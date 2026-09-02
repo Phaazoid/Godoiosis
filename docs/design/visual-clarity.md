@@ -7,7 +7,7 @@ its child [#49 Action Queue UX](https://github.com/Phaazoid/Godoiosis/issues/49)
 This is a *guidelines* doc, not a spec — it captures the principles we're holding the work to,
 plus the running order of the queue-UX checklist. Update it as items land.
 
-**Canon checked through #683 (2026-09-02).**
+**Canon checked through #687 (2026-09-02).**
 
 ## Principles
 
@@ -2396,6 +2396,53 @@ round 8 is those three joining:
 Known residual, declared not built: a MID-pass death followed by more beats still pans *away*
 with cubes flying — that abandons the show off-screen, which does not violate the ruling (the
 camera never looks at the formation), and it gets its own ticket if it reads badly in play.
+
+## The camera says what it just DID ([#669](https://github.com/Phaazoid/Godoiosis/issues/669), BUILT 2026-09-02)
+
+Lever 1 of the camera-system standardization the arc above motivated (#669 telemetry, #670 frame
+queries, #671 vocabulary, #672 the shot model). Diagnosis cost collapsed the moment the View line
+existed — round 8 was read off two numbers in the dev's own report — so the law it encodes is
+**build diagnostics in the channel that crosses the collaboration boundary**: Claude never launches
+the game, `report.md` is the shared evidence surface, and every question a filed report answers by
+itself is a play-check round nobody spends. (Sibling of the water arc's port-the-shader-offline
+law.)
+
+**The View line grew the HOLDS and a floor PAIR.** The channels say where the camera is; the holds
+— playback lock, death show, followed unit — say *why it is held there*, which is the question
+every round of the arc opened with. `CameraRig3D.live_frame_floor()` is the structural twin of
+`settled_frame_floor()`, term for term, so the only difference between the two printed numbers is
+live-versus-target and a gap between them is exactly how far the frame still has to descend.
+Flourish is excluded on both sides. It is a **declared sibling, not a second answer**: #670 folds
+both into one query surface taking a WHEN, and sweeps `battle3d._shot_floor`, `widen_to_fit` and
+this line together.
+
+**`CameraTrace` is the black box** — a bounded ring (`MAX_ENTRIES` 120) of named moments plus a
+heartbeat, rendered as its own `report.md` section. A final-frame reading cannot show a sequence,
+and rounds 5 and 8 were both sequence bugs.
+
+**The heartbeat is the load-bearing choice, and hooking the rig's mutator doors is the design that
+does not work.** Two facts kill it. `hold_at`, `drop_to` and `lift_to` are re-driven EVERY FRAME
+under playback — the 2D camera tweens the aim, a fall ramps the drop at eight cells a second — so
+a change-gated door hook writes ~60 rows a second and a 120-entry ring covers two seconds,
+evicting the very edges the trace exists to show. And the doors are not the funnel for every
+channel anyway: `stash_view`, `restore_view` and `drop_stashed_view` write `_target_drop` and
+`_target_yaw_degrees` by **direct assignment**, and `_process` clamps `_target_aim` against
+`pan_limit`. Reading the channels where they ENDED UP, last in `_process`, at 5 Hz, catches both —
+~20 s of continuous motion in the ring and nothing at all while idle.
+
+Discrete doors still `note_event` themselves, and that is what NAMES a cause: the zoom door (the
+one distance door — `widen_to_fit`, `frame`, `pose`, `restore_view` and the wheel all arrive
+there), the lift cut, a landed shake, the borrow/restore/drop trio, and `battle3d`'s own edges —
+the lock, the stage, the follow change, and **the round-8 deferral**, which needed its own rising
+edge because `_trained_seen_id` deliberately does not advance while the show holds. A note that
+fires on a no-op is guarded at each door for one reason: a row reading `11.0 -> 11.0` stands where
+a cause should be, and enough of them evict the causes.
+
+`CameraTrace` is **pure on time** — every verb takes `now_msec`, `recovered()`'s idiom — so the
+rate limit is asserted rather than slept through.
+
+Residual, declared: whether the rendered section is *readable* in a real report is the dev's, by
+filing one.
 
 Flash-not-glow unit highlights; counter-hover -> show countering enemy's attack range;
 enemy attack-range on hover during player turn; real Will bars on panels (HP over a unit's head
