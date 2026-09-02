@@ -99,22 +99,29 @@ jobs:
             git checkout -- project.godot
           fi
 
-      # AN IMPORT MUST NOT PRODUCE FILES THE COMMIT WAS MISSING (#659 follow-up). Godot mints a
-      # .uid sidecar beside every script the first time it imports one, so a commit that adds a
-      # .gd without its sidecar leaves every clone -- the dev's included -- going dirty by itself
-      # the moment the editor opens. That is the "a dirty tree is a ticket defect at both ends"
-      # rule, and nothing was watching for it: the guard above diffs project.godot alone, which
-      # is a TRACKED file, while a missing sidecar arrives UNTRACKED and shows up in neither
-      # `git diff` nor the test run (the import has already created it by the time gdUnit4 looks,
-      # so an on-disk assertion would pass vacuously in exactly the case it exists to catch).
+      # AN IMPORT MUST NOT PRODUCE SIDECARS THE COMMIT WAS MISSING (#659 follow-up). Godot mints a
+      # .uid beside every script (and a .import beside every asset) the first time it imports one,
+      # so a commit that adds a .gd without its sidecar leaves every clone -- the dev's included --
+      # going dirty by itself the moment the editor opens. That is the "a dirty tree is a ticket
+      # defect at both ends" rule, and nothing was watching for it: the guard above diffs
+      # project.godot alone, which is a TRACKED file, while a missing sidecar arrives UNTRACKED and
+      # shows up in neither `git diff` nor the test run (the import has already created it by the
+      # time gdUnit4 looks, so an on-disk assertion would pass vacuously in exactly the case it
+      # exists to catch).
+      #
+      # SCOPED TO THE SIDECAR SUFFIXES, not to "anything untracked", which is what the first cut
+      # said and it reddened instantly: this job downloads the engine to godot-bin/ INSIDE the
+      # working tree, so a bare `git ls-files --others` reports the Godot binary on every run. The
+      # narrow form is the better rule anyway -- it names the thing being guarded, and cannot be
+      # broken again by whatever the workflow drops in the tree next.
       #
       # Fails rather than warns, unlike its neighbour: this one's cause is always the PR in hand.
       - name: Guard against sidecars the commit forgot
         run: |
-          untracked="$(git ls-files --others --exclude-standard)"
-          if [ -n "$untracked" ]; then
-            echo "::error::The import created files that are not committed. A .gd needs its .uid sidecar committed beside it, or every fresh checkout goes dirty on first open. Add these and push:"
-            echo "$untracked"
+          missing="$(git ls-files --others --exclude-standard -- '*.uid' '*.import')"
+          if [ -n "$missing" ]; then
+            echo "::error::The import created sidecars that are not committed. A .gd needs its .uid (and an asset its .import) committed beside it, or every fresh checkout goes dirty on first open. Add these and push:"
+            echo "$missing"
             exit 1
           fi
 
