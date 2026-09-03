@@ -1,0 +1,13 @@
+[gd_resource type="Resource" script_class="WeaponModData" format=3 uid="uid://dot3dwcgmrmag"]
+
+[ext_resource type="Script" uid="uid://7w7ajveltxx5" path="res://Classes/jobs/AbilityData.gd" id="1_kc5go"]
+[ext_resource type="Script" uid="uid://ddqeee7njjjq2" path="res://Classes/weapons/WeaponAttackData.gd" id="2_edi57"]
+[ext_resource type="Resource" uid="uid://dhwc473yajqkt" path="res://Resources/WeaponAttacks/Lob Shot.tres" id="3_qip8k"]
+[ext_resource type="Script" uid="uid://df2c8ssuh18ff" path="res://Classes/weapons/WeaponModData.gd" id="4_5f642"]
+
+[resource]
+script = ExtResource("4_5f642")
+display_name = "Lob Shot Mod"
+family = 4
+replaces_main = ExtResource("3_qip8k")
+granted_attacks = Array[ExtResource("2_edi57")]([ExtResource("3_qip8k")])

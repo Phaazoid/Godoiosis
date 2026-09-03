@@ -1,0 +1,47 @@
+[gd_resource type="Resource" script_class="RuneData" format=3 uid="uid://krrct0mrxntj"]
+
+[ext_resource type="Script" uid="uid://bgbidu2bbf33l" path="res://Classes/alchemy/TransmutationData.gd" id="1_bs7q6"]
+[ext_resource type="Script" uid="uid://bbbfksnb0tted" path="res://Classes/weapons/patterns/ForwardLinePattern.gd" id="2_4h6r8"]
+[ext_resource type="Script" uid="uid://dsxc14gee2d01" path="res://Classes/weapons/patterns/ManhattanRangePattern.gd" id="3_q6jik"]
+[ext_resource type="Texture2D" uid="uid://d26i1cvn6ffwl" path="res://Art/Icons/ElementIcons/Fire.png" id="4_qddlg"]
+[ext_resource type="Script" uid="uid://ckrp1phgirys0" path="res://Classes/alchemy/RuneData.gd" id="5_h6ami"]
+
+[sub_resource type="Resource" id="Resource_nf0vl"]
+script = ExtResource("2_4h6r8")
+length = 5
+
+[sub_resource type="Resource" id="Resource_vbu1b"]
+script = ExtResource("1_bs7q6")
+sigils = Array[int]([1, 1, 6])
+display_name = "Zap Cannon"
+power = 7
+attack_pattern = SubResource("Resource_nf0vl")
+hits_allies = true
+
+[sub_resource type="Resource" id="Resource_mkp6h"]
+script = ExtResource("3_q6jik")
+max_range = 2
+max_and_a_half = true
+min_range = 2
+metadata/_custom_type_script = "uid://dsxc14gee2d01"
+
+[sub_resource type="Resource" id="Resource_vd2sa"]
+script = ExtResource("1_bs7q6")
+sigils = Array[int]([1])
+popup = "Fireball!"
+icon = ExtResource("4_qddlg")
+display_name = "Fireball"
+power = 5
+attack_pattern = SubResource("Resource_mkp6h")
+hits_allies = true
+targets = 2
+up_tolerance = 6
+arc_clearance = 6
+metadata/_custom_type_script = "uid://bgbidu2bbf33l"
+
+[resource]
+script = ExtResource("5_h6ami")
+size = 2
+inscriptions = Array[ExtResource("1_bs7q6")]([SubResource("Resource_vbu1b"), SubResource("Resource_vd2sa")])
+temper = 1
+display_name = "Lightning Tome"

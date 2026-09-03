@@ -1,0 +1,12 @@
+[gd_resource type="Resource" script_class="CarbineWeaponInstance" format=3 uid="uid://uyowr80i0o3v"]
+
+[ext_resource type="Script" uid="uid://bncwoq0llmo08" path="res://Classes/weapons/instances/CarbineWeaponInstance.gd" id="1_nqiqm"]
+[ext_resource type="Script" uid="uid://df2c8ssuh18ff" path="res://Classes/weapons/WeaponModData.gd" id="2_srchg"]
+[ext_resource type="Resource" path="res://Resources/Weapons/MainVarieties/Carbine.tres" id="3_gacie"]
+[ext_resource type="Resource" uid="uid://dot3dwcgmrmag" path="res://Resources/WeaponMods/Lob Shot Mod.tres" id="3_srchg"]
+
+[resource]
+script = ExtResource("1_nqiqm")
+template = ExtResource("3_gacie")
+spaces = Array[Array]([Array[ExtResource("2_srchg")]([ExtResource("3_srchg")]), Array[ExtResource("2_srchg")]([]), Array[ExtResource("2_srchg")]([])])
+display_name = "Lob Gun 2"

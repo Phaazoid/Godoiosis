@@ -1,0 +1,16 @@
+[gd_resource type="Resource" script_class="TransmutationData" format=3 uid="uid://cedpdcssc3i8a"]
+
+[ext_resource type="Script" uid="uid://bbbfksnb0tted" path="res://Classes/weapons/patterns/ForwardLinePattern.gd" id="1_oyucu"]
+[ext_resource type="Script" uid="uid://bgbidu2bbf33l" path="res://Classes/alchemy/TransmutationData.gd" id="2_l1t8p"]
+
+[sub_resource type="Resource" id="Resource_1bq0e"]
+script = ExtResource("1_oyucu")
+length = 5
+
+[resource]
+script = ExtResource("2_l1t8p")
+sigils = Array[int]([1, 1, 6])
+display_name = "Zap Cannon"
+power = 7
+attack_pattern = SubResource("Resource_1bq0e")
+hits_allies = true
