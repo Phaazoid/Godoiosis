@@ -490,6 +490,7 @@ texture = ExtResource("1_halkr")
 18:13/0/custom_data_2 = 4
 18:13/0/custom_data_3 = "tree"
 18:13/0/custom_data_4 = 1
+18:13/0/custom_data_13 = 1
 
 [resource]
 custom_data_layer_0/name = "walkable"
