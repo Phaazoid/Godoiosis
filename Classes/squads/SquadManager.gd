@@ -195,15 +195,20 @@ func validate_squad_plan(squad: Squad, plan: ResolvedPlan = null) -> bool:
 # Validate a HYPOTHETICAL queue — the hover preview's "what if it moved here?" and the queue-time
 # gate's "what if this were queued?". No plan: nothing has resolved this candidate.
 func validate_squad_plan_preview(squad: Squad, preview_action: BaseAction) -> bool:
-	return SquadPlanValidator.validate(squad, _hypothetical_actions(squad, preview_action), board_source.call())
+	var one: Array[BaseAction] = [preview_action]
+	return SquadPlanValidator.validate(squad, _hypothetical_actions(squad, one), board_source.call())
 
-# The queue as it WOULD be with `preview_action` in it; displacement uses the squad's own rule.
-func _hypothetical_actions(squad: Squad, preview_action: BaseAction) -> Array[BaseAction]:
+# The queue as it WOULD be with `previews` in it, appended in order; displacement uses the squad's
+# own rule. Takes a LIST because the AI's lookahead asks about a PAIR -- a set-up plus the squadmate
+# swing it arms (#117) -- and a pair judged one order at a time is not the pair. The queue-time gate
+# passes one; nothing about its answer changes.
+func _hypothetical_actions(squad: Squad, previews: Array[BaseAction]) -> Array[BaseAction]:
 	var actions: Array[BaseAction] = squad.action_queue.duplicate()
-	for action in actions.duplicate():
-		if squad.displaces(action, preview_action):
-			actions.erase(action)
-	actions.append(preview_action)
+	for preview in previews:
+		for action in actions.duplicate():
+			if squad.displaces(action, preview):
+				actions.erase(action)
+		actions.append(preview)
 	return actions
 
 # Same question BoardContext.projected_unit_at_cell answers, over squad membership rather than a
@@ -320,7 +325,8 @@ func _candidate_aim_connects(squad: Squad, action: BaseAction) -> bool:
 	if not (action is AttackAction):
 		return true
 	var aim := action as AttackAction
-	var found := SquadPlanValidator.aim_finds_a_target(aim, _hypothetical_actions(squad, action), _all_units())
+	var one: Array[BaseAction] = [action]
+	var found := SquadPlanValidator.aim_finds_a_target(aim, _hypothetical_actions(squad, one), _all_units())
 	if not SquadPlanValidator.aim_whiffs(aim, found):
 		return true
 	aim.add_validation_error("Nothing to hit on that cell")
@@ -581,11 +587,49 @@ func calculate_reactions_for_squad(attacking_squad: Squad, attacks: Array[Attack
 	strikes.append_array(heals)
 	return strikes
 	
-func resolve_plan(squad: Squad, board: BoardContext) -> ResolvedPlan:
+func resolve_plan(squad: Squad, board: BoardContext,
+		reactions: Array[ElementalReaction] = ReactionCatalog.get_all(),
+		terrain_reactions: Array[TerrainReaction] = TerrainReactionCatalog.get_all()) -> ResolvedPlan:
+	var plan := _resolve_actions(squad, squad.action_queue, board, reactions, terrain_reactions)
+	_last_resolved_plan = plan
+	_last_resolved_squad = squad
+	return plan
+
+
+# The SAME pass over a HYPOTHETICAL queue: what would this plan resolve to with `candidate` in it?
+# The AI's candidate scorer is the caller (#117 squad scoring) -- it needs the derived counters, the
+# threaded HP and the standing reactions, none of which a bare PlanResolver.resolve on one volley
+# has. _hypothetical_actions is the same builder the queue-time gate uses, so "the queue as it would
+# be" has one answer (Law #4).
+#
+# EXACT FOR NON-MOVE CANDIDATES ONLY, and the limit is structural rather than an oversight:
+# Unit.get_projected_destination reads the squad's LIVE queue (Unit.projected_cell over
+# squad.get_actions()), so a hypothetical MOVE moves nobody in the projection every stage here
+# reads. Main actions are unaffected -- they do not move anyone. Scoring a movement candidate has to
+# queue the move for real or extend projected_cell's axes; it cannot ride this.
+func resolve_hypothetical(squad: Squad, candidates: Array[BaseAction], board: BoardContext,
+		reactions: Array[ElementalReaction] = ReactionCatalog.get_all(),
+		terrain_reactions: Array[TerrainReaction] = TerrainReactionCatalog.get_all()) -> ResolvedPlan:
+	return _resolve_actions(squad, _hypothetical_actions(squad, candidates), board, reactions, terrain_reactions)
+
+
+# One pass over ONE action list. Split out of resolve_plan so a hypothetical queue can be resolved
+# by the same code rather than a second copy of it; `actions` is what every queue walk below reads.
+#
+# DELIBERATELY DOES NOT WRITE THE CACHE. `resolved_plan_for(squad)` is read by the queue gate's
+# rescue clause and the main-action menu as "the already-queued prefix" -- a hypothetical must never
+# be able to become that answer. Only resolve_plan, whose array IS the real queue, writes it.
+#
+# NOT PURE, and the caller has to know: this publishes set_projected_knockback/set_projected_rescue
+# onto units and stamps resolved_spent on queued Guard/Overwatch orders. Every pass clears and
+# rebuilds all three from its own array (the clear loop below), so consecutive hypotheticals cannot
+# contaminate each other -- but the LAST one leaves its residue on the board, so a caller that runs
+# hypotheticals must finish with a real resolve_plan. Execution is safe by construction: both
+# OrderExecutor and play_session.execute re-resolve before they play anything back.
+func _resolve_actions(squad: Squad, actions: Array[BaseAction], board: BoardContext,
+		reactions: Array[ElementalReaction], terrain_reactions: Array[TerrainReaction]) -> ResolvedPlan:
 	var plan := ResolvedPlan.new()
 	var hypo: Dictionary = plan.hypo   # threaded here, kept on the plan for end-of-pass reads (#124)
-	var reactions := ReactionCatalog.get_all()
-	var terrain_reactions := TerrainReactionCatalog.get_all()
 
 	# Knockback uses projected positions as its single source of truth (#84, approach B). Clear last
 	# pass's shove projections before recomputing; a unit's own queued move is untouched. The rescue
@@ -631,10 +675,10 @@ func resolve_plan(squad: Squad, board: BoardContext) -> ResolvedPlan:
 	# still standing where they started. When the block ends, every mover is at its destination
 	# again, so the attack walk below and everything downstream of it read exactly what they always
 	# did — the halted crosser being the one deliberate exception.
-	for action in squad.action_queue:
+	for action in actions:
 		if action.action_type == BaseAction.ActionType.MOVE and action.actor != null and is_instance_valid(action.actor):
 			PlanResolver.seed_at_origin(action.actor, hypo)
-	for action in squad.action_queue:
+	for action in actions:
 		if action.action_type == BaseAction.ActionType.MOVE:
 			PlanResolver.resolve_move(action as MoveAction, plan, hypo, reactions, board, terrain_reactions)
 
@@ -647,7 +691,7 @@ func resolve_plan(squad: Squad, board: BoardContext) -> ResolvedPlan:
 	# victim-gathering strictly before all shoves: aiming at a landing cell found nobody, and a unit
 	# shoved OUT of a later blast was still hit by it. Interleaving costs nothing — same order,
 	# same hypo, same cell-effect sequence.
-	for action in squad.action_queue:
+	for action in actions:
 		# A Guard ARMS AT ITS QUEUE SLOT (#414). This walk is already the pass's clock, so appending
 		# here — and nowhere else — is the whole rule: an attack expanded EARLIER never sees the
 		# entry, which is what lets a player sequence their own splash before their own bodyguard.
@@ -757,7 +801,7 @@ func resolve_plan(squad: Squad, board: BoardContext) -> ResolvedPlan:
 	# An ordinary rescue publishes NOTHING -- its stamp IS the body's own cell -- so the guard below
 	# keeps every pre-#116 rescue bit-for-bit unchanged rather than a special case inside it.
 	if board != null:
-		for action in squad.action_queue:
+		for action in actions:
 			if action.action_type != BaseAction.ActionType.RESCUE:
 				continue
 			var rescue := action as RescueAction
@@ -777,7 +821,7 @@ func resolve_plan(squad: Squad, board: BoardContext) -> ResolvedPlan:
 	# projected cell. Routed through cell_effects so preview + execution consume the same object
 	# (R3) — it serializes and draws for free, exactly like an elemental terrain deposit.
 	if board != null:
-		for action in squad.action_queue:
+		for action in actions:
 			if action.action_type != BaseAction.ActionType.BURROW:
 				continue
 			var cover := ResolvedCellEffect.new()
@@ -799,10 +843,8 @@ func resolve_plan(squad: Squad, board: BoardContext) -> ResolvedPlan:
 
 	# The END OF TURN forecast (#419), last of all: it reads where the pass leaves every member and
 	# which deposits the pass made, so it can only be derived once both are settled.
-	PlanResolver.resolve_tile_hits(plan, squad, hypo, board)
+	PlanResolver.resolve_tile_hits(plan, squad, actions, hypo, board)
 
-	_last_resolved_plan = plan
-	_last_resolved_squad = squad
 	return plan
 
 # The most recent resolve for THIS squad, or null. The gate's rescue clause and the menu's

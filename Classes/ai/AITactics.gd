@@ -6,17 +6,13 @@ class_name AITactics
 # this file owns HOW candidates are built, scored, and queued. Everything rides the player's
 # own surface -- get_selectable_attacks/active_attack/AttackAction.declare/queue_action
 # (Law #3) -- so new content (attacks, carvings, readiness, strain) reaches the AI with no
-# AI-side wiring. Scoring calls the REAL resolver on a throwaway volley (Law #2 as forecast).
-
-const _REMOVAL_TIERS: Array[ResolvedOutcome.Lethality] = [
-	ResolvedOutcome.Lethality.DOWNED,
-	ResolvedOutcome.Lethality.MAIMED,
-	ResolvedOutcome.Lethality.KILLED,
-]
-
-class _Pick:
-	var attack: AttackData
-	var aim_cell: Vector2i
+# AI-side wiring. Scoring resolves the squad's REAL plan with a candidate added (Law #2 as
+# forecast), so a candidate is priced by what it adds to what the squad is already doing (#117).
+#
+# (_REMOVAL_TIERS -- the DOWNED/MAIMED/KILLED rung list -- is gone with that change: a removal is
+# now a CHANGE OF STANDING across the plan, read off LethalityRules.lifecycle_for's own threading
+# via PlanResolver.projected_lifecycle, which covers the same three rungs and cannot double-count
+# a second hit on the same body. See _score_plan.)
 
 # `within`: optional Dictionary set of cells -- only enemies standing in it count.
 # NEAREST IS BY ROUTE, not raw distance: an enemy two cells away through a wall is further off than
@@ -124,38 +120,52 @@ static func queue_main_action(unit: Unit, board: BoardContext, squad_manager: Sq
 			return true
 	return false
 
-# Attack choice (#78): probe every selectable+fireable attack via the player's own pick slot
-# (active_attack), score each aim with a throwaway resolver pass, queue the best. Two passes
-# preserve #57's downed deprioritization: downed enemies neither aim nor score until nothing
-# active produced a candidate.
+# Attack choice (#78, rebuilt #117): probe every selectable+fireable attack, score each aim as its
+# MARGINAL GAIN to the squad's own plan, queue the best. The per-unit door -- one member, deciding
+# alone. The squad walks these jointly instead; see _queue_attacks_jointly.
 static func _try_best_attack(unit: Unit, board: BoardContext, squad_manager: SquadManager) -> bool:
-	if not unit.can_wield_equipped():
+	if not unit.can_wield_equipped() or unit.squad == null:
 		return false
-	var origin := unit.get_projected_destination()
-	var reactions := ReactionCatalog.get_all()   # hoisted -- the catalog dir-scans per call
-	for include_downed in [false, true]:
-		var pick := _best_attack_candidate(unit, board, origin, include_downed, reactions)
-		if pick == null:
-			continue
-		unit.active_attack = pick.attack   # the winner stays live, mirroring a player pick
-		var declared := AttackAction.declare(unit, origin, pick.aim_cell)
-		return squad_manager.queue_action(unit.squad, declared)
-	unit.active_attack = null   # no candidate -- don't leave a probe leftover behind
-	return false
+	var reactions := ReactionCatalog.get_all()   # hoisted -- both catalogs dir-scan per call, and
+	var terrain := TerrainReactionCatalog.get_all()   # a scoring pass resolves many times
+	var squad := unit.squad
+	var base_plan := squad_manager.resolve_plan(squad, board, reactions, terrain)
+	var pick := _best_candidate_for(unit, squad, board, base_plan, squad_manager, reactions, terrain, {}, true)
+	var queued := false
+	if pick != null:
+		unit.active_attack = pick.action.fired_attack   # the winner stays live, mirroring a player pick
+		# The board must be back on the real queue before the gate sees it -- see the note at
+		# _queue_attacks_jointly's own restore for what a leftover shove does to the whiff clause.
+		squad_manager.resolve_plan(squad, board, reactions, terrain)
+		queued = squad_manager.queue_action(squad, pick.action)
+	# ...and afterwards, because a hypothetical publishes projections onto units.
+	squad_manager.resolve_plan(squad, board, reactions, terrain)
+	return queued
 
-static func _best_attack_candidate(unit: Unit, board: BoardContext, origin: Vector2i, include_downed: bool, reactions: Array[ElementalReaction]) -> _Pick:
+
+# Every attack `unit` could declare from `origin`: each selectable+fireable attack crossed with
+# every enemy it can reach and legally aim at. Built as REAL declared orders through
+# AttackAction.declare -- the one stamp factory (#78) -- so the thing scored and the thing queued
+# are the same object rather than two descriptions of one.
+#
+# PASS 1 IS "WHO IS STILL STANDING WHEN THE PLAN SO FAR HAS RUN", not "who is standing right now".
+# Planning does not execute, so a unit a squadmate already felled THIS round is still is_active()
+# on the live board -- ask the base plan's hypo instead. Without that the two-pass rule reads the
+# wrong board: the felled unit stays a pass-1 candidate, and since #57's fall-through only opens
+# pass 2 when pass 1 offered nothing, a member whose one other option is an OLD body would idle
+# beside it. (It could never actually be ATTACKED -- the overkill clamp scores it (0,0) -- so this
+# only ever removes a candidate that was going to lose, which is why nothing else moves.)
+static func _attack_candidates(unit: Unit, board: BoardContext, origin: Vector2i, include_downed: bool,
+		base_hypo: Dictionary) -> Array[AttackAction]:
+	var out: Array[AttackAction] = []
 	var candidates: Array[AttackData] = unit.get_selectable_attacks()
 	if candidates.is_empty():
 		candidates = [null]   # unarmed (or aura-dry rune): null pick = bare-fist Manhattan-1, the resolver's STR fallback
-	var best: _Pick = null
-	var best_removals := 0
-	var best_net := 0
 	for attack in candidates:
 		if not unit.is_attack_fireable(attack):
 			continue
-		# The candidate is passed straight to the geometry now (#102). This loop used to write it
-		# into unit.active_attack purely so Reach/victim queries would pick it up — a side channel
-		# that left a live pick behind and skewed later reads.
+		# The candidate is passed straight to the geometry (#102) -- active_attack is written only
+		# for declare()'s stamp, immediately before it, and cleared again below.
 		var reach := Reach.get_all_attack_cells_from(unit, origin, attack)
 		for other in board.units:
 			if not is_instance_valid(other):
@@ -164,6 +174,8 @@ static func _best_attack_candidate(unit: Unit, board: BoardContext, origin: Vect
 				continue
 			if not (other.is_active() or (include_downed and other.is_downed())):
 				continue
+			if not include_downed and PlanResolver.projected_lifecycle(other, base_hypo) != Unit.LifecycleState.ACTIVE:
+				continue   # a squadmate already felled them this pass -- see the header
 			if not reach.has(other.movement.cell):
 				continue
 			# The player's vertical gate, mirrored (#258): a point aim above the attack's tolerance
@@ -172,49 +184,110 @@ static func _best_attack_candidate(unit: Unit, board: BoardContext, origin: Vect
 			if not Reach.vertical_aim_ok(attack, origin, other.movement.cell, board):
 				continue
 			var affected := Reach.get_affected_cells_from(unit, origin, other.movement.cell, attack)
-			var victims := RulesService.gather_attack_victims(unit, affected, board, attack)
-			if victims.is_empty():
+			if RulesService.gather_attack_victims(unit, affected, board, attack).is_empty():
 				continue
-			var plan := ResolvedPlan.new()
-			for a in AttackAction.create_volley(unit, origin, other.movement.cell, victims, attack):
-				plan.attacks.append(a)
-			PlanResolver.resolve(plan, reactions)   # throwaway plan, the queue's own math (Law #2); pure -- no live state touched
-			var score := _score_volley(unit, plan, include_downed)
-			if score.x > best_removals or (score.x == best_removals and score.y > best_net):
-				best = _Pick.new()
-				best.attack = attack
-				best.aim_cell = other.movement.cell
-				best_removals = score.x
-				best_net = score.y
-	return best
+			unit.active_attack = attack
+			out.append(AttackAction.declare(unit, origin, other.movement.cell))
+	unit.active_attack = null   # no probe left behind (#102)
+	return out
 
-# Score one resolved throwaway volley -> Vector2i(x = net removals, y = net damage);
-# removals outrank damage (lexicographic at the call site), and a candidate must beat
-# (0,0) to queue at all. Active enemies count for; ANY ally counts against (net-damage
-# doctrine, dev call 2026-07-22); downed enemies count only when count_downed (#57);
-# CRISIS counts as nothing -- the target stands back up surged, so triggering it is
-# neither prize nor penalty (revisit with smarter AI kinds).
-static func _score_volley(unit: Unit, plan: ResolvedPlan, count_downed: bool) -> Vector2i:
-	var removals := 0
-	var net := 0
+
+# Score a whole RESOLVED PLAN -> Vector2i(x = net removals, y = net damage); removals outrank
+# damage (lexicographic, _beats), and a candidate's MARGINAL must beat (0,0) to queue at all.
+#
+# The rule is #78's, widened from one throwaway volley to the squad's whole plan, and the widening
+# is what buys squad play: the plan holds every squadmate's queued swing (so a finishing blow is
+# visible as one), the threaded hypo (so a soak already in the plan is priced into the shock behind
+# it), and the DERIVED counters and watch shots -- which is how "counters aren't scored" closes.
+#
+# ONE sign rule covers all three lists: a victim hostile to `faction` counts FOR, anyone else counts
+# AGAINST. That is the net-damage doctrine (dev, 2026-07-22), and it lands the derived rows
+# correctly with no second clause -- an enemy AoE counter splashing its own side adds. Heals
+# contribute nothing: heal_amount is not damage, and scoring it would start AI healers healing,
+# which is its own behaviour and its own ticket.
+#
+# BUT A REACTION'S DAMAGE IS NOT SCORED AT ALL -- ONLY ITS REMOVALS (dev ruling, 2026-09-02).
+# Priced at par it cancels exactly: two units with the same weapon trade 3 for 3, every even
+# exchange scores (0,0), and an AI facing mirror-statted enemies declines every attack and reloads
+# instead. That is not caution, it is a parked squad, and it is the common matchup. Removals are
+# the currency the AI plays for and damage is the tie-break (the ratified lexicographic order), so
+# a counter that FELLS one of ours is a real loss and counts, while chip damage taken is the price
+# of engaging and is free. This is what closes "counters aren't scored" for the case that matters:
+# a candidate handing the enemy a lethal counter is refused, one handing them a scratch is not.
+#
+# CRISIS counts as nothing -- the target stands back up surged, so triggering it is neither prize
+# nor penalty (revisit with smarter AI kinds). Downed enemies count only when count_downed (#57).
+static func _score_plan(faction: Team.Faction, plan: ResolvedPlan, count_downed: bool) -> Vector2i:
+	var dealt := {}   # Unit -> damage this plan lands on them, before the overkill clamp
 	for a in plan.attacks:
-		var victim := a.target
-		if victim == null or a.resolved == null:
+		var victim: Unit = a.target
+		if victim == null or a.resolved == null or not is_instance_valid(victim):
 			continue
-		var removing := _REMOVAL_TIERS.has(a.resolved.lethality)
-		if Team.is_enemy(unit.get_faction(), victim.get_faction()):
+		if Team.is_enemy(faction, victim.get_faction()):
 			if a.resolved.lethality == ResolvedOutcome.Lethality.CRISIS:
 				continue
 			if victim.is_downed() and not count_downed:
-				continue
-			net += a.resolved.damage
-			if removing:
-				removals += 1
-		else:
-			net -= a.resolved.damage
-			if removing:
-				removals -= 1
+				continue   # already on the ground before this plan -- #57, pass 1
+		dealt[victim] = int(dealt.get(victim, 0)) + a.resolved.damage
+
+	# The REACTIONS this plan draws -- counters and any watch shots it sets off. Their victims join
+	# the removal ledger and nothing else, per the ruling above.
+	for a in _reaction_rows(plan):
+		var victim: Unit = a.target
+		if victim == null or a.resolved == null or not is_instance_valid(victim):
+			continue
+		if not dealt.has(victim):
+			dealt[victim] = 0
+
+	# OVERKILL IS WORTH NOTHING: a victim's damage is capped at the HP they had going in, so you
+	# cannot get more value out of a person than taking them out of the fight. Without this the
+	# removal ledger below fixes only half the double-spend -- a second member swinging at someone
+	# the first already downed still banked full damage, which ties exactly with hitting an
+	# untouched enemy for the same number, leaving focus-fire to be decided by board order. The cap
+	# binds only on overkill, so chipping a healthy unit is unaffected. Live HP is plan-start HP.
+	var net := 0
+	for victim: Unit in dealt:
+		var counted: int = mini(int(dealt[victim]), maxi(victim.get_current_hp(), 0))
+		net += counted if Team.is_enemy(faction, victim.get_faction()) else -counted
+
+	# A REMOVAL IS PER VICTIM, NOT PER HIT, and that is the whole of squad focus-fire. Counting the
+	# lethality rung of each row instead double-pays: the ladder answers KILLED for any damaging hit
+	# on an already-downed body (LethalityRules.predict), so a second member swinging at someone the
+	# first already downed scored a fresh removal and the two happily overkilled one target while a
+	# second enemy went untouched. Asked as a CHANGE OF STANDING -- on its feet before the plan,
+	# off them after -- so it is the plan's effect on a person, which is what a removal means.
+	var removals := 0
+	for victim: Unit in dealt:
+		if not _plan_removes(victim, plan):
+			continue
+		removals += 1 if Team.is_enemy(faction, victim.get_faction()) else -1
 	return Vector2i(removals, net)
+
+
+# The DERIVED rows: counters the plan drew, plus any watch shots it set off. Deliberately NOT
+# ResolvedPlan.attacks_for_playback() -- that splices the shots into `attacks` for the ANIMATOR, so
+# reading both lists would count every shot twice.
+static func _reaction_rows(plan: ResolvedPlan) -> Array[AttackAction]:
+	var rows: Array[AttackAction] = []
+	for c in plan.counters:
+		rows.append(c)
+	rows.append_array(plan.watch_shots)
+	return rows
+
+
+# Does this plan take `victim` off its feet? Standing now (the live board IS plan-start) and not
+# standing once the plan resolves. A CRISIS prediction lands ACTIVE, so the gambit falls out here
+# too rather than needing a clause of its own.
+static func _plan_removes(victim: Unit, plan: ResolvedPlan) -> bool:
+	if not victim.is_active():
+		return false
+	return PlanResolver.projected_lifecycle(victim, plan.hypo) != Unit.LifecycleState.ACTIVE
+
+
+static func _beats(a: Vector2i, b: Vector2i) -> bool:
+	if a.x != b.x:
+		return a.x > b.x
+	return a.y > b.y
 
 # Fallback builders -- each mirrors MainActionMenu's gate for its verb, then picks a
 # deterministic target (Law #1: explicit tie-break, first-in-order wins).
@@ -293,12 +366,168 @@ static func engage(squad: Squad, target: Unit, board: BoardContext, squad_manage
 	queue_main_actions_for_squad(squad, board, squad_manager)
 
 
-# Every member tries a main action, in the squad's own archetype-priority order. The tail of
-# engage() and the whole of HoldArchetype's turn -- and, since finding #3, Rushdown's no-target
-# branch too -- so it earns its own name rather than being hand-copied a third time.
+# Every member takes a main action. The tail of engage() and the whole of HoldArchetype's turn --
+# and, since finding #3, Rushdown's no-target branch too.
+#
+# TWO PASSES, and the split is the point (#117). ATTACK is decided for the squad JOINTLY, because
+# an attack's worth depends on what the rest of the squad is already doing; the remaining verbs
+# stay the ratified per-unit priority walk (dev, 2026-07-22 -- rescue/reload/rev/intimidate are a
+# lexical order, not a score). The fallback list therefore has ATTACK REMOVED: leaving it in would
+# let a member the joint pass deliberately declined re-decide alone and undo that judgement.
 static func queue_main_actions_for_squad(squad: Squad, board: BoardContext, squad_manager: SquadManager) -> void:
+	var priority: Array = AIArchetype.main_action_priority(squad.archetype)
+	if priority.has(BaseAction.ActionType.ATTACK):
+		_queue_attacks_jointly(squad, board, squad_manager)
+	var fallback: Array = priority.duplicate()
+	fallback.erase(BaseAction.ActionType.ATTACK)
 	for member in squad.get_members():
-		queue_main_action(member, board, squad_manager, AIArchetype.main_action_priority(squad.archetype))
+		queue_main_action(member, board, squad_manager, fallback)
+
+
+# The squad's attacks, chosen together. Each ROUND re-resolves the squad's real plan, scores every
+# remaining member's every candidate as a marginal against it, and queues the single best -- so the
+# second member decides knowing what the first just committed to. Repeats until nothing beats (0,0).
+#
+# Ties resolve to the earlier member and then the earlier candidate (Law #1): _beats is strict, so
+# the first to reach a score keeps it, and both loops walk their own declaration order.
+static func _queue_attacks_jointly(squad: Squad, board: BoardContext, squad_manager: SquadManager) -> void:
+	var leader := squad.get_leader()
+	if leader == null or not is_instance_valid(leader):
+		return
+	var reactions := ReactionCatalog.get_all()
+	var terrain := TerrainReactionCatalog.get_all()
+	var refused := {}   # candidate key -> true; queue_action turned this one down, don't re-pick it
+
+	while true:
+		var base_plan := squad_manager.resolve_plan(squad, board, reactions, terrain)
+		var best: _Scored = null
+		for member in squad.get_members():
+			var pick := _best_candidate_for(member, squad, board, base_plan, squad_manager, reactions, terrain, refused, true)
+			if pick != null and (best == null or _beats(pick.score, best.score)):
+				best = pick
+		if best == null:
+			break
+		best.action.actor.active_attack = best.action.fired_attack
+		# RESTORE BEFORE QUEUEING, not merely at the end. queue_action's whiff gate asks
+		# SquadPlanValidator.aim_finds_a_target, the one reader of published knockback, and it is
+		# correct there ONLY because that knockback is the already-queued aims' shoves. Scoring has
+		# just published a LOSING candidate's shove, so without this the gate looks for the target
+		# on the cell some rejected hypothetical would have thrown it to, finds nobody, and refuses
+		# the winner as a whiff -- which made a shoving attack unqueueable by this pass entirely.
+		squad_manager.resolve_plan(squad, board, reactions, terrain)
+		if not squad_manager.queue_action(squad, best.action):
+			refused[_candidate_key(best.action)] = true   # bounded: candidates are finite and keys are stable across rounds
+
+	# ...and once more on the way out: the loop breaks with a hypothetical as its last resolve.
+	# DECLARED UNPINNED -- no case here goes red when this line is deleted, and two attempts at one
+	# failed. Kept for what it MEANS rather than for a behaviour a test can currently see: the pass
+	# must not hand the board back dressed for a plan nobody gave. Everything downstream happens to
+	# re-resolve (the queue panel's refresh, OrderExecutor's own pass), so the residue is masked
+	# rather than harmless -- delete this and the masking becomes load-bearing.
+	squad_manager.resolve_plan(squad, board, reactions, terrain)
+
+
+class _Scored:
+	var action: AttackAction
+	var score: Vector2i
+
+
+# One member's best candidate, or null when nothing it can do beats (0,0).
+#
+# TWO PASSES, and the fall-through between them is #57's downed deprioritization per member: a
+# body is neither aimed at nor scored while anyone is still standing in reach. That is a HARD
+# PRECEDENCE rather than a weight -- no amount of damage on a corpse can outrank engaging someone
+# on their feet -- which is what makes the player's rescue window worth playing for.
+#
+# PASS 2 NEEDS AN EMPTY PASS 1, NOT A LOSING ONE (dev ruling, 2026-09-02). It used to open whenever
+# pass 1 produced nothing QUEUEABLE, so a member whose only standing target was a bad trade (one
+# whose counter would fell it) went and executed a downed unit instead -- precisely the moment the
+# body most wants sparing. `considered` is what separates "nobody to fight" from "nobody worth
+# fighting"; a REFUSED candidate deliberately does not count, since the queue gate turning it down
+# means it was never a real option and the body genuinely is the only one.
+static func _best_candidate_for(member: Unit, squad: Squad, board: BoardContext, base_plan: ResolvedPlan,
+		squad_manager: SquadManager, reactions: Array[ElementalReaction],
+		terrain: Array[TerrainReaction], refused: Dictionary, allow_lookahead: bool) -> _Scored:
+	if not member.is_active() or member.has_main_action_queued() or not member.can_wield_equipped():
+		return null
+	var origin := member.get_projected_destination()
+	for include_downed in [false, true]:
+		# Measured on the SAME terms as the candidate, or a pass-2 marginal double-counts damage a
+		# pass-2 order queued in an earlier round already put on a downed enemy.
+		var base := _score_plan(member.get_faction(), base_plan, include_downed)
+		var best: _Scored = null
+		var considered := false
+		for candidate in _attack_candidates(member, board, origin, include_downed, base_plan.hypo):
+			if refused.has(_candidate_key(candidate)):
+				continue
+			considered = true
+			var one: Array[BaseAction] = [candidate]
+			var plan := squad_manager.resolve_hypothetical(squad, one, board, reactions, terrain)
+			var score := _score_plan(member.get_faction(), plan, include_downed) - base
+			# A SET-UP is worth nothing by itself and everything to the swing behind it: Splash
+			# deals no damage, so soaking a target scores (0,0) and the old chooser refused it --
+			# the AI was structurally unable to OPEN a combo. One step of lookahead prices it by
+			# what a squadmate could then do (dev call, pairs in v1, 2026-09-02).
+			if not _beats(score, Vector2i.ZERO) and allow_lookahead and _applies_state_to_an_enemy(member.get_faction(), plan):
+				score = _lookahead(member, candidate, squad, board, base_plan, squad_manager, reactions, terrain, refused)
+			if not _beats(score, Vector2i.ZERO):
+				continue
+			if best == null or _beats(score, best.score):
+				best = _Scored.new()
+				best.action = candidate
+				best.score = score
+		if best != null:
+			return best
+		if not include_downed and considered:
+			return null   # someone was standing in reach and the exchange was not worth it: idle, don't execute a body
+	return null
+
+
+# What the best squadmate follow-up makes this set-up worth. Scored as the PAIR against the same
+# base, so a set-up is credited with the whole combo's gain; the follow-up is NOT committed -- the
+# next round finds it on its own merits, against a plan that now really holds the set-up.
+#
+# Bounded by its trigger rather than by a depth counter: only a candidate that scores nothing alone
+# AND applies a state to an enemy gets here, so a squad of plain weapons pays nothing at all.
+static func _lookahead(setup_unit: Unit, setup: AttackAction, squad: Squad, board: BoardContext,
+		base_plan: ResolvedPlan, squad_manager: SquadManager, reactions: Array[ElementalReaction],
+		terrain: Array[TerrainReaction], refused: Dictionary) -> Vector2i:
+	var base := _score_plan(setup_unit.get_faction(), base_plan, false)
+	var best := Vector2i.ZERO
+	for mate in squad.get_members():
+		if mate == setup_unit or not mate.is_active() or mate.has_main_action_queued() or not mate.can_wield_equipped():
+			continue
+		var origin := mate.get_projected_destination()
+		for follow in _attack_candidates(mate, board, origin, false, base_plan.hypo):
+			if refused.has(_candidate_key(follow)):
+				continue
+			var pair: Array[BaseAction] = [setup, follow]
+			var plan := squad_manager.resolve_hypothetical(squad, pair, board, reactions, terrain)
+			var score := _score_plan(setup_unit.get_faction(), plan, false) - base
+			if _beats(score, best):
+				best = score
+	return best
+
+
+# Does this plan put a state on somebody hostile? The lookahead's trigger -- the mark of a set-up,
+# read off the resolver's own outcome rather than off the attack's authored sigils, so a state that
+# an insulation or a reaction cancelled correctly reads as no set-up at all.
+static func _applies_state_to_an_enemy(faction: Team.Faction, plan: ResolvedPlan) -> bool:
+	for a in plan.attacks:
+		if a.target == null or a.resolved == null or not is_instance_valid(a.target):
+			continue
+		if not Team.is_enemy(faction, a.target.get_faction()):
+			continue
+		if not a.resolved.states_added.is_empty():
+			return true
+	return false
+
+
+# Identity of a candidate ACROSS ROUNDS -- who fires what at where. The candidate objects are
+# rebuilt every round, so a refusal has to be remembered by what it names, not by the instance.
+static func _candidate_key(a: AttackAction) -> String:
+	var attack_id: int = a.fired_attack.get_instance_id() if a.fired_attack != null else 0
+	return "%d|%d|%d|%d" % [a.actor.get_instance_id(), a.target_cell.x, a.target_cell.y, attack_id]
 
 
 # Reachable cell that best approaches `goal_cell` -- Sentry's walk back to its post. Same walk with
