@@ -2,7 +2,7 @@
 
 **Status: an idea wall plus two locked decisions.** Solicited by the dev on 2026-08-12, the day Stage 0 (#203) passed its GO gate: *"a full thought experiment, all ideas on the wall."* Nothing below the Decisions section is a commitment — it is the candidate pool for #176's stage 5 and beyond, kept so it can't evaporate from chat. The look-dev scene (`Scenes/LookDev/LookDev.tscn`) is the standing playground where any of it gets prototyped before it's real — and since #212 (2026-08-15) the **Moods tab** in the dev-tools window tunes the *shipping* view live, so a value on this wall can be judged on a real board rather than in the diorama. **It is a playground, not a scratch scene ([#393](https://github.com/Phaazoid/Godoiosis/issues/393), 2026-08-19)** — seven presentation suites fixture on it, `Battle3D.tscn` loads its MeshLibrary, and `BoardMirror`/`BoardOverlays` read textures out of `Art/LookDev/`, so it is edited with the same care as shipping code. Its four moods stopped being a second copy at the same time: `look_dev.gd` held them as a hardcoded `PRESETS` table, seeded from the same values four of the twelve `LookPreset` files now carry, and it resolves them by NAME through `LookKnobs` instead.
 
-**Canon checked through #676 (2026-09-01).**
+**Canon checked through #711 (2026-09-03).**
 
 ---
 
@@ -617,6 +617,12 @@ Its twin is a rule about every prop, not about tufts: **a prop follows its groun
 #### The facing is a SET OF EDGES, and it is a second column (#263, 2026-08-15)
 
 `prop_shape` says what form a tile takes; it cannot say which way that form points, so the facing is its own authored column, `wall_edges` — a declared second representation per Law #4, because the two answer different questions. Folding direction into the shape would mean `PLANE_EW` / `PLANE_NS` / `PLANE_CORNER_ES`… for one concept.
+
+**A third column joined them for the RULES, not the looks** (#660): `prop_rule_height`, how tall a
+prop stands for the sight trace. Same Law #4 reasoning one step further — how a prop is *drawn*
+(`prop_height_scale`, a 3/4-perspective correction) and how tall it *is* are different questions, and
+#642 had already ruled the look knob may never source legality. Owned by `verticality.md` → *Line of
+sight*, because what it feeds is a rule; it appears here only so the tile's columns read as a set.
 
 **It is a mask of cardinal edges, not a yaw**, because the pieces an artist draws include corners and a corner reaches *two* directions. Each authored edge becomes a half-length slab from the cell centre out to that edge, so **a straight run is two collinear halves — one wall — and a corner is two perpendicular halves — an L. One rule, no corner special case**, and it falls out that each half wears the matching half of its tile's art, so a straight run reassembles the whole sprite un-squashed.
 
