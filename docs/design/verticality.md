@@ -6,7 +6,7 @@ grill-style. Every ruling below is his; the rationale is recorded because almost
 re-derivable from the code. Numbers (tolerances, drop damage, the 2D offset) are deliberately absent —
 they are feel values and get knobs, not guesses (`CLAUDE.md` → the tuning rule).
 
-**Canon checked through #674 (2026-09-01).**
+**Canon checked through #711 (2026-09-03).**
 
 The one-line version: **a cell has a height, height changes only via ramps, ramps are chokepoints
 rather than tolls, and what height buys you is REACH — not damage, not to-hit.**
@@ -262,6 +262,13 @@ height never changes mid-battle.
 ever stand on this ground* (water, void, solid rock). Elevation answers *at what level does its
 surface sit*. Two questions, two homes. A "wall" is therefore not a new concept — it is a tall column
 with no ramp reaching it.
+
+**A painted wall is the counterexample, and #660 answered it.** The sentence above is true of a
+*terrain* wall and was never true of the ones the sheet actually ships: `stone_wall_*` and `fence_*`
+are PLANE tiles standing on ordinary ground, so their cells' elevation is 0 and "a tall column" is
+exactly what they are not. Until #660 that made every wall in the game invisible to the sight trace.
+A prop now carries its own **rules height** (`prop_rule_height`, in the same units), and the column
+the trace reads is *ground + prop*. See *Line of sight* below.
 
 ### A ramp's height is its LOW side [DECIDED]
 
@@ -551,6 +558,28 @@ h(t) = lerp(elev_origin + EYE, elev_target + EYE, t) + arc_clearance * 4t(1 - t)
   "anything 1 block tall blocks line of sight"). The crossed cells come from
   `GridUtils.cells_crossed` — supercover, endpoints excluded, corner-ties take BOTH cells, so a
   shot can never thread a diagonal seam between two walls.
+- **The column is GROUND + PROP** (#660). A wall is a painted tile, not geometry, so a trace reading
+  `BoardHeights` alone passed through every wall in the game at every angle — 100% transparent, not
+  a partial miss. Each standing tile carries a **`prop_rule_height`** (board height units, #427) and
+  the trace stacks it on the cell's surface. It is a second column beside `prop_height_scale` and
+  never derived from it: #642 established that knob is a 3/4-perspective LOOK correction capped near
+  two levels, so sourcing legality from it would let a look knob decide the rules.
+  - **0 is a declared sentinel meaning "this shape's default"** — forced by the storage
+    (`has_custom_data` answers whether the LAYER exists, never whether a tile authored). `SOLID_SHAPES`
+    stand one LEVEL, `BILLBOARD` and `TUFT` stand nothing. So the dev's standing "1 block tall blocks
+    line of sight" ships as the default rather than as an authored value on every wall tile, and
+    nothing in `TestTiles.tres` authors the column at all.
+  - **Authored in the Objects tab** ("Rules height"), deliberately next to "Block height" so the
+    rules/looks split is stated rather than rediscovered. The slider stops at
+    `GridUtils.MAX_DRAWABLE_RULE_HEIGHT`, and `tests/law/test_a_prop_never_claims_more_wall_than_it_draws.gd`
+    refuses a hand-edited sheet that goes past it — **a wall a shot dies on but the player can see
+    over is worse than no wall.** It is a CEILING, not an agreement check: the drawn height resolves a
+    live knob, and a rules law that reddened on a cosmetic tuning pass is lint that gets disabled.
+  - **Judged per crossed CELL, which over-blocks a PLANE's open half** — a wall is an *edge* fact and
+    `cells_crossed` is a cell walk. Ruled acceptable for v1 (dev, 2026-09-02) on the content: no
+    single-edge wall is authored anywhere, every one is a full run (N|S, E|W) or a corner L. What
+    stays over-blocked is a diagonal threading a corner piece's open quadrant, and a shot running
+    along a wall's own axis. The seam if it is ever wanted is the per-cell test in `sight_trace`.
 - **Terrain only; units never block** — they move every turn, so a unit-blocked preview could not
   stay truthful (Law #2).
 - **The readout**: `HoverPresenter` computes the trace once per hovered aim and stores it on

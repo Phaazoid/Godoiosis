@@ -490,6 +490,7 @@ texture = ExtResource("1_halkr")
 18:13/0/custom_data_2 = 4
 18:13/0/custom_data_3 = "tree"
 18:13/0/custom_data_4 = 1
+18:13/0/custom_data_13 = 1
 
 [resource]
 custom_data_layer_0/name = "walkable"
@@ -518,4 +519,6 @@ custom_data_layer_11/name = "prop_height_scale"
 custom_data_layer_11/type = 3
 custom_data_layer_12/name = "prop_tuft_scale"
 custom_data_layer_12/type = 3
+custom_data_layer_13/name = "prop_rule_height"
+custom_data_layer_13/type = 2
 sources/0 = SubResource("TileSetAtlasSource_e2o6t")

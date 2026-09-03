@@ -271,5 +271,51 @@ func test_ai_turn_from_a_jam_terminates_every_turn() -> void:
 	for turn in range(3):
 		for s in game.squad_manager.squads:
 			game.squad_manager.set_has_acted(s, s != squad)
-		await game.ai_controller.take_faction_turn(Team.Faction.PLAYER, game._board())
+		await game.ai_controller.take_faction_turn(Team.Faction.PLAYER)
 		_assert_turn_terminated(squad)
+
+
+# ------------------------------------------------------------------------------
+#  The board a faction turn plans against goes STALE (#714)
+# ------------------------------------------------------------------------------
+
+# take_faction_turn built ONE BoardContext and reused it for every squad in the turn, while
+# execute_orders between squads spans frames -- so a unit killed by an earlier squad is genuinely
+# FREED by the time a later squad plans, and _resolve_actions' clear loop calls a method on it.
+# The headless Play API never reproduced it because play_session._take_ai_turn re-derives the board
+# INSIDE its loop, which is the shape this now matches.
+func test_a_faction_turn_survives_a_unit_dying_between_two_squads() -> void:
+	_paint_corridor(8)
+	var killer: Unit = _spawn(Team.Faction.PLAYER, Vector2i(1, 0))
+	var body: Unit = _spawn(Team.Faction.ENEMY, Vector2i(2, 0))
+	body.lifecycle_state = Unit.LifecycleState.DOWNED   # any damaging hit on a body is KILLED
+	var later: Unit = _spawn(Team.Faction.PLAYER, Vector2i(6, 0))
+	var far_body: Unit = _spawn(Team.Faction.ENEMY, Vector2i(5, 0))
+	far_body.lifecycle_state = Unit.LifecycleState.DOWNED   # so the second squad has its own work
+	await await_idle_frame()
+
+	await game.ai_controller.take_faction_turn(Team.Faction.PLAYER)
+
+	assert_bool(is_instance_valid(body)).override_failure_message(
+			"the fixture did not kill anybody, so nothing is being pinned").is_false()
+	assert_bool(is_instance_valid(far_body)).override_failure_message(
+			"the SECOND squad never landed its attack: planning died on the stale board, which is "
+			+ "the crash -- _resolve_actions calls a method on every unit the board lists"
+			).is_false()
+	assert_bool(is_instance_valid(later)).is_true()
+
+# The sub-frame half, and why the filter is not merely belt-and-braces: Unit.die() sets DEAD and
+# THEN queue_free()s, so between a death and the next frame the node is still a child of units_root
+# and still valid. BoardContext.unit_at_cell does not ask about lifecycle, so a corpse went on
+# blocking its own tile for the rest of the turn.
+func test_a_unit_that_has_just_died_is_off_the_board_before_the_next_frame() -> void:
+	_paint_corridor(4)
+	var doomed: Unit = _spawn(Team.Faction.ENEMY, Vector2i(2, 0))
+
+	doomed.die()   # no frame awaited: this is exactly the window
+
+	var board: BoardContext = game._board()
+	assert_bool(board.units.has(doomed)).override_failure_message(
+			"a unit whose death has resolved was still on the board").is_false()
+	assert_object(board.unit_at_cell(Vector2i(2, 0))).override_failure_message(
+			"the corpse was still blocking its own tile").is_null()

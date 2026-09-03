@@ -13,9 +13,24 @@ var terrain_states: TerrainStateManager
 var zones: ZoneManager
 var heights: BoardHeights
 
+# A unit whose death has RESOLVED is not on this board, and the filter lives HERE rather than in
+# any one builder because there are three of them -- game.gd's _board(), play/board_builder.gd and
+# tests/support/squad_fixtures.gd -- and a rule in one is a rule the other two disagree with, which
+# is the two-implementations shape that hid #714 in the first place.
+#
+# It asks the DOMAIN fact, not the engine's: Unit.die() sets lifecycle DEAD and only then calls
+# queue_free(), so between a death and the next frame the node is still a valid child of units_root.
+# is_queued_for_deletion() would answer the same thing in a second vocabulary, which the persistence
+# seam's three-way `dead` split explicitly warns against growing a fourth of. `present_factions`
+# below has excluded the dead by this exact test since it was written; this is that belief applied
+# to the list itself rather than re-stated per reader -- and `unit_at_cell` is what proves it was
+# needed, since it never asked about lifecycle and so let a corpse go on blocking its own tile.
 func _init(grid_layer: TileMapLayer, unit_list: Array[Unit], manager: SquadManager, states: TerrainStateManager = null, zone_manager: ZoneManager = null, board_heights: BoardHeights = null) -> void:
 	grid = grid_layer
-	units = unit_list
+	units = []
+	for unit in unit_list:
+		if is_instance_valid(unit) and not unit.is_dead():
+			units.append(unit)
 	squad_manager = manager
 	terrain_states = states
 	zones = zone_manager
@@ -95,6 +110,19 @@ func ramp_climb_at(cell: Vector2i) -> int:
 	if heights == null:
 		return 0
 	return heights.ramp_climb_at(cell)
+
+# How tall the PROP standing on this cell reaches above its surface (#660), in the same height units
+# elevation_at answers in. The rules' read-point for the tile-authored column, sibling of
+# terrain_kind_at and there for the same reason: a fixture board stubs the method rather than
+# painting a TileSet it does not have.
+#
+# A board with no grid reads 0, which is "nothing stands here" -- the same "behaves exactly as it did
+# before this existed" contract every accessor above keeps, and what lets every existing sight-trace
+# fixture (BoardContext.new(null, ...)) go on answering as it always did.
+func prop_rule_height_at(cell: Vector2i) -> int:
+	if grid == null:
+		return 0
+	return GridUtils.prop_rule_height_at_cell(grid, cell)
 
 # Census over this board's units — shared by game.gd and the headless PlaySession so the
 # turn cycle's membership/auto-skip reads have ONE implementation.

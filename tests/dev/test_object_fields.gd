@@ -24,6 +24,12 @@ func before_test() -> void:
 		_tiles.add_custom_data_layer()
 		_tiles.set_custom_data_layer_name(at, field["layer"])
 		_tiles.set_custom_data_layer_type(at, field["type"])
+	# prop_shape is not an override field, so it is not in FIELDS -- but the rules-height column falls
+	# back to it, so the synthetic sheet has to be able to say what shape a tile is. Unauthored it
+	# reads 0 = FLAT, exactly what the missing layer read before.
+	_tiles.add_custom_data_layer()
+	_tiles.set_custom_data_layer_name(_tiles.get_custom_data_layers_count() - 1, "prop_shape")
+	_tiles.set_custom_data_layer_type(_tiles.get_custom_data_layers_count() - 1, TYPE_INT)
 	var source := TileSetAtlasSource.new()
 	var image := Image.create(16, 16, false, Image.FORMAT_RGBA8)
 	source.texture = ImageTexture.create_from_image(image)
@@ -182,3 +188,89 @@ func test_the_board_tileset_declares_objects_at_all() -> void:
 	assert_int(ObjectKnobs.object_tiles(load(BOARD_TILES) as TileSet).size()).override_failure_message(
 		"no object tiles — the Objects tab would list nothing and the laws above are vacuous"
 		).is_greater(0)
+
+
+# --- the INT column (#660) ---------------------------------------------------------------------
+#
+# The same storage lesson one type further along from the colour case, with one difference that
+# matters: this field's fallback is not a global at all. An unauthored solid prop stands one block
+# because of its SHAPE, so GridUtils resolves it and BoardMirror never sees it.
+
+func test_a_rules_height_inherits_its_shape_until_a_value_is_authored() -> void:
+	_data.set_custom_data("prop_shape", GridUtils.PropShape.PLANE)
+	assert_int(GridUtils.prop_int_override_of(_data, "prop_rule_height")).override_failure_message(
+		"an unwritten int column must read the sentinel, not a height").is_equal(0)
+	assert_int(GridUtils.prop_rule_height_of(_data)).override_failure_message(
+		"an unauthored wall does not stand one block").is_equal(Terrain.UNITS_PER_LEVEL)
+
+	# The authored path, which is the whole point of the column and which the trace's own suite
+	# cannot reach: its boards stub the read-point, so only this exercises the reader.
+	_data.set_custom_data("prop_rule_height", 1)
+	assert_int(GridUtils.prop_rule_height_of(_data)).override_failure_message(
+		"an authored height did not override the shape default").is_equal(1)
+
+	_data.set_custom_data("prop_rule_height", 0)
+	assert_int(GridUtils.prop_rule_height_of(_data)).override_failure_message(
+		"writing the sentinel back did not return the field to its shape default"
+		).is_equal(Terrain.UNITS_PER_LEVEL)
+
+
+# The narrowing, at the reader rather than through a painted board: a BILLBOARD stands up but is
+# thin, so it stops nothing until someone decides otherwise. Authoring is how a tree becomes cover.
+func test_a_billboard_stops_nothing_until_it_is_authored() -> void:
+	_data.set_custom_data("prop_shape", GridUtils.PropShape.BILLBOARD)
+	assert_int(GridUtils.prop_rule_height_of(_data)).override_failure_message(
+		"a lantern blocks line of sight by default").is_equal(0)
+	_data.set_custom_data("prop_rule_height", 3)
+	assert_int(GridUtils.prop_rule_height_of(_data)).override_failure_message(
+		"a billboard cannot be given a height, so a tree can never be cover").is_equal(3)
+
+
+# --- the inherit checkbox, driven for real (#660 follow-up) -------------------------------------
+#
+# Shipped broken, and no test could see it: everything above asks GridUtils, and ObjectTool's row
+# builder had no coverage at all -- `_rebuild` early-outs on "no 3D host", so even the suites that
+# hold a real ObjectTool never reach `_build_override_field`. These call it directly.
+#
+# The bug: unticking "inherit" writes the value the field RESOLVES to, which for a BILLBOARD's rules
+# height is 0 -- the sentinel. The write read straight back as "inherited", the box re-ticked itself,
+# and a tree could never be given a height. The one thing billboards were offered the field for.
+
+func _rows_for(shape: GridUtils.PropShape) -> ObjectTool:
+	var panel: ObjectTool = auto_free(ObjectTool.new())
+	add_child(panel)
+	_data.set_custom_data("prop_shape", shape)
+	panel._build_field_rows({"data": _data, "shape": shape})
+	return panel
+
+
+func _inherit_box(panel: ObjectTool, label: String) -> CheckBox:
+	for child in panel._rows.get_children():
+		if child is CheckBox and (child as CheckBox).text == "%s - inherit" % label:
+			return child
+	return null
+
+
+func test_a_billboards_rules_height_can_actually_be_authored() -> void:
+	var panel := _rows_for(GridUtils.PropShape.BILLBOARD)
+	var box := _inherit_box(panel, "Rules height")
+	assert_object(box).override_failure_message(
+		"the Objects panel offers a billboard no Rules height row at all").is_not_null()
+
+	box.toggled.emit(false)   # the dev unticking "inherit" to give a tree a height
+
+	assert_int(GridUtils.prop_int_override_of(_data, "prop_rule_height")).override_failure_message(
+		"unticking wrote the sentinel back, so the row is stuck inheriting and a tree can never block"
+		).is_greater(0)
+	assert_int(GridUtils.prop_rule_height_of(_data)).override_failure_message(
+		"a tree that was just given a height still stops nothing").is_greater(0)
+
+
+func test_unticking_a_solid_prop_adopts_what_it_already_resolved() -> void:
+	# The control: the fix must not simply write the minimum. A PLANE already resolves to a full
+	# block, so unticking has to keep THAT -- switching a field to authored does not move the board.
+	var panel := _rows_for(GridUtils.PropShape.PLANE)
+	_inherit_box(panel, "Rules height").toggled.emit(false)
+	assert_int(GridUtils.prop_rule_height_of(_data)).override_failure_message(
+		"unticking moved a wall's height instead of adopting what it already stood at"
+		).is_equal(Terrain.UNITS_PER_LEVEL)

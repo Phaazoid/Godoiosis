@@ -107,6 +107,14 @@ static func draws_sight_trace(attack: AttackData) -> bool:
 # that grazes a wall-top stops, and a 1-high wall stops a flat shot -- the dev's standing
 # "1-block-tall blocks line of sight"). Terrain only; units never block (they move every turn, so
 # a unit-blocked preview could not stay truthful).
+#
+# THE BLOCKING COLUMN IS GROUND PLUS PROP (#660). A wall is a painted TILE: its cell's elevation is
+# whatever ground stands under it, so a trace reading BoardHeights alone let every shot in the game
+# pass through every wall, at every angle. The tile's authored rule height stacks on the surface --
+# and it is a column of its own, never prop_height_scale, which #642 established is a look
+# correction. Judged per crossed CELL, which over-blocks a PLANE's open half by construction: ruled
+# acceptable for v1 (dev, 2026-09-02) because no single-edge wall is authored anywhere -- every wall
+# in the sheet is a full run or a corner L.
 static func sight_trace(attack: AttackData, origin_cell: Vector2i, target_cell: Vector2i, board: BoardContext) -> SightTrace:
 	var trace := SightTrace.new()
 	var origin_h := 0.0 if board == null else float(board.elevation_at(origin_cell))
@@ -120,7 +128,13 @@ static func sight_trace(attack: AttackData, origin_cell: Vector2i, target_cell: 
 	if board != null:
 		for cell in GridUtils.cells_crossed(origin_cell, target_cell):
 			var t := _closest_t(p0, span, Vector2(cell) + Vector2(0.5, 0.5))
-			if float(board.elevation_at(cell)) >= _trajectory_height(origin_h, target_h, clearance, t):
+			# THE COLUMN, NOT THE GROUND (#660). A wall is a painted TILE, not geometry -- its cell's
+			# elevation is whatever ground it stands on -- so reading BoardHeights alone made every
+			# wall, fence and crate in the game 100% transparent to the rules. The tile's authored
+			# rule height stacks on the surface, and cells_crossed excludes BOTH endpoints, so the
+			# prop you stand behind never blocks your own shot out.
+			var column_top := float(board.elevation_at(cell) + board.prop_rule_height_at(cell))
+			if column_top >= _trajectory_height(origin_h, target_h, clearance, t):
 				trace.blocked = true
 				trace.blocked_cell = cell
 				end_t = t
