@@ -29,6 +29,16 @@ class_name AITactics
 #   screening a mage behind a frontline, and it is unreadable -- "it goes for whoever is closest"
 #   is a rule you can bait and funnel, "it goes for its best target" is a computation you cannot see.
 #
+# A BODY COUNTS AS ATTACKABLE (#720, dev 2026-09-03: "the same level of prioritization as other
+# attacks, it just loses to other attacks in the head to head"). Both selectors used to answer only
+# about the STANDING, so a squad with a body in reach and nothing else read the fork as "nobody" and
+# fell into pursuit -- which then preferred any standing enemy anywhere, including one it had no
+# route to. That is thirteen rounds of Castle Assault revving beside a downed general.
+#
+# STANDING IS THE TOP KEY AND SITS ABOVE SAFETY, which is the whole of what makes it a ranking
+# rather than a reversal: a body can never counter, so it is unconditionally "safe" and would win
+# every comparison it entered. Ordered this way it wins only what nobody upright is competing for.
+#
 # The exchange term is a BOOLEAN -- can they answer me from the cell I would attack from -- and not
 # a scored one, because scoring an attack from a cell nobody has moved to is structurally
 # impossible today (SquadManager._resolve_actions reads positions off the LIVE queue, so a
@@ -42,24 +52,39 @@ static func choose_engagement_target(leader: Unit, board: BoardContext, squad_ma
 		return nearest_enemy(leader, board, within)   # pursuit: nobody in reach, distance is the answer
 
 	var best: Unit = null
+	var best_standing := false
 	var best_safe := false
 	var best_hops := 0
 	for enemy: Unit in engageable:
 		var plan: _Engagement = engageable[enemy]
 		# Asked at the cell we would attack FROM, so this layer and the approach cannot disagree
 		# about where the fight happens.
+		var standing := enemy.is_active()
 		var safe := not squad_manager.can_counter(enemy, leader, board, plan.from)
-		if best == null or (safe and not best_safe) or (safe == best_safe and plan.hops < best_hops):
+		if best == null or _engagement_beats(standing, safe, plan.hops, best_standing, best_safe, best_hops):
 			best = enemy
+			best_standing = standing
 			best_safe = safe
 			best_hops = plan.hops
 	return best
 
 
-# Enemy -> the cell this leader would attack it from, for every ACTIVE enemy it could reach and
-# attack THIS TURN. `within` tests the enemy's OWN cell exactly as _nearest_enemy_matching does --
-# without it a Sentry engages an enemy standing OUTSIDE its zone because a cell inside the zone can
-# reach it, i.e. a lured sentry, which is the one thing that archetype exists to refuse.
+# Ranked, best first: still on their feet > cannot answer me > fewer hops of route. Ties keep the
+# earlier enemy (Law #1 -- board order, and the caller's dictionary preserves it).
+static func _engagement_beats(standing: bool, safe: bool, hops: int,
+		b_standing: bool, b_safe: bool, b_hops: int) -> bool:
+	if standing != b_standing:
+		return standing
+	if safe != b_safe:
+		return safe
+	return hops < b_hops
+
+
+# Enemy -> the cell this leader would attack it from, for every enemy it could reach and attack
+# THIS TURN -- a body among them since #720, since a body is an ordinary target that loses head to
+# head. `within` tests the enemy's OWN cell exactly as pursuit does -- without it a Sentry engages
+# an enemy standing OUTSIDE its zone because a cell inside the zone can reach it, i.e. a lured
+# sentry, which is the one thing that archetype exists to refuse.
 #
 # OPTIMISTIC for a leader with squadmates, and declared rather than fixed: this is the leader's own
 # unclamped move range, but cohesion (V3) can refuse the group move to a cell the leader alone
@@ -83,7 +108,7 @@ static func _engageable_enemies(leader: Unit, board: BoardContext, within, allow
 	var per_enemy := {}
 	var wanted := {}
 	for enemy in board.units:
-		if not is_instance_valid(enemy) or not enemy.is_active():
+		if not is_instance_valid(enemy) or not (enemy.is_active() or enemy.is_downed()):
 			continue
 		if not Team.is_enemy(leader.get_faction(), enemy.get_faction()):
 			continue
@@ -124,14 +149,54 @@ static func _engageable_enemies(leader: Unit, board: BoardContext, within, allow
 # one eight cells down an open corridor, and picking the walled one commits the whole squad to
 # walking at a wall. Distance survives only as the tie-break, which is what everything degrades to
 # when no enemy is reachable at all (an island, a sealed room) -- the old answer, unchanged.
-# Downed enemies are DEPRIORITIZED, not protected (#57, fork 3): any active enemy wins;
-# a downed one is targeted only when nothing active matches (finishing off is legal).
+#
+# ONE RANKING OVER EVERYONE, bodies included (#720, dev 2026-09-03). This was two walks -- every
+# active enemy first, downed ones consulted only if that found nobody -- which made "deprioritized"
+# mean ABSOLUTE precedence in the layer that decides where to STAND: a body one step away lost to a
+# standing enemy on the far side of a wall, the squad committed its turn to a route that does not
+# exist, and every candidate cell scored UNREACHABLE so the straight-line fallback answered with the
+# cell it was already on. It parked there for the rest of the battle. Now a body ranks like anyone
+# else and simply loses the head-to-head: standing is the tie-break BELOW route, so it decides only
+# when the walk is equally long.
 static func nearest_enemy(from_unit: Unit, board: BoardContext, within = null) -> Unit:
 	var route := _approach_distances(from_unit, board)
-	var target := _nearest_enemy_matching(from_unit, board, within, false, route)
-	if target == null:
-		target = _nearest_enemy_matching(from_unit, board, within, true, route)
-	return target
+	var nearest: Unit = null
+	var best_hops := 0
+	var best_standing := false
+	var best_dist := 0
+	for unit in board.units:
+		if not is_instance_valid(unit):
+			continue
+		if not (unit.is_active() or unit.is_downed()):
+			continue
+		if not Team.is_enemy(from_unit.get_faction(), unit.get_faction()):
+			continue
+		# `within` still tests the enemy's OWN cell -- "is this enemy inside my zone" is a different
+		# question from "how far is a firing position on it", and Sentry's leash means the first.
+		if within != null and not within.has(unit.movement.cell):
+			continue
+		var hops: int = route.get(unit, RulesService.UNREACHABLE)
+		var standing := unit.is_active()
+		var d := GridUtils.manhattan_distance(from_unit.movement.cell, unit.movement.cell)
+		if nearest == null or _pursuit_beats(hops, standing, d, best_hops, best_standing, best_dist):
+			nearest = unit
+			best_hops = hops
+			best_standing = standing
+			best_dist = d
+	return nearest
+
+
+# Ranked, best first: fewer hops of route > still on their feet > nearer in a straight line. The
+# standing term sits BELOW route and ABOVE distance on purpose -- above route it is the two-walk
+# precedence again, below distance it never speaks, since two enemies at equal hops are rarely at
+# equal distance too. Ties keep the earlier unit (Law #1: board order).
+static func _pursuit_beats(hops: int, standing: bool, dist: int,
+		b_hops: int, b_standing: bool, b_dist: int) -> bool:
+	if hops != b_hops:
+		return hops < b_hops
+	if standing != b_standing:
+		return standing
+	return dist < b_dist
 
 # Enemy -> hops to the nearest cell this unit could FIGHT it from. Keyed by the unit rather than by
 # its cell, because the distance that decides a target has to be the distance to a firing position,
@@ -174,29 +239,6 @@ static func _approach_distances(from_unit: Unit, board: BoardContext) -> Diction
 				best = hops
 		result[unit] = best
 	return result
-
-static func _nearest_enemy_matching(from_unit: Unit, board: BoardContext, within, downed: bool, route: Dictionary) -> Unit:
-	var nearest: Unit = null
-	var best_hops := 0
-	var best_dist := 0
-	for unit in board.units:
-		if not is_instance_valid(unit):
-			continue
-		if (unit.is_downed() if downed else unit.is_active()) == false:
-			continue
-		if not Team.is_enemy(from_unit.get_faction(), unit.get_faction()):
-			continue
-		# `within` still tests the enemy's OWN cell -- "is this enemy inside my zone" is a different
-		# question from "how far is a firing position on it", and Sentry's leash means the first.
-		if within != null and not within.has(unit.movement.cell):
-			continue
-		var hops: int = route.get(unit, RulesService.UNREACHABLE)
-		var d := GridUtils.manhattan_distance(from_unit.movement.cell, unit.movement.cell)
-		if nearest == null or hops < best_hops or (hops == best_hops and d < best_dist):
-			nearest = unit
-			best_hops = hops
-			best_dist = d
-	return nearest
 
 # Walks the archetype's priority list (AIArchetype.MAIN_ACTION_PRIORITY); first type that
 # yields a buildable candidate queues and wins. Everything funnels through queue_action,
@@ -253,14 +295,19 @@ static func _try_best_attack(unit: Unit, board: BoardContext, squad_manager: Squ
 # AttackAction.declare -- the one stamp factory (#78) -- so the thing scored and the thing queued
 # are the same object rather than two descriptions of one.
 #
-# PASS 1 IS "WHO IS STILL STANDING WHEN THE PLAN SO FAR HAS RUN", not "who is standing right now".
-# Planning does not execute, so a unit a squadmate already felled THIS round is still is_active()
-# on the live board -- ask the base plan's hypo instead. Without that the two-pass rule reads the
-# wrong board: the felled unit stays a pass-1 candidate, and since #57's fall-through only opens
-# pass 2 when pass 1 offered nothing, a member whose one other option is an OLD body would idle
-# beside it. (It could never actually be ATTACKED -- the overkill clamp scores it (0,0) -- so this
-# only ever removes a candidate that was going to lose, which is why nothing else moves.)
-static func _attack_candidates(unit: Unit, board: BoardContext, origin: Vector2i, include_downed: bool,
+# ONE LIST, standing and downed alike (#720, dev 2026-09-03). It was two passes, a body offered only
+# once nothing upright had produced a candidate -- #57's precedence as a hard gate. The score already
+# says everything that rule was protecting: a downed unit clings at 1 HP (Unit._go_downed), so the
+# overkill clamp prices finishing one at exactly +1, which loses to any real swing and wins only when
+# nothing else is there. The gate on top of that was what made a body an ABSOLUTE last resort.
+#
+# WHAT THE PLAN HAS ALREADY KILLED IS NOT A TARGET (#719). Planning does not execute, so a unit a
+# squadmate felled THIS round is still standing on the live board -- the base plan's hypo is the only
+# honest answer, and the pass-2 filter never asked it. That is how a leader queued her 6-long line
+# through her own party at a corpse: it was the one candidate she had left, and with no bar (#711)
+# the one candidate is taken however bad it is. DOWNED in the hypo is still a target (finishing is
+# intended); DEAD is not, because there is nobody there to finish.
+static func _attack_candidates(unit: Unit, board: BoardContext, origin: Vector2i,
 		base_hypo: Dictionary) -> Array[AttackAction]:
 	var out: Array[AttackAction] = []
 	var candidates: Array[AttackData] = unit.get_selectable_attacks()
@@ -277,10 +324,10 @@ static func _attack_candidates(unit: Unit, board: BoardContext, origin: Vector2i
 				continue
 			if not Team.is_enemy(unit.get_faction(), other.get_faction()):
 				continue
-			if not (other.is_active() or (include_downed and other.is_downed())):
+			if not (other.is_active() or other.is_downed()):
 				continue
-			if not include_downed and PlanResolver.projected_lifecycle(other, base_hypo) != Unit.LifecycleState.ACTIVE:
-				continue   # a squadmate already felled them this pass -- see the header
+			if PlanResolver.projected_lifecycle(other, base_hypo) == Unit.LifecycleState.DEAD:
+				continue   # a squadmate already finished them this pass -- see the header
 			if not reach.has(other.movement.cell):
 				continue
 			# The player's vertical gate, mirrored (#258): a point aim above the attack's tolerance
@@ -298,8 +345,8 @@ static func _attack_candidates(unit: Unit, board: BoardContext, origin: Vector2i
 
 
 # Score a whole RESOLVED PLAN -> Vector3i(x = net removals, y = net damage dealt, z = -damage taken
-# from reactions); compared lexicographically (_beats), and a candidate's MARGINAL must beat
-# (0,0,0) to queue at all.
+# from reactions); compared lexicographically (_beats). The MARGINAL a candidate adds is what ranks
+# it, and since #711 there is no bar it has to clear -- the score orders, it never gates.
 #
 # The rule is #78's, widened from one throwaway volley to the squad's whole plan, and the widening
 # is what buys squad play: the plan holds every squadmate's queued swing (so a finishing blow is
@@ -331,18 +378,19 @@ static func _attack_candidates(unit: Unit, board: BoardContext, origin: Vector2i
 #
 # A DOWNED VICTIM IS PRICED LIKE ANY OTHER, and the parameter that used to suppress that is gone
 # (#716, dev 2026-09-03). The score used to skip damage on an already-downed enemy during pass 1,
-# which was a SECOND spelling of #57's precedence -- _attack_candidates already refuses to AIM at a
-# body while anyone is standing, and that is the whole rule. All the skip added was erasing the
-# incidental value of an attack that catches a body on its way to a standing target, so a general
-# with an AoE that would hit an upright enemy AND finish a corpse scored it identically to one that
-# hit only the upright enemy, and the tie fell to candidate order. Reported from play as the AI
-# "playing for the wrong team". His ruling: prioritize the standing, but never DE-prioritize an
-# otherwise better attack for having a body in it.
+# which erased the incidental value of an attack that catches a body on its way to a standing
+# target: a general with an AoE that would hit an upright enemy AND finish a corpse scored it
+# identically to one that hit only the upright enemy, and the tie fell to candidate order. Reported
+# from play as the AI "playing for the wrong team". His ruling: prioritize the standing, but never
+# DE-prioritize an otherwise better attack for having a body in it.
 #
-# The magnitude is self-limiting rather than tuned: a downed unit clings at 1 HP (Unit._go_downed),
-# so the overkill clamp below values finishing one at exactly +1 damage -- enough to break a tie,
-# never enough to outrank felling someone on their feet. _plan_removes still answers false for a
-# body, so it cannot earn a removal either, and the precedence is untouched.
+# THIS IS NOW THE WHOLE OF THAT PRIORITY, and the justification #716 shipped with is not -- it read
+# "_attack_candidates already refuses to AIM at a body while anyone is standing, and that is the
+# whole rule", which #720 deleted a day later. The rule survives its reason: what keeps a body from
+# outranking somebody upright is the arithmetic below rather than a gate above it. A downed unit
+# clings at 1 HP (Unit._go_downed), so the overkill clamp values finishing one at exactly +1 damage
+# -- enough to break a tie, never enough to outrank a real swing -- and _plan_removes answers false
+# for a body, so it cannot earn a removal either.
 static func _score_plan(faction: Team.Faction, plan: ResolvedPlan) -> Vector3i:
 	var dealt := {}   # Unit -> damage this plan lands on them, before the overkill clamp
 	for a in plan.attacks:
@@ -574,48 +622,51 @@ class _Scored:
 # option." So there is no bar to beat and the argmax wins at any sign -- a squad frozen by a
 # counter bill it could not net positive against is the shape that deleted the bar.
 #
-# TWO PASSES, and the fall-through between them is #57's downed deprioritization per member: a
-# body is neither aimed at nor scored while anyone is still standing in reach. That is a HARD
-# PRECEDENCE rather than a weight -- no amount of damage on a corpse can outrank engaging someone
-# on their feet -- which is what makes the player's rescue window worth playing for.
+# ONE PASS OVER EVERY TARGET, a body among them (#720, dev 2026-09-03: "the same level of
+# prioritization as other attacks, it just loses to other attacks in the head to head"). This was
+# two, falling through to bodies only when nothing upright produced a candidate -- #57's
+# deprioritization as a HARD PRECEDENCE. What replaces it is the score, which was already saying the
+# same thing more precisely: a body clings at 1 HP, so finishing one is worth +1 and earns no
+# removal, and any swing at somebody on their feet outranks it. (This SUPERSEDES "felling someone
+# standing always beats finishing a body", dev 2026-09-02 -- kept as a ranking, dropped as a gate.)
 #
-# Pass 2 therefore opens only when pass 1 offered NOTHING, which needs no bookkeeping: with no bar,
-# any candidate pass 1 looked at is also the one it returns. (This SUPERSEDES "pass 2 needs an empty
-# pass 1, not a losing one", dev 2026-09-02 -- pass 1 has no losing outcome left to have. The half
-# of that ruling which survives is REFUSAL: a candidate `queue_action` turned down is skipped before
-# it can count, so it was never a real option and the body genuinely is the only thing left.)
+# The one corner where the two rulings disagree is a body in reach beside a standing target whose
+# counter would FELL the attacker, and the score decides it (dev, 2026-09-03): a free finish at
+# (0,+1,0) beats a suicidal swing at (-1,d,-x). That is the only comparison a body wins.
+#
+# THE SCORE ORDERS, IT NEVER GATES (#711, dev ruling 2026-09-02): "the AI should ALWAYS attack if
+# there is an option to, and if all the options are weighed bad, it has to pick its least bad
+# option." So there is no bar to beat and the argmax wins at any sign -- a squad frozen by a
+# counter bill it could not net positive against is the shape that deleted the bar.
+#
+# REFUSAL still removes a candidate before it can count: one `queue_action` turned down is skipped,
+# so it was never a real option. That is the surviving half of "pass 2 needs an empty pass 1".
 static func _best_candidate_for(member: Unit, squad: Squad, board: BoardContext, base_plan: ResolvedPlan,
 		squad_manager: SquadManager, reactions: Array[ElementalReaction],
 		terrain: Array[TerrainReaction], refused: Dictionary, allow_lookahead: bool) -> _Scored:
 	if not member.is_active() or member.has_main_action_queued() or not member.can_wield_equipped():
 		return null
 	var origin := member.get_projected_destination()
-	# ONE base for both passes, since the score no longer forks on include_downed (#716). The passes
-	# differ only in which enemies _attack_candidates will AIM at -- #57's precedence -- never in how
-	# the resulting plan is priced, which is the whole of that ticket.
 	var base := _score_plan(member.get_faction(), base_plan)
-	for include_downed in [false, true]:
-		var best: _Scored = null
-		for candidate in _attack_candidates(member, board, origin, include_downed, base_plan.hypo):
-			if refused.has(_candidate_key(candidate)):
-				continue
-			var one: Array[BaseAction] = [candidate]
-			var plan := squad_manager.resolve_hypothetical(squad, one, board, reactions, terrain)
-			var score := _score_plan(member.get_faction(), plan) - base
-			# A SET-UP is worth nothing by itself and everything to the swing behind it: Splash deals
-			# no damage, so soaking a target scores (0,0) and a greedy chooser could never OPEN a
-			# combo. One step of lookahead prices it by what a squadmate could then do (dev call,
-			# pairs in v1, 2026-09-02), FLOORED AT ITS OWN SOLO SCORE -- see _lookahead for why
-			# inventing a zero there inverts the ranking now that a negative score can still win.
-			if not _beats(score, Vector3i.ZERO) and allow_lookahead and _applies_state_to_an_enemy(member.get_faction(), plan):
-				score = _lookahead(member, candidate, score, squad, board, base_plan, squad_manager, reactions, terrain, refused)
-			if best == null or _beats(score, best.score):
-				best = _Scored.new()
-				best.action = candidate
-				best.score = score
-		if best != null:
-			return best
-	return null
+	var best: _Scored = null
+	for candidate in _attack_candidates(member, board, origin, base_plan.hypo):
+		if refused.has(_candidate_key(candidate)):
+			continue
+		var one: Array[BaseAction] = [candidate]
+		var plan := squad_manager.resolve_hypothetical(squad, one, board, reactions, terrain)
+		var score := _score_plan(member.get_faction(), plan) - base
+		# A SET-UP is worth nothing by itself and everything to the swing behind it: Splash deals
+		# no damage, so soaking a target scores (0,0) and a greedy chooser could never OPEN a
+		# combo. One step of lookahead prices it by what a squadmate could then do (dev call,
+		# pairs in v1, 2026-09-02), FLOORED AT ITS OWN SOLO SCORE -- see _lookahead for why
+		# inventing a zero there inverts the ranking now that a negative score can still win.
+		if not _beats(score, Vector3i.ZERO) and allow_lookahead and _applies_state_to_an_enemy(member.get_faction(), plan):
+			score = _lookahead(member, candidate, score, squad, board, base_plan, squad_manager, reactions, terrain, refused)
+		if best == null or _beats(score, best.score):
+			best = _Scored.new()
+			best.action = candidate
+			best.score = score
+	return best
 
 
 # What the best squadmate follow-up makes this set-up worth. Scored as the PAIR against the same
@@ -640,7 +691,7 @@ static func _lookahead(setup_unit: Unit, setup: AttackAction, solo: Vector3i, sq
 		if mate == setup_unit or not mate.is_active() or mate.has_main_action_queued() or not mate.can_wield_equipped():
 			continue
 		var origin := mate.get_projected_destination()
-		for follow in _attack_candidates(mate, board, origin, false, base_plan.hypo):
+		for follow in _attack_candidates(mate, board, origin, base_plan.hypo):
 			if refused.has(_candidate_key(follow)):
 				continue
 			var pair: Array[BaseAction] = [setup, follow]
