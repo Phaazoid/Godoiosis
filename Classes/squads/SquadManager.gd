@@ -453,7 +453,15 @@ func squad_has_invalid_actions(squad: Squad) -> bool:
 			return true
 	return false
 	
-func can_counter(countering_unit: Unit, target_unit: Unit, board: BoardContext) -> bool:
+# `target_cell` overrides where the ATTACKER is taken to be standing; null = wherever the plan
+# leaves them, which is every caller but one. The AI's target selection (#117) is that one: it asks
+# "would this enemy be able to answer me from the cell I would attack it from?" about a cell nobody
+# has moved to yet, and a resolve cannot answer that (SquadManager._resolve_actions reads positions
+# off the LIVE queue, so a hypothetical move moves nobody). Taken as a parameter rather than
+# re-derived in AITactics, per Law #4's own words -- if you cannot reach the existing answer from
+# where you are standing, pass it in; a private counter-reach predicate would be a second spelling
+# of a rule the resolver owns, which is the drift #78 exists to stop.
+func can_counter(countering_unit: Unit, target_unit: Unit, board: BoardContext, target_cell = null) -> bool:
 	if countering_unit == null or target_unit == null:
 		return false
 	if not is_instance_valid(countering_unit) or not is_instance_valid(target_unit):
@@ -467,14 +475,14 @@ func can_counter(countering_unit: Unit, target_unit: Unit, board: BoardContext) 
 		return false
 
 	var counter_cell := countering_unit.get_projected_destination()
-	var target_cell := target_unit.get_projected_destination()
+	var aimed_from: Vector2i = target_cell if target_cell != null else target_unit.get_projected_destination()
 
 	# Reach must be judged by the attack the counter will ACTUALLY fire -- main, for a weapon --
 	# not by whatever this unit last aimed with. Reading the live pick here let a melee unit
 	# counter from a reach attack's range and then swing a range-1 main (#102). The board carries
 	# the elevations: a target above this unit's up_tolerance draws no counter (#258's counter
 	# denial). Required, may be null = flat -- an optional would silently read flat forever.
-	return Reach.can_hit_cell_from(countering_unit, counter_cell, target_cell, countering_unit.get_counter_attack(), board)
+	return Reach.can_hit_cell_from(countering_unit, counter_cell, aimed_from, countering_unit.get_counter_attack(), board)
 
 func choose_counter_target(countering_unit: Unit, attacking_party: Array[Unit], board: BoardContext) -> Unit:
 	# Taunt (Reaction, docs/design/jobs.md "The ability chassis"): a standing policy, never a

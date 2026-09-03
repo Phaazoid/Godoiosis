@@ -14,6 +14,79 @@ class_name AITactics
 # via PlanResolver.projected_lifecycle, which covers the same three rungs and cannot double-count
 # a second hit on the same body. See _score_plan.)
 
+# WHO THE SQUAD FIGHTS -- and it is TWO SYSTEMS, forked on one question: is anybody attackable
+# this turn? (Dev ruling, 2026-09-02, from playtest.)
+#
+#   SOMEBODY IS -> pick the best EXCHANGE. Distance is only the tie-break. His words: "the closest
+#   possible unit isn't what should be picked, but the best possible trade for the attacker...
+#   absolute distance was not even, but that should not matter since both attacks were in range
+#   that turn." The reported case: an enemy adjacent to a spearman that could counter, with a mage
+#   one step beyond that could not, and it took the spearman.
+#
+#   NOBODY IS -> pursue the NEAREST, unchanged. That is Rushdown's identity and it is deliberate:
+#   a rusher that hunts the softest target across the board is the BALANCED archetype wearing the
+#   wrong name (see "Not this layer" in ai-tactics.md), it stops the player being rewarded for
+#   screening a mage behind a frontline, and it is unreadable -- "it goes for whoever is closest"
+#   is a rule you can bait and funnel, "it goes for its best target" is a computation you cannot see.
+#
+# The exchange term is a BOOLEAN -- can they answer me from the cell I would attack from -- and not
+# a scored one, because scoring an attack from a cell nobody has moved to is structurally
+# impossible today (SquadManager._resolve_actions reads positions off the LIVE queue, so a
+# hypothetical move moves nobody). That is why this layer and the ATTACK pick judge an exchange
+# differently: this one cannot resolve, _score_plan can and would be throwing information away.
+# Declared in ai-tactics.md rather than left to be discovered.
+static func choose_engagement_target(leader: Unit, board: BoardContext, squad_manager: SquadManager,
+		within = null, allowed = null) -> Unit:
+	var engageable := _engageable_enemies(leader, board, within, allowed)
+	if engageable.is_empty():
+		return nearest_enemy(leader, board, within)   # pursuit: nobody in reach, distance is the answer
+
+	var route := _approach_distances(leader, board)   # the tie-break, reusing the one BFS
+	var best: Unit = null
+	var best_safe := false
+	var best_hops := 0
+	for enemy: Unit in engageable:
+		# Asked at the cell best_attack_destination will route to, so the two layers cannot disagree
+		# about where the fight happens.
+		var safe := not squad_manager.can_counter(enemy, leader, board, engageable[enemy])
+		var hops: int = route.get(enemy, RulesService.UNREACHABLE)
+		if best == null or (safe and not best_safe) or (safe == best_safe and hops < best_hops):
+			best = enemy
+			best_safe = safe
+			best_hops = hops
+	return best
+
+
+# Enemy -> the cell this leader would attack it from, for every ACTIVE enemy it could reach and
+# attack THIS TURN. `within` tests the enemy's OWN cell exactly as _nearest_enemy_matching does --
+# without it a Sentry engages an enemy standing OUTSIDE its zone because a cell inside the zone can
+# reach it, i.e. a lured sentry, which is the one thing that archetype exists to refuse.
+#
+# OPTIMISTIC for a leader with squadmates, and declared rather than fixed: this is the leader's own
+# unclamped move range, but cohesion (V3) can refuse the group move to a cell the leader alone
+# could stand on, in which case the squad stays put. best_attack_destination has carried the
+# identical optimism since #29, so nothing new is introduced here.
+static func _engageable_enemies(leader: Unit, board: BoardContext, within, allowed) -> Dictionary:
+	var aiming := leader.get_fired_attack()
+	var reach_set: Dictionary = RulesService.compute_move_range(leader, board).reachable.duplicate()
+	reach_set[leader.movement.cell] = true   # standing still counts; compute_move_range omits the start cell
+	var out := {}
+	for enemy in board.units:
+		if not is_instance_valid(enemy) or not enemy.is_active():
+			continue
+		if not Team.is_enemy(leader.get_faction(), enemy.get_faction()):
+			continue
+		if within != null and not within.has(enemy.movement.cell):
+			continue
+		var from_cell := _nearest_standable_attack_cell(leader, enemy.movement.cell, aiming, board)
+		if not reach_set.has(from_cell):
+			continue
+		if allowed != null and not allowed.has(from_cell):
+			continue
+		out[enemy] = from_cell
+	return out
+
+
 # `within`: optional Dictionary set of cells -- only enemies standing in it count.
 # NEAREST IS BY ROUTE, not raw distance: an enemy two cells away through a wall is further off than
 # one eight cells down an open corridor, and picking the walled one commits the whole squad to
@@ -192,8 +265,9 @@ static func _attack_candidates(unit: Unit, board: BoardContext, origin: Vector2i
 	return out
 
 
-# Score a whole RESOLVED PLAN -> Vector2i(x = net removals, y = net damage); removals outrank
-# damage (lexicographic, _beats), and a candidate's MARGINAL must beat (0,0) to queue at all.
+# Score a whole RESOLVED PLAN -> Vector3i(x = net removals, y = net damage dealt, z = -damage taken
+# from reactions); compared lexicographically (_beats), and a candidate's MARGINAL must beat
+# (0,0,0) to queue at all.
 #
 # The rule is #78's, widened from one throwaway volley to the squad's whole plan, and the widening
 # is what buys squad play: the plan holds every squadmate's queued swing (so a finishing blow is
@@ -206,18 +280,23 @@ static func _attack_candidates(unit: Unit, board: BoardContext, origin: Vector2i
 # contribute nothing: heal_amount is not damage, and scoring it would start AI healers healing,
 # which is its own behaviour and its own ticket.
 #
-# BUT A REACTION'S DAMAGE IS NOT SCORED AT ALL -- ONLY ITS REMOVALS (dev ruling, 2026-09-02).
-# Priced at par it cancels exactly: two units with the same weapon trade 3 for 3, every even
-# exchange scores (0,0), and an AI facing mirror-statted enemies declines every attack and reloads
-# instead. That is not caution, it is a parked squad, and it is the common matchup. Removals are
-# the currency the AI plays for and damage is the tie-break (the ratified lexicographic order), so
-# a counter that FELLS one of ours is a real loss and counts, while chip damage taken is the price
-# of engaging and is free. This is what closes "counters aren't scored" for the case that matters:
-# a candidate handing the enemy a lethal counter is refused, one handing them a scratch is not.
+# A REACTION'S DAMAGE NEVER JOINS y -- ONLY ITS REMOVALS (dev ruling, 2026-09-02). Priced at par
+# it cancels exactly: two units with the same weapon trade 3 for 3, every even exchange scores
+# (0,0), and an AI facing mirror-statted enemies declines every attack and reloads instead. That is
+# not caution, it is a parked squad, and it is the common matchup. So a counter that FELLS one of
+# ours is a real loss and lands in x, while chip damage taken is the price of engaging.
+#
+# ...BUT IT IS THE TIE-BREAK z (dev, 2026-09-02, from playtest): "when all else is even, they
+# should go for optimal exchanges." Sitting strictly BELOW damage dealt is what keeps it from
+# reviving the parked squad -- a mirror matchup still scores (0, 8, -8) and beats (0,0,0), because
+# z only ever speaks when both higher terms tie exactly. It is also what stops the ATTACK pick
+# undoing the TARGET pick: once the squad has walked to the harmless target, the dangerous one may
+# still be in reach from the settled cell, and without z that choice ties on damage and falls to
+# board order. See choose_engagement_target for the other half.
 #
 # CRISIS counts as nothing -- the target stands back up surged, so triggering it is neither prize
 # nor penalty (revisit with smarter AI kinds). Downed enemies count only when count_downed (#57).
-static func _score_plan(faction: Team.Faction, plan: ResolvedPlan, count_downed: bool) -> Vector2i:
+static func _score_plan(faction: Team.Faction, plan: ResolvedPlan, count_downed: bool) -> Vector3i:
 	var dealt := {}   # Unit -> damage this plan lands on them, before the overkill clamp
 	for a in plan.attacks:
 		var victim: Unit = a.target
@@ -231,11 +310,16 @@ static func _score_plan(faction: Team.Faction, plan: ResolvedPlan, count_downed:
 		dealt[victim] = int(dealt.get(victim, 0)) + a.resolved.damage
 
 	# The REACTIONS this plan draws -- counters and any watch shots it sets off. Their victims join
-	# the removal ledger and nothing else, per the ruling above.
+	# the removal ledger, and what they land on OUR side accumulates as the z tie-break. Damage a
+	# reaction deals to an ENEMY (an AoE counter splashing its own party) is deliberately outside
+	# the term rather than counted as a bonus, so z means exactly one thing: what engaging costs us.
+	var taken := 0
 	for a in _reaction_rows(plan):
 		var victim: Unit = a.target
 		if victim == null or a.resolved == null or not is_instance_valid(victim):
 			continue
+		if not Team.is_enemy(faction, victim.get_faction()):
+			taken += a.resolved.damage
 		if not dealt.has(victim):
 			dealt[victim] = 0
 
@@ -261,7 +345,7 @@ static func _score_plan(faction: Team.Faction, plan: ResolvedPlan, count_downed:
 		if not _plan_removes(victim, plan):
 			continue
 		removals += 1 if Team.is_enemy(faction, victim.get_faction()) else -1
-	return Vector2i(removals, net)
+	return Vector3i(removals, net, -taken)
 
 
 # The DERIVED rows: counters the plan drew, plus any watch shots it set off. Deliberately NOT
@@ -284,10 +368,16 @@ static func _plan_removes(victim: Unit, plan: ResolvedPlan) -> bool:
 	return PlanResolver.projected_lifecycle(victim, plan.hypo) != Unit.LifecycleState.ACTIVE
 
 
-static func _beats(a: Vector2i, b: Vector2i) -> bool:
+# Lexicographic, and the ORDER is the design: removals are the currency, damage dealt is the
+# tie-break, and damage taken from reactions only speaks when both of those tie exactly -- which is
+# what "when all else is even, go for optimal exchanges" means, and what keeps a counter from ever
+# talking the AI out of a trade.
+static func _beats(a: Vector3i, b: Vector3i) -> bool:
 	if a.x != b.x:
 		return a.x > b.x
-	return a.y > b.y
+	if a.y != b.y:
+		return a.y > b.y
+	return a.z > b.z
 
 # Fallback builders -- each mirrors MainActionMenu's gate for its verb, then picks a
 # deterministic target (Law #1: explicit tie-break, first-in-order wins).
@@ -429,7 +519,7 @@ static func _queue_attacks_jointly(squad: Squad, board: BoardContext, squad_mana
 
 class _Scored:
 	var action: AttackAction
-	var score: Vector2i
+	var score: Vector3i
 
 
 # One member's best candidate, or null when nothing it can do beats (0,0).
@@ -468,9 +558,9 @@ static func _best_candidate_for(member: Unit, squad: Squad, board: BoardContext,
 			# deals no damage, so soaking a target scores (0,0) and the old chooser refused it --
 			# the AI was structurally unable to OPEN a combo. One step of lookahead prices it by
 			# what a squadmate could then do (dev call, pairs in v1, 2026-09-02).
-			if not _beats(score, Vector2i.ZERO) and allow_lookahead and _applies_state_to_an_enemy(member.get_faction(), plan):
+			if not _beats(score, Vector3i.ZERO) and allow_lookahead and _applies_state_to_an_enemy(member.get_faction(), plan):
 				score = _lookahead(member, candidate, squad, board, base_plan, squad_manager, reactions, terrain, refused)
-			if not _beats(score, Vector2i.ZERO):
+			if not _beats(score, Vector3i.ZERO):
 				continue
 			if best == null or _beats(score, best.score):
 				best = _Scored.new()
@@ -491,9 +581,9 @@ static func _best_candidate_for(member: Unit, squad: Squad, board: BoardContext,
 # AND applies a state to an enemy gets here, so a squad of plain weapons pays nothing at all.
 static func _lookahead(setup_unit: Unit, setup: AttackAction, squad: Squad, board: BoardContext,
 		base_plan: ResolvedPlan, squad_manager: SquadManager, reactions: Array[ElementalReaction],
-		terrain: Array[TerrainReaction], refused: Dictionary) -> Vector2i:
+		terrain: Array[TerrainReaction], refused: Dictionary) -> Vector3i:
 	var base := _score_plan(setup_unit.get_faction(), base_plan, false)
-	var best := Vector2i.ZERO
+	var best := Vector3i.ZERO
 	for mate in squad.get_members():
 		if mate == setup_unit or not mate.is_active() or mate.has_main_action_queued() or not mate.can_wield_equipped():
 			continue

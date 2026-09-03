@@ -8,7 +8,7 @@ class_name RushdownArchetype
 # member positioning isn't AI-special-cased.
 static func take_squad_turn(squad: Squad, board: BoardContext, squad_manager: SquadManager) -> void:
 	var leader := squad.get_leader()
-	var enemy := AITactics.nearest_enemy(leader, board)
+	var enemy := AITactics.choose_engagement_target(leader, board, squad_manager)
 	if enemy != null:
 		AITactics.engage(squad, enemy, board, squad_manager)
 	else:
