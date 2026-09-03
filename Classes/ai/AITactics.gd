@@ -554,19 +554,23 @@ class _Scored:
 	var score: Vector3i
 
 
-# One member's best candidate, or null when nothing it can do beats (0,0).
+# One member's best candidate, or null when it has nothing it can legally aim.
+#
+# THE SCORE ORDERS, IT NEVER GATES (#711, dev ruling 2026-09-02): "the AI should ALWAYS attack if
+# there is an option to, and if all the options are weighed bad, it has to pick its least bad
+# option." So there is no bar to beat and the argmax wins at any sign -- a squad frozen by a
+# counter bill it could not net positive against is the shape that deleted the bar.
 #
 # TWO PASSES, and the fall-through between them is #57's downed deprioritization per member: a
 # body is neither aimed at nor scored while anyone is still standing in reach. That is a HARD
 # PRECEDENCE rather than a weight -- no amount of damage on a corpse can outrank engaging someone
 # on their feet -- which is what makes the player's rescue window worth playing for.
 #
-# PASS 2 NEEDS AN EMPTY PASS 1, NOT A LOSING ONE (dev ruling, 2026-09-02). It used to open whenever
-# pass 1 produced nothing QUEUEABLE, so a member whose only standing target was a bad trade (one
-# whose counter would fell it) went and executed a downed unit instead -- precisely the moment the
-# body most wants sparing. `considered` is what separates "nobody to fight" from "nobody worth
-# fighting"; a REFUSED candidate deliberately does not count, since the queue gate turning it down
-# means it was never a real option and the body genuinely is the only one.
+# Pass 2 therefore opens only when pass 1 offered NOTHING, which needs no bookkeeping: with no bar,
+# any candidate pass 1 looked at is also the one it returns. (This SUPERSEDES "pass 2 needs an empty
+# pass 1, not a losing one", dev 2026-09-02 -- pass 1 has no losing outcome left to have. The half
+# of that ruling which survives is REFUSAL: a candidate `queue_action` turned down is skipped before
+# it can count, so it was never a real option and the body genuinely is the only thing left.)
 static func _best_candidate_for(member: Unit, squad: Squad, board: BoardContext, base_plan: ResolvedPlan,
 		squad_manager: SquadManager, reactions: Array[ElementalReaction],
 		terrain: Array[TerrainReaction], refused: Dictionary, allow_lookahead: bool) -> _Scored:
@@ -578,30 +582,25 @@ static func _best_candidate_for(member: Unit, squad: Squad, board: BoardContext,
 		# pass-2 order queued in an earlier round already put on a downed enemy.
 		var base := _score_plan(member.get_faction(), base_plan, include_downed)
 		var best: _Scored = null
-		var considered := false
 		for candidate in _attack_candidates(member, board, origin, include_downed, base_plan.hypo):
 			if refused.has(_candidate_key(candidate)):
 				continue
-			considered = true
 			var one: Array[BaseAction] = [candidate]
 			var plan := squad_manager.resolve_hypothetical(squad, one, board, reactions, terrain)
 			var score := _score_plan(member.get_faction(), plan, include_downed) - base
-			# A SET-UP is worth nothing by itself and everything to the swing behind it: Splash
-			# deals no damage, so soaking a target scores (0,0) and the old chooser refused it --
-			# the AI was structurally unable to OPEN a combo. One step of lookahead prices it by
-			# what a squadmate could then do (dev call, pairs in v1, 2026-09-02).
+			# A SET-UP is worth nothing by itself and everything to the swing behind it: Splash deals
+			# no damage, so soaking a target scores (0,0) and a greedy chooser could never OPEN a
+			# combo. One step of lookahead prices it by what a squadmate could then do (dev call,
+			# pairs in v1, 2026-09-02), FLOORED AT ITS OWN SOLO SCORE -- see _lookahead for why
+			# inventing a zero there inverts the ranking now that a negative score can still win.
 			if not _beats(score, Vector3i.ZERO) and allow_lookahead and _applies_state_to_an_enemy(member.get_faction(), plan):
-				score = _lookahead(member, candidate, squad, board, base_plan, squad_manager, reactions, terrain, refused)
-			if not _beats(score, Vector3i.ZERO):
-				continue
+				score = _lookahead(member, candidate, score, squad, board, base_plan, squad_manager, reactions, terrain, refused)
 			if best == null or _beats(score, best.score):
 				best = _Scored.new()
 				best.action = candidate
 				best.score = score
 		if best != null:
 			return best
-		if not include_downed and considered:
-			return null   # someone was standing in reach and the exchange was not worth it: idle, don't execute a body
 	return null
 
 
@@ -611,11 +610,18 @@ static func _best_candidate_for(member: Unit, squad: Squad, board: BoardContext,
 #
 # Bounded by its trigger rather than by a depth counter: only a candidate that scores nothing alone
 # AND applies a state to an enemy gets here, so a squad of plain weapons pays nothing at all.
-static func _lookahead(setup_unit: Unit, setup: AttackAction, squad: Squad, board: BoardContext,
+#
+# THE ACCUMULATOR STARTS AT THE SET-UP'S OWN SOLO SCORE, never at Vector3i.ZERO (#711). A zero floor
+# was invisible while a candidate had to BEAT zero to queue -- it only ever turned a refusal into a
+# refusal. With no bar it LAUNDERS: a set-up really worth (-1, 0, -5) came back (0,0,0) and then
+# outranked an honest plain swing at (-1, 8, -4) on the first term, so a member facing a lethal
+# counter soaked instead of hitting and died dealing nothing. A set-up is worth the better of what
+# it does alone and what it enables; zero is not one of those two and must not be invented here.
+static func _lookahead(setup_unit: Unit, setup: AttackAction, solo: Vector3i, squad: Squad, board: BoardContext,
 		base_plan: ResolvedPlan, squad_manager: SquadManager, reactions: Array[ElementalReaction],
 		terrain: Array[TerrainReaction], refused: Dictionary) -> Vector3i:
 	var base := _score_plan(setup_unit.get_faction(), base_plan, false)
-	var best := Vector3i.ZERO
+	var best := solo
 	for mate in squad.get_members():
 		if mate == setup_unit or not mate.is_active() or mate.has_main_action_queued() or not mate.can_wield_equipped():
 			continue

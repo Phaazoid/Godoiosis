@@ -135,21 +135,31 @@ func test_prefers_a_predicted_down_at_equal_damage() -> void:
 	assert_that(aim.target_cell).is_equal(frail.movement.cell)
 
 
-func test_friendly_splash_can_veto_a_net_zero_candidate() -> void:
-	# ForwardLine through own ally into the enemy: +6 enemy, -6 ally = net (0,0) -- not better
-	# than doing nothing, so the chooser declines. Soft penalty, not a ban: see the clear-line
-	# contrast below.
+func test_friendly_splash_loses_to_a_clean_shot_at_the_same_victim() -> void:
+	# ForwardLine through own ally into the enemy: +6 enemy, -6 ally = net 0, against a clean
+	# reach-2 shot at +3. Friendly fire is a soft penalty, not a ban, and with the bar gone (#711)
+	# what it does is ORDER: the clean attack wins whenever the AI has one. It used to VETO the
+	# splash outright -- that half is superseded, since a candidate no longer has to beat nothing.
 	var attacker: Unit = H.spawn_solo(self, _sm, ENEMY, Vector2i(0, 0))
 	var weapon: WeaponInstance = attacker.get_equipped_weapon() as WeaponInstance
 	weapon.template.main_attack.power = 6
 	weapon.template.main_attack.hits_allies = true
 	weapon.template.main_attack.attack_pattern = ForwardLinePattern.new()   # length 2
+	var clean: WeaponAttackData = WeaponAttackData.new()
+	clean.power = 3
+	var reach: ManhattanRangePattern = ManhattanRangePattern.new()
+	reach.max_range = 2                                    # far enough to skip the ally entirely
+	clean.attack_pattern = reach
+	var extras: Array[WeaponAttackData] = [clean]
+	weapon.template.extra_attacks = extras
 	var _friend: Unit = H.spawn_solo(self, _sm, ENEMY, Vector2i(1, 0), { Stats.Stat.MHP: 50 })
-	var _victim: Unit = H.spawn_solo(self, _sm, PLAYER, Vector2i(2, 0), { Stats.Stat.MHP: 50 })
+	var victim: Unit = H.spawn_solo(self, _sm, PLAYER, Vector2i(2, 0), { Stats.Stat.MHP: 50 })
 
-	var units: Array[Unit] = [attacker, _friend, _victim]
-	assert_bool(AITactics.queue_main_action(attacker, _board(units), _sm, ATTACK_ONLY)).is_false()
-	assert_array(attacker.squad.action_queue).is_empty()
+	var units: Array[Unit] = [attacker, _friend, victim]
+	assert_bool(AITactics.queue_main_action(attacker, _board(units), _sm, ATTACK_ONLY)).is_true()
+	var aim: AttackAction = attacker.squad.action_queue[0] as AttackAction
+	assert_object(aim.fired_attack).override_failure_message(
+			"the AI fired through its own ally when it had a clean shot").is_same(clean)
 
 
 func test_clear_line_queues_the_same_attack() -> void:
