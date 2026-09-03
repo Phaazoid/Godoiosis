@@ -63,17 +63,22 @@ func test_nearest_enemy_picks_closest_active() -> void:
 	assert_object(AITactics.nearest_enemy(player, _context(board))).is_same(near)
 
 
-func test_nearest_enemy_ignores_allies_and_downed() -> void:
+# Allies are not targets; a body is (#720, dev 2026-09-03 -- it asserted the far standing enemy
+# until then). Both halves ride one assertion, because the ally is the NEAREST unit on the board:
+# an answer of the ally means the faction filter broke, and an answer of the far enemy means bodies
+# dropped out of the ranking again. The doctrine and its own cases live in
+# tests/ai/test_downed_deprioritization.gd.
+func test_nearest_enemy_ignores_allies_but_takes_the_nearer_body() -> void:
 	var board: Dictionary = _build_board()
 	var player: Unit = _spawn(board, Team.Faction.PLAYER, Vector2i(0, 0))
 	var _ally: Unit = _spawn(board, Team.Faction.PLAYER, Vector2i(1, 0))
 	var downed: Unit = _spawn(board, Team.Faction.ENEMY, Vector2i(2, 0))
-	var far_active: Unit = _spawn(board, Team.Faction.ENEMY, Vector2i(5, 0))
+	var _far_active: Unit = _spawn(board, Team.Faction.ENEMY, Vector2i(5, 0))
 
 	downed.take_damage(12)   # fatal but sub-overkill (MHP 10, ceiling 10) -> DOWNED, not dead
 	assert_bool(downed.is_downed()).is_true()
 
-	assert_object(AITactics.nearest_enemy(player, _context(board))).is_same(far_active)
+	assert_object(AITactics.nearest_enemy(player, _context(board))).is_same(downed)
 
 
 func test_nearest_enemy_within_filter() -> void:

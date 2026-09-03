@@ -134,3 +134,51 @@ func test_a_sentry_never_engages_an_enemy_standing_outside_its_zone() -> void:
 
 	assert_object(_choose(board, leader, zone, null)).override_failure_message(
 			"the sentry was lured out by an enemy standing outside its own zone").is_null()
+
+
+# --- A body is a target here too (#720, dev 2026-09-03) -----------------------------------------
+
+# A body, through the door that makes one -- see the note in test_downed_deprioritization.gd for why
+# the hand-set lifecycle is not good enough anywhere the answer depends on a body's HP.
+func _down(unit: Unit) -> void:
+	unit.force_down()
+
+
+# The ORDER of the engagement ranking, and the reason standing sits above safety: a body can never
+# counter, so it is unconditionally "safe" and would win every comparison it entered. The armed one
+# is the right answer despite being the only one that can hit back.
+#
+# DECLARED unpinned before #720 -- bodies were not engageable at all, so this passed by exclusion.
+# It is a mutant guard: drop the standing key and the body wins on safety.
+func test_a_standing_target_outranks_a_body_even_though_the_body_cannot_answer() -> void:
+	var board: Dictionary = _build_board()
+	var leader: Unit = _spawn(board, PLAYER, Vector2i(2, 2))
+	var body: Unit = _spawn(board, ENEMY, Vector2i(1, 2))       # safe, and spawned first
+	_down(body)
+	var armed: Unit = _spawn(board, ENEMY, Vector2i(3, 2))
+
+	assert_object(_choose(board, leader)).override_failure_message(
+			"the squad went for the body because it was the safe option").is_same(armed)
+
+
+# ...and the fork itself: a body in reach makes the answer to "is anybody attackable this turn?" YES.
+# The leash is what makes that observable -- `allowed` says which cells this sentry may fight FROM,
+# and the intruder's only firing cells are outside it (the body is standing on the one inside), so
+# the intruder is not engageable while the body is. Before #720 the body was invisible here, the fork
+# answered NO, and pursuit sent the sentry after an enemy it has no legal cell to attack from.
+func test_a_leashed_squad_engages_the_body_it_can_legally_fight() -> void:
+	var board: Dictionary = _build_board()
+	var leader: Unit = _spawn(board, PLAYER, Vector2i(3, 0))
+	var body: Unit = _spawn(board, ENEMY, Vector2i(5, 0))
+	_down(body)
+	var _intruder: Unit = _spawn(board, ENEMY, Vector2i(6, 0))
+
+	var zone := {}
+	for x in range(4, 7):
+		zone[Vector2i(x, 0)] = true
+	var allowed: Dictionary = zone.duplicate()
+	allowed[Vector2i(3, 0)] = true                              # the post counts as inside
+
+	assert_object(_choose(board, leader, zone, allowed)).override_failure_message(
+			"the sentry pursued an intruder it has no legal cell to fight from, past a body it does"
+			).is_same(body)

@@ -54,6 +54,16 @@ func _context(board: Dictionary) -> BoardContext:
 	return BoardContext.new(board.grid, units, board.squad_manager)
 
 
+# A body, through the DOOR that makes one. Setting `lifecycle_state` by hand is half a down: the
+# real thing clings at 1 HP (Unit._go_downed), and the scoring pass reads that HP through the
+# overkill clamp -- so a hand-set body is priced at its FULL bar and every "a body loses head to
+# head" case here would be measuring a state the game cannot produce. force_down is the dev bypass
+# built for exactly this: DOWNED with no Will spend, no maim and no Crisis. Nothing listens to
+# `went_downed` on a board_builder fixture (the game wires it at game.spawn_unit).
+func _down(unit: Unit) -> void:
+	unit.force_down()
+
+
 # A two-member PLAYER squad on the diagonal, M1 as leader. Returns [M1, M2] in member order.
 func _pair(board: Dictionary) -> Array[Unit]:
 	var m1: Unit = _spawn(board, PLAYER, M1_CELL)
@@ -350,39 +360,43 @@ func test_scoring_leaves_the_board_where_a_real_resolve_would() -> void:
 			.is_equal(unit.get_projected_destination())
 
 
-# --- Standing beats a body, even when standing LOSES (dev rulings, 2026-09-02) ------------------
+# --- The one comparison a body wins (dev ruling, 2026-09-03) -------------------------------------
 
-# The player's downed unit is a rescue waiting to happen, so the AI must never spend an action
-# executing one while anybody is still on their feet in reach. The standing enemy here answers with
-# a counter that fells the attacker, so the trade is a clear loss -- and BOTH halves of the ruling
-# now speak: the losing trade is TAKEN (#711, no bar), and the body is still left alone (#57's
-# precedence, which a loss does not weaken).
+# THE CORNER WHERE TWO RULINGS MEET, and the dev settled it with the score. The rescue window says
+# felling someone standing is worth more than finishing a corpse (2026-09-02); #720 says a body is an
+# ordinary target that loses head to head. Here the standing target's counter FELLS the attacker, so
+# the two rulings point opposite ways -- and the arithmetic decides: a free finish scores (0,+1,0)
+# against a suicidal swing at (-1,3,-3), and a removal on our own side is the first term.
 #
-# This case is the only coverage of pass-1-over-pass-2 in the LOSING case, which is why it kept its
-# fixture rather than being retired with the bar. It used to assert that NEITHER was attacked --
-# superseding "pass 2 needs an EMPTY pass 1, not a losing one" (dev, 2026-09-02), which is vacuous
-# now that pass 1 has no losing outcome to have.
-func test_a_standing_target_is_attacked_at_a_loss_rather_than_a_body_being_finished() -> void:
+# This SUPERSEDES the assertion this case carried until #720, which was that the body is never
+# touched while anyone stands in reach. That was #57's precedence as a gate; what is left is the
+# ranking, and a swing that trades our unit for three chip damage is the one thing it loses to.
+func test_a_free_finish_outranks_a_swing_that_would_fell_the_attacker() -> void:
 	var board: Dictionary = _build_board()
 	var attacker: Unit = _spawn(board, PLAYER, Vector2i(0, 0))
 	attacker.set_current_hp(3)                              # the counter takes it off its feet
 	var body: Unit = _spawn(board, ENEMY, Vector2i(1, 0))
-	body.lifecycle_state = Unit.LifecycleState.DOWNED
+	_down(body)
 	var armed: Unit = _spawn(board, ENEMY, Vector2i(0, 1))  # standing, and its answer is lethal
 
 	AITactics.queue_main_actions_for_squad(attacker.squad, _context(board), board.squad_manager)
 
 	assert_int(_aim_count(attacker.squad, body.movement.cell)).override_failure_message(
-			"the AI executed a downed unit while somebody was still standing in reach").is_equal(0)
+			"the AI threw itself at a standing target rather than take the finish in front of it"
+			).is_equal(1)
 	assert_int(_aim_count(attacker.squad, armed.movement.cell)).override_failure_message(
-			"the AI idled instead of taking the only trade it had, bad as it was").is_equal(1)
+			"the AI took the swing that gets it killed for three chip damage").is_equal(0)
 
 
-# ...and the other half, which is why "considered" reads the PLAN rather than the live board.
-# Planning does not execute, so a unit a squadmate fells THIS round is still is_active() -- read
-# live it would count as a standing target and wedge pass 2 shut, leaving M2 idling beside a body
-# it should finish. M1 can reach only A; M2 can reach A and the old body, so once M1 downs A the
-# body really is M2's only option.
+# ...and the plan-vs-live half, which is why the candidate filter reads the PLAN. Planning does not
+# execute, so a unit a squadmate fells THIS round is still is_active() on the board -- and the score
+# has to price M2's options against what the squad is really doing, not against a board where A is
+# still healthy. M1 can reach only A; M2 can reach A and the old body, so once M1 has downed A the
+# body is worth more than a second swing at someone already down (+1 against the clamp's nothing).
+#
+# The wording this comment carried until #720 described a gate rather than a score -- reading A live
+# "wedged pass 2 shut". There are no passes now; what would break is the ranking, in the same
+# direction and for the same reason.
 func test_a_squadmate_felled_this_round_is_not_a_standing_target_any_more() -> void:
 	var board: Dictionary = _build_board()
 	var m1: Unit = _spawn(board, PLAYER, Vector2i(2, 0))    # reaches A only
@@ -391,7 +405,7 @@ func test_a_squadmate_felled_this_round_is_not_a_standing_target_any_more() -> v
 	var a: Unit = _spawn(board, ENEMY, Vector2i(1, 0), false)
 	a.set_current_hp(3)                                     # one hit fells it
 	var body: Unit = _spawn(board, ENEMY, Vector2i(1, 2), false)
-	body.lifecycle_state = Unit.LifecycleState.DOWNED
+	_down(body)
 
 	AITactics.queue_main_actions_for_squad(m1.squad, _context(board), board.squad_manager)
 
@@ -513,7 +527,7 @@ func test_an_aoe_that_also_catches_a_body_beats_the_same_shot_that_does_not() ->
 	weapon.template.extra_attacks = extras
 	var upright: Unit = _spawn(board, ENEMY, Vector2i(1, 0))
 	var body: Unit = _spawn(board, ENEMY, Vector2i(2, 0), false)
-	body.lifecycle_state = Unit.LifecycleState.DOWNED
+	_down(body)
 
 	AITactics.queue_main_actions_for_squad(attacker.squad, _context(board), board.squad_manager)
 
@@ -527,3 +541,50 @@ func test_an_aoe_that_also_catches_a_body_beats_the_same_shot_that_does_not() ->
 	assert_object(ordered[0].fired_attack).override_failure_message(
 			"the AI took the shot that spares the corpse, over the identical one that also finishes it"
 			).is_same(sweep)
+
+
+# --- A target the plan has already KILLED is not a target (#719, dev 2026-09-03) ----------------
+
+# Reported from play: the defending leader fired her 6-long line down the middle of her own party,
+# into a player unit her squadmates had already finished this round. Logged marginal (0, -20, 0) --
+# ten to her own archer, ten to her own general, and ten to a corpse. She took it because with no
+# bar (#711) a squad's only option is taken however bad it is, and it was her only option because
+# the dead unit was still being offered as one.
+#
+# The offer came from the SECOND pass: it admitted anyone `is_downed()` on the LIVE board and never
+# asked the plan's hypo, while pass 1 had asked it since #117. One filter with the hypo clause, one
+# without -- the duplicate-filter shape #716 was, drifting the same way.
+#
+# HYPO-DOWNED IS STILL A TARGET and that is the whole distinction: finishing a body is intended when
+# nothing else is in reach, and the case above pins it. What is gone is aiming at somebody the plan
+# has already taken off the board entirely.
+func test_a_target_the_plan_has_already_killed_is_not_aimed_at() -> void:
+	var board: Dictionary = _build_board()
+	var body: Unit = _spawn(board, ENEMY, Vector2i(0, 0), false)
+	_down(body)
+	var m1: Unit = _spawn(board, PLAYER, Vector2i(1, 0))    # adjacent: finishes the body, hypo DEAD
+	var m2: Unit = _spawn(board, PLAYER, Vector2i(2, 0))
+	board.squad_manager.join_squad(m2, m1.squad)
+
+	# M2's line sweeps its own squadmate on the way to the body, and the body is its only enemy --
+	# so if the corpse still counts, this is the only candidate it has and it fires.
+	var weapon: WeaponInstance = m2.get_equipped_weapon() as WeaponInstance
+	var lance: WeaponAttackData = WeaponAttackData.new()
+	lance.power = 3
+	lance.hits_allies = true
+	lance.attack_pattern = ForwardLinePattern.new()   # length 2: (1,0) then (0,0)
+	var extras: Array[WeaponAttackData] = [lance]
+	weapon.template.extra_attacks = extras
+
+	AITactics.queue_main_actions_for_squad(m1.squad, _context(board), board.squad_manager)
+
+	assert_int(_aim_count(m1.squad, body.movement.cell)).override_failure_message(
+			"a second swing was aimed at a unit the plan had already killed: %s" % str(_attack_aims(m1.squad))
+			).is_equal(1)
+	var ordered := _attacks_in_order(m1.squad)
+	assert_int(ordered.size()).is_equal(1)
+	if ordered.is_empty():
+		return
+	assert_object(ordered[0].actor).override_failure_message(
+			"the finisher is no longer the one that queued -- the fixture stopped measuring #719"
+			).is_same(m1)
