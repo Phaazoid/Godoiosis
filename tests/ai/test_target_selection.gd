@@ -161,24 +161,31 @@ func test_a_standing_target_outranks_a_body_even_though_the_body_cannot_answer()
 			"the squad went for the body because it was the safe option").is_same(armed)
 
 
-# ...and the fork itself: a body in reach makes the answer to "is anybody attackable this turn?" YES.
-# The leash is what makes that observable -- `allowed` says which cells this sentry may fight FROM,
-# and the intruder's only firing cells are outside it (the body is standing on the one inside), so
-# the intruder is not engageable while the body is. Before #720 the body was invisible here, the fork
-# answered NO, and pursuit sent the sentry after an enemy it has no legal cell to attack from.
+# ...and the FORK itself: a body in reach makes "is anybody attackable this turn?" answer YES, so the
+# squad uses the exchange ranking rather than falling into pursuit.
+#
+# THE LEASH IS WHAT MAKES THAT OBSERVABLE, and it took a surviving mutant to find a fixture that
+# could. The two layers agree about bodies everywhere else -- both rank by route now, so excluding
+# bodies from engagement just sends the question to pursuit, which lands on the same target and hides
+# the difference. `allowed` is the one thing only engagement reads: it says which cells this sentry
+# may fight FROM. Here the NEAR body can only be attacked from cells outside the leash, and the FAR
+# one from a cell inside it, so the two layers genuinely disagree -- and pursuit, which cannot see
+# the leash at all, answers with the body this sentry may not legally go to.
 func test_a_leashed_squad_engages_the_body_it_can_legally_fight() -> void:
 	var board: Dictionary = _build_board()
-	var leader: Unit = _spawn(board, PLAYER, Vector2i(3, 0))
-	var body: Unit = _spawn(board, ENEMY, Vector2i(5, 0))
-	_down(body)
-	var _intruder: Unit = _spawn(board, ENEMY, Vector2i(6, 0))
+	var leader: Unit = _spawn(board, PLAYER, Vector2i(3, 3))
+	var near_body: Unit = _spawn(board, ENEMY, Vector2i(3, 1))   # nearest, and outside the leash
+	_down(near_body)
+	var far_body: Unit = _spawn(board, ENEMY, Vector2i(5, 0))    # fightable from (5,1), which is allowed
+	_down(far_body)
 
 	var zone := {}
-	for x in range(4, 7):
-		zone[Vector2i(x, 0)] = true
-	var allowed: Dictionary = zone.duplicate()
-	allowed[Vector2i(3, 0)] = true                              # the post counts as inside
+	zone[near_body.movement.cell] = true
+	zone[far_body.movement.cell] = true
+	var allowed := {}
+	for cell in [Vector2i(3, 3), Vector2i(4, 3), Vector2i(5, 3), Vector2i(5, 2), Vector2i(5, 1)]:
+		allowed[cell] = true
 
 	assert_object(_choose(board, leader, zone, allowed)).override_failure_message(
-			"the sentry pursued an intruder it has no legal cell to fight from, past a body it does"
-			).is_same(body)
+			"the sentry went for the body it has no legal cell to attack from -- the fork answered NO"
+			).is_same(far_body)
