@@ -1,6 +1,6 @@
 # AI Tactics — the archetype layer's integration contract
 
-**Canon checked through #720 (2026-09-03).**
+**Canon checked through #726 (2026-09-03).**
 
 **Status: BUILT 2026-07-22, #78 CLOSED 2026-07-23 (commit `239555b`)** — ratified and hand-typed the same day; full suite 444/444 green. Feel iteration continues through ordinary playtesting (the v1 approximations below are the watch-list). The #29-era archetype layer (Rushdown/Hold/Sentry, painted zones, Crisis stances — see CLAUDE.md's architecture map) is the substrate; this doc covers the #78 rebuild of *how the AI decides*, and the standing contract that keeps it from rotting again. *(2026-08-09: the Crisis-stance piece of that substrate is GONE — [#158](https://github.com/Phaazoid/Godoiosis/issues/158) made Crisis a deterministic equipped ability, deleting `CRISIS_STANCES`/`accepts_crisis` with the accept/decline question they answered; enemy Crisis access is authored content now.)*
 
@@ -38,25 +38,27 @@ Two things follow, and both already happened:
 
 Every main action type must land in exactly one of the two, for every archetype — pinned by `tests/law/test_ai_action_coverage.gd`. **A new verb cannot silently skip the AI**: the suite stays red until a stance is declared, even if that stance is NEVER. This is the action registry's AI column, mirroring how `test_action_registry.gd` pins the pipeline.
 
-Candidate builders live in `AITactics` (one per type, each mirroring `MainActionMenu`'s gate for that verb); an undeclared builder is a loud `push_error`, never a silent skip.
+Candidate builders live in `AITactics` (one per type, each mirroring `MainActionMenu`'s gate for that verb); an undeclared builder is a loud `push_error`, never a silent skip. **The table says WHAT an archetype will ever do; WHEN a weapon verb is worth doing is the family's own call** — `queue_main_action` asks the equipped weapon's `AIWeaponRoutine` before a weapon verb's builder runs (see *Weapon routines*).
 
-### Ratified tables (dev calls, 2026-07-22; REV column added 2026-08-06)
+### Ratified tables (dev calls, 2026-07-22; REV column added 2026-08-06; REV/BURROW on Hold+Sentry 2026-09-03)
 
-| | ATTACK | RESCUE | RELOAD | INTIMIDATE | RALLY | REV |
-|---|---|---|---|---|---|---|
-| **Rushdown** | 1 | never | 2 | never | never | 3 |
-| **Hold** | 1 | 2 | 3 | 4 | never | never |
-| **Sentry** | 1 | 2 | 3 | 4 | never | never |
+| | ATTACK | RESCUE | RELOAD | REV | BURROW | INTIMIDATE | RALLY |
+|---|---|---|---|---|---|---|---|
+| **Rushdown** | 1 | never | 2 | 3 | never | never | never |
+| **Hold** | 1 | 2 | 3 | 4 | 5 | 6 | never |
+| **Sentry** | 1 | 2 | 3 | 4 | 5 | 6 | never |
 
 - Intimidation/rescue on Hold+Sentry only — defenders recover their own and menace what they can't hit; Rushdown stays pure aggression.
 - Rescue before Reload: a returned unit now beats rearming for later. (The verb was `SPRING_LOAD` when these tables were ratified; it went generic as `RELOAD` in #84 when the Carbine wanted the same order — same slot, same priority, one more family using it.) Intimidate last: menace only when nothing better exists.
 - RALLY is NEVER everywhere for now: early rallies burn the strong falloff steps (6/4/2…) while idling. Revisit with real Will-awareness — this is a deliberately parked knob, not an oversight.
-- **REV is Rushdown-only, added 2026-08-06 (AI generalization sweep, finding #3).** It had been
+- **REV was Rushdown-only from 2026-08-06 (AI generalization sweep, finding #3)** — before that it had been
   `NEVER` for every archetype with no builder at all (unreachable even if declared — the
-  `queue_main_action` match had no arm for it). `AITactics._try_rev` now mirrors `_try_reload`
-  exactly (`Unit.can_rev_weapon()`/`rev_weapon()`, same shape as the reload pair), and Rushdown
-  tries it last, after ATTACK and RELOAD. Hold/Sentry keep REV `NEVER` — undecided for them, not
-  ruled out.
+  `queue_main_action` match had no arm for it). `AITactics._try_rev` mirrors `_try_reload`
+  exactly (`Unit.can_rev_weapon()`/`rev_weapon()`, same shape as the reload pair), tried last.
+  **Hold/Sentry gained REV and BURROW on 2026-09-03 ([#726](https://github.com/Phaazoid/Godoiosis/issues/726), dev: a defender at its post revs, digs in, tops off)**, slotted ahead of INTIMIDATE so
+  the ratified "menace only when nothing better exists" still holds; `_try_burrow` is the rev pair's
+  shape once more. **Rushdown keeps BURROW `NEVER` as a declaration, not an omission: a rusher does
+  not entrench.**
 
 ## Shared engage plumbing
 
@@ -73,6 +75,8 @@ The per-member "everybody tries a main action" step is itself `AITactics.queue_m
 Rushdown's own no-enemy branch, which used to `return` above it and skip fallback main actions
 (Reload/Rev) entirely whenever the squad found no target at all (`choose_engagement_target` since
 2026-09-02; `nearest_enemy` before it). `HoldArchetype` never moves, so it has no destination/move step, only this one.
+
+Its second half stands alone as `AITactics.queue_fallback_actions_for_squad` — the per-member walk with ATTACK removed — because **a Sentry AT ITS POST with nobody in the zone takes exactly that and never an attack** ([#726](https://github.com/Phaazoid/Godoiosis/issues/726), dev 2026-09-03: *"at the post only"*). An enemy in reach but outside the zone is bait, and the lure-proofing contract is unchanged (`test_cannot_be_lured_by_enemy_in_reach_but_outside_zone` now asserts no move and no attack rather than an empty queue). Before this the branch queued nothing at all, so an idle sentry never reloaded either — the "Carbine needed zero AI work" story was false for one archetype. The walk-home branch stays silent on purpose: entrenching a cell you are leaving is waste.
 
 **A FACTION TURN RE-DERIVES THE BOARD PER SQUAD** ([#714](https://github.com/Phaazoid/Godoiosis/issues/714), 2026-09-03). `AIController.take_faction_turn` takes no `BoardContext` parameter, and that absence is the fix: it used to build one for the whole turn while `execute_orders` between squads spans frames, so a unit an earlier squad **killed** was genuinely freed by the time a later squad planned — and `SquadManager._resolve_actions` opens by calling a method on every unit the board lists. The crash was the loud half; for the rest of that turn the AI had also been targeting, pathing and measuring cohesion against a roster including the dead.
 
@@ -112,6 +116,36 @@ The magnitude is self-limiting rather than tuned, which is why no knob was neede
 
 Target-state awareness ships "minimal": lethality tiers (via the resolver's own prediction) + two builder tie-breaks — intimidate the lowest-Will adjacent enemy (maim-cliff pressure, skipping Will 0), rescue the most urgent downed clock. Deeper state reasoning (limb loss, Crisis avoidance/exploitation) is future scoring-term work, and the seam for it is `_score_plan`.
 
+## Weapon routines — a family's own say on WHEN its tool is worth using ([#726](https://github.com/Phaazoid/Godoiosis/issues/726), 2026-09-03)
+
+The integration contract above hands the AI every verb and attack for free; nothing in it says when a tool is worth **setting up** rather than firing. His framing on #117: *"we're going to need some weapon/ability specific routines the AI will have to be able to plug and play, depending on what tools are available to them."* `Classes/ai/weapons/AIWeaponRoutine.gd` is that seam: one class per `WeaponData.WeaponType`, dispatched the way `WeaponInstance._instance_for` is, with an **explicit entry for every family** — the inert base is a legal declaration, `MAIN_ACTION_NEVER`'s idiom — pinned by `tests/law/test_ai_weapon_routine_coverage.gd`, so a new family goes red until somebody declares its stance even when that stance is "nothing". A rune or an empty hand resolves to the base.
+
+**A routine only ever says NO.** Two hooks, both inert on the base:
+
+- `allows_preparation(unit, verb, board)` — asked by `queue_main_action` before a **weapon** verb's builder runs (`RELOAD`/`REV`/`BURROW`, the Weapon Action submenu's own set — never RESCUE/INTIMIDATE/RALLY, which are not a weapon's to veto). A refusal is the same shape as `can_reload()` answering false: a builder gate, not a skip of the walk.
+- `defers_candidate(unit, candidate, plan, score)` — asked inside `_best_candidate_for` after the hypothetical is resolved and scored. **A deferred candidate loses to every candidate the same member did not defer and is still taken when it has nothing else** — deferred, never deleted, so #711 stays literal.
+
+It never introduces a verb the archetype declared `NEVER`, never invents a target, never adds a score term. The archetype table stays the authority on *what* a squad will ever do; the routine decides *when* it is worth doing.
+
+**A preparation is a RULE, not a SCORE** *(dev, 2026-09-03)*. `_score_plan` prices this turn; a preparation pays off next turn, which no term can see (the lookahead is one step *inside* the squad's own turn). The predictability contract *prefers* the legible rule — *"the spearman saves the spring for a line or a kill"* is a sentence a player can hold, where a discounted multi-turn expectation is the computation that law exists to reject. So `_score_plan` is untouched.
+
+**Deferral is MEMBER-LOCAL, and that is the answer to the obvious objection.** #720 deleted a two-tier structure a day earlier in favour of one ranking — but that tier duplicated arithmetic the score already did (a body prices at +1 unaided), where this one expresses a cost the score has *no* term for. It is applied inside `_best_candidate_for` only; `_Scored` and the joint loop are untouched, because threading a flag through them would make it a precedence *across members* — the shape #720 deleted — and let one family's routine reorder another family's swing. Pinned by `test_deferral_is_member_local_never_a_precedence_across_members`. Declared limit: a target only the deferred attack can reach still gets it, because the alternative is not attacking.
+
+**The rules, and the sentence each one is:**
+
+| Family | Rule | The sentence |
+|---|---|---|
+| **Drill** | `BURROW` only when the **projected destination** has no COVER (`board.cover_def_at`) | *A drill with nothing to hit digs in where it stands — once.* |
+| **Springspear** | defer an attack that **disarms** (spends readiness with no other selectable attack that fires without it) unless its own volley catches `SPRING_LINE_MINIMUM` enemies or its marginal removal term is positive | *The spearman saves the spring for a line or a kill.* |
+
+- The Drill's cell is the projected destination because the deposit lands there (`SquadManager.resolve_plan`, pinned by `test_cover_lands_where_the_digger_ends_up`) and the fallback walk runs after the group move is queued; `movement.cell` would be Law #4's exact drift. `can_burrow()` is unconditionally true, so without the rule an idle drill re-digs its own cover every turn — a no-op deposit (`TerrainStateManager.fold` dedupes), an order and an `AI_PLAN_READ` beat spent on nothing.
+- The Springspear's "disarms" is read off the content, not assumed of the family: `Stab` requires readiness without consuming it, so a spent spring gates every attack and the next turn is a Spring Load (and a sprung spear cannot counter either — `attack_source_can_counter` reads the same gate). Over two turns Stab-Stab beats Spring-then-reload unless the line catches two or the +2 fells. "Fells" is the marginal `score.x`, never `_plan_removes` on the hypothetical, which reads true when a squadmate already felled the target. `SPRING_LINE_MINIMUM` is the one tunable, a `# playtest-tunable` static on the routine (the `FallRules`/`Abilities` idiom) — not GameKnobs, which addresses node properties in the running Battle3D world.
+
+**Two families that LOOK like they want a routine and declare the bare base, recorded so nobody re-derives them:**
+
+- **Chainsword** — a proximity rule (*"rev when an enemy is within a move"*) was proposed and killed in review. `REV` is last in every list, so refusing it means the unit *idles* for a free refresh; a "not already revved" clause costs a refresh on the tick cadence (rev at N, refused at N+2, next swing lands unrevved); and *"a chainsword with nothing to hit revs"* is the simpler sentence. **Rev stays unconditional and stays a fallback — no ATTACK preemption** *(dev, 2026-09-03: "rev only when it can't attack", declined rather than deferred)*. What changed is only the table: Hold/Sentry may rev now.
+- **Kinetic Mace** — the economy is already priced. Blowback and Smash are both `power 3` Manhattan-1, but they do not tie against anything that can counter: `_resolve_actions` publishes each aim's shove *before* counters derive and `can_counter` reads the defender's **projected** cell, so a Blowback that shoves a Manhattan-1 defender off the attacker **denies its counter** and wins on the reaction term; near a drop or water it wins on damage outright. The mace alternates Smash/Blowback against melee on its own, and a "defer Blowback unless it beats Smash" rule is exactly what the argmax already does — a mutant deleting it would survive every test. (#117's *"mace charge → Blowback has no scoring"* was true until #706 derived counters from post-shove positions; it is stale now and ticked there.)
+
 ## Known v1 approximations (accepted at ratification)
 
 - **Destination planning reads the default pick** — `best_attack_destination` hoists one `leader.get_fired_attack()` and evaluates every cell against it, rather than per-candidate-attack. Cells × attacks × enemies was judged not worth it yet.
@@ -121,6 +155,8 @@ Target-state awareness ships "minimal": lethality tiers (via the resolver's own 
   - **The opener bears the counter alone — no longer a freeze, and no longer anything at all.** C1/C4 make a defending party react once per plan, to the *first* attack against it, so the whole cost lands on whichever candidate is scored first. Until #711 that froze a squad outright: if those counters would fell the opener, no candidate netted a positive removal and it would not open even when the follow-ups won the exchange (playtest symptom, *"the enemy won't attack my tank"*). With no bar the squad opens. **And nothing clever replaces it, which is worth stating so nobody goes looking**: `SquadManager.choose_counter_target` picks the first legal member of the attacking *party* in member order (or a taunter) and never asks who opened, and in round 1 nobody has moved — so every candidate aimed at a given defending squad draws the identical volley, the cost is constant across the argmax, and it cancels. Round 1 is decided by removals and damage dealt as though counters did not exist.
   - **Reaction heals are invisible.** `plan.counters` carries reactive heals (C8–C10) and heals are not scored at all, so the AI counts full damage against a healer-guarded target and the heal quietly undoes some of it. Removals stay honest — a heal never lifts a lifecycle — so only the chip-damage term is overstated.
   - **Heals and end-of-turn tile damage are not terms.** `heal_amount` would make AI healers start healing, which is its own behaviour and its own ticket; `tile_hits` is inert until movement is scored, since an attack candidate never changes where anyone ends the turn.
+  - **A deferred candidate can still price a pair** (#726). `_lookahead` builds follow-ups straight from `_attack_candidates`, so a set-up may be credited with a deferred Spring the squad will not choose next round. Inert for shipped content (no deferred candidate applies a state); the fix would be a delete rather than a defer, so it stays a declared limit on #117.
+  - **Reload-vs-poke** (#117's third instance, deferred by #726 rather than dropped). A unit carrying a dry weapon *and* a second fireable non-readiness attack pokes forever, since ATTACK always yields a candidate and RELOAD sits behind it in the walk. Unreachable with shipped content — no family carries that pair — and the Carbine's routine is where it would land.
 - **Movement never seeks rescue/intimidate targets** — fallback verbs fire from wherever attack-driven movement landed the unit.
 - **Movement is not scored at all** — joint selection prices *what a member does*, never *where it stands*. `score(plan with X at cell C)` is the same delta and is the natural next step, but the destination pick is still the group move below.
 - **Movement is a group move, not per-unit destinations** — both moving archetypes call `queue_group_move`, so a member's destination is "preserve your path-offset from the leader" rather than anything tactical. Measured 2026-07-29 while fixing [#103](https://github.com/Phaazoid/Godoiosis/issues/103): this is **not** why the AI authored illegal plans (a single individual leader move produces the identical refusal — the invalid order is the hold-position filler `game.gd` gives every member, and the binding rule is `SquadPlanValidator._check_leader_range`, which applies to any plan from any author). But `GroupMoveSolver` is currently the AI's *only* cohesion solver, so this cannot simply be deleted. The replacement needs no new solver — `RulesService.compute_move_range` already leashes a non-leader to the leader's *projected* destination, so queueing the leader first makes each member's own range cohesion-clamped — what it needs is a decision about each archetype's per-unit movement taste. Tracked on [#117](https://github.com/Phaazoid/Godoiosis/issues/117).
@@ -163,4 +199,4 @@ The Balanced archetype (#29 leftover), strain's fate (#76 — its AI integration
 **Win/loss detection is no longer a leftover** — it landed 2026-07-28 as #96 and lives outside this layer, in `MissionRules`/`MissionController` ([missions.md](missions.md)). The AI has two points of contact:
 
 - **A guard.** `AIController.take_faction_turn` stops issuing orders the moment the mission is over, so a squad that wipes the player mid-turn doesn't keep playing behind the end-of-mission card.
-- **`CAPTURE` is `MAIN_ACTION_NEVER` on all three archetypes**, forced to be an explicit decision by `tests/law/test_ai_action_coverage.gd`'s partition. **This one is not drift.** Rev and Burrow are `NEVER` because nobody has written a scored builder yet; `CAPTURE` is `NEVER` because there is nothing for an AI faction to *win* by capturing — enemy objectives are out of #96's scope, and the point belongs to the player. The AI contests it positionally with what it already has: Rushdown walks into the approach, and a Sentry squad zoned over the point defends it with no AI code at all. Revisit when non-player factions get objectives of their own — which is exactly [#571](https://github.com/Phaazoid/Godoiosis/issues/571), *defend a point* (split out of #101 when that closed), and the first thing that will need a real capture builder.
+- **`CAPTURE` is `MAIN_ACTION_NEVER` on all three archetypes**, forced to be an explicit decision by `tests/law/test_ai_action_coverage.gd`'s partition. **This one is not drift.** RALLY is `NEVER` as a parked knob (and Rev/Burrow *were* `NEVER` for want of a builder, until 2026-08-06 and #726 respectively); `CAPTURE` is `NEVER` because there is nothing for an AI faction to *win* by capturing — enemy objectives are out of #96's scope, and the point belongs to the player. The AI contests it positionally with what it already has: Rushdown walks into the approach, and a Sentry squad zoned over the point defends it with no AI code at all. Revisit when non-player factions get objectives of their own — which is exactly [#571](https://github.com/Phaazoid/Godoiosis/issues/571), *defend a point* (split out of #101 when that closed), and the first thing that will need a real capture builder.

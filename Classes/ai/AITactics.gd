@@ -246,9 +246,17 @@ static func _approach_distances(from_unit: Unit, board: BoardContext) -> Diction
 static func queue_main_action(unit: Unit, board: BoardContext, squad_manager: SquadManager, priority: Array) -> bool:
 	if not unit.is_active() or unit.has_main_action_queued():
 		return false
+	var routine := AIWeaponRoutine.for_unit(unit)
 	for t in priority:
+		var verb: BaseAction.ActionType = t
+		# The family's own say on its own verbs (#726): a weapon routine may refuse a preparation
+		# that is not worth it right now -- the same shape as can_reload() answering false, a
+		# builder gate rather than a skip of the walk. Asked about the weapon self-abilities only;
+		# rescue/intimidate/rally are not a weapon's to veto.
+		if AIWeaponRoutine.WEAPON_VERBS.has(verb) and not routine.allows_preparation(unit, verb, board):
+			continue
 		var queued := false
-		match t:
+		match verb:
 			BaseAction.ActionType.ATTACK:
 				queued = _try_best_attack(unit, board, squad_manager)
 			BaseAction.ActionType.RESCUE:
@@ -261,8 +269,10 @@ static func queue_main_action(unit: Unit, board: BoardContext, squad_manager: Sq
 				queued = _try_reload(unit, squad_manager)
 			BaseAction.ActionType.REV:
 				queued = _try_rev(unit, squad_manager)
+			BaseAction.ActionType.BURROW:
+				queued = _try_burrow(unit, squad_manager)
 			_:
-				push_error("No AI builder for ActionType %s" % BaseAction.ActionType.keys()[t])
+				push_error("No AI builder for ActionType %s" % BaseAction.ActionType.keys()[verb])
 		if queued:
 			return true
 	return false
@@ -528,6 +538,15 @@ static func _try_rev(unit: Unit, squad_manager: SquadManager) -> bool:
 	action.init(unit)
 	return squad_manager.queue_action(unit.squad, action)
 
+# Burrow (#726): the rev pair's shape once more. WHETHER it is worth digging here is the Drill's
+# own call (DrillWeaponRoutine), asked by queue_main_action before this builder runs.
+static func _try_burrow(unit: Unit, squad_manager: SquadManager) -> bool:
+	if not unit.can_burrow_weapon():
+		return false
+	var action := BurrowAction.new()
+	action.init(unit)
+	return squad_manager.queue_action(unit.squad, action)
+
 # Where the leader should stand to fight `enemy`: a cell it can already attack from, else the cell
 # furthest along the ROUTE to it. The route targets the nearest STANDABLE firing position, not
 # enemy.movement.cell itself (#127) -- see _nearest_standable_attack_cell for why that distinction
@@ -561,7 +580,14 @@ static func queue_main_actions_for_squad(squad: Squad, board: BoardContext, squa
 	var priority: Array = AIArchetype.main_action_priority(squad.archetype)
 	if priority.has(BaseAction.ActionType.ATTACK):
 		_queue_attacks_jointly(squad, board, squad_manager)
-	var fallback: Array = priority.duplicate()
+	queue_fallback_actions_for_squad(squad, board, squad_manager)
+
+
+# The second pass alone: every member walks the archetype's list with ATTACK removed. Also the
+# whole of a Sentry's turn AT ITS POST with nobody in the zone (#726, dev 2026-09-03) -- a drill
+# digs in, a chainsword revs, a carbine tops off, and nobody swings at bait outside the zone.
+static func queue_fallback_actions_for_squad(squad: Squad, board: BoardContext, squad_manager: SquadManager) -> void:
+	var fallback: Array = AIArchetype.main_action_priority(squad.archetype).duplicate()
 	fallback.erase(BaseAction.ActionType.ATTACK)
 	for member in squad.get_members():
 		queue_main_action(member, board, squad_manager, fallback)
@@ -648,7 +674,9 @@ static func _best_candidate_for(member: Unit, squad: Squad, board: BoardContext,
 		return null
 	var origin := member.get_projected_destination()
 	var base := _score_plan(member.get_faction(), base_plan)
+	var routine := AIWeaponRoutine.for_unit(member)
 	var best: _Scored = null
+	var last_resort: _Scored = null   # the best of what the family DEFERRED -- see below
 	for candidate in _attack_candidates(member, board, origin, base_plan.hypo):
 		if refused.has(_candidate_key(candidate)):
 			continue
@@ -662,11 +690,27 @@ static func _best_candidate_for(member: Unit, squad: Squad, board: BoardContext,
 		# inventing a zero there inverts the ranking now that a negative score can still win.
 		if not _beats(score, Vector3i.ZERO) and allow_lookahead and _applies_state_to_an_enemy(member.get_faction(), plan):
 			score = _lookahead(member, candidate, score, squad, board, base_plan, squad_manager, reactions, terrain, refused)
+		# A DEFERRED candidate is the family's own last resort (#726): it loses to every candidate
+		# this member has NOT deferred and is still taken when it has nothing else, so #711 stays
+		# literal -- the AI always attacks. MEMBER-LOCAL on purpose: decided here, never carried on
+		# _Scored into the joint loop, where it would become a precedence across members (the
+		# two-tier shape #720 deleted) and let one family's routine reorder another family's swing.
+		if routine.defers_candidate(member, candidate, plan, score):
+			if last_resort == null or _beats(score, last_resort.score):
+				last_resort = _scored(candidate, score)
+			continue
 		if best == null or _beats(score, best.score):
-			best = _Scored.new()
-			best.action = candidate
-			best.score = score
-	return best
+			best = _scored(candidate, score)
+	if best != null:
+		return best
+	return last_resort
+
+
+static func _scored(action: AttackAction, score: Vector3i) -> _Scored:
+	var out := _Scored.new()
+	out.action = action
+	out.score = score
+	return out
 
 
 # What the best squadmate follow-up makes this set-up worth. Scored as the PAIR against the same

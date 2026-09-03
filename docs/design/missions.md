@@ -218,8 +218,9 @@ The end-of-mission banner offers **Retry** (hidden when the board wasn't loaded 
 
 `CAPTURE` sits in `AIArchetype.MAIN_ACTION_NEVER` for all three archetypes, and `tests/law/test_ai_action_coverage.gd` forced that to be an explicit decision.
 
-**This is not the Burrow-style drift** (Rev shipped for Rushdown 2026-08-06; Burrow remains the
-live example — nobody has written it a scored builder yet). There is nothing for an AI faction
+**This is not the Burrow-style drift** (Rev shipped for Rushdown 2026-08-06; Burrow followed in
+[#726](https://github.com/Phaazoid/Godoiosis/issues/726), 2026-09-03 — the drift is closed, and
+the example is now historical). There is nothing for an AI faction
 to *win* by capturing, because enemy objectives are out of #96's scope — the point is the player's. The AI contests it positionally, which it already does: Rushdown walks into the approach, and a Sentry squad zoned over the point defends it with no AI code at all. Revisit when non-player factions get objectives of their own, which is [#571](https://github.com/Phaazoid/Godoiosis/issues/571), *defend a point*.
 
 ## Known gaps

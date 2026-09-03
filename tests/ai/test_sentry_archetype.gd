@@ -63,7 +63,10 @@ func _attack_aims(squad: Squad) -> Array[AttackAction]:
 	return result
 
 
-func test_idle_at_post_queues_nothing() -> void:
+func test_idle_at_post_takes_a_fallback_action_but_never_moves_or_attacks() -> void:
+	# At the post with nobody in the zone (#726, dev 2026-09-03: "at the post only"): the fallback
+	# walk runs -- a chainsword revs (H.make_weapon's family) -- but nothing moves and nothing
+	# swings. This case pinned "queues nothing" until then.
 	var board: Dictionary = _build_board()
 	var zones: ZoneManager = _make_zone_manager()
 	var guard: Unit = _spawn(board, Team.Faction.ENEMY, Vector2i(1, 1))
@@ -72,7 +75,10 @@ func test_idle_at_post_queues_nothing() -> void:
 
 	SentryArchetype.take_squad_turn(squad, _context(board, zones), board.squad_manager)
 
-	assert_array(squad.action_queue).is_empty()
+	assert_array(_move_destinations(squad)).is_empty()
+	assert_array(_attack_aims(squad)).is_empty()
+	assert_int(squad.action_queue.size()).is_equal(1)
+	assert_int(squad.action_queue[0].action_type).is_equal(BaseAction.ActionType.REV)
 
 
 func test_cannot_be_lured_by_enemy_in_reach_but_outside_zone() -> void:
@@ -84,7 +90,9 @@ func test_cannot_be_lured_by_enemy_in_reach_but_outside_zone() -> void:
 
 	SentryArchetype.take_squad_turn(squad, _context(board, zones), board.squad_manager)
 
-	assert_array(squad.action_queue).is_empty()
+	# Revving at the post is not being lured (#726); moving toward or swinging at the bait would be.
+	assert_array(_move_destinations(squad)).is_empty()
+	assert_array(_attack_aims(squad)).is_empty()
 
 
 func test_intruder_triggers_zone_clamped_engage() -> void:
@@ -132,7 +140,8 @@ func test_first_turn_fixes_home_for_mid_play_squads() -> void:
 	SentryArchetype.take_squad_turn(squad, _context(board, zones), board.squad_manager)
 
 	assert_that(squad.home_cell).is_equal(Vector2i(2, 1))
-	assert_array(squad.action_queue).is_empty()            # already standing on its (new) post
+	assert_array(_move_destinations(squad)).is_empty()     # already standing on its (new) post
+	assert_array(_attack_aims(squad)).is_empty()
 
 
 func test_missing_zone_falls_back_to_hold() -> void:

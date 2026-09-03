@@ -219,6 +219,32 @@ func test_non_rev_weapon_declines_rev() -> void:
 	assert_array(attacker.squad.action_queue).is_empty()
 
 
+func test_burrow_capable_weapon_burrows_when_nothing_else_applies() -> void:
+	# Drill (#726): the BURROW arm mirrors REV's. No target, nothing to reload, nothing to rev --
+	# and this grid-free board has no terrain store, so cover reads 0 and the Drill's routine lets
+	# it dig (the covered-cell refusal is tests/ai/test_weapon_routines.gd's, on real terrain).
+	var attacker: Unit = H.spawn_solo(self, _sm, ENEMY, Vector2i(0, 0))
+	var template := WeaponData.new()
+	template.weapon_type = WeaponData.WeaponType.DRILL
+	template.main_attack = WeaponAttackData.new()
+	template.main_attack.power = 3
+	attacker.equipped_weapon = WeaponInstance.make(template)
+
+	var units: Array[Unit] = [attacker]
+	var priority: Array = [BaseAction.ActionType.ATTACK, BaseAction.ActionType.RELOAD, BaseAction.ActionType.REV, BaseAction.ActionType.BURROW]
+	assert_bool(AITactics.queue_main_action(attacker, _board(units), _sm, priority)).is_true()
+	assert_int(attacker.squad.action_queue.size()).is_equal(1)
+	assert_int(attacker.squad.action_queue[0].action_type).is_equal(BaseAction.ActionType.BURROW)
+
+
+func test_non_drill_weapon_declines_burrow() -> void:
+	var attacker: Unit = H.spawn_solo(self, _sm, ENEMY, Vector2i(0, 0))   # Chainsword: revs, never digs
+
+	var units: Array[Unit] = [attacker]
+	assert_bool(AITactics.queue_main_action(attacker, _board(units), _sm, [BaseAction.ActionType.BURROW])).is_false()
+	assert_array(attacker.squad.action_queue).is_empty()
+
+
 func test_priority_order_is_respected_when_both_are_buildable() -> void:
 	var unit: Unit = H.spawn_solo(self, _sm, ENEMY, Vector2i(1, 1))
 	var fallen: Unit = H.spawn_solo(self, _sm, ENEMY, Vector2i(0, 1))

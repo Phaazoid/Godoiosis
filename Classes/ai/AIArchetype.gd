@@ -33,12 +33,20 @@ static func resolve(t: Type) -> Callable:
 # MAIN_ACTION_TYPES member must land in exactly one, pinned by tests/law/
 # test_ai_action_coverage.gd: a new verb can't silently skip the AI -- declare a stance
 # (even NEVER) or the suite goes red.
+#
+# WHAT an archetype will ever do lives here; WHEN a weapon verb is worth doing is the family's own
+# call (AIWeaponRoutine, #726), asked by the chooser before the builder runs. REV and BURROW joined
+# Hold/Sentry 2026-09-03 (dev: a defender at its post revs, digs in, tops off) ahead of INTIMIDATE,
+# which stays last per the ratified sentence "menace only when nothing better exists". Rushdown
+# keeps BURROW NEVER: a rusher does not entrench.
 const MAIN_ACTION_PRIORITY := {
 	Type.RUSHDOWN: [BaseAction.ActionType.ATTACK, BaseAction.ActionType.RELOAD, BaseAction.ActionType.REV],
 	Type.HOLD: [BaseAction.ActionType.ATTACK, BaseAction.ActionType.RESCUE,
-			BaseAction.ActionType.RELOAD, BaseAction.ActionType.INTIMIDATE],
+			BaseAction.ActionType.RELOAD, BaseAction.ActionType.REV, BaseAction.ActionType.BURROW,
+			BaseAction.ActionType.INTIMIDATE],
 	Type.SENTRY: [BaseAction.ActionType.ATTACK, BaseAction.ActionType.RESCUE,
-			BaseAction.ActionType.RELOAD, BaseAction.ActionType.INTIMIDATE],
+			BaseAction.ActionType.RELOAD, BaseAction.ActionType.REV, BaseAction.ActionType.BURROW,
+			BaseAction.ActionType.INTIMIDATE],
 }
 
 # CAPTURE everywhere (#96 slice 3): not deferred like the others — there is nothing for an AI
@@ -56,12 +64,10 @@ const MAIN_ACTION_NEVER := {
 			BaseAction.ActionType.INTIMIDATE, BaseAction.ActionType.BURROW,
 			BaseAction.ActionType.CAPTURE, BaseAction.ActionType.GUARD,
 			BaseAction.ActionType.OVERWATCH],
-	Type.HOLD: [BaseAction.ActionType.RALLY, BaseAction.ActionType.REV, BaseAction.ActionType.BURROW,
-			BaseAction.ActionType.CAPTURE, BaseAction.ActionType.GUARD,
-			BaseAction.ActionType.OVERWATCH],
-	Type.SENTRY: [BaseAction.ActionType.RALLY, BaseAction.ActionType.REV, BaseAction.ActionType.BURROW,
-			BaseAction.ActionType.CAPTURE, BaseAction.ActionType.GUARD,
-			BaseAction.ActionType.OVERWATCH],
+	Type.HOLD: [BaseAction.ActionType.RALLY, BaseAction.ActionType.CAPTURE,
+			BaseAction.ActionType.GUARD, BaseAction.ActionType.OVERWATCH],
+	Type.SENTRY: [BaseAction.ActionType.RALLY, BaseAction.ActionType.CAPTURE,
+			BaseAction.ActionType.GUARD, BaseAction.ActionType.OVERWATCH],
 }
 
 static func main_action_priority(t: Type) -> Array:
