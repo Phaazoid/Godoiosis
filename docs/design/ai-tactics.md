@@ -57,12 +57,12 @@ extracted the same day.
 The per-member "everybody tries a main action" step is itself `AITactics.queue_main_actions_for_squad(squad, board, squad_manager)`
 — `engage()`'s tail, the whole of `HoldArchetype`'s turn, and (since finding #3, same day)
 Rushdown's own no-enemy branch, which used to `return` above it and skip fallback main actions
-(Reload/Rev) entirely whenever the squad's own `nearest_enemy` search found nothing on the whole
-board. `HoldArchetype` never moves, so it has no destination/move step, only this one.
+(Reload/Rev) entirely whenever the squad found no target at all (`choose_engagement_target` since
+2026-09-02; `nearest_enemy` before it). `HoldArchetype` never moves, so it has no destination/move step, only this one.
 
 ## Attack scoring (ratified 2026-07-22; rebuilt onto the SQUAD'S PLAN 2026-09-02, #117)
 
-A candidate is scored by its **marginal gain to the squad's plan** — `score(plan + candidate) − score(plan)`, both sides resolved by the real `SquadManager.resolve_plan` machinery — still `(net removals, net damage)`, still lexicographic, still must beat `(0,0)` to queue.
+A candidate is scored by its **marginal gain to the squad's plan** — `score(plan + candidate) − score(plan)`, both sides resolved by the real `SquadManager.resolve_plan` machinery — as `(net removals, net damage dealt, −damage taken from reactions)`, compared lexicographically, and it must beat `(0,0,0)` to queue. *(Two terms until the third landed with target selection, 2026-09-02 — see* Target selection *for why it is a tie-break rather than a cost.)*
 
 Until #117 the throwaway plan held **one volley against the live board**, so a member could not see what its squadmates had already committed to. That is what made three things impossible rather than merely unwise: a second member re-spent its action on a target the first already downed, a finishing blow looked like any other hit, and a damageless set-up (Splash) scored `(0,0)` and was refused outright — the AI was **structurally unable to open a combo**.
 
@@ -102,9 +102,33 @@ Target-state awareness ships "minimal": lethality tiers (via the resolver's own 
 
 **The standing home for all of the above is [#117](https://github.com/Phaazoid/Godoiosis/issues/117)** (evergreen), added 2026-07-29 on the premise that the AI is permanently behind the feature set: every system we add creates AI work that lands after the system ships. New approximations go there as well as here — here for the doctrine, there for the queue.
 
+## Target selection — TWO SYSTEMS, forked on "is anybody attackable this turn?"
+
+*(Dev ruling, 2026-09-02, from playtest: an enemy adjacent to a spearman that could counter, with a mage one step beyond that could not, took the spearman. Both were attackable that turn.)*
+
+- **Somebody is → the best EXCHANGE wins, and distance is only the tie-break.** His words: *"the closest possible unit isn't what should be picked, but the best possible trade for the attacker… absolute distance was not even, but that should not matter since both attacks were in range that turn."*
+- **Nobody is → pursue the NEAREST**, exactly as before. `nearest_enemy` is unchanged and is now the pursuit half alone.
+
+**Pursuit stays nearest deliberately, and the reasons are design rather than cost.** It is Rushdown's *identity* — a rusher that hunts the softest target across the board is the **Balanced** archetype wearing the wrong name. It rewards the player for screening a mage behind a frontline, which is the same thing #57's rescue window rewards. And it is *legible*: "it goes for whoever is closest" is a rule you can bait and funnel, where "it goes for its best target" is a computation the player cannot see (Law #1's spirit, applied to the AI's reasoning).
+
+`AITactics.choose_engagement_target` is the fork; `RushdownArchetype` and `SentryArchetype` both call it. **Sentry passes BOTH its leashes and they answer different questions:** `within` tests the *enemy's own cell* (is this intruder in my zone), `allowed` tests the *cell I would fight from*. Dropping either lures a sentry out — one by target, one by footing.
+
+**The exchange term is a BOOLEAN — can this target answer me from the cell I would attack from — not a scored one**, and that ceiling is structural: scoring an attack from a cell nobody has moved to is impossible today (see *Out of scope* below). It is asked through `SquadManager.can_counter`, which takes the attacker's cell as a parameter rather than `AITactics` re-deriving counter reach — Law #4's own words, *"if you cannot reach the existing answer from where you are standing, take it as a parameter"*. A private counter-reach predicate would be exactly the drift #78 exists to stop.
+
+**One BFS, and the legality filter runs BEFORE it.** `_engageable_enemies` collects each enemy's firing cells that are both in move range and inside `allowed`, then walks `path_hops` once over the union (`_approach_distances`' own trick). Asking for the globally nearest firing cell and testing *that* is wrong twice: it excludes an enemy whose nearest cell is outside the leash when another one inside it would serve, and it pays a whole BFS per enemy — measured at +21% on Castle Assault before the fix, and *faster than baseline* after it.
+
+**Declared asymmetry:** this layer judges an exchange by a boolean, the attack pick (`_score_plan`) by graded resolver damage. Justified rather than sloppy — this layer cannot resolve at all, and the attack pick can and would be throwing information away. Stated here so the pair is a design rather than a drift.
+
+**Known limits, declared:**
+
+- **The engageable set is OPTIMISTIC for a leader with squadmates.** It uses the leader's own unclamped move range, but cohesion (V3) can refuse the group move to a cell the leader alone could stand on, in which case the squad stays put. `best_attack_destination` has carried the identical optimism since #29, so nothing new is introduced — but in play it reads as *"it went for the mage and then didn't."*
+- **Leader-only.** `engage` group-moves the whole squad toward the leader's pick, so a target good for the leader may be poor for a member. Widening it is #117's per-unit movement item.
+
 ## Not this layer
 
 The Balanced archetype (#29 leftover), strain's fate (#76 — its AI integration is already free by construction), the ability-chassis content itself (#61, closed).
+
+**Balanced now has a DEFINITION rather than only a name** (2026-09-02, out of the target-selection ruling): *pick the best target from the start and take what you meet on the way* — the answer Rushdown deliberately does not give. That is the archetype whose **movement** is scored, and it is why the two poles stay far apart: smear target quality into Rushdown and there is nothing left for Balanced to be.
 
 **Win/loss detection is no longer a leftover** — it landed 2026-07-28 as #96 and lives outside this layer, in `MissionRules`/`MissionController` ([missions.md](missions.md)). The AI has two points of contact:
 
