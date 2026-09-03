@@ -14,9 +14,9 @@
 >
 > **The floors** (`stone_floor` / `stone_smooth` / `stone_brick`, `10:6`–`12:6`) are walkable, `move_cost` 1, and **`terrain_type` = DIRT** — the first tiles that kind has ever had, which is also why `Art/Icons/TerrainIcons/Dirt.png` shipped with them: `GridUtils.get_terrain_icon_at_cell` falls back to `ERROR.png` for a kind with no entry, and DIRT is the first *walkable* kind without one, so every move ending on stone floor would have shown an error glyph in the action queue. VOID got away with it because nothing ends a move on a hole.
 >
-> **The walls** are `terrain_type` = ROCK + `prop_shape` = PLANE + a `wall_edges` mask, i.e. exactly the fence setup — the sheet ships a stone twin of the fence's 3×3 hollow frame at `10:7`–`12:9`, and all eight pieces map onto the fence's own masks one-for-one. They block movement the way the fences do, by leaving `walkable` unset. What did *not* transfer is the wall FACE: see `presentation-effects.md` → *WHICH slabs wear the tile's own art is a fact about the MATERIAL, not the axis*.
+> **The walls** are `terrain_type` = ROCK + `prop_shape` = PLANE + a `wall_edges` mask, i.e. exactly the fence setup — the sheet ships a stone twin of the fence's 3×3 hollow frame at `10:7`–`12:9`, and all eight pieces map onto the fence's own masks one-for-one. They block movement the way the fences do, by leaving `walkable` unset, and since #660 they block SIGHT as well — a PLANE stands one block tall for the trace unless its tile authors otherwise (`prop_rule_height`). What did *not* transfer is the wall FACE: see `presentation-effects.md` → *WHICH slabs wear the tile's own art is a fact about the MATERIAL, not the axis*.
 
-**Canon checked through #699 (2026-09-02).**
+**Canon checked through #711 (2026-09-03).**
 
 ## The tile model (implemented — [LOCKED shape])
 

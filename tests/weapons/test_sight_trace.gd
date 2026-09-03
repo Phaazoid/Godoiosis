@@ -126,3 +126,148 @@ func test_cells_crossed_includes_both_cells_of_a_corner() -> void:
 func test_cells_crossed_of_an_oblique_line() -> void:
 	var expected: Array[Vector2i] = [Vector2i(1, 0), Vector2i(1, 1)]
 	assert_that(GridUtils.cells_crossed(Vector2i(0, 0), Vector2i(2, 1))).is_equal(expected)
+
+
+# --- props block the line too (#660) ------------------------------------------------------------
+#
+# The bug this closes: a wall is a painted TILE, not geometry, so its cell's elevation is whatever
+# ground it stands on -- 0 on a flat board. The trace read BoardHeights alone, and every shot in the
+# game passed through every wall, at every angle.
+#
+# These stub the tile-authored column the way the terrain suites stub terrain_kind_at, so the
+# ARITHMETIC is pinned without pinning authored content. The real-tileset pair at the bottom is what
+# pins the WIRE -- a stub board cannot see GridUtils or BoardContext at all.
+class _PropBoard extends BoardContext:
+	const NO_UNITS: Array[Unit] = []
+	var _props: Dictionary
+
+	func _init(heights_store: BoardHeights, props: Dictionary) -> void:
+		super(null, NO_UNITS, null, null, null, heights_store)
+		_props = props
+
+	func prop_rule_height_at(cell: Vector2i) -> int:
+		var height: int = _props.get(cell, 0)
+		return height
+
+
+# One cell at (1,0) carrying a prop of the given height, standing on ground of the given height.
+func _prop_board(prop_height: int, ground: int = 0) -> BoardContext:
+	var heights := BoardHeights.new()
+	heights.set_cell(Vector2i(1, 0), ground)
+	return _PropBoard.new(heights, {Vector2i(1, 0): prop_height})
+
+
+func test_a_painted_wall_stops_a_flat_shot() -> void:
+	# THE BUG. Flat ground under a wall: elevation_at reads 0, so the old trace sailed over it at
+	# EYE_HEIGHT with room to spare. One block of prop is enough -- touch = blocked.
+	var board := _prop_board(Terrain.UNITS_PER_LEVEL)
+	var trace := Reach.sight_trace(_shot(0), Vector2i(0, 0), Vector2i(2, 0), board)
+	assert_bool(trace.blocked).is_true()
+	assert_bool(trace.blocked_cell == Vector2i(1, 0)).is_true()
+	assert_bool(Reach.vertical_aim_ok(_shot(0), Vector2i(0, 0), Vector2i(2, 0), board)).is_false()
+
+
+func test_a_prop_stacks_on_the_ground_under_it() -> void:
+	# A prop is a column ON the surface, not a reading of it: two units of ground plus two of wall
+	# stops a lob that clears either half alone. Both controls are named because a trace that took
+	# the LARGER of the two rather than the SUM would pass the third assert and fail the game.
+	var over_ground := Reach.sight_trace(_shot(3), Vector2i(0, 0), Vector2i(2, 0), _prop_board(0, 2))
+	var over_prop := Reach.sight_trace(_shot(3), Vector2i(0, 0), Vector2i(2, 0), _prop_board(2, 0))
+	var over_both := Reach.sight_trace(_shot(3), Vector2i(0, 0), Vector2i(2, 0), _prop_board(2, 2))
+	assert_bool(over_ground.blocked).override_failure_message(
+		"ground alone should not stop this lob").is_false()
+	assert_bool(over_prop.blocked).override_failure_message(
+		"prop alone should not stop this lob").is_false()
+	assert_bool(over_both.blocked).override_failure_message(
+		"ground + prop did not add up").is_true()
+
+
+func test_a_lob_clears_a_fence_and_dies_on_a_curtain_wall() -> void:
+	# What the rules-height answer buys that an opaque-wall answer could not (the #660 A/B fork):
+	# arc_clearance keeps its job over a PROP, not just over terrain. The gun is the control -- a
+	# fence a lob clears is still not transparent.
+	var fence := _prop_board(1)
+	var wall := _prop_board(6)
+	assert_bool(Reach.sight_trace(_shot(0), Vector2i(0, 0), Vector2i(2, 0), fence).blocked) \
+		.override_failure_message("a gun should die on a fence").is_true()
+	assert_bool(Reach.sight_trace(_shot(2), Vector2i(0, 0), Vector2i(2, 0), fence).blocked) \
+		.override_failure_message("a lob should clear a fence").is_false()
+	assert_bool(Reach.sight_trace(_shot(2), Vector2i(0, 0), Vector2i(2, 0), wall).blocked) \
+		.override_failure_message("the same lob should die on a curtain wall").is_true()
+
+
+func test_the_red_overlay_paints_the_cell_behind_a_wall() -> void:
+	# The preview derives from the same gate, so it can no longer tell the player a through-the-wall
+	# shot is legal. The open direction is the control: this must be a WALL verdict, not a blanket
+	# one.
+	var blocked := Reach.blocked_cells_from(null, Vector2i(0, 0), _shot(0),
+		_prop_board(Terrain.UNITS_PER_LEVEL))
+	assert_bool(blocked.has(Vector2i(2, 0))).override_failure_message(
+		"the cell behind the wall still previews as legal").is_true()
+	assert_bool(blocked.has(Vector2i(0, 2))).override_failure_message(
+		"an open direction was painted blocked").is_false()
+
+
+# --- the wire: GridUtils -> BoardContext -> the trace, against the REAL tileset ------------------
+#
+# Everything above stubs prop_rule_height_at, so all of it stays green with the reader and the
+# read-point deleted -- which is precisely the bug that shipped. These paint a real tile and let the
+# real readers answer. Tiles are found BY SHAPE, never by name: authored content is not pinnable.
+
+const TILES: TileSet = preload("res://Resources/TestTiles.tres")
+
+
+func _tile_of_shape(shape: GridUtils.PropShape) -> Vector2i:
+	var source := TILES.get_source(0) as TileSetAtlasSource
+	for i in source.get_tiles_count():
+		var coords := source.get_tile_id(i)
+		if source.get_tile_size_in_atlas(coords) != Vector2i.ONE:
+			continue
+		if GridUtils.prop_shape_of(source.get_tile_data(coords, 0)) == shape:
+			return coords
+	return Vector2i(-1, -1)
+
+
+func _board_painted_with(shape: GridUtils.PropShape) -> BoardContext:
+	var coords := _tile_of_shape(shape)
+	assert_bool(coords != Vector2i(-1, -1)).override_failure_message(
+		"fixture: the tileset declares no %s tile, so this case checks nothing"
+		% GridUtils.PropShape.keys()[shape]).is_true()
+	var layer := auto_free(TileMapLayer.new()) as TileMapLayer
+	layer.tile_set = TILES
+	layer.set_cell(Vector2i(1, 0), 0, coords)
+	return BoardContext.new(layer, NO_UNITS, null)
+
+
+func test_a_real_painted_wall_blocks_a_real_shot() -> void:
+	# THE WIRE. Nothing is stubbed: the tile's shape resolves its default through GridUtils,
+	# BoardContext reads it off the grid, and the trace stacks it on the surface. Drop any one of
+	# those three and every stubbed case above still passes while walls go back to transparent.
+	var board := _board_painted_with(GridUtils.PropShape.PLANE)
+	assert_bool(Reach.sight_trace(_shot(0), Vector2i(0, 0), Vector2i(2, 0), board).blocked).is_true()
+
+
+func test_a_real_painted_tuft_blocks_nothing() -> void:
+	# The control, and the narrowing: a TUFT stands up (its plants are billboards) but IS ground, so
+	# it reads 0 and a flowerbed does not stop a carbine. Without this, the case above would pass
+	# just as well against "any painted cell blocks".
+	var board := _board_painted_with(GridUtils.PropShape.TUFT)
+	assert_bool(Reach.sight_trace(_shot(0), Vector2i(0, 0), Vector2i(2, 0), board).blocked).is_false()
+
+
+func test_a_solid_prop_stands_one_block_unauthored() -> void:
+	# The dev's standing "1 block tall blocks line of sight", shipped as the shape DEFAULT rather
+	# than as nineteen authored copies of one number. Asserted in the UNIT, never as a literal, so
+	# the two cannot drift apart -- and the first assert guards the premise the second rests on.
+	var data := (TILES.get_source(0) as TileSetAtlasSource).get_tile_data(
+		_tile_of_shape(GridUtils.PropShape.PLANE), 0)
+	assert_int(GridUtils.prop_int_override_of(data, "prop_rule_height")).override_failure_message(
+		"fixture: this tile now AUTHORS a rules height, so this no longer tests the default"
+		).is_equal(0)
+	assert_int(GridUtils.prop_rule_height_of(data)).is_equal(Terrain.UNITS_PER_LEVEL)
+
+
+func test_a_board_with_no_grid_stands_nothing_up() -> void:
+	# The fixture contract every case above the props section leans on: a grid-less BoardContext
+	# reads flat AND propless, so adding this column changed no existing board in the suite.
+	assert_int(BoardContext.new(null, NO_UNITS, null).prop_rule_height_at(Vector2i(1, 0))).is_equal(0)

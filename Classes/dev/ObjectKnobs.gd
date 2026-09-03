@@ -13,10 +13,20 @@ class_name ObjectKnobs
 #
 # Per PLACED instance has no store at all and is a separate feature.
 #
+# NOT EVERY ROW FALLS BACK TO A GLOBAL. `prop_lit` never did (off is the right answer for most
+# tiles), and `prop_rule_height` (#660) falls back to a per-SHAPE default instead -- a solid prop
+# stands one block, a billboard stands nothing. Both carry `knob` = "", and a row like that is
+# resolved by whoever OWNS its fallback (GridUtils for the shape default) rather than by BoardMirror.
+#
+# `prop_rule_height` is also the first RULES column in this table rather than a presentation one:
+# how tall a prop stands for the sight trace is legality, not looks. It sits deliberately next to
+# `prop_height_scale` -- the look correction #642 ruled can never source legality -- so the panel
+# STATES that split instead of leaving it to be rediscovered.
+#
 # `shapes` empty means every object; otherwise only those PropShapes get the row, so a tuft is never
 # offered a block height and a crate is never offered a tuft scale. `lit_only` rows appear only once
 # a tile says it emits at all -- four dead sliders under an unlit crate is noise, not information.
-# `knob` names the global this falls back to, "" for the one field that has none.
+# `knob` names the global this falls back to, "" for the two fields that have none (above).
 #
 # The LAYERS THEMSELVES ARE AUTHORED IN Resources/TestTiles.tres, never added at runtime: a schema
 # migration that runs once on someone's machine is a path no test ever executes again. A law pins
@@ -39,6 +49,9 @@ const FIELDS: Array[Dictionary] = [
 	{"layer": "prop_height_scale", "type": TYPE_FLOAT, "label": "Block height", "shapes": GridUtils.SOLID_SHAPES,
 		"knob": "block_height_scale", "min": 0.2, "max": 2.5, "step": 0.01,
 		"tip": "How tall THIS object stands relative to its own art, overriding the global. The global exists because the art is drawn in 3/4 and reads a little tall; a single object that still looks wrong under it belongs here."},
+	{"layer": "prop_rule_height", "type": TYPE_INT, "label": "Rules height", "shapes": [], "knob": "",
+		"min": 1.0, "max": GridUtils.MAX_DRAWABLE_RULE_HEIGHT, "step": 1.0,
+		"tip": "How tall this object stands FOR THE RULES, in height units (two per level) -- the column a shot has to clear (#660). Block height above is its opposite number: that one is a 3/4-perspective LOOK correction and never touches legality (#642), this one decides what a gun can shoot over. Inherit gives every solid prop one block and a billboard nothing; drop a fence to 1 and a lob clears it while a gun still dies on it. The art only draws about two levels (#642), so the slider stops at that ceiling and a law refuses a hand-edited tileset that goes past it -- a wall a shot dies on but the player can see over is worse than no wall."},
 	{"layer": "prop_tuft_scale", "type": TYPE_FLOAT, "label": "Tuft scale", "shapes": [GridUtils.PropShape.TUFT],
 		"knob": "tuft_scale", "min": 0.0, "max": 2.0, "step": 0.01,
 		"tip": "How tall THIS tile's plants stand, overriding the global. Tall grass and a low flower are drawn at the same size in the sheet and should not stand at the same height."},

@@ -24,6 +24,12 @@ func before_test() -> void:
 		_tiles.add_custom_data_layer()
 		_tiles.set_custom_data_layer_name(at, field["layer"])
 		_tiles.set_custom_data_layer_type(at, field["type"])
+	# prop_shape is not an override field, so it is not in FIELDS -- but the rules-height column falls
+	# back to it, so the synthetic sheet has to be able to say what shape a tile is. Unauthored it
+	# reads 0 = FLAT, exactly what the missing layer read before.
+	_tiles.add_custom_data_layer()
+	_tiles.set_custom_data_layer_name(_tiles.get_custom_data_layers_count() - 1, "prop_shape")
+	_tiles.set_custom_data_layer_type(_tiles.get_custom_data_layers_count() - 1, TYPE_INT)
 	var source := TileSetAtlasSource.new()
 	var image := Image.create(16, 16, false, Image.FORMAT_RGBA8)
 	source.texture = ImageTexture.create_from_image(image)
@@ -182,3 +188,39 @@ func test_the_board_tileset_declares_objects_at_all() -> void:
 	assert_int(ObjectKnobs.object_tiles(load(BOARD_TILES) as TileSet).size()).override_failure_message(
 		"no object tiles — the Objects tab would list nothing and the laws above are vacuous"
 		).is_greater(0)
+
+
+# --- the INT column (#660) ---------------------------------------------------------------------
+#
+# The same storage lesson one type further along from the colour case, with one difference that
+# matters: this field's fallback is not a global at all. An unauthored solid prop stands one block
+# because of its SHAPE, so GridUtils resolves it and BoardMirror never sees it.
+
+func test_a_rules_height_inherits_its_shape_until_a_value_is_authored() -> void:
+	_data.set_custom_data("prop_shape", GridUtils.PropShape.PLANE)
+	assert_int(GridUtils.prop_int_override_of(_data, "prop_rule_height")).override_failure_message(
+		"an unwritten int column must read the sentinel, not a height").is_equal(0)
+	assert_int(GridUtils.prop_rule_height_of(_data)).override_failure_message(
+		"an unauthored wall does not stand one block").is_equal(Terrain.UNITS_PER_LEVEL)
+
+	# The authored path, which is the whole point of the column and which the trace's own suite
+	# cannot reach: its boards stub the read-point, so only this exercises the reader.
+	_data.set_custom_data("prop_rule_height", 1)
+	assert_int(GridUtils.prop_rule_height_of(_data)).override_failure_message(
+		"an authored height did not override the shape default").is_equal(1)
+
+	_data.set_custom_data("prop_rule_height", 0)
+	assert_int(GridUtils.prop_rule_height_of(_data)).override_failure_message(
+		"writing the sentinel back did not return the field to its shape default"
+		).is_equal(Terrain.UNITS_PER_LEVEL)
+
+
+# The narrowing, at the reader rather than through a painted board: a BILLBOARD stands up but is
+# thin, so it stops nothing until someone decides otherwise. Authoring is how a tree becomes cover.
+func test_a_billboard_stops_nothing_until_it_is_authored() -> void:
+	_data.set_custom_data("prop_shape", GridUtils.PropShape.BILLBOARD)
+	assert_int(GridUtils.prop_rule_height_of(_data)).override_failure_message(
+		"a lantern blocks line of sight by default").is_equal(0)
+	_data.set_custom_data("prop_rule_height", 3)
+	assert_int(GridUtils.prop_rule_height_of(_data)).override_failure_message(
+		"a billboard cannot be given a height, so a tree can never be cover").is_equal(3)
