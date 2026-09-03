@@ -87,7 +87,13 @@ var beat_profile: Pacing.Profile = Pacing.Profile.BOARD
 #
 # CLEARED ON BOTH EDGES below, which is the whole of its lifetime: "the pass ended" and "this is
 # false" are the same event, so no reader needs a second fact to know when to stop.
-var playback_cinematic := false
+#
+# SECOND CONSUMER SINCE #722, and the reason it is setter-backed: the 2D HUD stands down for a
+# cinematic, and that is an EDGE rather than a poll. The field IS the event (see the line above), so
+# the change is published from here -- a call bolted beside each of the two write points would be a
+# second copy of the same answer, going stale the first time a third writer appears. `game` is null
+# in a bare CameraController fixture, which is the whole of the guard.
+var playback_cinematic := false: set = _set_playback_cinematic
 # How far BELOW the board the 3D rig currently is, in world units, written every frame by
 # battle3d._mirror_camera (#602 round 2).
 #
@@ -254,6 +260,16 @@ func set_playback_locked(locked: bool) -> void:
 	playback_cinematic = false
 	if not locked:
 		follow_unit = null
+
+# The HUD's edge (#722). Compared against the FIELD ITSELF rather than a remembered copy, so this
+# cannot go stale the way a diff key does -- and the no-op matters, because a claiming pass writes
+# false here and its real answer immediately after, in one synchronous block.
+func _set_playback_cinematic(value: bool) -> void:
+	if playback_cinematic == value:
+		return
+	playback_cinematic = value
+	if game != null:
+		game.set_hud_hidden_for_playback(value)
 
 func follow(unit: Unit) -> void:
 	follow_unit = unit

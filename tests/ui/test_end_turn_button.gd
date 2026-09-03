@@ -53,9 +53,13 @@ func _open_confirm() -> ConfirmCard:
 # ==============================================================================
 
 # THE #467 rule, and the reason every case below asks about the flash instead: End Turn left the
-# action ring, so this button is the only door there is and may never hide. Asserted across the
-# states that used to hide it -- nothing acted, and a locked board.
-func test_the_button_is_never_hidden() -> void:
+# action ring, so this button is the only door there is and this predicate may never hide it.
+# Asserted across the states that used to -- nothing acted, and a locked board.
+#
+# NOT "never hidden" any more, which is what this case was called until #722: a cinematic hides it,
+# on a different predicate entirely (see the #722 section at the bottom). The locked-board line is
+# now also #541's ruling, closed into #722 -- a plain enemy turn leaves the button up.
+func test_the_flash_predicate_never_hides_the_button() -> void:
 	var unit := _spawn(Team.Faction.PLAYER, Vector2i(1, 1))
 	game.refresh_end_turn_button()
 	assert_bool(game.end_turn_button.visible) \
@@ -67,7 +71,7 @@ func test_the_button_is_never_hidden() -> void:
 	game.game_state = game.GameState.AI_TURN
 	game.refresh_end_turn_button()
 	assert_bool(game.end_turn_button.visible) \
-		.override_failure_message("hidden while the board was locked").is_true()
+		.override_failure_message("hidden while the board was locked -- #541's ruling").is_true()
 
 
 func test_not_flashing_with_one_unacted_squad() -> void:

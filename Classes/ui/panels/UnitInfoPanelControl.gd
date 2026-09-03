@@ -17,6 +17,14 @@ class_name UnitInfoPanelControl
 var current_unit: Unit
 var current_board: BoardContext   # kept so a live refresh can recompute terrain-dependent DEF
 
+# Hidden while a cinematic pass owns the frame (#722), and what the CONTENT rule last decided.
+# `_content_shown` is exactly what `visible` meant before #722, which is why is_showing/
+# is_showing_unit read it: a panel hidden for a cinematic has NOT let go of its unit, and
+# HoverPresenter asks those two to decide where the hover card parks and whether it would be a
+# second card for the same unit. Answering "no unit is open" there would move the card mid-pass.
+var _hidden_for_playback := false
+var _content_shown := false
+
 func _ready() -> void:
 	$UnitInfoPanel/Margin/VBox/HeaderRow/CloseButton.pressed.connect(clear)
 	inventory_panel.loadout_changed.connect(_refresh_derived_rows)
@@ -30,7 +38,8 @@ func set_unit(unit: Unit, can_act := false, board: BoardContext = null):
 	_release_current_unit()
 	current_unit = unit
 	current_board = board
-	visible = true
+	_content_shown = true
+	_apply_visibility()
 	name_label.text = unit.get_unit_name()
 	jobs_label.text = _jobs_text(unit)
 	portrait_panel.set_unit(unit)
@@ -59,18 +68,27 @@ func _release_current_unit() -> void:
 func clear():
 	_release_current_unit()
 	current_unit = null
-	visible = false
+	_content_shown = false
+	_apply_visibility()
 	portrait_panel.set_unit(null)
 	stats_section.set_unit(null)
 	inventory_panel.set_unit(null)
 	squad_panel.set_unit(null)
 	states_bar.set_unit(null)
 
+# #722's one input.
+func set_hidden_for_playback(hidden: bool) -> void:
+	_hidden_for_playback = hidden
+	_apply_visibility()
+
+func _apply_visibility() -> void:
+	visible = _content_shown and not _hidden_for_playback
+
 func is_showing() -> bool:
-	return visible and current_unit != null
+	return _content_shown and current_unit != null
 
 func is_showing_unit(unit: Unit) -> bool:
-	return visible and current_unit == unit
+	return _content_shown and current_unit == unit
 
 func panel_width() -> float:
 	return $UnitInfoPanel.size.x
