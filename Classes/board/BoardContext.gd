@@ -13,9 +13,24 @@ var terrain_states: TerrainStateManager
 var zones: ZoneManager
 var heights: BoardHeights
 
+# A unit whose death has RESOLVED is not on this board, and the filter lives HERE rather than in
+# any one builder because there are three of them -- game.gd's _board(), play/board_builder.gd and
+# tests/support/squad_fixtures.gd -- and a rule in one is a rule the other two disagree with, which
+# is the two-implementations shape that hid #714 in the first place.
+#
+# It asks the DOMAIN fact, not the engine's: Unit.die() sets lifecycle DEAD and only then calls
+# queue_free(), so between a death and the next frame the node is still a valid child of units_root.
+# is_queued_for_deletion() would answer the same thing in a second vocabulary, which the persistence
+# seam's three-way `dead` split explicitly warns against growing a fourth of. `present_factions`
+# below has excluded the dead by this exact test since it was written; this is that belief applied
+# to the list itself rather than re-stated per reader -- and `unit_at_cell` is what proves it was
+# needed, since it never asked about lifecycle and so let a corpse go on blocking its own tile.
 func _init(grid_layer: TileMapLayer, unit_list: Array[Unit], manager: SquadManager, states: TerrainStateManager = null, zone_manager: ZoneManager = null, board_heights: BoardHeights = null) -> void:
 	grid = grid_layer
-	units = unit_list
+	units = []
+	for unit in unit_list:
+		if is_instance_valid(unit) and not unit.is_dead():
+			units.append(unit)
 	squad_manager = manager
 	terrain_states = states
 	zones = zone_manager

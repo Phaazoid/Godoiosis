@@ -60,6 +60,10 @@ Rushdown's own no-enemy branch, which used to `return` above it and skip fallbac
 (Reload/Rev) entirely whenever the squad found no target at all (`choose_engagement_target` since
 2026-09-02; `nearest_enemy` before it). `HoldArchetype` never moves, so it has no destination/move step, only this one.
 
+**A FACTION TURN RE-DERIVES THE BOARD PER SQUAD** ([#714](https://github.com/Phaazoid/Godoiosis/issues/714), 2026-09-03). `AIController.take_faction_turn` takes no `BoardContext` parameter, and that absence is the fix: it used to build one for the whole turn while `execute_orders` between squads spans frames, so a unit an earlier squad **killed** was genuinely freed by the time a later squad planned — and `SquadManager._resolve_actions` opens by calling a method on every unit the board lists. The crash was the loud half; for the rest of that turn the AI had also been targeting, pathing and measuring cohesion against a roster including the dead.
+
+Two things are worth carrying from it. **`play_session._take_ai_turn` had always called `_board()` inside its own loop** — two live implementations of one walk, with the fault in whichever was not the model, which is the same shape as the `went_downed` wire that was missing from the game and present in the Play API for thirteen months. And **`BoardContext`'s constructor now excludes a unit whose death has RESOLVED**, asking the domain fact (`Unit.die()` sets lifecycle DEAD *before* it queue_frees) rather than `is_queued_for_deletion()`; the filter is in the constructor because three builders feed it and a rule in one is a rule the other two disagree with.
+
 ## Attack scoring (ratified 2026-07-22; rebuilt onto the SQUAD'S PLAN 2026-09-02, #117)
 
 A candidate is scored by its **marginal gain to the squad's plan** — `score(plan + candidate) − score(plan)`, both sides resolved by the real `SquadManager.resolve_plan` machinery — as `(net removals, net damage dealt, −damage taken from reactions)`, compared lexicographically, and it must beat `(0,0,0)` to queue. *(Two terms until the third landed with target selection, 2026-09-02 — see* Target selection *for why it is a tie-break rather than a cost.)*
