@@ -526,7 +526,7 @@ func start_faction_turn(faction: Team.Faction):
 	if ai_controller.is_ai_faction(faction):
 		game_state = GameState.AI_TURN
 		camera_controller.set_playback_locked(true)
-		await ai_controller.take_faction_turn(faction, _board())
+		await ai_controller.take_faction_turn(faction)
 		camera_controller.set_playback_locked(false)
 		return
 

@@ -74,7 +74,17 @@ static func plan_squad(squad: Squad, board: BoardContext, squad_manager: SquadMa
 	AIArchetype.resolve(squad.archetype).call(squad, board, squad_manager)
 
 
-func take_faction_turn(faction: Team.Faction, board: BoardContext) -> void:
+# THE BOARD IS RE-DERIVED PER SQUAD, and it takes no board parameter for exactly that reason (#714).
+# This used to build one BoardContext for the whole turn while `execute_orders` between squads spans
+# frames, so a unit an earlier squad KILLED was genuinely freed by the time a later squad planned --
+# and `_resolve_actions`' clear loop calls a method on every unit the board lists. Everything else it
+# got wrong was quieter: for the rest of the turn the AI targeted, pathed and measured cohesion
+# against a roster including the dead.
+#
+# `play_session._take_ai_turn` has always called `_board()` inside its own loop, which is why the
+# headless API never reproduced it -- two live implementations of one walk, and the crash lived in
+# whichever one was not the model. This is now the same shape.
+func take_faction_turn(faction: Team.Faction) -> void:
 	for squad in actable_squads(faction, game.squad_manager):
 		# The mission can end mid-turn -- this squad's pass may have wiped the player. Stop
 		# issuing orders behind the end-of-mission card (#96).
@@ -86,6 +96,9 @@ func take_faction_turn(faction: Team.Faction, board: BoardContext) -> void:
 			continue
 
 		await game.camera_controller.pan_to(squad.get_leader())
+		# board_source is the wired seam for "the board as it stands", the same Callable
+		# SquadManager's own validators resolve fresh per query.
+		var board: BoardContext = game.squad_manager.board_source.call()
 		plan_squad(squad, board, game.squad_manager)
 		# The plan is on screen now -- queueing repaints the queue panel, path arrows, ghosts and
 		# target markers synchronously -- so hold before resolving it (#118). Skipped when the squad
