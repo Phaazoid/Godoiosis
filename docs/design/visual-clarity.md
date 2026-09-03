@@ -2640,3 +2640,47 @@ re-homing it into `ui_layer` drags in the #370 synthesized-click behaviour, the
 freezes itself. `Battle3D`'s own root readouts — the help line, checkout stamp and dev badge — do
 not scale either, and stay that way on purpose: the whiteout transition shares their CanvasLayer and
 must cover the real window.
+
+## The shell's menus, and what the cinematic owns (captured 2026-09-03 — three tickets, three findings)
+
+From the scratchpad sweep. All three became issues; what is recorded here is the half that outlives
+whichever way each ticket is decided.
+
+**1. A HUD-visibility rule belongs on `playback_owns_board()`, never on the composed predicate
+([#722](https://github.com/Phaazoid/Godoiosis/issues/722)).** The dev's ask was *"no menus during battle
+zoom (action queue, hover menus, etc)"*, and the measurement is that the HUD is **disabled but never
+hidden**: all nine readers of `game._board_locked_for_player()` refuse an *action* — the queue's execute,
+cancel and reorder arms, `refresh_action_queue`'s `ExecuteState.DISABLED`, `refresh_end_turn_button`'s
+flash — while every surface's `visible` is driven by something unrelated (entries present, objectives
+declared, what is under the cursor). `battle3d.gd`'s own header makes it total rather than incidental:
+*"every Control — menus, cards, the queue panel, the HUD — draws over the 3D world."*
+
+The finding is which predicate to hang the fix on. `_board_locked_for_player()` is **composed** of
+`playback_owns_board() or menu_is_up()`, split during #520 precisely because they had acquired different
+readers — battle3d gates the rig's zoom on `menu_is_up()` alone. A HUD-hide is the third such reader and
+wants the *other* half: hanging it on the composed predicate would hide the mission-status panel at
+`MISSION_OVER`, which is the moment that panel exists for. **And the answer can never be
+`ui_layer.visible = false`** — [#545](https://github.com/Phaazoid/Godoiosis/issues/545)'s skip affordance
+has to live on screen during exactly this window, so what is being specified is a declared *set* of
+surfaces with the skip explicitly outside it.
+
+**2. The pause list is a build history, not a decision
+([#724](https://github.com/Phaazoid/Godoiosis/issues/724)).** `PauseMenu._build`'s `_add_button` sequence
+*is* the order, and each row was appended as it was built — #132, #144, #135, #350, #131. The symptom:
+**Return to Title sits above Glossary, Settings and Report**, three read-only detours that
+`game._open_pause_menu` deliberately hands straight back to this same card, so the row that leaves the
+board is in the middle of rows that cost nothing, and the two exits are split apart by them. Two things
+whoever reorders it should know: `ModalCard._build_button_row` offers **one** `BoxContainer` with a single
+separation, so grouping into blocks is real work; and `tests/ui/test_pause_menu.gd` fires `chosen`
+directly by design, so it asserts **nothing** about row order in either direction.
+
+**3. `menu_is_up()` covers two states, and one reader's justification only holds for one of them
+([#723](https://github.com/Phaazoid/Godoiosis/issues/723)).** Esc at the title screen opens a **bug report
+card**, defaulted to `Kind.BUG`. The chain is legitimate at every step — `open_mission_select` sets `MENU`;
+`MissionSelectScreen` deliberately does not claim `ModalLock` (load-bearing, pinned); so `game._input`
+still runs and takes the locked-board branch. What went stale is the comment above it: *"an AI turn, a
+finished mission, or the menu — exactly the moments a stranger most wants to complain."* True of the first
+two. The title screen is the third, and a stranger who has just booted the game has not seen anything to
+complain about — which the same file says out loud six lines away, where the title screen's own Feedback
+button defaults to `Kind.FEEDBACK` *"because nobody reaches this screen mid-defect"*. **The predicate is
+right and only this reader is wrong**; narrow the branch, not `menu_is_up()`.
