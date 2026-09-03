@@ -96,6 +96,29 @@ section's case at all. See *The aim palette* below, and take the correction as t
 **which section a value belongs in is decided by whether the dev and the player move it along the SAME
 axis, and that is worth asking again at build time rather than inheriting from the filing.**
 
+**Captured 2026-09-03 (scratchpad, not decided): the HOVER-UNTIL-APPEAR delay is the next candidate, and
+it arrives asking for the shape the ruling forbids.** The dev's filing (2026-08-22, [#467](https://github.com/Phaazoid/Godoiosis/issues/467)
+round 3) was *"maybe hover until appear time should be a dev mode toggle"*. Today the action ring's readout
+waits out `gui/timers/tooltip_delay_sec` — the **project** setting the inspect panel's own tooltips already
+read, chosen deliberately (*"same amount as in the inspect menu"*, `ActionMenuController.hover_delay`), so
+there is exactly one number and no second seam. A dev toggle would be a second writer of it. Three things
+worth having written down before anyone builds it:
+
+- **It is arguably a PLAYER setting, not a dev one.** A slow reader and a fast one want different waits —
+  the same argument that put `CAMERA_PAN_SPEED` / `MOUSE_SENSITIVITY` / `CAMERA_SMOOTHING` in
+  `PlayerSettings` as `Scale` choice rows (#394). If that is the call, *eligibility moves the home* exactly
+  as this section says, and it needs **no new widget kind** — unlike the reticule colour, which is why this
+  is the cheaper first exerciser of the two.
+- **The store is a THIRD kind, and that is the part worth knowing.** Every value this page has ruled on so
+  far lives either in a source declaration (`@export`, a `static var`, a `LookPreset`) or in
+  `user://settings.cfg`. This one lives in `ProjectSettings`, and **Godot's own tooltip machinery reads it**.
+  So "one live runtime value" here means whoever wins has to keep the project setting itself in step rather
+  than shadowing it, or the ring's readout and every built-in `tooltip_text` drift apart — which is the exact
+  drift the single-store choice was made to prevent.
+- **The dev-toggle form is refused, not deferred.** Under the ruling there is no version of this where a dev
+  control and a player control hold different waits; if the dev wants a short one while authoring, he moves
+  the one value.
+
 ### The aim palette: the player picks BETWEEN authored sets ([#422](https://github.com/Phaazoid/Godoiosis/issues/422), BUILT 2026-09-01)
 
 **The player chooses WHICH palette; the dev goes on authoring what is IN one.** Two different axes, so
