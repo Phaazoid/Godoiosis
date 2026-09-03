@@ -142,8 +142,9 @@ func _build_override_field(data: TileData, field: Dictionary) -> void:
 	DevWidgets.add_checkbox(_rows, "%s - inherit" % field["label"], inherited,
 		func(on: bool) -> void:
 			# Ticking gives the value back to the fallback; unticking adopts whatever it currently
-			# RESOLVES to, so turning an override on never moves the board by itself.
-			_write_field(data, layer, _inherit_value(field) if on else resolved))
+			# RESOLVES to, so turning an override on never moves the board by itself -- except where it
+			# cannot, which _adopted_value owns.
+			_write_field(data, layer, _inherit_value(field) if on else _adopted_value(field, resolved)))
 	if inherited:
 		DevWidgets.add_label(_rows, "    inherits %s" % _shown(resolved))
 	elif is_color:
@@ -165,6 +166,23 @@ func _inherit_value(field: Dictionary) -> Variant:
 		TYPE_COLOR: return GridUtils.INHERIT_COLOR
 		TYPE_INT: return 0
 	return GridUtils.INHERIT
+
+
+# What unticking "inherit" writes. Normally the value the field already RESOLVES to, so switching a
+# field to authored does not move the board -- but that invariant is unreachable when the resolved
+# value IS the sentinel, and then writing it back would re-tick the box the click just cleared. The
+# row would be permanently stuck inheriting, which is precisely how #660 shipped: a BILLBOARD's
+# rules height resolves to 0 by design (a lantern stops no shot), so a TREE could never be given a
+# height at all -- the one thing the field was offered to billboards FOR.
+#
+# So a sentinel resolve adopts the smallest authorable value instead. Moving the board by one unit
+# is a worse outcome than the invariant promises and a far better one than a control that cannot be
+# operated. Reachable for the float rows too, not just the int one: any of them whose GLOBAL is
+# tuned to 0 in the Game tab lands here the same way.
+func _adopted_value(field: Dictionary, resolved: Variant) -> Variant:
+	if field["type"] == TYPE_COLOR or not GridUtils.is_inherited(resolved):
+		return resolved
+	return int(field["min"]) if field["type"] == TYPE_INT else float(field["min"])
 
 
 # What this field actually comes out as for this tile — asked of whoever OWNS its fallback. That is

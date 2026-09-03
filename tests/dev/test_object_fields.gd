@@ -224,3 +224,53 @@ func test_a_billboard_stops_nothing_until_it_is_authored() -> void:
 	_data.set_custom_data("prop_rule_height", 3)
 	assert_int(GridUtils.prop_rule_height_of(_data)).override_failure_message(
 		"a billboard cannot be given a height, so a tree can never be cover").is_equal(3)
+
+
+# --- the inherit checkbox, driven for real (#660 follow-up) -------------------------------------
+#
+# Shipped broken, and no test could see it: everything above asks GridUtils, and ObjectTool's row
+# builder had no coverage at all -- `_rebuild` early-outs on "no 3D host", so even the suites that
+# hold a real ObjectTool never reach `_build_override_field`. These call it directly.
+#
+# The bug: unticking "inherit" writes the value the field RESOLVES to, which for a BILLBOARD's rules
+# height is 0 -- the sentinel. The write read straight back as "inherited", the box re-ticked itself,
+# and a tree could never be given a height. The one thing billboards were offered the field for.
+
+func _rows_for(shape: GridUtils.PropShape) -> ObjectTool:
+	var panel: ObjectTool = auto_free(ObjectTool.new())
+	add_child(panel)
+	_data.set_custom_data("prop_shape", shape)
+	panel._build_field_rows({"data": _data, "shape": shape})
+	return panel
+
+
+func _inherit_box(panel: ObjectTool, label: String) -> CheckBox:
+	for child in panel._rows.get_children():
+		if child is CheckBox and (child as CheckBox).text == "%s - inherit" % label:
+			return child
+	return null
+
+
+func test_a_billboards_rules_height_can_actually_be_authored() -> void:
+	var panel := _rows_for(GridUtils.PropShape.BILLBOARD)
+	var box := _inherit_box(panel, "Rules height")
+	assert_object(box).override_failure_message(
+		"the Objects panel offers a billboard no Rules height row at all").is_not_null()
+
+	box.toggled.emit(false)   # the dev unticking "inherit" to give a tree a height
+
+	assert_int(GridUtils.prop_int_override_of(_data, "prop_rule_height")).override_failure_message(
+		"unticking wrote the sentinel back, so the row is stuck inheriting and a tree can never block"
+		).is_greater(0)
+	assert_int(GridUtils.prop_rule_height_of(_data)).override_failure_message(
+		"a tree that was just given a height still stops nothing").is_greater(0)
+
+
+func test_unticking_a_solid_prop_adopts_what_it_already_resolved() -> void:
+	# The control: the fix must not simply write the minimum. A PLANE already resolves to a full
+	# block, so unticking has to keep THAT -- switching a field to authored does not move the board.
+	var panel := _rows_for(GridUtils.PropShape.PLANE)
+	_inherit_box(panel, "Rules height").toggled.emit(false)
+	assert_int(GridUtils.prop_rule_height_of(_data)).override_failure_message(
+		"unticking moved a wall's height instead of adopting what it already stood at"
+		).is_equal(Terrain.UNITS_PER_LEVEL)
