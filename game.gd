@@ -996,13 +996,32 @@ func refresh_mission_status() -> void:
 # handoff -- the refresh_mission_status pattern above (#134), a write-point call, not a signal.
 func refresh_end_turn_button() -> void:
 	var faction: Team.Faction = turn_manager.active_faction()
-	# Since #467 this decides the FLASH, not the visibility -- the button is the only door to
-	# ending a turn now, so it is always up. Same predicate the early-press confirm reads, which
-	# is what makes "it is flashing" and "it will not ask" the same fact.
+	# Since #467 this decides the FLASH, not the visibility -- the button is up whenever the player
+	# could act, so this predicate never hides it. Same predicate the early-press confirm reads,
+	# which is what makes "it is flashing" and "it will not ask" the same fact. What DOES hide it is
+	# a cinematic (#722), on a different predicate and through set_hud_hidden_for_playback below.
 	var urgent: bool = (not _board_locked_for_player()
 		and not ai_controller.is_ai_faction(faction)
 		and squad_manager.faction_all_squads_acted(faction))
 	end_turn_button.set_urgent(urgent)
+
+# THE CINEMATIC OWNS THE FRAME (#722). Called from CameraController's playback_cinematic setter --
+# the one edge, since that field is cleared on both lock edges and published once per pass.
+#
+# A DECLARED SET, never `ui_layer.visible = false`: MissionStatusPanel stays up (objectives, the
+# build stamp and #182's tutorial instruction row -- a lesson's current instruction has to survive
+# the moment the lesson is being demonstrated), and #545's skip affordance is outside this set by
+# construction rather than by having to discover it.
+#
+# Each surface conjoins the flag into its OWN gate rather than being written here (visual-clarity's
+# "one gate, no second visibility expression"), which is what keeps a mid-pass re-show impossible:
+# the hover card is re-driven on every cursor-cell change, and a player's own Execute never leaves
+# game_state IDLE.
+func set_hud_hidden_for_playback(hidden: bool) -> void:
+	squad_action_queue_control.set_hidden_for_playback(hidden)
+	hover_info_panel.set_hidden_for_playback(hidden)
+	unit_info_panel.set_hidden_for_playback(hidden)
+	end_turn_button.set_hidden_for_playback(hidden)
 
 # Law #2 board preview: consequences of the active plan the queue panel also shows, derived from
 # the same resolver pass and ghosted as "pending" — terrain ignites (#50) + knockback shoves (#84).

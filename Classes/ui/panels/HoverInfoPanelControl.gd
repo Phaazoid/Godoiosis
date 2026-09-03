@@ -30,6 +30,14 @@ var _tile_lines_box: VBoxContainer
 var _park_bottom: bool = false
 var _park_left_x: int = MARGIN
 
+# Hidden while a cinematic pass owns the frame (#722), and what the CONTENT rule last decided.
+# THIS is the panel that proves the term has to live in the gate rather than be written from
+# outside: HoverPresenter re-runs show_hover on every cursor-CELL change, and the player's own
+# Execute leaves game_state at IDLE -- so a mouse move mid-pass would put the card straight back
+# over the cinematic.
+var _hidden_for_playback := false
+var _content_shown := false
+
 # Set here rather than in the .tscn so UiLayers is the single answer for the whole UI stack --
 # the scene used to author a bare 2, which agreed with the rest of the order only by luck.
 # The tile card is code-built (data-shaped UI): same stylebox as the unit card's Panel, so the
@@ -73,7 +81,8 @@ func show_hover(unit: Unit, tile_icon: Texture2D, tile_header: String, tile_line
 	if unit == null and not tile_has_content:
 		clear()
 		return
-	visible = true
+	_content_shown = true
+	_apply_visibility()
 	current_unit = unit
 	hover_panel.visible = unit != null
 	if unit != null:
@@ -86,7 +95,16 @@ func show_hover(unit: Unit, tile_icon: Texture2D, tile_header: String, tile_line
 
 func clear():
 	current_unit = null
-	visible = false
+	_content_shown = false
+	_apply_visibility()
+
+# #722's one input.
+func set_hidden_for_playback(hidden: bool) -> void:
+	_hidden_for_playback = hidden
+	_apply_visibility()
+
+func _apply_visibility() -> void:
+	visible = _content_shown and not _hidden_for_playback
 
 func _set_tile_block(icon: Texture2D, header: String, lines: Array[String]) -> void:
 	_tile_icon.texture = icon

@@ -32,6 +32,14 @@ var _drag_section: VBoxContainer = null
 var _drag_dirty := false
 var _expanded_actors: Dictionary = {}                  # actor instance_id -> bool (volley expanded?)
 var _last_entries: Array[ActionQueueDisplayEntry] = []  # cached so a toggle re-renders without the backend
+# Hidden while a cinematic pass owns the frame (#722), and what the CONTENT rule last decided.
+# Two fields because the playback edge must re-apply the gate WITHOUT re-deriving the content half:
+# game.refresh_action_queue refuses to run at all while a pass is executing (#361), and the release
+# edge fires before `executing_plan` is cleared -- so routing the re-apply through it would leave
+# this panel hidden for the rest of the mission. Storing what _render decided is what makes the
+# gate re-applicable on its own.
+var _hidden_for_playback := false
+var _content_shown := false
 
 
 signal execute_requested
@@ -60,10 +68,12 @@ func _render() -> void:
 	_clear_sections()
 
 	if _last_entries.is_empty():
-		visible = false
+		_content_shown = false
+		_apply_visibility()
 		return
 
-	visible = true
+	_content_shown = true
+	_apply_visibility()
 	execute_button.show()
 
 	var current_list: VBoxContainer = null
@@ -207,9 +217,19 @@ func _wire_row(row: ActionQueueRow) -> void:
 
 func clear():
 	current_squad = null
-	visible = false
+	_content_shown = false
+	_apply_visibility()
 	_clear_sections()
 	_expanded_actors.clear()
+
+# #722's one input, and the gate both halves write through. Deliberately NOT `_render()` -- that
+# rebuilds every section, and a playback edge has not changed a single row.
+func set_hidden_for_playback(hidden: bool) -> void:
+	_hidden_for_playback = hidden
+	_apply_visibility()
+
+func _apply_visibility() -> void:
+	visible = _content_shown and not _hidden_for_playback
 
 func _clear_sections():
 	_section_scrolls.clear()
