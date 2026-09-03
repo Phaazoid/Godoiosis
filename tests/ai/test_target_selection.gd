@@ -100,11 +100,16 @@ func test_a_tie_among_reachable_targets_falls_to_route_distance() -> void:
 # `tempting` is unarmed and would win the exchange outright; `reachable` is armed and would lose.
 # Inside the leash only `reachable` can be fought, so it must win anyway. Mutant: drop `allowed`
 # from the reachable set and the sentry picks the softer target it cannot legally reach.
+#
+# `tempting` sits at (5,2) rather than further out FOR A REASON, and the first draft got it wrong:
+# at (6,2) it was not engageable at all -- its firing cell is beyond this unit's move range -- so
+# the leash was never what excluded it and the case passed against a mutant that ignored the leash
+# entirely. The lure has to be genuinely reachable for the leash to be the thing under test.
 func test_a_sentry_ranks_only_the_targets_its_leash_lets_it_fight() -> void:
 	var board: Dictionary = _build_board()
 	var leader: Unit = _spawn(board, PLAYER, Vector2i(2, 2))
-	var reachable: Unit = _spawn(board, ENEMY, Vector2i(3, 2))          # armed; fought from inside
-	var tempting: Unit = _spawn(board, ENEMY, Vector2i(6, 2), false)    # unarmed; only from outside
+	var reachable: Unit = _spawn(board, ENEMY, Vector2i(3, 2))          # armed; fought from (2,2)
+	var tempting: Unit = _spawn(board, ENEMY, Vector2i(5, 2), false)    # unarmed; fought from (4,2)
 	var leash := {}
 	for x in range(1, 4):
 		for y in range(1, 4):

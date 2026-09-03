@@ -41,19 +41,18 @@ static func choose_engagement_target(leader: Unit, board: BoardContext, squad_ma
 	if engageable.is_empty():
 		return nearest_enemy(leader, board, within)   # pursuit: nobody in reach, distance is the answer
 
-	var route := _approach_distances(leader, board)   # the tie-break, reusing the one BFS
 	var best: Unit = null
 	var best_safe := false
 	var best_hops := 0
 	for enemy: Unit in engageable:
-		# Asked at the cell best_attack_destination will route to, so the two layers cannot disagree
+		var plan: _Engagement = engageable[enemy]
+		# Asked at the cell we would attack FROM, so this layer and the approach cannot disagree
 		# about where the fight happens.
-		var safe := not squad_manager.can_counter(enemy, leader, board, engageable[enemy])
-		var hops: int = route.get(enemy, RulesService.UNREACHABLE)
-		if best == null or (safe and not best_safe) or (safe == best_safe and hops < best_hops):
+		var safe := not squad_manager.can_counter(enemy, leader, board, plan.from)
+		if best == null or (safe and not best_safe) or (safe == best_safe and plan.hops < best_hops):
 			best = enemy
 			best_safe = safe
-			best_hops = hops
+			best_hops = plan.hops
 	return best
 
 
@@ -66,11 +65,23 @@ static func choose_engagement_target(leader: Unit, board: BoardContext, squad_ma
 # unclamped move range, but cohesion (V3) can refuse the group move to a cell the leader alone
 # could stand on, in which case the squad stays put. best_attack_destination has carried the
 # identical optimism since #29, so nothing new is introduced here.
+class _Engagement:
+	var from: Vector2i   # the cell we would attack from -- the same one the approach will route to
+	var hops: int        # route to it, the tie-break
+
+
 static func _engageable_enemies(leader: Unit, board: BoardContext, within, allowed) -> Dictionary:
 	var aiming := leader.get_fired_attack()
 	var reach_set: Dictionary = RulesService.compute_move_range(leader, board).reachable.duplicate()
 	reach_set[leader.movement.cell] = true   # standing still counts; compute_move_range omits the start cell
-	var out := {}
+
+	# Every firing cell this leader may LEGALLY use against each enemy -- filtered BEFORE the walk,
+	# not after. Asking _nearest_standable_attack_cell for the globally nearest and then testing IT
+	# is wrong twice over: it excludes an enemy whose nearest firing cell is outside the leash even
+	# when another one inside it would serve, and it pays a whole BFS per enemy (measured: +21% on
+	# Castle Assault, over the budget this was planned against).
+	var per_enemy := {}
+	var wanted := {}
 	for enemy in board.units:
 		if not is_instance_valid(enemy) or not enemy.is_active():
 			continue
@@ -78,12 +89,33 @@ static func _engageable_enemies(leader: Unit, board: BoardContext, within, allow
 			continue
 		if within != null and not within.has(enemy.movement.cell):
 			continue
-		var from_cell := _nearest_standable_attack_cell(leader, enemy.movement.cell, aiming, board)
-		if not reach_set.has(from_cell):
-			continue
-		if allowed != null and not allowed.has(from_cell):
-			continue
-		out[enemy] = from_cell
+		var legal := {}
+		for cell in _standable_attack_cells(leader, enemy.movement.cell, aiming, board):
+			if not reach_set.has(cell):
+				continue
+			if allowed != null and not allowed.has(cell):
+				continue
+			legal[cell] = true
+		if not legal.is_empty():
+			per_enemy[enemy] = legal
+			wanted.merge(legal)
+	if wanted.is_empty():
+		return {}
+
+	# ONE walk for every candidate cell at once, _approach_distances' own trick: the `until` set is
+	# the union, so the search stops as soon as they all have a distance.
+	var field := RulesService.path_hops(leader.movement.cell, board, leader, -1, wanted, true)
+	var out := {}
+	for enemy: Unit in per_enemy:
+		var best := _Engagement.new()
+		best.hops = RulesService.UNREACHABLE
+		for cell in per_enemy[enemy]:
+			var hops: int = field.get(cell, RulesService.UNREACHABLE)
+			if hops < best.hops:
+				best.from = cell
+				best.hops = hops
+		if best.hops < RulesService.UNREACHABLE:
+			out[enemy] = best   # in move-COST range but with no occupancy-honest route is not engageable
 	return out
 
 
