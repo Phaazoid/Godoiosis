@@ -7,7 +7,7 @@ its child [#49 Action Queue UX](https://github.com/Phaazoid/Godoiosis/issues/49)
 This is a *guidelines* doc, not a spec — it captures the principles we're holding the work to,
 plus the running order of the queue-UX checklist. Update it as items land.
 
-**Canon checked through #699 (2026-09-02).**
+**Canon checked through #722 (2026-09-03).**
 
 ## Principles
 
@@ -1157,7 +1157,10 @@ already had a richer HUD door. The principle worth keeping: **the unit's menu is
 the turn is the HUD's business.** The one capability genuinely lost is *"wipe everything this unit
 has queued in one press"*, which is now N presses of the queue row's X.
 
-**So the End Turn button is permanent.** What its old visibility rule became is the FLASH, and the
+**So the End Turn button is permanent** — with one exception added by
+[#722](https://github.com/Phaazoid/Godoiosis/issues/722): it stands down while a cinematic pass owns the
+frame, on a different predicate entirely (see *The shell's menus, and what the cinematic owns* below).
+A plain enemy turn still leaves it up, which is #541's ruling. What its old visibility rule became is the FLASH, and the
 same predicate (`faction_all_squads_acted`) now also decides whether pressing it **asks first** —
 so a flashing button never interrupts and a still one always does, and the cue and the confirmation
 cannot disagree. Two notes measured rather than assumed while making it permanent: `MissionStatusPanel`
@@ -2646,23 +2649,47 @@ must cover the real window.
 From the scratchpad sweep. All three became issues; what is recorded here is the half that outlives
 whichever way each ticket is decided.
 
-**1. A HUD-visibility rule belongs on `playback_owns_board()`, never on the composed predicate
-([#722](https://github.com/Phaazoid/Godoiosis/issues/722)).** The dev's ask was *"no menus during battle
-zoom (action queue, hover menus, etc)"*, and the measurement is that the HUD is **disabled but never
-hidden**: all nine readers of `game._board_locked_for_player()` refuse an *action* — the queue's execute,
-cancel and reorder arms, `refresh_action_queue`'s `ExecuteState.DISABLED`, `refresh_end_turn_button`'s
-flash — while every surface's `visible` is driven by something unrelated (entries present, objectives
-declared, what is under the cursor). `battle3d.gd`'s own header makes it total rather than incidental:
-*"every Control — menus, cards, the queue panel, the HUD — draws over the 3D world."*
+**1. The HUD stands down for a CINEMATIC, on `playback_cinematic` — not on either half of the lock
+([#722](https://github.com/Phaazoid/Godoiosis/issues/722), BUILT 2026-09-03).** The dev's ask was *"no
+menus during battle zoom (action queue, hover menus, etc)"*, and the measurement is that the HUD was
+**disabled but never hidden**: all nine readers of `game._board_locked_for_player()` refuse an *action* —
+the queue's execute, cancel and reorder arms, `refresh_action_queue`'s `ExecuteState.DISABLED`,
+`refresh_end_turn_button`'s flash — while every surface's `visible` was driven by something unrelated
+(entries present, objectives declared, what is under the cursor). `battle3d.gd`'s own header makes it
+total rather than incidental: *"every Control — menus, cards, the queue panel, the HUD — draws over the
+3D world."*
 
-The finding is which predicate to hang the fix on. `_board_locked_for_player()` is **composed** of
-`playback_owns_board() or menu_is_up()`, split during #520 precisely because they had acquired different
-readers — battle3d gates the rig's zoom on `menu_is_up()` alone. A HUD-hide is the third such reader and
-wants the *other* half: hanging it on the composed predicate would hide the mission-status panel at
-`MISSION_OVER`, which is the moment that panel exists for. **And the answer can never be
-`ui_layer.visible = false`** — [#545](https://github.com/Phaazoid/Godoiosis/issues/545)'s skip affordance
-has to live on screen during exactly this window, so what is being specified is a declared *set* of
-surfaces with the skip explicitly outside it.
+**This entry said `playback_owns_board()` when it was captured, and that was wrong.** That predicate is
+`playback_locked or game_state == AI_TURN`, and an AI turn holds the lock end to end —
+`execute_orders` restores the prior value rather than releasing — so it means *the whole enemy turn,
+gaps and walk-only passes included*, which is [#541](https://github.com/Phaazoid/Godoiosis/issues/541)'s
+question rather than this one. The right predicate already existed and had two consumers:
+**`CameraController.playback_cinematic`**, published once per pass at `OrderExecutor.gd:118` as
+`_shows_a_fight(sheet)` (*any beat cinematic* **and** the sheet stages cells) and cleared on both lock
+edges. Reading it makes the `BATTLE_ZOOM_MODE` fork evaporate rather than need answering — **OFF** never
+hides, **COMBAT_ONLY** is true for the whole pass if any volley is in it so no per-beat flicker is
+representable, and a walk-only pass is not a fight under any mode. `beat_profile` is its per-beat twin
+and is the wrong field: it is held between passes, so it reads CINEMATIC for ever after the first clash.
+
+**The generalizable half: when a surface should react to the cinematic, read what the cinematic
+PUBLISHES — the disable path's predicate is the nearest one, not the right one.**
+
+**The set is DECLARED and can never be `ui_layer.visible = false`** —
+[#545](https://github.com/Phaazoid/Godoiosis/issues/545)'s skip affordance has to live on screen during
+exactly this window, so it is outside the set by construction. Hidden: the queue panel, the hover card,
+the inspect panel and End Turn. **`MissionStatusPanel` stays up** (dev, 2026-09-03) — objectives, the
+build stamp and #182's tutorial instruction row, which has to survive the moment the lesson is being
+demonstrated. Hard `visible = false`, no fade and no knob: there is no tuned value here to disagree
+about.
+
+Each surface conjoins the flag into **its own** gate rather than being written from outside — *one gate,
+no second visibility expression*, the rule stated three times above. That is load-bearing, not tidy:
+`HoverPresenter` re-drives the hover card on every cursor-CELL change and a player's own Execute never
+leaves `game_state` at IDLE, so a one-shot write at the claim edge is undone by the first mouse move.
+`UnitInfoPanelControl.is_showing()`/`is_showing_unit()` therefore read the CONTENT half — a panel hidden
+for a cinematic has not let go of its unit, and `HoverPresenter` asks those two where to park the card.
+`#541` closed into this: one predicate writes the End Turn button's `visible`, and a plain enemy turn
+leaves it up.
 
 **2. The pause list is a build history, not a decision
 ([#724](https://github.com/Phaazoid/Godoiosis/issues/724)).** `PauseMenu._build`'s `_add_button` sequence
