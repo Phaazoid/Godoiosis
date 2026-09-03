@@ -152,9 +152,13 @@ func test_the_second_member_secures_the_down_the_first_started() -> void:
 
 # Overkill is the other half of focus fire, and the half a per-hit removal count cannot express:
 # the ladder answers KILLED for ANY damaging hit on a downed body, so counting removals per hit
-# re-pays the second member for finishing what the first downed. Here there is nowhere else to go,
-# so the question is only whether the wasted swing is still worth taking -- it is not.
-func test_a_second_swing_at_a_body_the_plan_already_downed_is_declined() -> void:
+# re-pays the second member for finishing what the first downed.
+#
+# THE PREFERENCE is pinned above, by the case that gives the second member somewhere else to go --
+# the clamp is what makes a fresh enemy outrank a corpse. What THIS case pins is the declared
+# consequence of dropping the bar (#711): with nowhere else to go, the wasted swing is taken. It
+# used to assert the opposite, and that was the bar speaking rather than the clamp.
+func test_a_body_is_still_swung_at_when_it_is_the_only_thing_in_reach() -> void:
 	var board: Dictionary = _build_board()
 	var pair := _pair(board)
 	var a: Unit = _spawn(board, ENEMY, A_CELL)
@@ -163,7 +167,7 @@ func test_a_second_swing_at_a_body_the_plan_already_downed_is_declined() -> void
 	AITactics.queue_main_actions_for_squad(pair[0].squad, _context(board), board.squad_manager)
 
 	assert_int(_aim_count(pair[0].squad, A_CELL)).override_failure_message(
-			"a member spent its action overkilling a body: %s" % str(_attack_aims(pair[0].squad))).is_equal(1)
+			"a member idled with a reachable target: %s" % str(_attack_aims(pair[0].squad))).is_equal(2)
 
 
 # --- The dev's counter ruling (2026-09-02) ------------------------------------------------------
@@ -311,28 +315,30 @@ func test_a_shoving_attack_is_still_queued() -> void:
 # The projections half: a scoring pass runs many hypotheticals and the LAST one is not the queue,
 # so the pass has to finish on a real resolve or the board is left dressed for a plan nobody gave.
 #
-# TWO INGREDIENTS, and the first draft of this case had NEITHER, which a mutant caught: the pass
-# must END on a candidate that is not queued (otherwise a later real resolve covers for it), and
-# that candidate's resolve must actually PUBLISH something (with no knockback anywhere, every
-# projection is just the unit's own cell and the assertion cannot fail whatever the code does).
+# The LOSER has to publish something DIFFERENT from the winner, or the assertion cannot fail
+# whatever the code does. One shoving attacker, two reachable enemies: the frail one is a removal
+# and wins, the tough one is only damage and loses -- and each candidate's resolve shoves its own
+# target a different way, so a leftover projection is visible as the tough enemy standing where
+# nothing in the queued plan ever put it.
 #
-# Both come from one shoving attacker with nothing worth hitting: the enemy is DOWNED, so pass 1
-# declines it (#57) and pass 2 scores only what a body is worth -- which the counter it can still
-# draw outweighs, so the candidate loses after its resolve has already published the shove.
+# DECLARED: the TRAILING restore is still unpinned, and this fixture cannot pin it either. With no
+# bar (#711) the joint loop always queues whatever it scored, so the round that finally breaks it
+# opens with a REAL resolve and no hypothetical is ever the last word. What is asserted here is the
+# invariant itself -- a refactor dropping that top-of-loop resolve reds this case.
 func test_scoring_leaves_the_board_where_a_real_resolve_would() -> void:
 	var board: Dictionary = _build_board()
 	var attacker: Unit = _spawn(board, PLAYER, Vector2i(0, 0))
 	attacker.equipped_weapon = _shoving_weapon()
-	attacker.set_current_hp(3)                             # a counter would fell it
-	var foe: Unit = _spawn(board, ENEMY, Vector2i(1, 0))
-	var guard: Unit = _spawn(board, ENEMY, Vector2i(0, 1))  # squadmate of nobody, but it CAN answer
-	board.squad_manager.join_squad(guard, foe.squad)        # ...so the party counters as one (C1/C4)
-	foe.lifecycle_state = Unit.LifecycleState.DOWNED
+	var frail: Unit = _spawn(board, ENEMY, Vector2i(1, 0))
+	frail.set_current_hp(3)                                 # one hit fells it: a removal, so it wins
+	var tough: Unit = _spawn(board, ENEMY, Vector2i(0, 1))  # damage only, so its candidate LOSES
 	var context: BoardContext = _context(board)
 
 	AITactics.queue_main_actions_for_squad(attacker.squad, context, board.squad_manager)
-	assert_int(_aim_count(attacker.squad, foe.movement.cell)).override_failure_message(
-			"the fixture no longer declines its only candidate, so nothing is being pinned").is_equal(0)
+	assert_int(_aim_count(attacker.squad, frail.movement.cell)).override_failure_message(
+			"the fixture no longer picks the frail target, so no losing candidate was scored last"
+			).is_equal(1)
+	assert_int(_aim_count(attacker.squad, tough.movement.cell)).is_equal(0)
 
 	var after_pass := {}
 	for unit in context.units:
@@ -344,13 +350,19 @@ func test_scoring_leaves_the_board_where_a_real_resolve_would() -> void:
 			.is_equal(unit.get_projected_destination())
 
 
-# --- Pass 2 needs an EMPTY pass 1, not a losing one (dev ruling, 2026-09-02) --------------------
+# --- Standing beats a body, even when standing LOSES (dev rulings, 2026-09-02) ------------------
 
 # The player's downed unit is a rescue waiting to happen, so the AI must never spend an action
-# executing one while anybody is still on their feet in reach -- and "a bad trade" is not the same
-# as "nobody to fight". Here the only standing enemy would answer with a counter that fells the
-# attacker, so every pass-1 candidate loses; the body must still be left alone.
-func test_a_losing_trade_does_not_open_the_door_to_finishing_a_body() -> void:
+# executing one while anybody is still on their feet in reach. The standing enemy here answers with
+# a counter that fells the attacker, so the trade is a clear loss -- and BOTH halves of the ruling
+# now speak: the losing trade is TAKEN (#711, no bar), and the body is still left alone (#57's
+# precedence, which a loss does not weaken).
+#
+# This case is the only coverage of pass-1-over-pass-2 in the LOSING case, which is why it kept its
+# fixture rather than being retired with the bar. It used to assert that NEITHER was attacked --
+# superseding "pass 2 needs an EMPTY pass 1, not a losing one" (dev, 2026-09-02), which is vacuous
+# now that pass 1 has no losing outcome to have.
+func test_a_standing_target_is_attacked_at_a_loss_rather_than_a_body_being_finished() -> void:
 	var board: Dictionary = _build_board()
 	var attacker: Unit = _spawn(board, PLAYER, Vector2i(0, 0))
 	attacker.set_current_hp(3)                              # the counter takes it off its feet
@@ -361,9 +373,9 @@ func test_a_losing_trade_does_not_open_the_door_to_finishing_a_body() -> void:
 	AITactics.queue_main_actions_for_squad(attacker.squad, _context(board), board.squad_manager)
 
 	assert_int(_aim_count(attacker.squad, body.movement.cell)).override_failure_message(
-			"the AI executed a downed unit because its only standing target was a bad trade").is_equal(0)
+			"the AI executed a downed unit while somebody was still standing in reach").is_equal(0)
 	assert_int(_aim_count(attacker.squad, armed.movement.cell)).override_failure_message(
-			"the losing trade was taken after all -- the fixture is no longer pinning the rule").is_equal(0)
+			"the AI idled instead of taking the only trade it had, bad as it was").is_equal(1)
 
 
 # ...and the other half, which is why "considered" reads the PLAN rather than the live board.
@@ -409,3 +421,70 @@ func test_between_equal_targets_the_one_that_cannot_answer_is_chosen() -> void:
 	assert_int(_aim_count(attacker.squad, harmless.movement.cell)).override_failure_message(
 			"the attack pick took the target that hits back, on an otherwise even trade").is_equal(1)
 	assert_int(_aim_count(attacker.squad, answerer.movement.cell)).is_equal(0)
+
+
+# --- No floor: the score ORDERS, it never gates (#711, dev 2026-09-02) ---------------------------
+
+# "The AI should ALWAYS attack if there is an option to, and if all the options are weighed bad, it
+# has to pick its least bad option." The attacker cannot survive the reply, so its only candidate
+# scores a NEGATIVE removal -- which under the old bar was refused, leaving it to idle in reach.
+func test_the_least_bad_option_is_taken_when_every_trade_loses() -> void:
+	var board: Dictionary = _build_board()
+	var attacker: Unit = _spawn(board, PLAYER, M1_CELL)
+	attacker.set_current_hp(3)                            # the counter takes it off its feet
+	var armed: Unit = _spawn(board, ENEMY, A_CELL)        # and its answer is lethal
+
+	AITactics.queue_main_actions_for_squad(attacker.squad, _context(board), board.squad_manager)
+
+	assert_int(_aim_count(attacker.squad, armed.movement.cell)).override_failure_message(
+			"the AI idled in reach rather than take a losing trade -- the scoring bar is back"
+			).is_equal(1)
+
+
+# THE PLAYTEST SYMPTOM #117 filed as "the enemy won't attack my tank". C1/C4 make a defending party
+# react ONCE per plan, to the FIRST attack against it, and every member of that party answers -- so
+# the whole bill lands on whichever candidate is scored first and nothing is left to charge it
+# against. Under the bar no candidate netted positive and the squad queued NOTHING, however plainly
+# the follow-ups won; the second attack is free, because the party has already reacted.
+func test_a_squad_opens_on_a_counter_capable_party_instead_of_freezing() -> void:
+	var board: Dictionary = _build_board()
+	var pair := _pair(board)
+	pair[0].set_current_hp(3)
+	pair[1].set_current_hp(3)
+	var a: Unit = _spawn(board, ENEMY, A_CELL)
+	var b: Unit = _spawn(board, ENEMY, B_CELL)
+	board.squad_manager.join_squad(b, a.squad)            # one party, so C1/C4 gate them together
+
+	AITactics.queue_main_actions_for_squad(pair[0].squad, _context(board), board.squad_manager)
+
+	assert_int(_attacks_in_order(pair[0].squad).size()).override_failure_message(
+			"the squad froze: the opener's counter bill still vetoes the first attack"
+			).is_greater(0)
+
+
+# The lookahead's floor was Vector3i.ZERO and the caller REPLACED the solo score with it, which was
+# invisible while the bar refused zero anyway. With no bar it LAUNDERS a negative into a zero: the
+# damageless soak below is really (-1, 0, ...) and comes back (0,0,0), which then outranks an honest
+# plain swing at (-1, 8, ...) on the first term. The unit dies either way; the difference is whether
+# it deals damage on the way out. Nothing follows the soak here -- a set-up with no follow-up is
+# worth what it does alone, which is nothing.
+func test_a_setup_with_no_follow_up_does_not_outrank_a_better_plain_swing() -> void:
+	var board: Dictionary = _build_board()
+	var attacker: Unit = _spawn(board, PLAYER, M1_CELL)
+	attacker.equipped_weapon = _elemental_weapon(Elemental.Element.WATER, 0, true)
+	var plain: WeaponAttackData = WeaponAttackData.new()
+	plain.power = 3                                       # 8 damage: real, and short of felling a 10 HP foe
+	var extras: Array[WeaponAttackData] = [plain]
+	attacker.equipped_weapon.template.extra_attacks = extras
+	attacker.set_current_hp(3)                            # so BOTH candidates score a negative removal
+	var _armed: Unit = _spawn(board, ENEMY, A_CELL)
+
+	AITactics.queue_main_actions_for_squad(attacker.squad, _context(board), board.squad_manager)
+
+	var ordered := _attacks_in_order(attacker.squad)
+	assert_int(ordered.size()).override_failure_message("no attack was queued at all").is_equal(1)
+	if ordered.is_empty():
+		return
+	assert_object(ordered[0].fired_attack).override_failure_message(
+			"the soak won: a losing set-up was laundered to (0,0,0) and outranked a real swing"
+			).is_same(plain)
