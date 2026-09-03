@@ -219,6 +219,46 @@ static func wall_edges_at_cell(grid: TileMapLayer, cell: Vector2i) -> int:
 	return wall_edges_of(grid.get_cell_tile_data(cell))
 
 
+# How tall this cell's prop stands FOR THE RULES (#660), in the board's own height units (#427, two
+# per level) -- the column the sight trace stacks on top of the ground. A wall is a painted TILE and
+# not geometry, so before this every wall was 100% transparent to Reach.sight_trace: it read
+# BoardHeights alone, and on a flat board the sightline sits a half level above every fence.
+#
+# NOT prop_height_scale, and that separation is the point (#642): that knob is a 3/4-perspective
+# look correction capped at 2.03 levels, so sourcing legality from it would let a look knob silently
+# decide the rules, and it could not express a three-high wall at all. Two columns, two questions --
+# how tall a prop is DRAWN, and how tall it IS.
+#
+# ZERO IS A DECLARED SENTINEL meaning "this shape's default", the same storage trade INHERIT
+# documents below: has_custom_data answers whether the LAYER exists, never whether this tile
+# authored a value, so an unauthored int reads 0 and no other sentinel is reachable. The cost is
+# that a solid prop cannot author "stands up but does not block", and that costs nothing in the
+# sheet we ship -- crate, chest, barrel and rock all want to stop a shot. Measured, not assumed.
+#
+# The default is DERIVED from SOLID_SHAPES rather than tabled per shape, so "which shapes are real
+# geometry" keeps ONE answer (Law #4). A BILLBOARD is thin and reads 0 -- a lantern stopping a
+# carbine would be a surprise -- but it is still offered the field, so a tree can be given a height
+# without a code change.
+static func prop_rule_height_of(data: TileData) -> int:
+	var authored := prop_int_override_of(data, "prop_rule_height")
+	if authored > 0:
+		return authored
+	return Terrain.UNITS_PER_LEVEL if SOLID_SHAPES.has(prop_shape_of(data)) else 0
+
+
+# The tallest rules height the ART can currently back, in the same units (#642). A PLANE slab is
+# drawn from y=0 to 13/16 of a cell and prop_height_scale caps at 2.5, so a wall tops out near two
+# LEVELS however it is authored -- and a rules height above that is a wall a shot dies on and the
+# player can see straight over. Pinned as a ceiling rather than as agreement with the drawn height:
+# the drawn height resolves a live look knob, so an agreement law would go red on a purely cosmetic
+# tuning pass. #642's prop stack is what lifts this number.
+const MAX_DRAWABLE_RULE_HEIGHT := 4
+
+
+static func prop_rule_height_at_cell(grid: TileMapLayer, cell: Vector2i) -> int:
+	return prop_rule_height_of(grid.get_cell_tile_data(cell))
+
+
 # Which of a PLANE's authored edges wear the TILE'S OWN SPRITE on their slab, rather than a face
 # generated in the tile's colours (#554). The rest are generated.
 #
@@ -271,6 +311,16 @@ static func prop_lit_of(data: TileData) -> bool:
 static func prop_override_of(data: TileData, layer: String) -> float:
 	if data == null or not data.has_custom_data(layer):
 		return INHERIT
+	return data.get_custom_data(layer)
+
+
+# The INT twin, for the columns whose unit is a whole number of height units rather than a scale
+# (#660's prop_rule_height is the first). Same declared sentinel for the same storage reason -- 0
+# is "the author wrote nothing" -- but the FALLBACK is not a global here: the caller resolves it,
+# because a rules column falls back to its shape rather than to a knob.
+static func prop_int_override_of(data: TileData, layer: String) -> int:
+	if data == null or not data.has_custom_data(layer):
+		return 0
 	return data.get_custom_data(layer)
 
 

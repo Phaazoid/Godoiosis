@@ -111,6 +111,19 @@ func ramp_climb_at(cell: Vector2i) -> int:
 		return 0
 	return heights.ramp_climb_at(cell)
 
+# How tall the PROP standing on this cell reaches above its surface (#660), in the same height units
+# elevation_at answers in. The rules' read-point for the tile-authored column, sibling of
+# terrain_kind_at and there for the same reason: a fixture board stubs the method rather than
+# painting a TileSet it does not have.
+#
+# A board with no grid reads 0, which is "nothing stands here" -- the same "behaves exactly as it did
+# before this existed" contract every accessor above keeps, and what lets every existing sight-trace
+# fixture (BoardContext.new(null, ...)) go on answering as it always did.
+func prop_rule_height_at(cell: Vector2i) -> int:
+	if grid == null:
+		return 0
+	return GridUtils.prop_rule_height_at_cell(grid, cell)
+
 # Census over this board's units — shared by game.gd and the headless PlaySession so the
 # turn cycle's membership/auto-skip reads have ONE implementation.
 func present_factions() -> Array[Team.Faction]:

@@ -127,33 +127,73 @@ func _build_bool_field(data: TileData, field: Dictionary) -> void:
 func _build_override_field(data: TileData, field: Dictionary) -> void:
 	var layer: String = field["layer"]
 	var is_color: bool = field["type"] == TYPE_COLOR
-	var authored: Variant = GridUtils.prop_color_override_of(data, layer) if is_color \
-		else GridUtils.prop_override_of(data, layer)
+	var is_int: bool = field["type"] == TYPE_INT
+	var authored: Variant
+	if is_color:
+		authored = GridUtils.prop_color_override_of(data, layer)
+	elif is_int:
+		authored = GridUtils.prop_int_override_of(data, layer)
+	else:
+		authored = GridUtils.prop_override_of(data, layer)
 	var inherited: bool = GridUtils.is_inherited_color(authored) if is_color \
 		else GridUtils.is_inherited(authored)
 	var resolved: Variant = _resolved_value(data, field)
 	var first := _rows.get_child_count()
 	DevWidgets.add_checkbox(_rows, "%s - inherit" % field["label"], inherited,
 		func(on: bool) -> void:
-			# Ticking gives the value back to the global; unticking adopts whatever it currently
-			# RESOLVES to, so turning an override on never moves the board by itself.
-			_write_field(data, layer,
-				(GridUtils.INHERIT_COLOR if is_color else GridUtils.INHERIT) if on else resolved))
+			# Ticking gives the value back to the fallback; unticking adopts whatever it currently
+			# RESOLVES to, so turning an override on never moves the board by itself -- except where it
+			# cannot, which _adopted_value owns.
+			_write_field(data, layer, _inherit_value(field) if on else _adopted_value(field, resolved)))
 	if inherited:
 		DevWidgets.add_label(_rows, "    inherits %s" % _shown(resolved))
 	elif is_color:
 		DevWidgets.add_color(_rows, field["label"], authored,
 			func(picked: Color) -> void: _write_field(data, layer, picked))
 	else:
+		# An int column stores whole units, so its row is a step-1 slider and the write is ROUNDED:
+		# a float landing in an int layer is a value the loader would have to guess about.
 		DevWidgets.add_slider(_rows, field["label"], authored,
 			field["min"], field["max"], field["step"],
-			func(moved: float) -> void: _write_field(data, layer, moved))
+			func(moved: float) -> void: _write_field(data, layer, int(moved) if is_int else moved))
 	_tip_rows(first, field["tip"])
 
 
-# What this field actually comes out as for this tile — asked of BoardMirror, which owns the
-# global-then-override layering. The panel deliberately does not re-derive it.
+# The value that means "no opinion", per storage type. All three are the sentinels GridUtils
+# declares; reading it off the FIELD is what keeps a float zero out of an int layer.
+func _inherit_value(field: Dictionary) -> Variant:
+	match field["type"]:
+		TYPE_COLOR: return GridUtils.INHERIT_COLOR
+		TYPE_INT: return 0
+	return GridUtils.INHERIT
+
+
+# What unticking "inherit" writes. Normally the value the field already RESOLVES to, so switching a
+# field to authored does not move the board -- but that invariant is unreachable when the resolved
+# value IS the sentinel, and then writing it back would re-tick the box the click just cleared. The
+# row would be permanently stuck inheriting, which is precisely how #660 shipped: a BILLBOARD's
+# rules height resolves to 0 by design (a lantern stops no shot), so a TREE could never be given a
+# height at all -- the one thing the field was offered to billboards FOR.
+#
+# So a sentinel resolve adopts the smallest authorable value instead. Moving the board by one unit
+# is a worse outcome than the invariant promises and a far better one than a control that cannot be
+# operated. Reachable for the float rows too, not just the int one: any of them whose GLOBAL is
+# tuned to 0 in the Game tab lands here the same way.
+func _adopted_value(field: Dictionary, resolved: Variant) -> Variant:
+	if field["type"] == TYPE_COLOR or not GridUtils.is_inherited(resolved):
+		return resolved
+	return int(field["min"]) if field["type"] == TYPE_INT else float(field["min"])
+
+
+# What this field actually comes out as for this tile — asked of whoever OWNS its fallback. That is
+# BoardMirror for the presentation rows, which own the global-then-override layering; the panel
+# deliberately does not re-derive it.
 func _resolved_value(data: TileData, field: Dictionary) -> Variant:
+	# A RULES column falls back to its SHAPE, not to a global, and GridUtils answers that with no 3D
+	# host at all -- so it resolves before the mirror is even looked up, and the row reads correctly
+	# in the tab's no-host state instead of reporting 0.0.
+	if field["layer"] == "prop_rule_height":
+		return GridUtils.prop_rule_height_of(data)
 	var mirror := _mirror()
 	if mirror == null:
 		return 0.0
@@ -171,6 +211,8 @@ func _resolved_value(data: TileData, field: Dictionary) -> Variant:
 func _shown(value: Variant) -> String:
 	if value is Color:
 		return DevWidgets.literal_for(value)
+	if value is int:
+		return str(value)
 	return String.num(value, 3)
 
 
