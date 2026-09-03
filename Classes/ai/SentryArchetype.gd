@@ -19,7 +19,9 @@ static func take_squad_turn(squad: Squad, board: BoardContext, squad_manager: Sq
 	var allowed := zone_set.duplicate()
 	allowed[squad.home_cell] = true   # the post counts as inside even if painted over
 
-	var intruder := AITactics.nearest_enemy(leader, board, zone_set)
+	# `allowed` as well as `zone_set`: the leash decides which cells this sentry may fight FROM, and
+	# a target it cannot legally walk to is not one it can engage.
+	var intruder := AITactics.choose_engagement_target(leader, board, squad_manager, zone_set, allowed)
 	if intruder != null:
 		AITactics.engage(squad, intruder, board, squad_manager, allowed)
 		return

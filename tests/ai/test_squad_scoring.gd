@@ -387,3 +387,25 @@ func test_a_squadmate_felled_this_round_is_not_a_standing_target_any_more() -> v
 			"the squad did not fell A first: %s" % str(_attack_aims(m1.squad))).is_equal(1)
 	assert_int(_aim_count(m1.squad, body.movement.cell)).override_failure_message(
 			"the second member idled beside the body -- it read A as still standing: %s" % str(_attack_aims(m1.squad))).is_equal(1)
+
+
+# --- The exchange tie-break (dev, 2026-09-02, from playtest) -------------------------------------
+
+# "When all else is even, they should go for optimal exchanges." Both targets take the same damage
+# and neither falls, so the score's two higher terms tie exactly and z is the whole answer: prefer
+# the one that cannot hit back. The armed one is spawned FIRST so board order would take it.
+#
+# This is also what stops the ATTACK pick undoing the TARGET pick: choose_engagement_target walks
+# the squad to the harmless enemy, and if the dangerous one is still in reach from the settled
+# cell, a scorer without z ties on damage and re-selects exactly what layer 1 avoided.
+func test_between_equal_targets_the_one_that_cannot_answer_is_chosen() -> void:
+	var board: Dictionary = _build_board()
+	var attacker: Unit = _spawn(board, PLAYER, M1_CELL)
+	var answerer: Unit = _spawn(board, ENEMY, A_CELL)            # armed: counters for real damage
+	var harmless: Unit = _spawn(board, ENEMY, Vector2i(2, 0), false)   # unarmed: C6, no counter
+
+	AITactics.queue_main_actions_for_squad(attacker.squad, _context(board), board.squad_manager)
+
+	assert_int(_aim_count(attacker.squad, harmless.movement.cell)).override_failure_message(
+			"the attack pick took the target that hits back, on an otherwise even trade").is_equal(1)
+	assert_int(_aim_count(attacker.squad, answerer.movement.cell)).is_equal(0)
