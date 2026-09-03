@@ -327,8 +327,23 @@ static func _attack_candidates(unit: Unit, board: BoardContext, origin: Vector2i
 # board order. See choose_engagement_target for the other half.
 #
 # CRISIS counts as nothing -- the target stands back up surged, so triggering it is neither prize
-# nor penalty (revisit with smarter AI kinds). Downed enemies count only when count_downed (#57).
-static func _score_plan(faction: Team.Faction, plan: ResolvedPlan, count_downed: bool) -> Vector3i:
+# nor penalty (revisit with smarter AI kinds).
+#
+# A DOWNED VICTIM IS PRICED LIKE ANY OTHER, and the parameter that used to suppress that is gone
+# (#716, dev 2026-09-03). The score used to skip damage on an already-downed enemy during pass 1,
+# which was a SECOND spelling of #57's precedence -- _attack_candidates already refuses to AIM at a
+# body while anyone is standing, and that is the whole rule. All the skip added was erasing the
+# incidental value of an attack that catches a body on its way to a standing target, so a general
+# with an AoE that would hit an upright enemy AND finish a corpse scored it identically to one that
+# hit only the upright enemy, and the tie fell to candidate order. Reported from play as the AI
+# "playing for the wrong team". His ruling: prioritize the standing, but never DE-prioritize an
+# otherwise better attack for having a body in it.
+#
+# The magnitude is self-limiting rather than tuned: a downed unit clings at 1 HP (Unit._go_downed),
+# so the overkill clamp below values finishing one at exactly +1 damage -- enough to break a tie,
+# never enough to outrank felling someone on their feet. _plan_removes still answers false for a
+# body, so it cannot earn a removal either, and the precedence is untouched.
+static func _score_plan(faction: Team.Faction, plan: ResolvedPlan) -> Vector3i:
 	var dealt := {}   # Unit -> damage this plan lands on them, before the overkill clamp
 	for a in plan.attacks:
 		var victim: Unit = a.target
@@ -337,8 +352,6 @@ static func _score_plan(faction: Team.Faction, plan: ResolvedPlan, count_downed:
 		if Team.is_enemy(faction, victim.get_faction()):
 			if a.resolved.lethality == ResolvedOutcome.Lethality.CRISIS:
 				continue
-			if victim.is_downed() and not count_downed:
-				continue   # already on the ground before this plan -- #57, pass 1
 		dealt[victim] = int(dealt.get(victim, 0)) + a.resolved.damage
 
 	# The REACTIONS this plan draws -- counters and any watch shots it sets off. Their victims join
@@ -577,17 +590,18 @@ static func _best_candidate_for(member: Unit, squad: Squad, board: BoardContext,
 	if not member.is_active() or member.has_main_action_queued() or not member.can_wield_equipped():
 		return null
 	var origin := member.get_projected_destination()
+	# ONE base for both passes, since the score no longer forks on include_downed (#716). The passes
+	# differ only in which enemies _attack_candidates will AIM at -- #57's precedence -- never in how
+	# the resulting plan is priced, which is the whole of that ticket.
+	var base := _score_plan(member.get_faction(), base_plan)
 	for include_downed in [false, true]:
-		# Measured on the SAME terms as the candidate, or a pass-2 marginal double-counts damage a
-		# pass-2 order queued in an earlier round already put on a downed enemy.
-		var base := _score_plan(member.get_faction(), base_plan, include_downed)
 		var best: _Scored = null
 		for candidate in _attack_candidates(member, board, origin, include_downed, base_plan.hypo):
 			if refused.has(_candidate_key(candidate)):
 				continue
 			var one: Array[BaseAction] = [candidate]
 			var plan := squad_manager.resolve_hypothetical(squad, one, board, reactions, terrain)
-			var score := _score_plan(member.get_faction(), plan, include_downed) - base
+			var score := _score_plan(member.get_faction(), plan) - base
 			# A SET-UP is worth nothing by itself and everything to the swing behind it: Splash deals
 			# no damage, so soaking a target scores (0,0) and a greedy chooser could never OPEN a
 			# combo. One step of lookahead prices it by what a squadmate could then do (dev call,
@@ -620,7 +634,7 @@ static func _best_candidate_for(member: Unit, squad: Squad, board: BoardContext,
 static func _lookahead(setup_unit: Unit, setup: AttackAction, solo: Vector3i, squad: Squad, board: BoardContext,
 		base_plan: ResolvedPlan, squad_manager: SquadManager, reactions: Array[ElementalReaction],
 		terrain: Array[TerrainReaction], refused: Dictionary) -> Vector3i:
-	var base := _score_plan(setup_unit.get_faction(), base_plan, false)
+	var base := _score_plan(setup_unit.get_faction(), base_plan)
 	var best := solo
 	for mate in squad.get_members():
 		if mate == setup_unit or not mate.is_active() or mate.has_main_action_queued() or not mate.can_wield_equipped():
@@ -631,7 +645,7 @@ static func _lookahead(setup_unit: Unit, setup: AttackAction, solo: Vector3i, sq
 				continue
 			var pair: Array[BaseAction] = [setup, follow]
 			var plan := squad_manager.resolve_hypothetical(squad, pair, board, reactions, terrain)
-			var score := _score_plan(setup_unit.get_faction(), plan, false) - base
+			var score := _score_plan(setup_unit.get_faction(), plan) - base
 			if _beats(score, best):
 				best = score
 	return best

@@ -488,3 +488,42 @@ func test_a_setup_with_no_follow_up_does_not_outrank_a_better_plain_swing() -> v
 	assert_object(ordered[0].fired_attack).override_failure_message(
 			"the soak won: a losing set-up was laundered to (0,0,0) and outranked a real swing"
 			).is_same(plain)
+
+
+# --- A body in the blast is a BONUS, never a reason to aim elsewhere (#716, dev 2026-09-03) ------
+
+# Reported from play: a general with an AoE had two options that both hit an upright enemy, and only
+# one of them ALSO caught a downed one. It took the option that hit nobody extra -- "playing for the
+# wrong team". The score used to skip damage on an already-downed victim during pass 1, so both
+# candidates priced identically and the tie fell to candidate order.
+#
+# That skip was a SECOND spelling of #57's precedence: _attack_candidates already refuses to AIM at
+# a body while anyone is standing, which is the whole rule. Both aims here are at the UPRIGHT enemy,
+# so the precedence is not in play at all -- only whether the extra corpse in the blast is worth
+# anything. It is worth exactly +1 (a downed unit clings at 1 HP and the overkill clamp binds), which
+# is enough to break a tie and not enough to outrank felling someone standing.
+func test_an_aoe_that_also_catches_a_body_beats_the_same_shot_that_does_not() -> void:
+	var board: Dictionary = _build_board()
+	var attacker: Unit = _spawn(board, PLAYER, Vector2i(0, 0))
+	var weapon: WeaponInstance = attacker.get_equipped_weapon() as WeaponInstance
+	var sweep: WeaponAttackData = WeaponAttackData.new()
+	sweep.power = 3                                    # same power as main: the ONLY difference is reach
+	sweep.attack_pattern = ForwardLinePattern.new()    # length 2 -- the aimed cell and one beyond
+	var extras: Array[WeaponAttackData] = [sweep]
+	weapon.template.extra_attacks = extras
+	var upright: Unit = _spawn(board, ENEMY, Vector2i(1, 0))
+	var body: Unit = _spawn(board, ENEMY, Vector2i(2, 0), false)
+	body.lifecycle_state = Unit.LifecycleState.DOWNED
+
+	AITactics.queue_main_actions_for_squad(attacker.squad, _context(board), board.squad_manager)
+
+	var ordered := _attacks_in_order(attacker.squad)
+	assert_int(ordered.size()).override_failure_message("no attack was queued at all").is_equal(1)
+	if ordered.is_empty():
+		return
+	assert_that(ordered[0].target_cell).override_failure_message(
+			"the aim left the standing enemy, so #57's precedence is what is being measured, not this"
+			).is_equal(upright.movement.cell)
+	assert_object(ordered[0].fired_attack).override_failure_message(
+			"the AI took the shot that spares the corpse, over the identical one that also finishes it"
+			).is_same(sweep)
