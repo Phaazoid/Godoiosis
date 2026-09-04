@@ -213,8 +213,14 @@ func test_cells_of_kind_counts_a_shared_cell_once() -> void:
 	zones.paint_cell("reserve", DEPLOYMENT, Vector2i(3, 1))
 
 	# Four paints, three distinct cells. A naive sum over the two zones answers four.
-	assert_array(zones.cells_of_kind(DEPLOYMENT)).contains_exactly_in_any_order(
+	var cells: Array[Vector2i] = zones.cells_of_kind(DEPLOYMENT)
+	assert_array(cells).contains_exactly_in_any_order(
 		[Vector2i(1, 1), Vector2i(2, 1), Vector2i(3, 1)])
+	# The SIZE is the assertion with teeth, and only a mutant said so: contains_exactly_in_any_order
+	# compares membership, not multiplicity, so it passes on [a, b, b, c] -- exactly the array a
+	# cells_of_kind with no dedup returns. A caller asking "how much room is there" reads the count.
+	assert_int(cells.size()).override_failure_message(
+		"cells_of_kind counted the shared cell twice: %s" % str(cells)).is_equal(3)
 
 
 func test_cells_of_kind_ignores_every_other_kind() -> void:
