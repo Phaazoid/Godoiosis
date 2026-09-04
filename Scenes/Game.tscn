@@ -134,6 +134,10 @@ tile_set = SubResource("TileSet_nnt18")
 z_index = 1
 tile_set = SubResource("TileSet_nnt18")
 
+[node name="DeploymentOverlay" type="TileMapLayer" parent="OverlayManager" unique_id=1517273392]
+z_index = 1
+tile_set = SubResource("TileSet_nnt18")
+
 [node name="InvalidMoveOverlay" type="TileMapLayer" parent="OverlayManager" unique_id=364384559]
 tile_set = SubResource("TileSet_nb51f")
 

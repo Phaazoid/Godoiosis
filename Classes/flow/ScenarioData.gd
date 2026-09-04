@@ -59,6 +59,19 @@ class_name ScenarioData
 # player a different mission.
 @export var roster := ""
 
+# How many units the player may DEPLOY from that roster (#736). Authored per mission, by the dev
+# (2026-09-04). A MAXIMUM and nothing else: a mission cannot demand a minimum force, and losing is
+# the answer to a hopeless deployment.
+#
+# 0 = as many as the deployment zone physically holds, and that sentinel IS this field's own
+# default -- round_limit's rule above, for round_limit's reason: a board that never authored a cap
+# must not read as one that authored a cap of zero, which would let nobody in at all.
+#
+# NOT derived from the zone's cell count, deliberately. Force size and starting spread have to move
+# independently, or a wide, tactically interesting deployment area also hands over an army and a
+# narrow corridor can never take six.
+@export var deployment_cap := 0
+
 # Where the camera OPENS on this board (#234). Null = derive it -- battle3d frames the player's own
 # units, which is the right default and the wrong authored answer for a handcrafted level. Authored
 # is AUTHORITATIVE; the derivation is the fallback for a board that says nothing (Law #4, same shape

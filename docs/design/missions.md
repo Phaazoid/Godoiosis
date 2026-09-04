@@ -2,7 +2,7 @@
 
 **Status: ALL FOUR SLICES BUILT 2026-07-28 ([#96](https://github.com/Phaazoid/Godoiosis/issues/96)).** Filed 2026-07-27, when the project acquired a win condition for the first time. Before this, Iosis had ten interlocking systems and no way to finish a battle — which meant a design question could be answered *"is this coherent?"* but never *"does this improve play?"*
 
-**Canon checked through #709 (2026-09-04).**
+**Canon checked through #748 (2026-09-04).**
 
 ## What a mission is
 
@@ -18,6 +18,7 @@ The loop lives in four places, and the split is load-bearing:
 | **where a requirement IS** | `ScenarioData.zones` (via `ZoneManager.Kind`) | Geometry. A capture point is a zone of size one. |
 | **who the computer plays** | `ScenarioData.ai_factions` (#150) | Authored content, saved with the board — same shelf as `objectives`. Commanding is hotseat-gated, so a mission that declares nobody hands the player both sides rather than stalling — **which is a board the dev authors on purpose** (2026-08-26: *"controlling both sides is important to testing"*), so `BoardLint` warns about it and never refuses it. |
 | **what it LOOKS like** | `ScenarioData.look_preset` (#253 part 2) | A preset NAME, not a `LookPreset` reference — a dangling `ext_resource` can fail the whole load rather than degrade, and a Resource field risks embedding the preset on save (#177's trap). Empty, or a name that no longer resolves, falls back to `Resources/DefaultLook.tres`, loudly — which the Moods tab can itself rewrite since #386, so "what an unnamed board wears" is authored rather than only editable by hand. `battle3d` applies it off `board_loaded`; a flat 2D launch has no host and applies nothing. |
+| **who the player may BRING, and how many** | `ScenarioData.roster` (#735) + `deployment_cap` (#736) | The pre-mission phase's authored half ([#731](https://github.com/Phaazoid/Godoiosis/issues/731)). `roster` is a NAME resolved against `RosterCatalog.ROSTER_DIR`, for `look_preset`'s two reasons directly below; **empty = this board has no pre-mission phase**, which is what every board saved before #735 is, and is why adding it broke nothing. `deployment_cap` is a MAXIMUM only — a mission cannot demand a minimum force — with `0` meaning *as many as the deployment zone holds*, that sentinel being the field's own default (`round_limit`'s rule). Deliberately **not** derived from the zone's size: force size and starting spread must move independently. Both live on `ScenarioManager` as `current_*` stores with the four-writer contract, not on `MissionController`, which owns the mission's ENDING. |
 
 Plus two UI surfaces: `MissionSelectScreen` (`ui/`) is the game's front door, and `MissionEndBanner` (`ui/`) is the card at the end.
 
@@ -52,6 +53,14 @@ Zones now supply **geometry only**. The cost is a second source of truth, which 
 ### Zones overlap, and a zone's kind locks at creation (2026-08-12)
 
 Two authoring rules replaced the original one-zone-per-cell store: **zones overlap freely** — the motivating case is a patrol area containing a capture point — and **a zone's kind is fixed when its first cell is painted** (repainting never retypes; changing kind = delete and repaint, which closes the trap where continuing to paint under an existing name with a different Kind picked silently converted the whole zone). Consequences: "the zone at this cell" stopped being a well-formed question — the kind-sensitive reader is `MissionController.capturable_zone_at(cell)` (the uncaptured CAPTURE zone there, which the menu gate and `CaptureAction`'s stamp both read) — and brush erase is **scoped to the picked zone**, since an unscoped erase could never carve one zone out from under another. Where two capture zones overlap, claiming one leaves the other capturable from the shared cell.
+
+### `Kind.DEPLOYMENT` — where the player's force starts (#736)
+
+The fourth kind, and the first that is neither an AI leash nor an objective: it is **where the pre-mission phase may place the units the roster offers**, painted like any other zone and overlapping freely — a deployment area inside a patrol zone is a reasonable board. It draws plainly in both views, like CAPTURE, rather than being gated to the Tile Brush tab like PATROL: that gate exists to keep AI internals out of play, and where the player may stand is the opposite of a secret.
+
+**It disappears when the battle starts** (dev, 2026-09-04). Not by a second visibility input — `redraw_zones`' existing `hidden` list already means *this zone has stopped being information*, which is exactly what a deployment area becomes once placement is over. `MissionController.hidden_zone_names()` is the one answer to that list (claimed capture zones, plus every deployment zone once a turn has begun), and `_begin_turn` is the single door every arrival takes — mission select, restart, resume, sandbox — while the dev-tools Load path takes none of them. So the zone is visible while authoring, visible during the pre-mission phase #737 will run *between* the load and that door, and gone from turn 1 onward, with nothing for #737 to add.
+
+Two `BoardLint` findings guard the pair, both **DEGRADES** and both gated on a roster being named (a cap on a board with no pool caps nothing): a board that offers a roster and paints no deployment zone, and a cap larger than that zone's deduped cell count. They sit at DEGRADES rather than BLOCKS because the tier is judged against what the code in the tree does with the board — nothing reads a roster before #737, so such a board still plays exactly as authored, and BLOCKS is the CI gate that would stop the dev committing a half-authored board on the way to building the phase.
 
 ### The guard: declared without painted
 

@@ -411,6 +411,8 @@ const CLASS_KNOBS: Array[Dictionary] = [
 		"tip": "A painted objective zone that can be captured. Stays visible for the whole battle -- this is live objective information, not authoring scaffolding."},
 	{"group": "Board markup colours", "label": "Extraction zone", "layer": BoardOverlays.Layer.ZONE_EXTRACTION,
 		"tip": "A painted zone your units must reach to extract. Also visible all battle."},
+	{"group": "Board markup colours", "label": "Deployment zone", "layer": BoardOverlays.Layer.ZONE_DEPLOYMENT,
+		"tip": "Where the force you bring may be placed before the mission starts. Unlike the two above it is gone the moment turn 1 begins, so this colour only has to read against the map for as long as you are choosing."},
 	{"group": "Board markup colours", "label": "Attack reach (2D+3D)", "static": "ATTACK_MODULATE",
 		"tip": "The reach fill while aiming a damaging attack. Red reads as hostile, which is the whole reason a healing pick paints green instead."},
 	{"group": "Board markup colours", "label": "Heal reach (2D+3D)", "static": "HEAL_ATTACK_MODULATE",

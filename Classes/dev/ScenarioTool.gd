@@ -101,11 +101,41 @@ func refresh_roster_row() -> void:
 		"Who the player may bring into this mission, and the loose gear on offer. "
 		+ "(none) means this board has no pre-mission phase: it keeps its authored cast and "
 		+ "starts at turn 1."))
+	# The cap rides the roster's OWN row rather than taking a slot in the move_child stack (#736).
+	# Two reasons, and the second is mechanical: they are one thought -- who may come, and how many
+	# -- and a SpinBox has no list that changes on load, so a separately built row would be built
+	# once and then drift below this one the first time a board load re-pinned this row to index 0.
+	# Built by hand rather than through DevWidgets.add_spinbox, which wraps its own HBox.
+	#
+	# After the tooltip above, never before: apply_tooltip walks the subtree, so an earlier add
+	# would wear the roster's text.
+	var cap_label := Label.new()
+	cap_label.text = "Cap"
+	_roster_row.add_child(cap_label)
+	var cap_spin := SpinBox.new()
+	cap_spin.min_value = 0   # 0 IS "as many as fit", the field's own default; a negative means nothing
+	cap_spin.max_value = 99
+	cap_spin.value = scenario_manager.current_deployment_cap
+	cap_spin.value_changed.connect(_on_deployment_cap_changed)
+	_roster_row.add_child(cap_spin)
+	var cap_tip := DevWidgets.wrap_tooltip(
+		"The most units the player may deploy from that roster. A MAXIMUM only -- a mission cannot "
+		+ "demand a minimum force, and bringing one unit is a legal answer.\n\n"
+		+ "0 means as many as the Deployment zone physically holds. Deliberately not derived from "
+		+ "that zone's size: a wide, tactically interesting deployment area must not also hand over "
+		+ "an army, and a narrow corridor must be able to take six.")
+	DevWidgets.apply_tooltip(cap_label, cap_tip)
+	DevWidgets.apply_tooltip(cap_spin, cap_tip)
 	move_child(_roster_row, 0)
 
 
 func _on_roster_picked(picked: String) -> void:
 	scenario_manager.current_roster = "" if picked == NO_ROSTER_LABEL else picked
+	_mark()
+
+
+func _on_deployment_cap_changed(value: float) -> void:
+	scenario_manager.current_deployment_cap = int(value)
 	_mark()
 
 

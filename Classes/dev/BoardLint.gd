@@ -5,9 +5,9 @@ class_name BoardLint
 # Scenario > Properties and again in CI over every shipped mission (tests/dev/test_board_lint.gd).
 #
 # Every fault here is an AUTHORING mistake, never a code bug: the game does exactly what the board
-# says, and the board says something the author didn't mean. Four of the five are entirely silent
-# and the fifth only shouts into the console, so all of them were previously found by PLAYING the
-# mission and noticing something wrong.
+# says, and the board says something the author didn't mean. Nearly all of them are entirely silent
+# (the unwinnable objective is the one that shouts, and only into the console), so before this page
+# existed they were found by PLAYING the mission and noticing something wrong.
 #
 # This class BORROWS every rule it can rather than restating one -- objectives_missing_geometry,
 # spawn_unit's walkability pair, SquadManager.contact_breaks, LookKnobs.saved_presets -- so a rule
@@ -48,6 +48,7 @@ static func check(game) -> Array[Dictionary]:
 	_check_cohesion(game, found)
 	_check_look_preset(game, found)
 	_check_roster(game, found)
+	_check_deployment(game, found)
 	_check_dialog(game, board, found)
 	_check_repaired_content(found)
 
@@ -216,6 +217,45 @@ static func _check_roster(game, found: Array[Dictionary]) -> void:
 	_add(found, Severity.BLOCKS,
 		("This board names roster '%s', which does not exist -- the pre-mission phase has no units "
 		+ "to offer.") % roster)
+
+
+# The roster's other half (#736): a board that offers a pool has to say where that pool may stand,
+# and how much of it may come. Both faults are one rule because they are one question asked at two
+# depths, and the roster gate is what makes either mean anything -- a cap on a board with no pool
+# caps nothing, so it is not a finding.
+#
+# DEGRADES, where _check_roster directly above is BLOCKS, and the two comments would read as a
+# contradiction without this: the tier is judged against WHAT THE CODE IN THIS TREE DOES with the
+# board, never against what a downstream ticket will do with it. Nothing reads the roster before
+# #737, so a board naming one with no zone painted boots into turn 1 with its authored cast and
+# plays exactly as before -- it degrades. A roster name that does not RESOLVE is different in kind
+# rather than in degree: no authoring session passes through "names a file that is not there" on
+# purpose, it is a typo or a deletion, while naming a roster before painting its zone is a state
+# every session building toward #737 passes through and would commit. That is _check_ai_factions'
+# "a thing the dev WANTS" argument, and BLOCKS is the CI gate, so filing this there would hand him
+# a hard stop halfway through authoring the feature it exists for. #737 raises it when the phase
+# is real and the board genuinely stops working.
+#
+# Note the interaction: this asks only whether a roster is NAMED, so a board naming a missing
+# roster reports both findings. That is correct -- they are different faults and each needs fixing.
+static func _check_deployment(game, found: Array[Dictionary]) -> void:
+	var scenario_manager: ScenarioManager = game.scenario_manager
+	if scenario_manager.current_roster == "":
+		return
+	var zones: ZoneManager = game.zone_manager
+	# The DEDUPED union, not a sum over the zones: deployment areas may overlap like any others,
+	# and a cap compared against a double-counted total is a cap compared against nothing.
+	var cells: Array[Vector2i] = zones.cells_of_kind(ZoneManager.Kind.DEPLOYMENT)
+	if cells.is_empty():
+		_add(found, Severity.DEGRADES,
+			("This board offers roster '%s' but paints no Deployment zone -- there is nowhere to "
+			+ "put the units it offers. Paint one on the Tile Brush tab.") % scenario_manager.current_roster)
+		return
+	var cap: int = scenario_manager.current_deployment_cap
+	if cap > 0 and cap > cells.size():
+		_add(found, Severity.DEGRADES,
+			("This board lets %d units deploy into a zone of %d cells -- only %d of them can "
+			+ "actually stand there.") % [cap, cells.size(), cells.size()])
 
 
 # #397, the two checks deferred from #390. Both read the SAME stores the director reads
