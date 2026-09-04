@@ -11,8 +11,9 @@ class_name AITactics
 #
 # (_REMOVAL_TIERS -- the DOWNED/MAIMED/KILLED rung list -- is gone with that change: a removal is
 # now a CHANGE OF STANDING across the plan, read off LethalityRules.lifecycle_for's own threading
-# via PlanResolver.projected_lifecycle, which covers the same three rungs and cannot double-count
-# a second hit on the same body. See _score_plan.)
+# via PlanResolver.plan_fells, which covers the same three rungs and cannot double-count
+# a second hit on the same body -- and, since #708, the fresh CRISIS the ladder does not move a
+# lifecycle for. See _score_plan.)
 
 # WHO THE SQUAD FIGHTS -- and it is TWO SYSTEMS, forked on one question: is anybody attackable
 # this turn? (Dev ruling, 2026-09-02, from playtest.)
@@ -416,8 +417,25 @@ static func _attack_candidates(unit: Unit, board: BoardContext, origin: Vector2i
 # still be in reach from the settled cell, and without z that choice ties on damage and falls to
 # board order. See choose_engagement_target for the other half.
 #
-# CRISIS counts as nothing -- the target stands back up surged, so triggering it is neither prize
-# nor penalty (revisit with smarter AI kinds).
+# THE AI IS BLIND TO CRISIS (dev ruling, 2026-09-04, explicitly provisional): a hit the ladder
+# sentences to CRISIS is priced at the damage AND the removal it would have earned if the gambit did
+# not exist. His words: "the ai simply won't see crisis mode until they have to react to a unit
+# currently in it." It counted as NOTHING before -- the damage was skipped here and CRISIS threads
+# ACTIVE so no removal followed -- which under #711's no-bar rule is not a refusal but a LOSING
+# candidate, so a full-Will Berserker was the last thing an AI would swing at. (#708, whose own
+# "a neutral verdict means never" reading died with the bar.)
+#
+# Neither half needs new arithmetic. The damage is the raw pre-Crisis number (the resolver fixes
+# outcome.damage before the rung is named and the Crisis branch rewrites only hp/will/in_crisis),
+# and the overkill clamp below caps it at the HP they had going in -- which a would-be-down met by
+# definition. The removal comes from _plan_removes asking PlanResolver.plan_fells.
+#
+# BLIND TO THE GAMBIT, SIGHTED TO WHAT IT DRAWS (dev, same day). A Crisis'd defender is still ACTIVE
+# and so COUNTERS where a downed one cannot, and that counter's damage still lands in z -- so
+# between two otherwise identical targets the AI prefers the one that cannot answer. Declared rather
+# than accidental: blinding z too is a different edit in the reaction loop, and "it takes the
+# finishing blow, even into a Crisis" is the sentence the predictability contract wants.
+
 #
 # A DOWNED VICTIM IS PRICED LIKE ANY OTHER, and the parameter that used to suppress that is gone
 # (#716, dev 2026-09-03). The score used to skip damage on an already-downed enemy during pass 1,
@@ -440,9 +458,6 @@ static func _score_plan(faction: Team.Faction, plan: ResolvedPlan) -> Vector3i:
 		var victim: Unit = a.target
 		if victim == null or a.resolved == null or not is_instance_valid(victim):
 			continue
-		if Team.is_enemy(faction, victim.get_faction()):
-			if a.resolved.lethality == ResolvedOutcome.Lethality.CRISIS:
-				continue
 		dealt[victim] = int(dealt.get(victim, 0)) + a.resolved.damage
 
 	# The REACTIONS this plan draws -- counters and any watch shots it sets off. Their victims join
@@ -501,7 +516,7 @@ static func _reaction_rows(plan: ResolvedPlan) -> Array[AttackAction]:
 static func _plan_removes(victim: Unit, plan: ResolvedPlan) -> bool:
 	if not victim.is_active():
 		return false
-	return PlanResolver.projected_lifecycle(victim, plan.hypo) != Unit.LifecycleState.ACTIVE
+	return PlanResolver.plan_fells(victim, plan.hypo)
 
 
 # Lexicographic, and the ORDER is the design: removals are the currency, damage dealt is the
