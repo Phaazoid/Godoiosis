@@ -660,3 +660,63 @@ func test_a_candidate_list_is_built_against_the_plan_not_a_rejected_hypothetical
 	assert_int(by_b).override_failure_message(
 			"B never attacked: its candidates were built against A's published shove -- aims were %s"
 			% str(_attack_aims(a.squad))).is_equal(1)
+
+
+# --- Crisis, which the AI does not see (#708) ---------------------------------------------------
+
+# Arm the gambit the way content does, mirroring tests/rules/test_crisis_preview.gd's helper: the
+# Berserker job's pool carries the ability, so this exercises jobs -> JobCatalog -> ability kit
+# rather than hand-stamping a flag.
+func _arm_crisis(unit: Unit) -> void:
+	unit.unit_instance.jobs.append("berserker")
+	assert_bool(unit.has_live_ability(Abilities.Id.CRISIS)) \
+		.override_failure_message("fixture: the Berserker job did not arm Crisis").is_true()
+
+
+# THE AI IS BLIND TO CRISIS (dev ruling, 2026-09-04): a hit the ladder sentences to CRISIS is priced
+# at the damage it WOULD have done, and at the removal it WOULD have earned, if the gambit did not
+# exist. His words: "the ai simply won't see crisis mode until they have to react to a unit
+# currently in it."
+#
+# It scored (0,0,0) before -- the damage was skipped outright and CRISIS threads ACTIVE, so no
+# removal either -- which under #711's no-bar rule is not a refusal but a losing candidate: any
+# ordinary target outranks it, so a full-Will Berserker was the LAST thing an AI would swing at.
+# That is the shape #708 filed; its own "a neutral verdict means never" reading died with the bar.
+#
+# Both targets are UNARMED, and that is load-bearing rather than tidy. A Crisis'd defender is still
+# ACTIVE, so it COUNTERS where a downed one cannot -- and the AI is deliberately sighted to that
+# reply (dev, same day), so an armed pair would separate on the counter term z and this case would
+# pin the opposite of the ruling. The blindness is to the gambit, never to what it draws.
+#
+# The armed one is spawned FIRST so it leads board order: after the fix both candidates score
+# identically and the tie falls to that order, so the assertion can only pass if the scores really
+# tie -- it cannot be satisfied by a preference that happens to point the right way.
+func test_a_crisis_armed_target_is_priced_like_any_other_kill() -> void:
+	var board: Dictionary = _build_board()
+	var attacker: Unit = _spawn(board, PLAYER, M1_CELL)
+	attacker.equipped_weapon = H.make_weapon(5)   # power 5 + fixture STR 5 = MHP 10: fells exactly, no overkill
+	# WIL is NOT in squad_fixtures' TEST_TUNING, so a baseline unit sits below CRISIS_WILL_GATE and
+	# the ability alone arms nothing -- the rung comes back DOWNED and this case measures an ordinary
+	# kill that passes whatever the scorer does. It did, before the override and the pin below.
+	var armed: Unit = BB.spawn(board, H.make_unit_data({Stats.Stat.WIL: UnitInstance.MAX_WILL}, ENEMY), A_CELL)
+	_arm_crisis(armed)
+	var plain: Unit = _spawn(board, ENEMY, B_CELL, false)
+
+	AITactics.queue_main_actions_for_squad(attacker.squad, _context(board), board.squad_manager)
+
+	assert_int(_aim_count(attacker.squad, A_CELL)).override_failure_message(
+			"the AI passed over the Berserker at %s for %s -- it is still seeing the gambit; aims were %s" % [
+				str(A_CELL), plain.get_unit_name(), str(_attack_aims(attacker.squad))]).is_equal(1)
+	assert_int(_aim_count(attacker.squad, B_CELL)).is_equal(0)
+
+	# THE PRECONDITION, ASSERTED THROUGH THE RESOLVER RATHER THAN RESTATED. Whether this fixture is
+	# measuring Crisis at all is exactly what a hand-set Will got wrong, and no assertion about the
+	# AI's choice can tell a blind scorer from a fixture that never armed the gambit.
+	var plan: ResolvedPlan = board.squad_manager.resolve_plan(attacker.squad, _context(board))
+	var rung := ResolvedOutcome.Lethality.NONE
+	for a in plan.attacks:
+		if a.target == armed and a.resolved != null:
+			rung = a.resolved.lethality
+	assert_that(rung).override_failure_message(
+			"fixture: the queued hit sentenced the Berserker to %s, not CRISIS -- this measured an ordinary kill"
+			% ResolvedOutcome.Lethality.keys()[rung]).is_equal(ResolvedOutcome.Lethality.CRISIS)
