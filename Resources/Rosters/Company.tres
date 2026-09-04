@@ -1,0 +1,68 @@
+[gd_resource type="Resource" script_class="Roster" format=3]
+
+[ext_resource type="Script" path="res://Classes/flow/Roster.gd" id="1_roster"]
+[ext_resource type="Script" path="res://Classes/flow/ScenarioUnitEntry.gd" id="2_entry"]
+[ext_resource type="Resource" path="res://Resources/Units/Aldin.tres" id="3_aldin"]
+[ext_resource type="Resource" path="res://Resources/Units/Aster.tres" id="4_aster"]
+[ext_resource type="Resource" path="res://Resources/Units/Bram.tres" id="5_bram"]
+[ext_resource type="Resource" path="res://Resources/Units/Celest.tres" id="6_celest"]
+[ext_resource type="Resource" path="res://Resources/Units/Dorian.tres" id="7_dorian"]
+[ext_resource type="Resource" path="res://Resources/Units/Isaac.tres" id="8_isaac"]
+[ext_resource type="Resource" path="res://Resources/Units/Noemie.tres" id="9_noemie"]
+[ext_resource type="Resource" path="res://Resources/Units/Rebecca.tres" id="10_rebecca"]
+[ext_resource type="Resource" path="res://Resources/Units/Ross.tres" id="11_ross"]
+[ext_resource type="Resource" path="res://Resources/Units/Torv.tres" id="12_torv"]
+
+[sub_resource type="Resource" id="Resource_aldin"]
+script = ExtResource("2_entry")
+unit_data = ExtResource("3_aldin")
+state_saved = false
+
+[sub_resource type="Resource" id="Resource_aster"]
+script = ExtResource("2_entry")
+unit_data = ExtResource("4_aster")
+state_saved = false
+
+[sub_resource type="Resource" id="Resource_bram"]
+script = ExtResource("2_entry")
+unit_data = ExtResource("5_bram")
+state_saved = false
+
+[sub_resource type="Resource" id="Resource_celest"]
+script = ExtResource("2_entry")
+unit_data = ExtResource("6_celest")
+state_saved = false
+
+[sub_resource type="Resource" id="Resource_dorian"]
+script = ExtResource("2_entry")
+unit_data = ExtResource("7_dorian")
+state_saved = false
+
+[sub_resource type="Resource" id="Resource_isaac"]
+script = ExtResource("2_entry")
+unit_data = ExtResource("8_isaac")
+state_saved = false
+
+[sub_resource type="Resource" id="Resource_noemie"]
+script = ExtResource("2_entry")
+unit_data = ExtResource("9_noemie")
+state_saved = false
+
+[sub_resource type="Resource" id="Resource_rebecca"]
+script = ExtResource("2_entry")
+unit_data = ExtResource("10_rebecca")
+state_saved = false
+
+[sub_resource type="Resource" id="Resource_ross"]
+script = ExtResource("2_entry")
+unit_data = ExtResource("11_ross")
+state_saved = false
+
+[sub_resource type="Resource" id="Resource_torv"]
+script = ExtResource("2_entry")
+unit_data = ExtResource("12_torv")
+state_saved = false
+
+[resource]
+script = ExtResource("1_roster")
+entries = Array[ExtResource("2_entry")]([SubResource("Resource_aldin"), SubResource("Resource_aster"), SubResource("Resource_bram"), SubResource("Resource_celest"), SubResource("Resource_dorian"), SubResource("Resource_isaac"), SubResource("Resource_noemie"), SubResource("Resource_rebecca"), SubResource("Resource_ross"), SubResource("Resource_torv")])
