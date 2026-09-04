@@ -159,7 +159,7 @@ static func _engageable_enemies(leader: Unit, board: BoardContext, within, allow
 # cell it was already on. It parked there for the rest of the battle. Now a body ranks like anyone
 # else and simply loses the head-to-head: standing is the tie-break BELOW route, so it decides only
 # when the walk is equally long.
-# ACTIVE_ONLY is the caller's to state (#750), the path_hops(block_on_occupancy) shape: one question
+# ACTIVE_ONLY is the caller's to state (#751), the path_hops(block_on_occupancy) shape: one question
 # -- which enemy is nearest -- with the lifecycle admission passed in rather than a second walk.
 # PURSUIT wants a body (it is an ordinary target, #720); a WATCH cannot use one, because a corpse
 # never enters anything and _watch_triggered_by refuses a non-ACTIVE entrant outright. Left false so
@@ -604,7 +604,7 @@ static func _try_burrow(unit: Unit, squad_manager: SquadManager) -> bool:
 	action.init(unit)
 	return squad_manager.queue_action(unit.squad, action)
 
-# Overwatch (#750): AIM the attack instead of firing it, down the way an enemy would come.
+# Overwatch (#751): AIM the attack instead of firing it, down the way an enemy would come.
 #
 # A PREPARATION, so it is a RULE and never a score term -- the shot lands on somebody else's turn,
 # which `_score_plan` structurally cannot reach (#726's doctrine, second application). It sits below
@@ -668,7 +668,7 @@ static func _watch_aim(unit: Unit, origin: Vector2i, attack: AttackData, enemy: 
 	return origin
 
 
-# Guard (#750): ward the ally the most enemies can reach. The other preparation whose payoff lands on
+# Guard (#751): ward the ally the most enemies can reach. The other preparation whose payoff lands on
 # somebody else's turn, so it is a rule for the same reason Overwatch is.
 #
 # ZERO EXPOSURE REFUSES. "Shields whoever is most exposed" presumes exposure above zero -- without

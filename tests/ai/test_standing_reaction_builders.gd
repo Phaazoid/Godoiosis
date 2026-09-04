@@ -1,4 +1,4 @@
-# The AI side of Guard and Overwatch (#750). Both shipped NEVER on every archetype when #413/#414
+# The AI side of Guard and Overwatch (#751). Both shipped NEVER on every archetype when #413/#414
 # landed, deferred whole; Hold and Sentry may take them now (dev, 2026-09-04).
 #
 # BOTH ARE PREPARATIONS, so both are RULES rather than score terms -- the ward absorbs and the watch

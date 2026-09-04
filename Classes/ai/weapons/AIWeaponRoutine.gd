@@ -30,7 +30,7 @@ class_name AIWeaponRoutine
 # submenu's own set (Unit.has_weapon_actions) -- never RESCUE/INTIMIDATE/RALLY. A family cannot
 # veto a verb that is not its own.
 #
-# OVERWATCH joined it in #750, because that set has included a watchable attack since #413 and this
+# OVERWATCH joined it in #751, because that set has included a watchable attack since #413 and this
 # list had simply gone stale against its own justification. GUARD deliberately did NOT: it is a basic
 # action everyone has, granted by no weapon, so no family owns a veto over it. Every shipped routine
 # answers the inert default for OVERWATCH today -- the seam is there for the first family that wants

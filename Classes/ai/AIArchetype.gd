@@ -56,7 +56,7 @@ const MAIN_ACTION_PRIORITY := {
 # player's. The AI contests it positionally, which it already does: Rushdown walks into the
 # approach, and a Sentry squad zoned over the point defends it with no AI code at all. Revisit
 # only when non-player factions get objectives of their own.
-# GUARD and OVERWATCH were NEVER everywhere until #750 (2026-09-04): Hold and Sentry take both now
+# GUARD and OVERWATCH were NEVER everywhere until #751 (2026-09-04): Hold and Sentry take both now
 # (dev), Rushdown keeps NEVER for both -- a rusher that stops to shield somebody is not a rusher,
 # the same reason it refuses rescue, intimidate and burrow. Both sit BELOW attack, because both are
 # PREPARATIONS whose payoff lands on somebody else's turn and #726's ruling covers that case: a

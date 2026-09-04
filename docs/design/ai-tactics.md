@@ -1,6 +1,6 @@
 # AI Tactics — the archetype layer's integration contract
 
-**Canon checked through #750 (2026-09-04).**
+**Canon checked through #751 (2026-09-04).**
 
 **Status: BUILT 2026-07-22, #78 CLOSED 2026-07-23 (commit `239555b`)** — ratified and hand-typed the same day; full suite 444/444 green. Feel iteration continues through ordinary playtesting (the v1 approximations below are the watch-list). The #29-era archetype layer (Rushdown/Hold/Sentry, painted zones, Crisis stances — see CLAUDE.md's architecture map) is the substrate; this doc covers the #78 rebuild of *how the AI decides*, and the standing contract that keeps it from rotting again. *(2026-08-09: the Crisis-stance piece of that substrate is GONE — [#158](https://github.com/Phaazoid/Godoiosis/issues/158) made Crisis a deterministic equipped ability, deleting `CRISIS_STANCES`/`accepts_crisis` with the accept/decline question they answered; enemy Crisis access is authored content now.)*
 
@@ -48,7 +48,7 @@ Candidate builders live in `AITactics` (one per type, each mirroring `MainAction
 | **Hold** | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | never |
 | **Sentry** | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | never |
 
-**OVERWATCH and GUARD joined the table in [#750](https://github.com/Phaazoid/Godoiosis/issues/750) (dev, 2026-09-04)**, having shipped `NEVER` everywhere when #413/#414 landed. Hold and Sentry take both; **Rushdown keeps `NEVER` for both** — a rusher that stops to shield somebody is not a rusher, the same reason it refuses rescue, intimidate and burrow. His placement: *"Guard should probably generally be a lower priority. Overwatch should be a higher default priority, all other things equal."* A watch is the closest thing to attacking, so it outranks the weapon self-verbs; a ward sits just above the menace that already means *nothing better exists*.
+**OVERWATCH and GUARD joined the table in [#751](https://github.com/Phaazoid/Godoiosis/issues/751) (dev, 2026-09-04)**, having shipped `NEVER` everywhere when #413/#414 landed. Hold and Sentry take both; **Rushdown keeps `NEVER` for both** — a rusher that stops to shield somebody is not a rusher, the same reason it refuses rescue, intimidate and burrow. His placement: *"Guard should probably generally be a lower priority. Overwatch should be a higher default priority, all other things equal."* A watch is the closest thing to attacking, so it outranks the weapon self-verbs; a ward sits just above the menace that already means *nothing better exists*.
 
 **He rejected a fixed order as the general answer in the same breath**, asking for real situational weights — filed as its own ticket rather than folded in, because it reopens the 2026-07-22 ratification and its hard question is *what a verb is WORTH when its payoff lands on somebody else's turn*, which is true of Guard, Overwatch and Rev alike. Until then, situational behaviour is a **refusal** (#726's shape), not a weight — and his own example already works that way: a dry Carbine reloads because ATTACK yields no candidate at all, never because the order changed.
 
