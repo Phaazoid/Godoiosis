@@ -7,7 +7,7 @@ its child [#49 Action Queue UX](https://github.com/Phaazoid/Godoiosis/issues/49)
 This is a *guidelines* doc, not a spec — it captures the principles we're holding the work to,
 plus the running order of the queue-UX checklist. Update it as items land.
 
-**Canon checked through #729 (2026-09-04).**
+**Canon checked through #746 (2026-09-04).**
 
 ## Principles
 
@@ -2891,7 +2891,8 @@ proposed — but `popup` is read by the glossary's composed interaction line and
 where there is room for the dramatic word and it is the better one. `ElementalReaction.short_name`
 is therefore a **declared** second representation (Law #4): two genuinely different questions, one
 accessor (`badge_name()`, falling back to `popup`), and blank on the reactions whose word already
-fits. Authored: `Shock`, `Temp Shock`, `Dried`, `Deep Chill`.
+fits. Authored: `Shock`, `Shatter`, `Dried`, `Deep` — **retuned 2026-09-04 against a law that
+measures them**, where round 3 had eyeballed the shortening and left two of the four overflowing.
 
 **One claim from this round that was wrong and is worth keeping wrong-side-up:** the first version of
 the chip comment said text-only was forced by the measurement. It is not — a mutant put the 16px icon
@@ -2976,3 +2977,61 @@ is a constraint this ticket never agreed to and the tuning razor forbids.
 The two ink values take knobs of their own and are **inert while Slate is live** — #422's cost
 pointed the other way, and acceptable here for a reason it is not there: you tune them while
 *looking* at Parchment, and the panel repaints under the slider.
+
+### The row that escaped the dock — and the guard that could not fail (bug report, 2026-09-04)
+
+*"The action queue row somehow got too big for the actionqueue. Might have had to do with resizing
+the window? I haven't been able to repro."*
+
+**It was not the resize.** The UI lays out in a fixed 1280×720 design space stretched to the window
+(#659), so the dock is 216 design-px at every resolution. What escaped was a **consequence pill wider
+than the line's leftover slack**, and he could not reproduce it because he was looking for the wrong
+trigger: his board has void holes, a shove killed someone into one, and `"Into the void!"` is the
+longest string the queue can print.
+
+Measured on the real scene: the dock is **216** with **198** of row inside it; the line's fixed
+contents (two 32px sprites, the verb, the hp card, the cancel X, five gaps) take **152**, leaving a
+**46px** slack — and `"Into the void!"` is **72**. The row's right edge landed **4px past the panel**
+with the cancel X flush on the border, and `OuterScroll`/`SectionsBox` grew 200 → 232 to carry it.
+
+**The mechanism, which is a Godot fact worth carrying: an `HFlowContainer`'s minimum width is its
+WIDEST CHILD.** Wrapping only ever happens *between* chips, never inside one, so a single over-wide
+chip demands its full width from the line — and nothing between the row and `BackgroundPanel`
+imposes a ceiling, because a plain `Panel` neither constrains nor clips its children. Minimum sizes
+propagate upward and the whole column simply moves out of the dock.
+
+**Two of my own round-3 claims were wrong, and they are the same mistake.** I reported *"a crowded
+row's minimum is 209 inside a 215px section"* as evidence it fit. **That 215 was the section already
+grown to fit the row** — I measured the symptom and called it the budget. The two guards written from
+it compared the row against that same growing container, so **neither could ever fail**: one passed
+at 224-in-230 while the row hung outside a 216px dock. The general form is worth more than the fix:
+
+> **A budget that expands to fit whatever it is measuring is not a budget.** Assert against a
+> reference that is *anchored* — here `BackgroundPanel`'s own rect, which the `.tscn` fixes — never
+> against a sibling in the same layout pass.
+
+The crowd guard was blind a second way besides: it crowded the row by **count**, using two short
+words, which the widest-child rule makes irrelevant. **Pinning "several of these fit" says nothing
+about "one big one fits."**
+
+**The fix is what round 3 already invented, applied to the other kind of pill.** A reaction's badge
+had been split from its dramatic word (`short_name` / `popup`); the world-event pills never were, and
+rendered `popups` verbatim — a channel built for the **board's floating text**, where there is room
+and nothing has to fit. So the row now builds those chips from the outcome's **recorded facts**
+(`insulated`, `fall_levels`, `drown_damage`, `removed`) rather than parsing them back out of strings,
+prints its own short badge, and puts the dramatic word on hover — which is where the dev is taking
+this anyway: *"I will probably slowly replace all of these with icons only... and we can move text
+into hover menus when that time comes."*
+
+Three of those four facts were **already on `ResolvedOutcome`**; only `insulated` had to be added,
+and that file's own rule asked for it — `elements` holds what *survived*, so an insulated hit and a
+non-elemental swing both arrive with it empty and nothing else could tell them apart. Reading facts
+also deleted the string bookkeeping that decided which popup belonged to which reaction.
+
+**`tests/ui/test_queue_badge_widths.gd` is the law**, and it measures every badge the row can print —
+authored `short_name`s, state words, the four world events — against the anchored dock, **with the
+widest hp readout in the line**, because a badge shares that line and sizing against a narrow one
+leaves ~15px of budget a real three-digit exchange takes back. It priced the words rather than
+guessing them: **`Immune` and `Drowned` both failed**, which counting characters would never have
+shown (a proportional font makes `Thermal` overflow where `Chilled` fits). Authored badges are now
+`Fell N` / `Drown` / `Void` / `Shrug`, and two reaction words were retuned with them.

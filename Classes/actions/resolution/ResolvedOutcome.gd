@@ -47,6 +47,13 @@ var fall_levels: int = 0    # how far the unit actually FELL (#259 follow-up): t
 							# drop pointer deliberately does NOT read it (#431): it measures the
 							# trail's own surfaces, which is the only form that can see the SECOND
 							# drop a plummet adds.
+# The target SHRUGGED OFF at least one element this hit (#685 follow-up). The last of the four
+# world-consequence facts to be recorded rather than left as a string: fall_levels, drown_damage and
+# `removed` were already here, so the queue row could read three of them and had to parse the fourth
+# back out of `popups`. This file's own rule -- record it when nothing downstream can tell afterwards
+# -- applies exactly: `elements` holds what SURVIVED, so an insulated hit and a non-elemental swing
+# both arrive with it empty and only this tells them apart.
+var insulated: bool = false
 # Shoved into water this unit cannot stand on (#116) — the water's own component, whatever the hit
 # and the fall left, already folded into `damage` above. Recorded rather than derived because
 # afterwards nothing can tell a drowning from an ordinary down: both land on the DOWNED rung with the

@@ -21,6 +21,19 @@ class_name ActionQueueRow
 # because a status lands on the unit RECEIVING it and reading it under the attacker is a lie about
 # who is wet.
 
+# The BADGE this row prints for each world consequence, as against the dramatic word PlanResolver
+# hands the board's floating text (reported 2026-09-04: "Into the void!" is 72px, the line's slack is
+# 46, and a chip too wide to wrap pushes the whole dock open). Same split ElementalReaction.short_name
+# already makes for a reaction's word, applied to the other kind of pill -- and the dramatic word is
+# not lost, it is the tooltip.
+#
+# THEY ARE CONSTS SO A LAW CAN ENUMERATE THEM: tests/ui/test_queue_badge_widths.gd measures each one
+# against the real dock, so the next word too long for the row fails CI instead of the panel.
+const BADGE_FELL := "Fell %d"
+const BADGE_DROWNED := "Drown"
+const BADGE_VOID := "Void"
+const BADGE_INSULATED := "Shrug"
+
 @onready var rail: ColorRect = $Frame/Rail
 @onready var actor_texture: TextureRect = $Frame/Pad/Body/Line/ActorTexture
 @onready var action_icon: TextureRect = $Frame/Pad/Body/Line/ActionIcon
@@ -124,23 +137,32 @@ func _build_consequence(outcome: ResolvedOutcome) -> void:
 		consequence.add_child(_chip(QueueStyle.state_ink(state),
 				Elemental.state_display_name(state), tip))
 
-	# A reaction OWNS its popup whether or not it earns a chip: the setup half is already fully said
-	# by the state chip it just produced, so claiming the word here is what stops "Wet" appearing
-	# twice -- once as its chip and again as a neutral event pill.
-	var spoken: Array[String] = []
+	# A fired COMBO gets its badge word. The SETUP half stays silent -- already fully said by the
+	# state chip it just produced, and saying it twice is the noise the split-by-weight ruling exists
+	# to prevent (#685). The guard asks the ACCESSOR whether there is a word, not the raw popup.
 	for reaction: ElementalReaction in outcome.fired_reactions:
-		if reaction.popup == "":
-			continue
-		spoken.append(reaction.popup)
-		if not reaction.is_combo():
+		if not reaction.is_combo() or reaction.badge_name() == "":
 			continue
 		consequence.add_child(_chip(QueueStyle.element_ink(reaction.incoming_element),
 				reaction.badge_name(), UiText.wrap(Glossary.reaction_line(reaction))))
 
-	for popup in outcome.popups:
-		if spoken.has(popup):
-			continue   # a reaction's own word, said above as its chip
-		consequence.add_child(_chip(QueueStyle.ink(QueueStyle.Role.EVENT_TINT), popup, ""))
+	# What the WORLD did, read off the outcome's own recorded FACTS rather than parsed back out of
+	# `popups`. That channel is the BOARD's floating text, where the dramatic word has room and
+	# nothing has to fit -- reading it here printed a string sized for a different surface, and
+	# "Into the void!" is 72px against a 46px slack, which pushed the row, its section and the whole
+	# scroll column clean out of the dock (reported 2026-09-04). The BADGE is this panel's own short
+	# spelling; the dramatic word is the tooltip, which is where the wording is headed anyway.
+	#
+	# Reading facts also deletes the string bookkeeping this loop used to need: nothing has to work
+	# out which popup belonged to which reaction, because the two channels no longer share one list.
+	if outcome.insulated:
+		_add_event(BADGE_INSULATED, PlanResolver.INSULATED_POPUP)
+	if outcome.fall_levels > 0:
+		_add_event(BADGE_FELL % outcome.fall_levels, PlanResolver.FELL_POPUP % outcome.fall_levels)
+	if outcome.drown_damage > 0:
+		_add_event(BADGE_DROWNED, PlanResolver.DROWNING_POPUP)
+	if outcome.removed:
+		_add_event(BADGE_VOID, PlanResolver.VOID_POPUP)
 	# No visibility toggle: the container holds the line's horizontal EXPAND whether or not it has
 	# chips, which is what keeps the cancel X on the right edge of a row that has none. It WRAPS
 	# rather than clips, so a crowded hit costs the row a second line instead of losing a word.
@@ -162,6 +184,11 @@ func _chip(tint: Color, text: String, tip: String) -> Control:
 	label.tooltip_text = tip
 	pill.add_child(label)
 	return pill
+
+
+# A world-event pill: this panel's short badge, with the resolver's dramatic word on hover.
+func _add_event(badge: String, spoken: String) -> void:
+	consequence.add_child(_chip(QueueStyle.ink(QueueStyle.Role.EVENT_TINT), badge, UiText.wrap(spoken)))
 
 func _show_hp_delta(outcome: ResolvedOutcome, subject: Unit) -> void:
 	# target_hp_after is threaded across the whole pass (R4): for the Nth hit it already accounts
