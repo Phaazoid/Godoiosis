@@ -154,23 +154,27 @@ func test_a_watcher_ignores_a_corpse_and_faces_the_living() -> void:
 # WARD WHOEVER IS MOST EXPOSED (dev, 2026-09-04): the ally the most enemies could reach and hit, not
 # the weakest, so a shield is spent where a blow is actually coming.
 #
-# The board does the discriminating rather than the numbers: the ally to the SOUTH is walled in on
+# The board does the discriminating rather than the numbers: the ally to the NORTH is walled in on
 # three sides, and its only remaining firing cell is the one the guard itself occupies -- which
 # `is_standable_for` refuses to a non-squadmate -- so nobody can reach it and its exposure is zero.
-# The ally to the NORTH stands in the open with an enemy that can walk up to it.
+# The ally to the SOUTH stands in the open with an enemy that can walk up to it.
+#
+# THE SHELTERED ONE IS NORTH ON PURPOSE. `guard_candidates` walks cells_within_manhattan_range, which
+# yields the north neighbour first, so a mutant that ignores exposure and wards `candidates[0]` picks
+# the WRONG ally and this case reds. With the two swapped it survived -- the case was measuring
+# candidate order, not the rule, and only the mutant said so.
 func test_a_guard_wards_the_ally_the_most_enemies_can_reach() -> void:
 	var board: Dictionary = BB.build(self)
 	auto_free(board.root)
-	BB.paint_rect(board.grid, Rect2i(4, 0, 1, 6))    # the open north column: enemy, exposed ally, guard
-	BB.paint_rect(board.grid, Rect2i(4, 5, 1, 1))    # the sheltered ally's cell, reachable only through the guard
+	BB.paint_rect(board.grid, Rect2i(4, 3, 1, 7))    # one column: sheltered ally, guard, exposed ally, then open ground
 
 	var guard: Unit = BB.spawn(board, H.make_unit_data({}, PLAYER), Vector2i(4, 4))
 	guard.equipped_weapon = H.make_weapon()
-	var exposed: Unit = BB.spawn(board, H.make_unit_data({}, PLAYER), Vector2i(4, 3))
-	var sheltered: Unit = BB.spawn(board, H.make_unit_data({}, PLAYER), Vector2i(4, 5))
+	var sheltered: Unit = BB.spawn(board, H.make_unit_data({}, PLAYER), Vector2i(4, 3))
+	var exposed: Unit = BB.spawn(board, H.make_unit_data({}, PLAYER), Vector2i(4, 5))
 	board.squad_manager.join_squad(exposed, guard.squad)
 	board.squad_manager.join_squad(sheltered, guard.squad)
-	var foe: Unit = BB.spawn(board, H.make_unit_data({}, ENEMY), Vector2i(4, 0))
+	var foe: Unit = BB.spawn(board, H.make_unit_data({}, ENEMY), Vector2i(4, 8))
 	foe.equipped_weapon = H.make_weapon()
 
 	assert_bool(AITactics.queue_main_action(guard, _context(board), board.squad_manager, GUARD_ONLY)) \
