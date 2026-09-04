@@ -660,11 +660,16 @@ static func _queue_attacks_jointly(squad: Squad, board: BoardContext, squad_mana
 			break
 		best.action.actor.active_attack = best.action.fired_attack
 		# RESTORE BEFORE QUEUEING, not merely at the end. queue_action's whiff gate asks
-		# SquadPlanValidator.aim_finds_a_target, the one reader of published knockback, and it is
-		# correct there ONLY because that knockback is the already-queued aims' shoves. Scoring has
-		# just published a LOSING candidate's shove, so without this the gate looks for the target
-		# on the cell some rejected hypothetical would have thrown it to, finds nobody, and refuses
-		# the winner as a whiff -- which made a shoving attack unqueueable by this pass entirely.
+		# SquadPlanValidator.aim_finds_a_target, and it is correct there ONLY because that knockback
+		# is the already-queued aims' shoves. Scoring has just published a LOSING candidate's shove,
+		# so without this the gate looks for the target on the cell some rejected hypothetical would
+		# have thrown it to, finds nobody, and refuses the winner as a whiff -- which made a shoving
+		# attack unqueueable by this pass entirely.
+		#
+		# THAT GATE IS NOT THE ONLY READER, and this comment said it was until #709:
+		# gather_attack_victims resolves occupants projected too (#105), so the candidate BUILDER
+		# reads the same published shove. Restoring here fixed the gate and left the builder, which
+		# is why the lists are hoisted above -- see _candidates_by_member.
 		squad_manager.resolve_plan(squad, board, reactions, terrain)
 		if not squad_manager.queue_action(squad, best.action):
 			refused[_candidate_key(best.action)] = true   # bounded: candidates are finite and keys are stable across rounds

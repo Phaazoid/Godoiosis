@@ -304,7 +304,7 @@ func test_a_hypothetical_resolve_never_becomes_the_squads_stored_plan() -> void:
 # so the pass has to finish on a real resolve or the board is left dressed for a plan nobody gave.
 #
 # A SHOVING attack must still be queueable, and it very nearly was not. queue_action's whiff gate
-# (SquadPlanValidator.aim_finds_a_target) is the one reader of PUBLISHED KNOCKBACK, and it is
+# (SquadPlanValidator.aim_finds_a_target) reads PUBLISHED KNOCKBACK, and it is
 # correct there only because that knockback belongs to the already-queued aims. A scoring pass
 # publishes a candidate's shove too -- so the gate went looking for the target on the cell the
 # scoring resolve had thrown it to, found nobody, and refused the winner as a whiff. Every attack
