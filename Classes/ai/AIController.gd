@@ -71,14 +71,6 @@ static func is_squad_actable(squad: Squad, faction: Team.Faction) -> bool:
 static func plan_squad(squad: Squad, board: BoardContext, squad_manager: SquadManager) -> void:
 	for member in squad.get_members():
 		member.active_attack = null   # fresh pick each turn -- a stale winner from last turn would skew reach queries (mirrors _begin_attack's reset)
-	# THE BOARD MUST BE REAL BEFORE THE ARCHETYPE READS IT (#709). A squad that CONCEDED an invalid
-	# plan (#103) published its shoves through `refresh_action_queue` and then ended its turn without
-	# resolving again, so those projections stood until something else resolved -- and the movement
-	# layer runs before this squad queues anything, measuring target routes and the cohesion leash
-	# against a displacement nobody performed. Resolving this squad's own (still empty) queue clears
-	# every unit's knockback and rescue projections, which is `_resolve_actions`' first act, and
-	# republishes only what is really queued.
-	squad_manager.resolve_plan(squad, board, ReactionCatalog.get_all(), TerrainReactionCatalog.get_all())
 	AIArchetype.resolve(squad.archetype).call(squad, board, squad_manager)
 
 
