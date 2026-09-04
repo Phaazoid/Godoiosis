@@ -67,3 +67,47 @@ func test_a_turn_handoff_still_resets_actions() -> void:
 	assert_bool(unit.squad.has_acted) \
 		.override_failure_message("the turn handoff no longer resets has_acted — squads would stay spent forever") \
 		.is_false()
+
+
+const GRASS_SOURCE := 0
+const GRASS_ATLAS := Vector2i(5, 0)
+
+
+# THE HAND-OFF SHEDS WHAT NOBODY EXECUTED (#709, dev ruling 2026-09-03). An order the player queued
+# and did not run used to survive the whole enemy turn -- and it could never happen, because the
+# reset at the player's OWN next turn discarded it unexecuted. While it stood, the two layers that
+# ask where a unit is disagreed: PlanResolver seeds every unit from get_projected_destination() and
+# so placed it at the queued destination, while queue_action's whiff gate positions a foreign unit
+# at the cell it stands on. Two answers, during the one turn when something else is aiming at it.
+#
+# Asserted through the REAL hand-off (TurnManager.end_turn -> turn_started -> _on_turn_started ->
+# reset_faction_actions), which is the one step both this walk and play_session's share.
+func test_a_handoff_sheds_orders_the_outgoing_faction_never_executed() -> void:
+	for x in range(6):
+		for y in range(3):
+			game.grid.set_cell(Vector2i(x, y), GRASS_SOURCE, GRASS_ATLAS)
+	await await_idle_frame()
+	var unit: Unit = game.spawn_unit(H.make_unit_data({}, Team.Faction.PLAYER), Vector2i(1, 1))
+	assert_object(unit).is_not_null()
+	assert_object(game.spawn_unit(H.make_unit_data({}, Team.Faction.ENEMY), Vector2i(5, 1))).is_not_null()
+	game.turn_manager.set_active_faction(Team.Faction.PLAYER)
+	await await_idle_frame()
+
+	var move := MoveAction.new()
+	var path: Array[Vector2i] = [Vector2i(1, 1), Vector2i(2, 1)]
+	move.init(unit, path, null)
+	assert_bool(game.squad_manager.queue_action(unit.squad, move)) \
+		.override_failure_message("fixture failed to queue the move").is_true()
+	assert_vector(unit.get_projected_destination()) \
+		.override_failure_message("fixture never got the projection it exists to measure") \
+		.is_equal(Vector2i(2, 1))
+
+	game.turn_manager.end_turn(game._board().present_factions())
+	await await_idle_frame()
+
+	assert_int(unit.squad.action_queue.size()) \
+		.override_failure_message("the player's un-executed order survived the hand-off into the enemy turn") \
+		.is_equal(0)
+	assert_vector(unit.get_projected_destination()) \
+		.override_failure_message("the enemy turn still reads the player on a cell no order can now reach") \
+		.is_equal(Vector2i(1, 1))

@@ -66,10 +66,38 @@ func is_another_squad_active(squad: Squad) -> bool:
 		return false
 	return active_squad != squad
 
+# Drop every order a squad still holds, THROUGH THE SIGNALLING DOOR. `_reset_squad`'s raw
+# `action_queue.clear()` emits nothing, which is why an un-executed move's path arrow and projected
+# ghost outlived the order that drew them: game.gd clears that markup off `squad_action_cancelled`,
+# and only `_clear_all_actions` emits it per order. Same door `revert_if_only_hold` and
+# `_set_has_acted` already use -- the mechanism is shared, the SCOPE stays at each caller (the two
+# execute-path loops also drop per-actor projected visuals, which shedding has no opinion about).
+func shed_orders(squad: Squad) -> void:
+	if not is_instance_valid(squad) or squad.action_queue.is_empty():
+		return
+	squad._clear_all_actions()
+	if active_squad == squad:
+		active_squad = null   # a stale activation blocks the next hotseat faction's action menu
+
+# THE HAND-OFF, and the one step both walks share: game.gd's `turn_started` handler and both of
+# play_session's end-turn paths call this, with nothing between the faction switch and the new
+# faction's first order.
+#
+# The INCOMING faction resets. EVERYONE ELSE SHEDS (#709, dev ruling 2026-09-03). An order a faction
+# queued and never executed used to survive until that faction's OWN next turn, so for a whole enemy
+# turn the resolver placed the unit at its queued destination (`PlanResolver` seeds every unit from
+# `get_projected_destination`) while `queue_action`'s whiff gate placed it where it stands -- two
+# answers to where the player is, and the AI's targeting inherited whichever it happened to read.
+# Nothing is lost by shedding: `_reset_squad` discarded those orders unexecuted anyway, and this
+# only does it at the moment they stop being able to happen. Shedding every non-incoming faction
+# rather than tracking the outgoing one is not a widening -- a faction only queues during its own
+# turn, so every other queue is already empty and the call is a no-op there.
 func reset_faction_actions(faction: Team.Faction) -> void:
 	for squad in squads:
 		if squad.leader.get_faction() == faction:
 			squad._reset_squad()
+		else:
+			shed_orders(squad)
 
 # "Has this faction got anything left to click?" (#189) -- every squad with an ACTIVE leader on
 # this faction must have has_acted true, and there must be at least one such squad: an empty/wiped
