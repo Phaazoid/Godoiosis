@@ -10,8 +10,11 @@ class_name ZoneManager
 #
 # The kind is what makes this ONE mechanism instead of a parallel Array[Vector2i] on ScenarioData
 # per objective type (dev call 2026-07-28): a capture point is a zone of size one, and zone kinds
-# were always going to expand. Adding a kind costs one enum member, one overlay registry line, and
-# whatever rule consumes it -- save/load, authoring and persistence need no edit at all.
+# were always going to expand. What a new kind costs, measured on #736 rather than estimated: one
+# enum member, whatever rule consumes it, and -- if it draws -- a layer in BOTH stacks (a .tscn
+# node, an @onready, a modulate, a zone_layer_map row, a BoardOverlays.Layer + LAYERS row, an
+# OverlayMirror fill, and a string in each of the two headless overlay-child lists). Save/load,
+# authoring and persistence genuinely need no edit at all, which is the part that matters.
 #
 # PERSISTED, so the enum is APPEND-ONLY (enums serialize as plain ints).
 
@@ -23,7 +26,14 @@ enum Kind {
 	PATROL,    # Sentry archetype trigger/leash regions -- the only kind until #96
 	CAPTURE,   # objective: stand inside, spend a main action, the zone is claimed (#96 slice 3)
 	EXTRACTION,   # objective: get every surviving unit inside, and the mission ends (#96 slice 4)
+	DEPLOYMENT,   # where the player may place the force it brings, before turn 1 (#736)
 }
+
+# "DEPLOYMENT" -> "Deployment", derived rather than a parallel label array (Terrain.gd's shape).
+# The array this replaced was indexed RAW by the Tile Brush, so a kind added without a label was
+# an out-of-bounds crash in the zone dropdown rather than a missing string.
+static func kind_display_name(kind: Kind) -> String:
+	return Kind.keys()[kind].capitalize()
 
 # name -> {"kind": Kind, "cells": Array[Vector2i]}. Plain nested dicts rather than an inner class,
 # so to_dict/load_dict stay a straight pass-through into ScenarioData with nothing to serialize by
@@ -53,6 +63,20 @@ func cells_in(zone_name: String) -> Array[Vector2i]:
 
 func contains(zone_name: String, cell: Vector2i) -> bool:
 	return _zones.has(zone_name) and _zones[zone_name]["cells"].has(cell)
+
+# Every cell any zone of this kind covers, ONCE. The dedup is the whole point: zones overlap
+# freely, so summing cells_in() sizes over zone_names_of() double-counts the shared cells -- and a
+# caller asking "how much room is there" would be told more than the board has (#736's cap check).
+func cells_of_kind(kind: Kind) -> Array[Vector2i]:
+	var seen: Dictionary = {}
+	var cells: Array[Vector2i] = []
+	for name in zone_names_of(kind):
+		for cell: Vector2i in cells_in(name):
+			if seen.has(cell):
+				continue
+			seen[cell] = true
+			cells.append(cell)
+	return cells
 
 # Kind applies only at creation; painting more of an existing zone keeps its own kind whatever the
 # brush has picked (the silent-retype trap, reported 2026-08-12). Repainting an owned cell is a

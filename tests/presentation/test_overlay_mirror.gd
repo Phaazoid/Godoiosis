@@ -933,6 +933,30 @@ func test_zone_fills_mirror_and_captured_zones_drop() -> void:
 	assert_int(_overlays.cells_of(BoardOverlays.Layer.ZONE_EXTRACTION).size()).is_equal(1)
 
 
+# #736. UNGATED, deliberately — the opposite of the patrol case directly below, and the two exist
+# side by side so the difference is stated rather than implied: the gate keeps AI internals out of
+# play, and where the player may stand is the opposite of a secret. What ends a deployment zone is
+# the same `hidden` list a claimed capture point uses, driven by MissionController once a turn has
+# begun — so if this ever needs a gate, something has gone wrong upstream.
+func test_a_deployment_zone_mirrors_without_the_authoring_gate() -> void:
+	game.zone_manager.load_dict({
+		"landing": {"kind": ZoneManager.Kind.DEPLOYMENT, "cells": [Vector2i(4, 2), Vector2i(5, 2)]},
+	})
+	_om().redraw_zones(game.zone_manager)
+
+	_om().set_zone_visibility(false)   # the play view: patrol scaffolding is DOWN here
+	await _settle()
+	assert_that(_sorted_3d(BoardOverlays.Layer.ZONE_DEPLOYMENT)).override_failure_message(
+			"a painted deployment zone is invisible in 3D").is_equal(
+		[BoardSpace.of_cell(Vector2i(4, 2), BoardSpace.top_row_of(0)),
+			BoardSpace.of_cell(Vector2i(5, 2), BoardSpace.top_row_of(0))] as Array[Vector3i])
+
+	# ...and the hidden list is what takes it away, not a visibility flag.
+	_om().redraw_zones(game.zone_manager, ["landing"])
+	await _settle()
+	assert_int(_overlays.cells_of(BoardOverlays.Layer.ZONE_DEPLOYMENT).size()).is_equal(0)
+
+
 func test_the_patrol_zone_and_picked_highlight_mirror_only_while_visible() -> void:
 	# #231's whole point. PATROL is the tile brush's DEFAULT kind and had no 3D twin, so
 	# zone painting in the 3D view drew nothing. Mirroring its cells alone is the opposite

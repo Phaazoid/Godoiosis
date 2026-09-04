@@ -210,6 +210,81 @@ func test_a_board_naming_no_roster_says_nothing_about_rosters() -> void:
 	_assert_silent(BoardLint.Severity.BLOCKS, "roster")
 
 
+# --- the deployment pair (#736) -------------------------------------------------------------------
+#
+# Every case here pins the TIER as well as the text, both directions, because the tier is the whole
+# argument: DEGRADES is what lets the dev commit a half-authored board while building toward #737,
+# and BLOCKS is the CI gate that would stop him. #737 raises the first of these, and asserting the
+# absence is what makes that a two-surface change rather than a silent half-landing.
+
+func _a_real_roster() -> String:
+	var real: Array[String] = RosterCatalog.saved_rosters()
+	if real.is_empty():   # content-absent: warn, never fail (tests/README.md rule 9)
+		push_warning("no rosters are shipped, so the deployment cases cannot name a pool")
+		return ""
+	return real[0]
+
+
+func test_a_board_that_offers_a_roster_and_paints_no_deployment_zone_warns() -> void:
+	_spawn(Team.Faction.PLAYER, 0)
+	var roster := _a_real_roster()
+	if roster == "":
+		return
+	game.scenario_manager.current_roster = roster
+	_assert_reports(BoardLint.Severity.DEGRADES, "paints no Deployment zone")
+	_assert_silent(BoardLint.Severity.BLOCKS, "Deployment zone")
+
+	# Non-vacuous: paint one and the finding goes.
+	game.zone_manager.paint_cell("landing", ZoneManager.Kind.DEPLOYMENT, Vector2i(0, 0))
+	_assert_silent(BoardLint.Severity.DEGRADES, "paints no Deployment zone")
+
+
+func test_a_board_with_no_roster_is_never_asked_about_deployment() -> void:
+	# The guard that matters most: every board shipped today names no roster, so a rule missing its
+	# early-return would warn about all of them at once. A cap with no pool caps nothing.
+	_spawn(Team.Faction.PLAYER, 0)
+	game.scenario_manager.current_roster = ""
+	game.scenario_manager.current_deployment_cap = 6
+	_assert_silent(BoardLint.Severity.DEGRADES, "Deployment")
+
+
+func test_a_cap_larger_than_the_zone_holds_warns() -> void:
+	_spawn(Team.Faction.PLAYER, 0)
+	var roster := _a_real_roster()
+	if roster == "":
+		return
+	game.scenario_manager.current_roster = roster
+	game.zone_manager.paint_cell("landing", ZoneManager.Kind.DEPLOYMENT, Vector2i(0, 0))
+	game.zone_manager.paint_cell("landing", ZoneManager.Kind.DEPLOYMENT, Vector2i(1, 0))
+	game.scenario_manager.current_deployment_cap = 5
+
+	_assert_reports(BoardLint.Severity.DEGRADES, "only 2 of them can actually stand there")
+	_assert_silent(BoardLint.Severity.BLOCKS, "deploy")
+
+	# Non-vacuous twice over: a cap the zone holds is silent, and so is the 0 sentinel.
+	game.scenario_manager.current_deployment_cap = 2
+	_assert_silent(BoardLint.Severity.DEGRADES, "actually stand there")
+	game.scenario_manager.current_deployment_cap = 0
+	_assert_silent(BoardLint.Severity.DEGRADES, "actually stand there")
+
+
+func test_the_cap_is_measured_against_the_deduped_zone_and_not_a_sum() -> void:
+	# Two DEPLOYMENT zones sharing a cell: three distinct cells, four paints. A rule summing
+	# cells_in() over zone_names_of() answers four and stays silent on a cap of 4.
+	_spawn(Team.Faction.PLAYER, 0)
+	var roster := _a_real_roster()
+	if roster == "":
+		return
+	game.scenario_manager.current_roster = roster
+	game.zone_manager.paint_cell("landing", ZoneManager.Kind.DEPLOYMENT, Vector2i(0, 0))
+	game.zone_manager.paint_cell("landing", ZoneManager.Kind.DEPLOYMENT, Vector2i(1, 0))
+	game.zone_manager.paint_cell("reserve", ZoneManager.Kind.DEPLOYMENT, Vector2i(1, 0))
+	game.zone_manager.paint_cell("reserve", ZoneManager.Kind.DEPLOYMENT, Vector2i(2, 0))
+	game.scenario_manager.current_deployment_cap = 4
+
+	_assert_reports(BoardLint.Severity.DEGRADES, "only 3 of them can actually stand there")
+
+
 func test_findings_that_block_play_are_listed_first() -> void:
 	# The order IS part of what the report says, so it belongs to the rule and not to the panel.
 	# Built degrades-first so a lint that merely preserved call order would fail this.

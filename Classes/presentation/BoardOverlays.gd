@@ -32,6 +32,7 @@ enum Layer {
 	TARGET_PICK, PATH_ARROWS, KNOCKBACK, TERRAIN, TERRAIN_PREVIEW, ICONS,
 	ZONE_PATROL, ZONE_HIGHLIGHT, GROUND_ICONS, ATTACK_BLOCKED, SIGHT_TRACE,
 	GUARD_ICONS, GUARD_LINK, WATCH_ICONS,
+	ZONE_DEPLOYMENT,
 }
 enum Kind { FILL, BRACKET, SPRITE, BILLBOARD, LINE }
 
@@ -73,6 +74,9 @@ const LAYERS: Dictionary[Layer, Dictionary] = {
 	Layer.ZONE_CAPTURE: {"color": Color(0.3, 0.9, 1, 0.5), "sort": -3, "kind": Kind.FILL},
 	Layer.ZONE_EXTRACTION: {"color": Color(0.4, 1, 0.5, 0.5), "sort": -3, "kind": Kind.FILL},
 	Layer.ZONE_PATROL: {"color": OverlayManager.ZONE_PATROL_MODULATE, "sort": -3, "kind": Kind.FILL},
+	# #736. In the band with the others: it is markup lying on the tile face like every zone, and it
+	# is gone before any of them matter -- turn 1 stops it being drawn at all.
+	Layer.ZONE_DEPLOYMENT: {"color": Color(0.65, 0.5, 1, 0.45), "sort": -3, "kind": Kind.FILL},
 	Layer.ZONE_HIGHLIGHT: {"color": OverlayManager.ZONE_HIGHLIGHT_MODULATE, "sort": -2, "kind": Kind.FILL},
 	Layer.HOVER: {"color": Color(1, 0.9, 0.3, 0.9), "sort": 2, "kind": Kind.BRACKET},
 	Layer.INVALID_MOVE: {"color": Color(0.5, 0.36, 0.4, 0.5), "sort": 0, "kind": Kind.FILL},

@@ -20,6 +20,7 @@ class_name OverlayManager
 @onready var zone_overlay = $ZoneOverlay
 @onready var capture_overlay = $CaptureOverlay
 @onready var extraction_overlay = $ExtractionOverlay
+@onready var deployment_overlay = $DeploymentOverlay
 
 const PATH_ERROR := preload("res://Art/Icons/ArrowIcons/ERROR.png")
 const PATH_HORIZONTAL := preload("res://Art/Icons/ArrowIcons/horizontal.png")
@@ -382,12 +383,21 @@ func _ready() -> void:
 	zone_overlay.visible = false   # authoring-only visual; DevOverlay shows it with the Tile Brush tab
 	capture_overlay.modulate = Color(0.3, 0.9, 1, 0.5)
 	extraction_overlay.modulate = Color(0.4, 1, 0.5, 0.5)
-	# PATROL is an authoring aid (DevOverlay shows it with the Tile Brush tab); CAPTURE is live
-	# objective information and stays visible for the whole battle.
+	deployment_overlay.modulate = Color(0.65, 0.5, 1, 0.45)
+	# These three restate BoardOverlays.LAYERS' literal rather than sharing a const the way PATROL
+	# does, and that fork is deliberate: the Game tab's markup-colour knob rewrites the LAYERS
+	# entry, so a shared const would be replaced by a literal on the first Save. PATROL is excluded
+	# from that table precisely because it shares one (GameKnobs.CLASS_KNOBS says so).
+	#
+	# PATROL is an authoring aid (DevOverlay shows it with the Tile Brush tab); CAPTURE and
+	# EXTRACTION are live objective information and stay visible for the whole battle. DEPLOYMENT
+	# (#736) is a third thing again -- it is real information the player acts on, but only until
+	# turn 1 begins, after which MissionController.hidden_zone_names() stops it being drawn.
 	zone_layer_map = {
 		ZoneManager.Kind.PATROL: zone_overlay,
 		ZoneManager.Kind.CAPTURE: capture_overlay,
 		ZoneManager.Kind.EXTRACTION: extraction_overlay,
+		ZoneManager.Kind.DEPLOYMENT: deployment_overlay,
 	}
 	# The Tile Brush's picked-zone highlight: a white lift drawn over the kind layers so the picked
 	# zone reads against its neighbours. Code-built as a duplicate of zone_overlay (same tileset and

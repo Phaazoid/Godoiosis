@@ -21,7 +21,6 @@ class_name TileBrushTool
 # it drags the POINT four cells share to the level picker's height, welding them, where the cell
 # brush paints one whole tile and can still author a deliberate cliff between neighbours.
 
-const KIND_LABELS := ["Patrol", "Capture", "Extraction"]   # index == ZoneManager.Kind value
 const MODE_LABELS := ["Terrain", "Zones", "Tile States", "Corners"]   # index == PaintMode value
 
 var brush_active := false
@@ -330,8 +329,10 @@ func _build_extra_controls() -> void:
 	kind_label.text = "Zone Kind"
 	_zone_kind_row.add_child(kind_label)
 	_zone_kind_option = OptionButton.new()
-	for label in KIND_LABELS:
-		_zone_kind_option.add_item(label)
+	# Row index == Kind value, which _sync_kind_row's select() and the item_selected cast both
+	# rely on -- so the enum's own order IS the dropdown's, and a new kind needs nothing here.
+	for kind: ZoneManager.Kind in ZoneManager.Kind.values():
+		_zone_kind_option.add_item(ZoneManager.kind_display_name(kind))
 	_zone_kind_option.select(0)
 	_zone_kind_option.item_selected.connect(func(idx: int): _zone_kind = idx as ZoneManager.Kind)
 	_zone_kind_row.add_child(_zone_kind_option)
@@ -537,7 +538,7 @@ func refresh_zone_list() -> void:
 	var names: Array[String] = game.zone_manager.zone_names()
 	var labels: Array[String] = []
 	for name in names:
-		labels.append("%s (%s)" % [name, KIND_LABELS[game.zone_manager.kind_of(name)]])
+		labels.append("%s (%s)" % [name, ZoneManager.kind_display_name(game.zone_manager.kind_of(name))])
 	if labels == _zone_dropdown_labels:
 		return
 	_zone_dropdown_names = names

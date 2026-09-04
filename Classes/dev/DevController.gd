@@ -670,7 +670,7 @@ func _paint_zone(cell: Vector2i) -> void:
 	if zone_name == "":
 		return
 	game.zone_manager.paint_cell(zone_name, game.dev_overlay.tile_brush.selected_zone_kind(), cell)
-	game.overlay_manager.redraw_zones(game.zone_manager)
+	game.overlay_manager.redraw_zones(game.zone_manager, game.mission_controller.hidden_zone_names())
 	game.dev_overlay.tile_brush.update_zone_highlight()
 
 # Scoped to the picked zone (overlap, 2026-08-12): erase must be able to carve one zone out from
@@ -680,7 +680,7 @@ func _erase_zone(cell: Vector2i) -> void:
 	if zone_name == "":
 		return
 	game.zone_manager.erase_cell_from(zone_name, cell)
-	game.overlay_manager.redraw_zones(game.zone_manager)
+	game.overlay_manager.redraw_zones(game.zone_manager, game.mission_controller.hidden_zone_names())
 	game.dev_overlay.tile_brush.update_zone_highlight()
 
 # Dynamic tile-state painting (#174). Writes through TerrainStateManager.apply -- the ONE deposit

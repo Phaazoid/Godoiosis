@@ -1,7 +1,7 @@
 extends RefCounted
 # Headless board construction for the Play API (docs/play-api.md, #46 M2).
 # Builds the minimal node graph the real managers expect — Grid (+ the game's TileSet),
-# Units, OverlayManager (+ its nine overlays), SquadManager, TurnManager — so PlaySession
+# Units, OverlayManager (+ the child overlays it declares), SquadManager, TurnManager — so PlaySession
 # drives the REAL SquadManager / TurnManager / PlanResolver / RulesService headless.
 # No visuals run; the one overlay call on the order path (redraw_planned_paths) no-ops
 # while no planned paths are registered.
@@ -16,7 +16,7 @@ const WATER_ATLAS := Vector2i(5, 6)   # walkable=false (Waterwalk-only), move_co
 const OVERLAY_CHILD_NAMES := [
 	"MoveOverlay", "AttackOverlay", "HoverOverlay", "SquadOverlay", "IconOverlay",
 	"ArrowIconOverlay", "ProjectedUnitOverlay", "SquadRangeOverlay", "InvalidMoveOverlay",
-	"ZoneOverlay", "CaptureOverlay", "ExtractionOverlay",
+	"ZoneOverlay", "CaptureOverlay", "ExtractionOverlay", "DeploymentOverlay",
 ]
 
 # Build the node graph under `parent` (a node already in the SceneTree). Returns refs by name.

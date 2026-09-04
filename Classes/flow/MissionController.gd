@@ -36,6 +36,15 @@ var _rounds_elapsed := 0
 # Why the mission was lost, for the banner. Set beside `outcome`, so it can never name a reason for
 # an ending that did not happen.
 var _failed_by: MissionRules.LoseCondition = MissionRules.LoseCondition.NONE
+# Has a turn actually STARTED on this board (#736)? Battle-scoped like the two above, and set from
+# _begin_turn -- the one door every arrival takes (mission select, restart, resume, sandbox), and
+# NOT from begin_mission, which #737's pre-mission phase will run inside. False therefore means
+# "nobody is playing yet": an authoring session loaded through the dev tools, or that phase.
+#
+# Its one reader is hidden_zone_names below. It is deliberately not a "is the battle running" flag
+# for general use -- it answers exactly one question, and a second caller wanting a different
+# shade of it should ask its own.
+var _battle_begun := false
 
 
 func is_over() -> bool:
@@ -71,12 +80,28 @@ func reset() -> void:
 	round_limit = 0
 	_rounds_elapsed = 0
 	_failed_by = MissionRules.LoseCondition.NONE
+	_battle_begun = false
 	game.refresh_mission_status()
 
 # --- Mid-battle snapshot (#87) ---
 
 func captured_zone_names() -> Array[String]:
 	return _captured_zones.duplicate()
+
+
+# THE answer to "which painted zones should not be drawn right now" -- redraw_zones' `hidden`
+# argument, for every caller of it (#736). It used to be answered twice: this node passed
+# _captured_zones while ScenarioManager and DevController passed nothing, so painting a zone
+# mid-battle quietly re-lit a capture point that had already been claimed.
+#
+# A claimed CAPTURE zone is done with; a DEPLOYMENT zone is done with the moment a turn starts,
+# because it says where you MAY PLACE units and placement is over. Both are "this zone has stopped
+# being information", which is why they are one list and not two mechanisms.
+func hidden_zone_names() -> Array[String]:
+	var hidden: Array[String] = _captured_zones.duplicate()
+	if _battle_begun:
+		hidden.append_array(game.zone_manager.zone_names_of(ZoneManager.Kind.DEPLOYMENT))
+	return hidden
 
 func is_contested() -> bool:
 	return _contested
@@ -89,7 +114,7 @@ func restore_progress(zones: Array[String], contested: bool, rounds := 0) -> voi
 	_captured_zones.assign(zones)
 	_contested = contested
 	_rounds_elapsed = rounds
-	game.overlay_manager.redraw_zones(game.zone_manager, _captured_zones)
+	game.overlay_manager.redraw_zones(game.zone_manager, hidden_zone_names())
 	game.refresh_mission_status()
 
 # ==============================================================================
@@ -153,6 +178,12 @@ func _on_load_game_chosen() -> void:
 # restores whose turn it was. Without this a mission saved on an AI faction's turn would sit
 # there doing nothing, because turn_started only ever fires from TurnManager.end_turn.
 func _begin_turn() -> void:
+	# The deployment window closes here (#736), and the zones that showed it stop being drawn. Set
+	# BEFORE the redraw for the obvious reason, and the redraw is needed at all because every
+	# arrival painted the zones on the way in (apply_scenario -> restore_progress) while this was
+	# still false.
+	_battle_begun = true
+	game.overlay_manager.redraw_zones(game.zone_manager, hidden_zone_names())
 	var faction: Team.Faction = game.turn_manager.active_faction()
 	game.turn_banner.show_label("%s Turn" % Team.faction_name(faction))
 	game.start_faction_turn(faction)
@@ -216,7 +247,7 @@ func capture(zone_name: String) -> void:
 	if game.zone_manager.kind_of(zone_name) != ZoneManager.Kind.CAPTURE:
 		return
 	_captured_zones.append(zone_name)
-	game.overlay_manager.redraw_zones(game.zone_manager, _captured_zones)
+	game.overlay_manager.redraw_zones(game.zone_manager, hidden_zone_names())
 	game.refresh_mission_status()
 
 func is_zone_captured(zone_name: String) -> bool:

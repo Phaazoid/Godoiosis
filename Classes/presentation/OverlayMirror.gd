@@ -83,6 +83,10 @@ func _process(_delta: float) -> void:
 	_fill(BoardOverlays.Layer.SQUAD_RANGE, om.squadrange_overlay.get_used_cells())
 	_fill(BoardOverlays.Layer.ZONE_CAPTURE, om.capture_overlay.get_used_cells())
 	_fill(BoardOverlays.Layer.ZONE_EXTRACTION, om.extraction_overlay.get_used_cells())
+	# Ungated like the two above, not gated like PATROL below (#736): the gate exists to keep AI
+	# internals out of play, and where the player may stand is the opposite of a secret. What ends
+	# it is redraw_zones' `hidden` list once turn 1 begins, so the cells simply stop being there.
+	_fill(BoardOverlays.Layer.ZONE_DEPLOYMENT, om.deployment_overlay.get_used_cells())
 	# Authoring scaffolding: cells AND the authoring INTENT, or patrol zones leak into play.
 	var authoring: bool = om.zones_authoring_visible
 	_fill_gated(BoardOverlays.Layer.ZONE_PATROL, om.zone_overlay, authoring)

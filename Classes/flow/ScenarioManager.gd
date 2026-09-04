@@ -73,6 +73,13 @@ var current_camera_start: CameraPose = null
 # it back out. Nothing resolves it to a Roster yet; #737 is the first reader.
 var current_roster := ""
 
+# How many of that roster the CURRENT board lets the player deploy (#736); 0 = as many as the
+# deployment zone holds. Same store and same four writers as the roster right above, and it lives
+# HERE rather than beside MissionController.round_limit because it is the roster's other half --
+# one question ("what force may be fielded on this board"), one home. MissionController owns the
+# mission's ENDING, which a deployment cap has nothing to do with.
+var current_deployment_cap := 0
+
 # The #182 lesson content, same seam: authored scenario content that is not board state. THE store
 # — ScenarioDirector reads these LIVE (never copies), capture_scenario writes them back out, and
 # clear_board empties them so a sandbox spawn cannot inherit the last mission's lesson.
@@ -156,7 +163,7 @@ func restore_board(snapshot: BoardSnapshot) -> void:
 	# Authored state must be VISIBLE at turn one -- nothing else redraws until the first round tick (#174).
 	overlay_manager.redraw_terrain_live(game.terrain_states)
 	game.zone_manager.load_dict(snapshot.zones)
-	overlay_manager.redraw_zones(game.zone_manager)
+	overlay_manager.redraw_zones(game.zone_manager, game.mission_controller.hidden_zone_names())
 
 # The snapshot itself, split from writing it (#87) -- apply_scenario is its inverse.
 # authored (#177): cast units — those spawned from a standalone character file — save as a
@@ -174,6 +181,7 @@ func capture_scenario(scenario_name: String, authored := false) -> ScenarioData:
 	scenario.ai_factions = game.ai_controller.ai_factions()   # #150: who the computer plays here
 	scenario.look_preset = current_look_preset               # #253 part 2: the look it wears
 	scenario.roster = current_roster                         # #735: who it offers, if anyone
+	scenario.deployment_cap = current_deployment_cap         # #736: and how many of them
 	scenario.camera_start = current_camera_start             # #234: where it opens, if authored
 	scenario.dialog_beats = current_dialog_beats.duplicate()       # #182/#397: Update must not wipe
 	scenario.tutorial_steps = current_tutorial_steps.duplicate()   # the lesson it cannot see on the board
@@ -257,6 +265,7 @@ func apply_scenario(scenario: ScenarioData) -> void:
 	current_look_preset = scenario.look_preset
 	current_camera_start = scenario.camera_start   # #234, same signal, same reason: read from board_loaded
 	current_roster = scenario.roster              # #735: nothing reads it before #737, but the store is board state
+	current_deployment_cap = scenario.deployment_cap   # #736: its other half, and BoardLint reads it today
 
 	var leaders_by_squad_id := {}
 	var members_by_squad_id := {}
@@ -380,6 +389,9 @@ func clear_board():
 	# Sandbox lands here with no ScenarioData, so without this a sandbox board would keep offering
 	# the last mission's pool -- and the next Save As would write that name into a fixture.
 	current_roster = ""
+	# And the cap with it (#736) -- a sandbox board offers nobody, so it can hardly cap them at six,
+	# and the same Save As would write the stale number into a fixture beside the stale name.
+	current_deployment_cap = 0
 	# And the lesson (#182/#397): content follows its board out.
 	current_dialog_beats = []
 	current_tutorial_steps = []
@@ -400,7 +412,7 @@ func clear_board():
 	# it. `BoardSpace` is a static, so it outlives the board exactly the way that flag does.
 	BoardSpace.clear_staging()
 	game.zone_manager.load_dict({})   # zones are board content; load_scenario refills them after
-	overlay_manager.redraw_zones(game.zone_manager)
+	overlay_manager.redraw_zones(game.zone_manager, game.mission_controller.hidden_zone_names())
 	game.terrain_states.clear()   # tile states are board content too -- a sandbox spawn inherits no fire (#174)
 	overlay_manager.redraw_terrain_live(game.terrain_states)
 	game.board_heights.clear()   # so is elevation (#257) -- a sandbox spawn starts flat, not on the

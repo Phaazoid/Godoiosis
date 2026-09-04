@@ -16,6 +16,7 @@ extends GdUnitTestSuite
 const PATROL := ZoneManager.Kind.PATROL
 const CAPTURE := ZoneManager.Kind.CAPTURE
 const EXTRACTION := ZoneManager.Kind.EXTRACTION
+const DEPLOYMENT := ZoneManager.Kind.DEPLOYMENT
 
 
 func _zones() -> ZoneManager:
@@ -186,3 +187,77 @@ func test_dict_round_trip_preserves_kinds() -> void:
 	assert_int(restored.kind_of("gate")).is_equal(PATROL)
 	assert_int(restored.kind_of("throne")).is_equal(CAPTURE)
 	assert_int(restored.kind_of("docks")).is_equal(EXTRACTION)
+
+
+# --- Kind.DEPLOYMENT and the union query it needed (#736) ---
+
+# The enum is PERSISTED (ScenarioData.zones stores plain ints), so its VALUES are format, not
+# taste -- the content razor's exemption. The round-trip cases above cannot see this: they compare
+# whatever ints the enum has against themselves, so a REORDER passes every one of them while every
+# board on disk silently changes which kind its zones are.
+func test_the_zone_kinds_keep_the_values_every_saved_board_was_written_with() -> void:
+	assert_int(ZoneManager.Kind.PATROL).is_equal(0)
+	assert_int(ZoneManager.Kind.CAPTURE).is_equal(1)
+	assert_int(ZoneManager.Kind.EXTRACTION).is_equal(2)
+	assert_int(ZoneManager.Kind.DEPLOYMENT).is_equal(3)
+
+
+# The dedup is the reason cells_of_kind exists at all: zones overlap freely, so summing cells_in()
+# sizes over zone_names_of() counts a shared cell twice, and BoardLint's cap check would then be
+# comparing an authored number against more room than the board has.
+func test_cells_of_kind_counts_a_shared_cell_once() -> void:
+	var zones: ZoneManager = _zones()
+	zones.paint_cell("landing", DEPLOYMENT, Vector2i(1, 1))
+	zones.paint_cell("landing", DEPLOYMENT, Vector2i(2, 1))
+	zones.paint_cell("reserve", DEPLOYMENT, Vector2i(2, 1))   # the overlap
+	zones.paint_cell("reserve", DEPLOYMENT, Vector2i(3, 1))
+
+	# Four paints, three distinct cells. A naive sum over the two zones answers four.
+	var cells: Array[Vector2i] = zones.cells_of_kind(DEPLOYMENT)
+	assert_array(cells).contains_exactly_in_any_order(
+		[Vector2i(1, 1), Vector2i(2, 1), Vector2i(3, 1)])
+	# The SIZE is the assertion with teeth, and only a mutant said so: contains_exactly_in_any_order
+	# compares membership, not multiplicity, so it passes on [a, b, b, c] -- exactly the array a
+	# cells_of_kind with no dedup returns. A caller asking "how much room is there" reads the count.
+	assert_int(cells.size()).override_failure_message(
+		"cells_of_kind counted the shared cell twice: %s" % str(cells)).is_equal(3)
+
+
+func test_cells_of_kind_ignores_every_other_kind() -> void:
+	var zones: ZoneManager = _zones()
+	zones.paint_cell("landing", DEPLOYMENT, Vector2i(1, 1))
+	zones.paint_cell("gate", PATROL, Vector2i(2, 2))
+	zones.paint_cell("throne", CAPTURE, Vector2i(3, 3))
+
+	assert_array(zones.cells_of_kind(DEPLOYMENT)).contains_exactly([Vector2i(1, 1)])
+	assert_array(zones.cells_of_kind(PATROL)).contains_exactly([Vector2i(2, 2)])
+
+
+func test_cells_of_kind_is_empty_when_nothing_of_that_kind_is_painted() -> void:
+	var zones: ZoneManager = _zones()
+	zones.paint_cell("gate", PATROL, Vector2i(1, 1))
+
+	assert_array(zones.cells_of_kind(DEPLOYMENT)).is_empty()
+
+
+# The Tile Brush indexed a parallel label array RAW, so a kind added without a label was an
+# out-of-bounds crash in the zone dropdown rather than a missing string. Deriving from the enum is
+# what makes a new kind cost the brush nothing -- this asserts the derivation reads well, since a
+# key that capitalizes badly is the one way it could be a bad trade.
+func test_kind_display_name_reads_every_kind() -> void:
+	assert_str(ZoneManager.kind_display_name(PATROL)).is_equal("Patrol")
+	assert_str(ZoneManager.kind_display_name(CAPTURE)).is_equal("Capture")
+	assert_str(ZoneManager.kind_display_name(EXTRACTION)).is_equal("Extraction")
+	assert_str(ZoneManager.kind_display_name(DEPLOYMENT)).is_equal("Deployment")
+
+
+func test_a_deployment_zone_survives_the_dict_round_trip_with_its_kind() -> void:
+	var zones: ZoneManager = _zones()
+	zones.paint_cell("landing", DEPLOYMENT, Vector2i(6, 7))
+	var data := zones.to_dict()
+
+	var restored: ZoneManager = _zones()
+	restored.load_dict(data)
+
+	assert_int(restored.kind_of("landing")).is_equal(DEPLOYMENT)
+	assert_array(restored.cells_in("landing")).contains_exactly([Vector2i(6, 7)])
