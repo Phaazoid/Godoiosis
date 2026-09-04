@@ -45,7 +45,7 @@ theme_override_constants/separation = 6
 layout_mode = 2
 mouse_filter = 2
 theme_override_font_sizes/font_size = 11
-text = "ORDERS"
+text = "Action Queue"
 
 [node name="OuterScroll" type="ScrollContainer" parent="BackgroundPanel/MarginContainer/VBox" unique_id=944768170]
 layout_mode = 2

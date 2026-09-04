@@ -2807,3 +2807,49 @@ A **heal** short-circuits above the elemental stage, and a **tile hit** is built
 `TileHitAction.make` rather than `_resolve_one` — so neither records `elements`, and both wear the
 neutral rail. Stated rather than left to read as an oversight; both are one line if content ever
 wants them.
+
+### Round 2 — the play-check rulings (dev, 2026-09-03)
+
+He liked the direction and gave six corrections. Four are worth keeping as rules rather than as a
+changelog, because each names something the first pass got structurally wrong rather than merely
+mis-tuned.
+
+**A ROW SITS ABOVE ITS SECTION, NOT IN IT.** The first pass put the row at `0.137` against a `0.09`
+section card — a step of nothing, and his reading was the honest one: *"it doesn't make the action
+queue row stand out from the rest of the menu, and it's hard to see things against the background."*
+The section is the **gutter** and the row is the **card lying on it**, so the contrast belongs on
+the row (`0.23`), not in a darker section. Darkening the section instead would have made the panel
+muddier while leaving the row exactly as hard to read.
+
+**A 32px SLOT BOUGHT NOTHING AND COST THE WHOLE DOCK.** *"These rows are too tall. We can barely fit
+one and a half of them on screen."* The action art is authored at 16 and was being upscaled 2×, so
+the height was paid for no detail at all. Every slot is 16 now, the leader's crown is cut, and the
+row lost its `custom_minimum_size` height floor of 34 — which would have held rows tall whatever the
+slots did, and is the kind of leftover that makes a size change look like it did nothing.
+
+**ONE SCROLL IN THE PANEL, AND IT IS THE OUTER ONE.** *"If there is space available, we shouldn't be
+using scrollbars, we should be stretching to fit it until there's none left."* Each section owned a
+`ScrollContainer` capped at `SECTION_MAX_HEIGHT = 160`, so a section began scrolling while the dock
+still had 300px of empty space under it. Sections take their natural height now; only `OuterScroll`
+catches overflow. That deleted the cap, `_section_scrolls`, and `_render`'s measure-after-a-frame
+pass together — **a per-section cap is a second answer to "how tall may this get", and the panel's
+own height was always the first one.**
+
+**A STATUS BELONGS UNDER THE UNIT RECEIVING IT.** The consequence line started at the row's left
+edge, i.e. under the ATTACKER, which he read immediately as *"confusing and unintuitive... that needs
+to be below the image of the unit who is getting the status."* It is not a layout preference — a
+chip under the attacker is a **lie about who is wet**. `ConsequenceRow` is indented to start under
+`TargetTexture`.
+
+The other two were straightforward: the `hp→hp` digits get the same tinted card the chips wear
+(*"all the other text looks much more designed and professional, the damage numbers should have that
+feel too"*), and Execute had **no stylebox at all**, so it was drawing the engine's default grey on
+a grey panel — crimson now, with the disabled look still `EXECUTE_DULL`'s modulate over it rather
+than a second style to keep in sync.
+
+**The trap the readout card set on the way in**, worth knowing before adding any slot to this row:
+the card carried the line's horizontal `size_flags`, so a row that HIDES it — a move, which has no
+number — let the whole line collapse and packed the cancel X against the target sprite, breaking the
+row's own "the X keeps its slot on every row so content stays aligned" rule. **A slot that can be
+hidden must not be the slot holding the expand**; a dedicated `Slack` control owns it now, pinned by
+`test_the_cancel_x_holds_the_right_edge_on_a_row_with_no_number` (falsified: X at 1146 against 1183).

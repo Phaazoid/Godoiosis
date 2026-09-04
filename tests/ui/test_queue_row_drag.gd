@@ -77,26 +77,24 @@ func _panel_with_moves() -> Array[Unit]:
 
 
 func _move_section() -> VBoxContainer:
-	# The panel builds one section per header, in build_for's order; MOVE is first. WALKED by type
-	# rather than read off sections_box's direct children (#685 wrapped each section in a styled
-	# card, so the ScrollContainer sits a level deeper) -- the same shape
-	# tests/ui/test_watch_note_reaches_the_panel.gd walks for rows, and for the same reason: what
-	# this suite pins is the drag, not the panel's nesting.
+	# The panel builds one section per header in build_for's order, so the FIRST row in tree order is
+	# a MOVE row. Reached through the row rather than by walking the panel's nesting, and the walk is
+	# the production one: `row -> indent wrapper -> the section's row list` is exactly the hop count
+	# _on_row_drag_requested takes, so this helper cannot pass while the drag's own lookup is broken.
 	var panel = game.squad_action_queue_control
-	var scroll := _first_scroll(panel.sections_box)
-	if scroll == null or scroll.get_child_count() == 0:
+	var row := _first_row(panel.sections_box)
+	if row == null:
 		return null
-	return scroll.get_child(0) as VBoxContainer
+	return row.get_parent().get_parent() as VBoxContainer
 
 
-func _first_scroll(node: Node) -> ScrollContainer:
+func _first_row(node: Node) -> ActionQueueRow:
+	if node is ActionQueueRow:
+		return node as ActionQueueRow
 	for child in node.get_children():
-		var scroll := child as ScrollContainer
-		if scroll != null:
-			return scroll
-		var deeper := _first_scroll(child)
-		if deeper != null:
-			return deeper
+		var hit := _first_row(child)
+		if hit != null:
+			return hit
 	return null
 
 

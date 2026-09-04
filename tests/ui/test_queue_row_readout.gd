@@ -144,7 +144,7 @@ func test_no_row_element_is_drawn_on_top_of_another() -> void:
 		.is_equal(0)
 
 	var line: Array[Control] = []
-	for child in row.readout.get_parent().get_children():
+	for child in row.actor_texture.get_parent().get_children():
 		var control := child as Control
 		if control != null and control.visible:
 			line.append(control)
@@ -184,6 +184,88 @@ func test_a_state_the_hit_applies_becomes_a_chip_that_explains_itself() -> void:
 				.is_not_empty()
 			assert_that(e["color"]).is_equal(
 					ElementPalette.color_for_state(Elemental.State.WET))
+
+
+# A status lands on the unit RECEIVING it, so its chip has to sit under the TARGET sprite. Reading
+# it under the attacker is not a layout preference, it is a lie about who is wet (dev, 2026-09-03).
+func test_the_consequence_line_starts_under_the_target_not_the_attacker() -> void:
+	await _queue_elemental_attack(Elemental.Element.WATER, [])
+	var row := _attack_row()
+	assert_object(row).is_not_null()
+	assert_bool(row.consequence_row.visible).is_true()
+
+	var chips_left := row.consequence.get_global_rect().position.x
+	var target_left := row.target_texture.get_global_rect().position.x
+	var actor_left := row.actor_texture.get_global_rect().position.x
+	assert_float(chips_left) \
+		.override_failure_message("the consequence line starts at %.0f, under the ACTOR at %.0f rather than the TARGET at %.0f — it names who is applying the status, not who gets it"
+			% [chips_left, actor_left, target_left]) \
+		.is_equal_approx(target_left, 1.0)
+
+
+# The row's own header claims the X keeps its slot on every row so content stays aligned, and the
+# readout CARD nearly broke that: the card carried the line's horizontal expand, so a MOVE row --
+# which has no number and hides it -- packed the X in tight against the target sprite. A dedicated
+# Slack control holds the expand now, and this is what says so.
+func test_the_cancel_x_holds_the_right_edge_on_a_row_with_no_number() -> void:
+	var attacker := await _queue_elemental_attack(Elemental.Element.WATER, [])
+	var walker := _spawn(Team.Faction.PLAYER, Vector2i(1, 3))
+	var move := MoveAction.new()
+	move.init(walker, [walker.movement.cell, walker.movement.cell + Vector2i(1, 0)], null)
+	attacker.squad._queue_action(move)
+	game.refresh_action_queue(attacker.squad)
+	await await_idle_frame()
+
+	var with_number: ActionQueueRow = null
+	var without: ActionQueueRow = null
+	for row in _rows():
+		if row.readout_card.visible:
+			with_number = row
+		else:
+			without = row
+	assert_object(with_number).override_failure_message(
+			"no row showed a readout card, so there is nothing to compare against").is_not_null()
+	assert_object(without).override_failure_message(
+			"every row showed a readout card, so the hidden-card case is untested").is_not_null()
+
+	assert_float(without.cancel_button.get_global_rect().end.x) \
+		.override_failure_message("the X on a numberless row sits at %.0f while a numbered row's is at %.0f — hiding the readout card let the line collapse"
+			% [without.cancel_button.get_global_rect().end.x, with_number.cancel_button.get_global_rect().end.x]) \
+		.is_equal_approx(with_number.cancel_button.get_global_rect().end.x, 1.0)
+
+
+# The dock is 465px tall and a section used to start scrolling at 160 of it. A queue that fits must
+# show no scrollbar at all -- "if there is space available, we shouldn't be using scrollbars".
+func test_a_queue_that_fits_the_dock_scrolls_nothing() -> void:
+	await _queue_elemental_attack(Elemental.Element.WATER, [])
+	var panel = game.squad_action_queue_control
+	var outer: ScrollContainer = panel.sections_box.get_parent()
+	assert_object(outer).is_not_null()
+	# Non-vacuity: with nothing rendered, "no section scrolls" and "the content fits" are both
+	# trivially true and the case could never fail.
+	assert_int(_rows().size()).override_failure_message(
+			"nothing rendered, so this case cannot see what it claims to").is_greater(0)
+	assert_float(outer.size.y).override_failure_message(
+			"the dock has no measured height, so 'it fits' means nothing").is_greater(0.0)
+
+	var scrolls: Array[ScrollContainer] = []
+	_collect_scrolls(panel.sections_box, scrolls)
+	assert_int(scrolls.size()) \
+		.override_failure_message("a section owns its own ScrollContainer again — a section that scrolls before the dock is full is what #685 round 2 removed") \
+		.is_equal(0)
+
+	assert_float(panel.sections_box.get_combined_minimum_size().y) \
+		.override_failure_message("this small a queue does not fit the dock (%.0f needed, %.0f available), so the case cannot see what it claims to"
+			% [panel.sections_box.get_combined_minimum_size().y, outer.size.y]) \
+		.is_less_equal(outer.size.y)
+
+
+func _collect_scrolls(node: Node, out: Array[ScrollContainer]) -> void:
+	for child in node.get_children():
+		var scroll := child as ScrollContainer
+		if scroll != null:
+			out.append(scroll)
+		_collect_scrolls(child, out)
 
 
 # ------------------------------------------------------------------------------------------------

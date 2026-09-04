@@ -9,22 +9,28 @@ class_name ActionQueueRow
 #
 # EVERY FACT GETS ITS OWN SLOT (#685). The row used to stack four of them into three 32px squares
 # through `show_behind_parent`: state icons under the verb, the hp readout over it, reaction art
-# under the target. The crown is the one survivor of that trick, and deliberately -- it answers
-# "what is this unit", the same question the sprite answers, so the two are one token.
+# under the target, and the leader's crown under the actor. Nothing overlays anything now, and
+# `show_behind_parent` has no user left in this file -- do not reintroduce one.
 #
 # TWO CHANNELS, TWO MEANINGS (visual-clarity.md principle 2): the row's BORDER says whether the
 # order is refused; the RAIL says what element the hit carries. Neither may borrow the other.
+#
+# EVERY SLOT IS 16px AND THE ROW HAS NO HEIGHT FLOOR (dev, 2026-09-03): a 32px slot bought nothing
+# -- the action art is authored at 16 and was being upscaled -- and cost so much height that barely
+# one and a half rows fit the dock. The CONSEQUENCE line is indented to start under TargetTexture,
+# because a status lands on the unit RECEIVING it and reading it under the attacker is a lie about
+# who is wet.
 
 @onready var rail: ColorRect = $Frame/Rail
 @onready var actor_texture: TextureRect = $Frame/Pad/Body/Line/ActorTexture
 @onready var action_icon: TextureRect = $Frame/Pad/Body/Line/ActionIcon
 @onready var target_texture: TextureRect = $Frame/Pad/Body/Line/TargetTexture
-@onready var readout: Label = $Frame/Pad/Body/Line/Readout
+@onready var readout_card: PanelContainer = $Frame/Pad/Body/Line/ReadoutCard
+@onready var readout: Label = $Frame/Pad/Body/Line/ReadoutCard/Readout
 @onready var cancel_button: Button = $Frame/Pad/Body/Line/CancelButton
 @onready var description_label: Label = $Frame/Pad/Body/Line/DescriptionLabel
-@onready var consequence: HFlowContainer = $Frame/Pad/Body/Consequence
-
-const CROWN_ICON := preload("res://Art/Icons/BoardIcons/CrownIcon.png")
+@onready var consequence_row: MarginContainer = $Frame/Pad/Body/ConsequenceRow
+@onready var consequence: HFlowContainer = $Frame/Pad/Body/ConsequenceRow/Consequence
 
 var action: BaseAction
 var draggable := false
@@ -40,16 +46,13 @@ func setup(action_ref: BaseAction):
 
 	actor_texture.texture = action.get_actor_texture()
 	actor_texture.modulate = action.get_actor_modulate()
-	# Squad leader keeps its own sprite; the crown rides behind it, shifted up like a hat.
-	if action.actor != null and action.actor.is_leader() and action.actor.has_squad():
-		_overlay_behind(actor_texture, CROWN_ICON, Vector2(0, -10))
-
 	action_icon.texture = action.get_action_icon()
 	target_texture.texture = action.get_target_texture()
 	description_label.text = action.get_description()
 
 	var outcome := action.resolved_outcome()
 	_paint_rail(outcome)
+	readout_card.visible = false   # a MOVE row has no number, and an empty card is a stray box
 	# Any order carrying an outcome shows the readout, not attacks alone (#419) -- a tile's
 	# end-of-turn damage reads as a hit like any other.
 	if outcome != null:
@@ -140,7 +143,7 @@ func _build_consequence(outcome: ResolvedOutcome) -> void:
 		consequence.add_child(entry)
 	# A hidden Control contributes nothing to get_combined_minimum_size, so an unflipped `visible`
 	# loses the line AND the height the section reserves for it (#592's shape).
-	consequence.visible = not entries.is_empty()
+	consequence_row.visible = not entries.is_empty()
 
 # One tinted pill, art optional. Tooltip goes on EVERY control in it: a Label defaults to
 # MOUSE_FILTER_IGNORE, so the viewport never picks it and the text is dead however right it is.
@@ -176,20 +179,6 @@ func _chip(tint: Color, art: Texture2D, text: String, tip: String) -> Control:
 	row.add_child(label)
 	return pill
 
-func _overlay_behind(host: TextureRect, tex: Texture2D, pixel_offset := Vector2.ZERO) -> void:
-	var bg := TextureRect.new()
-	bg.texture = tex
-	bg.show_behind_parent = true
-	bg.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-	bg.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-	bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	host.add_child(bg)
-	bg.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	bg.offset_left += pixel_offset.x
-	bg.offset_right += pixel_offset.x
-	bg.offset_top += pixel_offset.y
-	bg.offset_bottom += pixel_offset.y
-
 func _show_hp_delta(outcome: ResolvedOutcome, subject: Unit) -> void:
 	# target_hp_after is threaded across the whole pass (R4): for the Nth hit it already accounts
 	# for the earlier hits this combat. The raw number goes negative on a fatal hit, so the
@@ -208,8 +197,15 @@ func _show_hp_delta(outcome: ResolvedOutcome, subject: Unit) -> void:
 	var friendly := true
 	if subject != null and is_instance_valid(subject):
 		friendly = not Team.is_enemy(subject.get_faction(), Team.Faction.PLAYER)
-	readout.add_theme_color_override("font_color",
-			QueueStyle.READOUT_ALLY if friendly else QueueStyle.READOUT_ENEMY)
+	_show_readout(QueueStyle.READOUT_ALLY if friendly else QueueStyle.READOUT_ENEMY)
+
+# The number wears the same tinted card the elemental chips do (dev, 2026-09-03: the digits "are a
+# bit odd on their own... the damage numbers should have that feel too"). One card language across
+# the row, so QueueStyle.tint_box is shared rather than copied.
+func _show_readout(tint: Color) -> void:
+	readout.add_theme_color_override("font_color", tint)
+	readout_card.add_theme_stylebox_override("panel", QueueStyle.tint_box(tint))
+	readout_card.visible = readout.text != ""
 
 func is_reorderable_row() -> bool:
 	# The order answers for itself (BaseAction.is_reorderable) -- a derived counter and a
@@ -230,8 +226,6 @@ func setup_volley_summary(lead: AttackAction, count: int, expanded: bool) -> voi
 
 	actor_texture.texture = lead.get_actor_texture()
 	actor_texture.modulate = lead.get_actor_modulate()
-	if lead.actor != null and lead.actor.is_leader() and lead.actor.has_squad():
-		_overlay_behind(actor_texture, CROWN_ICON, Vector2(0, -10))
 
 	# Plain attack icon (not the lead's lethality icon — the group has many outcomes).
 	action_icon.texture = AttackAction.ATTACK_ICON
@@ -242,7 +236,7 @@ func setup_volley_summary(lead: AttackAction, count: int, expanded: bool) -> voi
 	# The READOUT slot becomes the hit-count + expand affordance -- the group has no single hp->hp,
 	# and this is the slot that is free rather than one to draw over (#685).
 	readout.text = ("[-] x%d" if expanded else "[+] x%d") % count
-	readout.add_theme_color_override("font_color", QueueStyle.HEADER_TEXT)
+	_show_readout(QueueStyle.HEADER_TEXT)
 	_apply_row_style()
 
 	# Cancelling the summary cancels the whole volley (it's one aim) — keep the X live.

@@ -26,17 +26,31 @@ const HEADER_TEXT := Color(0.604, 0.627, 0.671)
 # ground rather than as a second palette.
 const TITLE_TEXT := Color(0.902, 0.827, 0.678)
 
-const ROW_BG := Color(0.137, 0.137, 0.165)
-const ROW_BORDER := Color(0.204, 0.204, 0.239)
-const ROW_HOVER_BG := Color(0.184, 0.184, 0.216)
-const ROW_HOVER_BORDER := Color(0.35, 0.35, 0.4)
+# A ROW SITS ABOVE ITS SECTION, NOT IN IT. First pass had the row at 0.137 against a 0.09 section
+# card, i.e. a step of nothing -- the dev's reading was that the row "doesn't stand out from the
+# rest of the menu, and it's hard to see things against the background" (2026-09-03). The section is
+# the gutter and the row is the card lying on it, so the contrast belongs here rather than in a
+# darker section.
+const ROW_BG := Color(0.23, 0.23, 0.27)
+const ROW_BORDER := Color(0.35, 0.35, 0.4)
+const ROW_HOVER_BG := Color(0.3, 0.3, 0.35)
+const ROW_HOVER_BORDER := Color(0.48, 0.48, 0.55)
 
 # The BORDER is validity's channel and element's is the rail -- one motif per meaning
 # (visual-clarity.md principle 2), which is what a colour-per-element border would have collided
 # with on a row that is both elemental and refused.
-const ROW_REFUSED_BG := Color(0.173, 0.125, 0.133)
-const ROW_REFUSED_BORDER := Color(0.722, 0.314, 0.247)
-const ROW_REFUSED_HOVER_BORDER := Color(0.878, 0.435, 0.353)
+const ROW_REFUSED_BG := Color(0.27, 0.17, 0.17)
+const ROW_REFUSED_BORDER := Color(0.78, 0.35, 0.28)
+const ROW_REFUSED_HOVER_BORDER := Color(0.93, 0.47, 0.38)
+
+# Execute has to read as ACT NOW against the slate, which the engine's default button chrome cannot:
+# it is grey on a grey panel and simply disappeared (dev, 2026-09-03). Crimson rather than the old
+# pure-red #ED0000, which fought every other saturated thing on screen. The DISABLED state needs no
+# second style -- set_execute_state modulates by EXECUTE_DULL, which mutes this to a dead maroon.
+const EXECUTE_BG := Color(0.62, 0.16, 0.12)
+const EXECUTE_BORDER := Color(0.95, 0.45, 0.33)
+const EXECUTE_HOVER_BG := Color(0.74, 0.21, 0.15)
+const EXECUTE_TEXT := Color(1, 0.93, 0.9)
 
 # The hp->hp readout, team-coloured: green when a friendly is losing HP, red for an enemy.
 const READOUT_ALLY := Color(0.486, 0.878, 0.561)
@@ -98,6 +112,16 @@ static func row_box(refused: bool, hovered: bool) -> StyleBoxFlat:
 		var box := _flat(bg, border, 1, 4)
 		box.set_content_margin_all(1.0)   # the rail rides flush inside the border
 		return box)
+
+
+static func execute_box() -> StyleBoxFlat:
+	return _cached("execute", func() -> StyleBoxFlat:
+		return _flat(EXECUTE_BG, EXECUTE_BORDER, 1, 5))
+
+
+static func execute_hover_box() -> StyleBoxFlat:
+	return _cached("execute_hover", func() -> StyleBoxFlat:
+		return _flat(EXECUTE_HOVER_BG, EXECUTE_BORDER, 1, 5))
 
 
 # An element-tinted pill, for a state chip and for a fired reaction's word alike. NOT cached: the

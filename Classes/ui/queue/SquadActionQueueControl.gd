@@ -26,9 +26,6 @@ class_name SquadActionQueueControl
 
 const ACTION_ROW_SCENE := preload("res://Scenes/ActionQueueRow.tscn")
 
-# A section shows up to this many pixels of rows before it scrolls internally. Tune to taste.
-const SECTION_MAX_HEIGHT := 160
-
 enum ExecuteState { DISABLED, READY, ALL_COMMITTED }
 
 const EXECUTE_DULL := Color(0.5, 0.5, 0.5, 1.0)
@@ -36,7 +33,6 @@ const EXECUTE_BRIGHT := Color(1, 1, 1, 1)
 const EXECUTE_FLASH := Color(0.5, 1.0, 0.5, 1.0)
 
 var current_squad = null
-var _section_scrolls: Array[ScrollContainer] = []
 var _flash_tween: Tween = null
 var _drag_row: ActionQueueRow = null
 var _drag_section: VBoxContainer = null
@@ -64,6 +60,16 @@ func _ready() -> void:
 	execute_button.pressed.connect(_execute)
 	background_panel.add_theme_stylebox_override("panel", QueueStyle.panel_box())
 	title_label.add_theme_color_override("font_color", QueueStyle.TITLE_TEXT)
+	# The engine's default button chrome is grey on a grey panel, so Execute vanished into the dock
+	# (dev, 2026-09-03). Its DISABLED look is still set_execute_state's EXECUTE_DULL modulate over
+	# this, rather than a second stylebox nobody would keep in sync.
+	execute_button.add_theme_stylebox_override("normal", QueueStyle.execute_box())
+	execute_button.add_theme_stylebox_override("hover", QueueStyle.execute_hover_box())
+	execute_button.add_theme_stylebox_override("pressed", QueueStyle.execute_hover_box())
+	execute_button.add_theme_stylebox_override("disabled", QueueStyle.execute_box())
+	execute_button.add_theme_color_override("font_color", QueueStyle.EXECUTE_TEXT)
+	execute_button.add_theme_color_override("font_hover_color", QueueStyle.EXECUTE_TEXT)
+	execute_button.add_theme_color_override("font_disabled_color", QueueStyle.EXECUTE_TEXT)
 	set_process(false)
 
 # Repaint what is already on screen, with no trip through the backend (#685). The dev's element
@@ -137,16 +143,6 @@ func _render() -> void:
 			_:
 				i += 1
 
-	# Cap each section's height once rows have a measured min size (snapshot: a re-render can
-	# rebuild _section_scrolls while we await).
-	var scrolls := _section_scrolls.duplicate()
-	await get_tree().process_frame
-	for scroll in scrolls:
-		if not is_instance_valid(scroll) or scroll.get_child_count() == 0:
-			continue
-		var inner: Control = scroll.get_child(0)
-		var content_h := inner.get_combined_minimum_size().y
-		scroll.custom_minimum_size.y = min(content_h, SECTION_MAX_HEIGHT)
 
 func set_execute_state(state: ExecuteState) -> void:
 	_stop_flash()
@@ -170,9 +166,14 @@ func _stop_flash() -> void:
 	_flash_tween = null
 
 # A section is a bordered CARD with its own header strip (#685) -- the delineation the dev asked
-# for. The wrapping sits ABOVE the ScrollContainer, never between it and its inner VBox: the height
-# cap in _render reads scroll.get_child(0), and the drag reads row -> wrapper -> this inner VBox,
-# so both stay exactly as they were.
+# for. ONE SCROLL IN THE PANEL, THE OUTER ONE: each section used to own a ScrollContainer capped at
+# 160px, so a section began scrolling while the dock still had empty space below it -- "if there is
+# space available, we shouldn't be using scrollbars, we should be stretching to fit it until there's
+# none left" (dev, 2026-09-03). Sections take their natural height now and OuterScroll handles the
+# overflow, which deleted the cap, the scroll list and the measure-after-a-frame pass with it.
+#
+# The row list is still a plain VBox whose children are the per-row indent wrappers, so the drag's
+# row -> wrapper -> list walk is unchanged.
 func _start_section(title: String) -> VBoxContainer:
 	var card := PanelContainer.new()
 	card.add_theme_stylebox_override("panel", QueueStyle.section_box())
@@ -196,17 +197,10 @@ func _start_section(title: String) -> VBoxContainer:
 		header.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		header_box.add_child(header)
 
-	var scroll := ScrollContainer.new()
-	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
-	scroll.size_flags_vertical = Control.SIZE_FILL
-	col.add_child(scroll)
-
 	var inner := VBoxContainer.new()
 	inner.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	inner.add_theme_constant_override("separation", 0)   # each row wrapper carries its own gap
-	scroll.add_child(inner)
-
-	_section_scrolls.append(scroll)
+	col.add_child(inner)
 	return inner
 
 func _is_attack_action(a: BaseAction) -> bool:
@@ -284,7 +278,6 @@ func _apply_visibility() -> void:
 	visible = _content_shown and not _hidden_for_playback
 
 func _clear_sections():
-	_section_scrolls.clear()
 	for child in sections_box.get_children():
 		child.queue_free()
 
