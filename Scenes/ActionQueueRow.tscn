@@ -2,39 +2,87 @@
 
 [ext_resource type="Script" uid="uid://fsvtlvbn45ve" path="res://Classes/ui/queue/ActionQueueRow.gd" id="1_fbndw"]
 
-[node name="ActionQueueRow" type="HBoxContainer" unique_id=552555432]
-custom_minimum_size = Vector2(128, 32)
-offset_right = 104.0
-offset_bottom = 32.0
-alignment = 1
+[node name="ActionQueueRow" type="PanelContainer" unique_id=552555432]
+custom_minimum_size = Vector2(0, 34)
+offset_right = 172.0
+offset_bottom = 40.0
+mouse_filter = 0
 script = ExtResource("1_fbndw")
 
-[node name="CancelButton" type="Button" parent="." unique_id=1540100166]
-custom_minimum_size = Vector2(20, 20)
+[node name="Frame" type="HBoxContainer" parent="." unique_id=884213077]
 layout_mode = 2
-focus_mode = 0
-text = "X"
+theme_override_constants/separation = 0
 
-[node name="ActorTexture" type="TextureRect" parent="." unique_id=1426592185]
+[node name="Rail" type="ColorRect" parent="Frame" unique_id=1315520688]
+custom_minimum_size = Vector2(3, 0)
+layout_mode = 2
+mouse_filter = 2
+color = Color(0.29, 0.29, 0.33, 1)
+
+[node name="Pad" type="MarginContainer" parent="Frame" unique_id=406771234]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_constants/margin_left = 3
+theme_override_constants/margin_top = 2
+theme_override_constants/margin_right = 3
+theme_override_constants/margin_bottom = 2
+
+[node name="Body" type="VBoxContainer" parent="Frame/Pad" unique_id=1739288450]
+layout_mode = 2
+theme_override_constants/separation = 2
+
+[node name="Line" type="HBoxContainer" parent="Frame/Pad/Body" unique_id=1072155963]
+layout_mode = 2
+theme_override_constants/separation = 2
+
+[node name="ActorTexture" type="TextureRect" parent="Frame/Pad/Body/Line" unique_id=1426592185]
 custom_minimum_size = Vector2(32, 32)
 layout_mode = 2
 size_flags_horizontal = 0
-size_flags_vertical = 0
+size_flags_vertical = 4
+mouse_filter = 2
 expand_mode = 2
 stretch_mode = 5
 
-[node name="ActionIcon" type="TextureRect" parent="." unique_id=336764216]
+[node name="ActionIcon" type="TextureRect" parent="Frame/Pad/Body/Line" unique_id=336764216]
 custom_minimum_size = Vector2(32, 32)
 layout_mode = 2
+size_flags_vertical = 4
+mouse_filter = 2
 expand_mode = 2
 stretch_mode = 5
 
-[node name="TargetTexture" type="TextureRect" parent="." unique_id=784272343]
+[node name="TargetTexture" type="TextureRect" parent="Frame/Pad/Body/Line" unique_id=784272343]
 custom_minimum_size = Vector2(32, 32)
 layout_mode = 2
+size_flags_vertical = 4
+mouse_filter = 2
 expand_mode = 2
 stretch_mode = 5
 
-[node name="DescriptionLabel" type="Label" parent="." unique_id=1194595699]
+[node name="Readout" type="Label" parent="Frame/Pad/Body/Line" unique_id=1993047185]
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 4
+mouse_filter = 2
+theme_override_font_sizes/font_size = 11
+horizontal_alignment = 2
+vertical_alignment = 1
+
+[node name="CancelButton" type="Button" parent="Frame/Pad/Body/Line" unique_id=1540100166]
+custom_minimum_size = Vector2(18, 18)
+layout_mode = 2
+size_flags_vertical = 4
+focus_mode = 0
+theme_override_font_sizes/font_size = 11
+text = "X"
+
+[node name="DescriptionLabel" type="Label" parent="Frame/Pad/Body/Line" unique_id=1194595699]
 visible = false
 layout_mode = 2
+
+[node name="Consequence" type="HFlowContainer" parent="Frame/Pad/Body" unique_id=708411552]
+visible = false
+layout_mode = 2
+theme_override_constants/h_separation = 4
+theme_override_constants/v_separation = 2

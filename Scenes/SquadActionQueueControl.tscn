@@ -2,22 +2,6 @@
 
 [ext_resource type="Script" uid="uid://bc5mnwx7424ki" path="res://Classes/ui/queue/SquadActionQueueControl.gd" id="1_voyyq"]
 
-[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_voyyq"]
-bg_color = Color(1, 0.78613406, 0.68115425, 1)
-border_width_left = 3
-border_width_top = 3
-border_width_right = 3
-border_width_bottom = 3
-border_color = Color(0.27275372, 0.09041131, 0, 1)
-
-[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_3ao6u"]
-bg_color = Color(0.92941177, 0, 0, 1)
-border_width_left = 3
-border_width_top = 3
-border_width_right = 3
-border_width_bottom = 3
-border_color = Color(0, 0, 0, 1)
-
 [node name="SquadActionQueueControl" type="Control" unique_id=1755236960]
 visible = false
 layout_mode = 3
@@ -35,31 +19,44 @@ layout_mode = 1
 anchors_preset = 1
 anchor_left = 1.0
 anchor_right = 1.0
-offset_left = -152.0
+offset_left = -223.0
 offset_top = 25.0
 offset_right = -7.0
 offset_bottom = 490.0
 grow_horizontal = 0
-theme_override_styles/panel = SubResource("StyleBoxFlat_voyyq")
 
 [node name="MarginContainer" type="MarginContainer" parent="BackgroundPanel" unique_id=250797685]
-layout_mode = 0
-offset_top = 10.0
-offset_right = 64.0
-offset_bottom = 42.0
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_constants/margin_left = 8
+theme_override_constants/margin_top = 8
+theme_override_constants/margin_right = 8
+theme_override_constants/margin_bottom = 8
 
 [node name="VBox" type="VBoxContainer" parent="BackgroundPanel/MarginContainer" unique_id=839256563]
 layout_mode = 2
+theme_override_constants/separation = 6
+
+[node name="Title" type="Label" parent="BackgroundPanel/MarginContainer/VBox" unique_id=1220884517]
+layout_mode = 2
+mouse_filter = 2
+theme_override_font_sizes/font_size = 11
+text = "ORDERS"
 
 [node name="OuterScroll" type="ScrollContainer" parent="BackgroundPanel/MarginContainer/VBox" unique_id=944768170]
-custom_minimum_size = Vector2(0, 410)
 layout_mode = 2
+size_flags_vertical = 3
 horizontal_scroll_mode = 0
 
 [node name="SectionsBox" type="VBoxContainer" parent="BackgroundPanel/MarginContainer/VBox/OuterScroll" unique_id=1989633923]
 layout_mode = 2
+size_flags_horizontal = 3
+theme_override_constants/separation = 8
 
 [node name="ExecuteButton" type="Button" parent="BackgroundPanel/MarginContainer/VBox" unique_id=350332695]
-custom_minimum_size = Vector2(145, 36)
+custom_minimum_size = Vector2(0, 34)
 layout_mode = 2
-theme_override_styles/normal = SubResource("StyleBoxFlat_3ao6u")

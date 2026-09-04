@@ -36,3 +36,10 @@ class_name ElementalReaction
 @export var popup: String = ""        # e.g. "Electrocuted!"
 @export var vfx_tag: String = ""
 @export var icon: Texture2D           # queue/board symbol shown when this reaction FIRES (e.g. the spark)
+
+
+# A COMBO needs a state already on the target; a NONE-requirement reaction is the SETUP half that
+# deposits one (see the header). The queue row asks this to decide whether a fired reaction earns its
+# own named line, or is already fully said by the state chip it produced (#685).
+func is_combo() -> bool:
+	return required_state != Elemental.State.NONE

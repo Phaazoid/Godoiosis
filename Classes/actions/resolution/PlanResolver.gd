@@ -363,6 +363,7 @@ static func _resolve_one(action: AttackAction, reactions: Array[ElementalReactio
 	var incoming := _source_elements(action)
 	var elements := _surviving_elements(incoming, target)
 	var fully_insulated := not incoming.is_empty() and elements.is_empty()
+	outcome.elements = elements.duplicate()   # what REACHED the target — the queue row's element rail
 	if elements.size() < incoming.size():
 		outcome.popups.append(INSULATED_POPUP)
 	var mult := 1.0
@@ -388,8 +389,7 @@ static func _resolve_one(action: AttackAction, reactions: Array[ElementalReactio
 				removes.append(s)
 		if reaction.popup != "":
 			outcome.popups.append(reaction.popup)
-		if reaction.icon != null:
-			outcome.reaction_icons.append(reaction.icon)
+		outcome.fired_reactions.append(reaction)   # whole, art or not (#685)
 
 	# remove-wins on conflict -> net-disjoint delta sets
 	var net_added: Array[Elemental.State] = []

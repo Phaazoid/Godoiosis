@@ -77,12 +77,26 @@ func _panel_with_moves() -> Array[Unit]:
 
 
 func _move_section() -> VBoxContainer:
-	# The panel builds one ScrollContainer per section, in build_for's order; MOVE is first.
+	# The panel builds one section per header, in build_for's order; MOVE is first. WALKED by type
+	# rather than read off sections_box's direct children (#685 wrapped each section in a styled
+	# card, so the ScrollContainer sits a level deeper) -- the same shape
+	# tests/ui/test_watch_note_reaches_the_panel.gd walks for rows, and for the same reason: what
+	# this suite pins is the drag, not the panel's nesting.
 	var panel = game.squad_action_queue_control
-	for child in panel.sections_box.get_children():
+	var scroll := _first_scroll(panel.sections_box)
+	if scroll == null or scroll.get_child_count() == 0:
+		return null
+	return scroll.get_child(0) as VBoxContainer
+
+
+func _first_scroll(node: Node) -> ScrollContainer:
+	for child in node.get_children():
 		var scroll := child as ScrollContainer
-		if scroll != null and scroll.get_child_count() > 0:
-			return scroll.get_child(0) as VBoxContainer
+		if scroll != null:
+			return scroll
+		var deeper := _first_scroll(child)
+		if deeper != null:
+			return deeper
 	return null
 
 

@@ -116,7 +116,7 @@ static func term_for_element_state(state: Elemental.State) -> Term:
 static func reaction_lines() -> Array[String]:
 	var lines: Array[String] = []
 	for reaction in ReactionCatalog.get_all():
-		lines.append(_reaction_line(reaction))
+		lines.append(reaction_line(reaction))
 	return lines
 
 static func terrain_reaction_lines() -> Array[String]:
@@ -125,7 +125,9 @@ static func terrain_reaction_lines() -> Array[String]:
 		lines.append(_terrain_reaction_line(reaction))
 	return lines
 
-static func _reaction_line(r: ElementalReaction) -> String:
+# Public since #685: a queue row hovering a fired reaction explains the combo in the same composed
+# words the glossary page uses, rather than growing a second phrasing of one catalog entry.
+static func reaction_line(r: ElementalReaction) -> String:
 	var trigger: String = Elemental.display_name(r.incoming_element)
 	if r.required_state != Elemental.State.NONE:
 		trigger += " vs a %s target" % Elemental.state_display_name(r.required_state)

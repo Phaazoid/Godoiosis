@@ -138,10 +138,16 @@ func get_actor_modulate() -> Color:
 		
 	return actor.modulate
 	
+# Is this order REFUSED? The one predicate; get_ui_modulate below is derived from it, and #685's
+# queue row draws its border off the same answer -- the tint and the border cannot disagree about
+# whether a row is broken.
+func is_refused() -> bool:
+	return not is_valid
+
 func get_ui_modulate() -> Color:
-	if is_valid:
+	if not is_refused():
 		return Color.WHITE
-		
+
 	return Color(1, .25, .25, 1)
 	
 func begin_execution():

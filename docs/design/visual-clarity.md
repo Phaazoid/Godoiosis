@@ -7,7 +7,7 @@ its child [#49 Action Queue UX](https://github.com/Phaazoid/Godoiosis/issues/49)
 This is a *guidelines* doc, not a spec — it captures the principles we're holding the work to,
 plus the running order of the queue-UX checklist. Update it as items land.
 
-**Canon checked through #722 (2026-09-03).**
+**Canon checked through #727 (2026-09-03).**
 
 ## Principles
 
@@ -2711,3 +2711,99 @@ two. The title screen is the third, and a stranger who has just booted the game 
 complain about — which the same file says out loud six lines away, where the title screen's own Feedback
 button defaults to `Kind.FEEDBACK` *"because nobody reaches this screen mid-defect"*. **The predicate is
 right and only this reader is wrong**; narrow the branch, not `menu_is_up()`.
+
+## The queue panel's chrome ([#685](https://github.com/Phaazoid/Godoiosis/issues/685), BUILT 2026-09-03)
+
+The action queue was the oldest hand-authored UI in the game, and its two defects were the same
+defect at different scales. **Structurally**, `BackgroundPanel/MarginContainer` sat at absolute
+offsets — a ~64×32 box inside a 145×465 panel — so every child overflowed the container that was
+supposed to hold it. That is what clipped the `MOVE` / `ATTACK` headers, at every resolution, which
+is why #659 could rule it a pre-existing defect rather than a scaling symptom. **Per row**,
+`_overlay_behind()` stacked four facts into three 32px squares through `show_behind_parent`: the
+crown under the actor, elemental state icons under the verb, the `hp→hp` readout *over* that same
+verb, and the fired reaction's art under the target. The elemental half was drawn and effectively
+invisible, which was the dev's own complaint: *"the elemental sprites being behind the items in the
+row they effect doesn't really do the trick."*
+
+The grill this ticket owed happened in chat against a rendered mockup (2026-09-03). Three rulings,
+each of which set the ticket's size:
+
+1. **Palette → slate.** `Scenes/UnitInfoPanel.tscn`'s authored tokens verbatim, rather than a third
+   palette. The inspect panel is the newest deliberate surface and it is docked on the opposite edge
+   of the same screen; matching it collapses three disagreeing palettes to one, and dark chrome
+   holds contrast over a lit 3D board where a bright fill does not. `QueueStyle` is where they live,
+   because sections and rows are code-built and cannot carry a `.tscn` sub-resource.
+2. **One line per order, the panel widens** 145 → 216 design-px. The two-line row was rejected on
+   the count it costs: a row goes 32 → 46px, so a section shows three orders where it showed five.
+3. **Elemental effects split BY WEIGHT.** A *state applied* gets a compact chip; a *reaction that
+   fired* gets its own named line carrying the reaction's authored `popup` — a word the queue had
+   never shown at all.
+
+### The motif allocation, which is why "fun border effects" was the wrong answer
+
+The dev's own suggestion was border effects. A row **already** colours itself to say *this order is
+refused*, and Principle 2 above is one motif per meaning — so element claiming the border would
+collide with validity on any row that is both elemental and broken. The allocation:
+
+- **the BORDER is validity's** — and validity now has a predicate, `BaseAction.is_refused()`, with
+  `get_ui_modulate()` derived from it, so the border and the icon tint cannot disagree;
+- **the RAIL is element's** — a separate 3px channel down the row's left edge, which can sit beside
+  a red border without arguing with it.
+
+### What the row reads, and why two facts became recorded rather than derived
+
+- **`ResolvedOutcome.elements`** — the *surviving* elements, stamped where `_surviving_elements`
+  already computes them. Recorded rather than derived because `PlanResolver._source_elements` is
+  private and answers the **pre**-insulation question: a rail read off the authored attack would
+  claim a fire hit the target shrugged off. An insulated hit therefore honestly wears no rail.
+- **`ResolvedOutcome.fired_reactions`** replaced `reaction_icons: Array[Texture2D]` (Law #4). The
+  row needs three facts per reaction — its authored word, its art, and the element that triggered
+  it — and the reaction already holds all three, so recording the icon alone made the other two
+  unrecoverable. Three sites in the whole repo, so a swap rather than a second seam. **Its producer
+  had also been dropping any reaction with no `icon`**, which silently muted half the authored
+  catalog; that guard went with it.
+
+### A SETUP is said once
+
+`ElementalReaction.is_combo()` (`required_state != NONE`) is the fork, and it is the data model's
+own word: a NONE-requirement reaction *is* the setup half that deposits a state. `water_sets_wet`
+carries the popup `"Wet"` **and** deposits WET, so a line beside its chip says one fact twice. A
+reaction OWNS its popup whether or not it earns a line — that is what keeps the event pills
+(`"Fell 2!"`, `"Drowning!"`, `"Into the void!"`, `"Insulated!"`, all already recorded by the
+resolver and none ever shown before) from re-speaking a word the chip has said. **This was found by
+its own test, not by reasoning** — the first build drew "Wet" twice.
+
+### Element colour is a first, and it is knobs
+
+Nothing in the project answered *what colour is Fire* — the board's own forks (`ATTACK_MODULATE`,
+#422's `AIM_PALETTES`) are keyed on heals-vs-damage and watch-vs-attack, never on
+`Elemental.Element`. `Classes/ui/ElementPalette.gd` is `StateIcons`' shape for colour instead of
+art: seven `static var`s plus two projections (`color_for_element`, `color_for_state` — a state
+borrows the colour of the element that deposits it rather than owning a second set). Seven
+`GameKnobs.CLASS_KNOBS` rows on the **Elemental** tab, since a set of seven that must read against
+one another and against a slate ground is exactly what the tuning rule exists for. Deliberately
+**not** part of #422's aim palette: widening that vocabulary is
+[#675](https://github.com/Phaazoid/Godoiosis/issues/675)'s, at P3.
+
+Their re-apply is `GameKnobs._restyle_action_queue` → `SquadActionQueueControl.restyle()`, and the
+door matters: `game.refresh_action_queue` is the mission-HUD precedent's shape but re-**resolves**
+the whole plan, which a colour slider would fire once per tick. The panel already had a UI-only
+re-render (the volley toggle's, reading cached `_last_entries`), so the knob takes that.
+
+### What the drag survived on
+
+Only the row's INTERNALS changed. The row is still the sole direct child of its indent
+`MarginContainer`, and that wrapper is still a direct child of the section's inner `VBox`, so
+`row.get_parent().get_parent()` and `_row_in(wrapper).get_child(0)` are untouched — and the section
+card wraps **above** the `ScrollContainer`, never between it and its inner list, so `_render`'s
+height cap still measures what it always did. Insert a styled wrapper between row and list and
+`reorder_requested` fires with an empty actor array — silently, in production.
+`tests/ui/test_queue_row_drag.gd` is the guard; its `_move_section` helper now walks for a
+`ScrollContainer` by type, the same shape `test_watch_note_reaches_the_panel.gd` already used.
+
+### Two declared gaps
+
+A **heal** short-circuits above the elemental stage, and a **tile hit** is built by
+`TileHitAction.make` rather than `_resolve_one` — so neither records `elements`, and both wear the
+neutral rail. Stated rather than left to read as an oversight; both are one line if content ever
+wants them.

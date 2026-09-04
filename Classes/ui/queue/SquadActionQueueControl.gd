@@ -9,9 +9,20 @@ class_name SquadActionQueueControl
 # is full-rect with mouse_filter IGNORE — never STOP, or it eats every board click — and
 # BackgroundPanel is anchored to the RIGHT edge so the dock follows a window resize; don't let
 # an editor resave quietly restore absolute offsets.
+#
+# The chain under BackgroundPanel is FULL-RECT and must stay so (#685). It used to be a
+# MarginContainer at absolute offsets (~64x32) inside a 145x465 panel, so every child overflowed
+# its own box -- which is what clipped the section headers at any resolution. The panel is 216
+# design-px wide now; only offset_left moved, so the dock's 7px edge gap is unchanged.
+#
+# Its LOOK lives in QueueStyle, not here: sections and rows are code-built, so their chrome cannot
+# be a .tscn sub-resource, and one file answering "what colour is the queue" is what keeps this
+# panel from drifting off the inspect panel it was matched to.
 
 @onready var sections_box: VBoxContainer = $BackgroundPanel/MarginContainer/VBox/OuterScroll/SectionsBox
 @onready var execute_button: Button = $BackgroundPanel/MarginContainer/VBox/ExecuteButton
+@onready var title_label: Label = $BackgroundPanel/MarginContainer/VBox/Title
+@onready var background_panel: Panel = $BackgroundPanel
 
 const ACTION_ROW_SCENE := preload("res://Scenes/ActionQueueRow.tscn")
 
@@ -51,7 +62,21 @@ func _ready() -> void:
 	execute_button.text = "Execute Orders"
 	execute_button.focus_mode = Control.FOCUS_NONE
 	execute_button.pressed.connect(_execute)
+	background_panel.add_theme_stylebox_override("panel", QueueStyle.panel_box())
+	title_label.add_theme_color_override("font_color", QueueStyle.TITLE_TEXT)
 	set_process(false)
+
+# Repaint what is already on screen, with no trip through the backend (#685). The dev's element
+# colours are knobs, so a slider drag needs the rows to re-read them -- and a resolve per tick is
+# what the mission-HUD's own re-apply door would have cost. `_render` re-reads _last_entries, which
+# the volley toggle already relied on; the Execute button's visibility is preserved across it
+# because a restyle is not a plan change and must not un-hide a button a running pass hid.
+func restyle() -> void:
+	if _last_entries.is_empty():
+		return
+	var was_showing := execute_button.visible
+	_render()
+	execute_button.visible = was_showing
 
 func _execute():
 	execute_requested.emit()
@@ -144,20 +169,41 @@ func _stop_flash() -> void:
 	Pulse.stop(_flash_tween, execute_button, &"modulate", EXECUTE_BRIGHT)
 	_flash_tween = null
 
+# A section is a bordered CARD with its own header strip (#685) -- the delineation the dev asked
+# for. The wrapping sits ABOVE the ScrollContainer, never between it and its inner VBox: the height
+# cap in _render reads scroll.get_child(0), and the drag reads row -> wrapper -> this inner VBox,
+# so both stay exactly as they were.
 func _start_section(title: String) -> VBoxContainer:
+	var card := PanelContainer.new()
+	card.add_theme_stylebox_override("panel", QueueStyle.section_box())
+	card.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	sections_box.add_child(card)
+
+	var col := VBoxContainer.new()
+	col.add_theme_constant_override("separation", 0)
+	card.add_child(col)
+
 	if title != "":
+		var header_box := PanelContainer.new()
+		header_box.add_theme_stylebox_override("panel", QueueStyle.header_box())
+		header_box.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		col.add_child(header_box)
+
 		var header := Label.new()
 		header.text = title
-		sections_box.add_child(header)
+		header.add_theme_font_size_override("font_size", QueueStyle.HEADER_FONT_SIZE)
+		header.add_theme_color_override("font_color", QueueStyle.HEADER_TEXT)
+		header.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		header_box.add_child(header)
 
 	var scroll := ScrollContainer.new()
 	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
-	scroll.custom_minimum_size = Vector2(128, 0)
 	scroll.size_flags_vertical = Control.SIZE_FILL
-	sections_box.add_child(scroll)
+	col.add_child(scroll)
 
 	var inner := VBoxContainer.new()
 	inner.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	inner.add_theme_constant_override("separation", 0)   # each row wrapper carries its own gap
 	scroll.add_child(inner)
 
 	_section_scrolls.append(scroll)
@@ -202,9 +248,15 @@ func _make_row(list: VBoxContainer, action: BaseAction, indent_level: int, dragg
 	_wire_row(row)
 	return row
 
+# The wrapper carries the indent AND the row's clearance from its section card's edges -- the row
+# must stay its SOLE direct child, because both the drag's section lookup
+# (row -> wrapper -> inner VBox) and _row_in's get_child(0) are counted in hops.
 func _new_row(list: VBoxContainer, indent_level: int) -> ActionQueueRow:
 	var wrapper := MarginContainer.new()
-	wrapper.add_theme_constant_override("margin_left", indent_level * 18)
+	wrapper.add_theme_constant_override("margin_left", indent_level * 18 + QueueStyle.ROW_INSET)
+	wrapper.add_theme_constant_override("margin_right", QueueStyle.ROW_INSET)
+	wrapper.add_theme_constant_override("margin_top", QueueStyle.ROW_GAP)
+	wrapper.add_theme_constant_override("margin_bottom", QueueStyle.ROW_GAP)
 	list.add_child(wrapper)
 	var row: ActionQueueRow = ACTION_ROW_SCENE.instantiate()
 	wrapper.add_child(row)

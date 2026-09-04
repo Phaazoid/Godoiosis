@@ -382,6 +382,7 @@ const MOVEMENT_SCRIPT := "res://Classes/units/MovementComponent.gd"
 const ACTION_MENU_SCRIPT := "res://Classes/ui/ActionMenuController.gd"
 const PACING_SCRIPT := "res://Classes/core/Pacing.gd"
 const MISSION_STATUS_SCRIPT := "res://Classes/ui/MissionStatusPanel.gd"
+const ELEMENT_PALETTE_SCRIPT := "res://Classes/ui/ElementPalette.gd"
 const BOARD_SPACE_SCRIPT := "res://Classes/presentation/BoardSpace.gd"
 const SIGHT_TRACE_SCRIPT := "res://Classes/board/SightTrace2D.gd"
 
@@ -512,6 +513,30 @@ const CLASS_KNOBS: Array[Dictionary] = [
 	{"group": "Mission HUD", "label": "Clock urgency tint", "static": "URGENT_COLOR",
 		"script": MISSION_STATUS_SCRIPT,
 		"tip": "What the countdown turns once it is inside the threshold above. Reads against the plain white of an objective still pending, so it has to say urgent without reading as the red that means a mission cannot be won at all."},
+
+	# --- ELEMENT COLOURS (#685) ---------------------------------------------------------------
+	#
+	# What an element LOOKS like in 2D UI -- the action queue's rail, its state chips and its fired-
+	# reaction words all read these. On the Elemental tab beside the fire block because that tab is
+	# already where "what does this element look like" is answered; a class row rather than a node
+	# property because the store is a static on ElementPalette, which KNOBS cannot reach.
+	#
+	# TUNE THEM AS A SET, against the queue panel's slate ground AND against each other -- the whole
+	# job of these seven is that a glance at a row says which element without reading a word.
+	{"group": "Element colours", "label": "Fire", "static": "ELEMENT_FIRE", "script": ELEMENT_PALETTE_SCRIPT,
+		"tip": "Fire's colour wherever the UI names an element. The loudest of the seven by default, since a burn is usually the consequence a player most wants to spot in a queued plan."},
+	{"group": "Element colours", "label": "Water", "static": "ELEMENT_WATER", "script": ELEMENT_PALETTE_SCRIPT,
+		"tip": "Water's colour -- and, since a state borrows the colour of the element that deposits it, what a WET chip wears. Tune it against Ice, which is the one it can be confused with."},
+	{"group": "Element colours", "label": "Shock", "static": "ELEMENT_SHOCK", "script": ELEMENT_PALETTE_SCRIPT,
+		"tip": "Shock's colour. It is the payoff half of the wet/shock combo, so it wants to read as clearly DIFFERENT from Water rather than as a neighbour of it."},
+	{"group": "Element colours", "label": "Ice", "static": "ELEMENT_ICE", "script": ELEMENT_PALETTE_SCRIPT,
+		"tip": "Ice's colour, and what a CHILLED chip wears. Its near-neighbour is Water; if a chilled row and a wet row read the same at a glance, this is the dial."},
+	{"group": "Element colours", "label": "Earth", "static": "ELEMENT_EARTH", "script": ELEMENT_PALETTE_SCRIPT,
+		"tip": "Earth's colour. No authored reaction carries it yet, so this one is set for when content does -- it still has to read against the slate panel today."},
+	{"group": "Element colours", "label": "Air", "static": "ELEMENT_AIR", "script": ELEMENT_PALETTE_SCRIPT,
+		"tip": "Air's colour. Carried by damageless utility carvings like Gust, which means it is often the only mark a row has that anything elemental happened at all."},
+	{"group": "Element colours", "label": "Aether", "static": "ELEMENT_AETHER", "script": ELEMENT_PALETTE_SCRIPT,
+		"tip": "Aether's colour. The rarest of the sigils, so it can afford to be the most distinctive -- nothing else on screen should be near it."},
 
 	# --- PLAYBACK, in six sections (dev, 2026-08-27) ------------------------------------------
 	#
@@ -965,6 +990,8 @@ const GROUP_TABS: Dictionary[String, String] = {
 	# kind of thing -- a terrain STATE whose art draws objects. A new element is one line.
 	"Fire": "Elemental",
 	"Cover": "Elemental",
+	# ...and what an element looks like in 2D UI (#685), beside what it looks like on the board.
+	"Element colours": "Elemental",
 	# Playback is SIX groups on one tab (dev, 2026-08-27) -- thirty flat rows was unreadable, and a
 	# group is what draws a heading. Same two-groups-one-tab shape Water uses, three sections further.
 	# Declaration order here is only the TAB order; the section order inside the tab is the KNOBS
@@ -1145,6 +1172,13 @@ static func read_static(name: String) -> Variant:
 		"SLICE_DISABLED_COLOR": return ActionMenuController.SLICE_DISABLED_COLOR
 		"URGENT_ROUNDS": return MissionStatusPanel.URGENT_ROUNDS
 		"URGENT_COLOR": return MissionStatusPanel.URGENT_COLOR
+		"ELEMENT_FIRE": return ElementPalette.ELEMENT_FIRE
+		"ELEMENT_WATER": return ElementPalette.ELEMENT_WATER
+		"ELEMENT_SHOCK": return ElementPalette.ELEMENT_SHOCK
+		"ELEMENT_ICE": return ElementPalette.ELEMENT_ICE
+		"ELEMENT_EARTH": return ElementPalette.ELEMENT_EARTH
+		"ELEMENT_AIR": return ElementPalette.ELEMENT_AIR
+		"ELEMENT_AETHER": return ElementPalette.ELEMENT_AETHER
 	push_error("GameKnobs: unknown static '%s'" % name)
 	return null
 
@@ -1467,6 +1501,37 @@ static func write_static(host: Node3D, name: String, value: Variant) -> void:
 			MissionStatusPanel.URGENT_COLOR = value
 			_refresh_mission_status(host)
 			return
+		# The queue's rows read the palette when they are BUILT, so a dragged colour needs them
+		# rebuilt -- and through the panel's own UI-only re-render, never game.refresh_action_queue,
+		# which re-resolves the whole plan and would do so once per slider tick.
+		"ELEMENT_FIRE":
+			ElementPalette.ELEMENT_FIRE = value
+			_restyle_action_queue(host)
+			return
+		"ELEMENT_WATER":
+			ElementPalette.ELEMENT_WATER = value
+			_restyle_action_queue(host)
+			return
+		"ELEMENT_SHOCK":
+			ElementPalette.ELEMENT_SHOCK = value
+			_restyle_action_queue(host)
+			return
+		"ELEMENT_ICE":
+			ElementPalette.ELEMENT_ICE = value
+			_restyle_action_queue(host)
+			return
+		"ELEMENT_EARTH":
+			ElementPalette.ELEMENT_EARTH = value
+			_restyle_action_queue(host)
+			return
+		"ELEMENT_AIR":
+			ElementPalette.ELEMENT_AIR = value
+			_restyle_action_queue(host)
+			return
+		"ELEMENT_AETHER":
+			ElementPalette.ELEMENT_AETHER = value
+			_restyle_action_queue(host)
+			return
 		_:
 			push_error("GameKnobs: unknown static '%s'" % name)
 			return
@@ -1513,6 +1578,20 @@ static func _refresh_mission_status(host: Node3D) -> void:
 # The armed-Guard pair's re-apply, for the one knob that MOVES a marker instead of re-tinting it
 # (#450). Same shape and same reason as the mission-status one above: game.refresh_guard_markers is
 # already the door every write point uses, so a knob takes it rather than growing a second redraw.
+# The action queue's re-apply (#685). Deliberately NOT game.refresh_action_queue, which is the
+# mission-status precedent's shape: that door re-RESOLVES the plan, and an element colour is a UI
+# fact the panel can repaint from its own cached entries.
+static func _restyle_action_queue(host: Node3D) -> void:
+	if host == null:
+		return
+	var game_2d: Node2D = host.game
+	if game_2d == null:
+		return
+	var panel: SquadActionQueueControl = game_2d.squad_action_queue_control
+	if panel != null:
+		panel.restyle()
+
+
 static func _refresh_guard_markers(host: Node3D) -> void:
 	if host == null:
 		return
