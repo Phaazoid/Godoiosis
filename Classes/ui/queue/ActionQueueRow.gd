@@ -1,18 +1,35 @@
-extends HBoxContainer
+extends PanelContainer
 class_name ActionQueueRow
 
-# One row of the action-queue panel: actor sprite, action icon, target sprite, description, cancel.
-# Draws whatever BaseAction it is handed and asks the ORDER every question about itself -- icon,
-# description, validity tint, whether it may be dragged -- so a new action type needs nothing here.
-# Built by SquadActionQueueControl, which owns the drag and the sectioning.
+# One row of the action-queue panel: an element rail, the actor sprite, the action icon, the target
+# sprite, an hp->hp readout, the cancel X -- and, when the hit had elemental consequences, a second
+# CONSEQUENCE line under them. Draws whatever BaseAction it is handed and asks the ORDER every
+# question about itself (icon, description, validity, whether it may be dragged), so a new action
+# type needs nothing here. Built by SquadActionQueueControl, which owns the drag and the sectioning.
+#
+# EVERY FACT GETS ITS OWN SLOT (#685). The row used to stack four of them into three 32px squares
+# through `show_behind_parent`: state icons under the verb, the hp readout over it, reaction art
+# under the target, and the leader's crown under the actor. Nothing overlays anything now, and
+# `show_behind_parent` has no user left in this file -- do not reintroduce one.
+#
+# TWO CHANNELS, TWO MEANINGS (visual-clarity.md principle 2): the row's BORDER says whether the
+# order is refused; the RAIL says what element the hit carries. Neither may borrow the other.
+#
+# EVERY SLOT IS 16px AND THE ROW HAS NO HEIGHT FLOOR (dev, 2026-09-03): a 32px slot bought nothing
+# -- the action art is authored at 16 and was being upscaled -- and cost so much height that barely
+# one and a half rows fit the dock. The CONSEQUENCE line is indented to start under TargetTexture,
+# because a status lands on the unit RECEIVING it and reading it under the attacker is a lie about
+# who is wet.
 
-@onready var actor_texture: TextureRect = $ActorTexture
-@onready var action_icon: TextureRect = $ActionIcon
-@onready var target_texture: TextureRect = $TargetTexture
-@onready var description_label: Label = $DescriptionLabel
-@onready var cancel_button: Button = $CancelButton
-
-const CROWN_ICON := preload("res://Art/Icons/BoardIcons/CrownIcon.png")
+@onready var rail: ColorRect = $Frame/Rail
+@onready var actor_texture: TextureRect = $Frame/Pad/Body/Line/ActorTexture
+@onready var action_icon: TextureRect = $Frame/Pad/Body/Line/ActionIcon
+@onready var target_texture: TextureRect = $Frame/Pad/Body/Line/TargetTexture
+@onready var readout_card: PanelContainer = $Frame/Pad/Body/Line/ReadoutCard
+@onready var readout: Label = $Frame/Pad/Body/Line/ReadoutCard/Readout
+@onready var cancel_button: Button = $Frame/Pad/Body/Line/CancelButton
+@onready var description_label: Label = $Frame/Pad/Body/Line/DescriptionLabel
+@onready var consequence: HFlowContainer = $Frame/Pad/Body/Line/Consequence
 
 var action: BaseAction
 var draggable := false
@@ -28,27 +45,25 @@ func setup(action_ref: BaseAction):
 
 	actor_texture.texture = action.get_actor_texture()
 	actor_texture.modulate = action.get_actor_modulate()
-	# Squad leader keeps its own sprite; the crown rides behind it, shifted up like a hat.
-	if action.actor != null and action.actor.is_leader() and action.actor.has_squad():
-		_overlay_behind(actor_texture, CROWN_ICON, Vector2(0, -10))
-		
 	action_icon.texture = action.get_action_icon()
 	target_texture.texture = action.get_target_texture()
 	description_label.text = action.get_description()
 
-	if action is AttackAction:
-		_show_elemental_overlays(action as AttackAction)
-	# Any order carrying an outcome shows the readout, not attacks alone (#419) — a tile's
-	# end-of-turn damage reads as a hit like any other.
 	var outcome := action.resolved_outcome()
+	_paint_rail(outcome)
+	readout_card.visible = false   # a MOVE row has no number, and an empty card is a stray box
+	# Any order carrying an outcome shows the readout, not attacks alone (#419) -- a tile's
+	# end-of-turn damage reads as a hit like any other.
 	if outcome != null:
 		_show_hp_delta(outcome, action.aimed_at())
+		_build_consequence(outcome)
 
 	action_icon.modulate = action.get_ui_modulate()
+	_apply_row_style()
 
 	# The X keeps its slot on every row (so content stays aligned) but is inert on rows that
 	# can't be cancelled. That is exactly "not an order the player sequenced", which the order
-	# already answers for the drag — one question, one answer (#419; was a hand-listed triple).
+	# already answers for the drag -- one question, one answer (#419; was a hand-listed triple).
 	if not action.is_reorderable():
 		cancel_button.modulate.a = 0.0
 		cancel_button.disabled = true
@@ -57,11 +72,6 @@ func setup(action_ref: BaseAction):
 		cancel_button.modulate.a = 1.0
 		cancel_button.disabled = false
 		cancel_button.mouse_filter = Control.MOUSE_FILTER_STOP
-
-	# The sprites must not eat pointer input, or the row never sees the press that starts a drag.
-	actor_texture.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	action_icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	target_texture.mouse_filter = Control.MOUSE_FILTER_IGNORE
 
 	cancel_button.pressed.connect(_on_cancel_pressed)
 	mouse_entered.connect(_on_mouse_entered)
@@ -72,44 +82,87 @@ func _on_cancel_pressed():
 
 func _on_mouse_entered():
 	_hovered = true
-	queue_redraw()
+	_apply_row_style()
 	hover_changed.emit(action, true)
 
 func _on_mouse_exited():
 	_hovered = false
-	queue_redraw()
+	_apply_row_style()
 	hover_changed.emit(action, false)
 
-func _draw() -> void:
-	if _hovered:
-		draw_rect(Rect2(Vector2.ZERO, size), Color(1, 1, 1, 0.15))   # soft light behind the row
+# The row's chrome answers two independent questions at once -- refused, and hovered -- so both go
+# to QueueStyle rather than a wash drawn over whatever the panel put underneath.
+func _apply_row_style() -> void:
+	var refused: bool = action != null and action.is_refused()
+	add_theme_stylebox_override("panel", QueueStyle.row_box(refused, _hovered))
 
-func _show_elemental_overlays(atk: AttackAction) -> void:
-	if atk.resolved == null:
+# What element actually REACHED the target (post-insulation), read off the recorded outcome rather
+# than the authored attack -- a hit the target shrugged off wears no rail. First element wins; a
+# multi-element hit still says its consequences on the line below.
+func _paint_rail(outcome: ResolvedOutcome) -> void:
+	if outcome == null or outcome.elements.is_empty():
+		rail.color = QueueStyle.ink(QueueStyle.Role.RAIL_NEUTRAL)
 		return
-	# StateIcons.ICONS, not a local copy: this file kept its own one-entry twin until #357 added
-	# CHILLED, at which point the two would have disagreed about what a chill attack shows.
-	for state in atk.resolved.states_added:
-		if StateIcons.ICONS.has(state):
-			_overlay_behind(action_icon, StateIcons.ICONS[state], Vector2(0, -8))
-	for icon in atk.resolved.reaction_icons:
-		if icon != null:
-			_overlay_behind(target_texture, icon)
+	rail.color = QueueStyle.element_ink(outcome.elements[0])
 
-func _overlay_behind(host: TextureRect, tex: Texture2D, pixel_offset := Vector2.ZERO) -> void:
-	var bg := TextureRect.new()
-	bg.texture = tex
-	bg.show_behind_parent = true
-	bg.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-	bg.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-	bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	host.add_child(bg)
-	bg.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	bg.offset_left += pixel_offset.x
-	bg.offset_right += pixel_offset.x
-	bg.offset_top += pixel_offset.y
-	bg.offset_bottom += pixel_offset.y
-	
+# The consequence chips, IN the line between the target sprite and the readout (dev, 2026-09-03).
+# A STATE the hit applied gets a chip, a fired COMBO gets its BADGE word, and an event popup the
+# resolver already recorded ("Fell 2!", "Drowning!", "Insulated!") gets a neutral one. A SETUP
+# reaction is deliberately silent -- already fully said by the chip it produced, and saying it twice
+# is the noise the split-by-weight ruling exists to prevent (#685).
+#
+# TEXT ONLY, and it is a CHOICE rather than a constraint -- measured, an icon chip still fits the
+# row without clipping. It costs ~19px each, which is what decides whether a second chip WRAPS, and
+# the loudest complaint about this panel was height. `badge_name()` is the other half: the badge word
+# is what fits, and the dramatic one keeps its place in the tooltip and the glossary.
+func _build_consequence(outcome: ResolvedOutcome) -> void:
+	for state in outcome.states_added:
+		if state == Elemental.State.NONE:
+			continue
+		var tip: String = UiText.wrap("%s -- %s" % [Elemental.state_display_name(state),
+				Glossary.short(Glossary.term_for_element_state(state))])
+		consequence.add_child(_chip(QueueStyle.state_ink(state),
+				Elemental.state_display_name(state), tip))
+
+	# A reaction OWNS its popup whether or not it earns a chip: the setup half is already fully said
+	# by the state chip it just produced, so claiming the word here is what stops "Wet" appearing
+	# twice -- once as its chip and again as a neutral event pill.
+	var spoken: Array[String] = []
+	for reaction: ElementalReaction in outcome.fired_reactions:
+		if reaction.popup == "":
+			continue
+		spoken.append(reaction.popup)
+		if not reaction.is_combo():
+			continue
+		consequence.add_child(_chip(QueueStyle.element_ink(reaction.incoming_element),
+				reaction.badge_name(), UiText.wrap(Glossary.reaction_line(reaction))))
+
+	for popup in outcome.popups:
+		if spoken.has(popup):
+			continue   # a reaction's own word, said above as its chip
+		consequence.add_child(_chip(QueueStyle.ink(QueueStyle.Role.EVENT_TINT), popup, ""))
+	# No visibility toggle: the container holds the line's horizontal EXPAND whether or not it has
+	# chips, which is what keeps the cancel X on the right edge of a row that has none. It WRAPS
+	# rather than clips, so a crowded hit costs the row a second line instead of losing a word.
+
+# One tinted pill. The tooltip goes on the pill AND its label: a Label defaults to
+# MOUSE_FILTER_IGNORE, so the viewport never picks it and the text is dead however right it is.
+func _chip(tint: Color, text: String, tip: String) -> Control:
+	var pill := PanelContainer.new()
+	pill.add_theme_stylebox_override("panel", QueueStyle.tint_box(tint))
+	pill.mouse_filter = Control.MOUSE_FILTER_STOP
+	pill.tooltip_text = tip
+
+	var label := Label.new()
+	label.text = text
+	label.add_theme_font_size_override("font_size", QueueStyle.CONSEQUENCE_FONT_SIZE)
+	label.add_theme_color_override("font_color", tint)
+	label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	label.mouse_filter = Control.MOUSE_FILTER_STOP
+	label.tooltip_text = tip
+	pill.add_child(label)
+	return pill
+
 func _show_hp_delta(outcome: ResolvedOutcome, subject: Unit) -> void:
 	# target_hp_after is threaded across the whole pass (R4): for the Nth hit it already accounts
 	# for the earlier hits this combat. The raw number goes negative on a fatal hit, so the
@@ -120,27 +173,24 @@ func _show_hp_delta(outcome: ResolvedOutcome, subject: Unit) -> void:
 	var hp_after: int = LethalityRules.displayed_hp(outcome.target_hp_after,
 			LethalityRules.lifecycle_for(outcome.lethality))
 
-	var hp_label := Label.new()
-	hp_label.text = "%d->%d" % [hp_before, hp_after]
-	hp_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	hp_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	hp_label.add_theme_font_size_override("font_size", 9)
+	# The "->" spelling is load-bearing: tests/presentation/test_predicted_health.gd finds this
+	# label by searching for it and parses split("->")[1].
+	readout.text = "%d->%d" % [hp_before, hp_after]
 
 	# Team-color the readout: green when a friendly is losing HP, red for an enemy.
 	var friendly := true
 	if subject != null and is_instance_valid(subject):
 		friendly = not Team.is_enemy(subject.get_faction(), Team.Faction.PLAYER)
-	var hp_color := Color(0.4, 1.0, 0.4) if friendly else Color(1.0, 0.4, 0.4)
-	hp_label.add_theme_color_override("font_color", hp_color)
+	var role: QueueStyle.Role = QueueStyle.Role.READOUT_ALLY if friendly else QueueStyle.Role.READOUT_ENEMY
+	_show_readout(QueueStyle.ink(role))
 
-	# Outline so the digits read over the sprite without stealing a row of height.
-	hp_label.add_theme_color_override("font_outline_color", Color(0, 0, 0))
-	hp_label.add_theme_constant_override("outline_size", 4)
-
-	action_icon.add_child(hp_label)
-	hp_label.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_WIDE)
-	hp_label.offset_top = -12   # ride the bottom ~12px of the 32px icon, row height unchanged
-	
+# The number wears the same tinted card the elemental chips do (dev, 2026-09-03: the digits "are a
+# bit odd on their own... the damage numbers should have that feel too"). One card language across
+# the row, so QueueStyle.tint_box is shared rather than copied.
+func _show_readout(tint: Color) -> void:
+	readout.add_theme_color_override("font_color", tint)
+	readout_card.add_theme_stylebox_override("panel", QueueStyle.tint_box(tint))
+	readout_card.visible = readout.text != ""
 
 func is_reorderable_row() -> bool:
 	# The order answers for itself (BaseAction.is_reorderable) -- a derived counter and a
@@ -154,38 +204,25 @@ func _gui_input(event: InputEvent) -> void:
 	if event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT and event.pressed:
 		drag_requested.emit(self)
 		accept_event()
-		
+
 func setup_volley_summary(lead: AttackAction, count: int, expanded: bool) -> void:
 	action = lead
 	is_volley_header = true
 
 	actor_texture.texture = lead.get_actor_texture()
 	actor_texture.modulate = lead.get_actor_modulate()
-	if lead.actor != null and lead.actor.is_leader() and lead.actor.has_squad():
-		_overlay_behind(actor_texture, CROWN_ICON, Vector2(0, -12))
 
 	# Plain attack icon (not the lead's lethality icon — the group has many outcomes).
 	action_icon.texture = AttackAction.ATTACK_ICON
 	action_icon.modulate = lead.get_ui_modulate()
-
-	# The target slot becomes the hit-count + expand affordance.
 	target_texture.texture = null
-	var badge := Label.new()
-	badge.text = ("[-] x%d" if expanded else "[+] x%d") % count
-	badge.add_theme_font_size_override("font_size", 11)
-	badge.add_theme_color_override("font_color", Color(1, 1, 1))
-	badge.add_theme_color_override("font_outline_color", Color(0, 0, 0))
-	badge.add_theme_constant_override("outline_size", 4)
-	badge.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	badge.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	badge.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	target_texture.add_child(badge)
-	badge.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	_paint_rail(null)   # the group's hits may carry different elements; the folder's rows say which
 
-	# Sprites must not eat the drag press.
-	actor_texture.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	action_icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	target_texture.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	# The READOUT slot becomes the hit-count + expand affordance -- the group has no single hp->hp,
+	# and this is the slot that is free rather than one to draw over (#685).
+	readout.text = ("[-] x%d" if expanded else "[+] x%d") % count
+	_show_readout(QueueStyle.ink(QueueStyle.Role.HEADER_TEXT))
+	_apply_row_style()
 
 	# Cancelling the summary cancels the whole volley (it's one aim) — keep the X live.
 	cancel_button.modulate.a = 1.0

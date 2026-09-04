@@ -159,10 +159,11 @@ func resolved_outcome() -> ResolvedOutcome:
 	return resolved
 
 # A derived row shows its AIM's validity: the panel's ATTACK rows are the resolver's copies, whose
-# own is_valid is always the default true, so a refused aim could never render red.
-func get_ui_modulate() -> Color:
+# own is_valid is always the default true, so a refused aim could never render red. Overridden on the
+# PREDICATE since #685, so the row's border and its icon tint read one answer rather than two.
+func is_refused() -> bool:
 	if source_aim != null:
-		return source_aim.get_ui_modulate()
+		return source_aim.is_refused()
 	return super()
 
 # Static since #419: a derived row that is NOT an attack shows the same rung triple, and two

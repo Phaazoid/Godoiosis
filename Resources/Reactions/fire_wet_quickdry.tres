@@ -9,5 +9,6 @@ incoming_element = 1
 required_state = 1
 damage_mult = 0.5
 remove_states = Array[int]([1])
+short_name = "Dried"
 popup = "Dried Off!"
 icon = ExtResource("2_qkdry")

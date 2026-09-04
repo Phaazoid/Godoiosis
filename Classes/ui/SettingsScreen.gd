@@ -57,13 +57,22 @@ func _init() -> void:
 
 # The GlossaryScreen shape: build, wait for Close, free.
 #
-# ...plus ONE act on the way out (#422). The board's two aim layers are painted on entering an aim
-# and on leaving one, so an aim palette picked here would reach nothing until the player next aimed
-# an attack -- and the footprint layer is shared with PICKING_TARGET, so a rescue or squad-up pick
-# is drawn on it having never aimed at all. `refresh_aim_colors` is the door the Game tab's colour
-# knobs already re-apply through; this is the same act from the player's side, and it costs one call
-# at a moment the board is frozen anyway rather than a poll on a manager that has no _process by
-# design (every draw here is RETAINED -- OverlayMirror polls IT).
+# ...plus TWO acts on the way out, and they are the same act aimed at two surfaces. Both are painted
+# on an EDGE rather than polled, so a palette picked on this page reaches neither until the player
+# happens to trigger that edge.
+#
+# The BOARD (#422): its two aim layers are painted on entering an aim and on leaving one, so an aim
+# palette picked here would reach nothing until the player next aimed an attack -- and the footprint
+# layer is shared with PICKING_TARGET, so a rescue or squad-up pick is drawn on it having never aimed
+# at all. `refresh_aim_colors` is the door the Game tab's colour knobs already re-apply through.
+#
+# The QUEUE DOCK (#685 round 5): it renders on a PLAN change and nothing else, so a queue palette
+# picked here would not show until the player queued their next order -- and its chrome would have
+# waited for a relaunch. `restyle` is likewise the door those knobs already use.
+#
+# Both cost one call at a moment the board is frozen anyway, rather than a poll on surfaces that have
+# no _process by design (every draw here is RETAINED -- OverlayMirror polls THEM). A freeze stops
+# callbacks, not method calls, so ModalLock does not block either.
 static func show_screen(game_node: Node) -> void:
 	var screen := SettingsScreen.new()
 	game_node.ui_layer.add_child(screen)
@@ -71,6 +80,8 @@ static func show_screen(game_node: Node) -> void:
 	await screen.closed
 	var overlays: OverlayManager = game_node.overlay_manager
 	overlays.refresh_aim_colors()
+	var queue: SquadActionQueueControl = game_node.squad_action_queue_control
+	queue.restyle()
 	screen.queue_free()
 
 func _build(game_node: Node) -> void:

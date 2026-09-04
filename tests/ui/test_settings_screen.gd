@@ -387,6 +387,49 @@ func test_picking_an_aim_palette_repaints_the_board_on_close() -> void:
 
 
 # ==============================================================================
+#  ...and the queue dock follows one out of the page too (#685 round 5)
+# ==============================================================================
+
+# The same wire as the aim palette above, one surface over, and it needs the close for the same
+# reason: the panel is rendered on a PLAN change and nothing else, so a palette picked here reaches
+# nothing until the player queues their next order. Its CHROME is the sharper half -- that used to be
+# applied once in _ready, so without restyle's re-apply the frame would have waited for a relaunch.
+#
+# Asserted on the LIVE stylebox rather than the store, and derived from the accessor rather than a
+# literal: the palettes are the dev's to retune.
+func test_picking_a_queue_palette_repaints_the_dock_on_close() -> void:
+	var setting := PlayerSettings.Setting.QUEUE_PALETTE
+	SettingsScreen.show_screen(game)
+	await _frames(4)
+	var screen: Node = _first_modal_of(SettingsScreen)
+	var labels: Array = PlayerSettings.options_of(setting)
+	var pick: Button = _button_with_text(screen, str(labels[PlayerSettings.QueuePalette.PARCHMENT]))
+	assert_object(pick).override_failure_message(
+		"the settings page has no segment for the Parchment palette").is_not_null()
+
+	pick.button_pressed = true
+	await _frames(2)
+	assert_int(PlayerSettings.choice_of(setting)).override_failure_message(
+		"the palette segment moved and the store did not").is_equal(
+		PlayerSettings.QueuePalette.PARCHMENT)
+
+	var close: Button = _button_with_text(screen, "Close")
+	assert_object(close).is_not_null()
+	close.pressed.emit()
+	await _frames(4)
+
+	var panel: Panel = game.squad_action_queue_control.background_panel
+	var drawn: StyleBoxFlat = panel.get_theme_stylebox("panel") as StyleBoxFlat
+	assert_object(drawn).is_not_null()
+	assert_that(drawn.bg_color).override_failure_message(
+			"the queue dock did not follow the palette out of the settings page"
+			).is_equal(QueueStyle.ink(QueueStyle.Role.PANEL_BG))
+	assert_that(drawn.bg_color).override_failure_message(
+			"the dock is still wearing the slate frame -- closing the page re-rendered rows and left the chrome alone"
+			).is_not_equal(QueueStyle.PANEL_BG)
+
+
+# ==============================================================================
 #  The description is HOVER TEXT (2026-09-02)
 # ==============================================================================
 #

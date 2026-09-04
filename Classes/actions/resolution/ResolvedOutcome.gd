@@ -13,7 +13,17 @@ var states_removed: Array[Elemental.State] = []
 # state's default clock (Elemental.STATE_DEFAULT_TURNS); only meaningful for paired states.
 var state_turns: Dictionary[Elemental.State, int] = {}
 var popups: Array[String] = []
-var reaction_icons: Array[Texture2D] = []        # icons of reactions that FIRED this hit — drawn behind the target in the queue
+# The reactions that FIRED this hit, whole (#685 — was `reaction_icons: Array[Texture2D]`). The queue
+# row wants three facts per reaction — its authored word, its art, and the element that triggered it —
+# and the reaction already holds all three, so recording the icon alone made the other two
+# unrecoverable. Producer no longer skips an icon-less reaction: half the authored catalog has a
+# popup and no art, and under that guard those said nothing at all.
+var fired_reactions: Array[ElementalReaction] = []
+# The elements that actually REACHED the target — post-insulation, so an absorbed hit records none
+# (#685). Recorded rather than derived: `PlanResolver._source_elements` is private and answers the
+# pre-insulation question, so the queue row's element rail would otherwise claim a fire hit that the
+# target shrugged off. Empty on a heal, which short-circuits above the elemental stage.
+var elements: Array[Elemental.Element] = []
 var target_hp_after: int = 0                     # threaded hypothetical HP after this hit (R4)
 var knockback_applied: bool = false               # #84: this hit shoved the target (Kinetic Mace Blowback)
 var knockback_from: Vector2i = Vector2i.ZERO       # the cell it was standing on BEFORE this shove

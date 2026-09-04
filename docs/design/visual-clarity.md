@@ -7,7 +7,7 @@ its child [#49 Action Queue UX](https://github.com/Phaazoid/Godoiosis/issues/49)
 This is a *guidelines* doc, not a spec — it captures the principles we're holding the work to,
 plus the running order of the queue-UX checklist. Update it as items land.
 
-**Canon checked through #722 (2026-09-03).**
+**Canon checked through #729 (2026-09-04).**
 
 ## Principles
 
@@ -2711,3 +2711,268 @@ two. The title screen is the third, and a stranger who has just booted the game 
 complain about — which the same file says out loud six lines away, where the title screen's own Feedback
 button defaults to `Kind.FEEDBACK` *"because nobody reaches this screen mid-defect"*. **The predicate is
 right and only this reader is wrong**; narrow the branch, not `menu_is_up()`.
+
+## The queue panel's chrome ([#685](https://github.com/Phaazoid/Godoiosis/issues/685), BUILT 2026-09-03)
+
+The action queue was the oldest hand-authored UI in the game, and its two defects were the same
+defect at different scales. **Structurally**, `BackgroundPanel/MarginContainer` sat at absolute
+offsets — a ~64×32 box inside a 145×465 panel — so every child overflowed the container that was
+supposed to hold it. That is what clipped the `MOVE` / `ATTACK` headers, at every resolution, which
+is why #659 could rule it a pre-existing defect rather than a scaling symptom. **Per row**,
+`_overlay_behind()` stacked four facts into three 32px squares through `show_behind_parent`: the
+crown under the actor, elemental state icons under the verb, the `hp→hp` readout *over* that same
+verb, and the fired reaction's art under the target. The elemental half was drawn and effectively
+invisible, which was the dev's own complaint: *"the elemental sprites being behind the items in the
+row they effect doesn't really do the trick."*
+
+The grill this ticket owed happened in chat against a rendered mockup (2026-09-03). Three rulings,
+each of which set the ticket's size:
+
+1. **Palette → slate.** `Scenes/UnitInfoPanel.tscn`'s authored tokens verbatim, rather than a third
+   palette. The inspect panel is the newest deliberate surface and it is docked on the opposite edge
+   of the same screen; matching it collapses three disagreeing palettes to one, and dark chrome
+   holds contrast over a lit 3D board where a bright fill does not. `QueueStyle` is where they live,
+   because sections and rows are code-built and cannot carry a `.tscn` sub-resource.
+2. **One line per order, the panel widens** 145 → 216 design-px. The two-line row was rejected on
+   the count it costs: a row goes 32 → 46px, so a section shows three orders where it showed five.
+3. **Elemental effects split BY WEIGHT.** A *state applied* gets a compact chip; a *reaction that
+   fired* gets its own named line carrying the reaction's authored `popup` — a word the queue had
+   never shown at all.
+
+### The motif allocation, which is why "fun border effects" was the wrong answer
+
+The dev's own suggestion was border effects. A row **already** colours itself to say *this order is
+refused*, and Principle 2 above is one motif per meaning — so element claiming the border would
+collide with validity on any row that is both elemental and broken. The allocation:
+
+- **the BORDER is validity's** — and validity now has a predicate, `BaseAction.is_refused()`, with
+  `get_ui_modulate()` derived from it, so the border and the icon tint cannot disagree;
+- **the RAIL is element's** — a separate 3px channel down the row's left edge, which can sit beside
+  a red border without arguing with it.
+
+### What the row reads, and why two facts became recorded rather than derived
+
+- **`ResolvedOutcome.elements`** — the *surviving* elements, stamped where `_surviving_elements`
+  already computes them. Recorded rather than derived because `PlanResolver._source_elements` is
+  private and answers the **pre**-insulation question: a rail read off the authored attack would
+  claim a fire hit the target shrugged off. An insulated hit therefore honestly wears no rail.
+- **`ResolvedOutcome.fired_reactions`** replaced `reaction_icons: Array[Texture2D]` (Law #4). The
+  row needs three facts per reaction — its authored word, its art, and the element that triggered
+  it — and the reaction already holds all three, so recording the icon alone made the other two
+  unrecoverable. Three sites in the whole repo, so a swap rather than a second seam. **Its producer
+  had also been dropping any reaction with no `icon`**, which silently muted half the authored
+  catalog; that guard went with it.
+
+### A SETUP is said once
+
+`ElementalReaction.is_combo()` (`required_state != NONE`) is the fork, and it is the data model's
+own word: a NONE-requirement reaction *is* the setup half that deposits a state. `water_sets_wet`
+carries the popup `"Wet"` **and** deposits WET, so a line beside its chip says one fact twice. A
+reaction OWNS its popup whether or not it earns a line — that is what keeps the event pills
+(`"Fell 2!"`, `"Drowning!"`, `"Into the void!"`, `"Insulated!"`, all already recorded by the
+resolver and none ever shown before) from re-speaking a word the chip has said. **This was found by
+its own test, not by reasoning** — the first build drew "Wet" twice.
+
+### Element colour is a first, and it is knobs
+
+Nothing in the project answered *what colour is Fire* — the board's own forks (`ATTACK_MODULATE`,
+#422's `AIM_PALETTES`) are keyed on heals-vs-damage and watch-vs-attack, never on
+`Elemental.Element`. `Classes/ui/ElementPalette.gd` is `StateIcons`' shape for colour instead of
+art: seven `static var`s plus two projections (`color_for_element`, `color_for_state` — a state
+borrows the colour of the element that deposits it rather than owning a second set). Seven
+`GameKnobs.CLASS_KNOBS` rows on the **Elemental** tab, since a set of seven that must read against
+one another and against a slate ground is exactly what the tuning rule exists for. Deliberately
+**not** part of #422's aim palette: widening that vocabulary is
+[#675](https://github.com/Phaazoid/Godoiosis/issues/675)'s, at P3.
+
+Their re-apply is `GameKnobs._restyle_action_queue` → `SquadActionQueueControl.restyle()`, and the
+door matters: `game.refresh_action_queue` is the mission-HUD precedent's shape but re-**resolves**
+the whole plan, which a colour slider would fire once per tick. The panel already had a UI-only
+re-render (the volley toggle's, reading cached `_last_entries`), so the knob takes that.
+
+### What the drag survived on
+
+Only the row's INTERNALS changed. The row is still the sole direct child of its indent
+`MarginContainer`, and that wrapper is still a direct child of the section's inner `VBox`, so
+`row.get_parent().get_parent()` and `_row_in(wrapper).get_child(0)` are untouched — and the section
+card wraps **above** the `ScrollContainer`, never between it and its inner list, so `_render`'s
+height cap still measures what it always did. Insert a styled wrapper between row and list and
+`reorder_requested` fires with an empty actor array — silently, in production.
+`tests/ui/test_queue_row_drag.gd` is the guard; its `_move_section` helper now walks for a
+`ScrollContainer` by type, the same shape `test_watch_note_reaches_the_panel.gd` already used.
+
+### Two declared gaps
+
+A **heal** short-circuits above the elemental stage, and a **tile hit** is built by
+`TileHitAction.make` rather than `_resolve_one` — so neither records `elements`, and both wear the
+neutral rail. Stated rather than left to read as an oversight; both are one line if content ever
+wants them.
+
+### Round 2 — the play-check rulings (dev, 2026-09-03)
+
+He liked the direction and gave six corrections. Four are worth keeping as rules rather than as a
+changelog, because each names something the first pass got structurally wrong rather than merely
+mis-tuned.
+
+**A ROW SITS ABOVE ITS SECTION, NOT IN IT.** The first pass put the row at `0.137` against a `0.09`
+section card — a step of nothing, and his reading was the honest one: *"it doesn't make the action
+queue row stand out from the rest of the menu, and it's hard to see things against the background."*
+The section is the **gutter** and the row is the **card lying on it**, so the contrast belongs on
+the row (`0.23`), not in a darker section. Darkening the section instead would have made the panel
+muddier while leaving the row exactly as hard to read.
+
+**A 32px SLOT BOUGHT NOTHING AND COST THE WHOLE DOCK.** *"These rows are too tall. We can barely fit
+one and a half of them on screen."* The action art is authored at 16 and was being upscaled 2×, so
+the height was paid for no detail at all. Every slot is 16 now, the leader's crown is cut, and the
+row lost its `custom_minimum_size` height floor of 34 — which would have held rows tall whatever the
+slots did, and is the kind of leftover that makes a size change look like it did nothing.
+
+**ONE SCROLL IN THE PANEL, AND IT IS THE OUTER ONE.** *"If there is space available, we shouldn't be
+using scrollbars, we should be stretching to fit it until there's none left."* Each section owned a
+`ScrollContainer` capped at `SECTION_MAX_HEIGHT = 160`, so a section began scrolling while the dock
+still had 300px of empty space under it. Sections take their natural height now; only `OuterScroll`
+catches overflow. That deleted the cap, `_section_scrolls`, and `_render`'s measure-after-a-frame
+pass together — **a per-section cap is a second answer to "how tall may this get", and the panel's
+own height was always the first one.**
+
+**A STATUS BELONGS UNDER THE UNIT RECEIVING IT.** The consequence line started at the row's left
+edge, i.e. under the ATTACKER, which he read immediately as *"confusing and unintuitive... that needs
+to be below the image of the unit who is getting the status."* It is not a layout preference — a
+chip under the attacker is a **lie about who is wet**. `ConsequenceRow` is indented to start under
+`TargetTexture`.
+
+The other two were straightforward: the `hp→hp` digits get the same tinted card the chips wear
+(*"all the other text looks much more designed and professional, the damage numbers should have that
+feel too"*), and Execute had **no stylebox at all**, so it was drawing the engine's default grey on
+a grey panel — crimson now, with the disabled look still `EXECUTE_DULL`'s modulate over it rather
+than a second style to keep in sync.
+
+**The trap the readout card set on the way in**, worth knowing before adding any slot to this row:
+the card carried the line's horizontal `size_flags`, so a row that HIDES it — a move, which has no
+number — let the whole line collapse and packed the cancel X against the target sprite, breaking the
+row's own "the X keeps its slot on every row so content stays aligned" rule. **A slot that can be
+hidden must not be the slot holding the expand**; a dedicated `Slack` control owns it now, pinned by
+`test_the_cancel_x_holds_the_right_edge_on_a_row_with_no_number` (falsified: X at 1146 against 1183).
+
+### Round 3 — the chips come up into the line (dev, 2026-09-03)
+
+Two corrections, and the second one reversed a rule round 2 had just written down.
+
+**"ALL THE ICONS" MEANT THE UPSCALED ONES.** Round 2 read *"all the icons should be shrunk down to
+the 16x16 size, including the arrows and the crossing swords"* as covering the unit sprites too,
+on the reasoning that leaving them at 32 would keep rows 32px tall and not solve the height problem.
+That was the wrong half to give up: *"I like that the big ones shrunk, but the small ones, the unit
+sprites, shrunk too, and now they're not very readable."* The action art is authored at 16 and was
+being drawn at 32 — shrinking it costs nothing and was the whole point. A unit's map sprite is
+authored at 32 and shrinking it destroys the one thing a row is read by. **The rule the two share:
+shrink what was being UPSCALED, never what was authored at the size it draws.**
+
+**A CONSEQUENCE CHIP BELONGS IN THE LINE, NOT UNDER IT.** Round 2 indented the chips to start under
+`TargetTexture`, which satisfied *"below the image of the unit who is getting the status"* and cost
+a whole second line per elemental hit. He spotted the slack it was ignoring: *"we have room between
+the rightmost unit and the damage, I think instead of fitting the statuses in an under row, we could
+fit them there."* Measured, that gap is **~40px** on a 216px dock — the line is 181 wide and its
+fixed contents (32 + 16 + 32 sprites, a 35px readout card, a 16px X, five 2px gaps) take 141.
+
+So `Consequence` is now an `HFlowContainer` sitting **in the line** between the target sprite and the
+readout, and it does three jobs at once:
+
+- **it is the slack**, holding the line's horizontal `EXPAND` whether or not it has chips — which is
+  what keeps the cancel X on the right edge of a numberless row, the thing round 2's readout card
+  nearly broke and needed a dedicated spacer for;
+- **it wraps rather than clips**, so a crowded hit costs the row a second line and never a word
+  (measured: two chips take the row 24 → 40px, with its minimum at 209 inside a 215px section);
+- **it keeps the receiver rule** — a chip after the target sprite is still not a chip beside the
+  attacker, which is the part that was never about layout.
+
+**THE BADGE WORD IS ITS OWN FIELD.** *"Electrocuted is a long word, so we could shorten it to Shock
+to make it fit."* Shortening the authored `popup` would have done it in zero code, and it is what he
+proposed — but `popup` is read by the glossary's composed interaction line and by the bug report,
+where there is room for the dramatic word and it is the better one. `ElementalReaction.short_name`
+is therefore a **declared** second representation (Law #4): two genuinely different questions, one
+accessor (`badge_name()`, falling back to `popup`), and blank on the reactions whose word already
+fits. Authored: `Shock`, `Temp Shock`, `Dried`, `Deep Chill`.
+
+**One claim from this round that was wrong and is worth keeping wrong-side-up:** the first version of
+the chip comment said text-only was forced by the measurement. It is not — a mutant put the 16px icon
+back and nothing clipped. Text-only is a *choice* about height (an icon costs ~19px, which is what
+decides whether a second chip wraps), and the icon keeps its place in the tooltip. **A comment that
+says "measured" has to name a measurement that was actually taken**, or the next reader inherits a
+constraint that does not exist.
+
+**Round 4, one line, and it is a rule about REUSE.** *"The text for the void and falling is grey
+against grey, which is not readable."* Those pills — `"Fell 2!"`, `"Drowning!"`, `"Into the void!"`,
+`"Insulated!"` — were tinted `ElementPalette.NEUTRAL`, which is the **rail's off state**: a
+structural grey deliberately chosen to *disappear*. Reusing it as TEXT inverted its whole purpose
+(measured at the fix: luma 0.29 against a row at 0.23, a delta of 0.06). `QueueStyle.EVENT_TINT` is
+its own value now, deliberately **off the element wheel** — every element colour is saturated, so a
+cool near-white cannot be mistaken for one, and the obvious warm amber would have collided with
+Earth's ochre. It takes a knob, which is the one exception to this file's *no knobs on the chrome*:
+the chrome mirrors a panel that has none, while this is a colour the queue INVENTS and that has to
+read against the element chips beside it. **The general form: a colour picked to recede cannot be
+promoted to a colour that must be read** — check what a value was chosen FOR before borrowing it.
+
+### Round 5 — the losing palette comes back as a CHOICE
+
+*"I'm looking at your plan again, and I really do like the parchment option too. Can you give me a
+player setting toggle for it?"* The grill offered Slate and Parchment, he picked Slate, and round 5
+hands the loser back without taking anything away: `PlayerSettings.QUEUE_PALETTE`, two options, and
+no UI work at all — the settings page is a projection of `DEFS`. That is [#422](https://github.com/Phaazoid/Godoiosis/issues/422)'s
+relationship exactly — **the dev authors what is IN a palette, the player picks BETWEEN palettes** —
+so nothing moved out of `GameKnobs` and nothing became a `Scale` row.
+
+**The fork that set the ticket's size** (dev ruling, 2026-09-04): the seven element colours are tuned
+to *glow* against a dark ground and read as pastel mush on cream, so Parchment either authors a
+second seven or **adapts** the one authored set. His words: *"I'm good with adapting the colors to
+work with the cream background."*
+
+**The split that falls out of that is the reusable part:**
+
+| | what it is | how a palette gets it |
+|---|---|---|
+| an element colour | **semantic** — fire is orange on any ground | **ADAPTED** — hue carried through untouched, only ink weight moves |
+| a chrome colour | **a role** — *the text that reads against the card* | **AUTHORED** — near-white on slate INVERTS to near-black on cream |
+
+An inversion has nothing to derive from, which is why the 22 chrome roles are a table and the seven
+elements are a function.
+
+**It also corrects a line this project had written down as the cost of palettes.** `CLAUDE.md` says a
+palette *"leaves the knob tuning a set nobody is looking at"* — true of `OverlayManager.AIM_PALETTES`,
+whose alternatives **re-author** their colours, so a colour knob is inert while one is picked.
+Parchment derives its element inks from the same seven statics those knobs write, so **dragging the
+Fire slider moves both palettes**. That is the cost of RE-AUTHORING, not of palettes: a palette whose
+values are semantic should adapt, and only a palette of *roles* has to be authored twice.
+
+**DEFAULT is not a row in `PALETTES`** — #422's own ruling, load-bearing twice over here: a DEFAULT
+row would be a *copy* of the authored consts, so `EVENT_TINT`'s knob would write a static the panel
+had stopped reading, and the copy would drift the first time either end was tuned. `ink()` falls
+through to the authored value instead, and `_authored` is a `match` rather than a const Dictionary
+because a const table would snapshot that static at parse time.
+
+**Two things had to grow before a swap could reach the screen, and both were invisible while there
+was only one palette:**
+
+- **`_cached` keys on the PALETTE.** Every stylebox is built out of `ink()`, so a cache keyed on the
+  name alone hands the parchment panel the slate box it built first — the chips repaint and the
+  frame, the sections and the rows do not. The key lives inside `_cached` rather than at each caller,
+  so nothing has to remember.
+- **`restyle()` re-applies the CHROME.** It was set once in `_ready`, which is correct exactly as
+  long as a palette never changes: a swap re-rendered every row and left the frame, the title and
+  Execute wearing whatever the game booted in. It sits above the empty-queue early return on purpose
+  — an empty dock has no rows to re-render, and its panel still has to be right before the next order
+  shows it.
+
+Both are the same shape as `SettingsScreen.show_screen`'s exit act, which now carries two of them:
+**a surface painted on an EDGE rather than polled needs someone to fire that edge when a setting
+moves**, and the settings page is where that someone lives.
+
+**What the tests deliberately do NOT pin.** The contrast law runs against **Parchment only**.
+Parchment's ink is *derived*, so its readability is a property of the adaptation rather than of any
+authored colour — an HSV colour at value `v` has luma ≤ `v`, so the floor is met by construction for
+every hue the dev could ever pick, and only tuning the ink DEPTH pale can trip it. Putting the same
+floor over the authored slate seven would quietly make seven knobs un-tunable past a threshold, which
+is a constraint this ticket never agreed to and the tuning razor forbids.
+
+The two ink values take knobs of their own and are **inert while Slate is live** — #422's cost
+pointed the other way, and acceptable here for a reason it is not there: you tune them while
+*looking* at Parchment, and the panel repaints under the slider.

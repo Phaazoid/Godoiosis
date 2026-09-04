@@ -33,6 +33,7 @@ enum Setting {
 	PHOTOSENSITIVITY,
 	BATTLE_ZOOM_MODE,
 	AIM_PALETTE,
+	QUEUE_PALETTE,
 	UNHOVERED_BAR_NUMBERS,
 	CAMERA_PAN_SPEED,
 	MOUSE_SENSITIVITY,
@@ -93,6 +94,24 @@ enum AimPalette {
 	HIGH_CONTRAST,   # magenta / cyan / white, for legibility over busy art rather than for CVD
 }
 
+## Which colours the action-queue dock wears (#685). The same DECLARED-duplicate rule as HealthBars,
+## BattleZoom and AimPalette: these values ARE the indices into the row's `options`, and THE ENUM IS
+## AUTHORITATIVE.
+##
+## DEFAULT is a FALL-THROUGH, exactly as AimPalette's is -- QueueStyle.PALETTES holds no row for it
+## and reads its own authored consts instead, which is what keeps the shipped look and the dev's
+## knobs ONE value rather than two that can drift. It is labelled "Slate" on the page because that is
+## the palette's NAME: the member says what it DOES, the label says what it IS.
+##
+## The seven ELEMENT colours are deliberately not in that table at all -- they ADAPT. An element's
+## HUE is semantic and never moves; only its ink weight is a matter of which ground it sits on. That
+## is what makes this the first palette here whose alternative leaves the dev's colour knobs LIVE,
+## where AIM_PALETTE's alternatives make theirs inert. See presentation-effects.md.
+enum QueuePalette {
+	DEFAULT,     # slate, matched to the inspect panel opposite it -- #685's shipped look
+	PARCHMENT,   # #685's mockup: dark frame, cream cards, dark ink
+}
+
 # Per-setting metadata. Literal-only, so it can be a compile-time const (the Experiments.DEFS shape).
 #   title   — the row label
 #   desc    — one line under it, in the player's terms rather than the code's
@@ -132,6 +151,12 @@ const DEFS := {
 		"desc": "Which colours the board paints while you are aiming -- the reach an attack covers, the reach a heal covers, and the cells your pick would actually hit. Colour-blind safe tells an attack from a heal without leaning on red against green.",
 		"options": ["Default", "Colour-blind safe", "High contrast"],
 		"default": AimPalette.DEFAULT,
+	},
+	Setting.QUEUE_PALETTE: {
+		"title": "Action queue colours",
+		"desc": "Which colours the order panel on the right wears. Slate is dark and matches the unit panel on the opposite edge; Parchment is warm paper with dark ink. The element colours follow either way -- fire is orange in both.",
+		"options": ["Slate", "Parchment"],
+		"default": QueuePalette.DEFAULT,
 	},
 	Setting.UNHOVERED_BAR_NUMBERS: {
 		"title": "Numbers on unhovered bars",

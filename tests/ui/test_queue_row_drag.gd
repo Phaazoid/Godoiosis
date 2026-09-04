@@ -77,12 +77,24 @@ func _panel_with_moves() -> Array[Unit]:
 
 
 func _move_section() -> VBoxContainer:
-	# The panel builds one ScrollContainer per section, in build_for's order; MOVE is first.
+	# The panel builds one section per header in build_for's order, so the FIRST row in tree order is
+	# a MOVE row. Reached through the row rather than by walking the panel's nesting, and the walk is
+	# the production one: `row -> indent wrapper -> the section's row list` is exactly the hop count
+	# _on_row_drag_requested takes, so this helper cannot pass while the drag's own lookup is broken.
 	var panel = game.squad_action_queue_control
-	for child in panel.sections_box.get_children():
-		var scroll := child as ScrollContainer
-		if scroll != null and scroll.get_child_count() > 0:
-			return scroll.get_child(0) as VBoxContainer
+	var row := _first_row(panel.sections_box)
+	if row == null:
+		return null
+	return row.get_parent().get_parent() as VBoxContainer
+
+
+func _first_row(node: Node) -> ActionQueueRow:
+	if node is ActionQueueRow:
+		return node as ActionQueueRow
+	for child in node.get_children():
+		var hit := _first_row(child)
+		if hit != null:
+			return hit
 	return null
 
 

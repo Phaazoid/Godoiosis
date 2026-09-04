@@ -9,14 +9,23 @@ class_name SquadActionQueueControl
 # is full-rect with mouse_filter IGNORE — never STOP, or it eats every board click — and
 # BackgroundPanel is anchored to the RIGHT edge so the dock follows a window resize; don't let
 # an editor resave quietly restore absolute offsets.
+#
+# The chain under BackgroundPanel is FULL-RECT and must stay so (#685). It used to be a
+# MarginContainer at absolute offsets (~64x32) inside a 145x465 panel, so every child overflowed
+# its own box -- which is what clipped the section headers at any resolution. The panel is 216
+# design-px wide now; only offset_left moved, so the dock's 7px edge gap is unchanged.
+#
+# Its LOOK lives in QueueStyle, not here: sections and rows are code-built, so their chrome cannot
+# be a .tscn sub-resource, and one file answering "what colour is the queue" is what keeps this
+# panel from drifting off the inspect panel it was matched to. That file answers it for TWO palettes
+# since round 5 -- the player picks, this panel only re-applies.
 
 @onready var sections_box: VBoxContainer = $BackgroundPanel/MarginContainer/VBox/OuterScroll/SectionsBox
 @onready var execute_button: Button = $BackgroundPanel/MarginContainer/VBox/ExecuteButton
+@onready var title_label: Label = $BackgroundPanel/MarginContainer/VBox/Title
+@onready var background_panel: Panel = $BackgroundPanel
 
 const ACTION_ROW_SCENE := preload("res://Scenes/ActionQueueRow.tscn")
-
-# A section shows up to this many pixels of rows before it scrolls internally. Tune to taste.
-const SECTION_MAX_HEIGHT := 160
 
 enum ExecuteState { DISABLED, READY, ALL_COMMITTED }
 
@@ -25,7 +34,6 @@ const EXECUTE_BRIGHT := Color(1, 1, 1, 1)
 const EXECUTE_FLASH := Color(0.5, 1.0, 0.5, 1.0)
 
 var current_squad = null
-var _section_scrolls: Array[ScrollContainer] = []
 var _flash_tween: Tween = null
 var _drag_row: ActionQueueRow = null
 var _drag_section: VBoxContainer = null
@@ -51,7 +59,44 @@ func _ready() -> void:
 	execute_button.text = "Execute Orders"
 	execute_button.focus_mode = Control.FOCUS_NONE
 	execute_button.pressed.connect(_execute)
+	_apply_chrome()
 	set_process(false)
+
+# The PANEL's own chrome, as against the rows' -- the frame, the title and Execute. Its own function
+# only so restyle() can re-apply it; see there for why that matters.
+func _apply_chrome() -> void:
+	background_panel.add_theme_stylebox_override("panel", QueueStyle.panel_box())
+	title_label.add_theme_color_override("font_color", QueueStyle.ink(QueueStyle.Role.TITLE_TEXT))
+	# The engine's default button chrome is grey on a grey panel, so Execute vanished into the dock
+	# (dev, 2026-09-03). Its DISABLED look is still set_execute_state's EXECUTE_DULL modulate over
+	# this, rather than a second stylebox nobody would keep in sync.
+	execute_button.add_theme_stylebox_override("normal", QueueStyle.execute_box())
+	execute_button.add_theme_stylebox_override("hover", QueueStyle.execute_hover_box())
+	execute_button.add_theme_stylebox_override("pressed", QueueStyle.execute_hover_box())
+	execute_button.add_theme_stylebox_override("disabled", QueueStyle.execute_box())
+	var execute_text := QueueStyle.ink(QueueStyle.Role.EXECUTE_TEXT)
+	execute_button.add_theme_color_override("font_color", execute_text)
+	execute_button.add_theme_color_override("font_hover_color", execute_text)
+	execute_button.add_theme_color_override("font_disabled_color", execute_text)
+
+# Repaint what is already on screen, with no trip through the backend (#685). The dev's element
+# colours are knobs, so a slider drag needs the rows to re-read them -- and a resolve per tick is
+# what the mission-HUD's own re-apply door would have cost. `_render` re-reads _last_entries, which
+# the volley toggle already relied on; the Execute button's visibility is preserved across it
+# because a restyle is not a plan change and must not un-hide a button a running pass hid.
+#
+# THE CHROME IS RE-APPLIED FIRST AND UNCONDITIONALLY (round 5). It used to be set once in _ready,
+# which is invisible while a palette is fixed and wrong the moment one is not: a swap re-rendered
+# every row and left the frame, the title and Execute wearing the palette the game booted in. Above
+# the early return on purpose -- an empty queue has no rows to re-render, and its panel still has to
+# be right before the next order shows it.
+func restyle() -> void:
+	_apply_chrome()
+	if _last_entries.is_empty():
+		return
+	var was_showing := execute_button.visible
+	_render()
+	execute_button.visible = was_showing
 
 func _execute():
 	execute_requested.emit()
@@ -112,16 +157,6 @@ func _render() -> void:
 			_:
 				i += 1
 
-	# Cap each section's height once rows have a measured min size (snapshot: a re-render can
-	# rebuild _section_scrolls while we await).
-	var scrolls := _section_scrolls.duplicate()
-	await get_tree().process_frame
-	for scroll in scrolls:
-		if not is_instance_valid(scroll) or scroll.get_child_count() == 0:
-			continue
-		var inner: Control = scroll.get_child(0)
-		var content_h := inner.get_combined_minimum_size().y
-		scroll.custom_minimum_size.y = min(content_h, SECTION_MAX_HEIGHT)
 
 func set_execute_state(state: ExecuteState) -> void:
 	_stop_flash()
@@ -144,23 +179,42 @@ func _stop_flash() -> void:
 	Pulse.stop(_flash_tween, execute_button, &"modulate", EXECUTE_BRIGHT)
 	_flash_tween = null
 
+# A section is a bordered CARD with its own header strip (#685) -- the delineation the dev asked
+# for. ONE SCROLL IN THE PANEL, THE OUTER ONE: each section used to own a ScrollContainer capped at
+# 160px, so a section began scrolling while the dock still had empty space below it -- "if there is
+# space available, we shouldn't be using scrollbars, we should be stretching to fit it until there's
+# none left" (dev, 2026-09-03). Sections take their natural height now and OuterScroll handles the
+# overflow, which deleted the cap, the scroll list and the measure-after-a-frame pass with it.
+#
+# The row list is still a plain VBox whose children are the per-row indent wrappers, so the drag's
+# row -> wrapper -> list walk is unchanged.
 func _start_section(title: String) -> VBoxContainer:
+	var card := PanelContainer.new()
+	card.add_theme_stylebox_override("panel", QueueStyle.section_box())
+	card.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	sections_box.add_child(card)
+
+	var col := VBoxContainer.new()
+	col.add_theme_constant_override("separation", 0)
+	card.add_child(col)
+
 	if title != "":
+		var header_box := PanelContainer.new()
+		header_box.add_theme_stylebox_override("panel", QueueStyle.header_box())
+		header_box.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		col.add_child(header_box)
+
 		var header := Label.new()
 		header.text = title
-		sections_box.add_child(header)
-
-	var scroll := ScrollContainer.new()
-	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
-	scroll.custom_minimum_size = Vector2(128, 0)
-	scroll.size_flags_vertical = Control.SIZE_FILL
-	sections_box.add_child(scroll)
+		header.add_theme_font_size_override("font_size", QueueStyle.HEADER_FONT_SIZE)
+		header.add_theme_color_override("font_color", QueueStyle.HEADER_TEXT)
+		header.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		header_box.add_child(header)
 
 	var inner := VBoxContainer.new()
 	inner.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	scroll.add_child(inner)
-
-	_section_scrolls.append(scroll)
+	inner.add_theme_constant_override("separation", 0)   # each row wrapper carries its own gap
+	col.add_child(inner)
 	return inner
 
 func _is_attack_action(a: BaseAction) -> bool:
@@ -202,9 +256,15 @@ func _make_row(list: VBoxContainer, action: BaseAction, indent_level: int, dragg
 	_wire_row(row)
 	return row
 
+# The wrapper carries the indent AND the row's clearance from its section card's edges -- the row
+# must stay its SOLE direct child, because both the drag's section lookup
+# (row -> wrapper -> inner VBox) and _row_in's get_child(0) are counted in hops.
 func _new_row(list: VBoxContainer, indent_level: int) -> ActionQueueRow:
 	var wrapper := MarginContainer.new()
-	wrapper.add_theme_constant_override("margin_left", indent_level * 18)
+	wrapper.add_theme_constant_override("margin_left", indent_level * 18 + QueueStyle.ROW_INSET)
+	wrapper.add_theme_constant_override("margin_right", QueueStyle.ROW_INSET)
+	wrapper.add_theme_constant_override("margin_top", QueueStyle.ROW_GAP)
+	wrapper.add_theme_constant_override("margin_bottom", QueueStyle.ROW_GAP)
 	list.add_child(wrapper)
 	var row: ActionQueueRow = ACTION_ROW_SCENE.instantiate()
 	wrapper.add_child(row)
@@ -232,7 +292,6 @@ func _apply_visibility() -> void:
 	visible = _content_shown and not _hidden_for_playback
 
 func _clear_sections():
-	_section_scrolls.clear()
 	for child in sections_box.get_children():
 		child.queue_free()
 

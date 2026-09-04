@@ -36,3 +36,19 @@ class_name ElementalReaction
 @export var popup: String = ""        # e.g. "Electrocuted!"
 @export var vfx_tag: String = ""
 @export var icon: Texture2D           # queue/board symbol shown when this reaction FIRES (e.g. the spark)
+
+
+# A COMBO needs a state already on the target; a NONE-requirement reaction is the SETUP half that
+# deposits one (see the header). The queue row asks this to decide whether a fired reaction earns its
+# own named line, or is already fully said by the state chip it produced (#685).
+func is_combo() -> bool:
+	return required_state != Elemental.State.NONE
+
+# The BADGE word, for a surface with no room for the dramatic one. A DECLARED second representation
+# (Law #4): `popup` is what a reaction SHOUTS -- the glossary's composed interaction line and the bug
+# report read it -- and this is what fits a ~40px chip in the action queue's row, measured. Blank
+# means the popup already fits, so a reaction needs this only when its word is long.
+@export var short_name: String = ""
+
+func badge_name() -> String:
+	return short_name if short_name != "" else popup

@@ -2,7 +2,7 @@
 
 **Status: an idea wall plus two locked decisions.** Solicited by the dev on 2026-08-12, the day Stage 0 (#203) passed its GO gate: *"a full thought experiment, all ideas on the wall."* Nothing below the Decisions section is a commitment — it is the candidate pool for #176's stage 5 and beyond, kept so it can't evaporate from chat. The look-dev scene (`Scenes/LookDev/LookDev.tscn`) is the standing playground where any of it gets prototyped before it's real — and since #212 (2026-08-15) the **Moods tab** in the dev-tools window tunes the *shipping* view live, so a value on this wall can be judged on a real board rather than in the diorama. **It is a playground, not a scratch scene ([#393](https://github.com/Phaazoid/Godoiosis/issues/393), 2026-08-19)** — seven presentation suites fixture on it, `Battle3D.tscn` loads its MeshLibrary, and `BoardMirror`/`BoardOverlays` read textures out of `Art/LookDev/`, so it is edited with the same care as shipping code. Its four moods stopped being a second copy at the same time: `look_dev.gd` held them as a hardcoded `PRESETS` table, seeded from the same values four of the twelve `LookPreset` files now carry, and it resolves them by NAME through `LookKnobs` instead.
 
-**Canon checked through #711 (2026-09-03).**
+**Canon checked through #729 (2026-09-04).**
 
 ---
 
@@ -138,6 +138,12 @@ and #264's born-dead slider unless the panel says so, which is why the Game tab 
 naming the live palette. A LABEL, never a control: offering a picker there would put a second writer on
 a player setting, which is exactly what the ruling above refuses.
 
+**...and the inertness is this palette's, not every palette's** ([#685](https://github.com/Phaazoid/Godoiosis/issues/685)
+round 5). These three alternatives RE-AUTHOR their colours, which is what strands the knob. A palette
+whose values are semantic can ADAPT the authored ones instead and strand nothing — see *A palette can
+ADAPT instead of re-authoring* below, and note it names widening this vocabulary (#675) as the place
+to ask whether attack-vs-heal is semantic in the same way.
+
 **Scope is the reach pair plus the footprint** (dev's call). A watch aim keeps `WATCH_REACH_MODULATE`
 under every palette, pinned so a half-widening is loud. Worth a look in play: the watch's red-orange
 and the colour-blind palette's vermillion are neighbours, where against the DEFAULT red they were tuned
@@ -175,6 +181,9 @@ palette leaves three colour rows tuning a set nobody is looking at. What the Gam
 therefore the *other* half: while a step is off Normal the dev is tuning a base he is not feeling, and a
 value that felt right ships a factor away from what a Normal player gets. One polled clause per row that
 is off Normal, from the store's own title and `CameraRig3D.scale_of`'s own factor.
+
+**AMENDED by [#685](https://github.com/Phaazoid/Godoiosis/issues/685) round 5** — see *A palette can
+ADAPT instead of re-authoring* below. The inert-knob cost is re-authoring's, not the palette's.
 
 **`NORMAL` is absent from `SCALE_FACTORS` and falls through to 1.0** — `AIM_PALETTES`' rule, for the same
 reason: a factor of 1.0 written down is a second answer to what *unchanged* means. Factors are **per
@@ -235,6 +244,42 @@ the split-offset clamp the report proposed would have fixed nothing.
 **A global is the DEFAULT, an object may override it** (dev, 2026-08-16). `BoardMirror` is the only
 place that resolves the two, so nothing downstream knows a global exists.
 
+
+### A palette can ADAPT instead of re-authoring, and then no knob is inert ([#685](https://github.com/Phaazoid/Godoiosis/issues/685) round 5, BUILT 2026-09-04)
+
+**This amends *The player SCALES what the dev authored*, above.** *"A palette leaves three colour
+rows tuning a set nobody is looking at"* is true of `AIM_PALETTES` and is **not** true of palettes as
+such — it is the cost of **re-authoring**. The action-queue dock's second palette derives its element
+colours from the same seven `ElementPalette` statics the dev's knobs write, so dragging *Fire* moves
+both palettes, and the Scale row's advantage over a palette shrinks to just the arithmetic.
+
+**The fork is whether the value is SEMANTIC or a ROLE**, and one palette usually holds both:
+
+| | example | how the alternative gets it |
+|---|---|---|
+| **semantic** | *Fire is orange* | **ADAPT** — carry the meaning-bearing property through untouched, derive the rest from the ground |
+| **role** | *the text that reads against the card* | **AUTHOR** — near-white on slate becomes near-black on cream, and an inversion has nothing to derive from |
+
+For a colour that means to be a value of `Color.h`; the ground decides value and saturation. So
+`QueueStyle.PALETTES` holds 22 authored chrome roles and **no element colours at all** — those go
+through `element_ink`, which is `ElementPalette`'s answer with its weight adapted. Two projections of
+one store, not two stores (Law #4).
+
+**Ask it of the aim palette before widening that vocabulary** ([#675](https://github.com/Phaazoid/Godoiosis/issues/675)):
+attack-vs-heal is arguably semantic in the same way, and if it is, the colour-blind palette could
+adapt rather than re-author and the three aim knobs would stop going inert. That is a design question
+about what those colours MEAN, not a mechanical one — do not assume the answer from this entry.
+
+**What survives unchanged from #422:** DEFAULT is a FALL-THROUGH and never a table row, for exactly
+the same reason in both files — a copied default drifts, and it orphans the knob that writes the
+original. And the re-apply act on `SettingsScreen`'s way out is now a *pair*: **any surface painted
+on an EDGE rather than polled needs the settings page to fire that edge**, and the queue dock's
+chrome was the sharper case, since it had only ever been painted in `_ready`.
+
+**Its own cost, stated:** the two values that turn an element colour into ink (`PARCHMENT_INK_DEPTH`,
+`PARCHMENT_INK_SATURATION`) are themselves inert while the default palette is live — #422's problem
+one level in. That is acceptable where the original is not, because you tune them while *looking* at
+the palette they belong to, and the dock repaints under the slider.
 ### GLOW IS TWO QUESTIONS, and only one of them can be per-source ([#420](https://github.com/Phaazoid/Godoiosis/issues/420), 2026-08-21)
 
 The dev's ask was *"the glow settings belong on the Fire tab"*, and the ticket was filed as a

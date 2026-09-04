@@ -10,4 +10,5 @@ damage_bonus = 5
 add_states = Array[int]([2])
 remove_states = Array[int]([1])
 add_state_turns = Dictionary[int, int]({2: 3})
+short_name = "Deep Chill"
 popup = "Deep Chill!"
