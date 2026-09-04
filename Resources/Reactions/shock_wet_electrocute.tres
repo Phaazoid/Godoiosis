@@ -9,5 +9,6 @@ incoming_element = 3
 required_state = 1
 damage_bonus = 5
 remove_states = Array[int]([1])
+short_name = "Shock"
 popup = "Electrocuted!"
 icon = ExtResource("1_cisoi")

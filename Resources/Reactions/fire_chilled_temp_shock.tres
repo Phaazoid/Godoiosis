@@ -9,5 +9,6 @@ incoming_element = 1
 required_state = 2
 damage_bonus = 5
 remove_states = Array[int]([2])
+short_name = "Temp Shock"
 popup = "Temperature Shock!"
 icon = ExtResource("2_tshck")

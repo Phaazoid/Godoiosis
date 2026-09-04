@@ -10,9 +10,11 @@ class_name QueueStyle
 # newest deliberately designed surface in the game and it is docked on the opposite edge of the same
 # screen, so matching it is what makes the battle UI read as one system (dev ruling, 2026-09-03).
 #
-# NO KNOBS HERE, deliberately: these values are a copy of a neighbouring panel that has none either,
-# so a knob would be a second place to tune one look. The feel-tuned set that DOES get knobs is
-# ElementPalette -- see GameKnobs' Elemental tab.
+# NO KNOBS ON THE CHROME, deliberately: the panel/section/row values are a copy of a neighbouring
+# panel that has none either, so a knob would be a second place to tune one look. The exception is a
+# colour this panel INVENTS and that has to read against the element chips -- EVENT_TINT below --
+# which gets a row for the same reason ElementPalette's seven do: it is a feel value sitting beside
+# knobs he is already dragging, and an un-tunable neighbour is the inert-slider problem in reverse.
 
 # --- the slate palette ---------------------------------------------------------------------------
 const PANEL_BG := Color(0.12, 0.12, 0.14, 0.97)        # UnitInfoPanel.tscn's panel fill
@@ -55,6 +57,14 @@ const EXECUTE_TEXT := Color(1, 0.93, 0.9)
 # The hp->hp readout, team-coloured: green when a friendly is losing HP, red for an enemy.
 const READOUT_ALLY := Color(0.486, 0.878, 0.561)
 const READOUT_ENEMY := Color(1.0, 0.541, 0.478)
+
+# What the WORLD did, not what an element did -- "Fell 2!", "Drowning!", "Into the void!",
+# "Insulated!". These wore ElementPalette.NEUTRAL until the dev read them off the screen
+# (2026-09-03): that value is the RAIL's off state, a structural grey chosen to disappear, and text
+# in it is grey on grey. Deliberately OUTSIDE the element wheel -- every element colour is
+# saturated, so a cool near-white cannot be mistaken for one, and Earth's ochre is close enough that
+# the obvious warm amber would have collided.
+static var EVENT_TINT := Color(0.82, 0.84, 0.88)
 
 # --- CODE-BUILT values only ----------------------------------------------------------------------
 # Deliberately NOT here: the title's font size, the readout's, and the rail's width. Those nodes are

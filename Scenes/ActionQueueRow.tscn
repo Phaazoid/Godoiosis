@@ -35,7 +35,7 @@ layout_mode = 2
 theme_override_constants/separation = 2
 
 [node name="ActorTexture" type="TextureRect" parent="Frame/Pad/Body/Line" unique_id=1426592185]
-custom_minimum_size = Vector2(16, 16)
+custom_minimum_size = Vector2(32, 32)
 layout_mode = 2
 size_flags_horizontal = 0
 size_flags_vertical = 4
@@ -52,17 +52,20 @@ expand_mode = 2
 stretch_mode = 5
 
 [node name="TargetTexture" type="TextureRect" parent="Frame/Pad/Body/Line" unique_id=784272343]
-custom_minimum_size = Vector2(16, 16)
+custom_minimum_size = Vector2(32, 32)
 layout_mode = 2
 size_flags_vertical = 4
 mouse_filter = 2
 expand_mode = 2
 stretch_mode = 5
 
-[node name="Slack" type="Control" parent="Frame/Pad/Body/Line" unique_id=1204773915]
+[node name="Consequence" type="HFlowContainer" parent="Frame/Pad/Body/Line" unique_id=708411552]
 layout_mode = 2
 size_flags_horizontal = 3
+size_flags_vertical = 4
 mouse_filter = 2
+theme_override_constants/h_separation = 4
+theme_override_constants/v_separation = 2
 
 [node name="ReadoutCard" type="PanelContainer" parent="Frame/Pad/Body/Line" unique_id=1662803441]
 layout_mode = 2
@@ -88,12 +91,3 @@ text = "X"
 visible = false
 layout_mode = 2
 
-[node name="ConsequenceRow" type="MarginContainer" parent="Frame/Pad/Body" unique_id=1085291677]
-visible = false
-layout_mode = 2
-theme_override_constants/margin_left = 36
-
-[node name="Consequence" type="HFlowContainer" parent="Frame/Pad/Body/ConsequenceRow" unique_id=708411552]
-layout_mode = 2
-theme_override_constants/h_separation = 4
-theme_override_constants/v_separation = 2

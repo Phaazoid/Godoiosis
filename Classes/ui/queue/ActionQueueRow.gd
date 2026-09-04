@@ -29,8 +29,7 @@ class_name ActionQueueRow
 @onready var readout: Label = $Frame/Pad/Body/Line/ReadoutCard/Readout
 @onready var cancel_button: Button = $Frame/Pad/Body/Line/CancelButton
 @onready var description_label: Label = $Frame/Pad/Body/Line/DescriptionLabel
-@onready var consequence_row: MarginContainer = $Frame/Pad/Body/ConsequenceRow
-@onready var consequence: HFlowContainer = $Frame/Pad/Body/ConsequenceRow/Consequence
+@onready var consequence: HFlowContainer = $Frame/Pad/Body/Line/Consequence
 
 var action: BaseAction
 var draggable := false
@@ -106,24 +105,28 @@ func _paint_rail(outcome: ResolvedOutcome) -> void:
 		return
 	rail.color = ElementPalette.color_for_element(outcome.elements[0])
 
-# The consequence line: a STATE the hit applied gets a compact chip, a fired COMBO gets its authored
-# word, and an event popup the resolver already recorded ("Fell 2!", "Drowning!", "Insulated!") gets
-# a neutral one. A SETUP reaction is deliberately silent -- it is already fully said by the chip it
-# produced, and saying it twice is the noise the split-by-weight ruling exists to prevent (#685).
+# The consequence chips, IN the line between the target sprite and the readout (dev, 2026-09-03).
+# A STATE the hit applied gets a chip, a fired COMBO gets its BADGE word, and an event popup the
+# resolver already recorded ("Fell 2!", "Drowning!", "Insulated!") gets a neutral one. A SETUP
+# reaction is deliberately silent -- already fully said by the chip it produced, and saying it twice
+# is the noise the split-by-weight ruling exists to prevent (#685).
+#
+# TEXT ONLY, and it is a CHOICE rather than a constraint -- measured, an icon chip still fits the
+# row without clipping. It costs ~19px each, which is what decides whether a second chip WRAPS, and
+# the loudest complaint about this panel was height. `badge_name()` is the other half: the badge word
+# is what fits, and the dramatic one keeps its place in the tooltip and the glossary.
 func _build_consequence(outcome: ResolvedOutcome) -> void:
-	var entries: Array[Control] = []
-
 	for state in outcome.states_added:
 		if state == Elemental.State.NONE:
 			continue
 		var tip: String = UiText.wrap("%s -- %s" % [Elemental.state_display_name(state),
 				Glossary.short(Glossary.term_for_element_state(state))])
-		entries.append(_chip(ElementPalette.color_for_state(state),
-				StateIcons.ICONS.get(state, null), Elemental.state_display_name(state), tip))
+		consequence.add_child(_chip(ElementPalette.color_for_state(state),
+				Elemental.state_display_name(state), tip))
 
-	# A reaction OWNS its popup whether or not it earns a line: the setup half is already fully said
-	# by the chip it just produced, so claiming the word here is what stops "Wet" appearing twice --
-	# once as its chip and again as a neutral event pill.
+	# A reaction OWNS its popup whether or not it earns a chip: the setup half is already fully said
+	# by the state chip it just produced, so claiming the word here is what stops "Wet" appearing
+	# twice -- once as its chip and again as a neutral event pill.
 	var spoken: Array[String] = []
 	for reaction: ElementalReaction in outcome.fired_reactions:
 		if reaction.popup == "":
@@ -131,43 +134,24 @@ func _build_consequence(outcome: ResolvedOutcome) -> void:
 		spoken.append(reaction.popup)
 		if not reaction.is_combo():
 			continue
-		entries.append(_chip(ElementPalette.color_for_element(reaction.incoming_element),
-				reaction.icon, reaction.popup, UiText.wrap(Glossary.reaction_line(reaction))))
+		consequence.add_child(_chip(ElementPalette.color_for_element(reaction.incoming_element),
+				reaction.badge_name(), UiText.wrap(Glossary.reaction_line(reaction))))
 
 	for popup in outcome.popups:
 		if spoken.has(popup):
-			continue   # a reaction's own word, said above as its line or as its chip
-		entries.append(_chip(ElementPalette.NEUTRAL, null, popup, ""))
+			continue   # a reaction's own word, said above as its chip
+		consequence.add_child(_chip(QueueStyle.EVENT_TINT, popup, ""))
+	# No visibility toggle: the container holds the line's horizontal EXPAND whether or not it has
+	# chips, which is what keeps the cancel X on the right edge of a row that has none. It WRAPS
+	# rather than clips, so a crowded hit costs the row a second line instead of losing a word.
 
-	for entry in entries:
-		consequence.add_child(entry)
-	# A hidden Control contributes nothing to get_combined_minimum_size, so an unflipped `visible`
-	# loses the line AND the height the section reserves for it (#592's shape).
-	consequence_row.visible = not entries.is_empty()
-
-# One tinted pill, art optional. Tooltip goes on EVERY control in it: a Label defaults to
+# One tinted pill. The tooltip goes on the pill AND its label: a Label defaults to
 # MOUSE_FILTER_IGNORE, so the viewport never picks it and the text is dead however right it is.
-func _chip(tint: Color, art: Texture2D, text: String, tip: String) -> Control:
+func _chip(tint: Color, text: String, tip: String) -> Control:
 	var pill := PanelContainer.new()
 	pill.add_theme_stylebox_override("panel", QueueStyle.tint_box(tint))
 	pill.mouse_filter = Control.MOUSE_FILTER_STOP
 	pill.tooltip_text = tip
-
-	var row := HBoxContainer.new()
-	row.add_theme_constant_override("separation", 3)
-	pill.add_child(row)
-
-	if art != null:
-		var icon := TextureRect.new()
-		icon.texture = art
-		icon.custom_minimum_size = Vector2(QueueStyle.CHIP_ICON, QueueStyle.CHIP_ICON)
-		icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-		icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-		icon.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
-		icon.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-		icon.mouse_filter = Control.MOUSE_FILTER_STOP
-		icon.tooltip_text = tip
-		row.add_child(icon)
 
 	var label := Label.new()
 	label.text = text
@@ -176,7 +160,7 @@ func _chip(tint: Color, art: Texture2D, text: String, tip: String) -> Control:
 	label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	label.mouse_filter = Control.MOUSE_FILTER_STOP
 	label.tooltip_text = tip
-	row.add_child(label)
+	pill.add_child(label)
 	return pill
 
 func _show_hp_delta(outcome: ResolvedOutcome, subject: Unit) -> void:

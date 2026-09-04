@@ -2,7 +2,7 @@
 
 **Status: LIVING LIST (created 2026-07-05 at the dev's request).** The curated queue of design decisions awaiting a grill session — *not* an exhaustive dump of every open fork (each design doc keeps its own). Claude maintains this; when a session completes, its entry moves to **Done** with the date and where the canon landed. Detailed context for the A-items: [coherence-audit-2026-07-05.md](coherence-audit-2026-07-05.md).
 
-**Canon checked through #727 (2026-09-03).**
+**Canon checked through #729 (2026-09-03).**
 
 ## Next up — meaty sessions
 

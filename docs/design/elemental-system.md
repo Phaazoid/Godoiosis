@@ -4,7 +4,7 @@
 
 Supersedes the wiki's `Battle Mechanics/Elemental Combinatrix.docx` and `Systems Mechanics/Terrain Modification.docx`. Kept-but-era-checked: the *combinatrix concept* survives (the author flagged it keep-not-deprecate), but every "20% chance of shock," "hit/Avo advantage," "AP cost," and "move randomly 1 square" is **dead under Law #1** and re-expressed deterministically here.
 
-**Canon checked through #199 (2026-08-12).**
+**Canon checked through #729 (2026-09-03).**
 
 ## What it is
 
@@ -60,7 +60,8 @@ Small resources, edited in the reflection-based dev editor (same grain as `Weapo
 | `damage_mult` / `damage_bonus` | the deterministic damage change (replaces all "% chance" language); composed per E8 |
 | `add_states` | states applied on react |
 | `remove_states` | states cleared on react (omit to *not* consume) |
-| `vfx_tag` / `popup` | feedback hook ("Electrocuted!") |
+| `vfx_tag` / `popup` | feedback hook ("Electrocuted!") — the DRAMATIC word, read by the glossary's composed interaction line and the bug report |
+| `short_name` | the BADGE word ("Shock"), for a surface with no room for the dramatic one — the action queue's chip is ~40px (#685). Blank means the popup already fits, so only a long reaction needs one. A **declared** second representation per Law #4: two questions (what does this SHOUT vs what fits a badge), `badge_name()` is the one accessor, and every compact surface reads it rather than re-deriving a truncation. |
 
 Resolution against a target: collect *every* reaction with a trigger matching the snapshot's `(element ∈ attack.elements) × (state ∈ target.states)`, fire them all, compose per E8.
 

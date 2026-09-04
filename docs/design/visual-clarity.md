@@ -7,7 +7,7 @@ its child [#49 Action Queue UX](https://github.com/Phaazoid/Godoiosis/issues/49)
 This is a *guidelines* doc, not a spec — it captures the principles we're holding the work to,
 plus the running order of the queue-UX checklist. Update it as items land.
 
-**Canon checked through #727 (2026-09-03).**
+**Canon checked through #729 (2026-09-03).**
 
 ## Principles
 
@@ -2853,3 +2853,61 @@ number — let the whole line collapse and packed the cancel X against the targe
 row's own "the X keeps its slot on every row so content stays aligned" rule. **A slot that can be
 hidden must not be the slot holding the expand**; a dedicated `Slack` control owns it now, pinned by
 `test_the_cancel_x_holds_the_right_edge_on_a_row_with_no_number` (falsified: X at 1146 against 1183).
+
+### Round 3 — the chips come up into the line (dev, 2026-09-03)
+
+Two corrections, and the second one reversed a rule round 2 had just written down.
+
+**"ALL THE ICONS" MEANT THE UPSCALED ONES.** Round 2 read *"all the icons should be shrunk down to
+the 16x16 size, including the arrows and the crossing swords"* as covering the unit sprites too,
+on the reasoning that leaving them at 32 would keep rows 32px tall and not solve the height problem.
+That was the wrong half to give up: *"I like that the big ones shrunk, but the small ones, the unit
+sprites, shrunk too, and now they're not very readable."* The action art is authored at 16 and was
+being drawn at 32 — shrinking it costs nothing and was the whole point. A unit's map sprite is
+authored at 32 and shrinking it destroys the one thing a row is read by. **The rule the two share:
+shrink what was being UPSCALED, never what was authored at the size it draws.**
+
+**A CONSEQUENCE CHIP BELONGS IN THE LINE, NOT UNDER IT.** Round 2 indented the chips to start under
+`TargetTexture`, which satisfied *"below the image of the unit who is getting the status"* and cost
+a whole second line per elemental hit. He spotted the slack it was ignoring: *"we have room between
+the rightmost unit and the damage, I think instead of fitting the statuses in an under row, we could
+fit them there."* Measured, that gap is **~40px** on a 216px dock — the line is 181 wide and its
+fixed contents (32 + 16 + 32 sprites, a 35px readout card, a 16px X, five 2px gaps) take 141.
+
+So `Consequence` is now an `HFlowContainer` sitting **in the line** between the target sprite and the
+readout, and it does three jobs at once:
+
+- **it is the slack**, holding the line's horizontal `EXPAND` whether or not it has chips — which is
+  what keeps the cancel X on the right edge of a numberless row, the thing round 2's readout card
+  nearly broke and needed a dedicated spacer for;
+- **it wraps rather than clips**, so a crowded hit costs the row a second line and never a word
+  (measured: two chips take the row 24 → 40px, with its minimum at 209 inside a 215px section);
+- **it keeps the receiver rule** — a chip after the target sprite is still not a chip beside the
+  attacker, which is the part that was never about layout.
+
+**THE BADGE WORD IS ITS OWN FIELD.** *"Electrocuted is a long word, so we could shorten it to Shock
+to make it fit."* Shortening the authored `popup` would have done it in zero code, and it is what he
+proposed — but `popup` is read by the glossary's composed interaction line and by the bug report,
+where there is room for the dramatic word and it is the better one. `ElementalReaction.short_name`
+is therefore a **declared** second representation (Law #4): two genuinely different questions, one
+accessor (`badge_name()`, falling back to `popup`), and blank on the reactions whose word already
+fits. Authored: `Shock`, `Temp Shock`, `Dried`, `Deep Chill`.
+
+**One claim from this round that was wrong and is worth keeping wrong-side-up:** the first version of
+the chip comment said text-only was forced by the measurement. It is not — a mutant put the 16px icon
+back and nothing clipped. Text-only is a *choice* about height (an icon costs ~19px, which is what
+decides whether a second chip wraps), and the icon keeps its place in the tooltip. **A comment that
+says "measured" has to name a measurement that was actually taken**, or the next reader inherits a
+constraint that does not exist.
+
+**Round 4, one line, and it is a rule about REUSE.** *"The text for the void and falling is grey
+against grey, which is not readable."* Those pills — `"Fell 2!"`, `"Drowning!"`, `"Into the void!"`,
+`"Insulated!"` — were tinted `ElementPalette.NEUTRAL`, which is the **rail's off state**: a
+structural grey deliberately chosen to *disappear*. Reusing it as TEXT inverted its whole purpose
+(measured at the fix: luma 0.29 against a row at 0.23, a delta of 0.06). `QueueStyle.EVENT_TINT` is
+its own value now, deliberately **off the element wheel** — every element colour is saturated, so a
+cool near-white cannot be mistaken for one, and the obvious warm amber would have collided with
+Earth's ochre. It takes a knob, which is the one exception to this file's *no knobs on the chrome*:
+the chrome mirrors a panel that has none, while this is a colour the queue INVENTS and that has to
+read against the element chips beside it. **The general form: a colour picked to recede cannot be
+promoted to a colour that must be read** — check what a value was chosen FOR before borrowing it.

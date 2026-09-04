@@ -383,6 +383,7 @@ const ACTION_MENU_SCRIPT := "res://Classes/ui/ActionMenuController.gd"
 const PACING_SCRIPT := "res://Classes/core/Pacing.gd"
 const MISSION_STATUS_SCRIPT := "res://Classes/ui/MissionStatusPanel.gd"
 const ELEMENT_PALETTE_SCRIPT := "res://Classes/ui/ElementPalette.gd"
+const QUEUE_STYLE_SCRIPT := "res://Classes/ui/queue/QueueStyle.gd"
 const BOARD_SPACE_SCRIPT := "res://Classes/presentation/BoardSpace.gd"
 const SIGHT_TRACE_SCRIPT := "res://Classes/board/SightTrace2D.gd"
 
@@ -537,6 +538,13 @@ const CLASS_KNOBS: Array[Dictionary] = [
 		"tip": "Air's colour. Carried by damageless utility carvings like Gust, which means it is often the only mark a row has that anything elemental happened at all."},
 	{"group": "Element colours", "label": "Aether", "static": "ELEMENT_AETHER", "script": ELEMENT_PALETTE_SCRIPT,
 		"tip": "Aether's colour. The rarest of the sigils, so it can afford to be the most distinctive -- nothing else on screen should be near it."},
+
+	# --- THE ACTION QUEUE.S OWN COLOURS (#685 round 4) -----------------------------------------
+	#
+	# Not an element: what the WORLD did to a unit. Its own group because the seven above are about
+	# elements wherever they are drawn, while this one is a value this panel invents.
+	{"group": "Action queue", "label": "World event text", "static": "EVENT_TINT", "script": QUEUE_STYLE_SCRIPT,
+		"tip": "The pill an action-queue row wears for a consequence the WORLD caused rather than an element -- Fell, Drowning, Into the void, Insulated. It shipped as the rail.s structural grey once and was unreadable against the row, so the one thing it must not be is another grey. Keep it OFF the element wheel: every element colour is saturated, so a near-neutral reads as 'not elemental' at a glance."},
 
 	# --- PLAYBACK, in six sections (dev, 2026-08-27) ------------------------------------------
 	#
@@ -992,6 +1000,8 @@ const GROUP_TABS: Dictionary[String, String] = {
 	"Cover": "Elemental",
 	# ...and what an element looks like in 2D UI (#685), beside what it looks like on the board.
 	"Element colours": "Elemental",
+	# The queue.s own invented colour, beside the element chips it has to read against (#685).
+	"Action queue": "Elemental",
 	# Playback is SIX groups on one tab (dev, 2026-08-27) -- thirty flat rows was unreadable, and a
 	# group is what draws a heading. Same two-groups-one-tab shape Water uses, three sections further.
 	# Declaration order here is only the TAB order; the section order inside the tab is the KNOBS
@@ -1179,6 +1189,7 @@ static func read_static(name: String) -> Variant:
 		"ELEMENT_EARTH": return ElementPalette.ELEMENT_EARTH
 		"ELEMENT_AIR": return ElementPalette.ELEMENT_AIR
 		"ELEMENT_AETHER": return ElementPalette.ELEMENT_AETHER
+		"EVENT_TINT": return QueueStyle.EVENT_TINT
 	push_error("GameKnobs: unknown static '%s'" % name)
 	return null
 
@@ -1530,6 +1541,10 @@ static func write_static(host: Node3D, name: String, value: Variant) -> void:
 			return
 		"ELEMENT_AETHER":
 			ElementPalette.ELEMENT_AETHER = value
+			_restyle_action_queue(host)
+			return
+		"EVENT_TINT":
+			QueueStyle.EVENT_TINT = value
 			_restyle_action_queue(host)
 			return
 		_:

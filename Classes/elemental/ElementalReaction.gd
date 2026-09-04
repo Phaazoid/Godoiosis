@@ -43,3 +43,12 @@ class_name ElementalReaction
 # own named line, or is already fully said by the state chip it produced (#685).
 func is_combo() -> bool:
 	return required_state != Elemental.State.NONE
+
+# The BADGE word, for a surface with no room for the dramatic one. A DECLARED second representation
+# (Law #4): `popup` is what a reaction SHOUTS -- the glossary's composed interaction line and the bug
+# report read it -- and this is what fits a ~40px chip in the action queue's row, measured. Blank
+# means the popup already fits, so a reaction needs this only when its word is long.
+@export var short_name: String = ""
+
+func badge_name() -> String:
+	return short_name if short_name != "" else popup

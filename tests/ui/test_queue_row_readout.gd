@@ -186,27 +186,76 @@ func test_a_state_the_hit_applies_becomes_a_chip_that_explains_itself() -> void:
 					ElementPalette.color_for_state(Elemental.State.WET))
 
 
-# A status lands on the unit RECEIVING it, so its chip has to sit under the TARGET sprite. Reading
-# it under the attacker is not a layout preference, it is a lie about who is wet (dev, 2026-09-03).
-func test_the_consequence_line_starts_under_the_target_not_the_attacker() -> void:
+# A status lands on the unit RECEIVING it, so its chip sits AFTER the target sprite and before the
+# damage — in the gap the line already had. Round 2 put it on a second line under the target, which
+# the dev then read as wasted height; either way the rule is the same one, and it is not a layout
+# preference: a chip beside the ATTACKER is a lie about who is wet.
+func test_a_status_chip_sits_between_the_target_and_the_damage() -> void:
 	await _queue_elemental_attack(Elemental.Element.WATER, [])
 	var row := _attack_row()
 	assert_object(row).is_not_null()
-	assert_bool(row.consequence_row.visible).is_true()
+	assert_int(row.consequence.get_child_count()) \
+		.override_failure_message("the hit applied WET and no chip was built").is_greater(0)
 
-	var chips_left := row.consequence.get_global_rect().position.x
-	var target_left := row.target_texture.get_global_rect().position.x
-	var actor_left := row.actor_texture.get_global_rect().position.x
-	assert_float(chips_left) \
-		.override_failure_message("the consequence line starts at %.0f, under the ACTOR at %.0f rather than the TARGET at %.0f — it names who is applying the status, not who gets it"
-			% [chips_left, actor_left, target_left]) \
-		.is_equal_approx(target_left, 1.0)
+	var chip: Control = row.consequence.get_child(0)
+	var chip_left := chip.get_global_rect().position.x
+	var target_right := row.target_texture.get_global_rect().end.x
+	var readout_left := row.readout_card.get_global_rect().position.x
+	assert_float(chip_left) \
+		.override_failure_message("the status chip starts at %.0f, before the target sprite ends at %.0f — it reads as the ATTACKER's status, not the receiver's"
+			% [chip_left, target_right]) \
+		.is_greater_equal(target_right)
+	assert_float(chip.get_global_rect().end.x) \
+		.override_failure_message("the status chip runs to %.0f, past the damage readout at %.0f"
+			% [chip.get_global_rect().end.x, readout_left]) \
+		.is_less_equal(readout_left)
+
+
+# A hit with SEVERAL consequences wraps its chips rather than clipping or pushing the cancel X off
+# the panel. The wrap is the graceful half of putting the chips in the line at all: the row buys a
+# second line only when it genuinely needs one, and never loses a word.
+func test_a_crowded_row_wraps_its_chips_instead_of_overflowing() -> void:
+	var states: Array[Elemental.State] = [Elemental.State.WET]
+	await _queue_elemental_attack(Elemental.Element.ICE, states)   # deep chill: a state AND a combo
+	var row := _attack_row()
+	assert_object(row).is_not_null()
+	assert_int(row.consequence.get_child_count()) \
+		.override_failure_message("this hit produced %d chips, so it is not the crowded case it claims to be"
+			% row.consequence.get_child_count()) \
+		.is_greater(1)
+
+	var inner: Control = row.get_parent().get_parent()
+	assert_float(row.get_combined_minimum_size().x) \
+		.override_failure_message("a crowded row needs %.0fpx and its section leaves %.0f — the chips are pushing the row past the panel instead of wrapping"
+			% [row.get_combined_minimum_size().x, inner.size.x]) \
+		.is_less_equal(inner.size.x)
+
+
+# The chips take the slack the line already had, so a hit with one consequence must NOT cost a
+# second visual line -- that is the whole of what round 3 bought back.
+func test_one_status_does_not_grow_the_row() -> void:
+	var plain := _spawn(Team.Faction.PLAYER, Vector2i(1, 3))
+	var move := MoveAction.new()
+	move.init(plain, [plain.movement.cell, plain.movement.cell + Vector2i(1, 0)], null)
+	plain.squad._queue_action(move)
+	game.refresh_action_queue(plain.squad)
+	await await_idle_frame()
+	var bare_height := _rows()[0].size.y
+
+	await _queue_elemental_attack(Elemental.Element.WATER, [])
+	var row := _attack_row()
+	assert_object(row).is_not_null()
+	assert_int(row.consequence.get_child_count()).is_greater(0)
+	assert_float(row.size.y) \
+		.override_failure_message("a row with one status is %.0fpx tall against a bare row's %.0f — the chip wrapped to its own line instead of taking the slack"
+			% [row.size.y, bare_height]) \
+		.is_equal_approx(bare_height, 1.0)
 
 
 # The row's own header claims the X keeps its slot on every row so content stays aligned, and the
 # readout CARD nearly broke that: the card carried the line's horizontal expand, so a MOVE row --
-# which has no number and hides it -- packed the X in tight against the target sprite. A dedicated
-# Slack control holds the expand now, and this is what says so.
+# which has no number and hides it -- packed the X in tight against the target sprite. The Consequence
+# container holds the expand now, present whether or not it has chips, and this is what says so.
 func test_the_cancel_x_holds_the_right_edge_on_a_row_with_no_number() -> void:
 	var attacker := await _queue_elemental_attack(Elemental.Element.WATER, [])
 	var walker := _spawn(Team.Faction.PLAYER, Vector2i(1, 3))
@@ -268,6 +317,68 @@ func _collect_scrolls(node: Node, out: Array[ScrollContainer]) -> void:
 		_collect_scrolls(child, out)
 
 
+# A consequence the WORLD caused -- "Insulated!" here, and "Fell 2!" / "Drowning!" / "Into the void!"
+# on the same path -- must not wear the rail's structural grey. That value is chosen to DISAPPEAR,
+# which is exactly wrong for text: the dev read it off the screen as grey on grey (2026-09-03).
+#
+# Asserts the DEFECT, not a hue: EVENT_TINT is a knob he drags, so a pinned colour would red the
+# first time he tuned it. What cannot come back is it being the neutral, or vanishing into the row.
+func test_a_world_event_pill_is_readable_against_the_row() -> void:
+	var insulated := _spawn_insulated_to(Elemental.Element.SHOCK, Vector2i(2, 1))
+	var attacker := _spawn(Team.Faction.PLAYER, Vector2i(1, 1))
+	var weapon := H.make_weapon(4)
+	(weapon.template.main_attack as WeaponAttackData).elemental_damage_type = Elemental.Element.SHOCK
+	attacker.equipped_weapon = weapon
+	game.squad_manager.active_squad = attacker.squad
+	game.squad_manager.queue_action(attacker.squad, H.stamped_attack(attacker, insulated))
+	game.refresh_action_queue(attacker.squad)
+	await await_idle_frame()
+
+	var row := _attack_row()
+	assert_object(row).is_not_null()
+	var entries := _consequence_entries(row)
+	assert_array(_texts(entries)) \
+		.override_failure_message("the hit was fully insulated and the row said nothing about it — got %s"
+			% [_texts(entries)]) \
+		.contains([PlanResolver.INSULATED_POPUP])
+
+	for e in entries:
+		if String(e["text"]) != PlanResolver.INSULATED_POPUP:
+			continue
+		var tint: Color = e["color"]
+		assert_that(tint) \
+			.override_failure_message("the world-event pill is wearing the rail's off-state grey again — it is chosen to disappear, and text in it is grey on grey") \
+			.is_not_equal(ElementPalette.NEUTRAL)
+		# A generous floor: every readable choice clears it by miles, and only a near-row-coloured
+		# one trips it, which is the bug itself coming back.
+		var contrast: float = absf(_luma(tint) - _luma(QueueStyle.ROW_BG))
+		assert_float(contrast) \
+			.override_failure_message("the world-event pill sits at luma %.2f against a row at %.2f — that is the grey-on-grey the dev reported"
+				% [_luma(tint), _luma(QueueStyle.ROW_BG)]) \
+			.is_greater(0.25)
+
+
+func _luma(c: Color) -> float:
+	return 0.2126 * c.r + 0.7152 * c.g + 0.0722 * c.b
+
+
+# A unit that shrugs off `element` entirely, so the resolver records its INSULATED popup — the one
+# world-event pill reachable without a shove, a cliff or deep water.
+func _spawn_insulated_to(element: Elemental.Element, cell: Vector2i) -> Unit:
+	var data := H.make_unit_data({}, Team.Faction.ENEMY)
+	var ability := AbilityData.new()
+	ability.id = Abilities.INSULATION[element]
+	ability.display_name = "Insulated"
+	var abilities: Array[AbilityData] = [ability]
+	data.innate_abilities = abilities
+	var unit: Unit = game.spawn_unit(data, cell)
+	assert_object(unit).is_not_null()
+	assert_bool(unit.is_immune_to(element)) \
+		.override_failure_message("the fixture unit is not actually insulated, so this case cannot see what it claims to") \
+		.is_true()
+	return unit
+
+
 # ------------------------------------------------------------------------------------------------
 #  3. A fired combo says its authored word
 # ------------------------------------------------------------------------------------------------
@@ -292,10 +403,10 @@ func test_a_fired_combo_says_its_own_word_in_its_element_colour() -> void:
 	var entries := _consequence_entries(row)
 	assert_array(_texts(entries)) \
 		.override_failure_message("the fired combo never said its word — got %s" % [_texts(entries)]) \
-		.contains([combo.popup])
+		.contains([combo.badge_name()])
 
 	for e in entries:
-		if String(e["text"]) == combo.popup:
+		if String(e["text"]) == combo.badge_name():
 			assert_that(e["color"]).is_equal(
 					ElementPalette.color_for_element(combo.incoming_element))
 			assert_str(String(e["tip"])) \
@@ -331,11 +442,11 @@ func test_a_setup_reaction_is_said_once_by_its_chip_and_not_again_as_a_line() ->
 
 	var occurrences := 0
 	for text in _texts(_consequence_entries(row)):
-		if text == setup.popup:
+		if text == setup.badge_name():
 			occurrences += 1
 	assert_int(occurrences) \
 		.override_failure_message("the setup's word '%s' was drawn as a line beside the chip that already says it — entries were %s"
-			% [setup.popup, _texts(_consequence_entries(row))]) \
+			% [setup.badge_name(), _texts(_consequence_entries(row))]) \
 		.is_equal(0)
 
 
