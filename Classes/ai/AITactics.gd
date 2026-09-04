@@ -159,7 +159,12 @@ static func _engageable_enemies(leader: Unit, board: BoardContext, within, allow
 # cell it was already on. It parked there for the rest of the battle. Now a body ranks like anyone
 # else and simply loses the head-to-head: standing is the tie-break BELOW route, so it decides only
 # when the walk is equally long.
-static func nearest_enemy(from_unit: Unit, board: BoardContext, within = null) -> Unit:
+# ACTIVE_ONLY is the caller's to state (#751), the path_hops(block_on_occupancy) shape: one question
+# -- which enemy is nearest -- with the lifecycle admission passed in rather than a second walk.
+# PURSUIT wants a body (it is an ordinary target, #720); a WATCH cannot use one, because a corpse
+# never enters anything and _watch_triggered_by refuses a non-ACTIVE entrant outright. Left false so
+# every existing caller is unchanged.
+static func nearest_enemy(from_unit: Unit, board: BoardContext, within = null, active_only := false) -> Unit:
 	var route := _approach_distances(from_unit, board)
 	var nearest: Unit = null
 	var best_hops := 0
@@ -168,7 +173,7 @@ static func nearest_enemy(from_unit: Unit, board: BoardContext, within = null) -
 	for unit in board.units:
 		if not is_instance_valid(unit):
 			continue
-		if not (unit.is_active() or unit.is_downed()):
+		if not (unit.is_active() or (unit.is_downed() and not active_only)):
 			continue
 		if not Team.is_enemy(from_unit.get_faction(), unit.get_faction()):
 			continue
@@ -272,6 +277,10 @@ static func queue_main_action(unit: Unit, board: BoardContext, squad_manager: Sq
 				queued = _try_rev(unit, squad_manager)
 			BaseAction.ActionType.BURROW:
 				queued = _try_burrow(unit, squad_manager)
+			BaseAction.ActionType.OVERWATCH:
+				queued = _try_overwatch(unit, board, squad_manager)
+			BaseAction.ActionType.GUARD:
+				queued = _try_guard(unit, board, squad_manager)
 			_:
 				push_error("No AI builder for ActionType %s" % BaseAction.ActionType.keys()[verb])
 		if queued:
@@ -594,6 +603,127 @@ static func _try_burrow(unit: Unit, squad_manager: SquadManager) -> bool:
 	var action := BurrowAction.new()
 	action.init(unit)
 	return squad_manager.queue_action(unit.squad, action)
+
+# Overwatch (#751): AIM the attack instead of firing it, down the way an enemy would come.
+#
+# A PREPARATION, so it is a RULE and never a score term -- the shot lands on somebody else's turn,
+# which `_score_plan` structurally cannot reach (#726's doctrine, second application). It sits below
+# ATTACK for the same reason REV does: no preemption.
+#
+# THE AIM MUST BE ACTIVE-ONLY, and this is #720's pathology one door over. `nearest_enemy` ranks a
+# BODY as an ordinary target, but `PlanResolver._watch_triggered_by` refuses a non-ACTIVE entrant and
+# a corpse never moves -- so a watcher beside a downed enemy would aim at its "approach" every quiet
+# turn for the rest of the battle, watching something that can never arrive.
+static func _try_overwatch(unit: Unit, board: BoardContext, squad_manager: SquadManager) -> bool:
+	var watchable := unit.overwatch_attacks()
+	if watchable.is_empty():
+		return false
+	var attack: AttackData = watchable[0]   # one watch per weapon (dev, 2026-08-26); first is the deterministic pick
+	if unit.attack_block_reason(attack) != "":
+		return false   # the menu's own gate -- a dry Carbine cannot watch either, Overwatch requires readiness
+	var enemy := nearest_enemy(unit, board, null, true)
+	if enemy == null:
+		return false
+	var origin := unit.get_projected_destination()   # the fallback walk runs AFTER the group move is queued
+	var aim := _watch_aim(unit, origin, attack, enemy, board)
+	if aim == origin:
+		return false   # no facing produces a footprint -- see _watch_aim
+	var action := OverwatchAction.new()
+	action.init(unit, aim, attack)
+	return squad_manager.queue_action(unit.squad, action)
+
+
+# Which cell to aim the watch at -- a FACING for a directional attack (Overwatch.tres is a
+# ForwardLinePattern), the cell itself for a point one. Ranked by how few hops the enemy needs to
+# reach it, walking from THE ENEMY'S side with its own traversal and occupancy on: that is what makes
+# "the way you'll come" true around a wall rather than along a straight line.
+#
+# A DUD AIM MUST NEVER BE QUEUED. `ForwardLinePattern.get_selectable_cells` answers empty for a hint
+# that yields no cardinal direction, and from there the failure is entirely silent -- the resolver
+# arms nothing, `Unit.arm_watch` refuses on an empty footprint, and no queue gate looks at an
+# OverwatchAction at all, so the unit would spend its main action on air behind a legal-looking row.
+# Returning `origin` is this function's way of saying "no facing works", and the caller refuses.
+#
+# Ties keep CARDINAL_DIRECTIONS order (Law #1). A sealed board -- no route to any facing -- falls back
+# to simply facing the enemy, reusing GridUtils' own diagonal tie-break rather than inventing a second.
+static func _watch_aim(unit: Unit, origin: Vector2i, attack: AttackData, enemy: Unit, board: BoardContext) -> Vector2i:
+	var best := origin
+	var best_hops := -1
+	for dir in AttackPattern.CARDINAL_DIRECTIONS:
+		var aim: Vector2i = origin + dir
+		if Reach.get_affected_cells_from(unit, origin, aim, attack).is_empty():
+			continue
+		var field := RulesService.path_hops(enemy.movement.cell, board, enemy, -1, {aim: true}, true)
+		if not field.has(aim):
+			continue
+		var hops: int = field[aim]
+		if best_hops < 0 or hops < best_hops:
+			best = aim
+			best_hops = hops
+	if best_hops >= 0:
+		return best
+	var facing := GridUtils.cardinal_direction_i_between(origin, enemy.movement.cell)
+	if facing != Vector2i.ZERO and not Reach.get_affected_cells_from(unit, origin, origin + facing, attack).is_empty():
+		return origin + facing
+	return origin
+
+
+# Guard (#751): ward the ally the most enemies can reach. The other preparation whose payoff lands on
+# somebody else's turn, so it is a rule for the same reason Overwatch is.
+#
+# ZERO EXPOSURE REFUSES. "Shields whoever is most exposed" presumes exposure above zero -- without
+# the refusal a Guard would pre-empt INTIMIDATE with a purposeless ward whenever any ally happened to
+# be standing beside it, and menacing somebody is the better use of that action.
+#
+# A DOWNED ally is in `guard_candidates` by design, but RESCUE sits above GUARD in the walk and
+# rescue adjacency IS the guard range, so a body is normally carried before this is asked.
+#
+# Ties keep guard_candidates' own order (Law #1), which walks cells_within_manhattan_range.
+static func _try_guard(unit: Unit, board: BoardContext, squad_manager: SquadManager) -> bool:
+	var candidates := RulesService.guard_candidates(unit, board)
+	if candidates.is_empty():
+		return false
+	var exposure := _exposure_counts(candidates, board, unit.get_faction())
+	var ward: Unit = null
+	var most := 0
+	for ally in candidates:
+		var count: int = int(exposure.get(ally, 0))
+		if count > most:
+			most = count
+			ward = ally
+	if ward == null:
+		return false
+	var action := GuardAction.new()
+	action.init(unit, ward)
+	return squad_manager.queue_action(unit.squad, action)
+
+
+# How many enemies could reach AND hit each of these allies -- one move-range search per enemy,
+# reused across every candidate, rather than one per pair.
+#
+# DECLARED APPROXIMATIONS, both inherited from the seams this composes: the search reads LIVE
+# occupancy (a squadmate about to move still blocks it) and honours the enemy's own cohesion leash,
+# so an enemy that could only reach the ally by breaking formation does not count. The cost is one
+# search per ACTIVE enemy, paid only once a unit has reached GUARD in the walk -- second to last, so
+# after every other verb has declined.
+static func _exposure_counts(allies: Array[Unit], board: BoardContext, faction: Team.Faction) -> Dictionary:
+	var counts := {}
+	for other in board.units:
+		if not is_instance_valid(other) or not other.is_active():
+			continue
+		if not Team.is_enemy(faction, other.get_faction()):
+			continue
+		var walk: Dictionary = RulesService.compute_move_range(other, board)
+		var reachable: Dictionary = walk["reachable"]
+		var aiming := other.get_fired_attack()
+		for ally in allies:
+			var firing := _standable_attack_cells(other, ally.get_projected_destination(), aiming, board)
+			for cell in firing:
+				if cell == other.movement.cell or reachable.has(cell):
+					counts[ally] = int(counts.get(ally, 0)) + 1
+					break
+	return counts
+
 
 # Where the leader should stand to fight `enemy`: a cell it can already attack from, else the cell
 # furthest along the ROUTE to it. The route targets the nearest STANDABLE firing position, not

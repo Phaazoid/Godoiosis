@@ -1,6 +1,6 @@
 # AI Tactics — the archetype layer's integration contract
 
-**Canon checked through #708 (2026-09-04).**
+**Canon checked through #751 (2026-09-04).**
 
 **Status: BUILT 2026-07-22, #78 CLOSED 2026-07-23 (commit `239555b`)** — ratified and hand-typed the same day; full suite 444/444 green. Feel iteration continues through ordinary playtesting (the v1 approximations below are the watch-list). The #29-era archetype layer (Rushdown/Hold/Sentry, painted zones, Crisis stances — see CLAUDE.md's architecture map) is the substrate; this doc covers the #78 rebuild of *how the AI decides*, and the standing contract that keeps it from rotting again. *(2026-08-09: the Crisis-stance piece of that substrate is GONE — [#158](https://github.com/Phaazoid/Godoiosis/issues/158) made Crisis a deterministic equipped ability, deleting `CRISIS_STANCES`/`accepts_crisis` with the accept/decline question they answered; enemy Crisis access is authored content now.)*
 
@@ -42,11 +42,27 @@ Candidate builders live in `AITactics` (one per type, each mirroring `MainAction
 
 ### Ratified tables (dev calls, 2026-07-22; REV column added 2026-08-06; REV/BURROW on Hold+Sentry 2026-09-03)
 
-| | ATTACK | RESCUE | RELOAD | REV | BURROW | INTIMIDATE | RALLY |
-|---|---|---|---|---|---|---|---|
-| **Rushdown** | 1 | never | 2 | 3 | never | never | never |
-| **Hold** | 1 | 2 | 3 | 4 | 5 | 6 | never |
-| **Sentry** | 1 | 2 | 3 | 4 | 5 | 6 | never |
+| | ATTACK | RESCUE | OVERWATCH | RELOAD | REV | BURROW | GUARD | INTIMIDATE | RALLY |
+|---|---|---|---|---|---|---|---|---|---|
+| **Rushdown** | 1 | never | never | 2 | 3 | never | never | never | never |
+| **Hold** | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | never |
+| **Sentry** | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | never |
+
+**OVERWATCH and GUARD joined the table in [#751](https://github.com/Phaazoid/Godoiosis/issues/751) (dev, 2026-09-04)**, having shipped `NEVER` everywhere when #413/#414 landed. Hold and Sentry take both; **Rushdown keeps `NEVER` for both** — a rusher that stops to shield somebody is not a rusher, the same reason it refuses rescue, intimidate and burrow. His placement: *"Guard should probably generally be a lower priority. Overwatch should be a higher default priority, all other things equal."* A watch is the closest thing to attacking, so it outranks the weapon self-verbs; a ward sits just above the menace that already means *nothing better exists*.
+
+**He rejected a fixed order as the general answer in the same breath**, asking for real situational weights — filed as its own ticket rather than folded in, because it reopens the 2026-07-22 ratification and its hard question is *what a verb is WORTH when its payoff lands on somebody else's turn*, which is true of Guard, Overwatch and Rev alike. Until then, situational behaviour is a **refusal** (#726's shape), not a weight — and his own example already works that way: a dry Carbine reloads because ATTACK yields no candidate at all, never because the order changed.
+
+### The two standing-reaction rules
+
+Both verbs are **preparations**, so both are rules rather than score terms — the ward absorbs and the watch fires on somebody *else's* turn, which `_score_plan` structurally cannot reach. That is #726's doctrine reaching its second application, and it is why neither preempts ATTACK.
+
+- **A watcher aims down the way an enemy would COME.** Routes are walked from the **enemy's** side, with its own traversal and occupancy on, so the rule is true around a wall rather than along a straight line; ties keep `CARDINAL_DIRECTIONS` order, and a sealed board falls back to simply facing them through `GridUtils`' own diagonal tie-break. **The aim is ACTIVE-only, and that is #720's pathology one door over**: `nearest_enemy` ranks a body as an ordinary target and it wins on route, but `_watch_triggered_by` refuses a non-ACTIVE entrant and a corpse never moves — so the unfiltered answer aims at an approach nobody can ever walk.
+- **A guard wards the ally the most enemies could reach and hit** — one move-range search per enemy, reused across candidates, and **zero exposure REFUSES**: "most exposed" presumes exposure above zero, and without the refusal a ward would pre-empt the intimidate directly below it every time an ally happened to stand adjacent.
+
+**A dud aim must never be queued, and nothing downstream would catch one.** A hint yielding no cardinal direction makes `ForwardLinePattern` answer with no cells, and from there the failure is entirely silent — the resolver arms nothing, `Unit.arm_watch` refuses an empty footprint, and no queue gate inspects an `OverwatchAction` at all. The unit would have spent its main action on air behind a legal-looking row, which is why the builder guarantees a real facing and the tests assert on the **footprint**, never on the queue row.
+
+**Declared limit, seen in the first replay:** a watch armed while everyone is still far away lapses unused at the owner's next turn. It costs nothing that was being spent — those Carbines idled before — but it is not free attention either, and the fix if it wants one is a refusal (*don't watch when nobody can reach the footprint before it lapses*), which the hop count the aim already computes would answer.
+
 
 - Intimidation/rescue on Hold+Sentry only — defenders recover their own and menace what they can't hit; Rushdown stays pure aggression.
 - Rescue before Reload: a returned unit now beats rearming for later. (The verb was `SPRING_LOAD` when these tables were ratified; it went generic as `RELOAD` in #84 when the Carbine wanted the same order — same slot, same priority, one more family using it.) Intimidate last: menace only when nothing better exists.

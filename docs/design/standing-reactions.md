@@ -2,7 +2,7 @@
 
 **RATIFIED DIRECTION (grilled 2026-08-20, dev + Claude); numbers playtest-tunable. ALL THREE ARE BUILT: [#414](https://github.com/Phaazoid/Godoiosis/issues/414) Guard (2026-08-21), then [#412](https://github.com/Phaazoid/Godoiosis/issues/412) (queue order becomes real) + [#413](https://github.com/Phaazoid/Godoiosis/issues/413) (Overwatch) together on one branch (2026-08-26).** #412 and #413 landed together because #412's clock half has no consumer without Overwatch, and Overwatch is what defines the shape the walk has to answer — building it blind would have been a coin flip. All three sat on the **Demo** milestone.
 
-**Canon checked through #629 (2026-08-28).**
+**Canon checked through #751 (2026-09-04).**
 
 **Why these exist (the throughline, dev 2026-08-19):** push the player from *"does my queued plan work"* toward genuinely predicting what the ENEMY PHASE will do — more of the puzzle living in anticipating reactive/triggered events, not just resolving an already-known queue. A reactive defense (Guard) and a reactive attack (Overwatch) are the two halves of one idea, which is why they share a grammar and a doc. Secondary motives, both real: **Overwatch is Carbine identity** ("finally give Carbines a real feel"), and **Guard is heritage** — an adaptation of the guarding feature from the GameMaker-era demo (the pre-squad parallel battle system; most of that build died, guarding was always loved).
 
@@ -121,9 +121,12 @@ Three rulings the doc did not spell out, decided at build time and open to argum
 
 Shipped beside the mechanic: `AttackData.pierces_guard` (the authored counterplay flag), `Abilities.Id.BRACE` + `BRACE_DEF_BONUS` riding the ability union and authored onto **Bulwark Plate**, `GUARD_BASE_RANGE`, a ground-channel ward marker (real shields as of 2026-08-21, cut from `ProjectUtumno_full` row 38 — the dev's picks; #450 then made it **shield-plus-link** as the design always asked, so col 35 is the one surviving cut and col 30 was deleted with the row's second shield), and the live ward in the save snapshot as an entry-index re-link. **The access fork stays open**: Guard ships basic-for-everyone, and every ruling above is gate-independent, so playtest can still flip it.
 
-## AI — deferred whole (dev, 2026-08-20)
+## AI — BUILT 2026-09-04 ([#751](https://github.com/Phaazoid/Godoiosis/issues/751)); deferred whole 2026-08-20 to 2026-09-04
 
 Both new action types ship declared **`NEVER` in every archetype table** (the `tests/law/test_ai_action_coverage.gd` partition demands a stance; NEVER is legal, absence is red). The entire AI side waits for the next big AI pass and is filed on [#117](https://github.com/Phaazoid/Godoiosis/issues/117) as one standing-reactions entry: watch-aware pathing (footprints join fire as hazards moves should prefer to avoid), crossing-order smarts under #412 (feed the tank first), a Guard builder, defended-target deprioritization (the scratchpad's threat-range idea — a *preference, never a ban*, [#57](https://github.com/Phaazoid/Godoiosis/issues/57)'s downed-deprioritization shape), and a Sentry watch stance (idle at post, watching the approach — the natural first builder). Known, accepted cost: until that pass, enemies play neither mechanic, so playtest reads on *facing* them wait.
+
+**That pass is #751, and three of those five items resolved differently than this paragraph expected.** Hold and Sentry now take both verbs (Rushdown keeps `NEVER`), with the aim and ward rules in [ai-tactics.md](ai-tactics.md) → *The two standing-reaction rules*. **The Sentry watch stance needed no builder of its own** — a sentry idling at its post already takes the fallback walk, so declaring OVERWATCH in the table produced "idle at post, watching the approach" with no special-casing. **And defended-target deprioritization was never the right description**: `ResolvedPlan.guards` carries wards armed in earlier passes, so the AI's own candidate resolve already retargets a hit to the blocker and prices the real outcome — it cannot kill through an intact shield and already sees that. It is a **repricing the resolver does**, not the preference-gate #57's shape suggested, and the AI will still attack a warded target when the blocker is the softer one, which is this design's own texture. **Still open:** watch-aware pathing (the same destination-danger term the fire/cover work wants) and crossing-order smarts.
+
 
 ## Open forks (deliberate — don't resolve in passing)
 
