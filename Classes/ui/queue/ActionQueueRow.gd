@@ -101,9 +101,9 @@ func _apply_row_style() -> void:
 # multi-element hit still says its consequences on the line below.
 func _paint_rail(outcome: ResolvedOutcome) -> void:
 	if outcome == null or outcome.elements.is_empty():
-		rail.color = ElementPalette.NEUTRAL
+		rail.color = QueueStyle.ink(QueueStyle.Role.RAIL_NEUTRAL)
 		return
-	rail.color = ElementPalette.color_for_element(outcome.elements[0])
+	rail.color = QueueStyle.element_ink(outcome.elements[0])
 
 # The consequence chips, IN the line between the target sprite and the readout (dev, 2026-09-03).
 # A STATE the hit applied gets a chip, a fired COMBO gets its BADGE word, and an event popup the
@@ -121,7 +121,7 @@ func _build_consequence(outcome: ResolvedOutcome) -> void:
 			continue
 		var tip: String = UiText.wrap("%s -- %s" % [Elemental.state_display_name(state),
 				Glossary.short(Glossary.term_for_element_state(state))])
-		consequence.add_child(_chip(ElementPalette.color_for_state(state),
+		consequence.add_child(_chip(QueueStyle.state_ink(state),
 				Elemental.state_display_name(state), tip))
 
 	# A reaction OWNS its popup whether or not it earns a chip: the setup half is already fully said
@@ -134,13 +134,13 @@ func _build_consequence(outcome: ResolvedOutcome) -> void:
 		spoken.append(reaction.popup)
 		if not reaction.is_combo():
 			continue
-		consequence.add_child(_chip(ElementPalette.color_for_element(reaction.incoming_element),
+		consequence.add_child(_chip(QueueStyle.element_ink(reaction.incoming_element),
 				reaction.badge_name(), UiText.wrap(Glossary.reaction_line(reaction))))
 
 	for popup in outcome.popups:
 		if spoken.has(popup):
 			continue   # a reaction's own word, said above as its chip
-		consequence.add_child(_chip(QueueStyle.EVENT_TINT, popup, ""))
+		consequence.add_child(_chip(QueueStyle.ink(QueueStyle.Role.EVENT_TINT), popup, ""))
 	# No visibility toggle: the container holds the line's horizontal EXPAND whether or not it has
 	# chips, which is what keeps the cancel X on the right edge of a row that has none. It WRAPS
 	# rather than clips, so a crowded hit costs the row a second line instead of losing a word.
@@ -181,7 +181,8 @@ func _show_hp_delta(outcome: ResolvedOutcome, subject: Unit) -> void:
 	var friendly := true
 	if subject != null and is_instance_valid(subject):
 		friendly = not Team.is_enemy(subject.get_faction(), Team.Faction.PLAYER)
-	_show_readout(QueueStyle.READOUT_ALLY if friendly else QueueStyle.READOUT_ENEMY)
+	var role: QueueStyle.Role = QueueStyle.Role.READOUT_ALLY if friendly else QueueStyle.Role.READOUT_ENEMY
+	_show_readout(QueueStyle.ink(role))
 
 # The number wears the same tinted card the elemental chips do (dev, 2026-09-03: the digits "are a
 # bit odd on their own... the damage numbers should have that feel too"). One card language across
@@ -220,7 +221,7 @@ func setup_volley_summary(lead: AttackAction, count: int, expanded: bool) -> voi
 	# The READOUT slot becomes the hit-count + expand affordance -- the group has no single hp->hp,
 	# and this is the slot that is free rather than one to draw over (#685).
 	readout.text = ("[-] x%d" if expanded else "[+] x%d") % count
-	_show_readout(QueueStyle.HEADER_TEXT)
+	_show_readout(QueueStyle.ink(QueueStyle.Role.HEADER_TEXT))
 	_apply_row_style()
 
 	# Cancelling the summary cancels the whole volley (it's one aim) — keep the X live.

@@ -546,6 +546,20 @@ const CLASS_KNOBS: Array[Dictionary] = [
 	{"group": "Action queue", "label": "World event text", "static": "EVENT_TINT", "script": QUEUE_STYLE_SCRIPT,
 		"tip": "The pill an action-queue row wears for a consequence the WORLD caused rather than an element -- Fell, Drowning, Into the void, Insulated. It shipped as the rail.s structural grey once and was unreadable against the row, so the one thing it must not be is another grey. Keep it OFF the element wheel: every element colour is saturated, so a near-neutral reads as 'not elemental' at a glance."},
 
+	# ...and the two values that turn those seven element colours into INK on the PARCHMENT palette
+	# (round 5). A player picks the palette in Settings; these are what the dev authors inside one.
+	#
+	# INERT WHILE SLATE IS LIVE, which is #422's cost pointed the other way -- the alternative is
+	# authored in source, exactly as OverlayManager's aim palettes are. Tune them with Parchment
+	# picked, where the panel repaints under the slider. The seven element rows above are inert under
+	# NEITHER palette, which is the whole reason parchment adapts them rather than re-authoring them.
+	{"group": "Action queue", "label": "Parchment ink depth", "static": "PARCHMENT_INK_DEPTH",
+		"script": QUEUE_STYLE_SCRIPT, "min": 0.2, "max": 0.9, "step": 0.01,
+		"tip": "How dark an element reads as ink on the parchment palette's cream rows. Its HUE never moves -- fire is orange in both palettes -- so this is the whole of how heavily the seven sit on the page. Too high and they wash out against the paper; too low and they all read as one dark smudge."},
+	{"group": "Action queue", "label": "Parchment ink saturation", "static": "PARCHMENT_INK_SATURATION",
+		"script": QUEUE_STYLE_SCRIPT, "min": 1.0, "max": 3.0, "step": 0.05,
+		"tip": "How far the element colours are pushed toward pure hue before being inked onto parchment. The slate set is tuned to GLOW on a dark ground, so the palest of them (Ice, Air) go to mud at ink depth without this. A gain rather than a floor, so your relative choices stay in order -- it clamps at fully saturated, which is the one place they can flatten."},
+
 	# --- PLAYBACK, in six sections (dev, 2026-08-27) ------------------------------------------
 	#
 	# It was ONE group of thirty flat rows and unreadable at that length: "I also see a lot of
@@ -1190,6 +1204,8 @@ static func read_static(name: String) -> Variant:
 		"ELEMENT_AIR": return ElementPalette.ELEMENT_AIR
 		"ELEMENT_AETHER": return ElementPalette.ELEMENT_AETHER
 		"EVENT_TINT": return QueueStyle.EVENT_TINT
+		"PARCHMENT_INK_DEPTH": return QueueStyle.PARCHMENT_INK_DEPTH
+		"PARCHMENT_INK_SATURATION": return QueueStyle.PARCHMENT_INK_SATURATION
 	push_error("GameKnobs: unknown static '%s'" % name)
 	return null
 
@@ -1545,6 +1561,14 @@ static func write_static(host: Node3D, name: String, value: Variant) -> void:
 			return
 		"EVENT_TINT":
 			QueueStyle.EVENT_TINT = value
+			_restyle_action_queue(host)
+			return
+		"PARCHMENT_INK_DEPTH":
+			QueueStyle.PARCHMENT_INK_DEPTH = value
+			_restyle_action_queue(host)
+			return
+		"PARCHMENT_INK_SATURATION":
+			QueueStyle.PARCHMENT_INK_SATURATION = value
 			_restyle_action_queue(host)
 			return
 		_:

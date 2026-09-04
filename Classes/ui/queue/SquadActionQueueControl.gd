@@ -17,7 +17,8 @@ class_name SquadActionQueueControl
 #
 # Its LOOK lives in QueueStyle, not here: sections and rows are code-built, so their chrome cannot
 # be a .tscn sub-resource, and one file answering "what colour is the queue" is what keeps this
-# panel from drifting off the inspect panel it was matched to.
+# panel from drifting off the inspect panel it was matched to. That file answers it for TWO palettes
+# since round 5 -- the player picks, this panel only re-applies.
 
 @onready var sections_box: VBoxContainer = $BackgroundPanel/MarginContainer/VBox/OuterScroll/SectionsBox
 @onready var execute_button: Button = $BackgroundPanel/MarginContainer/VBox/ExecuteButton
@@ -58,8 +59,14 @@ func _ready() -> void:
 	execute_button.text = "Execute Orders"
 	execute_button.focus_mode = Control.FOCUS_NONE
 	execute_button.pressed.connect(_execute)
+	_apply_chrome()
+	set_process(false)
+
+# The PANEL's own chrome, as against the rows' -- the frame, the title and Execute. Its own function
+# only so restyle() can re-apply it; see there for why that matters.
+func _apply_chrome() -> void:
 	background_panel.add_theme_stylebox_override("panel", QueueStyle.panel_box())
-	title_label.add_theme_color_override("font_color", QueueStyle.TITLE_TEXT)
+	title_label.add_theme_color_override("font_color", QueueStyle.ink(QueueStyle.Role.TITLE_TEXT))
 	# The engine's default button chrome is grey on a grey panel, so Execute vanished into the dock
 	# (dev, 2026-09-03). Its DISABLED look is still set_execute_state's EXECUTE_DULL modulate over
 	# this, rather than a second stylebox nobody would keep in sync.
@@ -67,17 +74,24 @@ func _ready() -> void:
 	execute_button.add_theme_stylebox_override("hover", QueueStyle.execute_hover_box())
 	execute_button.add_theme_stylebox_override("pressed", QueueStyle.execute_hover_box())
 	execute_button.add_theme_stylebox_override("disabled", QueueStyle.execute_box())
-	execute_button.add_theme_color_override("font_color", QueueStyle.EXECUTE_TEXT)
-	execute_button.add_theme_color_override("font_hover_color", QueueStyle.EXECUTE_TEXT)
-	execute_button.add_theme_color_override("font_disabled_color", QueueStyle.EXECUTE_TEXT)
-	set_process(false)
+	var execute_text := QueueStyle.ink(QueueStyle.Role.EXECUTE_TEXT)
+	execute_button.add_theme_color_override("font_color", execute_text)
+	execute_button.add_theme_color_override("font_hover_color", execute_text)
+	execute_button.add_theme_color_override("font_disabled_color", execute_text)
 
 # Repaint what is already on screen, with no trip through the backend (#685). The dev's element
 # colours are knobs, so a slider drag needs the rows to re-read them -- and a resolve per tick is
 # what the mission-HUD's own re-apply door would have cost. `_render` re-reads _last_entries, which
 # the volley toggle already relied on; the Execute button's visibility is preserved across it
 # because a restyle is not a plan change and must not un-hide a button a running pass hid.
+#
+# THE CHROME IS RE-APPLIED FIRST AND UNCONDITIONALLY (round 5). It used to be set once in _ready,
+# which is invisible while a palette is fixed and wrong the moment one is not: a swap re-rendered
+# every row and left the frame, the title and Execute wearing the palette the game booted in. Above
+# the early return on purpose -- an empty queue has no rows to re-render, and its panel still has to
+# be right before the next order shows it.
 func restyle() -> void:
+	_apply_chrome()
 	if _last_entries.is_empty():
 		return
 	var was_showing := execute_button.visible

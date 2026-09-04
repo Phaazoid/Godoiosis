@@ -183,7 +183,7 @@ func test_a_state_the_hit_applies_becomes_a_chip_that_explains_itself() -> void:
 				.override_failure_message("the WET chip has no hover readout — the tooltip doctrine is what keeps the elemental table off the player's memory") \
 				.is_not_empty()
 			assert_that(e["color"]).is_equal(
-					ElementPalette.color_for_state(Elemental.State.WET))
+					QueueStyle.state_ink(Elemental.State.WET))
 
 
 # A status lands on the unit RECEIVING it, so its chip sits AFTER the target sprite and before the
@@ -348,13 +348,13 @@ func test_a_world_event_pill_is_readable_against_the_row() -> void:
 		var tint: Color = e["color"]
 		assert_that(tint) \
 			.override_failure_message("the world-event pill is wearing the rail's off-state grey again — it is chosen to disappear, and text in it is grey on grey") \
-			.is_not_equal(ElementPalette.NEUTRAL)
+			.is_not_equal(QueueStyle.ink(QueueStyle.Role.RAIL_NEUTRAL))
 		# A generous floor: every readable choice clears it by miles, and only a near-row-coloured
 		# one trips it, which is the bug itself coming back.
-		var contrast: float = absf(_luma(tint) - _luma(QueueStyle.ROW_BG))
+		var contrast: float = absf(_luma(tint) - _luma(QueueStyle.ink(QueueStyle.Role.ROW_BG)))
 		assert_float(contrast) \
 			.override_failure_message("the world-event pill sits at luma %.2f against a row at %.2f — that is the grey-on-grey the dev reported"
-				% [_luma(tint), _luma(QueueStyle.ROW_BG)]) \
+				% [_luma(tint), _luma(QueueStyle.ink(QueueStyle.Role.ROW_BG))]) \
 			.is_greater(0.25)
 
 
@@ -408,7 +408,7 @@ func test_a_fired_combo_says_its_own_word_in_its_element_colour() -> void:
 	for e in entries:
 		if String(e["text"]) == combo.badge_name():
 			assert_that(e["color"]).is_equal(
-					ElementPalette.color_for_element(combo.incoming_element))
+					QueueStyle.element_ink(combo.incoming_element))
 			assert_str(String(e["tip"])) \
 				.override_failure_message("the combo's word has no hover explanation") \
 				.is_not_empty()
@@ -475,7 +475,7 @@ func test_the_rail_wears_the_element_that_reached_the_target() -> void:
 		.override_failure_message("the resolve recorded no surviving elements, so the rail has nothing to read") \
 		.is_not_empty()
 	assert_that(row.rail.color).is_equal(
-			ElementPalette.color_for_element(outcome.elements[0]))
+			QueueStyle.element_ink(outcome.elements[0]))
 
 
 # A MOVE carries no element and must not borrow one.
@@ -490,7 +490,7 @@ func test_a_row_with_no_element_wears_the_neutral_rail() -> void:
 
 	var rows := _rows()
 	assert_int(rows.size()).is_greater(0)
-	assert_that(rows[0].rail.color).is_equal(ElementPalette.NEUTRAL)
+	assert_that(rows[0].rail.color).is_equal(QueueStyle.ink(QueueStyle.Role.RAIL_NEUTRAL))
 
 
 # ------------------------------------------------------------------------------------------------
