@@ -183,6 +183,33 @@ func test_a_look_preset_that_no_longer_exists_degrades_the_board() -> void:
 	_assert_silent(BoardLint.Severity.DEGRADES, "no longer exists")
 
 
+func test_a_roster_that_does_not_exist_blocks_the_board() -> void:
+	# BLOCKS where the look preset one case up is DEGRADES, and the tier is the finding: a board
+	# with no look wears the default and plays exactly as authored, while a board whose pool cannot
+	# be found has no pool to offer. Only BLOCKS reds CI, so filing this at the wrong tier would
+	# leave every shipped roster-naming mission unswept.
+	_spawn(Team.Faction.PLAYER, 0)
+	game.scenario_manager.current_roster = "NoSuchRosterEverExisted"
+	_assert_reports(BoardLint.Severity.BLOCKS, "NoSuchRosterEverExisted")
+
+	# Non-vacuous against a roster that DOES resolve -- otherwise this passes on any non-empty name.
+	var real: Array[String] = RosterCatalog.saved_rosters()
+	if real.is_empty():   # content-absent: warn, never fail (tests/README.md rule 9)
+		push_warning("no rosters are shipped, so the resolving twin cannot be shown")
+		return
+	game.scenario_manager.current_roster = real[0]
+	_assert_silent(BoardLint.Severity.BLOCKS, "does not exist")
+
+
+func test_a_board_naming_no_roster_says_nothing_about_rosters() -> void:
+	# The ordinary board, and the case that would catch a rule that forgot its empty-name guard --
+	# every scenario shipped before #735 names no roster, so a missing early-return would BLOCK
+	# every one of them at once.
+	_spawn(Team.Faction.PLAYER, 0)
+	game.scenario_manager.current_roster = ""
+	_assert_silent(BoardLint.Severity.BLOCKS, "roster")
+
+
 func test_findings_that_block_play_are_listed_first() -> void:
 	# The order IS part of what the report says, so it belongs to the rule and not to the panel.
 	# Built degrades-first so a lint that merely preserved call order would fail this.

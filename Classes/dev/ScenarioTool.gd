@@ -23,10 +23,14 @@ var _lose_boxes := {}        # MissionRules.LoseCondition -> CheckBox
 var _lose_warning: Label
 var _round_limit_spin: SpinBox
 var _look_row: HBoxContainer
+var _roster_row: HBoxContainer
 var _camera_row: HBoxContainer
 var _report_box: VBoxContainer
 
 const NO_LOOK_LABEL := "(none - default)"
+# Not "(none - default)" like the look above: there is no default roster to fall back to, and a
+# board with no roster is the ordinary board rather than a degraded one (#735).
+const NO_ROSTER_LABEL := "(none - no pre-mission)"
 
 # The report's three voices. Red is the same literal _refresh_objective_warning uses below -- the
 # live objective warning and a BLOCKS finding say the same kind of thing and must look the same.
@@ -45,6 +49,7 @@ func init(p_scenario_manager: ScenarioManager, p_game, header: ScenarioHeader) -
 	_build_lose_conditions()
 	_build_check_section()
 	refresh_look_row()
+	refresh_roster_row()   # between the two: each row pins itself to index 0, so this is the order
 	refresh_camera_row()   # last, so it lands above the look row and stays there on every rebuild
 	# A LOAD is the one thing that makes a report describe a board that is no longer on screen, and
 	# board_loaded is the only signal that means exactly that -- the header's file_changed also
@@ -73,6 +78,35 @@ func refresh_look_row() -> void:
 	_look_row = DevWidgets.add_option(self, "Look preset", options,
 		current if current != "" else NO_LOOK_LABEL, _on_look_picked)
 	move_child(_look_row, 0)
+
+
+# Which roster this board offers (#735). The look row's shape exactly, and for the same reason:
+# a NAME resolved against a folder, so the dropdown lists the folder and a stale name stays
+# selectable rather than silently reading as "(none)".
+#
+# No live side-effect twin to the look row's apply_preset call: nothing reads a roster until #737,
+# and there is nothing on screen a pick could change.
+func refresh_roster_row() -> void:
+	if _roster_row != null:
+		remove_child(_roster_row)
+		_roster_row.queue_free()
+	var options: Array[String] = [NO_ROSTER_LABEL]
+	options.append_array(RosterCatalog.saved_rosters())
+	var current: String = scenario_manager.current_roster
+	if current != "" and not options.has(current):
+		options.append(current)
+	_roster_row = DevWidgets.add_option(self, "Roster", options,
+		current if current != "" else NO_ROSTER_LABEL, _on_roster_picked)
+	DevWidgets.apply_tooltip(_roster_row, DevWidgets.wrap_tooltip(
+		"Who the player may bring into this mission, and the loose gear on offer. "
+		+ "(none) means this board has no pre-mission phase: it keeps its authored cast and "
+		+ "starts at turn 1."))
+	move_child(_roster_row, 0)
+
+
+func _on_roster_picked(picked: String) -> void:
+	scenario_manager.current_roster = "" if picked == NO_ROSTER_LABEL else picked
+	_mark()
 
 
 func _on_look_picked(picked: String) -> void:
@@ -168,6 +202,7 @@ func refresh_on_show() -> void:
 	refresh_objectives()
 	refresh_lose_conditions()   # ...and what loses it (#101)
 	refresh_look_row()   # a board load changes which preset this board wears
+	refresh_roster_row()   # ...and who it offers (#735)
 	refresh_camera_row()   # ...and where it opens (#234)
 
 

@@ -47,6 +47,7 @@ static func check(game) -> Array[Dictionary]:
 	_check_placement(game, board, found)
 	_check_cohesion(game, found)
 	_check_look_preset(game, found)
+	_check_roster(game, found)
 	_check_dialog(game, board, found)
 	_check_repaired_content(found)
 
@@ -196,6 +197,25 @@ static func _check_look_preset(game, found: Array[Dictionary]) -> void:
 	_add(found, Severity.DEGRADES,
 		"This board names look preset '%s', which no longer exists -- it opens with the default look."
 			% preset)
+
+
+# A named roster that no longer resolves (#735). BLOCKS, where the look preset directly above is
+# DEGRADES, and the difference is the whole reason they are separate rules: a board with no look
+# wears the default and plays exactly as authored, while a board whose pool cannot be found has no
+# pool -- the pre-mission phase would offer nobody. Substituting some other roster would hand the
+# player a different mission, so RosterCatalog.resolve has no default to fall back to.
+#
+# saved_rosters() rather than resolve(), for _check_look_preset's reason one rule up: resolve's job
+# is to push_error, and a lint must not have side effects. It is also the same question the
+# Properties dropdown asks, so a name the row offers is always a name this accepts.
+static func _check_roster(game, found: Array[Dictionary]) -> void:
+	var scenario_manager: ScenarioManager = game.scenario_manager
+	var roster: String = scenario_manager.current_roster
+	if roster == "" or RosterCatalog.saved_rosters().has(roster):
+		return
+	_add(found, Severity.BLOCKS,
+		("This board names roster '%s', which does not exist -- the pre-mission phase has no units "
+		+ "to offer.") % roster)
 
 
 # #397, the two checks deferred from #390. Both read the SAME stores the director reads

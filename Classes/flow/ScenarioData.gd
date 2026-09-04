@@ -47,6 +47,18 @@ class_name ScenarioData
 # unit_data. Empty = the default look. Resolved by LookKnobs.resolve, applied by battle3d.
 @export var look_preset := ""
 
+# Which Roster this mission offers (#735) -- who the player may bring into it, and the loose gear
+# they may bring. A NAME resolved against RosterCatalog.ROSTER_DIR, never a Roster reference, for
+# the two reasons stated for look_preset directly above; the filename IS a roster's identity, so
+# there is no display_name to disagree with it.
+#
+# EMPTY = this board has no pre-mission phase, which is what every scenario saved before #735 is:
+# it keeps its authored cast and boots straight into turn 1. That fallback is why adding this
+# breaks nothing -- the objectives: [] shape. A named roster that no longer resolves is a BLOCKS
+# finding in BoardLint rather than a silent fallback: substituting a different pool would hand the
+# player a different mission.
+@export var roster := ""
+
 # Where the camera OPENS on this board (#234). Null = derive it -- battle3d frames the player's own
 # units, which is the right default and the wrong authored answer for a handcrafted level. Authored
 # is AUTHORITATIVE; the derivation is the fallback for a board that says nothing (Law #4, same shape
