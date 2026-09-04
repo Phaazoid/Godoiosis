@@ -56,11 +56,17 @@ const MAIN_ACTION_PRIORITY := {
 # player's. The AI contests it positionally, which it already does: Rushdown walks into the
 # approach, and a Sentry squad zoned over the point defends it with no AI code at all. Revisit
 # only when non-player factions get objectives of their own.
-# GUARD and OVERWATCH everywhere at v1 (#414/#413): the entire AI side of the standing reactions is
-# deferred to the next big AI pass and filed on #117 (a Guard builder, defended-target
-# deprioritization, watch-aware pathing, crossing-order smarts, a Sentry watch stance). NEVER is a
-# legal declaration, absence is red. Accepted cost, stated in the doc: enemies play neither yet, so
-# playtest reads on FACING them wait for that pass.
+# GUARD and OVERWATCH were NEVER everywhere until #750 (2026-09-04): Hold and Sentry take both now
+# (dev), Rushdown keeps NEVER for both -- a rusher that stops to shield somebody is not a rusher,
+# the same reason it refuses rescue, intimidate and burrow. Both sit BELOW attack, because both are
+# PREPARATIONS whose payoff lands on somebody else's turn and #726's ruling covers that case: a
+# preparation is a rule, never a score term.
+#
+# Two of the five items #117 filed came off that list without code: defended-target deprioritization
+# turned out to be REPRICING the resolver already does (an armed ward retargets the hit, so the AI
+# cannot kill through an intact shield and already sees that), and the Sentry watch stance falls out
+# of the fallback walk #726 gave a sentry at its post. Watch-aware pathing and crossing-order smarts
+# are still open -- the first is the same `_approach_beats` danger term the fire/cover work wants.
 const MAIN_ACTION_NEVER := {
 	Type.RUSHDOWN: [BaseAction.ActionType.RESCUE, BaseAction.ActionType.RALLY,
 			BaseAction.ActionType.INTIMIDATE, BaseAction.ActionType.BURROW,
