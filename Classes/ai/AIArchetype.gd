@@ -42,10 +42,12 @@ static func resolve(t: Type) -> Callable:
 const MAIN_ACTION_PRIORITY := {
 	Type.RUSHDOWN: [BaseAction.ActionType.ATTACK, BaseAction.ActionType.RELOAD, BaseAction.ActionType.REV],
 	Type.HOLD: [BaseAction.ActionType.ATTACK, BaseAction.ActionType.RESCUE,
-			BaseAction.ActionType.RELOAD, BaseAction.ActionType.REV, BaseAction.ActionType.BURROW,
+			BaseAction.ActionType.OVERWATCH, BaseAction.ActionType.RELOAD, BaseAction.ActionType.REV,
+			BaseAction.ActionType.BURROW, BaseAction.ActionType.GUARD,
 			BaseAction.ActionType.INTIMIDATE],
 	Type.SENTRY: [BaseAction.ActionType.ATTACK, BaseAction.ActionType.RESCUE,
-			BaseAction.ActionType.RELOAD, BaseAction.ActionType.REV, BaseAction.ActionType.BURROW,
+			BaseAction.ActionType.OVERWATCH, BaseAction.ActionType.RELOAD, BaseAction.ActionType.REV,
+			BaseAction.ActionType.BURROW, BaseAction.ActionType.GUARD,
 			BaseAction.ActionType.INTIMIDATE],
 }
 
@@ -64,10 +66,8 @@ const MAIN_ACTION_NEVER := {
 			BaseAction.ActionType.INTIMIDATE, BaseAction.ActionType.BURROW,
 			BaseAction.ActionType.CAPTURE, BaseAction.ActionType.GUARD,
 			BaseAction.ActionType.OVERWATCH],
-	Type.HOLD: [BaseAction.ActionType.RALLY, BaseAction.ActionType.CAPTURE,
-			BaseAction.ActionType.GUARD, BaseAction.ActionType.OVERWATCH],
-	Type.SENTRY: [BaseAction.ActionType.RALLY, BaseAction.ActionType.CAPTURE,
-			BaseAction.ActionType.GUARD, BaseAction.ActionType.OVERWATCH],
+	Type.HOLD: [BaseAction.ActionType.RALLY, BaseAction.ActionType.CAPTURE],
+	Type.SENTRY: [BaseAction.ActionType.RALLY, BaseAction.ActionType.CAPTURE],
 }
 
 static func main_action_priority(t: Type) -> Array:
