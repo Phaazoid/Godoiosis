@@ -224,11 +224,16 @@ func test_a_crowded_row_wraps_its_chips_instead_of_overflowing() -> void:
 			% row.consequence.get_child_count()) \
 		.is_greater(1)
 
-	var inner: Control = row.get_parent().get_parent()
-	assert_float(row.get_combined_minimum_size().x) \
-		.override_failure_message("a crowded row needs %.0fpx and its section leaves %.0f — the chips are pushing the row past the panel instead of wrapping"
-			% [row.get_combined_minimum_size().x, inner.size.x]) \
-		.is_less_equal(inner.size.x)
+	# MEASURED AGAINST THE DOCK, not the section -- see test_the_widest_row_still_fits_inside_its_section.
+	# This case's own blind spot was separate and worse: an HFlowContainer's minimum width is its
+	# WIDEST CHILD, so wrapping only ever happens BETWEEN chips and a crowd of SHORT ones can never
+	# trip it. The single over-wide chip is what broke the dock, and tests/ui/test_queue_badge_widths.gd
+	# is the law that covers it; this case keeps the crowd half.
+	var dock: Control = game.squad_action_queue_control.background_panel
+	assert_float(row.get_global_rect().end.x) \
+		.override_failure_message("the row reaches %.0f and the dock ends at %.0f -- the chips are pushing the row out of the panel instead of wrapping"
+			% [row.get_global_rect().end.x, dock.get_global_rect().end.x]) \
+		.is_less_equal(dock.get_global_rect().end.x)
 
 
 # The chips take the slack the line already had, so a hit with one consequence must NOT cost a
@@ -337,14 +342,20 @@ func test_a_world_event_pill_is_readable_against_the_row() -> void:
 	var row := _attack_row()
 	assert_object(row).is_not_null()
 	var entries := _consequence_entries(row)
+	# THE BADGE is what the row prints; the dramatic word moved to the tooltip (2026-09-04), because
+	# a pill sized for the board's floating text does not fit this line. Both halves are asserted --
+	# a badge with no tooltip would have lost the wording rather than relocated it.
 	assert_array(_texts(entries)) \
 		.override_failure_message("the hit was fully insulated and the row said nothing about it — got %s"
 			% [_texts(entries)]) \
-		.contains([PlanResolver.INSULATED_POPUP])
+		.contains([ActionQueueRow.BADGE_INSULATED])
 
 	for e in entries:
-		if String(e["text"]) != PlanResolver.INSULATED_POPUP:
+		if String(e["text"]) != ActionQueueRow.BADGE_INSULATED:
 			continue
+		assert_str(String(e["tip"])) \
+			.override_failure_message("the badge shortened the word and dropped it: the dramatic wording has to survive on hover") \
+			.contains(PlanResolver.INSULATED_POPUP)
 		var tint: Color = e["color"]
 		assert_that(tint) \
 			.override_failure_message("the world-event pill is wearing the rail's off-state grey again — it is chosen to disappear, and text in it is grey on grey") \
@@ -539,10 +550,12 @@ func test_the_widest_row_still_fits_inside_its_section() -> void:
 	row.readout.text = "100->128"
 	await await_idle_frame()
 
-	var inner: Control = row.get_parent().get_parent()   # row -> indent wrapper -> section's VBox
-	assert_object(inner).is_not_null()
-	assert_float(row.get_combined_minimum_size().x) \
-		.override_failure_message("the row cannot fit its section: it needs %.0fpx and has %.0f — the panel's width no longer covers its slots"
-			% [row.get_combined_minimum_size().x, inner.size.x]) \
-		.is_less_equal(inner.size.x)
+	# MEASURED AGAINST THE DOCK, not the section. BackgroundPanel is anchored in the .tscn and is the
+	# one width here that does not move; a section GROWS to whatever its row demands, so the earlier
+	# form of this assertion could not fail (reported 2026-09-04).
+	var dock: Control = game.squad_action_queue_control.background_panel
+	assert_float(row.get_global_rect().end.x) \
+		.override_failure_message("the widest row reaches %.0f and the dock ends at %.0f -- the panel's width no longer covers its slots"
+			% [row.get_global_rect().end.x, dock.get_global_rect().end.x]) \
+		.is_less_equal(dock.get_global_rect().end.x)
 	assert_object(attacker).is_not_null()

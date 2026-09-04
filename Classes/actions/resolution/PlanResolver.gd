@@ -2,6 +2,12 @@ extends Object
 class_name PlanResolver
 
 const INSULATED_POPUP := "Insulated!"
+# The other three world-event words, promoted off inline literals (#685 follow-up) so the queue row's
+# BADGE can carry the same event without a second spelling of its wording. These stay the dramatic
+# form: they are what floats over the unit and what a bug report prints, where there is room.
+const FELL_POPUP := "Fell %d!"
+const DROWNING_POPUP := "Drowning!"
+const VOID_POPUP := "Into the void!"
 
 # The one place consequences are derived (docs/design/resolution-pipeline.md, R1-R8).
 # ONE pure pass over the ordered plan — attacks, then counters (R7) — threading a
@@ -365,6 +371,7 @@ static func _resolve_one(action: AttackAction, reactions: Array[ElementalReactio
 	var fully_insulated := not incoming.is_empty() and elements.is_empty()
 	outcome.elements = elements.duplicate()   # what REACHED the target — the queue row's element rail
 	if elements.size() < incoming.size():
+		outcome.insulated = true
 		outcome.popups.append(INSULATED_POPUP)
 	var mult := 1.0
 	var bonus := 0
@@ -440,7 +447,7 @@ static func _resolve_one(action: AttackAction, reactions: Array[ElementalReactio
 			# mitigation, before the Iron Will clamp so the cap stays absolute.
 			outcome.fall_damage = FallRules.damage_for(landing.fall_units, target)
 			outcome.damage += outcome.fall_damage
-			outcome.popups.append("Fell %d!" % outcome.fall_levels)
+			outcome.popups.append(FELL_POPUP % outcome.fall_levels)
 
 	# Iron Will (Passive, docs/design/jobs.md "The ability chassis"): a deterministic per-hit
 	# damage cap on the holder. Composes with the floor above as an ordinary clamp — order is
@@ -465,7 +472,7 @@ static func _resolve_one(action: AttackAction, reactions: Array[ElementalReactio
 	if landing != null and landing.drowned:
 		outcome.drown_damage = maxi(0, target_hypo.hp - outcome.damage)
 		outcome.damage += outcome.drown_damage
-		outcome.popups.append("Drowning!")
+		outcome.popups.append(DROWNING_POPUP)
 
 	# --- thread the hypothetical forward (R4) ---
 	for s in outcome.states_removed:
@@ -483,7 +490,7 @@ static func _resolve_one(action: AttackAction, reactions: Array[ElementalReactio
 		# every reader threads DEAD; the flag is execution's own die() door.
 		outcome.lethality = ResolvedOutcome.Lethality.KILLED
 		outcome.removed = true
-		outcome.popups.append("Into the void!")
+		outcome.popups.append(VOID_POPUP)
 	# The lifecycle a rung leaves behind is ONE map (#313) — a preview holding only an outcome reads
 	# the same one. What a rung SPENDS stays here: it differs per rung and it is spent from the hypo.
 	target_hypo.lifecycle = LethalityRules.lifecycle_for(outcome.lethality, target_hypo.lifecycle)
