@@ -7,7 +7,7 @@ its child [#49 Action Queue UX](https://github.com/Phaazoid/Godoiosis/issues/49)
 This is a *guidelines* doc, not a spec — it captures the principles we're holding the work to,
 plus the running order of the queue-UX checklist. Update it as items land.
 
-**Canon checked through #729 (2026-09-03).**
+**Canon checked through #729 (2026-09-04).**
 
 ## Principles
 
@@ -2911,3 +2911,68 @@ Earth's ochre. It takes a knob, which is the one exception to this file's *no kn
 the chrome mirrors a panel that has none, while this is a colour the queue INVENTS and that has to
 read against the element chips beside it. **The general form: a colour picked to recede cannot be
 promoted to a colour that must be read** — check what a value was chosen FOR before borrowing it.
+
+### Round 5 — the losing palette comes back as a CHOICE
+
+*"I'm looking at your plan again, and I really do like the parchment option too. Can you give me a
+player setting toggle for it?"* The grill offered Slate and Parchment, he picked Slate, and round 5
+hands the loser back without taking anything away: `PlayerSettings.QUEUE_PALETTE`, two options, and
+no UI work at all — the settings page is a projection of `DEFS`. That is [#422](https://github.com/Phaazoid/Godoiosis/issues/422)'s
+relationship exactly — **the dev authors what is IN a palette, the player picks BETWEEN palettes** —
+so nothing moved out of `GameKnobs` and nothing became a `Scale` row.
+
+**The fork that set the ticket's size** (dev ruling, 2026-09-04): the seven element colours are tuned
+to *glow* against a dark ground and read as pastel mush on cream, so Parchment either authors a
+second seven or **adapts** the one authored set. His words: *"I'm good with adapting the colors to
+work with the cream background."*
+
+**The split that falls out of that is the reusable part:**
+
+| | what it is | how a palette gets it |
+|---|---|---|
+| an element colour | **semantic** — fire is orange on any ground | **ADAPTED** — hue carried through untouched, only ink weight moves |
+| a chrome colour | **a role** — *the text that reads against the card* | **AUTHORED** — near-white on slate INVERTS to near-black on cream |
+
+An inversion has nothing to derive from, which is why the 22 chrome roles are a table and the seven
+elements are a function.
+
+**It also corrects a line this project had written down as the cost of palettes.** `CLAUDE.md` says a
+palette *"leaves the knob tuning a set nobody is looking at"* — true of `OverlayManager.AIM_PALETTES`,
+whose alternatives **re-author** their colours, so a colour knob is inert while one is picked.
+Parchment derives its element inks from the same seven statics those knobs write, so **dragging the
+Fire slider moves both palettes**. That is the cost of RE-AUTHORING, not of palettes: a palette whose
+values are semantic should adapt, and only a palette of *roles* has to be authored twice.
+
+**DEFAULT is not a row in `PALETTES`** — #422's own ruling, load-bearing twice over here: a DEFAULT
+row would be a *copy* of the authored consts, so `EVENT_TINT`'s knob would write a static the panel
+had stopped reading, and the copy would drift the first time either end was tuned. `ink()` falls
+through to the authored value instead, and `_authored` is a `match` rather than a const Dictionary
+because a const table would snapshot that static at parse time.
+
+**Two things had to grow before a swap could reach the screen, and both were invisible while there
+was only one palette:**
+
+- **`_cached` keys on the PALETTE.** Every stylebox is built out of `ink()`, so a cache keyed on the
+  name alone hands the parchment panel the slate box it built first — the chips repaint and the
+  frame, the sections and the rows do not. The key lives inside `_cached` rather than at each caller,
+  so nothing has to remember.
+- **`restyle()` re-applies the CHROME.** It was set once in `_ready`, which is correct exactly as
+  long as a palette never changes: a swap re-rendered every row and left the frame, the title and
+  Execute wearing whatever the game booted in. It sits above the empty-queue early return on purpose
+  — an empty dock has no rows to re-render, and its panel still has to be right before the next order
+  shows it.
+
+Both are the same shape as `SettingsScreen.show_screen`'s exit act, which now carries two of them:
+**a surface painted on an EDGE rather than polled needs someone to fire that edge when a setting
+moves**, and the settings page is where that someone lives.
+
+**What the tests deliberately do NOT pin.** The contrast law runs against **Parchment only**.
+Parchment's ink is *derived*, so its readability is a property of the adaptation rather than of any
+authored colour — an HSV colour at value `v` has luma ≤ `v`, so the floor is met by construction for
+every hue the dev could ever pick, and only tuning the ink DEPTH pale can trip it. Putting the same
+floor over the authored slate seven would quietly make seven knobs un-tunable past a threshold, which
+is a constraint this ticket never agreed to and the tuning razor forbids.
+
+The two ink values take knobs of their own and are **inert while Slate is live** — #422's cost
+pointed the other way, and acceptable here for a reason it is not there: you tune them while
+*looking* at Parchment, and the panel repaints under the slider.
