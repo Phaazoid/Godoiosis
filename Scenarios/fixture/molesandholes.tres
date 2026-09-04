@@ -1,0 +1,1288 @@
+[gd_resource type="Resource" script_class="ScenarioData" format=4 uid="uid://v0q2s72i6cqt"]
+
+[ext_resource type="Script" uid="uid://b7i3qekbjuuca" path="res://Classes/flow/DialogBeat.gd" id="1_aarde"]
+[ext_resource type="Script" uid="uid://cw4xhmsnr71ao" path="res://Classes/flow/ScenarioData.gd" id="2_l1bgn"]
+[ext_resource type="Script" uid="uid://8ryqq4dv281h" path="res://Classes/flow/TutorialStep.gd" id="3_6yl3u"]
+[ext_resource type="Script" uid="uid://dbb0pgdet8qo0" path="res://Classes/flow/ScenarioUnitEntry.gd" id="4_lrogb"]
+[ext_resource type="Script" uid="uid://cbb6calgu7yux" path="res://Classes/items/EquippableData.gd" id="5_5qx3r"]
+[ext_resource type="Script" uid="uid://t6htdtobwxob" path="res://Classes/weapons/instances/KineticMaceWeaponInstance.gd" id="6_bopqh"]
+[ext_resource type="Script" uid="uid://df2c8ssuh18ff" path="res://Classes/weapons/WeaponModData.gd" id="7_p4rrl"]
+[ext_resource type="Resource" uid="uid://ceogmk32dfq6l" path="res://Resources/Weapons/MainVarieties/Kinetic_Mace.tres" id="8_adqjh"]
+[ext_resource type="Script" uid="uid://6vu10nf3p58m" path="res://Classes/units/StatEffect.gd" id="9_ggc8e"]
+[ext_resource type="Texture2D" uid="uid://c5o27na4rlnf6" path="res://Art/Units/MapSprites/Brigand_Downed.png" id="10_wsn0r"]
+[ext_resource type="Script" uid="uid://7w7ajveltxx5" path="res://Classes/jobs/AbilityData.gd" id="11_rdr4l"]
+[ext_resource type="Texture2D" uid="uid://bxnjjje4mnfqs" path="res://Art/Units/MapSprites/Brigand.png" id="12_aw0nw"]
+[ext_resource type="Texture2D" uid="uid://lin61ix60e11" path="res://Art/Units/MapSprites/Brigand_Moving.png" id="13_ljvvr"]
+[ext_resource type="Texture2D" uid="uid://bg13ksnfa1txj" path="res://Art/Units/Portraits/hair_mcgee_evil.png" id="14_tviya"]
+[ext_resource type="Script" uid="uid://cvvknuw621ar2" path="res://Classes/units/UnitData.gd" id="15_gnsc6"]
+[ext_resource type="Resource" path="res://Resources/Weapons/WeaponVariants/Drill.tres" id="16_g6pwf"]
+[ext_resource type="Script" uid="uid://bu1j3q4jhqcpf" path="res://Classes/weapons/instances/DrillWeaponInstance.gd" id="17_22von"]
+[ext_resource type="Resource" uid="uid://bv7tui68o7xfr" path="res://Resources/Weapons/MainVarieties/Drill.tres" id="18_gvau7"]
+[ext_resource type="Script" uid="uid://bgbidu2bbf33l" path="res://Classes/alchemy/TransmutationData.gd" id="19_j3sob"]
+[ext_resource type="Script" uid="uid://dsxc14gee2d01" path="res://Classes/weapons/patterns/ManhattanRangePattern.gd" id="20_q5eac"]
+[ext_resource type="Script" uid="uid://ckrp1phgirys0" path="res://Classes/alchemy/RuneData.gd" id="21_qlc3e"]
+
+[sub_resource type="Resource" id="Resource_5qx3r"]
+script = ExtResource("6_bopqh")
+template = ExtResource("8_adqjh")
+spaces = Array[Array]([Array[ExtResource("7_p4rrl")]([]), Array[ExtResource("7_p4rrl")]([]), Array[ExtResource("7_p4rrl")]([])])
+display_name = "Smasher"
+
+[sub_resource type="Resource" id="Resource_bopqh"]
+script = ExtResource("15_gnsc6")
+display_name = "Bandit"
+portrait = ExtResource("14_tviya")
+base_stats = Dictionary[int, int]({
+0: 20,
+1: 7,
+2: 2,
+3: 3,
+4: 3,
+5: 3,
+6: 7,
+7: 3
+})
+map_sprite = ExtResource("12_aw0nw")
+move_sprite = ExtResource("13_ljvvr")
+downed_sprite = ExtResource("10_wsn0r")
+starting_inventory = Array[ExtResource("5_5qx3r")]([ExtResource("16_g6pwf")])
+
+[sub_resource type="Resource" id="Resource_p4rrl"]
+script = ExtResource("4_lrogb")
+unit_data = SubResource("Resource_bopqh")
+cell = Vector2i(3, 3)
+squad_id = 0
+is_leader = true
+squad_archetype = 1
+stats = Dictionary[int, int]({
+0: 20,
+1: 7,
+2: 6,
+3: 3,
+4: 3,
+5: 3,
+6: 7,
+7: 3
+})
+current_hp = 20
+current_will = 3
+inventory = Array[ExtResource("5_5qx3r")]([SubResource("Resource_5qx3r")])
+equipped_index = 0
+affinity_saved = true
+limb_states = Dictionary[int, int]({
+0: 0,
+1: 0,
+2: 0,
+3: 0
+})
+weapon_battle_states = Dictionary[int, Dictionary]({
+0: {
+"charge": 0
+}
+})
+
+[sub_resource type="Resource" id="Resource_adqjh"]
+script = ExtResource("6_bopqh")
+template = ExtResource("8_adqjh")
+spaces = Array[Array]([Array[ExtResource("7_p4rrl")]([]), Array[ExtResource("7_p4rrl")]([]), Array[ExtResource("7_p4rrl")]([])])
+display_name = "Smasher"
+
+[sub_resource type="Resource" id="Resource_ggc8e"]
+script = ExtResource("15_gnsc6")
+display_name = "Bandit"
+portrait = ExtResource("14_tviya")
+base_stats = Dictionary[int, int]({
+0: 20,
+1: 7,
+2: 2,
+3: 3,
+4: 3,
+5: 3,
+6: 7,
+7: 3
+})
+map_sprite = ExtResource("12_aw0nw")
+move_sprite = ExtResource("13_ljvvr")
+downed_sprite = ExtResource("10_wsn0r")
+starting_inventory = Array[ExtResource("5_5qx3r")]([ExtResource("16_g6pwf")])
+
+[sub_resource type="Resource" id="Resource_wsn0r"]
+script = ExtResource("4_lrogb")
+unit_data = SubResource("Resource_ggc8e")
+cell = Vector2i(2, 4)
+squad_id = 0
+stats = Dictionary[int, int]({
+0: 20,
+1: 7,
+2: 2,
+3: 3,
+4: 3,
+5: 3,
+6: 7,
+7: 3
+})
+current_hp = 20
+current_will = 3
+inventory = Array[ExtResource("5_5qx3r")]([SubResource("Resource_adqjh")])
+equipped_index = 0
+affinity_saved = true
+limb_states = Dictionary[int, int]({
+0: 0,
+1: 0,
+2: 0,
+3: 0
+})
+weapon_battle_states = Dictionary[int, Dictionary]({
+0: {
+"charge": 0
+}
+})
+
+[sub_resource type="Resource" id="Resource_rdr4l"]
+script = ExtResource("6_bopqh")
+template = ExtResource("8_adqjh")
+spaces = Array[Array]([Array[ExtResource("7_p4rrl")]([]), Array[ExtResource("7_p4rrl")]([]), Array[ExtResource("7_p4rrl")]([])])
+display_name = "Smasher"
+
+[sub_resource type="Resource" id="Resource_aw0nw"]
+script = ExtResource("15_gnsc6")
+display_name = "Bandit"
+portrait = ExtResource("14_tviya")
+base_stats = Dictionary[int, int]({
+0: 20,
+1: 7,
+2: 2,
+3: 3,
+4: 3,
+5: 3,
+6: 7,
+7: 3
+})
+map_sprite = ExtResource("12_aw0nw")
+move_sprite = ExtResource("13_ljvvr")
+downed_sprite = ExtResource("10_wsn0r")
+starting_inventory = Array[ExtResource("5_5qx3r")]([ExtResource("16_g6pwf")])
+
+[sub_resource type="Resource" id="Resource_ljvvr"]
+script = ExtResource("4_lrogb")
+unit_data = SubResource("Resource_aw0nw")
+cell = Vector2i(2, 2)
+squad_id = 0
+stats = Dictionary[int, int]({
+0: 20,
+1: 7,
+2: 2,
+3: 3,
+4: 3,
+5: 3,
+6: 7,
+7: 3
+})
+current_hp = 20
+current_will = 3
+inventory = Array[ExtResource("5_5qx3r")]([SubResource("Resource_rdr4l")])
+equipped_index = 0
+affinity_saved = true
+limb_states = Dictionary[int, int]({
+0: 0,
+1: 0,
+2: 0,
+3: 0
+})
+weapon_battle_states = Dictionary[int, Dictionary]({
+0: {
+"charge": 0
+}
+})
+
+[sub_resource type="Resource" id="Resource_tviya"]
+script = ExtResource("17_22von")
+template = ExtResource("18_gvau7")
+spaces = Array[Array]([Array[ExtResource("7_p4rrl")]([]), Array[ExtResource("7_p4rrl")]([]), Array[ExtResource("7_p4rrl")]([])])
+display_name = "Drill"
+
+[sub_resource type="Resource" id="Resource_gnsc6"]
+script = ExtResource("15_gnsc6")
+display_name = "Bandit"
+portrait = ExtResource("14_tviya")
+base_stats = Dictionary[int, int]({
+0: 20,
+1: 7,
+2: 2,
+3: 3,
+4: 3,
+5: 3,
+6: 7,
+7: 3
+})
+faction = 1
+map_sprite = ExtResource("12_aw0nw")
+move_sprite = ExtResource("13_ljvvr")
+downed_sprite = ExtResource("10_wsn0r")
+starting_inventory = Array[ExtResource("5_5qx3r")]([ExtResource("16_g6pwf")])
+
+[sub_resource type="Resource" id="Resource_g6pwf"]
+script = ExtResource("4_lrogb")
+unit_data = SubResource("Resource_gnsc6")
+cell = Vector2i(5, 4)
+squad_id = 1
+stats = Dictionary[int, int]({
+0: 20,
+1: 7,
+2: 2,
+3: 3,
+4: 3,
+5: 3,
+6: 7,
+7: 3
+})
+current_hp = 20
+current_will = 3
+inventory = Array[ExtResource("5_5qx3r")]([SubResource("Resource_tviya")])
+equipped_index = 0
+affinity_saved = true
+limb_states = Dictionary[int, int]({
+0: 0,
+1: 0,
+2: 0,
+3: 0
+})
+
+[sub_resource type="Resource" id="Resource_22von"]
+script = ExtResource("17_22von")
+template = ExtResource("18_gvau7")
+spaces = Array[Array]([Array[ExtResource("7_p4rrl")]([]), Array[ExtResource("7_p4rrl")]([]), Array[ExtResource("7_p4rrl")]([])])
+display_name = "Drill"
+
+[sub_resource type="Resource" id="Resource_gvau7"]
+script = ExtResource("15_gnsc6")
+display_name = "Lake Bandit"
+portrait = ExtResource("14_tviya")
+base_stats = Dictionary[int, int]({
+0: 20,
+1: 7,
+2: 2,
+3: 3,
+4: 3,
+5: 3,
+6: 7,
+7: 3
+})
+faction = 1
+map_sprite = ExtResource("12_aw0nw")
+move_sprite = ExtResource("13_ljvvr")
+downed_sprite = ExtResource("10_wsn0r")
+starting_inventory = Array[ExtResource("5_5qx3r")]([ExtResource("16_g6pwf")])
+
+[sub_resource type="Resource" id="Resource_j3sob"]
+script = ExtResource("4_lrogb")
+unit_data = SubResource("Resource_gvau7")
+cell = Vector2i(5, 3)
+squad_id = 1
+is_leader = true
+squad_archetype = 2
+stats = Dictionary[int, int]({
+0: 20,
+1: 7,
+2: 6,
+3: 3,
+4: 3,
+5: 3,
+6: 7,
+7: 3
+})
+current_hp = 20
+current_will = 3
+inventory = Array[ExtResource("5_5qx3r")]([SubResource("Resource_22von")])
+equipped_index = 0
+affinity_saved = true
+limb_states = Dictionary[int, int]({
+0: 0,
+1: 0,
+2: 0,
+3: 0
+})
+
+[sub_resource type="Resource" id="Resource_q5eac"]
+script = ExtResource("17_22von")
+template = ExtResource("18_gvau7")
+spaces = Array[Array]([Array[ExtResource("7_p4rrl")]([]), Array[ExtResource("7_p4rrl")]([]), Array[ExtResource("7_p4rrl")]([])])
+display_name = "Drill"
+
+[sub_resource type="Resource" id="Resource_qlc3e"]
+script = ExtResource("15_gnsc6")
+display_name = "Bandit"
+portrait = ExtResource("14_tviya")
+base_stats = Dictionary[int, int]({
+0: 20,
+1: 7,
+2: 2,
+3: 3,
+4: 3,
+5: 3,
+6: 7,
+7: 3
+})
+faction = 1
+map_sprite = ExtResource("12_aw0nw")
+move_sprite = ExtResource("13_ljvvr")
+downed_sprite = ExtResource("10_wsn0r")
+starting_inventory = Array[ExtResource("5_5qx3r")]([ExtResource("16_g6pwf")])
+
+[sub_resource type="Resource" id="Resource_8idap"]
+script = ExtResource("4_lrogb")
+unit_data = SubResource("Resource_qlc3e")
+cell = Vector2i(5, 2)
+squad_id = 1
+stats = Dictionary[int, int]({
+0: 20,
+1: 7,
+2: 2,
+3: 3,
+4: 3,
+5: 3,
+6: 7,
+7: 3
+})
+current_hp = 20
+current_will = 3
+inventory = Array[ExtResource("5_5qx3r")]([SubResource("Resource_q5eac")])
+equipped_index = 0
+affinity_saved = true
+limb_states = Dictionary[int, int]({
+0: 0,
+1: 0,
+2: 0,
+3: 0
+})
+
+[sub_resource type="Resource" id="Resource_h1x2s"]
+script = ExtResource("17_22von")
+template = ExtResource("18_gvau7")
+spaces = Array[Array]([Array[ExtResource("7_p4rrl")]([]), Array[ExtResource("7_p4rrl")]([]), Array[ExtResource("7_p4rrl")]([])])
+display_name = "Drill"
+
+[sub_resource type="Resource" id="Resource_kljf3"]
+script = ExtResource("15_gnsc6")
+display_name = "Bandit"
+portrait = ExtResource("14_tviya")
+base_stats = Dictionary[int, int]({
+0: 20,
+1: 7,
+2: 2,
+3: 3,
+4: 3,
+5: 3,
+6: 7,
+7: 3
+})
+map_sprite = ExtResource("12_aw0nw")
+move_sprite = ExtResource("13_ljvvr")
+downed_sprite = ExtResource("10_wsn0r")
+starting_inventory = Array[ExtResource("5_5qx3r")]([ExtResource("16_g6pwf")])
+
+[sub_resource type="Resource" id="Resource_jejrg"]
+script = ExtResource("4_lrogb")
+unit_data = SubResource("Resource_kljf3")
+cell = Vector2i(5, 5)
+squad_id = 2
+is_leader = true
+squad_archetype = 1
+stats = Dictionary[int, int]({
+0: 20,
+1: 7,
+2: 5,
+3: 3,
+4: 3,
+5: 3,
+6: 7,
+7: 3
+})
+current_hp = 20
+current_will = 3
+inventory = Array[ExtResource("5_5qx3r")]([SubResource("Resource_h1x2s")])
+equipped_index = 0
+affinity_saved = true
+limb_states = Dictionary[int, int]({
+0: 0,
+1: 0,
+2: 0,
+3: 0
+})
+
+[sub_resource type="Resource" id="Resource_8pwjl"]
+script = ExtResource("17_22von")
+template = ExtResource("18_gvau7")
+spaces = Array[Array]([Array[ExtResource("7_p4rrl")]([]), Array[ExtResource("7_p4rrl")]([]), Array[ExtResource("7_p4rrl")]([])])
+display_name = "Drill"
+
+[sub_resource type="Resource" id="Resource_su0w1"]
+script = ExtResource("15_gnsc6")
+display_name = "Bandit"
+portrait = ExtResource("14_tviya")
+base_stats = Dictionary[int, int]({
+0: 20,
+1: 7,
+2: 2,
+3: 3,
+4: 3,
+5: 3,
+6: 7,
+7: 3
+})
+map_sprite = ExtResource("12_aw0nw")
+move_sprite = ExtResource("13_ljvvr")
+downed_sprite = ExtResource("10_wsn0r")
+starting_inventory = Array[ExtResource("5_5qx3r")]([ExtResource("16_g6pwf")])
+
+[sub_resource type="Resource" id="Resource_75yjd"]
+script = ExtResource("4_lrogb")
+unit_data = SubResource("Resource_su0w1")
+cell = Vector2i(5, 6)
+squad_id = 2
+stats = Dictionary[int, int]({
+0: 20,
+1: 7,
+2: 2,
+3: 3,
+4: 3,
+5: 3,
+6: 7,
+7: 3
+})
+current_hp = 20
+current_will = 3
+inventory = Array[ExtResource("5_5qx3r")]([SubResource("Resource_8pwjl")])
+equipped_index = 0
+affinity_saved = true
+limb_states = Dictionary[int, int]({
+0: 0,
+1: 0,
+2: 0,
+3: 0
+})
+
+[sub_resource type="Resource" id="Resource_1vgbo"]
+script = ExtResource("20_q5eac")
+max_range = 3
+metadata/_custom_type_script = "uid://dsxc14gee2d01"
+
+[sub_resource type="Resource" id="Resource_mpdgd"]
+script = ExtResource("19_j3sob")
+sigils = Array[int]([6])
+display_name = "Gust"
+attack_pattern = SubResource("Resource_1vgbo")
+hits_allies = true
+knockback = 2
+deals_no_damage = true
+metadata/_custom_type_script = "uid://bgbidu2bbf33l"
+
+[sub_resource type="Resource" id="Resource_httdr"]
+script = ExtResource("21_qlc3e")
+inscriptions = Array[ExtResource("19_j3sob")]([SubResource("Resource_mpdgd")])
+temper = 6
+display_name = "woosh"
+
+[sub_resource type="Resource" id="Resource_6mrty"]
+script = ExtResource("15_gnsc6")
+display_name = "Bandit"
+portrait = ExtResource("14_tviya")
+base_stats = Dictionary[int, int]({
+0: 20,
+1: 7,
+2: 2,
+3: 3,
+4: 3,
+5: 3,
+6: 7,
+7: 3
+})
+faction = 1
+map_sprite = ExtResource("12_aw0nw")
+move_sprite = ExtResource("13_ljvvr")
+downed_sprite = ExtResource("10_wsn0r")
+starting_inventory = Array[ExtResource("5_5qx3r")]([ExtResource("16_g6pwf")])
+
+[sub_resource type="Resource" id="Resource_tha1c"]
+script = ExtResource("4_lrogb")
+unit_data = SubResource("Resource_6mrty")
+cell = Vector2i(10, 6)
+squad_id = 3
+stats = Dictionary[int, int]({
+0: 20,
+1: 7,
+2: 2,
+3: 3,
+4: 3,
+5: 3,
+6: 7,
+7: 3
+})
+current_hp = 20
+current_will = 3
+inventory = Array[ExtResource("5_5qx3r")]([SubResource("Resource_httdr")])
+equipped_index = 0
+aura = Dictionary[int, int]({
+6: 1
+})
+affinity = Array[int]([6])
+affinity_saved = true
+limb_states = Dictionary[int, int]({
+0: 0,
+1: 0,
+2: 0,
+3: 0
+})
+
+[sub_resource type="Resource" id="Resource_mab6h"]
+script = ExtResource("20_q5eac")
+max_range = 3
+metadata/_custom_type_script = "uid://dsxc14gee2d01"
+
+[sub_resource type="Resource" id="Resource_mfdw7"]
+script = ExtResource("19_j3sob")
+sigils = Array[int]([6])
+display_name = "Gust"
+attack_pattern = SubResource("Resource_mab6h")
+hits_allies = true
+knockback = 2
+deals_no_damage = true
+metadata/_custom_type_script = "uid://bgbidu2bbf33l"
+
+[sub_resource type="Resource" id="Resource_1id6q"]
+script = ExtResource("21_qlc3e")
+inscriptions = Array[ExtResource("19_j3sob")]([SubResource("Resource_mfdw7")])
+temper = 6
+display_name = "woosh"
+
+[sub_resource type="Resource" id="Resource_gdt8c"]
+script = ExtResource("15_gnsc6")
+display_name = "Hill Bandit"
+portrait = ExtResource("14_tviya")
+base_stats = Dictionary[int, int]({
+0: 20,
+1: 7,
+2: 2,
+3: 3,
+4: 3,
+5: 3,
+6: 7,
+7: 3
+})
+faction = 1
+map_sprite = ExtResource("12_aw0nw")
+move_sprite = ExtResource("13_ljvvr")
+downed_sprite = ExtResource("10_wsn0r")
+starting_inventory = Array[ExtResource("5_5qx3r")]([ExtResource("16_g6pwf")])
+
+[sub_resource type="Resource" id="Resource_mb4c7"]
+script = ExtResource("4_lrogb")
+unit_data = SubResource("Resource_gdt8c")
+cell = Vector2i(10, 5)
+squad_id = 3
+is_leader = true
+squad_archetype = 2
+stats = Dictionary[int, int]({
+0: 20,
+1: 7,
+2: 5,
+3: 3,
+4: 3,
+5: 3,
+6: 7,
+7: 3
+})
+current_hp = 20
+current_will = 3
+inventory = Array[ExtResource("5_5qx3r")]([SubResource("Resource_1id6q")])
+equipped_index = 0
+aura = Dictionary[int, int]({
+6: 1
+})
+affinity = Array[int]([6])
+affinity_saved = true
+limb_states = Dictionary[int, int]({
+0: 0,
+1: 0,
+2: 0,
+3: 0
+})
+
+[sub_resource type="Resource" id="Resource_tvh0h"]
+script = ExtResource("17_22von")
+template = ExtResource("18_gvau7")
+spaces = Array[Array]([Array[ExtResource("7_p4rrl")]([]), Array[ExtResource("7_p4rrl")]([]), Array[ExtResource("7_p4rrl")]([])])
+display_name = "Drill"
+
+[sub_resource type="Resource" id="Resource_758i0"]
+script = ExtResource("15_gnsc6")
+display_name = "Bandit"
+portrait = ExtResource("14_tviya")
+base_stats = Dictionary[int, int]({
+0: 20,
+1: 7,
+2: 2,
+3: 3,
+4: 3,
+5: 3,
+6: 7,
+7: 3
+})
+faction = 1
+map_sprite = ExtResource("12_aw0nw")
+move_sprite = ExtResource("13_ljvvr")
+downed_sprite = ExtResource("10_wsn0r")
+starting_inventory = Array[ExtResource("5_5qx3r")]([ExtResource("16_g6pwf")])
+
+[sub_resource type="Resource" id="Resource_3we3l"]
+script = ExtResource("4_lrogb")
+unit_data = SubResource("Resource_758i0")
+cell = Vector2i(13, 4)
+squad_id = 4
+stats = Dictionary[int, int]({
+0: 20,
+1: 7,
+2: 2,
+3: 3,
+4: 3,
+5: 3,
+6: 7,
+7: 3
+})
+current_hp = 20
+current_will = 3
+inventory = Array[ExtResource("5_5qx3r")]([SubResource("Resource_tvh0h")])
+equipped_index = 0
+affinity_saved = true
+limb_states = Dictionary[int, int]({
+0: 0,
+1: 0,
+2: 0,
+3: 0
+})
+
+[sub_resource type="Resource" id="Resource_v78ee"]
+script = ExtResource("17_22von")
+template = ExtResource("18_gvau7")
+spaces = Array[Array]([Array[ExtResource("7_p4rrl")]([]), Array[ExtResource("7_p4rrl")]([]), Array[ExtResource("7_p4rrl")]([])])
+display_name = "Drill"
+
+[sub_resource type="Resource" id="Resource_iob4t"]
+script = ExtResource("15_gnsc6")
+display_name = "Bandit"
+portrait = ExtResource("14_tviya")
+base_stats = Dictionary[int, int]({
+0: 20,
+1: 7,
+2: 2,
+3: 3,
+4: 3,
+5: 3,
+6: 7,
+7: 3
+})
+faction = 1
+map_sprite = ExtResource("12_aw0nw")
+move_sprite = ExtResource("13_ljvvr")
+downed_sprite = ExtResource("10_wsn0r")
+starting_inventory = Array[ExtResource("5_5qx3r")]([ExtResource("16_g6pwf")])
+
+[sub_resource type="Resource" id="Resource_0kyje"]
+script = ExtResource("4_lrogb")
+unit_data = SubResource("Resource_iob4t")
+cell = Vector2i(13, 2)
+squad_id = 4
+is_leader = true
+squad_archetype = 1
+stats = Dictionary[int, int]({
+0: 20,
+1: 7,
+2: 5,
+3: 3,
+4: 3,
+5: 3,
+6: 7,
+7: 3
+})
+current_hp = 20
+current_will = 3
+inventory = Array[ExtResource("5_5qx3r")]([SubResource("Resource_v78ee")])
+equipped_index = 0
+affinity_saved = true
+limb_states = Dictionary[int, int]({
+0: 0,
+1: 0,
+2: 0,
+3: 0
+})
+
+[sub_resource type="Resource" id="Resource_4sfdo"]
+script = ExtResource("17_22von")
+template = ExtResource("18_gvau7")
+spaces = Array[Array]([Array[ExtResource("7_p4rrl")]([]), Array[ExtResource("7_p4rrl")]([]), Array[ExtResource("7_p4rrl")]([])])
+display_name = "Drill"
+
+[sub_resource type="Resource" id="Resource_khqhh"]
+script = ExtResource("15_gnsc6")
+display_name = "Bandit"
+portrait = ExtResource("14_tviya")
+base_stats = Dictionary[int, int]({
+0: 20,
+1: 7,
+2: 2,
+3: 3,
+4: 3,
+5: 3,
+6: 7,
+7: 3
+})
+map_sprite = ExtResource("12_aw0nw")
+move_sprite = ExtResource("13_ljvvr")
+downed_sprite = ExtResource("10_wsn0r")
+starting_inventory = Array[ExtResource("5_5qx3r")]([ExtResource("16_g6pwf")])
+
+[sub_resource type="Resource" id="Resource_5wua6"]
+script = ExtResource("4_lrogb")
+unit_data = SubResource("Resource_khqhh")
+cell = Vector2i(15, 2)
+squad_id = 5
+is_leader = true
+squad_archetype = 1
+stats = Dictionary[int, int]({
+0: 20,
+1: 7,
+2: 2,
+3: 3,
+4: 3,
+5: 3,
+6: 7,
+7: 3
+})
+current_hp = 20
+current_will = 3
+inventory = Array[ExtResource("5_5qx3r")]([SubResource("Resource_4sfdo")])
+equipped_index = 0
+affinity_saved = true
+limb_states = Dictionary[int, int]({
+0: 0,
+1: 0,
+2: 0,
+3: 0
+})
+
+[sub_resource type="Resource" id="Resource_7puip"]
+script = ExtResource("20_q5eac")
+max_range = 3
+metadata/_custom_type_script = "uid://dsxc14gee2d01"
+
+[sub_resource type="Resource" id="Resource_inpo2"]
+script = ExtResource("19_j3sob")
+sigils = Array[int]([6])
+display_name = "Gust"
+attack_pattern = SubResource("Resource_7puip")
+hits_allies = true
+knockback = 2
+deals_no_damage = true
+metadata/_custom_type_script = "uid://bgbidu2bbf33l"
+
+[sub_resource type="Resource" id="Resource_ppp6a"]
+script = ExtResource("21_qlc3e")
+inscriptions = Array[ExtResource("19_j3sob")]([SubResource("Resource_inpo2")])
+temper = 6
+display_name = "woosh"
+
+[sub_resource type="Resource" id="Resource_vsr1d"]
+script = ExtResource("15_gnsc6")
+display_name = "Bandit"
+portrait = ExtResource("14_tviya")
+base_stats = Dictionary[int, int]({
+0: 20,
+1: 7,
+2: 2,
+3: 3,
+4: 3,
+5: 3,
+6: 7,
+7: 3
+})
+map_sprite = ExtResource("12_aw0nw")
+move_sprite = ExtResource("13_ljvvr")
+downed_sprite = ExtResource("10_wsn0r")
+starting_inventory = Array[ExtResource("5_5qx3r")]([ExtResource("16_g6pwf")])
+
+[sub_resource type="Resource" id="Resource_2afcj"]
+script = ExtResource("4_lrogb")
+unit_data = SubResource("Resource_vsr1d")
+cell = Vector2i(15, 4)
+squad_id = 6
+is_leader = true
+squad_archetype = 1
+stats = Dictionary[int, int]({
+0: 20,
+1: 7,
+2: 2,
+3: 3,
+4: 3,
+5: 3,
+6: 7,
+7: 3
+})
+current_hp = 20
+current_will = 3
+inventory = Array[ExtResource("5_5qx3r")]([SubResource("Resource_ppp6a")])
+equipped_index = 0
+aura = Dictionary[int, int]({
+6: 1
+})
+affinity = Array[int]([6])
+affinity_saved = true
+limb_states = Dictionary[int, int]({
+0: 0,
+1: 0,
+2: 0,
+3: 0
+})
+
+[sub_resource type="Resource" id="Resource_p0203"]
+script = ExtResource("17_22von")
+template = ExtResource("18_gvau7")
+spaces = Array[Array]([Array[ExtResource("7_p4rrl")]([]), Array[ExtResource("7_p4rrl")]([]), Array[ExtResource("7_p4rrl")]([])])
+display_name = "Drill"
+
+[sub_resource type="Resource" id="Resource_y1m1g"]
+script = ExtResource("15_gnsc6")
+display_name = "Bandit"
+portrait = ExtResource("14_tviya")
+base_stats = Dictionary[int, int]({
+0: 20,
+1: 7,
+2: 2,
+3: 3,
+4: 3,
+5: 3,
+6: 7,
+7: 3
+})
+map_sprite = ExtResource("12_aw0nw")
+move_sprite = ExtResource("13_ljvvr")
+downed_sprite = ExtResource("10_wsn0r")
+starting_inventory = Array[ExtResource("5_5qx3r")]([ExtResource("16_g6pwf")])
+
+[sub_resource type="Resource" id="Resource_lc44r"]
+script = ExtResource("4_lrogb")
+unit_data = SubResource("Resource_y1m1g")
+cell = Vector2i(9, 7)
+squad_id = 7
+is_leader = true
+squad_archetype = 1
+stats = Dictionary[int, int]({
+0: 20,
+1: 7,
+2: 2,
+3: 3,
+4: 3,
+5: 3,
+6: 7,
+7: 3
+})
+current_hp = 20
+current_will = 3
+inventory = Array[ExtResource("5_5qx3r")]([SubResource("Resource_p0203")])
+equipped_index = 0
+affinity_saved = true
+limb_states = Dictionary[int, int]({
+0: 0,
+1: 0,
+2: 0,
+3: 0
+})
+
+[sub_resource type="Resource" id="Resource_41j7o"]
+script = ExtResource("17_22von")
+template = ExtResource("18_gvau7")
+spaces = Array[Array]([Array[ExtResource("7_p4rrl")]([]), Array[ExtResource("7_p4rrl")]([]), Array[ExtResource("7_p4rrl")]([])])
+display_name = "Drill"
+
+[sub_resource type="Resource" id="Resource_3o6mo"]
+script = ExtResource("15_gnsc6")
+display_name = "Bandit"
+portrait = ExtResource("14_tviya")
+base_stats = Dictionary[int, int]({
+0: 20,
+1: 7,
+2: 2,
+3: 3,
+4: 3,
+5: 3,
+6: 7,
+7: 3
+})
+map_sprite = ExtResource("12_aw0nw")
+move_sprite = ExtResource("13_ljvvr")
+downed_sprite = ExtResource("10_wsn0r")
+starting_inventory = Array[ExtResource("5_5qx3r")]([ExtResource("16_g6pwf")])
+
+[sub_resource type="Resource" id="Resource_gsa3c"]
+script = ExtResource("4_lrogb")
+unit_data = SubResource("Resource_3o6mo")
+cell = Vector2i(10, 7)
+squad_id = 8
+is_leader = true
+squad_archetype = 1
+stats = Dictionary[int, int]({
+0: 20,
+1: 7,
+2: 2,
+3: 3,
+4: 3,
+5: 3,
+6: 7,
+7: 3
+})
+current_hp = 20
+current_will = 3
+inventory = Array[ExtResource("5_5qx3r")]([SubResource("Resource_41j7o")])
+equipped_index = 0
+affinity_saved = true
+limb_states = Dictionary[int, int]({
+0: 0,
+1: 0,
+2: 0,
+3: 0
+})
+
+[sub_resource type="Resource" id="Resource_hjnp5"]
+script = ExtResource("17_22von")
+template = ExtResource("18_gvau7")
+spaces = Array[Array]([Array[ExtResource("7_p4rrl")]([]), Array[ExtResource("7_p4rrl")]([]), Array[ExtResource("7_p4rrl")]([])])
+display_name = "Drill"
+
+[sub_resource type="Resource" id="Resource_56mw2"]
+script = ExtResource("15_gnsc6")
+display_name = "Bandit"
+portrait = ExtResource("14_tviya")
+base_stats = Dictionary[int, int]({
+0: 20,
+1: 7,
+2: 2,
+3: 3,
+4: 3,
+5: 3,
+6: 7,
+7: 3
+})
+map_sprite = ExtResource("12_aw0nw")
+move_sprite = ExtResource("13_ljvvr")
+downed_sprite = ExtResource("10_wsn0r")
+starting_inventory = Array[ExtResource("5_5qx3r")]([ExtResource("16_g6pwf")])
+
+[sub_resource type="Resource" id="Resource_7t40n"]
+script = ExtResource("4_lrogb")
+unit_data = SubResource("Resource_56mw2")
+cell = Vector2i(11, 7)
+squad_id = 9
+is_leader = true
+squad_archetype = 1
+stats = Dictionary[int, int]({
+0: 20,
+1: 7,
+2: 2,
+3: 3,
+4: 3,
+5: 3,
+6: 7,
+7: 3
+})
+current_hp = 20
+current_will = 3
+inventory = Array[ExtResource("5_5qx3r")]([SubResource("Resource_hjnp5")])
+equipped_index = 0
+affinity_saved = true
+limb_states = Dictionary[int, int]({
+0: 0,
+1: 0,
+2: 0,
+3: 0
+})
+
+[sub_resource type="Resource" id="Resource_5e51k"]
+script = ExtResource("17_22von")
+template = ExtResource("18_gvau7")
+spaces = Array[Array]([Array[ExtResource("7_p4rrl")]([]), Array[ExtResource("7_p4rrl")]([]), Array[ExtResource("7_p4rrl")]([])])
+display_name = "Drill"
+
+[sub_resource type="Resource" id="Resource_tevod"]
+script = ExtResource("15_gnsc6")
+display_name = "Bandit"
+portrait = ExtResource("14_tviya")
+base_stats = Dictionary[int, int]({
+0: 20,
+1: 7,
+2: 2,
+3: 3,
+4: 3,
+5: 3,
+6: 7,
+7: 3
+})
+faction = 1
+map_sprite = ExtResource("12_aw0nw")
+move_sprite = ExtResource("13_ljvvr")
+downed_sprite = ExtResource("10_wsn0r")
+starting_inventory = Array[ExtResource("5_5qx3r")]([ExtResource("16_g6pwf")])
+
+[sub_resource type="Resource" id="Resource_v0dsv"]
+script = ExtResource("4_lrogb")
+unit_data = SubResource("Resource_tevod")
+cell = Vector2i(17, 5)
+squad_id = 10
+stats = Dictionary[int, int]({
+0: 20,
+1: 7,
+2: 2,
+3: 3,
+4: 3,
+5: 3,
+6: 7,
+7: 3
+})
+current_hp = 20
+current_will = 3
+inventory = Array[ExtResource("5_5qx3r")]([SubResource("Resource_5e51k")])
+equipped_index = 0
+affinity_saved = true
+limb_states = Dictionary[int, int]({
+0: 0,
+1: 0,
+2: 0,
+3: 0
+})
+
+[sub_resource type="Resource" id="Resource_nirbv"]
+script = ExtResource("17_22von")
+template = ExtResource("18_gvau7")
+spaces = Array[Array]([Array[ExtResource("7_p4rrl")]([]), Array[ExtResource("7_p4rrl")]([]), Array[ExtResource("7_p4rrl")]([])])
+display_name = "Drill"
+
+[sub_resource type="Resource" id="Resource_yjrxj"]
+script = ExtResource("15_gnsc6")
+display_name = "Bandit"
+portrait = ExtResource("14_tviya")
+base_stats = Dictionary[int, int]({
+0: 20,
+1: 7,
+2: 2,
+3: 3,
+4: 3,
+5: 3,
+6: 7,
+7: 3
+})
+faction = 1
+map_sprite = ExtResource("12_aw0nw")
+move_sprite = ExtResource("13_ljvvr")
+downed_sprite = ExtResource("10_wsn0r")
+starting_inventory = Array[ExtResource("5_5qx3r")]([ExtResource("16_g6pwf")])
+
+[sub_resource type="Resource" id="Resource_s0yfg"]
+script = ExtResource("4_lrogb")
+unit_data = SubResource("Resource_yjrxj")
+cell = Vector2i(17, 3)
+squad_id = 10
+is_leader = true
+squad_archetype = 1
+stats = Dictionary[int, int]({
+0: 20,
+1: 7,
+2: 5,
+3: 3,
+4: 3,
+5: 3,
+6: 7,
+7: 3
+})
+current_hp = 20
+current_will = 3
+inventory = Array[ExtResource("5_5qx3r")]([SubResource("Resource_nirbv")])
+equipped_index = 0
+affinity_saved = true
+limb_states = Dictionary[int, int]({
+0: 0,
+1: 0,
+2: 0,
+3: 0
+})
+
+[sub_resource type="Resource" id="Resource_cg6r7"]
+script = ExtResource("6_bopqh")
+template = ExtResource("8_adqjh")
+spaces = Array[Array]([Array[ExtResource("7_p4rrl")]([]), Array[ExtResource("7_p4rrl")]([]), Array[ExtResource("7_p4rrl")]([])])
+display_name = "Smasher"
+
+[sub_resource type="Resource" id="Resource_rufqh"]
+script = ExtResource("15_gnsc6")
+display_name = "Bandit"
+portrait = ExtResource("14_tviya")
+base_stats = Dictionary[int, int]({
+0: 20,
+1: 7,
+2: 2,
+3: 3,
+4: 3,
+5: 3,
+6: 7,
+7: 3
+})
+map_sprite = ExtResource("12_aw0nw")
+move_sprite = ExtResource("13_ljvvr")
+downed_sprite = ExtResource("10_wsn0r")
+starting_inventory = Array[ExtResource("5_5qx3r")]([ExtResource("16_g6pwf")])
+
+[sub_resource type="Resource" id="Resource_b1381"]
+script = ExtResource("4_lrogb")
+unit_data = SubResource("Resource_rufqh")
+cell = Vector2i(14, 0)
+squad_id = 11
+is_leader = true
+squad_archetype = 1
+stats = Dictionary[int, int]({
+0: 20,
+1: 7,
+2: 2,
+3: 3,
+4: 3,
+5: 3,
+6: 7,
+7: 3
+})
+current_hp = 20
+current_will = 3
+inventory = Array[ExtResource("5_5qx3r")]([SubResource("Resource_cg6r7")])
+equipped_index = 0
+affinity_saved = true
+limb_states = Dictionary[int, int]({
+0: 0,
+1: 0,
+2: 0,
+3: 0
+})
+weapon_battle_states = Dictionary[int, Dictionary]({
+0: {
+"charge": 0
+}
+})
+
+[sub_resource type="Resource" id="Resource_ec5cr"]
+script = ExtResource("6_bopqh")
+template = ExtResource("8_adqjh")
+spaces = Array[Array]([Array[ExtResource("7_p4rrl")]([]), Array[ExtResource("7_p4rrl")]([]), Array[ExtResource("7_p4rrl")]([])])
+display_name = "Smasher"
+
+[sub_resource type="Resource" id="Resource_0cu2q"]
+script = ExtResource("15_gnsc6")
+display_name = "Bandit"
+portrait = ExtResource("14_tviya")
+base_stats = Dictionary[int, int]({
+0: 20,
+1: 7,
+2: 2,
+3: 3,
+4: 3,
+5: 3,
+6: 7,
+7: 3
+})
+map_sprite = ExtResource("12_aw0nw")
+move_sprite = ExtResource("13_ljvvr")
+downed_sprite = ExtResource("10_wsn0r")
+starting_inventory = Array[ExtResource("5_5qx3r")]([ExtResource("16_g6pwf")])
+
+[sub_resource type="Resource" id="Resource_ahfha"]
+script = ExtResource("4_lrogb")
+unit_data = SubResource("Resource_0cu2q")
+cell = Vector2i(16, 0)
+squad_id = 12
+is_leader = true
+squad_archetype = 1
+stats = Dictionary[int, int]({
+0: 20,
+1: 7,
+2: 2,
+3: 3,
+4: 3,
+5: 3,
+6: 7,
+7: 3
+})
+current_hp = 20
+current_will = 3
+inventory = Array[ExtResource("5_5qx3r")]([SubResource("Resource_ec5cr")])
+equipped_index = 0
+affinity_saved = true
+limb_states = Dictionary[int, int]({
+0: 0,
+1: 0,
+2: 0,
+3: 0
+})
+weapon_battle_states = Dictionary[int, Dictionary]({
+0: {
+"charge": 0
+}
+})
+
+[resource]
+script = ExtResource("2_l1bgn")
+scenario_name = "fixture/molesandholes"
+unit_entries = Array[ExtResource("4_lrogb")]([SubResource("Resource_p4rrl"), SubResource("Resource_wsn0r"), SubResource("Resource_ljvvr"), SubResource("Resource_g6pwf"), SubResource("Resource_j3sob"), SubResource("Resource_8idap"), SubResource("Resource_jejrg"), SubResource("Resource_75yjd"), SubResource("Resource_tha1c"), SubResource("Resource_mb4c7"), SubResource("Resource_3we3l"), SubResource("Resource_0kyje"), SubResource("Resource_5wua6"), SubResource("Resource_2afcj"), SubResource("Resource_lc44r"), SubResource("Resource_gsa3c"), SubResource("Resource_7t40n"), SubResource("Resource_v0dsv"), SubResource("Resource_s0yfg"), SubResource("Resource_b1381"), SubResource("Resource_ahfha")])
+tile_data = PackedByteArray("AAAAAAcAAAAFAAAAAAABAAcAAAAFAAEAAAACAAcAAAAFAAEAAAADAAcAAAAFAAEAAAAEAAcAAAAFAAEAAAAFAAcAAAAFAAEAAAAGAAcAAAAFAAEAAAAHAAcAAAAFAAEAAAAIAAcAAAAFAAEAAAAJAAcAAAAFAAEAAAAKAAcAAAAFAAEAAAALAAcAAAAFAAEAAAAMAAcAAAAFAAEAAAANAAcAAAAFAAEAAAAOAAcAAAAFAAAAAAAGAAYAAAAFAAEAAAADAAYAAAAFAAEAAAACAAYAAAAFAAEAAAABAAYAAAAFAAEAAAAAAAYAAAAFAAAAAAAAAAUAAAAFAAAAAAABAAUAAAAFAAEAAAACAAUAAAAFAAEAAAADAAUAAAAFAAEAAAAEAAUAAAAFAAEAAAAGAAUAAAAFAAEAAAAHAAUAAAAFAAEAAAAIAAUAAAAFAAEAAAAJAAUAAAAFAAEAAAAKAAUAAAAFAAEAAAALAAUAAAAFAAEAAAANAAYAAAAFAAAAAAAOAAYAAAAFAAAAAAAMAAYAAAAFAAAAAAALAAYAAAAFAAEAAAAKAAYAAAAFAAEAAAAJAAYAAAAFAAEAAAAIAAYAAAAFAAEAAAAHAAYAAAAFAAEAAAADAAQAAAAFAAAAAAAEAAQAAAAFAAAAAAAFAAQAAAAFAAAAAAAGAAQAAAAGAAYAAAAHAAQAAAAFAAYAAAAKAAQAAAAFAAEAAAALAAQAAAAFAAEAAAANAAQAAAAFAAAAAAAKAAMAAAAFAAEAAAALAAMAAAAFAAEAAAAHAAMAAAAFAAYAAAAGAAMAAAAGAAYAAAAFAAMAAAAFAAAAAAAEAAMAAAAFAAAAAAADAAMAAAAFAAAAAAACAAMAAAAFAAAAAAAGAAIAAAAGAAYAAAAHAAIAAAAFAAYAAAAKAAIAAAAFAAEAAAALAAIAAAAFAAEAAAAMAAIAAAASAAIAAAANAAIAAAAFAAAAAAAOAAIAAAAFAAAAAAACAAQAAAAFAAAAAAAAAAMAAAAFAAAAAAABAAMAAAAFAAAAAAABAAQAAAAFAAAAAAAAAAQAAAAFAAAAAAAAAAIAAAAFAAAAAAABAAIAAAAFAAAAAAACAAIAAAAFAAAAAAADAAIAAAAFAAAAAAAEAAIAAAAFAAAAAAAAAAEAAAAFAAAAAAABAAEAAAAFAAAAAAAFAAIAAAAFAAAAAAAMAAEAAAAFAAAAAAALAAEAAAAFAAEAAAAKAAEAAAAFAAEAAAAJAAEAAAAGAAYAAAAIAAEAAAAGAAYAAAAHAAEAAAAGAAYAAAAGAAEAAAAGAAYAAAAFAAEAAAAFAAAAAAAEAAEAAAAFAAAAAAADAAEAAAAFAAAAAAACAAEAAAAFAAAAAAANAAEAAAASAAIAAAAOAAEAAAAFAAAAAAAOAAAAAAAFAAAAAAANAAAAAAAFAAAAAAAMAAAAAAAFAAAAAAALAAAAAAAFAAEAAAAKAAAAAAAFAAEAAAAJAAAAAAAFAAAAAAAIAAAAAAAFAAAAAAAHAAAAAAAFAAAAAAAGAAAAAAAFAAAAAAAFAAAAAAAFAAAAAAAEAAAAAAAFAAAAAAADAAAAAAAFAAAAAAACAAAAAAAFAAAAAAABAAAAAAAFAAAAAAAAAAAAAAAFAAAAAAAMAAUAAAAFAAAAAAANAAUAAAASAAIAAAAOAAUAAAAFAAAAAAAOAAQAAAAFAAAAAAAMAAQAAAASAAIAAAAMAAMAAAAFAAAAAAANAAMAAAAFAAAAAAAOAAMAAAASAAIAAAAFAAYAAAAFAAEAAAAEAAYAAAAFAAEAAAAFAAUAAAAFAAEAAAAIAAQAAAAFAAYAAAAIAAMAAAAFAAYAAAAIAAIAAAAFAAYAAAAJAAIAAAAFAAYAAAAJAAMAAAAFAAYAAAAJAAQAAAAFAAYAAAAPAAcAAAAFAAAAAAAPAAYAAAAFAAAAAAAPAAUAAAAFAAAAAAAPAAQAAAAFAAAAAAAPAAMAAAAFAAAAAAAPAAIAAAAFAAAAAAAPAAEAAAAFAAAAAAAPAAAAAAAFAAAAAAAQAAAAAAAFAAAAAAAQAAEAAAAFAAAAAAAQAAIAAAASAAIAAAAQAAMAAAASAAIAAAAQAAQAAAASAAIAAAAQAAUAAAASAAIAAAAQAAYAAAASAAIAAAAQAAcAAAAFAAAAAAARAAcAAAAFAAAAAAARAAYAAAAFAAAAAAARAAUAAAAFAAAAAAARAAQAAAAFAAAAAAARAAMAAAAFAAAAAAARAAIAAAAFAAAAAAARAAEAAAAFAAAAAAARAAAAAAAFAAAAAAA=")
+corner_heights = Dictionary[Vector2i, Vector4i]({
+Vector2i(1, 5): Vector4i(0, 1, 1, 0),
+Vector2i(1, 6): Vector4i(0, 1, 1, 0),
+Vector2i(1, 7): Vector4i(0, 1, 1, 0),
+Vector2i(2, 5): Vector4i(1, 2, 2, 1),
+Vector2i(2, 6): Vector4i(1, 2, 2, 1),
+Vector2i(2, 7): Vector4i(1, 2, 2, 1),
+Vector2i(3, 5): Vector4i(2, 2, 2, 2),
+Vector2i(3, 6): Vector4i(2, 2, 2, 2),
+Vector2i(3, 7): Vector4i(2, 2, 2, 2),
+Vector2i(4, 5): Vector4i(2, 2, 2, 2),
+Vector2i(4, 6): Vector4i(2, 2, 2, 2),
+Vector2i(4, 7): Vector4i(2, 2, 2, 2),
+Vector2i(5, 5): Vector4i(2, 2, 2, 2),
+Vector2i(5, 6): Vector4i(2, 2, 2, 2),
+Vector2i(5, 7): Vector4i(2, 2, 2, 2),
+Vector2i(6, 5): Vector4i(2, 4, 4, 2),
+Vector2i(6, 6): Vector4i(2, 4, 4, 2),
+Vector2i(6, 7): Vector4i(2, 2, 2, 2),
+Vector2i(7, 5): Vector4i(4, 6, 6, 4),
+Vector2i(7, 6): Vector4i(4, 6, 6, 4),
+Vector2i(7, 7): Vector4i(2, 2, 2, 2),
+Vector2i(8, 5): Vector4i(6, 7, 7, 6),
+Vector2i(8, 6): Vector4i(6, 7, 7, 6),
+Vector2i(8, 7): Vector4i(2, 2, 2, 2),
+Vector2i(9, 5): Vector4i(7, 7, 7, 7),
+Vector2i(9, 6): Vector4i(7, 7, 7, 7),
+Vector2i(9, 7): Vector4i(2, 2, 2, 2),
+Vector2i(10, 0): Vector4i(1, 1, 3, 3),
+Vector2i(10, 1): Vector4i(3, 3, 5, 5),
+Vector2i(10, 2): Vector4i(5, 5, 7, 7),
+Vector2i(10, 3): Vector4i(7, 7, 7, 7),
+Vector2i(10, 4): Vector4i(7, 7, 7, 7),
+Vector2i(10, 5): Vector4i(7, 7, 7, 7),
+Vector2i(10, 6): Vector4i(7, 7, 7, 7),
+Vector2i(10, 7): Vector4i(2, 2, 2, 2),
+Vector2i(11, 0): Vector4i(1, 1, 3, 3),
+Vector2i(11, 1): Vector4i(3, 3, 5, 5),
+Vector2i(11, 2): Vector4i(5, 5, 7, 7),
+Vector2i(11, 3): Vector4i(7, 7, 7, 7),
+Vector2i(11, 4): Vector4i(7, 7, 7, 7),
+Vector2i(11, 5): Vector4i(7, 7, 7, 7),
+Vector2i(11, 6): Vector4i(7, 7, 7, 7),
+Vector2i(11, 7): Vector4i(2, 2, 2, 2),
+Vector2i(12, 7): Vector4i(2, 1, 1, 2),
+Vector2i(13, 7): Vector4i(1, 0, 0, 1)
+})
+active_faction = 1
+contested = true
+rounds_elapsed = 2
