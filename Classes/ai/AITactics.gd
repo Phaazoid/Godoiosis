@@ -287,7 +287,9 @@ static func _try_best_attack(unit: Unit, board: BoardContext, squad_manager: Squ
 	var terrain := TerrainReactionCatalog.get_all()   # a scoring pass resolves many times
 	var squad := unit.squad
 	var base_plan := squad_manager.resolve_plan(squad, board, reactions, terrain)
-	var pick := _best_candidate_for(unit, squad, board, base_plan, squad_manager, reactions, terrain, {}, true)
+	var alone: Array[Unit] = [unit]
+	var pick := _best_candidate_for(unit, squad, board, base_plan, squad_manager, reactions, terrain, {}, true,
+			_candidates_by_member(alone, board, base_plan))
 	var queued := false
 	if pick != null:
 		unit.active_attack = pick.action.fired_attack   # the winner stays live, mirroring a player pick
@@ -298,6 +300,30 @@ static func _try_best_attack(unit: Unit, board: BoardContext, squad_manager: Squ
 	# ...and afterwards, because a hypothetical publishes projections onto units.
 	squad_manager.resolve_plan(squad, board, reactions, terrain)
 	return queued
+
+
+# EVERY member's candidate list, built in one pass over the squad against ONE plan (#709).
+#
+# It fixes an ORDER rather than saving work. `_best_candidate_for` resolves a hypothetical per
+# candidate and the joint pass restores the real plan only before it QUEUES, so a list built inside
+# the member loop was built while the previous member's last REJECTED hypothetical was still
+# published on the units -- and `_attack_candidates` reads projected occupancy twice over, at the
+# aim (#709) and again through `gather_attack_victims` (#105). The second member was therefore not
+# reading a projection at all; it was reading a plan nobody gave, and its candidates could be
+# refused as whiffs against the restored board and have their keys poisoned in `refused` for the
+# rest of the turn.
+#
+# THE ELIGIBILITY GATE LIVES HERE, and a missing entry is its whole answer -- so the two readers
+# below cannot drift about who is still choosing. Rebuilt per ROUND by the caller, because
+# `has_main_action_queued` changes as the round queues and the entry must go with it; within a
+# round nothing is committed until the single queue, so no entry can go stale before it is used.
+static func _candidates_by_member(members: Array[Unit], board: BoardContext, base_plan: ResolvedPlan) -> Dictionary:
+	var out := {}
+	for member in members:
+		if not member.is_active() or member.has_main_action_queued() or not member.can_wield_equipped():
+			continue
+		out[member] = _attack_candidates(member, board, member.get_projected_destination(), base_plan.hypo)
+	return out
 
 
 # Every attack `unit` could declare from `origin`: each selectable+fireable attack crossed with
@@ -338,18 +364,25 @@ static func _attack_candidates(unit: Unit, board: BoardContext, origin: Vector2i
 				continue
 			if PlanResolver.projected_lifecycle(other, base_hypo) == Unit.LifecycleState.DEAD:
 				continue   # a squadmate already finished them this pass -- see the header
-			if not reach.has(other.movement.cell):
+			# WHERE THE PLAN PUTS THEM, not where they stand (#709). Sibling of the lifecycle read
+			# directly above, answered off the same dict: a squadmate's queued shove has already
+			# moved this target, and gather_attack_victims below has resolved occupants through
+			# PROJECTED cells since #105 -- so a live aim did not merely mis-point, it built a
+			# footprint holding nobody and the candidate was dropped at that guard. The direction
+			# that was invisible is the other one: a shove that pulls a target INTO reach.
+			var at := PlanResolver.projected_position(other, base_hypo)
+			if not reach.has(at):
 				continue
 			# The player's vertical gate, mirrored (#258): a point aim above the attack's tolerance
 			# is refused at the click, so the AI must not author one. Directional attacks pass, as
-			# they do at the click. (Live cell, not projected -- the declared v1 approximation.)
-			if not Reach.vertical_aim_ok(attack, origin, other.movement.cell, board):
+			# they do at the click.
+			if not Reach.vertical_aim_ok(attack, origin, at, board):
 				continue
-			var affected := Reach.get_affected_cells_from(unit, origin, other.movement.cell, attack)
+			var affected := Reach.get_affected_cells_from(unit, origin, at, attack)
 			if RulesService.gather_attack_victims(unit, affected, board, attack).is_empty():
 				continue
 			unit.active_attack = attack
-			out.append(AttackAction.declare(unit, origin, other.movement.cell))
+			out.append(AttackAction.declare(unit, origin, at))
 	unit.active_attack = null   # no probe left behind (#102)
 	return out
 
@@ -609,20 +642,34 @@ static func _queue_attacks_jointly(squad: Squad, board: BoardContext, squad_mana
 
 	while true:
 		var base_plan := squad_manager.resolve_plan(squad, board, reactions, terrain)
+		# EVERY member's candidates, built here against the REAL plan and before the first
+		# hypothetical (#709). Scoring resolves a hypothetical per candidate and this pass restores
+		# only before it QUEUES, so a list built inside the member loop was built while the previous
+		# member's last rejected hypothetical was still published -- and the reads that produce a
+		# candidate go through the board's projected occupancy, so the second member was aiming at
+		# a plan nobody gave. Rebuilt each round, which is what keeps it as fresh as the base plan:
+		# nothing is committed within a round, so no candidate can go stale before the single queue
+		# below, and the next round sees the commitment through its own base resolve.
+		var by_member := _candidates_by_member(squad.get_members(), board, base_plan)
 		var best: _Scored = null
 		for member in squad.get_members():
-			var pick := _best_candidate_for(member, squad, board, base_plan, squad_manager, reactions, terrain, refused, true)
+			var pick := _best_candidate_for(member, squad, board, base_plan, squad_manager, reactions, terrain, refused, true, by_member)
 			if pick != null and (best == null or _beats(pick.score, best.score)):
 				best = pick
 		if best == null:
 			break
 		best.action.actor.active_attack = best.action.fired_attack
 		# RESTORE BEFORE QUEUEING, not merely at the end. queue_action's whiff gate asks
-		# SquadPlanValidator.aim_finds_a_target, the one reader of published knockback, and it is
-		# correct there ONLY because that knockback is the already-queued aims' shoves. Scoring has
-		# just published a LOSING candidate's shove, so without this the gate looks for the target
-		# on the cell some rejected hypothetical would have thrown it to, finds nobody, and refuses
-		# the winner as a whiff -- which made a shoving attack unqueueable by this pass entirely.
+		# SquadPlanValidator.aim_finds_a_target, and it is correct there ONLY because that knockback
+		# is the already-queued aims' shoves. Scoring has just published a LOSING candidate's shove,
+		# so without this the gate looks for the target on the cell some rejected hypothetical would
+		# have thrown it to, finds nobody, and refuses the winner as a whiff -- which made a shoving
+		# attack unqueueable by this pass entirely.
+		#
+		# THAT GATE IS NOT THE ONLY READER, and this comment said it was until #709:
+		# gather_attack_victims resolves occupants projected too (#105), so the candidate BUILDER
+		# reads the same published shove. Restoring here fixed the gate and left the builder, which
+		# is why the lists are hoisted above -- see _candidates_by_member.
 		squad_manager.resolve_plan(squad, board, reactions, terrain)
 		if not squad_manager.queue_action(squad, best.action):
 			refused[_candidate_key(best.action)] = true   # bounded: candidates are finite and keys are stable across rounds
@@ -669,15 +716,16 @@ class _Scored:
 # so it was never a real option. That is the surviving half of "pass 2 needs an empty pass 1".
 static func _best_candidate_for(member: Unit, squad: Squad, board: BoardContext, base_plan: ResolvedPlan,
 		squad_manager: SquadManager, reactions: Array[ElementalReaction],
-		terrain: Array[TerrainReaction], refused: Dictionary, allow_lookahead: bool) -> _Scored:
-	if not member.is_active() or member.has_main_action_queued() or not member.can_wield_equipped():
-		return null
-	var origin := member.get_projected_destination()
+		terrain: Array[TerrainReaction], refused: Dictionary, allow_lookahead: bool,
+		by_member: Dictionary) -> _Scored:
+	if not by_member.has(member):
+		return null   # the eligibility gate ran when the table was built -- _candidates_by_member
 	var base := _score_plan(member.get_faction(), base_plan)
 	var routine := AIWeaponRoutine.for_unit(member)
 	var best: _Scored = null
 	var last_resort: _Scored = null   # the best of what the family DEFERRED -- see below
-	for candidate in _attack_candidates(member, board, origin, base_plan.hypo):
+	var candidates: Array[AttackAction] = by_member[member]
+	for candidate in candidates:
 		if refused.has(_candidate_key(candidate)):
 			continue
 		var one: Array[BaseAction] = [candidate]
@@ -689,7 +737,7 @@ static func _best_candidate_for(member: Unit, squad: Squad, board: BoardContext,
 		# pairs in v1, 2026-09-02), FLOORED AT ITS OWN SOLO SCORE -- see _lookahead for why
 		# inventing a zero there inverts the ranking now that a negative score can still win.
 		if not _beats(score, Vector3i.ZERO) and allow_lookahead and _applies_state_to_an_enemy(member.get_faction(), plan):
-			score = _lookahead(member, candidate, score, squad, board, base_plan, squad_manager, reactions, terrain, refused)
+			score = _lookahead(member, candidate, score, squad, board, base_plan, squad_manager, reactions, terrain, refused, by_member)
 		# A DEFERRED candidate is the family's own last resort (#726): it loses to every candidate
 		# this member has NOT deferred and is still taken when it has nothing else, so #711 stays
 		# literal -- the AI always attacks. MEMBER-LOCAL on purpose: decided here, never carried on
@@ -728,14 +776,14 @@ static func _scored(action: AttackAction, score: Vector3i) -> _Scored:
 # it does alone and what it enables; zero is not one of those two and must not be invented here.
 static func _lookahead(setup_unit: Unit, setup: AttackAction, solo: Vector3i, squad: Squad, board: BoardContext,
 		base_plan: ResolvedPlan, squad_manager: SquadManager, reactions: Array[ElementalReaction],
-		terrain: Array[TerrainReaction], refused: Dictionary) -> Vector3i:
+		terrain: Array[TerrainReaction], refused: Dictionary, by_member: Dictionary) -> Vector3i:
 	var base := _score_plan(setup_unit.get_faction(), base_plan)
 	var best := solo
 	for mate in squad.get_members():
-		if mate == setup_unit or not mate.is_active() or mate.has_main_action_queued() or not mate.can_wield_equipped():
-			continue
-		var origin := mate.get_projected_destination()
-		for follow in _attack_candidates(mate, board, origin, base_plan.hypo):
+		if mate == setup_unit or not by_member.has(mate):
+			continue   # a missing entry IS the eligibility gate, run once at the table build
+		var follows: Array[AttackAction] = by_member[mate]
+		for follow in follows:
 			if refused.has(_candidate_key(follow)):
 				continue
 			var pair: Array[BaseAction] = [setup, follow]

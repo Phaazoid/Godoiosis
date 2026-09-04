@@ -304,7 +304,7 @@ func test_a_hypothetical_resolve_never_becomes_the_squads_stored_plan() -> void:
 # so the pass has to finish on a real resolve or the board is left dressed for a plan nobody gave.
 #
 # A SHOVING attack must still be queueable, and it very nearly was not. queue_action's whiff gate
-# (SquadPlanValidator.aim_finds_a_target) is the one reader of PUBLISHED KNOCKBACK, and it is
+# (SquadPlanValidator.aim_finds_a_target) reads PUBLISHED KNOCKBACK, and it is
 # correct there only because that knockback belongs to the already-queued aims. A scoring pass
 # publishes a candidate's shove too -- so the gate went looking for the target on the cell the
 # scoring resolve had thrown it to, found nobody, and refused the winner as a whiff. Every attack
@@ -588,3 +588,75 @@ func test_a_target_the_plan_has_already_killed_is_not_aimed_at() -> void:
 	assert_object(ordered[0].actor).override_failure_message(
 			"the finisher is no longer the one that queued -- the fixture stopped measuring #719"
 			).is_same(m1)
+
+
+# --- Where a shoved target IS, versus where it WAS (#709) ---------------------------------------
+
+# A pattern-less weapon that shoves for a chosen power -- the pair below needs a shover that LOSES
+# the argmax, which _shoving_weapon's fixed 3 cannot express.
+func _shoving_weapon_of(power: int) -> WeaponInstance:
+	var template := WeaponData.new()
+	template.weapon_type = WeaponData.WeaponType.CHAINSWORD
+	template.main_attack = WeaponAttackData.new()
+	template.main_attack.power = power
+	template.main_attack.knockback = 1
+	return WeaponInstance.make(template)
+
+
+# THE AIM FOLLOWS THE SHOVE. A queued squadmate's knockback moves the target inside the plan, and
+# the candidate builder used to read `other.movement.cell` -- where the enemy stands on the LIVE
+# board, which the plan has already left behind.
+#
+# The fixture is built so the two answers are not merely different but DISJOINT: B cannot reach E
+# where it stands (Manhattan 2 away) and can reach only where the shove puts it. So this measures
+# the direction that is invisible today rather than one that merely mis-aims -- a shove that pulls
+# a target INTO a squadmate's reach produces a candidate that did not exist before.
+#
+# A(0,0) shoves E(1,0) to (2,0); B(2,1) is adjacent to the landing cell and nothing else.
+func test_a_squadmate_aims_where_the_plans_shove_puts_the_target() -> void:
+	var board: Dictionary = _build_board()
+	var a: Unit = _spawn(board, PLAYER, Vector2i(0, 0))
+	a.equipped_weapon = _shoving_weapon()
+	var b: Unit = _spawn(board, PLAYER, Vector2i(2, 1))
+	board.squad_manager.join_squad(b, a.squad)
+	var e: Unit = _spawn(board, ENEMY, Vector2i(1, 0), false)
+
+	AITactics.queue_main_actions_for_squad(a.squad, _context(board), board.squad_manager)
+
+	assert_int(_aim_count(a.squad, Vector2i(2, 0))).override_failure_message(
+			"nobody aimed at the cell the plan's own shove throws %s to -- aims were %s" % [
+				e.get_unit_name(), str(_attack_aims(a.squad))]).is_equal(1)
+
+
+# THE SAME READ, ONE LAYER DOWN: a candidate list must be built against the REAL plan, never
+# against whatever the last hypothetical published.
+#
+# `_best_candidate_for` resolves a hypothetical per candidate and the joint pass restores only
+# before it queues, so the member iterated SECOND used to have its candidates built while the
+# first member's last rejected hypothetical was still published on the board. That is not a
+# projected read at all -- it is a read of a plan nobody gave.
+#
+# A is the leader and iterates first, but its power-1 shove LOSES the argmax to B's honest 3, so
+# the winner is decided by a list that must have been built before A ever probed. Under the old
+# order B's list is built with E shoved to (3,0), which B cannot reach: B builds nothing, A wins
+# by default, and the squad's better attack is never authored.
+func test_a_candidate_list_is_built_against_the_plan_not_a_rejected_hypothetical() -> void:
+	var board: Dictionary = _build_board()
+	var a: Unit = _spawn(board, PLAYER, Vector2i(1, 0))
+	a.equipped_weapon = _shoving_weapon_of(1)
+	var b: Unit = _spawn(board, PLAYER, Vector2i(2, 1))
+	board.squad_manager.join_squad(b, a.squad)
+	var e: Unit = _spawn(board, ENEMY, Vector2i(2, 0), false)
+
+	AITactics.queue_main_actions_for_squad(a.squad, _context(board), board.squad_manager)
+
+	var by_b := 0
+	for action in a.squad.action_queue:
+		if action.action_type == BaseAction.ActionType.ATTACK and action.actor == b:
+			by_b += 1
+			assert_vector((action as AttackAction).target_cell).override_failure_message(
+					"B aimed at a cell only a rejected hypothetical ever put %s on" % e.get_unit_name()
+					).is_equal(Vector2i(2, 0))
+	assert_int(by_b).override_failure_message(
+			"B never attacked: its candidates were built against A's published shove -- aims were %s"
+			% str(_attack_aims(a.squad))).is_equal(1)

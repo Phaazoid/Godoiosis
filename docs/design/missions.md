@@ -2,7 +2,7 @@
 
 **Status: ALL FOUR SLICES BUILT 2026-07-28 ([#96](https://github.com/Phaazoid/Godoiosis/issues/96)).** Filed 2026-07-27, when the project acquired a win condition for the first time. Before this, Iosis had ten interlocking systems and no way to finish a battle — which meant a design question could be answered *"is this coherent?"* but never *"does this improve play?"*
 
-**Canon checked through #572 (2026-08-26).**
+**Canon checked through #709 (2026-09-04).**
 
 ## What a mission is
 
@@ -201,6 +201,8 @@ The game boots into `MissionSelectScreen`, not a board. `TestBoard` was retired 
 - **Scenarios & fixtures** (everything outside `missions/`) are listed below the missions and are selectable — during development these *are* the content.
 - A board arriving from the menu has nobody's turn *started* (`load_scenario` only restores whose turn it *was*), so `MissionController._begin_turn` fires the banner and `start_faction_turn`. Without it a mission saved on an AI faction's turn would sit there doing nothing, because `turn_started` only ever fires from `TurnManager.end_turn`.
 - **A turn HANDOFF resets actions; a menu arrival trusts the file ([#144](https://github.com/Phaazoid/Godoiosis/issues/144)).** `reset_faction_actions` fires from `game._on_turn_started`, not from `start_faction_turn` — the menu paths call the latter, and a resumed save's restored `Squad.has_acted` must survive the arrival. It lived inside `start_faction_turn` until #144, which meant every menu-driven load silently handed acted squads their actions back; nobody saw it because only the dev-overlay Load (which skips `_begin_turn`) had ever loaded a mid-battle snapshot. Pinned both directions by `tests/flow/test_turn_handoff_reset.gd`.
+- **...AND THE HAND-OFF SHEDS WHAT NOBODY EXECUTED** (dev ruling, 2026-09-03, out of [#709](https://github.com/Phaazoid/Godoiosis/issues/709)). The same call now drops every OTHER faction's queued orders. An order queued and not run used to survive the whole enemy turn — and it could never happen, because the reset above discarded it unexecuted at that faction's own next turn — so while it stood, `PlanResolver` seeded that unit from `get_projected_destination()` and placed it at the queued destination, while `queue_action`'s whiff gate placed a foreign unit where it stands. **Two answers to where the player is, during the one turn something else is aiming at them.** Nothing is lost by shedding early; only the resolver, the gate and the AI could observe the difference, and they disagreed. It rides `reset_faction_actions` because that is the one step BOTH walks share — `game._on_turn_started` and both of `play_session`'s end-turn paths — where `TurnManager.end_turn` knows no squads and a new signal would be wired in one walk and not the other (#714's shape). Through `SquadManager.shed_orders`, never a raw `action_queue.clear()`: the raw clear emits nothing, which is why an un-executed move's path arrow and projected ghost outlived the order that drew them.
+
 
 ## Player save slots (#144)
 
