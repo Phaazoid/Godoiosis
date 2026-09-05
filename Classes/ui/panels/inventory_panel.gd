@@ -118,8 +118,12 @@ func _show_action_popup(index: int):
 			wear_btn.text = "Wear"
 			wear_btn.pressed.connect(_do_wear.bind(index))
 		else:
-			wear_btn.text = "Wear — needs %s" % item.requirement_text()
-			wear_btn.disabled = true      # the gate, shown rather than silently swallowed
+			# The gate, shown rather than silently swallowed -- and since #744 in the SENTENCE the
+			# gate itself chose, against this wearer, rather than this surface re-wording the rule
+			# from requirement_text (which cannot see who is holding it, so it could only ever say
+			# what the piece demands, never how far short you are).
+			wear_btn.text = "Wear — %s" % item.can_equip_reason(unit)
+			wear_btn.disabled = true
 		vbox.add_child(wear_btn)
 	# Any non-armor equippable: weapons AND runes. Mirrors equip_weapon_from_inventory's
 	# own split — armor is caught above and fills a different slot.
@@ -132,9 +136,10 @@ func _show_action_popup(index: int):
 			equip_btn.text = "Equip"
 			equip_btn.pressed.connect(_do_equip.bind(index))
 		else:
-			# The gate, shown rather than silently swallowed — armor's precedent above (#157).
-			# Only a rune can refuse today, so the reason is the rune's.
-			equip_btn.text = "Equip — can't channel"
+			# The gate, shown rather than silently swallowed — armor's precedent above (#157). This
+			# used to hardcode "can't channel", which was true only while runes were the one kind
+			# that could refuse; #744 made every kind able to say its own.
+			equip_btn.text = "Equip — %s" % item.can_equip_reason(unit)
 			equip_btn.disabled = true
 		vbox.add_child(equip_btn)
 

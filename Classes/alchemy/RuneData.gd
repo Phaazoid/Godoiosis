@@ -167,5 +167,21 @@ func attack_detail(wielder: Unit, attack: AttackData) -> String:
 # The equip gate (#157): at least ONE channelable carving, never "all" — a one-of-three rune is
 # good gear. No affinity exemption (dev call 2026-08-10): a dead rune is carryable, not wieldable,
 # and a blank rune fails for everyone. Scenario load bypasses this — a save is authoritative.
-func can_equip(wielder: Unit) -> bool:
-	return not channelable(wielder).is_empty()
+# #744 turned it into the SENTENCE and let EquippableData derive the boolean. It walks inscriptions
+# rather than calling channelable(), which builds an Array to throw away -- can_equip runs inside
+# Unit._enforce_gear_gates on every stat settle, so nothing is built until the rune has failed.
+#
+# A refused rune says what EACH carving would need, because "one of three" means the player's choice
+# is which of the three gaps to close.
+func can_equip_reason(wielder: Unit) -> String:
+	if inscriptions.is_empty():
+		return "This rune is blank"
+	for carving: TransmutationData in inscriptions:
+		if carving.can_channel(wielder, temper):
+			return ""
+	var refusals: Array[String] = []
+	for carving: TransmutationData in inscriptions:
+		refusals.append(carving.channel_block_reason(wielder, temper))
+	if refusals.size() == 1:
+		return refusals[0]
+	return "Nothing channels -- " + "; ".join(refusals)

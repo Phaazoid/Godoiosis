@@ -24,7 +24,11 @@ extends EquippableData
 # it. Only effects with a life of their OWN (a timed tonic, the Crisis surge) get stored.
 @export var stat_modifiers: Dictionary[Stats.Stat, int] = {}
 
-func can_equip(wearer: Unit) -> bool:
+# The wear gate, and what it would take to pass it (#744 widened this from a bare bool).
+#
+# EVERY failing gate is named, not the first: two points short on CON and three over on DEX is a
+# piece your build cannot wear, and a player told only about the CON goes and fixes the wrong thing.
+func can_equip_reason(wearer: Unit) -> String:
 	# Gates read the wearer's BODY — base -> limb -> jobs -> temporary effects — and NEVER gear
 	# (#112, amending #55/#89). Two rules in one line:
 	#
@@ -37,26 +41,37 @@ func can_equip(wearer: Unit) -> bool:
 	# A tonic that raises CON DOES let you wear the heavy plate — and when it lapses, the plate
 	# comes off. Carrying armour you can only wear while buffed is legal, just fragile; and
 	# debuffing an enemy under a gate strips their kit.
-	for stat in stat_minimums:
-		if wearer.get_body_stat(stat) < stat_minimums[stat]:
-			return false
-	for stat in stat_maximums:
-		if wearer.get_body_stat(stat) > stat_maximums[stat]:
-			return false
-	return true
+	var short: Array[String] = []
+	for stat: Stats.Stat in stat_minimums:
+		var has: int = wearer.get_body_stat(stat)
+		if has < stat_minimums[stat]:
+			short.append("%s (has %d)" % [_gate_text(stat, stat_minimums[stat], false), has])
+	for stat: Stats.Stat in stat_maximums:
+		var has: int = wearer.get_body_stat(stat)
+		if has > stat_maximums[stat]:
+			short.append("%s (has %d)" % [_gate_text(stat, stat_maximums[stat], true), has])
+	return "" if short.is_empty() else "Needs " + ", ".join(short)
 
 # Human-readable stat tax, for the equip UI (e.g. "DEX -1").
 func modifier_text() -> String:
 	return Stats.modifier_text(stat_modifiers)
 
-# Human-readable gate, for the equip UI's "why can't I wear this" label.
+# What this piece DEMANDS, with nobody holding it — the question a list of loose gear can ask and
+# can_equip_reason cannot, since that one takes a wearer (dev, 2026-09-05: an invalid readout needs a
+# unit to be validated against, so it lives on the card while this lives wherever gear is listed
+# alone). Two scopes deliberately; ONE grammar, through the helper below.
 func requirement_text() -> String:
 	var parts: Array[String] = []
-	for stat in stat_minimums:
-		parts.append("%s %d+" % [Stats.Stat.keys()[stat], stat_minimums[stat]])
-	for stat in stat_maximums:
-		parts.append("%s %d or less" % [Stats.Stat.keys()[stat], stat_maximums[stat]])
+	for stat: Stats.Stat in stat_minimums:
+		parts.append(_gate_text(stat, stat_minimums[stat], false))
+	for stat: Stats.Stat in stat_maximums:
+		parts.append(_gate_text(stat, stat_maximums[stat], true))
 	return ", ".join(parts)
+
+# ONE spelling of one gate, shared by the two questions above. Separate formatting is how "DEX 5 or
+# less" and "DEX max 5" end up on two surfaces describing the same number.
+static func _gate_text(stat: Stats.Stat, value: int, is_ceiling: bool) -> String:
+	return "%s %d%s" % [Stats.Stat.keys()[stat], value, " or less" if is_ceiling else "+"]
 	
 	# Mechanical readout for the inventory tooltip (#44). Itemized for the unit who'd wear it, since
 # the scaled term depends on their CON -- "DEF 6" means nothing without saying 6 for whom.
