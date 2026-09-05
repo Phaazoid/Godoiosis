@@ -126,7 +126,7 @@ const ENTRIES: Array[Dictionary] = [
 		"does": "Begin the mission with the force you have placed. Refused while nobody is on the board -- a mission cannot start with no one to command.",
 		"action": "commit_deployment"},
 	{"key": "Left-click", "context": Context.BOARD, "when": "deploying, before a mission starts",
-		"does": "With the pre-mission menu swapped away: on one of your units, opens what you may still change about it -- squads, and taking it back off the board. On an empty cell inside the deployment zone, offers the units still waiting. There is no action ring here, because nothing is taking a turn yet.",
+		"does": "With the pre-mission menu swapped away: on one of your units, opens what you may still change about it -- squads, moving it to another cell in the deployment zone, and taking it back off the board. Picking Reposition lights the zone up and the next click places it, swapping with whoever is already there. On an empty cell inside the deployment zone, offers the units still waiting. There is no action ring here, because nothing is taking a turn yet.",
 		"action": HARDCODED},
 	{"key": "Click / Space / Enter", "context": Context.BOARD, "when": "someone is speaking",
 		"does": "Advance the conversation. Dialog opens over the board, and the board waits underneath until the line is done.",
