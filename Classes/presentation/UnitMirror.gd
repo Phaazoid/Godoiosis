@@ -356,7 +356,12 @@ func reconcile() -> void:
 			# above skips a unit already queued for deletion, so the poll NEVER observes HP at 0.
 			# Noticing the unit vanish instead would fire on clear_board, which frees without
 			# dying. Nothing else here needs a wire; this cannot be answered without one.
-			unit.unit_died.connect(_on_unit_died.bind(id))
+			# Guarded because a unit can now LEAVE units_root and come back without dying (#739's
+			# undeploy/redeploy): the bar is freed on the way out and rebuilt on the way in, and
+			# the bound callable compares equal, so an unguarded re-connect errors on every
+			# re-placement. Death is still the one signal this node listens to.
+			if not unit.unit_died.is_connected(_on_unit_died.bind(id)):
+				unit.unit_died.connect(_on_unit_died.bind(id))
 		_sync(unit, _mirrored[id])
 		_sync_bar(unit, _mirrored[id], _bars[id], unit == hovered, plan, marked.has(id), bars,
 				unhovered_numbers)

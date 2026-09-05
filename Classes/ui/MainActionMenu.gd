@@ -71,6 +71,7 @@ const WEAPON_ACTION := 16
 const CAPTURE := 17
 const TRANSMUTATION := 18
 const GUARD := 19
+const UNDEPLOY := 20   # the pre-mission phase only (#739)
 
 # The ring's categories, and their order IS the inner ring's clockwise order.
 #
@@ -78,7 +79,7 @@ const GUARD := 19
 # rule in build_tree hands it up as a plain terminal slice -- "Inspect is top level" (dev, #467
 # round 2) costs no new mechanism, just a group nobody else joins.
 #
-enum Group { MOVE_GROUP, ATTACK_GROUP, ACT_GROUP, SQUAD_GROUP, INSPECT_GROUP }
+enum Group { MOVE_GROUP, ATTACK_GROUP, ACT_GROUP, SQUAD_GROUP, INSPECT_GROUP, DEPLOY_GROUP }
 
 # A category is a row the player hovers, so it owes a readout like any other (#135's law reaches
 # it, pinned by tests/law/test_glossary_coverage.gd). Move / Attack / Inspect reuse the verb terms
@@ -89,6 +90,9 @@ const CATEGORIES := {
 	Group.ACT_GROUP: {"name": "Action", "term": Glossary.Term.ACTION},
 	Group.SQUAD_GROUP: {"name": "Squad", "term": Glossary.Term.SQUAD_ACTIONS},
 	Group.INSPECT_GROUP: {"name": "Inspect", "term": Glossary.Term.INSPECT},
+	# A category of one holding the verb of its own name, exactly as Move and Inspect are -- so the
+	# collapse rule in build_tree hands it up as a plain terminal slice (#739).
+	Group.DEPLOY_GROUP: {"name": "Undeploy", "term": Glossary.Term.UNDEPLOY},
 }
 
 # The kit slice is named after WHAT IS EQUIPPED, never after attacking (#467 round 3). It holds
@@ -123,6 +127,7 @@ const ACTION_DATA := {
 	JOINSQUAD: {"name": "Join Squad", "term": Glossary.Term.JOIN_SQUAD, "group": Group.SQUAD_GROUP},
 	LEAVESQUAD: {"name": "Leave Squad", "term": Glossary.Term.LEAVE_SQUAD, "group": Group.SQUAD_GROUP},
 	DISBAND_SQUAD: {"name": "Disband Squad", "term": Glossary.Term.DISBAND_SQUAD, "group": Group.SQUAD_GROUP},
+	UNDEPLOY: {"name": "Undeploy", "term": Glossary.Term.UNDEPLOY, "group": Group.DEPLOY_GROUP},
 	INSPECT: {"name": "Inspect", "term": Glossary.Term.INSPECT, "group": Group.INSPECT_GROUP},
 }
 
@@ -397,6 +402,13 @@ func _can_group_move(unit: Unit) -> bool:
 func populate(unit: Unit) -> Array:
 	var options = []
 
+	# The pre-mission phase has its own vocabulary (#739): what a unit DOES this turn is not a
+	# question yet, because there is no turn. An early return like can_control's just below, and for
+	# a sharper version of the same reason -- every gate past this point reads `unit.squad`, and a
+	# unit the phase has just undeployed does not have one.
+	if game.mission_controller.is_deploying():
+		return _pre_mission_options(unit)
+
 	if not game.can_control(unit):
 		options.append(INSPECT)
 		return options
@@ -461,6 +473,64 @@ func populate(unit: Unit) -> Array:
 #  Dispatch
 # ==============================================================================
 
+# What the ring offers DURING the phase (#739): the squad verbs, taking a unit back off the board,
+# and Inspect. Deliberately no turn verb -- no Move, no attack, no Wait -- and that absence is the
+# testable form of "a click on a deployed unit must not open the action menu": the ring is the same
+# widget, and what changes is that it can no longer say anything about a turn.
+#
+# The squad verbs come through their OWN gates, unchanged. Their outer condition in populate() --
+# no queued orders, squad not acted, no squad active -- is trivially true on a board where nothing
+# has moved, which is exactly why #731 never had to split _formation_basics_ok.
+#
+# UNDEPLOY is gated on drawn_from_roster: an authored unit belongs to the board, and enemies are
+# units_root children too, so an ungated arm would lift either of them off it.
+func _pre_mission_options(unit: Unit) -> Array:
+	var options := []
+	if unit.drawn_from_roster:
+		options.append(UNDEPLOY)
+	if game.squad_manager.can_create_any_squad(unit):
+		options.append(SQUADUP)
+	if game.squad_manager.can_join_any_squad(unit):
+		options.append(JOINSQUAD)
+	if unit.has_squad():
+		options.append(LEAVESQUAD)
+		if unit.squad.get_leader() == unit:
+			options.append(DISBAND_SQUAD)
+	options.append(INSPECT)
+
+	var ordered := []
+	for id in ACTION_DATA:
+		if options.has(id):
+			ordered.append(id)
+	return ordered
+
+
+# The empty-cell door onto deploy_unit (#739), from the dev's own description: "click a blank spot
+# and click add, and get a dropdown of all deployable units to bring one in."
+#
+# The ring is the dropdown -- ActionMenuController already takes an arbitrary tree and already
+# routes non-verb leaves through synthetic negative ids, so this needs no widget of its own. It
+# opens with a NULL unit, which the controller supports (it simply draws no portrait at the centre).
+func show_deploy_menu(cell: Vector2i, pos: Vector2i) -> void:
+	var waiting: Array = game.reserve_root.get_children()
+	if waiting.is_empty():
+		return
+	_pick_by_id = {}
+	_next_synthetic_id = -1
+
+	var children: Array = []
+	for unit: Unit in waiting:
+		var node := _entry(unit.get_unit_name(), "", Glossary.short(Glossary.Term.UNDEPLOY))
+		children.append(_synthetic_leaf(node, func(_ignored: Unit): game.deploy_unit(unit, cell)))
+
+	var controller := ActionMenuController.new()
+	game.add_child(controller)
+	controller.setup(null)
+	controller.action_selected.connect(on_pressed)
+	controller.cancelled.connect(_on_menu_cancelled)
+	controller.open(children, Vector2(pos))
+
+
 func on_pressed(action_id: int, unit: Unit) -> void:
 	_dispatch(action_id, unit)
 	# The ring leaves the board unlocked, so the camera can be anywhere the player panned it while
@@ -484,6 +554,10 @@ func _dispatch(action_id: int, unit: Unit) -> void:
 		return
 
 	match action_id:
+		UNDEPLOY:
+			# #738's board-exit door, reached for the first time by something that is not a test.
+			# The ring only offers it for a drawn unit, so the gate is at _pre_mission_options.
+			game.undeploy_unit(unit)
 		MOVE:
 			# The gesture, not the bare mode: re-planning spends the queued move (#417). One
 			# answer, because right-click reaches the same gesture from the other side.

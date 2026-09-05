@@ -7,7 +7,7 @@ its child [#49 Action Queue UX](https://github.com/Phaazoid/Godoiosis/issues/49)
 This is a *guidelines* doc, not a spec — it captures the principles we're holding the work to,
 plus the running order of the queue-UX checklist. Update it as items land.
 
-**Canon checked through #756 (2026-09-04).**
+**Canon checked through #763 (2026-09-05).**
 
 ## Principles
 
@@ -1157,9 +1157,16 @@ already had a richer HUD door. The principle worth keeping: **the unit's menu is
 the turn is the HUD's business.** The one capability genuinely lost is *"wipe everything this unit
 has queued in one press"*, which is now N presses of the queue row's X.
 
-**So the End Turn button is permanent** — with one exception added by
-[#722](https://github.com/Phaazoid/Godoiosis/issues/722): it stands down while a cinematic pass owns the
-frame, on a different predicate entirely (see *The shell's menus, and what the cinematic owns* below).
+**So the End Turn button is permanent** — with TWO exceptions, and they are one mechanism answering
+two questions. [#722](https://github.com/Phaazoid/Godoiosis/issues/722) stands it down while a
+cinematic pass owns the frame, on a different predicate entirely (see *The shell's menus, and what the
+cinematic owns* below); [#739](https://github.com/Phaazoid/Godoiosis/issues/739) stands the same pair
+down -- End Turn and the queue dock, through `game.set_battle_hud_hidden` -- for the pre-mission
+placement phase. A cinematic is nobody LOOKING; the phase is nobody ACTING, which is why the two
+readouts stay up there and not here. The second one is load-bearing rather than tidy: the button's
+press gates on `_board_locked_for_player()`, which is FALSE during the phase, so an un-hidden button
+would run `end_turn()` on a turn that never started.
+
 A plain enemy turn still leaves it up, which is #541's ruling. What its old visibility rule became is the FLASH, and the
 same predicate (`faction_all_squads_acted`) now also decides whether pressing it **asks first** —
 so a flashing button never interrupts and a still one always does, and the cue and the confirmation

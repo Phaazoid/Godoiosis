@@ -209,6 +209,12 @@ func test_a_resume_does_not_draw_the_roster_a_second_time() -> void:
 	var deployed: int = _units().size()
 	assert_int(deployed).is_greater(0)
 
+	# The mission has to actually START before a slot will take it (#739): a save during the
+	# pre-mission phase is refused, because it would record the units already placed and drop the
+	# rest of the roster on the way back in.
+	assert_bool(mc.commit_deployment()).is_true()
+	await await_idle_frame()
+
 	assert_bool(sm.save_to_slot(1)).is_true()
 	sm.clear_board()
 	await await_idle_frame()
@@ -239,6 +245,11 @@ func test_the_draw_lands_before_the_director_arms() -> void:
 
 	assert_int(_units().size()).override_failure_message(
 		"precondition: nobody deployed, so the ordering was never exercised").is_greater(0)
+	# The arm moved to commit with the phase (#739), so the lesson cannot even be read until the
+	# mission starts -- and the ordering this case exists for is UNCHANGED by that, since the draw
+	# still happens first and is now a whole phase earlier.
+	assert_bool(mc.commit_deployment()).is_true()
+	await await_idle_frame()
 	assert_str(game.scenario_director.active_instruction()).override_failure_message(
 		"the draw's own squads completed the lesson before the player could act").is_equal(step.text)
 

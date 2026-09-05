@@ -45,6 +45,33 @@ var _failed_by: MissionRules.LoseCondition = MissionRules.LoseCondition.NONE
 # for general use -- it answers exactly one question, and a second caller wanting a different
 # shade of it should ask its own.
 var _battle_begun := false
+# Is the pre-mission phase OPEN (#739) -- the board loaded and standing, the roster drawn, and
+# nobody's turn started? This is the INTENT behind GameState.PRE_MISSION, and it has to be a flag of
+# its own for the reason dev_mode_enabled is one: game._base_state() decides what the board RESTS
+# at, and clear_selection WRITES game_state from it, so a state that read game_state would answer
+# PICKING_TARGET in the middle of a squad pick and rest the board on IDLE.
+#
+# `_battle_begun` above is NOT this flag, and its own comment says so: a dev-tools load has that
+# false too. This one means "a player is choosing right now".
+#
+# ITS FOUR EDGES, and they are the whole design:
+#   * SET by _open_deployment, from begin_mission and restart_mission -- the two fresh-start doors.
+#     That one entry also RESTS the board on the new _base_state; setting the flag alone leaves
+#     game_state wherever the arrival left it, and every click would reach the battle ring.
+#   * CLEARED in commit_deployment BEFORE _begin_turn, because start_faction_turn rests the board on
+#     _base_state() and turn 1 would otherwise rest inside the phase.
+#   * CLEARED in reset(), which clear_board calls BEFORE its own exit_current_mode -- and that
+#     ordering is what makes F2, a board swap, Load Game and the next mission all leave the phase
+#     correctly, for free. Do not reorder those two.
+#   * The HUD stand-down rides the SETTER, never commit. abandon_mission and resume_from_slot both
+#     leave the phase without passing through commit, so a hide written at commit would strand the
+#     next mission with no End Turn button (CameraController._set_playback_cinematic's shape).
+var _deploying := false:
+	set(value):
+		if _deploying == value:
+			return
+		_deploying = value
+		game.set_battle_hud_hidden(value)
 
 
 func is_over() -> bool:
@@ -81,6 +108,9 @@ func reset() -> void:
 	_rounds_elapsed = 0
 	_failed_by = MissionRules.LoseCondition.NONE
 	_battle_begun = false
+	# Through the setter, so the HUD comes back up on every board teardown (#739). This is the edge
+	# that covers F2, a board swap, Load Game and Abandon -- none of which pass through commit.
+	_deploying = false
 	game.refresh_mission_status()
 
 # --- Mid-battle snapshot (#87) ---
@@ -151,7 +181,15 @@ func _close_mission_select() -> void:
 func begin_mission(path: String, armed := true) -> void:
 	_close_mission_select()
 	game.scenario_manager.load_scenario(path)   # routes through clear_board() -> reset()
-	deploy_roster()   # BEFORE the arm, and it matters -- see the function
+	var drawn := deploy_roster()   # BEFORE the arm, and it matters -- see the function
+	# A PLAYER is what the phase is for (#739). armed=false is the watch-only boot (#375) and the
+	# Play API's shape -- nobody there to answer it -- so the draw stands as the answer and the
+	# mission starts, which is #731 ruling 8's "both auto-deploy". A board that drew NOBODY (no
+	# roster, or a zone with no room, which Check board BLOCKS) also falls straight through: a phase
+	# with nothing in it is one you could never commit.
+	if armed and drawn > 0:
+		_open_deployment()
+		return
 	# armed=false is the watch-only boot (#375: a lesson needs a student -- demo mode has no player
 	# to advance dialog or follow instructions). Must be decided HERE, not disarmed after: the intro
 	# starts DEFERRED (the layout-ready trap), so a late disarm cannot un-start it.
@@ -161,16 +199,85 @@ func begin_mission(path: String, armed := true) -> void:
 		game.scenario_director.disarm()
 	_begin_turn()
 
-# The pre-mission phase, as much of it as exists (#737). A board that names a Roster (#735) spawns
-# ALL of it (#738) and draws from that onto its DEPLOYMENT zone (#736), up to its cap, and then
-# plays. Returns how many stood up; the rest wait in game.reserve_root until clear_board frees them.
+
+# The phase's one ENTRY, from the two fresh-start doors above. Setting the flag is not enough by
+# itself: game_state is written by whoever last rested the board, and the arrival that got us here
+# rested it on IDLE -- clear_board's exit_current_mode, which runs after reset() and before the
+# draw. clear_selection is that write point, and it is the same one _begin_turn reaches through
+# start_faction_turn on the other branch, so the phase and a turn come to rest the same way.
+func _open_deployment() -> void:
+	_deploying = true
+	game.clear_selection()   # -> _base_state(), which now answers PRE_MISSION
+
+
+# The phase's one exit (#739). Refused with nothing on the board -- a mission cannot start with no
+# force -- and that refusal has a VOICE, because a silent one reads as a dead key.
 #
-# The PLAYER does not linger here yet (dev, 2026-09-04): the screen that would let them choose is
-# #740-#743, so until it lands the draw IS the choice and the mission starts straight after. What
-# that scope deliberately leaves unbuilt -- a commit that can be refused, a back-out, a restart
-# buffer -- would each be a mechanism whose only job was to survive until that screen, which is
-# #731's own anti-scaffolding ruling. Note "no saving during the phase" needs nothing at all here:
-# this is synchronous inside the mission-start door, so no frame passes in which a save is possible.
+# It clears the flag BEFORE arming and beginning the turn: start_faction_turn rests the board on
+# _base_state(), so turn 1 would otherwise rest inside the phase it just left.
+func commit_deployment() -> bool:
+	if not _deploying:
+		return false
+	if deployed_roster_count() == 0:
+		game.turn_banner.show_label("Deploy someone first")
+		return false
+	_deploying = false
+	game.exit_current_mode()   # the phase's own ring/pick is over; rests on the new _base_state
+	game.scenario_director.mission_started()   # a commit is a fresh start (#182), same as the door above
+	_begin_turn()
+	return true
+
+
+func is_deploying() -> bool:
+	return _deploying
+
+
+# The DEPLOYMENT cells a unit could actually be put on, right now. TWO callers and that is the point
+# (#739): the draw asks it once at mission start, and every click on an empty cell asks it again --
+# so "where may a unit stand" is one answer, not one the walk holds and one the click re-derives.
+#
+# Legality is asked HERE and passed onward, never inside PreMission's pure walk: game.can_spawn_at
+# IS spawn_unit's own gate, so a cell this accepts is one that spawn cannot refuse, while the
+# headless host's spawn answers differently. One question, asked by whoever can answer it.
+func open_deployment_cells() -> Array[Vector2i]:
+	var open_cells: Array[Vector2i] = []
+	for cell: Vector2i in game.zone_manager.cells_of_kind(ZoneManager.Kind.DEPLOYMENT):
+		if game.can_spawn_at(cell):
+			open_cells.append(cell)
+	return open_cells
+
+
+# How many of the ROSTER are standing on the board -- what the cap counts, and what #743's strip
+# will read as the left half of "4 / 6". Authored units on the same board are not the roster's and
+# never count against its cap (ruling 2c: authored units are additive).
+func deployed_roster_count() -> int:
+	var count := 0
+	for unit: Unit in game.units_root.get_children():
+		if unit.drawn_from_roster:
+			count += 1
+	return count
+
+
+# Room under the cap for one more? `0` is the cap's own "as many as fit" sentinel (#736), and the
+# ZONE is the other limit -- but that one enforces itself, since a cell with nothing free is a cell
+# open_deployment_cells never offers.
+func can_deploy_another() -> bool:
+	var cap: int = game.scenario_manager.current_deployment_cap
+	return cap == PreMission.NO_CAP or deployed_roster_count() < cap
+
+# The pre-mission phase's DRAW (#737). A board that names a Roster (#735) spawns ALL of it (#738)
+# and stands as many as its cap allows on its DEPLOYMENT zone (#736). Returns how many stood up;
+# the rest wait in game.reserve_root until clear_board frees them.
+#
+# THE PLAYER NOW LINGERS HERE (#739, replacing #737's "not yet"): the draw is the OPENING position
+# rather than the answer, and begin_mission holds the board in the phase instead of playing on. So
+# the three things #737 left unbuilt -- a commit that can be refused, a ring that can undeploy, a
+# save refusal -- are built, now that there is something for each of them to serve rather than a
+# mechanism whose only job was to survive until this ticket.
+#
+# The RESTART BUFFER is the one piece still out, filed as its own ticket rather than parked here
+# (#763): the walk below is deterministic over the same roster, cap and zone, so a retry re-draws
+# the same characters onto the same cells and only HAND placements are re-made.
 #
 # WHERE IT IS CALLED IS THE WHOLE DESIGN. It sits at the two FRESH-START doors, beside the arm
 # decision the director already forks on (#182) -- never inside apply_scenario, which every board
@@ -195,13 +302,7 @@ func deploy_roster() -> int:
 	if roster == null:
 		return 0
 
-	# Legality is asked HERE and passed in, never inside the walk: game.can_spawn_at IS spawn_unit's
-	# gate, so a cell this accepts is one that spawn cannot refuse, while the headless host's spawn
-	# answers differently. One question, asked by whoever can actually answer it.
-	var open_cells: Array[Vector2i] = []
-	for cell: Vector2i in game.zone_manager.cells_of_kind(ZoneManager.Kind.DEPLOYMENT):
-		if game.can_spawn_at(cell):
-			open_cells.append(cell)
+	var open_cells: Array[Vector2i] = open_deployment_cells()
 
 	# The WHOLE roster spawns, deployed or not (#738), into game.reserve_root -- so a card on #740's
 	# screen is a real Unit and every wielder-taking predicate serves it unchanged. It is also what
@@ -284,7 +385,14 @@ func can_restart() -> bool:
 
 func restart_mission() -> void:
 	game.scenario_manager.reload_current()
-	deploy_roster()   # a restart re-runs the same deterministic draw; see deploy_roster
+	var drawn := deploy_roster()   # a restart re-runs the same deterministic draw; see deploy_roster
+	# ...and returns to the PHASE, so a retry is a chance to place differently (#739). What it does
+	# not do yet is preserve what the player placed LAST attempt -- the draw is deterministic, so
+	# the force is the same, but hand placements are re-made. Filed as its own ticket rather than
+	# parked here (dev, 2026-09-05).
+	if drawn > 0:
+		_open_deployment()
+		return
 	game.scenario_director.mission_started()   # a restart is a fresh start (#182); arms before turn 1
 	_begin_turn()
 
