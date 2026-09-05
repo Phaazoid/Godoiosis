@@ -351,6 +351,32 @@ func test_a_friendly_fire_hit_draws_no_reaction_from_the_attackers_own_squad() -
 	assert_int(plan.counters.size()).is_equal(0)
 	_break_volleys(plan)
 
+# THE GATE IS FACTION-SHAPED, NOT SQUAD-SHAPED -- and this case is the only thing that says so.
+# Found by mutating: "defender_squad != attacking_squad" is the tempting symptom patch, and it
+# survives every other case in this section, because in all of them the two squads are the same
+# object. Two FRIENDLY squads is the board that separates them: one squad's healer patches the
+# other's wounded, the squads differ, and the units are still not enemies. Under the symptom patch
+# squad B answers with a free heal of its own; under the rule the dev actually gave, nothing.
+func test_a_heal_across_two_friendly_squads_draws_no_reaction() -> void:
+	var healer_a := H.spawn_solo(self, _sm, PLAYER, Vector2i(1, 0))
+	var wounded_b := H.spawn_solo(self, _sm, PLAYER, Vector2i(2, 0), TOUGH_LEADER)
+	var healer_b := H.spawn_solo(self, _sm, PLAYER, Vector2i(3, 0), TOUGH_LEADER)
+	_sm.join_squad(healer_b, wounded_b.squad)
+	_make_healer(healer_a)
+	_make_healer(healer_b)
+	wounded_b.set_current_hp(10)
+
+	var units := [healer_a, wounded_b, healer_b] as Array[Unit]
+	var plan := _resolve_attack_on(healer_a, wounded_b, units)
+
+	# 10 + 9 = 19 of 30, so squad B's own healer still has a hurt squadmate in reach -- the derived
+	# reaction had somewhere to go and the gate is what stopped it, not an empty candidate set.
+	assert_int(plan.attacks[0].resolved.heal_amount).is_greater(0)
+	assert_int(PlanResolver.projected_hp(wounded_b, plan.hypo)).is_between(11, 29)
+	assert_int(_reactions_by_actor(plan, healer_b).size()).is_equal(0)
+	assert_int(plan.counters.size()).is_equal(0)
+	_break_volleys(plan)
+
 # THE FORK THE DEV PICKED, pinned (ruling 2026-09-05): the gate is "actor and target are enemies",
 # NOT "a heal never triggers". Healing an enemy is authored canon (C8's note that a player-AIMED
 # heal keeps its enemy splash), and being healed by an enemy is still being acted upon by one -- so
