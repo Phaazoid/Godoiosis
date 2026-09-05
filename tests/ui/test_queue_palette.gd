@@ -196,6 +196,28 @@ func test_every_element_reads_against_the_parchment_row() -> void:
 # ...and its mirror, which is the rule round 4 actually wrote down: a colour picked to RECEDE must
 # stay receded. The rail's off state has that job in both palettes, and it is the value that got
 # promoted to text once already.
+# #774: a control whose GROUND is palette-aware and whose INK is not vanishes the moment the palette
+# changes -- the pre-mission bar's Loadout label did exactly that on parchment, having taken its box
+# from row_box() and its font colour from the theme. The law is the PAIRING, not the button:
+# HEADER_TEXT is one of the roles that INVERTS with its ground, which is what makes it the ink for a
+# row in either palette, while TITLE_TEXT and EXECUTE_TEXT stay light in both BY DESIGN (they sit on
+# the dark frame and on crimson) and so can never sit on paper.
+#
+# BOTH palettes here, unlike the element cases above, and the header's reasoning is why that is
+# allowed: these are authored consts, not GameKnobs rows, so a floor over them constrains nothing the
+# dev drags. The hover ground is in the loop because hover is exactly where a normal-state-only fix
+# still fails -- a Button falls back to the THEME's font_hover_color.
+func test_row_ink_reads_against_the_row_in_both_palettes() -> void:
+	for palette: int in [PlayerSettings.QueuePalette.DEFAULT, PlayerSettings.QueuePalette.PARCHMENT]:
+		_pick(palette)
+		var ink := QueueStyle.ink(QueueStyle.Role.HEADER_TEXT)
+		for ground_role: QueueStyle.Role in [QueueStyle.Role.ROW_BG, QueueStyle.Role.ROW_HOVER_BG]:
+			var ground := QueueStyle.ink(ground_role)
+			assert_float(_contrast(ink, ground)).override_failure_message(
+				"HEADER_TEXT cannot be read on %s in palette %d"
+				% [QueueStyle.Role.keys()[ground_role], palette]).is_greater(CONTRAST_FLOOR)
+
+
 func test_the_rail_off_state_stays_quiet_in_both_palettes() -> void:
 	for palette: int in [PlayerSettings.QueuePalette.DEFAULT, PlayerSettings.QueuePalette.PARCHMENT]:
 		_pick(palette)

@@ -167,6 +167,11 @@ func test_beginning_the_mission_from_the_screen_closes_it() -> void:
 
 	_screen()._on_begin()
 	await await_idle_frame()
+	# #774 put a confirm in front of the commit, on all three of its doors.
+	for child in game.ui_layer.get_children():
+		if child is ConfirmCard:
+			child.answered.emit(true)
+	await await_idle_frame()
 
 	assert_object(_screen()).override_failure_message(
 		"the screen outlived the mission it started").is_null()
@@ -185,6 +190,11 @@ func test_abandoning_closes_the_screen() -> void:
 
 	assert_object(_screen()).override_failure_message(
 		"the screen survived Abandon, holding units the next mission will free").is_null()
+	# #774's bar rides the same teardown, and this is the exit with no clear_board behind it: a
+	# survivor here would sit over Mission Select offering to begin a mission nobody is in.
+	for child in game.ui_layer.get_children():
+		assert_bool(child is PreMissionBar).override_failure_message(
+			"the board-side bar survived Abandon").is_false()
 
 
 func test_a_board_swap_closes_the_screen() -> void:

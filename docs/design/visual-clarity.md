@@ -1167,6 +1167,15 @@ readouts stay up there and not here. The second one is load-bearing rather than 
 press gates on `_board_locked_for_player()`, which is FALSE during the phase, so an un-hidden button
 would run `end_turn()` on a turn that never started.
 
+**And the slot it vacates is where the phase's own affordance goes**
+([#774](https://github.com/Phaazoid/Godoiosis/issues/774)). Standing the pair down left the board
+preview with no chrome at all: a lit deployment zone and two keys nobody had been told about. The
+corner is the right home for the replacement rather than a free one, because `MissionStatusPanel`
+reserves that slot whether or not anything is in it -- so `PreMissionBar` reflows nothing, and takes
+its height FROM the reservation (`BUTTON_CLEARANCE - CORNER_MARGIN`) rather than measuring the slot a
+third time. The general rule the pair of tickets makes: **a surface that stands down owes the frame
+whatever the player still needs from that corner.**
+
 A plain enemy turn still leaves it up, which is #541's ruling. What its old visibility rule became is the FLASH, and the
 same predicate (`faction_all_squads_acted`) now also decides whether pressing it **asks first** —
 so a flashing button never interrupts and a still one always does, and the cue and the confirmation
