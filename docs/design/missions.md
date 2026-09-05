@@ -50,6 +50,15 @@ The whole roster spawns as real `Unit` nodes, into **`game.reserve_root`** — b
 
 **The HUD stand-down rides the flag's SETTER, never the commit.** End Turn and the queue panel stand down; the two readouts stay up, which is not a smaller version of #722's cinematic hide but a different question — a cinematic is nobody *looking*, the phase is nobody *acting*, and #740's board preview inspects through the panel this would otherwise have hidden. End Turn is the load-bearing one: its press gates on `_board_locked_for_player()`, which is false in the phase, so an un-hidden button would run `end_turn()` on a turn that never started. Writing the hide at commit instead is the trap — `abandon_mission` and `resume_from_slot` both leave the phase without passing through it, so the *next* mission would open with no End Turn button at all.
 
+**What stands down leaves a hole, and #774 is the bill for it.** Hiding both battle surfaces left the
+board preview showing a lit deployment zone and nothing else — the way back to the menu and the way
+into the battle were both keys, on a screen that had just vanished. `PreMissionBar` is the phase's
+own corner HUD, built at `_open_deployment` and freed by `_close_deployment_menu` so all three exits
+already take it, carrying **Loadout** (the Tab swap) and **Begin Mission** (the Enter commit).
+Neither greys: Begin with nobody placed is `commit_deployment`'s own voice, the rule the screen's
+Begin already carries — two surfaces, one refusal. It sits in the slot End Turn just vacated, which
+`MissionStatusPanel` reserves whether or not that button is visible.
+
 **What the player may do while standing there.** A click on one of their units opens the ring — the same widget, with nothing to say about a turn: Squad Up / Join / Leave / Disband through their own gates unchanged, plus Undeploy and Inspect. `MainActionMenu.populate` early-returns into `_pre_mission_options` *before* any gate that reads `unit.squad`, because a unit the phase has just undeployed does not have one. A click on an empty deployment cell offers the units still waiting — `ActionMenuController` already takes an arbitrary tree and already routes non-verb leaves through synthetic ids, so the ring *is* the dropdown and no widget was built for it. Undeploy is gated on `drawn_from_roster`: authored units are additive and belong to the board (ruling 2c), and enemies are `units_root` children too.
 
 **Saving is refused during the phase, at `ScenarioManager.save_to_slot` rather than at the pause-menu row.** A slot is a mid-battle snapshot and `capture_scenario` walks `units_root`, so the reserve is invisible to it: a save taken here would record only the units already placed, and the resume — which correctly bypasses the phase — would come back with the rest of the roster gone and no way to finish choosing. The pause menu greys its own row and names the reason; the refusal underneath is the gate.
