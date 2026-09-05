@@ -629,16 +629,35 @@ static func _try_overwatch(unit: Unit, board: BoardContext, squad_manager: Squad
 	var origin := unit.get_projected_destination()   # the fallback walk runs AFTER the group move is queued
 	var aim := _watch_aim(unit, origin, attack, enemy, board)
 	if aim == origin:
-		return false   # no facing produces a footprint -- see _watch_aim
+		return false   # no facing covers a cell the enemy can reach -- see _watch_aim
 	var action := OverwatchAction.new()
 	action.init(unit, aim, attack)
 	return squad_manager.queue_action(unit.squad, action)
 
 
 # Which cell to aim the watch at -- a FACING for a directional attack (Overwatch.tres is a
-# ForwardLinePattern), the cell itself for a point one. Ranked by how few hops the enemy needs to
-# reach it, walking from THE ENEMY'S side with its own traversal and occupancy on: that is what makes
-# "the way you'll come" true around a wall rather than along a straight line.
+# ForwardLinePattern), the cell itself for a point one. The return is always `origin + dir`, and
+# stays adjacent: OverwatchAction re-derives the facing from it and the queue row names it.
+#
+# RANKED OVER THE WHOLE FOOTPRINT, never the cell in front (#769). A watch fires when an enemy
+# enters ANY cell it covers, so that is what the route question has to be asked about: fewest hops
+# to any cell of the lane the enemy can reach, then the MOST such cells, then CARDINAL_DIRECTIONS
+# order (Law #1). Reading `origin + dir` alone was #127's shape a third time -- a metric measuring
+# one cell of the thing it ranks -- and it cost three answers. A lane #756 had truncated to a stub
+# tied with a whole one. A facing whose near cell was merely OCCUPIED was refused outright, and
+# since the walk runs from THE ENEMY'S side with occupancy on, the blocker is usually the watcher's
+# own squadmate. And on a diagonal approach every facing tied at its near cell and fell through to
+# cardinal order -- watching north while the enemy walked in from the east.
+#
+# The coverage term only ever breaks a tie, which is why the answer barely moves: wherever the old
+# read produced one, the minimum sat on the near cell and still does.
+#
+# ONE HOP FIELD, hoisted -- all four facings ask the same source, so this was four floods that each
+# had to reach the watcher's neighbourhood anyway. `until` stops early only once EVERY cell in it
+# has a distance, and a lane routinely holds one that never will (off the map, since truncation asks
+# elevation and the trace but never bounds; or under a squadmate), so the hoisted call floods the
+# component. That is the tie-break's price and the lever if it ever bites -- `nearest_enemy` one
+# frame up already floods the same class, so this path was never flood-free.
 #
 # A DUD AIM MUST NEVER BE QUEUED. `ForwardLinePattern.get_selectable_cells` answers empty for a hint
 # that yields no cardinal direction, and from there the failure is entirely silent -- the resolver
@@ -646,22 +665,48 @@ static func _try_overwatch(unit: Unit, board: BoardContext, squad_manager: Squad
 # OverwatchAction at all, so the unit would spend its main action on air behind a legal-looking row.
 # Returning `origin` is this function's way of saying "no facing works", and the caller refuses.
 #
-# Ties keep CARDINAL_DIRECTIONS order (Law #1). A sealed board -- no route to any facing -- falls back
-# to simply facing the enemy, reusing GridUtils' own diagonal tie-break rather than inventing a second.
+# A sealed board falls back to simply facing the enemy, reusing GridUtils' own diagonal tie-break
+# rather than inventing a second. That hatch NARROWED without being touched: it used to open when no
+# near cell was reachable, and now waits until no lane cell is.
+#
+# WHO STANDS IN THE LANE IS NOT ASKED (dev, 2026-09-05: "the overwatch is an attack"). An
+# ally-hitting watch shoots its own squad, and that is the attack behaving as authored.
 static func _watch_aim(unit: Unit, origin: Vector2i, attack: AttackData, enemy: Unit, board: BoardContext) -> Vector2i:
+	var footprints := {}   # dir -> the cells that facing actually covers, truncation included
+	var wanted := {}       # their union, and the hop field's `until`
+	for dir in AttackPattern.CARDINAL_DIRECTIONS:
+		var cells := Reach.get_affected_cells_from(unit, origin, origin + dir, attack, board)
+		if cells.is_empty():
+			continue
+		footprints[dir] = cells
+		for cell in cells:
+			wanted[cell] = true
+	if footprints.is_empty():
+		return origin
+
+	var field := RulesService.path_hops(enemy.movement.cell, board, enemy, -1, wanted, true)
 	var best := origin
 	var best_hops := -1
+	var best_covered := 0
 	for dir in AttackPattern.CARDINAL_DIRECTIONS:
-		var aim: Vector2i = origin + dir
-		if Reach.get_affected_cells_from(unit, origin, aim, attack, board).is_empty():
+		if not footprints.has(dir):
 			continue
-		var field := RulesService.path_hops(enemy.movement.cell, board, enemy, -1, {aim: true}, true)
-		if not field.has(aim):
-			continue
-		var hops: int = field[aim]
-		if best_hops < 0 or hops < best_hops:
-			best = aim
+		var lane: Array[Vector2i] = footprints[dir]
+		var hops := -1
+		var covered := 0
+		for cell in lane:
+			if not field.has(cell):
+				continue
+			covered += 1
+			var d: int = field[cell]
+			if hops < 0 or d < hops:
+				hops = d
+		if covered == 0:
+			continue   # nothing this facing covers is somewhere the enemy can get to
+		if best_hops < 0 or hops < best_hops or (hops == best_hops and covered > best_covered):
+			best = origin + dir
 			best_hops = hops
+			best_covered = covered
 	if best_hops >= 0:
 		return best
 	var facing := GridUtils.cardinal_direction_i_between(origin, enemy.movement.cell)

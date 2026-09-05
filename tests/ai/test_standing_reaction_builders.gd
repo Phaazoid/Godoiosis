@@ -42,8 +42,9 @@ func _context(board: Dictionary) -> BoardContext:
 
 
 # A weapon carrying a watchable extra -- what a Carbine is, without depending on that content.
-# The line is length 1 so the footprint is exactly the aimed cell and a case can name it.
-func _watch_weapon() -> WeaponInstance:
+# The line defaults to length 1 so the footprint is exactly the aimed cell and a case can name it.
+# A case about the LANE (#769 -- what a facing covers, not the cell in front) passes a longer one.
+func _watch_weapon(length := 1) -> WeaponInstance:
 	var template := WeaponData.new()
 	template.weapon_type = WeaponData.WeaponType.CARBINE
 	template.main_attack = WeaponAttackData.new()
@@ -53,7 +54,7 @@ func _watch_weapon() -> WeaponInstance:
 	watch.power = 3
 	watch.can_overwatch = true
 	var line := ForwardLinePattern.new()
-	line.length = 1
+	line.length = length
 	watch.attack_pattern = line
 	var extras: Array[WeaponAttackData] = [watch]
 	template.extra_attacks = extras
@@ -193,6 +194,84 @@ func test_a_watcher_ignores_a_corpse_and_faces_the_living() -> void:
 		return
 	assert_vector(watch.target_cell).override_failure_message(
 			"the watch is aimed at the approach of a body that can never enter it").is_equal(Vector2i(4, 3))
+
+
+# THE LANE, NOT THE CELL IN FRONT (#769). A watch fires when an enemy enters ANY cell it covers, so
+# a facing whose near cell is merely OCCUPIED is still a facing -- and since path_hops walks from the
+# ENEMY'S side with occupancy on, the unit blocking it is usually the watcher's own squadmate.
+# Squads move as clusters, so this is the ordinary case rather than the exotic one.
+#
+# The mutant is the old read: rank on `origin + dir` alone and the north facing is refused outright,
+# leaving a 5-hop tie between west and east that CARDINAL_DIRECTIONS breaks westward.
+func test_a_watcher_takes_the_facing_its_own_squadmate_stands_in_front_of() -> void:
+	var board := _board_of()
+	var watcher: Unit = _spawn(board, PLAYER, Vector2i(4, 4))
+	watcher.equipped_weapon = _watch_weapon(2)
+	_spawn(board, PLAYER, Vector2i(4, 3))   # standing in the near cell of the facing that matters
+	_spawn(board, ENEMY, Vector2i(4, 0))
+
+	assert_bool(AITactics.queue_main_action(watcher, _context(board), board.squad_manager, WATCH_ONLY)).is_true()
+
+	var watch := _queued_watch(watcher)
+	assert_object(watch).is_not_null()
+	if watch == null:
+		return
+	assert_vector(watch.target_cell).override_failure_message(
+			"the watcher gave up the lane the enemy walks down because its own squadmate stood in the first cell"
+			).is_equal(Vector2i(4, 3))
+
+
+# A CUT LANE IS NOT A WHOLE ONE. #756 truncates a spread at the first cell its shot cannot reach, so
+# a facing can survive as a stub -- and read at the near cell alone, a stub of one ranks exactly like
+# an intact lane of three. Coverage breaks that tie: the enemy is one hop from both, and only the
+# east lane still covers anywhere it might go next.
+#
+# THE CUT LANE IS NORTH ON PURPOSE. CARDINAL_DIRECTIONS puts UP first, so the old read takes it on
+# the strict less-than and this case fails against unfixed code; with the orientation reversed the
+# fixture would agree with the bug and pass either way.
+func test_an_intact_lane_outranks_one_the_terrain_cut_to_a_stub() -> void:
+	var board := _board_of()
+	board.board_heights.set_cell(Vector2i(4, 2), 2)   # the ledge that ends the north lane
+	var watcher: Unit = _spawn(board, PLAYER, Vector2i(4, 4))
+	watcher.equipped_weapon = _watch_weapon(3)
+	# Reaches nothing above its own footing, so the ledge is out of the shot's range.
+	for attack in (watcher.equipped_weapon as WeaponInstance).template.extra_attacks:
+		attack.up_tolerance = 0
+	_spawn(board, ENEMY, Vector2i(5, 3))
+
+	assert_bool(AITactics.queue_main_action(watcher, _context(board), board.squad_manager, WATCH_ONLY)).is_true()
+
+	var watch := _queued_watch(watcher)
+	assert_object(watch).is_not_null()
+	if watch == null:
+		return
+	assert_vector(watch.target_cell).override_failure_message(
+			"the watch took the lane a ledge had cut to one cell over the intact lane beside it"
+			).is_equal(Vector2i(5, 4))
+
+
+# A DIAGONAL APPROACH COLLAPSES TO CARDINAL ORDER, with no terrain and nobody in the way. Every
+# facing's near cell is the same few hops from an enemy coming in diagonally, so the old read tied on
+# all of them and Law #1 broke the tie -- the watcher aimed NORTH while the enemy walked in from the
+# EAST. Read down the lane, east is one hop away and north is four.
+#
+# This is the plainest statement of what the rule always claimed to say, which is why it needs
+# neither terrain nor a blocker to show it.
+func test_a_watcher_faces_a_diagonal_approach_instead_of_north() -> void:
+	var board := _board_of(Rect2i(0, 0, 10, 8))
+	var watcher: Unit = _spawn(board, PLAYER, Vector2i(4, 4))
+	watcher.equipped_weapon = _watch_weapon(4)
+	_spawn(board, ENEMY, Vector2i(8, 3))
+
+	assert_bool(AITactics.queue_main_action(watcher, _context(board), board.squad_manager, WATCH_ONLY)).is_true()
+
+	var watch := _queued_watch(watcher)
+	assert_object(watch).is_not_null()
+	if watch == null:
+		return
+	assert_vector(watch.target_cell).override_failure_message(
+			"the watch aimed north on a cardinal tie-break while the enemy approached from the east"
+			).is_equal(Vector2i(5, 4))
 
 
 # --- Guard --------------------------------------------------------------------------------------
