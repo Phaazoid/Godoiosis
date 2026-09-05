@@ -310,3 +310,54 @@ func test_clear_board_empties_the_mirror() -> void:
 	await await_idle_frame()
 	await await_idle_frame()
 	assert_int(_mirror.mirrored_count()).is_equal(0)
+
+
+# #747: a queued move's ghost vanished in the 3D view while the flat view drew it, and stayed gone
+# until the move was cancelled and requeued. UnitSprite3D._process ticks ONCE on a node fresh out of
+# _init -- set_process(false) there does not survive entering the tree -- took its "the animation ran
+# off the end" branch with nothing playing, and handed `texture` back to a state a pooled ghost does
+# not have. So the fault only ever hit a node the pool had just BUILT, which is why the first move of
+# a launch was 100% and a later one needed the pool to grow past its high-water mark.
+#
+# `visible` is NOT the observable: it stays true throughout, which is why ghost_count() cannot see
+# this and every existing ghost case passes with the bug present.
+func test_a_ghost_the_pool_just_built_keeps_its_art() -> void:
+	assert_int(_mirror._ghosts.size()).override_failure_message(
+			"the pool is already warm, so this case cannot see a node being BUILT").is_equal(0)
+	var mover := _queue_any_player_move()
+	assert_object(mover).override_failure_message(
+			"no player unit on this board could be ordered to move; the case proves nothing"
+			).is_not_null()
+	await await_idle_frame()
+	assert_int(_mirror.ghost_count()).override_failure_message(
+			"the queued move drew no ghost at all -- the case is testing nothing").is_equal(1)
+	var ghost: UnitSprite3D = _mirror._ghosts[0]
+	# Two more frames: the node's single _process tick is what used to wipe it.
+	await await_idle_frame()
+	await await_idle_frame()
+	assert_bool(is_instance_valid(ghost.texture)).override_failure_message(
+			"the ghost lost its art on the frame it was built; nothing is drawn (#747)").is_true()
+	assert_bool(ghost.get_base().is_valid()).override_failure_message(
+			"the ghost has no render base, so it draws nothing however visible it is (#747)").is_true()
+
+
+# Order the first player unit that can actually be moved -- a unit on a terrace with no ramp off it
+# genuinely cannot, so the first one is not a safe pick. Returns null if nobody could.
+func _queue_any_player_move() -> Unit:
+	for unit in _live_units():
+		if unit.get_faction() != Team.Faction.PLAYER:
+			continue
+		_game.enter_move_mode(unit)
+		_game.selected_unit = unit
+		var moverange: Dictionary = _game.compute_move_range(unit)
+		var reachable: Dictionary = moverange.reachable
+		for cell: Vector2i in reachable.keys():
+			if cell == unit.movement.cell:
+				continue
+			_game._on_left_click(cell)   # the documented dispatcher idiom
+			var planned: Dictionary = _game.overlay_manager.planned_move_by_unit
+			if planned.has(unit):
+				return unit
+			break
+		_game.exit_current_mode()
+	return null
