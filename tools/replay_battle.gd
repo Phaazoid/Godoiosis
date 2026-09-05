@@ -113,6 +113,13 @@ func _on_queued(squad: Squad, action: BaseAction) -> void:
 					and GridUtils.manhattan_distance(dest, other.movement.cell) <= 1:
 				near.append(_u(other))
 		_log("Q %s %s from %s | enemies adjacent: %s" % [_u(actor), t, str(dest), str(near)])
+		if action is OverwatchAction:
+			# The facing is the whole answer for #769 and the row above cannot show it: which lane
+			# was picked, and what it actually covers once #756 has truncated it.
+			var ow: OverwatchAction = action
+			var cells := Reach.get_affected_cells_from(actor, dest, ow.target_cell, ow.fired_attack, game._board())
+			_log("      watch aim %s (facing %s) covers %s" % [
+					str(ow.target_cell), str(ow.target_cell - dest), str(cells)])
 		if action.action_type == BaseAction.ActionType.REV:
 			var b: BoardContext = game._board()
 			var leader: Unit = actor.squad.get_leader()
