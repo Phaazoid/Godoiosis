@@ -7,6 +7,10 @@ extends VBoxContainer
 # tests/ui/test_info_panel_text.gd assert what each line states without standing up a panel;
 # tests/ui/test_tooltip_rendering.gd covers the other half -- that this panel feeds them the
 # inspected unit's own numbers -- against a real populated scene.
+#
+# Its LIMB VOCABULARY moved to UnitInstance in #740, beside the enum it names: the pre-mission card
+# reads the same short and long labels, and this file has no class_name for a second surface to
+# reach. What stays here is the CHIP -- the battle-scoped at-risk colour is not the card's question.
 
 const DIM_COLOR := Color(0.6, 0.62, 0.6)
 const NATURAL_COLOR := Color(0.75, 0.78, 0.75)
