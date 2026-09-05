@@ -1968,8 +1968,10 @@ reading it off the displaced point would name a cell in the sky.
 
 **A MAIN ACTION is what tears the board open — movement never does** (dev, on playing it:
 *"there have to be main actions at play. Movement by itself doesn't do it."*). `BeatSheet.cells` is
-therefore what main actions touch: an attack's origin, aim, knockback flight and terrain deposits,
-plus the actor and target of every side-channel verb. Asked of `BaseAction.is_main_action()` rather
+therefore what main actions touch: an attack's origin, its aim, the blast's **whole footprint** (occupied or not â
+[#754](https://github.com/Phaazoid/Godoiosis/issues/754): a volley's members all share one aim cell, so
+reading the aim alone left a line's far victims and the ground under the beam on the board), its
+knockback flight and terrain deposits, plus the actor and target of every side-channel verb. Asked of `BaseAction.is_main_action()` rather
 than of `SIDE_CHANNEL_ORDER` membership — the two lists agree today and nothing pins that they must.
 
 **The GATE falls out of the SET rather than sitting beside it**: no main actions means no cells

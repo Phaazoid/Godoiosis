@@ -13,6 +13,11 @@ var resolved: ResolvedOutcome      # set by PlanResolver each pass (R8) — sour
 var attack_range: Array[Vector2i] = []
 var origin_cell: Vector2i
 var target_cell: Vector2i
+# The cells the blast fired over, occupied or not -- stamped when the resolve builds the volley
+# (create_volley), empty on an authored AIM. The tear-out stages exactly this (#754): every member
+# shares ONE aim cell, so reading target_cell alone left a line's far victims and the ground under
+# the beam on the board while the camera sat on the diorama.
+var footprint: Array[Vector2i] = []
 var target_texture: Texture2D
 var target_name := "Target"
 var is_secondary_hit := false
@@ -241,12 +246,13 @@ static func declare(attacker: Unit, origin: Vector2i, aim_cell: Vector2i) -> Att
 	action.fired_attack = attacker.get_fired_attack()
 	return action
 
-static func create_volley(attacker: Unit, origin: Vector2i, aim_cell: Vector2i, victims: Array[Unit], fired_attack: AttackData = null) -> Array[AttackAction]:
+static func create_volley(attacker: Unit, origin: Vector2i, aim_cell: Vector2i, victims: Array[Unit], fired_attack: AttackData, footprint: Array[Vector2i]) -> Array[AttackAction]:
 	var volley_actions: Array[AttackAction] = []
 
 	for victim in victims:
 		var attack := AttackAction.create(attacker, origin, victim, aim_cell)
 		attack.fired_attack = fired_attack
+		attack.footprint = footprint
 		attack.is_secondary_hit = not volley_actions.is_empty()
 		volley_actions.append(attack)
 

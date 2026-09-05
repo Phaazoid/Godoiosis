@@ -307,9 +307,10 @@ static func _derive_watch_shot(watch: Watch, entrant: Unit, board: BoardContext,
 		# reachable through a chain that shoved the crosser out before this watch fired.
 		var cell_shot := AttackAction.create(watch.watcher, watch.anchor_cell, null, watch.aim_cell)
 		cell_shot.fired_attack = watch.attack
+		cell_shot.footprint = watch.footprint
 		group.append(cell_shot)
 	else:
-		group = AttackAction.create_volley(watch.watcher, watch.anchor_cell, watch.aim_cell, victims, watch.attack)
+		group = AttackAction.create_volley(watch.watcher, watch.anchor_cell, watch.aim_cell, victims, watch.attack, watch.footprint)
 	for shot in group:
 		shot.is_watch_shot = true
 		shot.triggered_by = entrant
