@@ -243,9 +243,10 @@ func _tooltip_for(item) -> String:
 				lines.append(reason)
 	else:
 		lines.append(item.display_name)
-	if item.description != "":
+	# describe(), never the field: a weapon inherits its family's wording when it carries none (#745).
+	if item.describe() != "":
 		lines.append("")
-		lines.append(item.description)
+		lines.append(item.describe())
 	return "\n".join(lines)
 
 func _refresh():

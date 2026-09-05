@@ -9,5 +9,6 @@ script = ExtResource("1_6y7d4")
 main_attack = ExtResource("2_main")
 weapon_type = 2
 display_name = "Drill"
+description = "A shoulder-braced auger built for rock rather than for people, though it does not object. Its real work is downward: set it against the ground and it will dig you something to fight from."
 icon = ExtResource("3_icon")
 metadata/_custom_type_script = "uid://cfeu07eqvatyn"

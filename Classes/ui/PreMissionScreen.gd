@@ -51,6 +51,9 @@ var _stash_hint: Label
 var _selected_item: EquippableData
 var _selected_owner: Unit
 var _last_refusal := ""
+# What a hover is currently saying, kept apart from _last_refusal so a preview cannot erase the
+# reason the last move failed -- and written straight to the label, never through a redraw.
+var _hover_note := ""
 var _squads_row: HFlowContainer
 var _objectives_box: VBoxContainer
 var _begin_button: Button
@@ -298,6 +301,10 @@ func _refresh_cards() -> void:
 			var card := PreMissionCard.build(unit, _controller, _judge_move, _perform_move)
 			card.deploy_toggled.connect(_on_deploy_toggled)
 			card.gear_clicked.connect(_on_gear_clicked)
+			card.gear_hovered.connect(_on_gear_hovered)
+			card.gear_unhovered.connect(_on_gear_unhovered)
+			card.mouse_entered.connect(_on_card_hovered.bind(card))
+			card.mouse_exited.connect(_on_gear_unhovered.bind(card))
 			card.selected_item = _selected_item if _selected_owner == unit else null
 			_cards.append(card)
 			_grid.add_child(card)
@@ -327,7 +334,7 @@ func _refresh_stash() -> void:
 		# has nobody to validate against, so the marking lives on the unit card (dev, 2026-09-05). What
 		# a piece DEMANDS is the other question, and the one a list of loose gear can answer -- so the
 		# armor gate rides the tooltip, through the same _gate_text spelling the card's sentence uses.
-		var tip := item.description if item.description != "" else item.display_name
+		var tip := item.describe() if item.describe() != "" else item.display_name
 		var armor := item as ArmorData
 		if armor != null and armor.requirement_text() != "":
 			tip += "
@@ -528,6 +535,12 @@ func _clear_selection() -> void:
 func _refresh_hint() -> void:
 	if _stash_hint == null:
 		return
+	# A hover speaks over the last refusal, and neither redraws anything: this writes one label.
+	if _hover_note != "":
+		_stash_hint.text = _hover_note
+		_stash_hint.add_theme_color_override("font_color",
+			QueueStyle.ink(QueueStyle.Role.ROW_REFUSED_BORDER))
+		return
 	if _last_refusal != "":
 		_stash_hint.text = _last_refusal
 		_stash_hint.add_theme_color_override("font_color",
@@ -550,3 +563,46 @@ func _on_cancel() -> bool:
 		return false
 	_clear_selection()
 	return true
+
+
+# --- preview-at-decision (#745) --------------------------------------------------------------------
+
+# Hovering a card WITH SOMETHING IN HAND is the decision this screen exists for -- should this go to
+# Torv or to Bram -- and it is the one the stash cannot answer on its own, since can_equip_reason
+# takes a wielder. The row hover below answers the smaller question, re-arranging what a unit already
+# carries.
+func _on_card_hovered(card: PreMissionCard) -> void:
+	if _selected_item == null or _selected_owner == card.unit:
+		return
+	_preview(card, _selected_item, true)
+
+
+# ...and with EMPTY hands, hovering a carried row previews equipping it in place. Deferring to the
+# card-level preview while something is held is deliberate: what the player is deciding then is where
+# the held thing goes, not what the row under the cursor would do.
+func _on_gear_hovered(item: EquippableData, card: PreMissionCard) -> void:
+	if _selected_item != null:
+		return
+	_preview(card, item, false)
+
+
+func _on_gear_unhovered(card: PreMissionCard) -> void:
+	card.clear_preview()
+	_hover_note = ""
+	_refresh_hint()
+
+
+# A PREVIEW OF A PIECE THE UNIT CANNOT USE IS A LIE, so #744's gate decides whether there are numbers
+# at all -- and the sentence takes their place rather than leaving the hover silent, since finding out
+# at the click is exactly the nasty surprise that ticket exists to prevent.
+func _preview(card: PreMissionCard, item: EquippableData, incoming: bool) -> void:
+	if item == null:
+		return
+	var refusal := item.can_equip_reason(card.unit)
+	if refusal != "":
+		card.clear_preview()
+		_hover_note = "%s: %s" % [card.unit.get_unit_name(), refusal]
+	else:
+		card.show_preview(item, incoming)
+		_hover_note = ""
+	_refresh_hint()

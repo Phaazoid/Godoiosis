@@ -11,5 +11,5 @@ main_attack = ExtResource("4_main")
 weapon_type = 1
 display_name = "Chainsword"
 icon = ExtResource("2_ujirt")
-description = "Vroom Vroom"
+description = "A toothed blade on a spinning track. Left idle it cuts like any heavy sword; wound up, the teeth chew through plate and cover alike and do not much care what is in the way. Winding it up is a decision, and it does not stay wound."
 metadata/_custom_type_script = "uid://cfeu07eqvatyn"
