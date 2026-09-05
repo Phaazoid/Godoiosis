@@ -1,4 +1,4 @@
-# Reactive healing (#148) — squad-system.md C8/C9/C10.
+# Reactive healing (#148) — squad-system.md C8/C9/C10, plus C5's trigger half (#767).
 #
 # Being attacked grants every unit in the defending party ONE main-attack-shaped reaction (C1,
 # unchanged). What #148 adds is that the reaction's KIND forks on its source's AttackData.heals:
@@ -14,6 +14,11 @@
 #   * every HP read comes off the THREADED HYPOTHETICAL, not the live board: the attacks have
 #     already resolved into the hypo and onto nothing else, so a live read heals whoever was
 #     hurt BEFORE the swing
+#
+# The last section is #767's and belongs to C5 rather than to #148: what may TRIGGER a reaction at
+# all. It lives here because the trigger's only observable leak was heal-shaped — a damaging
+# squadmate is refused by choose_counter_target whatever the trigger was, so a healer is the only
+# witness this file could ever have called.
 #
 # Weapons are pattern-less => Reach falls back to Manhattan 1 (the caster's own cell included),
 # so reach is grid-free: distance <= 1 can be healed, >= 2 cannot. Base damage is power + STR
@@ -287,6 +292,108 @@ func test_the_previewed_heal_is_the_hp_execution_actually_moves() -> void:
 	defender.take_damage(plan.attacks[0].resolved.damage)
 	defender.heal(reaction.resolved.heal_amount)
 	assert_int(defender.get_current_hp()).is_equal(reaction.resolved.target_hp_after)
+	_break_volleys(plan)
+
+
+# --- C5 trigger half: a reaction answers a HOSTILE hit (#767) --------------------------------
+
+# THE REPORTED BUG, whole (in-game report 2026-09-05, build 0.136.0): the player queues a heal and
+# the healer heals TWICE. A heal is an ordinary AttackAction whose target is an ALLY, so the walk
+# over plan.attacks made the healer's own squad the defending party and handed it a free reaction.
+#
+# The shape is the report's: a healer and TWO hurt squadmates. The second wounded unit is what
+# keeps this case honest -- with only one, the queued heal itself lifts the only candidate out of
+# range of C9's "below max HP" filter and the case would pass on an empty candidate set rather than
+# on the gate. wounded_b is never touched by the plan, so a reaction has somewhere to land right up
+# until the gate refuses to derive one.
+func test_a_squads_own_heal_draws_no_reaction_from_itself() -> void:
+	var wounded_a := H.spawn_solo(self, _sm, PLAYER, Vector2i(1, 0), TOUGH_LEADER)
+	var healer := H.spawn_solo(self, _sm, PLAYER, Vector2i(2, 0), TOUGH_LEADER)
+	var wounded_b := H.spawn_solo(self, _sm, PLAYER, Vector2i(3, 0), TOUGH_LEADER)
+	_sm.join_squad(healer, wounded_a.squad)
+	_sm.join_squad(wounded_b, wounded_a.squad)
+	_make_healer(healer)
+	wounded_a.set_current_hp(10)
+	wounded_b.set_current_hp(10)
+
+	var units := [wounded_a, healer, wounded_b] as Array[Unit]
+	var plan := _resolve_attack_on(healer, wounded_a, units)
+
+	# The heal itself still happens -- a case that passed because nothing resolved would be no case.
+	assert_int(plan.attacks.size()).is_equal(1)
+	assert_object(plan.attacks[0].target).is_same(wounded_a)
+	assert_int(plan.attacks[0].resolved.heal_amount).is_greater(0)
+	# ...and the squad answers its own heal with nothing. wounded_b is still at 10/30 here, so the
+	# pre-#767 derivation had a perfectly good second target and took it.
+	assert_int(plan.counters.size()).is_equal(0)
+	_break_volleys(plan)
+
+# The dev's own example of the nonsense this opens: "being able to blow your own unit a tile to
+# double their output." Same gate, damaging source -- an attack aimed at a squadmate. Deliberately
+# NO enemy on the board, so `counters` empty is exact rather than a claim about which reactions
+# survived; a squad hitting itself is the whole trigger under test.
+func test_a_friendly_fire_hit_draws_no_reaction_from_the_attackers_own_squad() -> void:
+	var splasher := H.spawn_solo(self, _sm, PLAYER, Vector2i(0, 0), TOUGH_LEADER)
+	var victim := H.spawn_solo(self, _sm, PLAYER, Vector2i(1, 0), TOUGH_LEADER)
+	var healer := H.spawn_solo(self, _sm, PLAYER, Vector2i(2, 0), TOUGH_LEADER)
+	_sm.join_squad(victim, splasher.squad)
+	_sm.join_squad(healer, splasher.squad)
+	_make_healer(healer)
+	(splasher.get_equipped_weapon() as WeaponInstance).template.main_attack.hits_allies = true
+
+	var units := [splasher, victim, healer] as Array[Unit]
+	var plan := _resolve_attack_on(splasher, victim, units)
+
+	# MHP 30 taking base 8 (power 3 + STR 5) leaves the victim HURT AND STANDING -- a live heal
+	# candidate, which is what the healer would have answered with before the gate.
+	assert_int(plan.attacks[0].resolved.damage).is_greater(0)
+	assert_int(PlanResolver.projected_hp(victim, plan.hypo)).is_between(1, 29)
+	assert_int(plan.counters.size()).is_equal(0)
+	_break_volleys(plan)
+
+# THE GATE IS FACTION-SHAPED, NOT SQUAD-SHAPED -- and this case is the only thing that says so.
+# Found by mutating: "defender_squad != attacking_squad" is the tempting symptom patch, and it
+# survives every other case in this section, because in all of them the two squads are the same
+# object. Two FRIENDLY squads is the board that separates them: one squad's healer patches the
+# other's wounded, the squads differ, and the units are still not enemies. Under the symptom patch
+# squad B answers with a free heal of its own; under the rule the dev actually gave, nothing.
+func test_a_heal_across_two_friendly_squads_draws_no_reaction() -> void:
+	var healer_a := H.spawn_solo(self, _sm, PLAYER, Vector2i(1, 0))
+	var wounded_b := H.spawn_solo(self, _sm, PLAYER, Vector2i(2, 0), TOUGH_LEADER)
+	var healer_b := H.spawn_solo(self, _sm, PLAYER, Vector2i(3, 0), TOUGH_LEADER)
+	_sm.join_squad(healer_b, wounded_b.squad)
+	_make_healer(healer_a)
+	_make_healer(healer_b)
+	wounded_b.set_current_hp(10)
+
+	var units := [healer_a, wounded_b, healer_b] as Array[Unit]
+	var plan := _resolve_attack_on(healer_a, wounded_b, units)
+
+	# 10 + 9 = 19 of 30, so squad B's own healer still has a hurt squadmate in reach -- the derived
+	# reaction had somewhere to go and the gate is what stopped it, not an empty candidate set.
+	assert_int(plan.attacks[0].resolved.heal_amount).is_greater(0)
+	assert_int(PlanResolver.projected_hp(wounded_b, plan.hypo)).is_between(11, 29)
+	assert_int(_reactions_by_actor(plan, healer_b).size()).is_equal(0)
+	assert_int(plan.counters.size()).is_equal(0)
+	_break_volleys(plan)
+
+# THE FORK THE DEV PICKED, pinned (ruling 2026-09-05): the gate is "actor and target are enemies",
+# NOT "a heal never triggers". Healing an enemy is authored canon (C8's note that a player-AIMED
+# heal keeps its enemy splash), and being healed by an enemy is still being acted upon by one -- so
+# the enemy's own reaction survives. Under the rejected route this case reads zero.
+func test_a_heal_aimed_at_an_enemy_still_draws_their_reaction() -> void:
+	var healer := H.spawn_solo(self, _sm, PLAYER, Vector2i(0, 0))
+	var foe := H.spawn_solo(self, _sm, ENEMY, Vector2i(1, 0), TOUGH_LEADER)
+	_make_healer(healer)
+	foe.set_current_hp(10)
+
+	var plan := _resolve_attack_on(healer, foe, [healer, foe] as Array[Unit])
+
+	assert_object(plan.attacks[0].target).is_same(foe)
+	assert_int(plan.attacks[0].resolved.heal_amount).is_greater(0)
+	assert_int(plan.counters.size()).is_equal(1)
+	assert_object(plan.counters[0].actor).is_same(foe)
+	assert_object(plan.counters[0].target).is_same(healer)
 	_break_volleys(plan)
 
 

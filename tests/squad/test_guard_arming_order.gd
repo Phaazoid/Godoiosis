@@ -77,6 +77,11 @@ class FriendlyFireBoard:
 	var board: BoardContext
 
 
+# Since #767 this is also the one existing fixture that exercises the reaction TRIGGER's skip
+# branch: a PLAYER squad splashing its own ward derives no reaction at all now. Nothing here
+# observes that (no member carries a healing source, and a damaging squadmate could never counter
+# its own side anyway), so the cases below are unchanged — noted so the next reader doesn't take
+# their silence about `plan.counters` for coverage of it.
 func _friendly_fire_board() -> FriendlyFireBoard:
 	var s := FriendlyFireBoard.new()
 	s.splasher = _attacker(PLAYER, Vector2i(0, 0))
