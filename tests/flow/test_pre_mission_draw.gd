@@ -12,6 +12,7 @@
 extends GdUnitTestSuite
 
 const MAIN_SCENE := "res://Scenes/Main.tscn"
+const H := preload("res://tests/support/squad_fixtures.gd")
 const SCRATCH := "user://__pre_mission_737.tres"
 const TEST_SAVE_DIR := "user://__test_saves_737/"
 
@@ -77,11 +78,15 @@ func _roster_size(name: String) -> int:
 
 # Author a board with `zone_cells` deployment cells and NO authored cast, so its whole player force
 # is the draw. Returns the saved path, or "" when there is no roster to name.
-func _author(roster: String, cap: int, zone_cells: int, steps: Array[TutorialStep] = []) -> String:
+func _author(roster: String, cap: int, zone_cells: int, steps: Array[TutorialStep] = [],
+		blocked: Array[Vector2i] = []) -> String:
 	for x in range(ROW_WIDTH):
 		game.grid.paint(Vector2i(x, 0), GRASS_SOURCE, GRASS_ATLAS)
 	for x in range(zone_cells):
 		game.zone_manager.paint_cell("landing", ZoneManager.Kind.DEPLOYMENT, Vector2i(x, 0))
+	for cell: Vector2i in blocked:
+		assert_object(game.spawn_unit(H.make_unit_data({}, Team.Faction.ENEMY), cell)) \
+			.override_failure_message("precondition: could not park a blocker at %s" % cell).is_not_null()
 	sm.current_roster = roster
 	sm.current_deployment_cap = cap
 	sm.current_tutorial_steps = steps
@@ -160,6 +165,33 @@ func test_a_board_that_names_no_roster_boots_exactly_as_it_did_before() -> void:
 
 	assert_array(_units()).override_failure_message(
 		"a roster-less board grew units from somewhere").is_empty()
+
+
+# Authored units are ADDITIVE (#731 ruling 2c) -- they load as they always did and the draw is
+# appended after, so an authored unit standing in the deployment zone simply costs a cell. That is
+# the whole reason the caller filters the cells before handing them over: the walk pairs blindly,
+# so an unfiltered blocked cell would burn a slot on a spawn that returns null and the draw would
+# come up short. This is also the ONE case that proves the filter runs at all.
+func test_a_cell_someone_is_already_standing_on_is_skipped_rather_than_wasted() -> void:
+	var roster := _a_roster()
+	if roster == "":
+		return
+	var no_steps: Array[TutorialStep] = []
+	var blocked: Array[Vector2i] = [Vector2i(1, 0)]
+	var path := _author(roster, 3, 4, no_steps, blocked)
+
+	mc.begin_mission(path)
+	await await_idle_frame()
+
+	var drawn := 0
+	for unit: Unit in _units():
+		if unit.get_faction() == Team.Faction.PLAYER:
+			drawn += 1
+			assert_vector(unit.movement.cell).override_failure_message(
+				"the draw stood someone on the occupied cell").is_not_equal(Vector2i(1, 0))
+	assert_int(drawn).override_failure_message(
+		"the draw came up short, so a blocked cell burned a slot instead of being skipped"
+	).is_equal(3)
 
 
 # --- where it is called from, which is the design ---
