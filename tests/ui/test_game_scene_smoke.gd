@@ -59,6 +59,7 @@ func _player_states() -> Array:
 		game.GameState.CHOOSING_GROUP_MOVE,
 		game.GameState.PICKING_TARGET,
 		game.GameState.DEV_MODE,
+		game.GameState.PRE_MISSION,   # #739 -- a mode the player can be in, so it joins the sweep
 	]
 
 

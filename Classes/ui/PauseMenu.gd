@@ -37,8 +37,19 @@ func _build(can_restart: bool, can_load: bool, game_node: Node) -> void:
 
 	# Save rides Restart's gate (#144): missions only, for now -- a sandbox save would have no
 	# origin mission for Restart to return to. Campaign-scope saving is its own future issue.
+	#
+	# ...and is greyed during the pre-mission phase (#739), with the reason, on the Load row's
+	# rule that a menu can only grey what it can explain (#166). The real gate is
+	# ScenarioManager.save_to_slot -- this row is only its surface -- and the reason is worth
+	# spelling out because the damage is silent: a save mid-phase records the units already placed
+	# and nothing else, so resuming it drops the rest of the roster with no way to finish choosing.
 	if can_restart:
-		_add_button(row, "Save Game", func(): chosen.emit(Choice.SAVE_GAME))
+		var save_button := _add_button(row, "Save Game", func(): chosen.emit(Choice.SAVE_GAME))
+		if game_node.mission_controller.is_deploying():
+			save_button.disabled = true
+			save_button.tooltip_text = UiText.wrap(
+				"Not while you are deploying -- a save would keep only the units already placed. "
+				+ "Begin the mission first.")
 
 	# Greyed rather than hidden when there is nothing to load: the row teaches that saving exists,
 	# and a menu can only grey what it can explain (#166).

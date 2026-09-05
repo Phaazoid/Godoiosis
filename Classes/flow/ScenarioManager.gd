@@ -119,6 +119,14 @@ func save_to_slot(slot: int) -> bool:
 	if last_loaded_path == "":
 		push_warning("No mission loaded -- nothing to save")
 		return false
+	# Refused during the pre-mission phase (#739/#731 ruling 8). A slot is a MID-BATTLE snapshot and
+	# resume_from_slot correctly bypasses the phase, so a save taken while deploying would record
+	# the units already placed -- capture_scenario walks units_root, so the reserve is invisible to
+	# it -- and the resume would drop the rest of the roster with no way to finish choosing. HERE
+	# rather than at the pause menu's row, which is only the surface: this is the real gate.
+	if game.mission_controller.is_deploying():
+		push_warning("Cannot save during deployment -- begin the mission first")
+		return false
 	var save := SaveGame.new()
 	save.scenario = capture_scenario(display_name(last_loaded_path), false)
 	save.mission_path = last_loaded_path

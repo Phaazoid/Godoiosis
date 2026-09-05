@@ -80,7 +80,13 @@ func update_hover_visuals(hovered_cell: Vector2i) -> void:
 
 	if state == game.GameState.DEV_MODE:
 		_hover_dev_mode(hovered_cell)
-	elif state == game.GameState.IDLE:
+	elif state == game.GameState.IDLE or state == game.GameState.PRE_MISSION:
+		# The phase reads the board the way an idle board reads (#739): a cursor, a card on every
+		# tile, and an enemy inspectable exactly as the mission will show them -- which is #731
+		# ruling 6's whole point, that the preview is the board rather than a second rendering of
+		# it. It shares IDLE's branch rather than getting one of its own because every readout in
+		# there takes a wielder with a real cell, and a deployed unit has both. The squad icons come
+		# along, and should: squads are being BUILT here.
 		icons_to_draw = _hover_idle(hovered_cell)
 	elif state == game.GameState.TILE_SELECTED:
 		_hover_tile_selected()

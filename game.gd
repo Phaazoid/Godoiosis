@@ -74,7 +74,13 @@ enum GameState {
 	# mid-AI-turn (set_dev_mode, clear_board); the flag is what actually spans the turn (#484).
 	AI_TURN,
 	MISSION_OVER,
-	MENU
+	MENU,
+	# The pre-mission phase (#739): the board is loaded and standing, the roster is drawn, and
+	# nobody's turn has started. Deliberately NOT part of _board_locked_for_player() -- the phase
+	# has its own clicks, and _unhandled_input returns on that predicate before it reaches any of
+	# them. What stops the action ring from opening on a deployed unit is that _click_idle is the
+	# only arm that opens it, and this state has an arm of its own.
+	PRE_MISSION
 }
 
 var game_state: GameState = GameState.IDLE
@@ -260,6 +266,14 @@ func _input(event: InputEvent) -> void:
 		else:
 			_open_pause_menu()
 
+	# The phase's one exit (#739). It lives HERE rather than in _unhandled_input beside the board
+	# keys, and that is not a preference: a 3D host sets board_input_delegated, and _unhandled_input
+	# returns on it before reaching anything below -- which is why F5 is documented as flat-2D-only
+	# and Esc, up there, is not. Its own action rather than ui_accept, which is Enter AND Space, and
+	# Space is the camera recentre.
+	if event.is_action_pressed("commit_deployment") and not ModalLock.any_open(get_tree()):
+		mission_controller.commit_deployment()
+
 func _unhandled_input(event: InputEvent) -> void:
 	# A 3D host (#222) picks board cells itself and calls _on_left_click/_on_right_click
 	# directly, so this derivation would act a SECOND time on the same physical click --
@@ -382,6 +396,8 @@ func _on_left_click(cell: Vector2i) -> void:
 			_click_attack_targeting(cell)
 		GameState.PICKING_TARGET:
 			_click_picking_target(cell)
+		GameState.PRE_MISSION:
+			_click_pre_mission(cell)
 
 # Right-click carries TWO meanings, and the open mode wins (#228, dev call): it leaves whatever
 # is open -- an aim, a move pick, a target pick -- and only from a board already at rest does it
@@ -435,6 +451,26 @@ func _lone_queued_move(gesture: Array[BaseAction]) -> MoveAction:
 
 # Clicking a unit selects it and opens its action menu. Controlling enemies is deliberately
 # still allowed here for hotseat/testing; the AI_TURN lock above is what stops it in play.
+# The phase's own click (#739), and the reason "a click on a deployed unit must not open the action
+# ring" needs no gate anywhere: _click_idle is the only arm that opens the battle ring, and this
+# state never reaches it. What a unit gets instead is the PHASE ring -- squad verbs, Undeploy,
+# Inspect -- built by the same MainActionMenu.build_tree, so the squad flow is the one that already
+# exists rather than a second one authored for a screen.
+#
+# An empty DEPLOYMENT cell offers the units still in reserve, which is the dev's own description:
+# "click a blank spot and click add, and get a dropdown of all deployable units to bring one in."
+# A click anywhere else rests the board, so a mis-click closes whatever was open.
+func _click_pre_mission(cell: Vector2i) -> void:
+	var target := unit_at_pointer(cell)
+	if target != null:
+		select_unit(target, cell)
+		main_action_menu.show_main_menu(target, get_viewport().get_mouse_position())
+		return
+	if mission_controller.can_deploy_another() and mission_controller.open_deployment_cells().has(cell):
+		main_action_menu.show_deploy_menu(cell, get_viewport().get_mouse_position())
+		return
+	clear_selection()
+
 func _click_idle(cell: Vector2i) -> void:
 	var target := unit_at_pointer(cell)
 	if target == null:
@@ -828,8 +864,17 @@ func _clear_aiming_pick() -> void:
 		selected_unit.active_attack = null
 
 # Where the board rests when nothing is happening: dev mode if the dev asked for it, else IDLE.
+# What the board RESTS at once a mode ends -- read by clear_selection, and therefore by every
+# exit_current_mode. It reads INTENT flags rather than game_state, which it is the writer of: a
+# squad pick during the phase leaves game_state at PICKING_TARGET, so anything derived from that
+# would rest the board on IDLE and drop the player out of the phase mid-placement (#739).
+#
+# DEV_MODE still wins outright: F1 during deployment is the dev reaching for the brush, and
+# DevController.brush_armed/spawn_armed read that member by name.
 func _base_state() -> GameState:
-	return GameState.DEV_MODE if dev_mode_enabled else GameState.IDLE
+	if dev_mode_enabled:
+		return GameState.DEV_MODE
+	return GameState.PRE_MISSION if mission_controller.is_deploying() else GameState.IDLE
 
 func clear_selection():
 	game_state = _base_state()
@@ -1047,9 +1092,22 @@ func refresh_end_turn_button() -> void:
 # the hover card is re-driven on every cursor-cell change, and a player's own Execute never leaves
 # game_state IDLE.
 func set_hud_hidden_for_playback(hidden: bool) -> void:
-	squad_action_queue_control.set_hidden_for_playback(hidden)
+	set_battle_hud_hidden(hidden)
 	hover_info_panel.set_hidden_for_playback(hidden)
 	unit_info_panel.set_hidden_for_playback(hidden)
+
+# The TURN-shaped half of it, on its own (#739) -- what is meaningless when nobody is taking a turn.
+# The pre-mission phase hides exactly these two and leaves the readouts up, which is not a smaller
+# version of the cinematic's answer but a different question: a cinematic is nobody LOOKING, the
+# phase is nobody ACTING. The readouts staying up is also what #740 needs, since its board preview
+# inspects enemies through the panel this would otherwise have hidden -- and a hidden panel swallows
+# set_unit silently.
+#
+# End Turn is the load-bearing one. Its press gates on _board_locked_for_player(), which is FALSE in
+# the phase, so an un-hidden button would run end_turn() on a turn that never started: the enemy
+# would play, with the director unarmed and the phase flag still set.
+func set_battle_hud_hidden(hidden: bool) -> void:
+	squad_action_queue_control.set_hidden_for_playback(hidden)
 	end_turn_button.set_hidden_for_playback(hidden)
 
 # Law #2 board preview: consequences of the active plan the queue panel also shows, derived from

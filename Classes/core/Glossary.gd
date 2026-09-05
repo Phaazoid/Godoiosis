@@ -33,7 +33,7 @@ enum Term {
 	EXECUTE_ORDERS, MOVE, GROUP_MOVE, ATTACK, ATTACK_TARGETING, WEAPON_ACTION, TRANSMUTATION, ABILITY_ACTION,
 	GUARD, OVERWATCH, RESCUE, RALLY, CAPTURE, SQUAD_UP, JOIN_SQUAD, LEAVE_SQUAD, DISBAND_SQUAD, WAIT,
 	CANCEL_ACTIONS, INSPECT, END_TURN,
-	ACTION, RUNE, SQUAD_ACTIONS,
+	ACTION, RUNE, SQUAD_ACTIONS, UNDEPLOY,
 	# Elemental
 	ELEMENTS, WET, CHILLED, REACTIONS,
 	# Terrain
@@ -392,6 +392,13 @@ static func _build_entries() -> Dictionary:
 		"short": "Leave the current squad and go solo.",
 		"long": "The unit steps out of its squad into a squad of its own. Its old squad keeps its "
 			+ "plan; the leaver starts fresh."}
+	e[Term.UNDEPLOY] = {"category": Category.ACTIONS, "title": "Undeploy",
+		"short": "Take this unit back off the board before the mission starts.",
+		"long": "Only during the pre-mission phase, and only for units drawn from the mission's "
+			+ "roster -- an authored unit belongs to the board rather than to you. The unit goes "
+			+ "back among those the roster offers, its cell frees up, and it stops counting "
+			+ "against the deployment cap. Nothing about the unit changes: gear, jobs and "
+			+ "condition are all still there when you place it again."}
 	e[Term.DISBAND_SQUAD] = {"category": Category.ACTIONS, "title": "Disband Squad",
 		"short": "Dissolve the squad: every member goes solo.",
 		"long": "The leader dissolves the whole formation. Every member becomes a squad of one."}
