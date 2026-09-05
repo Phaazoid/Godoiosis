@@ -413,7 +413,9 @@ func set_ghosts(ghosts: Array[Dictionary]) -> void:
 		if i < ghosts.size():
 			ghost.visible = true
 			ghost.position = ghosts[i]["pos"]
-			ghost.texture = ghosts[i]["texture"]
+			# Through the state door, never past it: a ghost has no unit, so a texture written
+			# around `_apply_state_texture` is one that door will answer null for (#747).
+			ghost.show_still(ghosts[i]["texture"])
 			ghost.modulate = ghosts[i]["modulate"]
 		else:
 			ghost.visible = false
