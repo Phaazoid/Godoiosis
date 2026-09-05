@@ -25,6 +25,9 @@ class_name PreMissionCard
 # clip_text with the full string on hover, so the card's minimum size is a constant.
 
 signal deploy_toggled(unit: Unit)
+# A row was clicked -- the item under the cursor, or null for an empty slot. The screen holds the
+# selection, because a selection that outlives a redraw cannot live on a row the redraw frees (#107).
+signal gear_clicked(item: EquippableData, owner_unit: Unit)
 
 # The inspect panel owns the ability tooltip wording and its builders are static for exactly this
 # reason -- one sentence, two surfaces. Preloaded because that file is a scene script with no
@@ -41,6 +44,13 @@ const CHIP_MIN_W := 30
 const STAT_COLUMNS := 2
 
 var unit: Unit
+# Set by the screen, which owns the Loadout and therefore the only judgement about a move (#741).
+# The card wires them into every row it draws rather than judging anything itself.
+var judge_move: Callable = Callable()
+var perform_move: Callable = Callable()
+# What the screen currently has in hand, so a picked-up row reads as picked up on this side too.
+# Told rather than asked: the card has no business knowing the screen exists.
+var selected_item: EquippableData
 
 var _deploy_button: Button
 var _controller: MissionController
@@ -52,10 +62,16 @@ var _items_column: VBoxContainer
 var _derived_label: Label
 
 
-static func build(target: Unit, controller: MissionController) -> PreMissionCard:
+# The move callables are arguments rather than fields set afterwards, and that is not style: _build
+# draws the item rows, so a card built first and wired second renders its whole inventory with dead
+# Callables and only recovers on the next refresh.
+static func build(target: Unit, controller: MissionController,
+		judge := Callable(), perform := Callable()) -> PreMissionCard:
 	var card := PreMissionCard.new()
 	card.unit = target
 	card._controller = controller
+	card.judge_move = judge
+	card.perform_move = perform
 	card._build()
 	return card
 
@@ -328,8 +344,11 @@ func _chip(text: String, tint: Color, tip: String) -> Label:
 # slot is drawn rather than skipped: it is the drop target #741 will need, and six of them is what
 # MAX_INVENTORY_SIZE means.
 func _item_row(item: Item) -> Control:
-	var row := PanelContainer.new()
+	var row := GearRow.new()
 	row.custom_minimum_size.y = 20
+	row.wire(unit, judge_move, perform_move)
+	row.clicked.connect(func(gear: EquippableData, owner_unit: Unit) -> void:
+		gear_clicked.emit(gear, owner_unit))
 	if item == null:
 		row.add_theme_stylebox_override("panel", QueueStyle.section_box())
 		row.modulate = Color(1, 1, 1, 0.45)
@@ -340,7 +359,9 @@ func _item_row(item: Item) -> Control:
 
 	var equippable := item as EquippableData
 	var reason := _equip_block_reason(equippable)
-	row.add_theme_stylebox_override("panel", QueueStyle.row_box(reason != "", false))
+	row.carry(equippable)
+	row.add_theme_stylebox_override("panel",
+		QueueStyle.row_box(reason != "", equippable != null and equippable == selected_item))
 
 	var line := HBoxContainer.new()
 	line.add_theme_constant_override("separation", 4)

@@ -43,6 +43,14 @@ var _controller: MissionController
 var _cards: Array[PreMissionCard] = []
 var _grid: GridContainer
 var _stash_box: VBoxContainer
+var _stash_zone: GearDropZone
+var _stash_hint: Label
+# THE SELECTION IS DATA, NEVER A ROW (#741). Every successful move redraws both lists and frees every
+# row in them, so a selection holding a node would dangle on the first move that worked -- #107's
+# shape, arriving at the exact moment the feature starts functioning. Owner null means the stash.
+var _selected_item: EquippableData
+var _selected_owner: Unit
+var _last_refusal := ""
 var _squads_row: HFlowContainer
 var _objectives_box: VBoxContainer
 var _begin_button: Button
@@ -172,19 +180,25 @@ func _build_stash() -> Control:
 	var panel: PanelContainer = parts[0]
 	panel.size_flags_vertical = Control.SIZE_EXPAND_FILL
 
+	# The whole list is one drop zone, not just its rows: an empty stash still has to be a place a
+	# player can aim at, and dropping into the gap under the last row is the same gesture.
+	_stash_zone = GearDropZone.new()
+	_stash_zone.add_theme_stylebox_override("panel", QueueStyle.section_box())
+	_stash_zone.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	_stash_zone.wire(null, _judge_move, _perform_move)   # null owner IS the stash
+	_stash_zone.clicked.connect(_on_gear_clicked)
+	_scroller(parts[1]).add_child(_stash_zone)
+
 	_stash_box = VBoxContainer.new()
 	_stash_box.add_theme_constant_override("separation", 4)
 	_stash_box.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	_scroller(parts[1]).add_child(_stash_box)
+	_stash_zone.add_child(_stash_box)
 
-	# #741 owns every way gear MOVES; this ticket shows what is there. Said out loud rather than
-	# left looking broken.
-	var note := Label.new()
-	note.text = "Moving gear comes with the loadout pass."
-	note.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	note.add_theme_font_size_override("font_size", 10)
-	note.add_theme_color_override("font_color", QueueStyle.ink(QueueStyle.Role.HEADER_TEXT))
-	parts[1].add_child(note)
+	_stash_hint = Label.new()
+	_stash_hint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_stash_hint.add_theme_font_size_override("font_size", 10)
+	_stash_hint.add_theme_color_override("font_color", QueueStyle.ink(QueueStyle.Role.HEADER_TEXT))
+	parts[1].add_child(_stash_hint)
 	return panel
 
 
@@ -281,12 +295,15 @@ func _refresh_cards() -> void:
 		for unit: Unit in roster:
 			if not is_instance_valid(unit):
 				continue
-			var card := PreMissionCard.build(unit, _controller)
+			var card := PreMissionCard.build(unit, _controller, _judge_move, _perform_move)
 			card.deploy_toggled.connect(_on_deploy_toggled)
+			card.gear_clicked.connect(_on_gear_clicked)
+			card.selected_item = _selected_item if _selected_owner == unit else null
 			_cards.append(card)
 			_grid.add_child(card)
 		return
 	for card in _cards:
+		card.selected_item = _selected_item if _selected_owner == card.unit else null
 		card.refresh()
 
 
@@ -294,25 +311,35 @@ func _refresh_stash() -> void:
 	for child in _stash_box.get_children():
 		_stash_box.remove_child(child)
 		child.free()
-	var roster: Roster = RosterCatalog.resolve(_controller.game.scenario_manager.current_roster)
-	var stash: Array[EquippableData] = []
-	if roster != null:
-		stash = roster.stash
-	for item: EquippableData in stash:
+	# The LIVE stash, off the controller -- never RosterCatalog.resolve(), which hands back the cached
+	# authored Roster and would have had the first move out of here deplete it for the session (#741).
+	for item: EquippableData in _controller.loadout().stash:
 		if item == null:
 			continue
-		var row := PanelContainer.new()
-		row.add_theme_stylebox_override("panel", QueueStyle.row_box(false, false))
+		var row := GearRow.new()
+		var selected := item == _selected_item and _selected_owner == null
+		row.add_theme_stylebox_override("panel", QueueStyle.row_box(false, selected))
 		row.custom_minimum_size.y = 22
-		# NO BLOCK REASON HERE, and that is the design: can_equip takes a wielder and the stash has
-		# nobody to validate against, so the marking lives on the unit card (dev, 2026-09-05).
-		row.tooltip_text = UiText.wrap(item.description if item.description != "" else item.display_name)
+		row.carry(item)
+		row.wire(null, _judge_move, _perform_move)
+		row.clicked.connect(_on_gear_clicked)
+		# NO BLOCK REASON HERE, and that is the design: can_equip_reason takes a wielder and the stash
+		# has nobody to validate against, so the marking lives on the unit card (dev, 2026-09-05). What
+		# a piece DEMANDS is the other question, and the one a list of loose gear can answer -- so the
+		# armor gate rides the tooltip, through the same _gate_text spelling the card's sentence uses.
+		var tip := item.description if item.description != "" else item.display_name
+		var armor := item as ArmorData
+		if armor != null and armor.requirement_text() != "":
+			tip += "
+Requires: %s" % armor.requirement_text()
+		row.tooltip_text = UiText.wrap(tip)
 		var label := Label.new()
 		label.text = item.display_name
 		label.clip_text = true
 		label.add_theme_font_size_override("font_size", 11)
 		row.add_child(label)
 		_stash_box.add_child(row)
+	_refresh_hint()
 
 
 func _refresh_squads() -> void:
@@ -443,3 +470,83 @@ func _on_deploy_toggled(unit: Unit) -> void:
 
 func _on_begin() -> void:
 	_controller.confirm_and_commit()
+
+
+# --- moving gear (#741) --------------------------------------------------------------------------
+
+# The two callables every row and zone is wired with, click path and drag path alike. They are thin
+# on purpose: Loadout owns the rule, and a surface that judged for itself would be a second answer.
+func _judge_move(item: EquippableData, from: Unit, to: Unit) -> String:
+	return _controller.loadout().move_block_reason(item, from, to)
+
+
+# A REDRAW NEVER RUNS INSIDE THE CLICK THAT CAUSED IT. Every handler below is reached from a row's
+# own signal -- clicked, or _drop_data -- and refresh() frees every row in both lists to rebuild
+# them, the emitting one included. Godot refuses that outright ("Attempted to free a locked object"),
+# so the first move a player made would have errored rather than happened. Deferring hands the
+# emission back first; the rows are freed on the next idle frame, when nobody is standing on them.
+func _redraw() -> void:
+	refresh.call_deferred()
+
+
+func _perform_move(item: EquippableData, from: Unit, to: Unit) -> String:
+	var refusal := _controller.loadout().move(item, from, to)
+	_last_refusal = refusal
+	if refusal == "":
+		_selected_item = null
+		_selected_owner = null
+	_redraw()
+	return refusal
+
+
+# Click to pick up, click again to put down -- the same gesture the drag makes, for a player who
+# would rather not drag one. Clicking the selection itself lets go of it.
+func _on_gear_clicked(item: EquippableData, owner_unit: Unit) -> void:
+	if _selected_item != null:
+		if item == _selected_item and owner_unit == _selected_owner:
+			_clear_selection()
+			return
+		_perform_move(_selected_item, _selected_owner, owner_unit)
+		return
+	if item == null:
+		return   # an empty slot with nothing in hand is not a selection
+	_last_refusal = ""
+	_selected_item = item
+	_selected_owner = owner_unit
+	_redraw()
+
+
+func _clear_selection() -> void:
+	_selected_item = null
+	_selected_owner = null
+	_last_refusal = ""
+	_redraw()
+
+
+# The stash's own line: what is in hand, or why the last move did not happen. It sits under the stash
+# rather than by the cards because that is the one place on screen both ends of a move can see.
+func _refresh_hint() -> void:
+	if _stash_hint == null:
+		return
+	if _last_refusal != "":
+		_stash_hint.text = _last_refusal
+		_stash_hint.add_theme_color_override("font_color",
+			QueueStyle.ink(QueueStyle.Role.ROW_REFUSED_BORDER))
+		return
+	_stash_hint.add_theme_color_override("font_color", QueueStyle.ink(QueueStyle.Role.HEADER_TEXT))
+	if _selected_item == null:
+		_stash_hint.text = "Click a piece of gear, then click where it should go. Or drag it."
+		return
+	var holder := "the stash" if _selected_owner == null else _selected_owner.get_unit_name()
+	_stash_hint.text = "%s, from %s. Click a unit or the stash to place it." % [
+		_selected_item.display_name, holder]
+
+
+# Esc lets go of what is in hand -- and ONLY then. Answering it unconditionally would evict the
+# tenant that key already has: under this screen the board is locked, so game._input routes Esc to
+# the bug report card, which is the stranger's one complaint door (#131).
+func _on_cancel() -> bool:
+	if _selected_item == null:
+		return false
+	_clear_selection()
+	return true
