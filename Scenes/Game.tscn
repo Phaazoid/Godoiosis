@@ -147,6 +147,9 @@ tile_set = SubResource("TileSet_nb51f")
 
 [node name="Units" type="Node2D" parent="." unique_id=431218200]
 
+[node name="Reserve" type="Node2D" parent="." unique_id=431218201]
+visible = false
+
 [node name="Grid" type="TileMapLayer" parent="." unique_id=2117630587]
 script = ExtResource("1_bgrid")
 use_parent_material = true

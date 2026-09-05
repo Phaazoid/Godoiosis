@@ -18,6 +18,33 @@ extends Node2D
 
 @onready var grid : BoardGrid = $Grid
 @onready var units_root: Node2D = $Units
+# Units that EXIST but are not on the board (#738) -- the roster a mission offers, minus whoever has
+# been deployed. They are real Unit nodes on purpose: every readout the pre-mission screen needs
+# takes a WIELDER (EquippableData.can_equip, get_live_abilities, the whole base -> limb -> jobs ->
+# effects -> gear chain), and a second implementation reading UnitInstance directly would drift the
+# first time a stat source is added. Unit._ready guards ONLY its grid setup behind `if pending_grid`,
+# so everything below that line -- initialize(), _seed_starting_kit(), sprites -- runs regardless.
+#
+# NOT under units_root, and that is the whole rule. Nine readers across six files take that node to
+# mean "a unit on the board": _all_units (-> BoardContext -> the #96 defeat floor, present_factions,
+# AI targeting, cohesion), get_unit_at_cell, capture_scenario, clear_board, UnitMirror, three in
+# battle3d, and SpawnTool's name uniquifier. Undeployed units there means the last player unit on the
+# board is never the last one, so the mission can neither be lost nor left.
+#
+# ...but INSIDE the board's teardown, which is the other half: clear_board frees these beside the
+# deployed ones, or a board swap strands them pointing at a board that no longer exists (#107).
+#
+# `visible = false` in the .tscn is load-bearing rather than tidy: a Unit is a Node2D carrying real
+# sprites, so ten of them parked here draw stacked at the origin in the flat 2D view. The 3D side is
+# safe by construction -- UnitMirror scans units_root -- which is exactly why the 2D twin is easy to
+# miss.
+#
+# WHAT AN UNDEPLOYED UNIT MAY BE ASKED. Wielder-taking predicates, and nothing squad- or cell-shaped:
+# it has no Squad (deploy_unit is what registers one) and its movement.cell is a meaningless zero.
+# Unit.get_projected_destination already guards the squad-less window it calls "spawn_unit's one-line
+# window"; is_leader() and the action_queue reads do not. #740's card grid is the first thing that
+# will call methods on these, and this line is what should keep it from growing null guards.
+@onready var reserve_root: Node2D = $Reserve
 @onready var turn_manager = $TurnManager
 @onready var turn_banner = $TurnBanner
 @onready var ui_layer: CanvasLayer = $UILayer
@@ -1221,8 +1248,27 @@ func can_spawn_at(pos: Vector2i, is_body := false) -> bool:
 		return false
 	return get_unit_at_cell(pos) == null
 
+# Build a Unit and give it the two wires every unit needs, WITHOUT parenting it (#738). Shared by
+# the two entry doors below, so there is one place a unit is made and one place it is wired -- the
+# went_downed connection was missing from the game for months precisely because there was a single
+# caller and nobody was counting.
+#
+# It deliberately does not parent, because spawn_unit gates AFTER building and frees on a refusal: a
+# shared half that parked the node would make every refusal an unpark too.
+func _build_unit(data: UnitData, grid_layer: TileMapLayer, cell: Vector2i) -> Unit:
+	var unit: Unit = UnitFactory.create_unit(data, grid_layer, cell)
+	unit.unit_died.connect(_on_unit_died)
+	# The DOWN twin of the line above. It goes straight to OrderExecutor rather than through a
+	# game.gd handler because OrderExecutor owns the DEFERRAL (_downed_pending, drained by
+	# _process_downed_pending at pass end) -- restructuring squads mid-await was the original bug
+	# that deferral exists for. Missing until 2026-07-29, which left _process_downed_pending (and
+	# the since-deleted Crisis offer poll, #158) unreachable: downed units were never ejected, so
+	# their tiles stayed walkable to squadmates and a downed leader kept the squad.
+	unit.went_downed.connect(order_executor.on_unit_downed)
+	return unit
+
 func spawn_unit(data: UnitData, pos: Vector2i, is_body := false) -> Unit:
-	var unit: Unit = UnitFactory.create_unit(data, grid, pos)
+	var unit: Unit = _build_unit(data, grid, pos)
 
 	if not can_spawn_at(pos, is_body):
 		unit.queue_free()
@@ -1234,15 +1280,50 @@ func spawn_unit(data: UnitData, pos: Vector2i, is_body := false) -> Unit:
 	# no heights simply never breaks, which is what a flat board means anyway.
 	unit.movement.set_heights(board_heights)
 	squad_manager.create_squad(unit)
-	unit.unit_died.connect(_on_unit_died)
-	# The DOWN twin of the line above. It goes straight to OrderExecutor rather than through a
-	# game.gd handler because OrderExecutor owns the DEFERRAL (_downed_pending, drained by
-	# _process_downed_pending at pass end) -- restructuring squads mid-await was the original bug
-	# that deferral exists for. Missing until 2026-07-29, which left _process_downed_pending (and
-	# the since-deleted Crisis offer poll, #158) unreachable: downed units were never ejected, so
-	# their tiles stayed walkable to squadmates and a downed leader kept the squad.
-	unit.went_downed.connect(order_executor.on_unit_downed)
 	return unit
+
+
+# A unit the mission OFFERS but has not placed (#738): no grid, no cell, no squad. See reserve_root
+# for what it may be asked and what it must stay out of.
+func spawn_reserve_unit(data: UnitData) -> Unit:
+	var unit: Unit = _build_unit(data, null, Vector2i.ZERO)
+	reserve_root.add_child(unit)
+	return unit
+
+
+# Put a reserve unit ON the board -- spawn_unit's board-entry half, over a unit that already exists,
+# through the same gate and the same registration, so a deployed unit is indistinguishable from a
+# spawned one afterwards. False = the cell refused it and the unit is untouched, still in reserve.
+func deploy_unit(unit: Unit, cell: Vector2i) -> bool:
+	if unit == null or unit.get_parent() != reserve_root:
+		push_error("deploy_unit: not a reserve unit")
+		return false
+	if not can_spawn_at(cell):
+		return false
+	reserve_root.remove_child(unit)
+	units_root.add_child(unit)
+	unit.movement.set_grid(grid)
+	unit.movement.set_cell(cell)   # after set_grid: set_cell push_errors without one
+	unit.movement.set_heights(board_heights)
+	squad_manager.create_squad(unit)
+	return true
+
+
+# ...and take one back off it. The squad goes FIRST and through release() rather than leave_squad,
+# which re-solos the leaver: that door is for a unit that is still ON the board (downed ejection,
+# loss of contact), and using it here would leave a live Squad holding a unit in the reserve -- the
+# exact dangling reference this ticket exists to avoid.
+#
+# The grid goes with it, so anything that asks an undeployed unit a CELL question gets a loud
+# push_error from set_cell rather than a stale answer.
+func undeploy_unit(unit: Unit) -> void:
+	if unit == null or unit.get_parent() != units_root:
+		push_error("undeploy_unit: not a deployed unit")
+		return
+	squad_manager.release(unit)
+	units_root.remove_child(unit)
+	reserve_root.add_child(unit)
+	unit.movement.set_grid(null)
 
 func _on_unit_died(unit: Unit):
 	# The selection is stored (#107) and die() frees the node -- release it or every reader dangles.

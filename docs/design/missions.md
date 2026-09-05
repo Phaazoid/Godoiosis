@@ -2,7 +2,7 @@
 
 **Status: ALL FOUR SLICES BUILT 2026-07-28 ([#96](https://github.com/Phaazoid/Godoiosis/issues/96)).** Filed 2026-07-27, when the project acquired a win condition for the first time. Before this, Iosis had ten interlocking systems and no way to finish a battle — which meant a design question could be answered *"is this coherent?"* but never *"does this improve play?"*
 
-**Canon checked through #750 (2026-09-04).**
+**Canon checked through #755 (2026-09-05).**
 
 ## What a mission is
 
@@ -24,7 +24,17 @@ Plus two UI surfaces: `MissionSelectScreen` (`ui/`) is the game's front door, an
 
 ## The pre-mission draw (#737)
 
-A board that names a roster **draws from it onto its deployment zone, up to its cap, and then plays**. `MissionController.deploy_roster` is the whole of it, and `PreMission.deployment_plan` is the pure half that decides who and where (entry order for who, reading order for where, three limits composing: roster size, cap, room).
+A board that names a roster **spawns all of it, draws from that onto its deployment zone up to its cap, and then plays**. `MissionController.deploy_roster` is the whole of it, and `PreMission.deployment_plan` is the pure half that decides who and where (entry order for who, reading order for where, three limits composing: roster size, cap, room).
+
+### The undeployed half is real (#738)
+
+The whole roster spawns as real `Unit` nodes, into **`game.reserve_root`** — because every readout the pre-mission screen needs takes a **wielder** (`can_equip`, `get_live_abilities`, the base → limb → jobs → effects → gear chain), and an undeployed unit answered by a second implementation reading `UnitInstance` directly would drift the first time a stat source is added. `Unit._ready` guards *only* its grid setup behind `if pending_grid`, so an off-board unit has still run `initialize()` and `_seed_starting_kit()`. It is also what makes this the one way a roster unit reaches the board: the draw deploys out of the same set #740's screen will let the player choose from.
+
+**Two rules, and the reserve exists only where both hold.** It is **not under `units_root`** — nine readers across six files take that node to mean *a unit on the board*, so undeployed units there are living player units, the #96 defeat floor never fires, `present_factions` never drops PLAYER, and the AI weighs phantoms at the origin. (The floor, not rout: rout asks about *hostile* factions, so extra player units do not touch it.) And it is **inside `clear_board`'s teardown** — a holding parent outside it survives a board swap pointing into a board that has been freed. `visible = false` is a third, smaller rule: a `Unit` is a `Node2D` with sprites, so ten parked under a visible node draw stacked at the origin in the flat 2D view, where the 3D side is safe by construction because `UnitMirror` scans `units_root`.
+
+**What an undeployed unit may be asked**: wielder-taking predicates, and nothing squad- or cell-shaped. It has no `Squad` — `game.deploy_unit` is what registers one — and its `movement.cell` is a meaningless zero, so undeploy nulls the grid to make a cell question a loud `push_error` rather than a stale answer.
+
+**Undeploy goes through `SquadManager.release`, not `leave_squad`.** That door re-solos the leaver, which is right for a unit that is still standing (downed ejection, loss of contact) and wrong here: it would leave a live `Squad` holding a unit in the reserve, and emit `squad_created` on the way out. `release` is the one exception to *every unit is in exactly one squad*, scoped exactly to whether the unit is on the board. It also forced `Squad._erase_member` to clear `unit.squad`, symmetric with `_add_member` — every caller before this re-added immediately, so a unit naming a squad it had left was unobservable, and `destroy_empty_squad` then freed the object it still named.
 
 **The player does not linger there yet** (dev, 2026-09-04). The screen that would let them choose is #740–#743, so until it lands the draw *is* the choice. Four things the umbrella's #737 body describes are deliberately unbuilt for that reason — a commit that can be refused, a back-out to Mission Select, a restart buffer, no-saving-during-the-phase — because each would be a mechanism whose only job is to survive until that screen exists, which is #731's own anti-scaffolding ruling. Two of them turn out never to have been needed at all: the draw is deterministic, so a restart re-runs it and there is nothing to buffer; and the whole step is synchronous inside the mission-start door, so no frame passes in which a save is possible.
 

@@ -51,6 +51,7 @@ static func display_name(path: String) -> String:
 @onready var game = get_parent()
 @onready var grid: TileMapLayer = $"../Grid"
 @onready var units_root: Node2D = $"../Units"
+@onready var reserve_root: Node2D = $"../Reserve"   # #738; freed by clear_board beside the board's own
 @onready var squad_manager: SquadManager = $"../SquadManager"
 @onready var overlay_manager: OverlayManager = $"../OverlayManager"
 @onready var turn_manager: TurnManager = $"../TurnManager"
@@ -439,4 +440,12 @@ func clear_board():
 	for unit in units_root.get_children():
 		#remove_child immediately so same-frame respawns don't see dying units in occupancy checks
 		units_root.remove_child(unit)
+		unit.queue_free()
+
+	# The roster's UNDEPLOYED half goes out with the board (#738), and this line is half of why the
+	# reserve is allowed to exist at all: a holding parent outside the teardown would leave those
+	# units standing after a board swap, pointing into a board that has been freed -- #107's shape,
+	# one node over. They need no occupancy dance; nothing looks them up by cell.
+	for unit in reserve_root.get_children():
+		reserve_root.remove_child(unit)
 		unit.queue_free()

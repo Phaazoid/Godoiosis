@@ -52,6 +52,14 @@ func _add_member(unit: Unit):
 
 func _erase_member(unit: Unit):
 	members.erase(unit)
+	# Symmetric with _add_member's `unit.squad = self` (#738). Every caller before that ticket
+	# re-added the unit immediately -- leave_squad re-solos it, join_squad hands it on, disband
+	# re-solos everyone -- so a unit whose squad field pointed at a squad it had left was
+	# unobservable, and destroy_empty_squad then queue_freed the object it still named. The FREED
+	# half is the nasty one: a freed reference compares == null as TRUE, so a null check would
+	# have passed while the typed read one line above it died (#149).
+	if unit.squad == self:
+		unit.squad = null
 
 func has_any_queued_actions() -> bool:
 	return not action_queue.is_empty()
