@@ -13,5 +13,5 @@ extra_attacks = Array[ExtResource("1_g3ome")]([ExtResource("4_watch")])
 weapon_type = 4
 display_name = "Carbine"
 icon = ExtResource("3_icon")
-description = "Gun"
+description = "A stubby repeater fed from a box magazine. Fast and unfussy while it has something to feed on, and an inert length of pipe the moment it does not -- everything this weapon is depends on someone remembering to reload it."
 metadata/_custom_type_script = "uid://cfeu07eqvatyn"

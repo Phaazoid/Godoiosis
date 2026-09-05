@@ -24,6 +24,13 @@ static func property_tips() -> Dictionary:
 	return {
 		"display_name": "What this item is called wherever the game names it.",
 		"icon": "The picture shown in menus and the inventory. Optional -- an item with none simply draws nothing.",
-		"description": "Flavour text. Presentation only; no rule reads it.",
+		"description": "Flavour text. Presentation only; no rule reads it. A weapon may leave this blank and inherit its template's -- see WeaponInstance.describe.",
 		"weight": "Authored mass. Tracked but nearly inert -- fall damage is its one wired reader (#120 owns the rest).",
 	}
+
+
+# THE one door for reading flavour, so a kind that inherits its wording from somewhere else can say
+# so in one place (#745). Everything that renders a description asks this, never the field: the field
+# is storage, and for a WeaponInstance the stored value is usually empty on purpose.
+func describe() -> String:
+	return description

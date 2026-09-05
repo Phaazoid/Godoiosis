@@ -28,6 +28,10 @@ signal deploy_toggled(unit: Unit)
 # A row was clicked -- the item under the cursor, or null for an empty slot. The screen holds the
 # selection, because a selection that outlives a redraw cannot live on a row the redraw frees (#107).
 signal gear_clicked(item: EquippableData, owner_unit: Unit)
+# The cursor entered or left one of the item rows (#745). The SCREEN decides what a hover means,
+# because only it knows whether something is already in hand.
+signal gear_hovered(item: EquippableData, card: PreMissionCard)
+signal gear_unhovered(card: PreMissionCard)
 
 # The inspect panel owns the ability tooltip wording and its builders are static for exactly this
 # reason -- one sentence, two surfaces. Preloaded because that file is a scene script with no
@@ -59,6 +63,10 @@ var _job_label: Label
 var _abilities_row: HFlowContainer
 var _stats_grid: GridContainer
 var _items_column: VBoxContainer
+# The stat value labels, by stat, so a preview can rewrite them IN PLACE (#745). Re-captured on every
+# _refresh_stats, which is the only thing that builds them.
+var _stat_values: Dictionary[Stats.Stat, Label] = {}
+var _previewing := false
 var _derived_label: Label
 
 
@@ -272,6 +280,7 @@ func _refresh_abilities() -> void:
 
 func _refresh_stats() -> void:
 	_clear(_stats_grid)
+	_stat_values.clear()
 	for stat: Stats.Stat in Stats.STAT_DEFAULTS:
 		var row := HBoxContainer.new()
 		row.add_theme_constant_override("separation", 6)
@@ -285,6 +294,7 @@ func _refresh_stats() -> void:
 		value.text = str(unit.get_effective_stat(stat))
 		value.add_theme_font_size_override("font_size", 11)
 		row.add_child(value)
+		_stat_values[stat] = value
 		_stats_grid.add_child(row)
 
 
@@ -349,6 +359,8 @@ func _item_row(item: Item) -> Control:
 	row.wire(unit, judge_move, perform_move)
 	row.clicked.connect(func(gear: EquippableData, owner_unit: Unit) -> void:
 		gear_clicked.emit(gear, owner_unit))
+	row.mouse_entered.connect(func() -> void: gear_hovered.emit(row.item, self))
+	row.mouse_exited.connect(func() -> void: gear_unhovered.emit(self))
 	if item == null:
 		row.add_theme_stylebox_override("panel", QueueStyle.section_box())
 		row.modulate = Color(1, 1, 1, 0.45)
@@ -401,3 +413,47 @@ static func _clear(container: Node) -> void:
 	for child in container.get_children():
 		container.remove_child(child)
 		child.free()
+
+
+# --- preview-at-decision (#745) -------------------------------------------------------------------
+
+# "STR 6 -> 4" written over the numbers the player is already reading, rather than in a second
+# readout somewhere else: the value they compare against has to be the one in front of them.
+#
+# IT REBUILDS NOTHING. A hover that went through refresh() would free the very row the cursor is on,
+# and mouse_exited never fires on a freed node -- so the preview would stick for ever, one frame
+# after it appeared. Labels are rewritten in place and put back the same way (#741's law, arriving
+# from the other direction).
+func show_preview(candidate: EquippableData, incoming: bool) -> void:
+	if candidate == null:
+		clear_preview()
+		return
+	_previewing = true
+	for stat: Stats.Stat in _stat_values:
+		var now := unit.get_effective_stat(stat)
+		var then := unit.previewed_stat(stat, candidate)
+		var label: Label = _stat_values[stat]
+		if now == then:
+			label.text = str(now)
+			label.remove_theme_color_override("font_color")
+			continue
+		label.text = "%d → %d" % [now, then]
+		label.add_theme_color_override("font_color", QueueStyle.ink(
+			QueueStyle.Role.READOUT_ALLY if then > now else QueueStyle.Role.READOUT_ENEMY))
+	_derived_label.text = "WT %d → %d  ·  DEF %d → %d" % [
+		unit.get_weight(), unit.previewed_weight(candidate, incoming),
+		unit.get_effective_def(), unit.previewed_def(candidate)]
+
+
+# Back to the live numbers. Called on every mouse_exited, and cheap enough to call unconditionally --
+# a clear with nothing to clear must be silent, because the exit and the enter of two adjacent rows
+# arrive in an order no surface should have to reason about.
+func clear_preview() -> void:
+	if not _previewing:
+		return
+	_previewing = false
+	for stat: Stats.Stat in _stat_values:
+		var label: Label = _stat_values[stat]
+		label.text = str(unit.get_effective_stat(stat))
+		label.remove_theme_color_override("font_color")
+	_refresh_foot()

@@ -11,5 +11,6 @@ built_in_stat = 7
 main_attack = ExtResource("2_main")
 weapon_type = 7
 display_name = "Prosthetic"
+description = "Not carried but fitted -- a limb, built to work. It goes where its owner goes and cannot be handed to anyone else, which makes it the one piece of gear that is really part of the person holding it."
 icon = ExtResource("3_icon")
 metadata/_custom_type_script = "uid://cfeu07eqvatyn"

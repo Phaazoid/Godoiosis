@@ -210,3 +210,84 @@ func test_every_row_and_zone_is_reachable_by_the_mouse() -> void:
 			).is_not_equal(Control.MOUSE_FILTER_IGNORE)
 	assert_int(zones).override_failure_message(
 		"no gear zones were rendered, so this case pins nothing").is_greater(0)
+
+
+# --- preview-at-decision (#745) ----------------------------------------------------------------
+
+# THE decision this screen exists for: something in hand, hovering a card, asking "should it go to
+# THIS one". The stash cannot answer it alone -- can_equip_reason takes a wielder -- which is why the
+# preview hangs off the card's hover rather than the row's.
+#
+# Nothing here rebuilds: a hover routed through refresh() would free the row the cursor is on, and
+# mouse_exited never fires on a freed node, so the preview would stick for ever one frame after it
+# appeared (#741's law, arriving from the other direction).
+func test_holding_gear_over_a_card_previews_what_it_would_do() -> void:
+	if not await _enter_phase():
+		return
+	var screen := _screen()
+	var card := _card()
+
+	# Gear built here rather than picked out of the shipped stash: the case needs a piece that MOVES a
+	# number, and "equippable" does not mean that -- a weapon with no stat_modifiers previews as a row
+	# of unchanged values and the assertion below would be measuring the fixture. Authored content is
+	# not pinnable anyway (the content razor).
+	var wearable := ArmorData.new()
+	wearable.display_name = "Test Vest"
+	wearable.def_power = 3
+	wearable.stat_modifiers[Stats.Stat.DEX] = -2
+	mc.loadout().stash.append(wearable)
+	assert_str(wearable.can_equip_reason(card.unit)).override_failure_message(
+		"fixture: the vest refuses this unit, so the preview would show a reason instead").is_empty()
+
+	var before: Array[String] = []
+	for stat: Stats.Stat in card._stat_values:
+		before.append((card._stat_values[stat] as Label).text)
+
+	screen._on_gear_clicked(wearable, null)
+	await await_idle_frame()
+	screen._on_card_hovered(card)
+
+	var arrows := 0
+	for stat: Stats.Stat in card._stat_values:
+		if (card._stat_values[stat] as Label).text.contains("→"):
+			arrows += 1
+	assert_int(arrows).override_failure_message(
+		"hovering a card with gear in hand promised the player nothing").is_greater(0)
+
+	screen._on_gear_unhovered(card)
+	var after: Array[String] = []
+	for stat: Stats.Stat in card._stat_values:
+		after.append((card._stat_values[stat] as Label).text)
+	assert_array(after).override_failure_message(
+		"the preview outlived the hover that opened it").is_equal(before)
+
+
+# A preview of a piece the unit cannot use is a LIE, so #744's sentence takes the numbers' place
+# rather than the hover going silent -- finding out at the click is the nasty surprise both tickets
+# exist to prevent.
+func test_a_piece_the_unit_cannot_use_shows_its_reason_instead_of_numbers() -> void:
+	if not await _enter_phase():
+		return
+	var screen := _screen()
+	var card := _card()
+
+	# A gate nobody clears, so the case cannot go vacuous on a roster whose stats happen to suit
+	# whatever the shipped stash holds.
+	var blocked := ArmorData.new()
+	blocked.display_name = "Test Slab"
+	blocked.def_power = 9
+	blocked.stat_minimums[Stats.Stat.CON] = 99
+	mc.loadout().stash.append(blocked)
+	assert_str(blocked.can_equip_reason(card.unit)).override_failure_message(
+		"fixture: the slab does not actually refuse anybody").is_not_empty()
+
+	screen._on_gear_clicked(blocked, null)
+	await await_idle_frame()
+	screen._on_card_hovered(card)
+
+	for stat: Stats.Stat in card._stat_values:
+		assert_bool((card._stat_values[stat] as Label).text.contains("→")).override_failure_message(
+			"a piece the unit cannot wear still promised it numbers").is_false()
+	assert_str(screen._stash_hint.text).override_failure_message(
+		"the hover said nothing at all: %s" % screen._stash_hint.text
+		).contains(blocked.can_equip_reason(card.unit))

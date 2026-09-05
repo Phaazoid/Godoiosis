@@ -13,5 +13,5 @@ extra_attacks = Array[ExtResource("1_r4sgd")]([ExtResource("5_spring")])
 weapon_type = 3
 display_name = "Springspear"
 icon = ExtResource("2_x53eu")
-description = "I think that enemy got... the point"
+description = "A long haft with a coiled head that launches on release. It hits once with everything it has and then has to be reset before it will do it again, so a spear-fighter's rhythm is a wind, a strike, and a pause somebody else can use."
 metadata/_custom_type_script = "uid://cfeu07eqvatyn"

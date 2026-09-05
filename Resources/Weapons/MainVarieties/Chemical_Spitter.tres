@@ -9,5 +9,6 @@ script = ExtResource("1_iwbgy")
 main_attack = ExtResource("2_main")
 weapon_type = 6
 display_name = "Chemical Spitter"
+description = "A pressurised tank and a nozzle, and a great deal of trust in the seals. It throws its payload rather than striking with it, so what it does on arrival is a question about the mixture rather than about the arm that aimed it."
 icon = ExtResource("3_icon")
 metadata/_custom_type_script = "uid://cfeu07eqvatyn"

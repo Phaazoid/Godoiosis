@@ -448,10 +448,17 @@ func _mod_sources() -> Array[WeaponInstance]:
 # active_space_count needs a Unit, while UnitInstance.limb_stat(slot) has no wielder to ask.
 # The doctrine agrees -- built_in_stat is what the prosthetic IS, a mod is what is bolted to it.
 func _gear_modifier(stat: Stats.Stat) -> int:
+	return _gear_modifier_for(stat, worn_armor, _mod_sources())
+
+# The walk itself, with the gear handed IN so a hypothetical set can use it (#745). Live and preview
+# share this one function: a preview computed by a second walk drifts from the real number the first
+# time either side gains a stage, and a number the player is shown before deciding has to be the
+# number they get.
+func _gear_modifier_for(stat: Stats.Stat, armor: ArmorData, weapons: Array[WeaponInstance]) -> int:
 	var total := 0
-	if worn_armor != null:
-		total += worn_armor.stat_modifiers.get(stat, 0)
-	for weapon in _mod_sources():
+	if armor != null:
+		total += armor.stat_modifiers.get(stat, 0)
+	for weapon in weapons:
 		for mod in weapon.active_modules(self):
 			total += mod.stat_modifiers.get(stat, 0)
 	return total
@@ -470,6 +477,54 @@ func get_weight() -> int:
 		if item != null:
 			total += item.get_effective_weight()
 	return total
+
+# --- preview-at-decision (#745) ---------------------------------------------------------------
+#
+# "What would these numbers BE if this unit had that." Every one of the three below is the live
+# function with the gear substituted, going through the SAME walk -- see _gear_modifier_for.
+#
+# INCOMING says which question is being asked, and the two have different answers for weight alone:
+# an item coming from the stash or another unit ADDS its mass, while one already carried and merely
+# equipped moves nothing. The stat and DEF answers do not fork -- an idle inventory weapon
+# contributes neither, so where the thing came from cannot change them.
+#
+# NOT GATED HERE. can_equip_reason (#744) decides whether the player is shown these at all, and that
+# is a surface's decision: previewing a piece a unit cannot wear is a lie, but the arithmetic is the
+# same arithmetic and a model that refused to do it would only push the refusal somewhere worse.
+func previewed_stat(stat: Stats.Stat, candidate: EquippableData) -> int:
+	var gear := _candidate_gear(candidate)
+	return get_body_stat(stat) + _gear_modifier_for(stat, gear[0], gear[1])
+
+
+func previewed_def(candidate: EquippableData) -> int:
+	var gear := _candidate_gear(candidate)
+	return _def_for(gear[0], previewed_stat(Stats.Stat.CON, candidate))
+
+
+func previewed_weight(candidate: EquippableData, incoming: bool) -> int:
+	if candidate == null or not incoming:
+		return get_weight()
+	return get_weight() + candidate.get_effective_weight()
+
+
+# The substitution itself: [armor, weapons] with the candidate in whichever slot it fills. A weapon
+# displaces the EQUIPPED one rather than joining the list -- a unit swings one thing -- while
+# prosthetics stay, because a fitted limb contributes whatever else is in hand.
+func _candidate_gear(candidate: EquippableData) -> Array:
+	var armor := worn_armor
+	var weapons: Array[WeaponInstance] = _mod_sources()
+	var as_armor := candidate as ArmorData
+	if as_armor != null:
+		armor = as_armor
+	else:
+		var as_weapon := candidate as WeaponInstance
+		var held := equipped_weapon as WeaponInstance
+		if held != null:
+			weapons.erase(held)
+		if as_weapon != null and not weapons.has(as_weapon):
+			weapons.append(as_weapon)
+	return [armor, weapons]
+
 
 func get_weapon_proficiency(family: WeaponData.WeaponType) -> int:
 	return unit_instance.get_proficiency(family)
@@ -490,10 +545,16 @@ func get_effective_ldr() -> int:
 	return get_effective_stat(Stats.Stat.LDR) + Stats.per_ldr_band(get_effective_stat(Stats.Stat.PER))
 
 func get_effective_def() -> int:
+	return _def_for(worn_armor, get_effective_stat(Stats.Stat.CON))
+
+# DEF is a SECOND walk, not a term in the first, and that is what makes a preview of it easy to get
+# wrong: a candidate plate moves its own def_power AND the CON the scaling reads, through its
+# stat_modifiers. Judging the new plate against the old plate's CON is the bug this shape prevents.
+func _def_for(armor: ArmorData, con: int) -> int:
 	# DEF is gear-only (stats.md); the CON math lives with the stat doctrine in Stats.
-	if worn_armor == null:
+	if armor == null:
 		return 0
-	return Stats.armor_def(worn_armor.def_power, get_effective_stat(Stats.Stat.CON), worn_armor.flat_def)
+	return Stats.armor_def(armor.def_power, con, armor.flat_def)
 
 # THE composition point for "what is this unit immune to" — the role RulesService.def_breakdown
 # plays for DEF. Any UNIT-level immunity readout (a status icon, an inspect row) asks HERE and

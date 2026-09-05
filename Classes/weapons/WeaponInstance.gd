@@ -23,6 +23,18 @@ extends EquippableData
 # own. Lives here rather than in the menu (#166): the menu renders reasons, it doesn't know them.
 const NOT_READY_TEXT := "Not ready — reload the weapon first"
 
+# A READ-THROUGH, never a copy (#745). An instance is free to carry its own wording -- a named
+# variant with a story -- but almost none do, and `make()` has never copied the template's, so every
+# weapon a player has ever hovered showed an empty description while the family it belongs to had one
+# authored. Copying at make() would have fixed today's tooltips and frozen every scenario already
+# saved; reading through fixes those too, and re-wording a family re-words every instance for free.
+# That is the same rule that keeps NUMBERS off prose, pointed at the prose itself.
+func describe() -> String:
+	if description != "":
+		return description
+	return template.description if template != null else ""
+
+
 static func make(p_template: WeaponData) -> WeaponInstance:
 	var w := _instance_for(p_template.weapon_type)
 	if w == null:

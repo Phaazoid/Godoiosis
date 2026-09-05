@@ -12,5 +12,6 @@ main_attack = ExtResource("2_main")
 extra_attacks = Array[ExtResource("4_wad")]([ExtResource("5_blow")])
 weapon_type = 5
 display_name = "Kinetic Mace"
+description = "A weighted head on a sprung shaft that stores every swing it is given. Strike with it and it winds tighter; spend what it has stored and whatever it lands on goes somewhere else entirely."
 icon = ExtResource("3_icon")
 metadata/_custom_type_script = "uid://cfeu07eqvatyn"
