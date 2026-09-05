@@ -120,6 +120,10 @@ var _staged_drawn: Array[Vector2i] = []
 # Both are created on demand: a board that never stages pays nothing for either.
 var _flight_drawn: Dictionary[Vector2i, GridMap] = {}
 var _whiteout: ColorRect = null
+# The dust a landing throws (#656). Built in _ready rather than on demand, unlike the two above:
+# a particle system compiles its shader the first time it draws, and paying that on the first slam
+# is a hitch in the one moment this effect exists for.
+var _staging_dust: StagingDust = null
 # Which grid VERTEX the pointer is nearest (#427 slice 4). Stored beside the cell rather than derived
 # from it: it changes as the cursor crosses the MIDDLE of a cell, so the cell early-out below would
 # freeze it for the whole tile.
@@ -204,6 +208,8 @@ func _ready() -> void:
 	# the camera is actually holding (#602 round 4). Only this host knows the rig -- same reason
 	# report_impact is a callable and not a lookup.
 	_unit_mirror.frame_floor = _shot_floor
+	_staging_dust = StagingDust.new()
+	add_child(_staging_dust)
 	_overlay_mirror.game = game
 	_overlay_mirror.overlays = _overlays
 	_overlay_mirror.unit_mirror = _unit_mirror
@@ -327,11 +333,30 @@ func _drive_transition(delta: float) -> void:
 			_apply_whiteout(0.0)
 		return
 	var landed := BoardSpace.advance_flight(delta)
+	_puff_landings(landed)
 	_sync_flight_maps()
 	_drive_transition_camera()
 	_drive_whiteout()
-	if landed:
+	if not landed.is_empty():
 		return   # advance_flight bumped the version; _sync_staging re-seats the landed columns
+
+
+# The dust each landing throws (#656). DIRECTION-BLIND on purpose: a landing is a landing, and
+# BoardMirror.surface_point already answers where -- the diorama's surface on the way in, the tile's
+# own socket on the way out -- so neither arm needs a rule of its own.
+#
+# THE EXIT'S PUFFS ARE CURRENTLY OFF-SCREEN, and that is measured rather than overlooked. #602 round
+# 7 keeps the camera up at the diorama through every exit landing (the tiles are watched FALLING,
+# and the flash covers the drop home), so a puff forty units below the aim is outside the frustum.
+# The ticket asked for the exit; the entry is where the slam can be seen. Left firing on both,
+# because the alternative is a fork whose only content is a fact about today's camera.
+func _puff_landings(cells: Array[Vector2i]) -> void:
+	if cells.is_empty() or _staging_dust == null:
+		return
+	var heights: BoardHeights = game.board_heights
+	for cell in cells:
+		_staging_dust.puff(_board_mirror.surface_point(cell, heights),
+				StagingDust.burst_key(cell, BoardSpace.staging_version))
 
 
 # WHERE THE CAMERA WATCHES FROM, and the only thing the Experiments flag decides about the ENTRY.

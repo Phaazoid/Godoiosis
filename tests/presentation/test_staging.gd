@@ -458,12 +458,12 @@ func test_a_landing_bumps_the_version_and_a_plain_frame_does_not() -> void:
 	BoardSpace.begin_flight(plan, -lift, Vector3.ZERO, true)
 
 	var before := BoardSpace.staging_version
-	assert_bool(BoardSpace.advance_flight(0.0)).override_failure_message(
+	assert_bool(not BoardSpace.advance_flight(0.0).is_empty()).override_failure_message(
 			"a zero-length step reported a landing").is_false()
 	assert_int(BoardSpace.staging_version).override_failure_message(
 			"a frame with nothing landing still bumped the version").is_equal(before)
 
-	assert_bool(BoardSpace.advance_flight(StagingFlight.total(plan) + 1.0)).override_failure_message(
+	assert_bool(not BoardSpace.advance_flight(StagingFlight.total(plan) + 1.0).is_empty()).override_failure_message(
 			"every tile landed and no landing was reported").is_true()
 	assert_int(BoardSpace.staging_version).is_greater(before)
 
@@ -480,12 +480,12 @@ func test_a_landed_exit_tile_lands_ONCE_however_long_the_flash_holds_the_flight_
 	var plan := StagingFlight.schedule(cells)
 	BoardSpace.begin_flight(plan, Vector3.ZERO, -lift, false)
 
-	assert_bool(BoardSpace.advance_flight(StagingFlight.total(plan) + 0.01)) \
+	assert_bool(not BoardSpace.advance_flight(StagingFlight.total(plan) + 0.01).is_empty()) \
 		.override_failure_message("no tile landed by the end of its own schedule").is_true()
 	var landed_version := BoardSpace.staging_version
 
 	for _frame in range(5):
-		assert_bool(BoardSpace.advance_flight(0.016)).override_failure_message(
+		assert_bool(not BoardSpace.advance_flight(0.016).is_empty()).override_failure_message(
 				"a tile that was already home landed again -- the flash tail rebuilds the board "
 				+ "every frame").is_false()
 	assert_int(BoardSpace.staging_version).override_failure_message(
