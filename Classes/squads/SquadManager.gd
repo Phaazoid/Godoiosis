@@ -601,6 +601,13 @@ func can_reaction_heal(healer: Unit, candidate: Unit, board: BoardContext, hypo:
 # ONE walk, ONE ledger. C1 (a unit reacts once per plan) and C4 (a party responds once per
 # attacking squad's plan) are bookkeeping, and a second sweep for heals would have to keep its own
 # copy of it -- two answers to "has this party reacted yet", free to drift (Law #4).
+#
+# A REACTION ANSWERS A HOSTILE HIT (C5's trigger half, #767). C1 is written "when party X ATTACKS
+# party Y", and until #767 nothing enforced the verb: this walk read every action in plan.attacks,
+# and a heal is an ordinary AttackAction whose target is an ALLY. So a queued heal made the healer's
+# OWN squad the defending party and handed it a free reaction -- invisible for a damaging squadmate,
+# whom choose_counter_target refuses through the same predicate the gate below uses, but a heal
+# reaction turns inward and never asks who it is answering, so the healer simply healed twice.
 func calculate_reactions_for_squad(attacking_squad: Squad, attacks: Array[AttackAction], board: BoardContext, hypo: Dictionary = {}) -> Array[CounterAttackAction]:
 	var strikes: Array[CounterAttackAction] = []
 	var heals: Array[CounterAttackAction] = []
@@ -610,6 +617,18 @@ func calculate_reactions_for_squad(attacking_squad: Squad, attacks: Array[Attack
 	for attack in attacks:
 		var defender := attack.target
 		if defender == null or not is_instance_valid(defender):
+			continue
+
+		# THE trigger gate (#767). RulesService.can_target is the hostility gate C5 already names --
+		# the same predicate choose_counter_target reaches through can_counter, rather than a second
+		# spelling of "are these two at war" free to drift from it (Law #4). It refuses a self-hit
+		# too, so a self-aimed heal falls out here rather than needing a clause of its own.
+		#
+		# ABOVE THE LEDGER, NOT BELOW: a friendly hit must not spend the squad's one reaction (C4).
+		# Unobservable through legal play -- _formation_basics_ok forbids a mixed-faction squad, so
+		# no squad can hold both a hostile and a non-hostile victim of the same plan -- but the
+		# ledger should record reactions that happened, and a scenario file can hand-build that board.
+		if attack.actor == null or not RulesService.can_target(attack.actor, defender):
 			continue
 
 		var defender_squad = defender.squad
