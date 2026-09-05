@@ -386,6 +386,7 @@ const ELEMENT_PALETTE_SCRIPT := "res://Classes/ui/ElementPalette.gd"
 const QUEUE_STYLE_SCRIPT := "res://Classes/ui/queue/QueueStyle.gd"
 const BOARD_SPACE_SCRIPT := "res://Classes/presentation/BoardSpace.gd"
 const SIGHT_TRACE_SCRIPT := "res://Classes/board/SightTrace2D.gd"
+const STAGING_DUST_SCRIPT := "res://Classes/presentation/StagingDust.gd"
 
 const CLASS_KNOBS: Array[Dictionary] = [
 	# --- Player settings the dev authors the DEFAULT for (#394) ---
@@ -830,6 +831,46 @@ const CLASS_KNOBS: Array[Dictionary] = [
 		"profile": "cinematic", "script": PACING_SCRIPT, "min": 0.0, "max": 6.0, "step": 0.05,
 		"tip": "A beat on the diorama once the fighting is over, before the tiles drop back into their sockets -- so the aftermath is not immediately swept away by the board reassembling."},
 
+	# --- ...and the dust it throws (#656) ---
+	#
+	# Its OWN group rather than nine more rows under the tear-out, on the precedent that split
+	# "Water (deep)" from "Water (shallow)": a group is what draws a heading, so this reads as one
+	# labelled block on the SAME Playback tab as the rest of the battle zoom (dev, 2026-09-04 --
+	# every part of the zoom findable in one tab section), instead of a nineteen-row scroll.
+	#
+	# Game constants rather than mood, and that is the dev's call over the three-homes fork: nobody
+	# has yet authored a board that wants its own dust, and putting the colour on the Moods tab
+	# would split the zoom across two tabs to serve a disagreement that does not exist. If a mission
+	# ever needs one, eligibility MOVES the value's home (#422) -- the ask is the trigger, not a
+	# guess made here.
+	{"group": "The tear-out: dust", "label": "Grains per tile", "static": "grains_per_tile",
+		"profile": "cinematic", "script": STAGING_DUST_SCRIPT, "min": 0.0, "max": 60.0, "step": 1.0,
+		"tip": "How many motes one landing throws. At 0 the tile lands silently. Costs nothing per grain -- the whole board's dust is one emitter and one draw -- so this is a look dial, not a budget."},
+	{"group": "The tear-out: dust", "label": "Burst speed", "static": "burst_speed",
+		"profile": "cinematic", "script": STAGING_DUST_SCRIPT, "min": 0.0, "max": 8.0, "step": 0.05,
+		"tip": "How hard the dust is thrown outward from the tile. Low reads as settling, high as a shockwave."},
+	{"group": "The tear-out: dust", "label": "Spread radius", "static": "burst_spread",
+		"profile": "cinematic", "script": STAGING_DUST_SCRIPT, "min": 0.0, "max": 1.5, "step": 0.01,
+		"tip": "How far across the tile the grains START, in cells. Half a cell fills the tile; above 1 the puff spills onto its neighbours."},
+	{"group": "The tear-out: dust", "label": "Upward bias", "static": "upward_bias",
+		"profile": "cinematic", "script": STAGING_DUST_SCRIPT, "min": 0.0, "max": 2.0, "step": 0.05,
+		"tip": "How much of the burst speed goes UP rather than out. At 0 the dust rolls flat off the landing; at 1 it fountains."},
+	{"group": "The tear-out: dust", "label": "Grain lifetime", "static": "grain_lifetime",
+		"profile": "cinematic", "script": STAGING_DUST_SCRIPT, "min": 0.05, "max": 4.0, "step": 0.05,
+		"tip": "How long one mote lasts before it has faded out completely. The dev's transition timings run long, so a puff tuned to read in isolation can vanish against them -- judge it against the flight above, not on its own."},
+	{"group": "The tear-out: dust", "label": "Grain size", "static": "grain_size",
+		"profile": "cinematic", "script": STAGING_DUST_SCRIPT, "min": 0.01, "max": 1.0, "step": 0.01,
+		"tip": "How big one mote is, in cells. The tile art is 32 pixels to a cell, so 0.03 is roughly one art pixel -- mixing densities is the loudest amateur tell in HD-2D."},
+	{"group": "The tear-out: dust", "label": "Grain colour", "static": "grain_color",
+		"profile": "cinematic", "script": STAGING_DUST_SCRIPT,
+		"tip": "What the dust is made of. Alpha is its strength, the way the water foam's is -- a hue and how much of it there is are one decision, not two."},
+	{"group": "The tear-out: dust", "label": "Gravity", "static": "grain_gravity",
+		"profile": "cinematic", "script": STAGING_DUST_SCRIPT, "min": 0.0, "max": 20.0, "step": 0.1,
+		"tip": "How fast the dust falls back down. At 0 it hangs where the burst put it, which reads as smoke rather than grit."},
+	{"group": "The tear-out: dust", "label": "Drag", "static": "grain_damping",
+		"profile": "cinematic", "script": STAGING_DUST_SCRIPT, "min": 0.0, "max": 12.0, "step": 0.1,
+		"tip": "How quickly a mote loses the speed it was thrown with. High drag makes the puff bloom and stop; zero lets every grain carry to the end of its life."},
+
 	# The tear-out is its own section because it is CINEMATIC-ONLY by construction: _stage_the_fight
 	# returns early on BOARD, so this slider is dead in the other column rather than merely unused.
 	{"group": "The tear-out", "label": "How high the fight lifts off the board", "static": "STAGE_LIFT",
@@ -1031,6 +1072,8 @@ const GROUP_TABS: Dictionary[String, String] = {
 	# somewhere, this is what it does once it is there.
 	"Camera flourish": "Playback",
 	"The tear-out": "Playback",
+	# ...and its dust (#656), beside it rather than in it -- the Water split's shape, one tab along.
+	"The tear-out: dust": "Playback",
 	# ...and an EIGHTH since #602. Beside the tear-out rather than in it: both take the camera off the
 	# board plane, but one is the fight being lifted OUT and the other is one body dropping out of it,
 	# and only the first is cinematic-only.
@@ -1102,6 +1145,18 @@ static func read_static(name: String) -> Variant:
 		"GUARD_RING_COLOR": return OverlayManager.GUARD_RING_COLOR
 		"PICK_FLASH_ALPHA": return OverlayManager.PICK_FLASH_ALPHA
 		"PICK_FLASH_PERIOD": return OverlayManager.PICK_FLASH_PERIOD
+		# The slam dust (#656). A GPU particle's state cannot be read back, so every one of these
+		# names the CPU-side value the burst is built from -- which is also what makes the scatter
+		# assertable rather than merely deterministic.
+		"grains_per_tile": return StagingDust.grains_per_tile
+		"burst_speed": return StagingDust.burst_speed
+		"burst_spread": return StagingDust.burst_spread
+		"upward_bias": return StagingDust.upward_bias
+		"grain_lifetime": return StagingDust.grain_lifetime
+		"grain_size": return StagingDust.grain_size
+		"grain_color": return StagingDust.grain_color
+		"grain_gravity": return StagingDust.grain_gravity
+		"grain_damping": return StagingDust.grain_damping
 		"PLAYBACK_PAN": return Pacing.PLAYBACK_PAN
 		"TEAR_OUT_BRACE": return Pacing.TEAR_OUT_BRACE
 		"TEAR_OUT_EMPTY_SKY": return Pacing.TEAR_OUT_EMPTY_SKY
@@ -1245,6 +1300,46 @@ static func write_static(host: Node3D, name: String, value: Variant) -> void:
 		"PICK_FLASH_PERIOD": OverlayManager.PICK_FLASH_PERIOD = value
 		# The beat table (#519). Every one of these is read at the START of a pass, so there is never
 		# a standing pause to re-apply one to -- SHOVE_SLIDE_SPEED's early return, same reason.
+		# The slam dust (#656). Every arm re-applies, because two of these nine (lifetime, and the
+		# buffer `amount` that grains-per-tile sizes) are node state rather than values a burst
+		# reads as it goes -- and one sweep for all nine beats nine that have to agree about which
+		# ones need it. Costs nothing: the node's own apply() is a handful of assignments.
+		"grains_per_tile":
+			StagingDust.grains_per_tile = int(value)
+			_reapply_staging_dust(host)
+			return
+		"burst_speed":
+			StagingDust.burst_speed = value
+			_reapply_staging_dust(host)
+			return
+		"burst_spread":
+			StagingDust.burst_spread = value
+			_reapply_staging_dust(host)
+			return
+		"upward_bias":
+			StagingDust.upward_bias = value
+			_reapply_staging_dust(host)
+			return
+		"grain_lifetime":
+			StagingDust.grain_lifetime = value
+			_reapply_staging_dust(host)
+			return
+		"grain_size":
+			StagingDust.grain_size = value
+			_reapply_staging_dust(host)
+			return
+		"grain_color":
+			StagingDust.grain_color = value
+			_reapply_staging_dust(host)
+			return
+		"grain_gravity":
+			StagingDust.grain_gravity = value
+			_reapply_staging_dust(host)
+			return
+		"grain_damping":
+			StagingDust.grain_damping = value
+			_reapply_staging_dust(host)
+			return
 		"PLAYBACK_PAN":
 			Pacing.PLAYBACK_PAN = value
 			return
@@ -1640,6 +1735,19 @@ static func _refresh_guard_markers(host: Node3D) -> void:
 	if game_2d == null:
 		return
 	game_2d.refresh_guard_markers()
+
+
+# The slam dust's re-apply (#656). Its node is built in code by battle3d rather than authored into
+# the scene, so it is reached the way every effect node here is -- through the host, by type, with a
+# null answer meaning "no 3D host attached" rather than an error.
+static func _reapply_staging_dust(host: Node3D) -> void:
+	if host == null:
+		return
+	for child in host.get_children():
+		var dust := child as StagingDust
+		if dust != null:
+			dust.apply()
+			return
 
 
 static func overlays_of(host: Node3D) -> BoardOverlays:

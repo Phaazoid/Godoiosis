@@ -379,18 +379,24 @@ static func begin_flight(plan: Array[Dictionary], from: Vector3, to: Vector3, en
 	staging_version += 1
 
 
-# Advance the flight by `delta`. Returns true when a tile LANDED on this step, which is the caller's
-# cue to re-route its column and let the standing-state polls rebuild its props.
+# Advance the flight by `delta`. Returns the cells that LANDED on this step, which is the caller's
+# cue to re-route their columns and let the standing-state polls rebuild their props.
+#
+# IT NAMES THE CELLS RATHER THAN ANSWERING YES/NO (#656), because a landing is a moment something
+# is drawn AT and the bool was a lossy projection of the same question. Nothing else can answer it:
+# an exit KEEPS its landed cells in _flight holding _flight_to (see below), so flying_cells() never
+# shrinks and a frame-over-frame diff would report zero landings on every exit; and the version
+# bumps once per STEP, not per cell, so it cannot name them either.
 #
 # THE VERSION BUMPS ON LANDINGS ONLY, and that is load-bearing rather than thrifty: OverlayMirror
 # gates its whole standing-state rebuild on staging_version, so bumping per frame would rebuild
 # every prop on every frame of the transition. Landings are discrete, so a tile flies BARE and gets
 # dressed the instant it is home -- which is also why props are dropped when the tear-out starts.
-static func advance_flight(delta: float) -> bool:
+static func advance_flight(delta: float) -> Array[Vector2i]:
+	var landed_cells: Array[Vector2i] = []
 	if _flight_plan.is_empty():
-		return false
+		return landed_cells
 	_flight_elapsed += delta
-	var landed := false
 	for entry: Dictionary in _flight_plan:
 		var cell: Vector2i = entry["cell"]
 		var progress := StagingFlight.progress_at(entry, _flight_elapsed)
@@ -406,14 +412,14 @@ static func advance_flight(delta: float) -> bool:
 				_flight.erase(cell)
 				if _flight_to != Vector3.ZERO:
 					_flight[cell] = _flight_to
-				landed = true
+				landed_cells.append(cell)
 			continue
 		_flight[cell] = _flight_from.lerp(_flight_to, StagingFlight.slam(progress))
 	if _flight.is_empty():
 		_flight_plan.clear()
-	if landed:
+	if not landed_cells.is_empty():
 		staging_version += 1
-	return landed
+	return landed_cells
 
 
 static func flight_active() -> bool:

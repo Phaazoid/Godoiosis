@@ -7,7 +7,7 @@ its child [#49 Action Queue UX](https://github.com/Phaazoid/Godoiosis/issues/49)
 This is a *guidelines* doc, not a spec — it captures the principles we're holding the work to,
 plus the running order of the queue-UX checklist. Update it as items land.
 
-**Canon checked through #746 (2026-09-04).**
+**Canon checked through #756 (2026-09-04).**
 
 ## Principles
 
@@ -2067,8 +2067,13 @@ confirmed he had never changed. The beat he was reaching for did not exist, so i
 own row (empty sky) rather than by making one knob answer two questions. **When a dev moves a
 slider and reports no change, check the gate before checking the wire.**
 
-Still open on #521: the **dust shockwave** on the exit thud — which would be the project's first
-particle system — and strata on the cut edges, which is art-pass work.
+Still open on #521: strata on the cut edges, which is art-pass work. The **dust shockwave** — which
+was indeed the project's first particle system — shipped as
+[#656](https://github.com/Phaazoid/Godoiosis/issues/656) on 2026-09-04, with one correction to the
+ask: the EXIT thud is the half that cannot be seen, since the camera holds at the diorama through
+every exit landing (round 7, below) while the tiles fall forty units away from it. The effect is
+direction-blind and the ENTRY slam is where it reads. See `presentation-effects.md` →
+*A PARTICLE is one emitter told where to spawn*.
 
 ## The camera RIDES A BODY DOWN ([#602](https://github.com/Phaazoid/Godoiosis/issues/602), BUILT 2026-08-29)
 
