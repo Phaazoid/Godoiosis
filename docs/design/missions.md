@@ -106,7 +106,36 @@ The ring paid for it: `DEPLOY_GROUP` held one verb and so collapsed to a termina
 
 **`MissionController._roster_units` keeps the roster in ENTRY order.** Deploying and undeploying *reparent* between `units_root` and `reserve_root`, so both lists reshuffle every time the player changes their mind and a grid drawn off either would reorder mid-decision. Worth knowing that this is currently belt-and-braces for the grid — `_refresh_cards` rebuilds only when the roster's size changes, so the order settles at build time either way — and is kept as the contract underneath rather than deleted; the store's own guarantee is what the suite pins.
 
-Still deferred: #742's job picker and #745's tooltip pass. Weight reads 0 for everyone until #120's authoring pass (dev's call — the slot is shown so the gap is visible rather than forgotten).
+Still deferred: #742's job picker.
+
+### What the numbers say before you commit ([#745](https://github.com/Phaazoid/Godoiosis/issues/745))
+
+**Most of the derived half was already built** — `ArmorData.mechanical_text` (#44),
+`TransmutationData.mechanical_text` (#166) and `WeaponInstance.attack_detail` (#485) all read their
+numbers at display time. What nothing pinned was the property those tickets exist FOR: that retuning
+a value re-words the readout. Every case added here changes a number and asserts the text followed —
+a snapshot of expected strings pins the exact opposite.
+
+**Preview-at-decision is the new mechanism**, and it shows in the card's own stats grid rather than a
+second readout: the value a player compares against has to be the one already in front of them. Two
+hovers, two questions — gear IN HAND over a card asks *should this go to this one* (the decision the
+screen exists for, and the one the stash cannot answer alone since `can_equip_reason` takes a
+wielder), and an empty-handed hover over a carried row asks the smaller *what would equipping this
+do*. **A refused piece shows its #744 sentence in place of numbers**, because previewing a piece a
+unit cannot use is a lie and finding out at the click is the surprise both tickets exist to prevent.
+
+**THE HOVER REBUILDS NOTHING**, and that is the same law #741 minted arriving from the other
+direction: a redraw frees the row the cursor is on, and `mouse_exited` never fires on a freed node,
+so the preview would stick for ever one frame after appearing. Pinned by NODE IDENTITY rather than by
+text — a rebuild that restores the same values is invisible to a text compare, which a mutant proved.
+
+**And the flavour wire was broken.** `WeaponInstance.make()` has never copied its template's
+`description` and `copy_equippable` only copies instance-to-instance, so authoring a line on a family
+reached nothing a player could hover. `Item.describe()` is the one door now and `WeaponInstance`
+reads THROUGH to its template — re-wording a family re-words every weapon built on it, saved
+scenarios included, with no migration. Only then were the seven base-weapon descriptions worth
+writing. **Flavour never states a number**: a value in prose goes stale while the data stays right,
+which `test_derived_readouts.gd` enforces over every authored weapon file. Weight reads 0 for everyone until #120's authoring pass (dev's call — the slot is shown so the gap is visible rather than forgotten).
 
 ### Gear moves, and the stash that owns it ([#741](https://github.com/Phaazoid/Godoiosis/issues/741))
 
