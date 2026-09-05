@@ -1,4 +1,11 @@
-# Writes a card-format spritesheet out as a SpriteFrames (#629).
+# Writes a zoom-animation spritesheet out as a SpriteFrames (#629).
+#
+# TWO KINDS OF SHEET, two readers, one output. A CARD-format sheet is READ by `CardSheet` -- it
+# prints its own timing and carries its own registration. A LOOSE one is RECONSTRUCTED by
+# `LooseSheet`: no cards, no timing, no registration, so its frames are cut to their ink, re-carded
+# on that ink and given durations authored in the manifest (#635). An entry with a `loose` key is
+# the second kind. What they promise differs and those files say how; from `_write_frames` down the
+# two are one path.
 #
 # Two phases, because the SpriteFrames must reference an IMPORTED texture -- the same reason
 # gen_lookdev_assets.gd is two phases, and the same shape:
@@ -33,6 +40,26 @@ const SHEETS := {
 		"region": Rect2i(0, 700, 1000, 666),
 		"animations": ["attack", "crit", "dodge", "staff", "staff_dodge"],
 		"backdrop": Color8(0x09, 0x95, 0x4F),
+	},
+	# NO CARDS ON THIS SHEET, so it is read by LooseSheet and RE-CARDED (#635). Everything a card
+	# format hands over free is reconstructed or authored here:
+	#   - `region` is one animation's band rather than a palette block. The sheet's own labels sit
+	#     inside it and are dropped by size.
+	#   - `durations` are AUTHORED, in GBA frames at 60 Hz, because the sheet prints none. This set
+	#     is a first guess to be tuned by eye: a settled stance, a fast strike, a held impact.
+	#     74 frames is ~1.23s, and the axe lands on frame 8, ~0.63s in.
+	# The Hand Axe and Map rows below the region are deliberately left unread -- one gesture is what
+	# #603 asked for, and a second animation would have to agree with this one's card size.
+	"Brigand": {
+		"source": "res://Art/Units/ZoomAnimations/Brigand.png",
+		"atlas": "res://Art/Units/ZoomAnimations/Brigand_Frames.png",
+		"output": "res://Resources/ZoomAnimations/Brigand.tres",
+		"loose": {
+			"attack": {
+				"region": Rect2i(0, 30, 473, 120),
+				"durations": [8, 6, 6, 5, 6, 4, 3, 8, 10, 8, 5, 5],
+			},
+		},
 	},
 }
 
@@ -69,6 +96,12 @@ func _run(name: String, spec: Dictionary, want_atlas: bool, want_frames: bool) -
 		_fail("cannot load %s (error %d)" % [spec["source"], err])
 		return
 
+	# A sheet with no cards is a different READER and a different promise (#635); everything below
+	# this line is the card format's.
+	if spec.has("loose"):
+		_run_loose(spec, source, want_atlas, want_frames)
+		return
+
 	var read := CardSheet.read(source, spec["region"] as Rect2i, spec["animations"] as Array)
 	for note: String in (read["notes"] as Array):
 		print("  (%s)" % note)
@@ -90,7 +123,55 @@ func _run(name: String, spec: Dictionary, want_atlas: bool, want_frames: bool) -
 	if want_atlas:
 		_write_atlas(source, spec, animations, read["card"] as int)
 	if want_frames:
-		_write_frames(spec, animations)
+		_write_frames(spec, animations, (spec["region"] as Rect2i).position)
+
+
+# The loose path (#635): read each animation, RE-CARD it, and lay the animations out as stacked
+# strips of one atlas. From `_write_frames` down nothing knows which reader produced the cards --
+# they arrive as rects into the atlas either way, which is why the origin is a parameter now.
+func _run_loose(spec: Dictionary, source: Image, want_atlas: bool, want_frames: bool) -> void:
+	var loose: Dictionary = spec["loose"]
+	var reads: Array = []
+	var size := Vector2i.ZERO
+	for anim_name: String in loose:
+		var entry: Dictionary = loose[anim_name]
+		var read := LooseSheet.read(source, entry["region"] as Rect2i, entry["durations"] as Array)
+		for note: String in (read["notes"] as Array):
+			print("  (%s)" % note)
+		if not (read["errors"] as Array).is_empty():
+			for problem: String in (read["errors"] as Array):
+				_fail(problem)
+			return
+		var card: Vector2i = read["card"]
+		var count: int = (read["frames"] as Array).size()
+		print("    %-12s %2d frames re-carded to %s, %3d gba frames total   %s"
+				% [anim_name, count, card, _sum(read["durations"] as Array), read["durations"]])
+		reads.append({"name": anim_name, "read": read})
+		size = Vector2i(maxi(size.x, card.x * count), size.y + card.y)
+
+	# The atlas is composed whether or not it is WRITTEN: the card rects are what --frames needs,
+	# and deriving them twice by two routes is how the two phases would drift apart.
+	var atlas := Image.create(size.x, size.y, false, Image.FORMAT_RGBA8)
+	atlas.fill(Color(0, 0, 0, 0))
+	var animations: Array = []
+	var row := 0
+	for held: Dictionary in reads:
+		var read: Dictionary = held["read"]
+		animations.append({
+			"name": held["name"],
+			"cards": LooseSheet.paint(source, read, atlas, row),
+			"durations": read["durations"],
+		})
+		row += (read["card"] as Vector2i).y
+
+	if want_atlas:
+		var err := atlas.save_png(ProjectSettings.globalize_path(spec["atlas"] as String))
+		if err != OK:
+			_fail("could not write %s (error %d)" % [spec["atlas"], err])
+			return
+		print("  wrote %s (%dx%d)" % [spec["atlas"], size.x, size.y])
+	if want_frames:
+		_write_frames(spec, animations, Vector2i.ZERO)
 
 
 func _write_atlas(source: Image, spec: Dictionary, animations: Array, card: int) -> void:
@@ -108,14 +189,13 @@ func _write_atlas(source: Image, spec: Dictionary, animations: Array, card: int)
 	print("  wrote %s (%dx%d)" % [spec["atlas"], atlas.get_width(), atlas.get_height()])
 
 
-func _write_frames(spec: Dictionary, animations: Array) -> void:
+func _write_frames(spec: Dictionary, animations: Array, origin: Vector2i) -> void:
 	var atlas_path := spec["atlas"] as String
 	var sheet: Texture2D = load(atlas_path)
 	if sheet == null:
 		_fail("%s is not imported yet -- run --atlas, then `--import`, then --frames" % atlas_path)
 		return
 
-	var origin: Vector2i = (spec["region"] as Rect2i).position
 	var ground := _ground_point(sheet, animations, origin)
 	if ground.x < 0.0:
 		return   # _ground_point already said why

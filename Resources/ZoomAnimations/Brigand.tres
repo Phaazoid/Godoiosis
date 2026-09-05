@@ -1,0 +1,96 @@
+[gd_resource type="SpriteFrames" format=3]
+
+[ext_resource type="Texture2D" path="res://Art/Units/ZoomAnimations/Brigand_Frames.png" id="1_qn5ij"]
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_8ergo"]
+atlas = ExtResource("1_qn5ij")
+region = Rect2(0, 0, 42, 74)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_8cpe1"]
+atlas = ExtResource("1_qn5ij")
+region = Rect2(42, 0, 42, 74)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_7dkel"]
+atlas = ExtResource("1_qn5ij")
+region = Rect2(84, 0, 42, 74)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_275cq"]
+atlas = ExtResource("1_qn5ij")
+region = Rect2(126, 0, 42, 74)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_5gtyk"]
+atlas = ExtResource("1_qn5ij")
+region = Rect2(168, 0, 42, 74)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_k3thk"]
+atlas = ExtResource("1_qn5ij")
+region = Rect2(210, 0, 42, 74)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_bt4ln"]
+atlas = ExtResource("1_qn5ij")
+region = Rect2(252, 0, 42, 74)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_j3ihs"]
+atlas = ExtResource("1_qn5ij")
+region = Rect2(294, 0, 42, 74)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_e0il7"]
+atlas = ExtResource("1_qn5ij")
+region = Rect2(336, 0, 42, 74)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_wcfuw"]
+atlas = ExtResource("1_qn5ij")
+region = Rect2(378, 0, 42, 74)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_1g531"]
+atlas = ExtResource("1_qn5ij")
+region = Rect2(420, 0, 42, 74)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_s4bsy"]
+atlas = ExtResource("1_qn5ij")
+region = Rect2(462, 0, 42, 74)
+
+[resource]
+animations = [{
+"frames": [{
+"duration": 8.0,
+"texture": SubResource("AtlasTexture_8ergo")
+}, {
+"duration": 6.0,
+"texture": SubResource("AtlasTexture_8cpe1")
+}, {
+"duration": 6.0,
+"texture": SubResource("AtlasTexture_7dkel")
+}, {
+"duration": 5.0,
+"texture": SubResource("AtlasTexture_275cq")
+}, {
+"duration": 6.0,
+"texture": SubResource("AtlasTexture_5gtyk")
+}, {
+"duration": 4.0,
+"texture": SubResource("AtlasTexture_k3thk")
+}, {
+"duration": 3.0,
+"texture": SubResource("AtlasTexture_bt4ln")
+}, {
+"duration": 8.0,
+"texture": SubResource("AtlasTexture_j3ihs")
+}, {
+"duration": 10.0,
+"texture": SubResource("AtlasTexture_e0il7")
+}, {
+"duration": 8.0,
+"texture": SubResource("AtlasTexture_wcfuw")
+}, {
+"duration": 5.0,
+"texture": SubResource("AtlasTexture_1g531")
+}, {
+"duration": 5.0,
+"texture": SubResource("AtlasTexture_s4bsy")
+}],
+"loop": 0,
+"name": &"attack",
+"speed": 60.0
+}]
+metadata/ground_point = Vector2(21, 74)

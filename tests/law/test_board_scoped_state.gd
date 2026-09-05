@@ -59,6 +59,7 @@ const PROCESS_SCOPED := [
 	"_cube_mesh", "_cage_texture", "_cube_key",   # UnitHealthBar: cage geometry, keyed by _cube_key
 	"_art_top_cache",                             # UnitSprite3D: per-texture art top, keyed by path
 	"_warned_sets",                               # UnitSprite3D: which sets have already warned, keyed by path
+	"_zoom_sets",                                 # UnitSprite3D: art family -> its zoom set, keyed by family
 	"GUARD_RING_SCALE",                           # tuning, no knob
 	"texels_per_unit",                            # tuning, no knob
 ]

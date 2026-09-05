@@ -198,6 +198,39 @@ func set_walking_visual(walking: bool) -> void:
 	_apply_state_texture()
 
 
+# --- the zoom animation SET for a piece of art (#603) ------------------------------------------
+
+# Which animation set belongs to a unit drawn with `art`, or null when that family has none.
+#
+# Found by CONVENTION -- `Resources/ZoomAnimations/<art family>.tres` -- and NOT off a field on
+# UnitData, which is #603's fork 3 and deliberately unpicked: where a unit's animations are authored
+# (per weapon family? per unit? one shared vocabulary?) is still a question, and a field added now
+# would be a seam built to a shape nobody has chosen. A convention costs nothing to delete.
+#
+# Keyed on the MAP SPRITE, never on the unit's name: a zoom sheet is the same ART FAMILY as the map
+# art, which is why `ZoomAnimations/Brigand.png` is named to pair with `MapSprites/Brigand.png`. The
+# unit drawn with the Sage art is called Celest, so a name key found nothing, for every unit, always.
+#
+# Cached including the MISSES, and the misses are the point: most families have no set, and this is
+# asked on every blow of every battle. A null answer stored is one that costs nothing to repeat.
+static var _zoom_sets: Dictionary[String, SpriteFrames] = {}
+
+
+static func zoom_set_for(art: Texture2D) -> SpriteFrames:
+	if art == null:
+		return null
+	var family := art.resource_path.get_file().get_basename()
+	if family.is_empty():
+		return null
+	if not _zoom_sets.has(family):
+		var path := "res://Resources/ZoomAnimations/%s.tres" % family
+		var found: SpriteFrames = null
+		if ResourceLoader.exists(path):
+			found = load(path) as SpriteFrames
+		_zoom_sets[family] = found
+	return _zoom_sets[family]
+
+
 # --- frame animation (#629) --------------------------------------------------------------------
 
 
