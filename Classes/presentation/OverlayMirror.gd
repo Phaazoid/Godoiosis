@@ -571,8 +571,11 @@ func _ghost_sync(om: OverlayManager, kb_ghosts: Array[Dictionary]) -> void:
 	entries.append_array(kb_ghosts)
 	if _last_ghosts == entries:
 		return
+	# DIAGNOSTIC (#747), out with the ticket: a push that BUILT a pool node is not recorded, so the
+	# next frame pushes again into a pool that already has it.
+	if unit_mirror.set_ghosts(entries):
+		return
 	_last_ghosts = entries
-	unit_mirror.set_ghosts(entries)
 
 
 # --- Shared ------------------------------------------------------------------------

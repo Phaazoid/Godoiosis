@@ -398,7 +398,8 @@ func debris() -> HealthBlockDebris:
 # UnitSprite3Ds. One entry per ghost: {"pos": Vector3, "texture": Texture2D,
 # "modulate": Color} — texture and tint arrive by copy, the 2D stays the authority.
 # Wholesale replace, same pool contract as BoardOverlays (extras hidden, not freed).
-func set_ghosts(ghosts: Array[Dictionary]) -> void:
+func set_ghosts(ghosts: Array[Dictionary]) -> bool:
+	var grew := false
 	while _ghosts.size() < ghosts.size():
 		var ghost := UnitSprite3D.new()
 		ghost.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF  # a translucent stand-in casts no shadow
@@ -408,6 +409,7 @@ func set_ghosts(ghosts: Array[Dictionary]) -> void:
 		ghost.alpha_cut = SpriteBase3D.ALPHA_CUT_DISABLED
 		add_child(ghost)
 		_ghosts.append(ghost)
+		grew = true
 	for i in _ghosts.size():
 		var ghost: UnitSprite3D = _ghosts[i]
 		if i < ghosts.size():
@@ -417,6 +419,13 @@ func set_ghosts(ghosts: Array[Dictionary]) -> void:
 			ghost.modulate = ghosts[i]["modulate"]
 		else:
 			ghost.visible = false
+	# DIAGNOSTIC (#747), out with the ticket: what a pool node looks like on the push that BUILT it.
+	if grew:
+		var fresh: UnitSprite3D = _ghosts[_ghosts.size() - 1]
+		print("[#747] pool grew to %d | aabb=%s pos=%s px=%.4f vis=%s tex=%s" % [
+				_ghosts.size(), fresh.get_aabb().size, fresh.position, fresh.pixel_size,
+				fresh.visible, fresh.texture])
+	return grew
 
 
 func ghost_count() -> int:
