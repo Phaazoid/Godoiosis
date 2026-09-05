@@ -33,7 +33,7 @@ enum Term {
 	EXECUTE_ORDERS, MOVE, GROUP_MOVE, ATTACK, ATTACK_TARGETING, WEAPON_ACTION, TRANSMUTATION, ABILITY_ACTION,
 	GUARD, OVERWATCH, RESCUE, RALLY, CAPTURE, SQUAD_UP, JOIN_SQUAD, LEAVE_SQUAD, DISBAND_SQUAD, WAIT,
 	CANCEL_ACTIONS, INSPECT, END_TURN,
-	ACTION, RUNE, SQUAD_ACTIONS, UNDEPLOY,
+	ACTION, RUNE, SQUAD_ACTIONS, UNDEPLOY, REPOSITION, PLACEMENT,
 	# Elemental
 	ELEMENTS, WET, CHILLED, REACTIONS,
 	# Terrain
@@ -399,6 +399,18 @@ static func _build_entries() -> Dictionary:
 			+ "back among those the roster offers, its cell frees up, and it stops counting "
 			+ "against the deployment cap. Nothing about the unit changes: gear, jobs and "
 			+ "condition are all still there when you place it again."}
+	e[Term.REPOSITION] = {"category": Category.ACTIONS, "title": "Reposition",
+		"short": "Move this unit to another cell in the deployment zone.",
+		"long": "Only during the pre-mission phase. The zone lights up and the unit goes wherever "
+			+ "you click: an empty cell, or one another of your placed units holds, in which case "
+			+ "the two trade places. This is not a MOVE -- no turn has started and nothing is "
+			+ "spent; it is where the unit was standing when the battle began. If it leaves its "
+			+ "leader's cohesion range the squad breaks immediately, on the spot, rather than "
+			+ "quietly on the first turn."}
+	e[Term.PLACEMENT] = {"category": Category.ACTIONS, "title": "Placement",
+		"short": "Where this unit stands before the battle, and whether it comes at all.",
+		"long": "The pre-mission phase's own slice of the ring: move the unit inside the "
+			+ "deployment zone, or take it back off the board entirely."}
 	e[Term.DISBAND_SQUAD] = {"category": Category.ACTIONS, "title": "Disband Squad",
 		"short": "Dissolve the squad: every member goes solo.",
 		"long": "The leader dissolves the whole formation. Every member becomes a squad of one."}

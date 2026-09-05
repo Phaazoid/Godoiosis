@@ -284,6 +284,57 @@ func open_deployment_cells() -> Array[Vector2i]:
 			open_cells.append(cell)
 	return open_cells
 
+# Where this unit could stand instead (#772). The deployment zone's cells, minus its own, keeping
+# both a FREE cell and one another ROSTER-DRAWN unit holds -- swapping is allowed (dev, 2026-09-05),
+# so an occupied cell is a legal target rather than a refusal.
+#
+# Authored units are not swappable, for the reason Undeploy is gated the same way: they are the
+# BOARD's, additive to the roster's draw (#731 ruling 2c), and trading places with one would move a
+# unit the player was never given.
+#
+# can_spawn_at is asked for the FREE case rather than restated, so a cell this offers is one the
+# draw would also have accepted -- terrain, the map's edge and occupancy, one answer.
+func reposition_cells(unit: Unit) -> Array[Vector2i]:
+	var cells: Array[Vector2i] = []
+	if unit == null or not unit.drawn_from_roster:
+		return cells
+	for cell: Vector2i in game.zone_manager.cells_of_kind(ZoneManager.Kind.DEPLOYMENT):
+		if cell == unit.movement.cell:
+			continue
+		if game.can_spawn_at(cell):
+			cells.append(cell)
+			continue
+		var occupant: Unit = game.get_unit_at_cell(cell)
+		if occupant != null and occupant.drawn_from_roster:
+			cells.append(cell)   # a swap
+	return cells
+
+
+# Move a placed unit inside the zone, trading places with whoever is there.
+#
+# set_cell rather than deploy_unit: the unit is already ON the board with a squad, so this is a
+# position change, not a board entry -- the same door DevController's armed move uses.
+#
+# THEN THE SQUAD SETTLES, IMMEDIATELY (dev, 2026-09-05: it "ejects them there and then in the battle
+# preview"). Placing a member out of its leader's cohesion range is legal, and enforce_contact is
+# what answers for it -- the same sweep that runs at the end of a resolution pass and at turn start,
+# so THE PRE-MISSION PHASE IS A THIRD SETTLE POINT. Calling it here rather than leaving turn 1 to
+# find it is what makes the consequence land while the player is still looking at the board that
+# caused it, instead of a turn later with nothing on screen to connect it to.
+func reposition(unit: Unit, cell: Vector2i) -> bool:
+	if not _deploying or unit == null or not unit.drawn_from_roster:
+		return false
+	if not reposition_cells(unit).has(cell):
+		return false
+	var from := unit.movement.cell
+	var occupant: Unit = game.get_unit_at_cell(cell)
+	unit.movement.set_cell(cell)
+	if occupant != null:
+		occupant.movement.set_cell(from)   # the swap: both ends move, then the squads settle ONCE
+	game.squad_manager.enforce_contact()
+	game.overlay_manager.redraw_projected_units()
+	return true
+
 
 # The roster in ENTRY ORDER -- what #740's card grid iterates. Node order cannot serve: deploying
 # and undeploying REPARENT between units_root and reserve_root, so both lists reshuffle every time

@@ -72,6 +72,7 @@ const CAPTURE := 17
 const TRANSMUTATION := 18
 const GUARD := 19
 const UNDEPLOY := 20   # the pre-mission phase only (#739)
+const REPOSITION := 21  # ...and its sibling (#772)
 
 # The ring's categories, and their order IS the inner ring's clockwise order.
 #
@@ -90,9 +91,10 @@ const CATEGORIES := {
 	Group.ACT_GROUP: {"name": "Action", "term": Glossary.Term.ACTION},
 	Group.SQUAD_GROUP: {"name": "Squad", "term": Glossary.Term.SQUAD_ACTIONS},
 	Group.INSPECT_GROUP: {"name": "Inspect", "term": Glossary.Term.INSPECT},
-	# A category of one holding the verb of its own name, exactly as Move and Inspect are -- so the
-	# collapse rule in build_tree hands it up as a plain terminal slice (#739).
-	Group.DEPLOY_GROUP: {"name": "Undeploy", "term": Glossary.Term.UNDEPLOY},
+	# TWO verbs since #772, so this no longer collapses the way Move and Inspect do -- and the name
+	# had to stop being one of its own children's. "Placement" is what the pair answers together:
+	# where the unit stands, and whether it stands at all.
+	Group.DEPLOY_GROUP: {"name": "Placement", "term": Glossary.Term.PLACEMENT},
 }
 
 # The kit slice is named after WHAT IS EQUIPPED, never after attacking (#467 round 3). It holds
@@ -127,6 +129,7 @@ const ACTION_DATA := {
 	JOINSQUAD: {"name": "Join Squad", "term": Glossary.Term.JOIN_SQUAD, "group": Group.SQUAD_GROUP},
 	LEAVESQUAD: {"name": "Leave Squad", "term": Glossary.Term.LEAVE_SQUAD, "group": Group.SQUAD_GROUP},
 	DISBAND_SQUAD: {"name": "Disband Squad", "term": Glossary.Term.DISBAND_SQUAD, "group": Group.SQUAD_GROUP},
+	REPOSITION: {"name": "Reposition", "term": Glossary.Term.REPOSITION, "group": Group.DEPLOY_GROUP},
 	UNDEPLOY: {"name": "Undeploy", "term": Glossary.Term.UNDEPLOY, "group": Group.DEPLOY_GROUP},
 	INSPECT: {"name": "Inspect", "term": Glossary.Term.INSPECT, "group": Group.INSPECT_GROUP},
 }
@@ -487,6 +490,10 @@ func populate(unit: Unit) -> Array:
 func _pre_mission_options(unit: Unit) -> Array:
 	var options := []
 	if unit.drawn_from_roster:
+		# Offered only when there is somewhere to go -- a one-cell zone, or a unit already on the only
+		# cell it could stand on, would otherwise open a pick with nothing lit.
+		if not game.mission_controller.reposition_cells(unit).is_empty():
+			options.append(REPOSITION)
 		options.append(UNDEPLOY)
 	if game.squad_manager.can_create_any_squad(unit):
 		options.append(SQUADUP)
@@ -554,6 +561,12 @@ func _dispatch(action_id: int, unit: Unit) -> void:
 		return
 
 	match action_id:
+		REPOSITION:
+			# The generic CELL pick (#116's form), not the dev tools' armed move: it takes the legal
+			# cells up front and MARKS them, so "deployment tiles only" is both enforced and visible
+			# rather than a silent refusal on a bad click.
+			game.enter_cell_pick_mode(game.mission_controller.reposition_cells(unit),
+				func(cell: Vector2i) -> void: game.mission_controller.reposition(unit, cell), true, true)
 		UNDEPLOY:
 			# #738's board-exit door, reached for the first time by something that is not a test.
 			# The ring only offers it for a drawn unit, so the gate is at _pre_mission_options.
