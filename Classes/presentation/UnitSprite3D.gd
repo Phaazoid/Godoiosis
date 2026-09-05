@@ -228,6 +228,12 @@ func is_animating() -> bool:
 # The delta arrives already scaled by Engine.time_scale, so #520's hitstop freezes the swing with
 # the world rather than needing to be told about it.
 func _process(delta: float) -> void:
+	# Hand `texture` back only if this clock BORROWED it. `set_process(false)` in _init does not
+	# survive entering the tree, so a fresh node ticks once with nothing playing -- and restoring
+	# state there wiped a pooled ghost's art on the frame it was built (#747).
+	if not _animator.is_playing():
+		set_process(false)
+		return
 	_animator.advance(delta)
 	if _animator.is_playing():
 		_show_animation_frame()
@@ -313,6 +319,14 @@ func _apply_state_texture() -> void:
 	var wanted := _state_texture()
 	if texture != wanted:
 		texture = wanted
+
+
+# A pooled planning ghost (UnitMirror.set_ghosts) shows ONE authored still and has no unit behind
+# it, so the state door has to answer with that still. Driving `texture` from outside instead left
+# `_state_texture()` answering null, and anything that re-applied state wiped the ghost (#747).
+func show_still(still: Texture2D) -> void:
+	_map_texture = still
+	_apply_state_texture()
 
 
 func _step_to_next_cell() -> void:
