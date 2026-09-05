@@ -21,6 +21,13 @@ var outcome: MissionRules.Outcome = MissionRules.Outcome.ONGOING
 var _contested := false
 var _ending := false   # _end_mission awaits the banner, so check() can re-enter behind it
 var _select_screen: MissionSelectScreen
+# The pre-mission screen (#740), open for exactly as long as _deploying is. Held rather than looked
+# up, the way _select_screen is, because game.menu_is_up() has to ask about it every frame.
+var _premission_screen: PreMissionScreen
+# The roster as ENTRY ORDER, which is the order #740's card grid draws in. Node order cannot answer
+# it: deploy_unit and undeploy_unit REPARENT, so units_root and reserve_root both reshuffle every
+# time the player changes their mind and the grid would reorder under them mid-decision.
+var _roster_units: Array[Unit] = []
 # Which CAPTURE zones have been claimed, by name. Battle-scoped, which is why it lives here and
 # not on ScenarioData: the zones are authored content, taking them is this battle's progress.
 var _captured_zones: Array[String] = []
@@ -63,6 +70,8 @@ var _battle_begun := false
 #   * CLEARED in reset(), which clear_board calls BEFORE its own exit_current_mode -- and that
 #     ordering is what makes F2, a board swap, Load Game and the next mission all leave the phase
 #     correctly, for free. Do not reorder those two.
+#   * The SCREEN (#740) opens and closes with it, and abandon_mission needs its own close: that
+#     path never reaches clear_board, so nothing else would ever take the screen down.
 #   * The HUD stand-down rides the SETTER, never commit. abandon_mission and resume_from_slot both
 #     leave the phase without passing through commit, so a hide written at commit would strand the
 #     next mission with no End Turn button (CameraController._set_playback_cinematic's shape).
@@ -111,6 +120,9 @@ func reset() -> void:
 	# Through the setter, so the HUD comes back up on every board teardown (#739). This is the edge
 	# that covers F2, a board swap, Load Game and Abandon -- none of which pass through commit.
 	_deploying = false
+	_close_deployment_menu()
+	# Dropped BEFORE clear_board frees these nodes, so nothing holds a reference into a dead board.
+	_roster_units.clear()
 	game.refresh_mission_status()
 
 # --- Mid-battle snapshot (#87) ---
@@ -208,6 +220,31 @@ func begin_mission(path: String, armed := true) -> void:
 func _open_deployment() -> void:
 	_deploying = true
 	game.clear_selection()   # -> _base_state(), which now answers PRE_MISSION
+	_premission_screen = PreMissionScreen.open(game, self)
+
+
+# THE screen's whole lifecycle, in one place because every path that ends the phase has to take it
+# (#740). Freeing rather than hiding: the screen holds references to Unit nodes the next
+# load_scenario frees, which is the #107 stale-reference shape.
+func _close_deployment_menu() -> void:
+	if is_instance_valid(_premission_screen):
+		_premission_screen.queue_free()
+	_premission_screen = null
+
+
+# Is the pre-mission menu on screen RIGHT NOW? game.menu_is_up() reads this, which is what puts the
+# board behind it out of reach -- see that function for why a full-rect Control is not enough.
+# Hidden (the board preview) reads FALSE on purpose: that is the whole point of the toggle.
+func deployment_menu_is_up() -> bool:
+	return is_instance_valid(_premission_screen) and _premission_screen.visible
+
+
+# The board preview, and back (#731 ruling 6). The screen is HIDDEN rather than freed so the
+# player's scroll position and any open row survive a look at the board.
+func toggle_deployment_menu() -> void:
+	if not is_instance_valid(_premission_screen):
+		return
+	_premission_screen.set_shown(not _premission_screen.visible)
 
 
 # The phase's one exit (#739). Refused with nothing on the board -- a mission cannot start with no
@@ -222,6 +259,7 @@ func commit_deployment() -> bool:
 		game.turn_banner.show_label("Deploy someone first")
 		return false
 	_deploying = false
+	_close_deployment_menu()
 	game.exit_current_mode()   # the phase's own ring/pick is over; rests on the new _base_state
 	game.scenario_director.mission_started()   # a commit is a fresh start (#182), same as the door above
 	_begin_turn()
@@ -246,6 +284,12 @@ func open_deployment_cells() -> Array[Vector2i]:
 			open_cells.append(cell)
 	return open_cells
 
+
+# The roster in ENTRY ORDER -- what #740's card grid iterates. Node order cannot serve: deploying
+# and undeploying REPARENT between units_root and reserve_root, so both lists reshuffle every time
+# the player changes their mind, and a grid drawn off them would reorder mid-decision.
+func roster_units() -> Array[Unit]:
+	return _roster_units
 
 # How many of the ROSTER are standing on the board -- what the cap counts, and what #743's strip
 # will read as the left half of "4 / 6". Authored units on the same board are not the roster's and
@@ -310,6 +354,7 @@ func deploy_roster() -> int:
 	# set the screen will later let the player choose from, rather than a second spawn path #740
 	# would have had to replace.
 	var unit_of_entry: Dictionary = {}   # ScenarioUnitEntry -> its reserve Unit
+	_roster_units.clear()
 	for entry: ScenarioUnitEntry in roster.entries:
 		# The same skip PreMission.deployment_plan makes, so the two loops agree about who exists.
 		if entry == null or entry.unit_data == null:
@@ -324,6 +369,7 @@ func deploy_roster() -> int:
 		if entry.state_saved:
 			entry.apply_unit_state(unit)   # the snapshot half of #177's fork, same as the loader's
 		unit_of_entry[entry] = unit
+		_roster_units.append(unit)   # entry order, and it must survive every later reparent
 
 	var deployed := 0
 	for row: Dictionary in PreMission.deployment_plan(roster.entries, open_cells,
@@ -415,6 +461,10 @@ func resume_from_slot(slot: int) -> void:
 # abandoned board is left standing on purpose: MissionSelectScreen's background is opaque, and the
 # next mission routes through load_scenario -> clear_board() like every other entry does.
 func abandon_mission() -> void:
+	# Abandon never reaches clear_board -- the board is deliberately left standing behind Mission
+	# Select's opaque backdrop -- so the phase's own screen has to be closed here or it outlives the
+	# mission it belongs to, holding units the NEXT load frees (#740, Fable).
+	_close_deployment_menu()
 	# exit_current_mode, not clear_selection: only the former nulls the STORED game.selected_unit
 	# (#107), and walking away from a board must not leave a reference into it -- the next
 	# load_scenario frees those Unit nodes. clear_selection sets game_state = IDLE on the way ...
