@@ -2,7 +2,7 @@
 
 **Status: ALL FOUR SLICES BUILT 2026-07-28 ([#96](https://github.com/Phaazoid/Godoiosis/issues/96)).** Filed 2026-07-27, when the project acquired a win condition for the first time. Before this, Iosis had ten interlocking systems and no way to finish a battle — which meant a design question could be answered *"is this coherent?"* but never *"does this improve play?"*
 
-**Canon checked through #768 (2026-09-05).**
+**Canon checked through #772 (2026-09-05).**
 
 ## What a mission is
 
@@ -73,6 +73,14 @@ The whole roster spawns as real `Unit` nodes, into **`game.reserve_root`** — b
 **Two extractions rather than second implementations.** `MissionStatusPanel.briefing_rows` is now the one builder for the objective and FAIL-IF rows, so the briefing *before* the battle and the status *during* it cannot word a condition differently. `UnitInstance.LIMB_SHORT`/`LIMB_FULL` moved beside the enum they name, `info_panel` being a scene script with no `class_name` whose vocabulary had gained a second reader.
 
 **Begin carries its own refusal.** `commit_deployment`'s "Deploy someone first" speaks through `TurnBanner`, a plain child of Game, while this screen sits on a `CanvasLayer` — so under the menu that banner cannot be seen at all, and a dead Begin button would be silent. It disables at zero with the reason on hover; the banner still covers the Enter-on-the-board path.
+
+**Repositioning is the board preview's own verb (#772).** Undeploy and the empty-cell click could change *who* was placed but not *where*, so moving one unit a single cell meant undeploy-then-redeploy, which puts them back on the first free cell rather than the chosen one. `Reposition` on the phase ring opens `game.enter_cell_pick_mode` over `MissionController.reposition_cells(unit)` — **the generic cell pick, not the dev tools' armed move**: it takes the legal cells up front and *marks* them, so "deployment tiles only" is enforced by construction and visible before the click, where `DevController.arm_move` carries no candidate set and refuses silently. #116's rescue haul already picks a destination cell this way.
+
+**Swapping is allowed** (dev, 2026-09-05): a cell another *roster-drawn* unit holds is a legal target and the two trade places. Authored units are not swappable, for the reason Undeploy is gated the same way — they are the board's, additive to the draw (ruling 2c).
+
+**And a reposition that breaks cohesion ejects the member there and then**, in the preview. `SquadManager.enforce_contact()` is the sweep, so this is not a new rule — it is a **third settle point** beside the end of a resolution pass and turn start, and the one the player reaches deliberately. The other two answer a displacement nobody chose; this answers the player placing a member out of their leader's reach on purpose, so the consequence is shown at the moment of the decision rather than a turn after it, with nothing on screen to connect it to.
+
+The ring paid for it: `DEPLOY_GROUP` held one verb and so collapsed to a terminal slice named for its only child, which a second verb breaks. It is **Placement** now — what the pair answers together, where the unit stands and whether it stands at all.
 
 **`MissionController._roster_units` keeps the roster in ENTRY order.** Deploying and undeploying *reparent* between `units_root` and `reserve_root`, so both lists reshuffle every time the player changes their mind and a grid drawn off either would reorder mid-decision. Worth knowing that this is currently belt-and-braces for the grid — `_refresh_cards` rebuilds only when the roster's size changes, so the order settles at build time either way — and is kept as the contract underneath rather than deleted; the store's own guarantee is what the suite pins.
 
