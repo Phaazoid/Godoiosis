@@ -252,6 +252,16 @@ func reseed_kit() -> bool:
 	_seed_starting_kit(unit_data_source)
 	return true
 
+# WHY this unit cannot take another thing -- "" means it can (#741, on #744's shape one layer up).
+# The inventory is a FIXED array of MAX_INVENTORY_SIZE nulls, so "full" means every slot is spoken
+# for rather than a length check. add_item's bare false is derived from this, so a refusal and the
+# sentence explaining it cannot drift.
+func add_block_reason(_item: Item) -> String:
+	for slot: Item in inventory:
+		if slot == null:
+			return ""
+	return "%s is carrying %d of %d." % [get_unit_name(), MAX_INVENTORY_SIZE, MAX_INVENTORY_SIZE]
+
 func add_item(item: Item) -> bool:
 	for i in range(inventory.size()):
 		if inventory[i] == null:
@@ -284,16 +294,22 @@ func get_move_texture() -> Texture2D:
 func get_unit_name() -> String:
 	return unit_data.display_name
 
+# WHY this slot cannot be emptied -- "" means it can (#741). The prosthetic rule used to be a silent
+# early return here, which meant anything BUILT on it had to re-ask is_installed_prosthetic and word
+# its own refusal: a second gate on one rule, the shape #744 spent a ticket collapsing.
+func remove_block_reason(index: int) -> String:
+	if index < 0 or index >= inventory.size() or inventory[index] == null:
+		return "There is nothing in that slot."
+	var weapon := inventory[index] as WeaponInstance
+	if weapon != null and unit_instance.is_installed_prosthetic(weapon):
+		return "%s is a fitted limb, not carried gear." % weapon.display_name
+	return ""
+
 func remove_item(index: int):
-	if index < 0 or index >= inventory.size():
+	# An installed prosthetic is load-bearing gear, not loose inventory — it can't be dropped.
+	if remove_block_reason(index) != "":
 		return
 	var item := inventory[index]
-	if item == null:
-		return
-	# An installed prosthetic is load-bearing gear, not loose inventory — it can't be dropped.
-	var weapon := item as WeaponInstance
-	if weapon != null and unit_instance.is_installed_prosthetic(weapon):
-		return
 	if item == equipped_weapon:
 		equipped_weapon = null
 	if item == worn_armor:

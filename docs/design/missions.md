@@ -106,7 +106,47 @@ The ring paid for it: `DEPLOY_GROUP` held one verb and so collapsed to a termina
 
 **`MissionController._roster_units` keeps the roster in ENTRY order.** Deploying and undeploying *reparent* between `units_root` and `reserve_root`, so both lists reshuffle every time the player changes their mind and a grid drawn off either would reorder mid-decision. Worth knowing that this is currently belt-and-braces for the grid — `_refresh_cards` rebuilds only when the roster's size changes, so the order settles at build time either way — and is kept as the contract underneath rather than deleted; the store's own guarantee is what the suite pins.
 
-Still deferred: #741's gear moves, #742's job picker, #744's reasons, #745's tooltip pass. Weight reads 0 for everyone until #120's authoring pass (dev's call — the slot is shown so the gap is visible rather than forgotten).
+Still deferred: #742's job picker and #745's tooltip pass. Weight reads 0 for everyone until #120's authoring pass (dev's call — the slot is shown so the gap is visible rather than forgotten).
+
+### Gear moves, and the stash that owns it ([#741](https://github.com/Phaazoid/Godoiosis/issues/741))
+
+**The phase's gear is a COPY, and `Loadout` is what holds it.** The stash used to be read straight off
+whatever `RosterCatalog.resolve()` returned, and that is Godot's resource **cache** — the same object
+for every resolve in a session. The first item moved out would have depleted the authored `Roster` for
+every mission after it, which is ruling 3 broken by one drag. Nothing on disk was ever at risk (nothing
+saves a roster); the cached object was. `Loadout.from_roster` copies through `copy_equippable()`, the
+same grant the unit side already made in `apply_unit_state`, and `MissionController` builds one in
+`deploy_roster` — where the Roster is already in hand — and drops it in `reset()`, the pair of edges
+`_roster_units` lives on.
+
+**Four directions are ONE function, because the stash is a null owner at either end.** `move(item,
+from, to)` with `null` meaning the stash covers stash→unit, unit→stash and unit→unit without three
+near-copies, and a drop back where it started is a no-op rather than a refusal — a drag lands on its
+own row constantly.
+
+**One rule, two inputs.** Clicking and dragging both ask `move_block_reason` and both act through
+`move()`. A drag that judged for itself would be a second answer to "may this move" — the shape #744
+had just finished collapsing one layer down, and the reason `GearDropZone` takes its judge and its act
+as callables rather than reaching for the screen.
+
+**Both refusals are the OWNING END's own sentence**, which is why `Unit` grew `add_block_reason` and
+`remove_block_reason` with `add_item`'s bare `false` and `remove_item`'s silent prosthetic guard
+derived from them. An installed prosthetic sits *in* the inventory, so a mover that did not read that
+guard would let a player trade away someone's arm — and a mover that re-asked `is_installed_prosthetic`
+and worded its own sentence would be the second gate #744 exists to prevent.
+
+**A REDRAW NEVER RUNS INSIDE THE CLICK THAT CAUSED IT.** Every handler is reached from a row's own
+signal, and a refresh frees every row to rebuild them — the emitting one included, which Godot refuses
+outright ("Attempted to free a locked object"). The first move a player made would have errored rather
+than happened. `PreMissionScreen._redraw` defers, and that is a rule for any surface that rebuilds
+itself in response to one of its own children.
+
+**The selection is DATA, never a row.** A successful move frees every row on screen, so a selection
+holding a node dangles at the exact moment the feature starts working (#107's shape).
+
+**The stash shows what a piece DEMANDS, never whether it fits** (dev, 2026-09-05). `requirement_text`
+is the wielder-free question and the only one a list of loose gear can answer; the wielder-relative
+sentence stays on the card, where there is a unit to validate against.
 
 ## Objectives: declared explicitly, located by zones
 
