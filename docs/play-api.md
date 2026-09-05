@@ -165,6 +165,9 @@ unattended playtest needs blanket approval — which removes the guard that stop
 supposed to be *playing* the game from editing it. One batch per turn, through `send.sh`, keeps the
 whole allowlist to two entries.
 
+**Running a playtest experiment** — isolating an unattended session, what to measure, and the
+several ways an obvious setup produces a wrong answer: [`playtest-experiments.md`](playtest-experiments.md).
+
 **The opponent acts (#665).** `endturn` runs the incoming faction's AI when the board declares it in
 `ScenarioData.ai_factions`, and reports what it did as an event log — the same account `execute`
 gives of your own pass:
