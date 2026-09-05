@@ -801,9 +801,10 @@ func _resolve_actions(squad: Squad, actions: Array[BaseAction], board: BoardCont
 			# land (#50). Units are a CONSEQUENCE of the aimed cells, not the gate.
 			var cell_attack := AttackAction.create(aim.actor, origin, null, aim.target_cell)
 			cell_attack.fired_attack = aim.fired_attack
+			cell_attack.footprint = affected
 			group.append(cell_attack)
 		else:
-			group = AttackAction.create_volley(aim.actor, origin, aim.target_cell, victims, aim.fired_attack)
+			group = AttackAction.create_volley(aim.actor, origin, aim.target_cell, victims, aim.fired_attack, affected)
 
 		# Back-link every derived action to the order that produced it -- read by the whiff clause
 		# and the queue row's tint. One place, so a new expansion branch can't forget it.
@@ -853,7 +854,7 @@ func _resolve_actions(squad: Squad, actions: Array[BaseAction], board: BoardCont
 		var healing := c_attack != null and c_attack.heals
 		var c_affected := Reach.get_affected_cells_from(aim.actor, c_origin, c_aim_cell, c_attack, board)
 		var c_victims := RulesService.gather_attack_victims(aim.actor, c_affected, board, c_attack, healing)
-		for ctr in CounterAttackAction.create_counter_volley(aim.actor, c_origin, c_victims, aim.source_attack):
+		for ctr in CounterAttackAction.create_counter_volley(aim.actor, c_origin, c_victims, aim.source_attack, c_affected):
 			plan.counters.append(ctr)
 	# Phase 2: counters, now built from post-shove positions.
 	PlanResolver.resolve_counters(plan, hypo, reactions, board, terrain_reactions)

@@ -35,7 +35,7 @@ func get_action_icon() -> Texture2D:
 	var lethal := lethality_icon(resolved)
 	return lethal if lethal != null else COUNTER_ATTACK_ICON
 
-static func create_counter_volley(counter_unit: Unit, origin: Vector2i, victims: Array[Unit], source: AttackAction) -> Array[CounterAttackAction]:
+static func create_counter_volley(counter_unit: Unit, origin: Vector2i, victims: Array[Unit], source: AttackAction, footprint: Array[Vector2i]) -> Array[CounterAttackAction]:
 	var counters: Array[CounterAttackAction] = []
 	var volley: Array[AttackAction] = []
 	# The attack this unit fires reactively: a rune counters with whatever it would currently
@@ -47,6 +47,7 @@ static func create_counter_volley(counter_unit: Unit, origin: Vector2i, victims:
 		var counter := CounterAttackAction.new()
 		counter.init_counter(counter_unit, victim, origin, source)
 		counter.fired_attack = chosen
+		counter.footprint = footprint
 		counter.is_secondary_hit = not counters.is_empty()   # only the first lunges
 		counters.append(counter)
 		volley.append(counter)

@@ -135,8 +135,9 @@ var beats: Array[Beat] = []
 # by construction, so they are never gathered separately.
 var cast: Array[Unit] = []
 
-# Every cell a MAIN ACTION touches: attacker origins, aimed cells, whole knockback flights and their
-# landings, terrain deposits, and the actor and target of every side-channel verb. Slice #521's
+# Every cell a MAIN ACTION touches: attacker origins, the blast's WHOLE FOOTPRINT (occupied or not,
+# #754 -- a volley's members all share one aim cell, so the aim alone left every secondary victim
+# and the ground under the beam on the board), whole knockback flights and their landings, terrain deposits, and the actor and target of every side-channel verb. Slice #521's
 # tear-out set is exactly this, computed once here rather than again there.
 #
 # MOVEMENT CONTRIBUTES NOTHING, and that is the rule rather than an omission (dev, 2026-08-26):
@@ -334,6 +335,9 @@ func _gather_cells(plan: ResolvedPlan) -> void:
 				continue
 			_mark(attack.origin_cell, seen)
 			_mark(attack.target_cell, seen)
+			# Origin and aim stay beside the footprint: a truncated line (#756) can cut its own aim cell.
+			for cell in attack.footprint:
+				_mark(cell, seen)
 			var out := attack.resolved
 			if out == null or not out.knockback_applied:
 				continue

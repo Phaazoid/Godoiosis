@@ -66,7 +66,7 @@ func _resolve_aim(attacker: Unit, aim: AttackAction, units: Array[Unit]) -> Reso
 	var affected: Array[Vector2i] = Reach.get_affected_cells_from(attacker, aim.origin_cell, aim.target_cell, aim.fired_attack, null)
 	var victims: Array[Unit] = RulesService.gather_attack_victims(attacker, affected, _board(units), aim.fired_attack)
 	var plan: ResolvedPlan = ResolvedPlan.new()
-	for a in AttackAction.create_volley(attacker, aim.origin_cell, aim.target_cell, victims, aim.fired_attack):
+	for a in AttackAction.create_volley(attacker, aim.origin_cell, aim.target_cell, victims, aim.fired_attack, affected):
 		plan.attacks.append(a)
 	var no_reactions: Array[ElementalReaction] = []
 	PlanResolver.resolve(plan, no_reactions)

@@ -29,7 +29,10 @@ func after_test() -> void:
 
 # Make a tracked volley (so after_test can release its cycle).
 func _make_volley(attacker: Unit, aim: Vector2i, victims: Array[Unit]) -> Array[AttackAction]:
-	var volley := AttackAction.create_volley(attacker, attacker.movement.cell, aim, victims)
+	var footprint: Array[Vector2i] = []
+	for victim in victims:
+		footprint.append(victim.movement.cell)
+	var volley := AttackAction.create_volley(attacker, attacker.movement.cell, aim, victims, null, footprint)
 	_volleys.append(volley)
 	return volley
 

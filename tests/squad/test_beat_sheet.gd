@@ -113,6 +113,77 @@ func test_the_cast_holds_every_member_of_every_participating_squad() -> void:
 	_break_volleys(plan)
 
 
+
+# THE BLAST'S WHOLE FOOTPRINT IS ON STAGE, occupied or not (dev, 2026-09-05: "definitely B", #754).
+# create_volley stamps every member with the ONE aim cell, so marking target_cell put a line's lead
+# victim on stage and left the rest -- and the empty ground under the beam -- on the board forty
+# cells below the camera. The report's shape: four hits down a column, staged 2.
+func test_a_volley_puts_its_whole_footprint_on_stage() -> void:
+	var attacker := H.spawn_solo(self, _sm, PLAYER, Vector2i(0, 0), {Stats.Stat.LDR: 3})
+	_give_a_line(attacker, 3)
+	var near := H.spawn_solo(self, _sm, ENEMY, Vector2i(1, 0), {Stats.Stat.LDR: 3})
+	var far := H.spawn_solo(self, _sm, ENEMY, Vector2i(3, 0), {Stats.Stat.LDR: 3})
+	_sm.active_squad = attacker.squad
+	attacker.squad._queue_action(AttackAction.declare(attacker, attacker.movement.cell, Vector2i(1, 0)))
+
+	var plan := _sm.resolve_plan(attacker.squad, _board_with([attacker, near, far]))
+	var sheet := BeatSheet.read(attacker.squad, plan)
+
+	# Non-vacuity: the line reached both of them, or the far cell proves nothing.
+	assert_int(plan.attacks.size()).override_failure_message(
+			"fixture drifted: the line did not hit both").is_equal(2)
+	for cell: Vector2i in [Vector2i(1, 0), Vector2i(2, 0), Vector2i(3, 0)]:
+		assert_bool(sheet.cells.has(cell)).override_failure_message(
+				"%s is not on stage: %s" % [cell, sheet.cells]).is_true()
+	_break_volleys(plan)
+
+
+# A counter's footprint comes along too: the foe answers with a line, and the open ground its beam
+# crosses past the attacker lifts with the fight.
+func test_a_counters_footprint_is_on_stage() -> void:
+	var attacker := H.spawn_solo(self, _sm, PLAYER, Vector2i(2, 0), {Stats.Stat.LDR: 3})
+	var foe := H.spawn_solo(self, _sm, ENEMY, Vector2i(3, 0), {Stats.Stat.LDR: 3})
+	_give_a_line(foe, 2)
+	_sm.active_squad = attacker.squad
+	attacker.squad._queue_action(AttackAction.declare(attacker, attacker.movement.cell, Vector2i(3, 0)))
+
+	var plan := _sm.resolve_plan(attacker.squad, _board_with([attacker, foe]))
+	var sheet := BeatSheet.read(attacker.squad, plan)
+
+	assert_array(plan.counters).override_failure_message(
+			"fixture drifted: nobody countered").is_not_empty()
+	# The foe fires back along -x: (2, 0) is the attacker, (1, 0) is open ground under the beam.
+	assert_bool(sheet.cells.has(Vector2i(1, 0))).override_failure_message(
+			"the counter's empty cell is not on stage: %s" % [sheet.cells]).is_true()
+	_break_volleys(plan)
+
+
+# A swing at open ground (#47) stages its footprint: the cell-attack branch is the one a volley
+# case cannot reach, and it fires over the same ground.
+func test_a_swing_at_open_ground_stages_its_footprint() -> void:
+	var attacker := H.spawn_solo(self, _sm, PLAYER, Vector2i(0, 0), {Stats.Stat.LDR: 3})
+	_give_a_line(attacker, 3)
+	_sm.active_squad = attacker.squad
+	attacker.squad._queue_action(AttackAction.declare(attacker, attacker.movement.cell, Vector2i(1, 0)))
+
+	var plan := _sm.resolve_plan(attacker.squad, _board_with([attacker]))
+	var sheet := BeatSheet.read(attacker.squad, plan)
+
+	assert_int(plan.attacks.size()).is_equal(1)
+	assert_object(plan.attacks[0].target).override_failure_message(
+			"fixture drifted: somebody was hit").is_null()
+	for cell: Vector2i in [Vector2i(1, 0), Vector2i(2, 0), Vector2i(3, 0)]:
+		assert_bool(sheet.cells.has(cell)).override_failure_message(
+				"%s is not on stage: %s" % [cell, sheet.cells]).is_true()
+	_break_volleys(plan)
+
+
+# A line of the given length on the unit's own template, so declare() fires it.
+func _give_a_line(unit: Unit, length: int) -> void:
+	var line := ForwardLinePattern.new()
+	line.length = length
+	var weapon: WeaponInstance = unit.get_equipped_weapon() as WeaponInstance
+	weapon.template.main_attack.attack_pattern = line
 # --- fact cases: hand-built plans -----------------------------------------------------------
 
 # One blast is one shot however many it hits -- #410 rules an AoE striking three victims a single
@@ -157,7 +228,7 @@ func test_a_three_victim_volley_is_one_beat_in_strike_order() -> void:
 	var plan := ResolvedPlan.new()
 	var victims: Array[Unit] = [a, b, c]
 	plan.attacks.assign(AttackAction.create_volley(attacker, Vector2i(0, 0), Vector2i(1, 0),
-			victims, attacker.get_equipped_weapon().template.main_attack))
+			victims, attacker.get_equipped_weapon().template.main_attack, _cells_of(victims)))
 
 	var sheet := BeatSheet.read(attacker.squad, plan)
 	var volleys := _of_kind(sheet, BeatSheet.Kind.VOLLEY)
@@ -195,7 +266,7 @@ func test_an_all_skipped_counter_phase_produces_no_beats_and_no_turnover() -> vo
 	var source := H.stamped_attack(attacker, foe)
 	plan.attacks.append(source)
 	var victims: Array[Unit] = [attacker]
-	for counter in CounterAttackAction.create_counter_volley(foe, Vector2i(1, 0), victims, source):
+	for counter in CounterAttackAction.create_counter_volley(foe, Vector2i(1, 0), victims, source, _cells_of(victims)):
 		counter.resolved = ResolvedOutcome.new()
 		counter.resolved.skipped = true
 		plan.counters.append(counter)
@@ -382,7 +453,7 @@ func test_a_volley_gets_ONE_hold_on_the_action_that_opens_it() -> void:
 	var plan := ResolvedPlan.new()
 	var victims: Array[Unit] = [a, b, c]
 	plan.attacks.assign(AttackAction.create_volley(attacker, Vector2i(0, 0), Vector2i(1, 0),
-			victims, attacker.get_equipped_weapon().template.main_attack))
+			victims, attacker.get_equipped_weapon().template.main_attack, _cells_of(victims)))
 
 	var sheet := BeatSheet.read(attacker.squad, plan)
 	var executor := OrderExecutor.new()
@@ -420,7 +491,7 @@ func test_a_volley_lingers_ONCE_after_the_action_that_closes_it() -> void:
 	var plan := ResolvedPlan.new()
 	var victims: Array[Unit] = [a, b, c]
 	plan.attacks.assign(AttackAction.create_volley(attacker, Vector2i(0, 0), Vector2i(1, 0),
-			victims, attacker.get_equipped_weapon().template.main_attack))
+			victims, attacker.get_equipped_weapon().template.main_attack, _cells_of(victims)))
 
 	var sheet := BeatSheet.read(attacker.squad, plan)
 	var executor := OrderExecutor.new()
@@ -620,6 +691,15 @@ func _beat_of_a_hit_on_an_ally(healing: bool) -> BeatSheet.Beat:
 	return beat
 
 
+# A hand-built volley's footprint: the ground its victims stand on, which is all a fictional blast
+# can honestly claim.
+func _cells_of(units: Array[Unit]) -> Array[Vector2i]:
+	var cells: Array[Vector2i] = []
+	for unit in units:
+		cells.append(unit.movement.cell)
+	return cells
+
+
 func _board_with(units_in: Array) -> BoardContext:
 	var units: Array[Unit] = []
 	units.assign(units_in)
@@ -661,7 +741,7 @@ func test_the_emphasis_schedule_keys_on_the_action_that_OPENS_a_beat() -> void:
 	var plan := ResolvedPlan.new()
 	var victims: Array[Unit] = [a, b]
 	plan.attacks.assign(AttackAction.create_volley(attacker, Vector2i(0, 0), Vector2i(1, 0),
-			victims, attacker.get_equipped_weapon().template.main_attack))
+			victims, attacker.get_equipped_weapon().template.main_attack, _cells_of(victims)))
 
 	var sheet := BeatSheet.read(attacker.squad, plan)
 	var executor := OrderExecutor.new()
@@ -692,7 +772,7 @@ func test_every_beat_publishes_an_emphasis_INCLUDING_zero() -> void:
 	var plan := ResolvedPlan.new()
 	var victims: Array[Unit] = [victim]
 	plan.attacks.assign(AttackAction.create_volley(attacker, Vector2i(0, 0), Vector2i(1, 0),
-			victims, attacker.get_equipped_weapon().template.main_attack))
+			victims, attacker.get_equipped_weapon().template.main_attack, _cells_of(victims)))
 
 	var sheet := BeatSheet.read(attacker.squad, plan)
 	var executor := OrderExecutor.new()
