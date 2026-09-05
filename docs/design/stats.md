@@ -117,7 +117,11 @@ armour moves CON, which moves max HP.
 The gate step carries a **second, parallel clause** since [#157](https://github.com/Phaazoid/Godoiosis/issues/157)
 (2026-08-10): the equipped rune's channel gate (`EquippableData.can_equip` — read from **aura +
 affinity**, a different input than the body, still never gear), so a maim's aura tax strips a
-dead rune in the same single no-cascade pass that strips under-gated armour. Deliberately a
+dead rune in the same single no-cascade pass that strips under-gated armour. Since
+[#744](https://github.com/Phaazoid/Godoiosis/issues/744) both clauses are **derived** — each kind
+overrides `can_equip_reason` and the base computes the boolean from it — so the sweep that strips
+gear and the sentence that explains why can never disagree about a piece. The sweep runs on every
+stat settle, so both reasons build their string only on the refusal branch. Deliberately a
 sibling check, **not** a new clause inside `stat_minimums`/`stat_maximums` — folding it in would
 be a second answer to "what disqualifies worn gear" wearing one name. Doctrine:
 [alchemy-kit.md](alchemy-kit.md) → *Channeling*.
