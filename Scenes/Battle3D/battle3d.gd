@@ -294,10 +294,13 @@ func rebuild() -> void:
 	heights.dirty.clear()
 
 
-# _tops and _board_rect are one fact in two shapes — never write one without the other.
+# _tops and _board_rect are one fact in two shapes — never write one without the other. The dust's
+# cull box is a THIRD shape of it (#656 round 2), so it is re-derived wherever the rect is written:
+# here for a wholesale rebuild, and at the incremental sync's own rect compare for a brush stroke.
 func _refresh_tops() -> void:
 	_tops = BoardPicker.column_tops_from($Board)
 	_board_rect = BoardPicker.used_rect(_tops)
+	_cover_with_dust(_board_volume())
 
 
 # The live terrain poll (#231). Confined to DEV_MODE on purpose: the sim never paints
@@ -536,7 +539,7 @@ func _sync_terrain_while_authoring() -> void:
 		_board_mirror.sync_cells(game.grid, cells, heights, floor_row)
 		_update_tops(cells, floor_row)
 	if _board_rect != before:
-		_rig.rebound(_board_volume())
+		_board_extent_changed()
 
 
 # The incremental twin of _refresh_tops, and it must keep the SAME invariant that one states:
@@ -576,6 +579,7 @@ func _update_tops(columns: Array[Vector2i], floor_row: int) -> void:
 # it simply retires the width knob for that board.
 func fit_camera() -> void:
 	var board := _board_volume()
+	_cover_with_dust(board)
 	var start: CameraPose = game.scenario_manager.current_camera_start
 	if start != null:
 		_rig.pose(start.aim, start.yaw_degrees, start.distance, board)
@@ -619,6 +623,23 @@ func _opening_volume(board: AABB) -> AABB:
 	return AABB(
 		Vector3(center.x - span * 0.5, board.position.y, center.y - span * 0.5),
 		Vector3(span, board.size.y, span))
+
+
+# Everything that has to be re-derived when the board's EXTENT moves -- a brush stroke growing or
+# shrinking the footprint. One door rather than a call per consumer, because the second consumer is
+# what proved it was needed: the dust's cull box is invisible when it is wrong (#656 round 2), so a
+# site that remembered the camera and forgot the particles would look entirely correct.
+func _board_extent_changed() -> void:
+	var board := _board_volume()
+	_rig.rebound(board)
+	_cover_with_dust(board)
+
+
+# The dust's cull box follows the board (#656 round 2). Not folded into _board_volume(), which is a
+# QUERY -- three callers read it and only two of them mean "the extent just moved".
+func _cover_with_dust(board: AABB) -> void:
+	if _staging_dust != null:
+		_staging_dust.cover(board)
 
 
 # The volume the camera must see, derived from the picker's column tops rather than the

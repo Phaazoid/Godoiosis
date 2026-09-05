@@ -227,6 +227,52 @@ func test_the_emitter_never_emits_on_its_own() -> void:
 			).is_false()
 
 
+# THE ONE THAT SHIPPED BROKEN, and the reason it needed finding by eye: a GPUParticles3D is culled
+# by its own visibility_aabb, which defaults to eight cells around the emitter -- and this emitter
+# sits at the Battle3D origin while the diorama is STAGE_LIFT overhead. Every entry puff was
+# emitted, simulated and drawn NOWHERE. Measured in an offline render: 0 lit pixels as shipped,
+# 1248 for the identical burst inside a box that contains it.
+#
+# A headless suite cannot see a pixel, so this asserts the CPU-side fact that stands in for one --
+# the box contains the point a puff is actually thrown at. Both levels, because the effect is
+# direction-blind and the two arms are a lift apart.
+func test_the_cull_box_contains_the_puffs_at_both_the_board_and_the_diorama() -> void:
+	var dust := _dust()
+	var cell := _cells(1)[0]
+	var heights: BoardHeights = _game.board_heights
+	var box := dust.visibility_aabb
+	assert_bool(box.has_volume()).override_failure_message(
+			"the emitter has no cull box at all, so nothing it emits can be drawn").is_true()
+
+	var on_the_board := BoardSpace.surface_point(cell, heights)
+	assert_bool(box.has_point(on_the_board - dust.global_position)).override_failure_message(
+			"an EXIT puff at %s falls outside the cull box %s" % [on_the_board, box]).is_true()
+	var in_the_diorama := on_the_board + BoardSpace.stage_offset()
+	assert_bool(box.has_point(in_the_diorama - dust.global_position)).override_failure_message(
+			"an ENTRY puff at %s falls outside the cull box %s -- this is the bug that shipped, "
+			+ "and no knob can beat it" % [in_the_diorama, box]).is_true()
+
+
+# ...and it has to FOLLOW the board, or painting past the old edge culls the dust there while every
+# puff inside the original footprint goes on working -- the half a fixed box would hide.
+func test_the_cull_box_follows_a_board_that_grows() -> void:
+	var dust := _dust()
+	var before := dust.visibility_aabb
+	var far := Vector2i(60, 60)
+	var out_there := BoardSpace.surface_point(far, _game.board_heights) + BoardSpace.stage_offset()
+	assert_bool(before.has_point(out_there - dust.global_position)).override_failure_message(
+			"this case is vacuous -- the cell it paints is already inside the box").is_false()
+
+	var seed_cell: Vector2i = _game.grid.get_used_cells()[0]
+	_game.grid.paint(far, _game.grid.get_cell_source_id(seed_cell),
+			_game.grid.get_cell_atlas_coords(seed_cell))
+	_scene.rebuild()
+	await _settle()
+	assert_bool(dust.visibility_aabb.has_point(out_there - dust.global_position)) \
+		.override_failure_message("the board grew and the cull box did not follow, so dust on the "
+			+ "new ground is culled").is_true()
+
+
 # The other measured cap: emit_particle past `amount` is dropped with no error, so a busy board
 # silently stops throwing dust. Sized from the knob rather than authored, so moving the knob cannot
 # leave the buffer behind.
