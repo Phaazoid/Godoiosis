@@ -31,6 +31,11 @@ var _premission_bar: PreMissionBar
 # it: deploy_unit and undeploy_unit REPARENT, so units_root and reserve_root both reshuffle every
 # time the player changes their mind and the grid would reorder under them mid-decision.
 var _roster_units: Array[Unit] = []
+# The phase's LIVE gear (#741) -- the stash as copies, plus the one judge every move goes through.
+# Built beside the draw below, where the Roster is already in hand, and dropped on the same edge
+# _roster_units is: a stash read off the resolved resource would be Godot's cache, and the first move
+# out of it would deplete the authored roster for the rest of the session.
+var _loadout: Loadout = Loadout.new()
 # Which CAPTURE zones have been claimed, by name. Battle-scoped, which is why it lives here and
 # not on ScenarioData: the zones are authored content, taking them is this battle's progress.
 var _captured_zones: Array[String] = []
@@ -126,6 +131,7 @@ func reset() -> void:
 	_close_deployment_menu()
 	# Dropped BEFORE clear_board frees these nodes, so nothing holds a reference into a dead board.
 	_roster_units.clear()
+	_loadout = Loadout.new()   # the phase's gear dies with the phase (#731 ruling 3)
 	game.refresh_mission_status()
 
 # --- Mid-battle snapshot (#87) ---
@@ -378,6 +384,12 @@ func reposition(unit: Unit, cell: Vector2i) -> bool:
 # The roster in ENTRY ORDER -- what #740's card grid iterates. Node order cannot serve: deploying
 # and undeploying REPARENT between units_root and reserve_root, so both lists reshuffle every time
 # the player changes their mind, and a grid drawn off them would reorder mid-decision.
+# The phase's gear, for the screen that edits it. Never null: an empty Loadout is what a board with
+# no roster has, and a surface asking a null one is a crash a missing stash does not deserve.
+func loadout() -> Loadout:
+	return _loadout
+
+
 func roster_units() -> Array[Unit]:
 	return _roster_units
 
@@ -445,6 +457,7 @@ func deploy_roster() -> int:
 	# would have had to replace.
 	var unit_of_entry: Dictionary = {}   # ScenarioUnitEntry -> its reserve Unit
 	_roster_units.clear()
+	_loadout = Loadout.from_roster(roster)
 	for entry: ScenarioUnitEntry in roster.entries:
 		# The same skip PreMission.deployment_plan makes, so the two loops agree about who exists.
 		if entry == null or entry.unit_data == null:
