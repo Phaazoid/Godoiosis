@@ -156,6 +156,17 @@ func leave_squad(unit: Unit):
 	_detach_from_current_squad(unit)
 	create_squad(unit)
 
+# The detach WITHOUT the re-solo (#738) -- for a unit that is leaving the BOARD, not just its squad.
+# leave_squad directly above cannot serve that: it exists for a unit that stays standing (downed
+# ejection, loss of contact), so it hands out a fresh solo squad, and using it to undeploy would
+# leave a live Squad holding a unit in the reserve and emit squad_created on the way out.
+#
+# This is the ONE exception to handle_unit_downed's invariant that every unit is in exactly one
+# squad, and the scope of the exception is exactly "is it on the board": game.deploy_unit gives a
+# squad back on the way in.
+func release(unit: Unit):
+	_detach_from_current_squad(unit)
+
 # #151's loss-of-contact backstop: a member whose SETTLED position cannot path to its leader within
 # COH leaves into a solo squad -- you cannot command what you cannot see or hear. Movement can no
 # longer author a split (the validator refuses it), so what reaches here is displacement the plan

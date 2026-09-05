@@ -161,8 +161,9 @@ func begin_mission(path: String, armed := true) -> void:
 		game.scenario_director.disarm()
 	_begin_turn()
 
-# The pre-mission phase, as much of it as exists (#737). A board that names a Roster (#735) draws
-# from it onto its DEPLOYMENT zone (#736), up to its cap, and then plays. Returns how many stood up.
+# The pre-mission phase, as much of it as exists (#737). A board that names a Roster (#735) spawns
+# ALL of it (#738) and draws from that onto its DEPLOYMENT zone (#736), up to its cap, and then
+# plays. Returns how many stood up; the rest wait in game.reserve_root until clear_board frees them.
 #
 # The PLAYER does not linger here yet (dev, 2026-09-04): the screen that would let them choose is
 # #740-#743, so until it lands the draw IS the choice and the mission starts straight after. What
@@ -202,18 +203,40 @@ func deploy_roster() -> int:
 		if game.can_spawn_at(cell):
 			open_cells.append(cell)
 
+	# The WHOLE roster spawns, deployed or not (#738), into game.reserve_root -- so a card on #740's
+	# screen is a real Unit and every wielder-taking predicate serves it unchanged. It is also what
+	# makes this the ONE way a roster unit reaches the board: the draw below deploys out of the same
+	# set the screen will later let the player choose from, rather than a second spawn path #740
+	# would have had to replace.
+	var unit_of_entry: Dictionary = {}   # ScenarioUnitEntry -> its reserve Unit
+	for entry: ScenarioUnitEntry in roster.entries:
+		# The same skip PreMission.deployment_plan makes, so the two loops agree about who exists.
+		if entry == null or entry.unit_data == null:
+			continue
+		# Un-duplicated, exactly as apply_scenario passes it (#177): UnitFactory copies anyway, and
+		# an outer duplicate destroys the resource_path a reference entry exists to keep.
+		var unit: Unit = game.spawn_reserve_unit(entry.unit_data)
+		# Marked here rather than at deploy, so deploy_unit stays a pure board-entry that knows
+		# nothing about rosters -- and so an undeployed unit carries the mark too, for whenever
+		# something starts asking.
+		unit.drawn_from_roster = true
+		if entry.state_saved:
+			entry.apply_unit_state(unit)   # the snapshot half of #177's fork, same as the loader's
+		unit_of_entry[entry] = unit
+
 	var deployed := 0
 	for row: Dictionary in PreMission.deployment_plan(roster.entries, open_cells,
 			scenario_manager.current_deployment_cap):
 		var entry: ScenarioUnitEntry = row[PreMission.ENTRY]
-		# Un-duplicated, exactly as apply_scenario passes it (#177): UnitFactory copies anyway, and
-		# an outer duplicate destroys the resource_path a reference entry exists to keep.
-		var unit: Unit = game.spawn_unit(entry.unit_data, row[PreMission.CELL])
+		var unit: Unit = unit_of_entry.get(entry)
 		if unit == null:
+			continue
+		if not game.deploy_unit(unit, row[PreMission.CELL]):
 			continue   # the cells were filtered, so this is a bug rather than a blocked cell
-		unit.drawn_from_roster = true
-		if entry.state_saved:
-			entry.apply_unit_state(unit)   # the snapshot half of #177's fork, same as the loader's
+		# One unit per entry: a file hand-edited to list the same sub-resource twice would otherwise
+		# try to deploy it a second time. It spends a slot and says nothing, which is the right
+		# volume for authoring nonsense RosterLint has not been taught to name.
+		unit_of_entry.erase(entry)
 		deployed += 1
 
 	if deployed > 0:
