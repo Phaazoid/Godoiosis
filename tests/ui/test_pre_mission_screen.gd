@@ -200,7 +200,7 @@ func test_a_board_swap_closes_the_screen() -> void:
 
 # --- the card grid ---
 
-func test_the_grid_draws_one_card_per_roster_member_in_entry_order() -> void:
+func test_the_grid_draws_one_card_per_roster_member() -> void:
 	if not await _enter_phase():
 		return
 	var roster: Array[Unit] = mc.roster_units()
@@ -209,11 +209,46 @@ func test_the_grid_draws_one_card_per_roster_member_in_entry_order() -> void:
 	var cards := _cards()
 	assert_int(cards.size()).override_failure_message(
 		"the grid and the roster disagree about who exists").is_equal(roster.size())
-	# ENTRY order, not node order: deploying reparents between units_root and reserve_root, so a grid
-	# drawn off either list reshuffles under the player every time they change their mind.
 	for i in range(cards.size()):
 		assert_object(cards[i].unit).override_failure_message(
 			"card %d is not the %d'th roster entry" % [i, i]).is_same(roster[i])
+
+
+# THE case the entry-order store exists for, and the one an obvious version of it cannot see.
+#
+# Asserting the order at phase start is VACUOUS: the draw places the first N entries and leaves the
+# rest in the reserve, both in entry order, so node order and entry order agree exactly at the only
+# moment such a case looks. They diverge only once the player CHANGES THEIR MIND -- undeploying
+# somebody reparents them to the end of the reserve -- which is what this drives before asking.
+#
+# (Measured: a mutant deriving roster_units() from node order passes an assert-at-start version of
+# this, and passes it twice over, because _refresh_cards rebuilds only when the roster's SIZE
+# changes, so the grid's order is settled at build time whatever the store says. The store is
+# therefore belt-and-braces for the grid TODAY and the real contract underneath it -- kept and
+# declared rather than deleted to make a mutant tidy.)
+func test_the_roster_keeps_its_entry_order_after_the_player_changes_their_mind() -> void:
+	if not await _enter_phase(2):
+		return
+	var before: Array[Unit] = mc.roster_units().duplicate()
+	assert_int(before.size()).is_greater(2)
+
+	var placed: Unit = null
+	var waiting: Unit = null
+	for unit: Unit in before:
+		if placed == null and unit.get_parent() == game.units_root:
+			placed = unit
+		elif waiting == null and unit.get_parent() == game.reserve_root:
+			waiting = unit
+	assert_object(placed).is_not_null()
+	assert_object(waiting).is_not_null()
+
+	game.undeploy_unit(placed)                                    # -> the end of the reserve
+	game.deploy_unit(waiting, mc.open_deployment_cells()[0])      # -> the end of units_root
+	await await_idle_frame()
+
+	assert_array(mc.roster_units()).override_failure_message(
+		"the roster reordered when a unit was swapped -- a grid drawn off this would reshuffle "
+		+ "under the player mid-decision").is_equal(before)
 
 
 func test_a_deploy_toggle_puts_its_unit_on_the_board_and_takes_it_off_again() -> void:
