@@ -54,6 +54,13 @@ const CONCURRENT_BURSTS := 16
 const GOLDEN_ANGLE := 2.39996323
 
 
+# How far past the reachable volume the box is grown, in cells. A grain is thrown outward and up
+# and then falls, so it leaves the surface it was born on; this is that travel plus slack, and it
+# is deliberately generous because the cost of an over-large box is nothing and the cost of a
+# small one is the effect vanishing entirely.
+const CULL_MARGIN := 8.0
+
+
 func _ready() -> void:
 	emitting = false
 	local_coords = false
@@ -61,6 +68,27 @@ func _ready() -> void:
 	process_material = _process_material()
 	draw_pass_1 = _grain_mesh()
 	apply()
+
+
+# Where the puffs can be, so the renderer does not cull them (#656 round 2).
+#
+# THIS IS THE ONE THING NO TEST COULD SEE AND NO KNOB COULD BEAT. A GPUParticles3D is culled by its
+# own visibility_aabb, which defaults to eight cells around the emitter's origin -- and this node
+# sits at the Battle3D origin while the diorama it draws into is STAGE_LIFT (40) cells overhead. So
+# every entry puff was emitted correctly, simulated correctly, and drawn nowhere: measured at ZERO
+# lit pixels, against 1248 for the identical burst inside a box that contains it. The dev found it
+# the only way it could be found -- "I even bumped up the dials a bunch, and still saw nothing",
+# which is the signature of a value multiplied by zero rather than tuned too low.
+#
+# BOTH LEVELS, because the effect is direction-blind: an exit lands on the board and an entry in the
+# diorama, one lift apart. The volume is the CALLER'S -- battle3d._board_volume() is already the one
+# answer to how big this board is, and its own comment says a second copy of that is Law #4.
+func cover(board: AABB) -> void:
+	var lifted := AABB(board.position + BoardSpace.stage_offset(), board.size)
+	var both := board.merge(lifted).grow(CULL_MARGIN)
+	# Local space, and this node sits at the origin -- but say so rather than assume it, since a
+	# node moved later would silently re-break exactly what this function exists to fix.
+	visibility_aabb = AABB(both.position - global_position, both.size)
 
 
 # Re-push everything a knob can move. Called by the Game tab's write path, because a knob that only
