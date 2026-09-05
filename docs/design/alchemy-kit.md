@@ -6,7 +6,7 @@
 
 Supersedes the wiki's **tiered rune tree** and the **stale top half of `Alchemy.docx`** (one-rune-per-element, aura-from-casting — the dev confirmed that section is an old layer), plus all **crit / hit / avo / AP / random-level-up** framing (Law #1; `Stats Overview.docx` is otherwise pre-determinism-era). Empty wiki stubs: `Alcahest & elemental affinities.docx`, `Rune Combination Psuedocode.docx`.
 
-**Canon checked through #699 (2026-09-02).**
+**Canon checked through #782 (2026-09-05).**
 
 Tags: **[LOCKED]** · **[PROPOSED]** (awaiting sign-off) · **[WORKSHOP]** (actively being designed) · **[OPEN]** (fork).
 
@@ -100,11 +100,20 @@ A cast is **empowered** in element *E* when the caster is **on or adjacent to** 
 - **Otherwise the fallback: +1 effective aura in that element, scaling only** — used when nothing special suits the carving, or when raw power simply *is* the fitting answer. It is the limb tax's mirror twin: aura already moves by ±1, the wound takes a point and the river lends one.
 - **Three invariants, each load-bearing.** Empowerment **never** feeds the **anchor** (a carving you cannot channel stays unchannelable), **never** feeds **wildcards** (the deficit budget does not move with position), and **never** feeds the **equip gate** — otherwise walking away from a river would force-unequip a rune mid-battle (`EquippableData.can_equip`, [#157](https://github.com/Phaazoid/Godoiosis/issues/157)). Empowerment is power, never permission.
 - **Binary, never stacked.** A vein beside a river is still just *empowered in water: yes*.
-- Keyed on the caster's **projected cell at resolve time**, so the queue previews it exactly (Law #2). Reach is a **knob**, a game constant rather than mission mood.
+- Keyed on the caster's **projected cell at resolve time**, so the queue previews it exactly (Law #2). Reach is **playtest-tunable** — `Materia.REACH`, a bare `const` beside the rule that reads it, the `OVERKILL_CEILING`/`DOWN_WILL_COST` idiom. *(Not a `GameKnobs` row: that table is presentation only — board markup, camera, fire visuals, HUD colours — and structurally addresses node/class properties reachable from the Battle3D host. #694's own issue body said otherwise and was wrong.)*
 
 ### Sources — two kinds
 
-1. **Terrain-derived** (common, element-specific, no second painted layer — *terrain **is** the materia map*): **water** = water tiles · **fire** = burning tiles, flammables, lit props · **earth** = rock: walls, boulders, cliff faces · **air** = elevation: high ground and cliff edges · **aether** = life-dense features: trees, groves, herb patches. **Living units are never ambient sources** (see *Aether sourcing* under Special cases).
+1. **Terrain-derived** (common, element-specific, no second painted layer — *terrain **is** the materia map*). **Narrowed at build time, dev 2026-09-05 (#694)** — the list below is what a cell actually offers; the wider list this replaces was written at grill resolution and is kept underneath, because two of its five elements are waiting rather than rejected:
+   - **water** = a water tile, **unless it has frozen over** — ice is a floor, not a well.
+   - **earth** = a **rock** tile. Walls and boulders already are rock tiles, so *press your back to the wall* comes free from the reach rule. **Cliff faces are not in yet.**
+   - **fire** = something **actually alight**: a burning or blazing cell, or a lit prop. **An unlit flammable is FUEL, not a source** — a tree offers nothing until it catches, and then offers fire through the state it gained.
+   - **air** — **nothing. PARKED**: *what counts as high ground* (any lower neighbour? a full level's drop? an absolute height?) is a real fork, filed as [#783](https://github.com/Phaazoid/Godoiosis/issues/783) rather than guessed at.
+   - **aether** — **nothing yet, and this is a content gap rather than a rule**: ambient aether is life-dense **terrain**, and no such feature is authored. It arrives with the authored-source work ([#696](https://github.com/Phaazoid/Godoiosis/issues/696)).
+
+   *(The pre-build wording, for the record: fire = burning tiles, **flammables**, lit props · earth = rock: walls, boulders, **cliff faces** · air = elevation: high ground and cliff edges · aether = life-dense features: trees, groves, herb patches.)*
+
+   **Living units are never ambient sources** (see *Aether sourcing* under Special cases) — unchanged, and the reason the aether gap is a missing feature rather than a missing unit rule.
 2. **Veins** (authored, scarce — the contested hotspots): **element-tagged**, the common kind out in the world, and **alkahest veins**, which are **universal** — they empower any element, and are the common kind near **Paracelsus proper**, the alkahest-saturated runestone being why wildcards work at all. Their in-world substances are lore: [alchemy-lore.md](../story/world/alchemy-lore.md) → *Materia — the minerals* (**the authority on what materia IS**; this doc stays the authority on what it DOES).
 
 **Sources are permanent and empowerment consumes nothing.** A source changes only when the *terrain* changes — a fire burns out or is doused, FROZEN water is no source until it melts, and **mechanist terraforming** (drills) can open or bury a vein, so positioning/pathing matter and the alchemy economy is still reshapeable mid-battle. **Maps can still break the rules:** extreme environments (a fallout zone; the Still Point's null field) override source availability as an authored, per-map dial.
