@@ -55,7 +55,9 @@ var _battle_begun := false
 # false too. This one means "a player is choosing right now".
 #
 # ITS FOUR EDGES, and they are the whole design:
-#   * SET after deploy_roster in begin_mission and restart_mission -- the two fresh-start doors.
+#   * SET by _open_deployment, from begin_mission and restart_mission -- the two fresh-start doors.
+#     That one entry also RESTS the board on the new _base_state; setting the flag alone leaves
+#     game_state wherever the arrival left it, and every click would reach the battle ring.
 #   * CLEARED in commit_deployment BEFORE _begin_turn, because start_faction_turn rests the board on
 #     _base_state() and turn 1 would otherwise rest inside the phase.
 #   * CLEARED in reset(), which clear_board calls BEFORE its own exit_current_mode -- and that
@@ -263,16 +265,19 @@ func can_deploy_another() -> bool:
 	var cap: int = game.scenario_manager.current_deployment_cap
 	return cap == PreMission.NO_CAP or deployed_roster_count() < cap
 
-# The pre-mission phase, as much of it as exists (#737). A board that names a Roster (#735) spawns
-# ALL of it (#738) and draws from that onto its DEPLOYMENT zone (#736), up to its cap, and then
-# plays. Returns how many stood up; the rest wait in game.reserve_root until clear_board frees them.
+# The pre-mission phase's DRAW (#737). A board that names a Roster (#735) spawns ALL of it (#738)
+# and stands as many as its cap allows on its DEPLOYMENT zone (#736). Returns how many stood up;
+# the rest wait in game.reserve_root until clear_board frees them.
 #
-# The PLAYER does not linger here yet (dev, 2026-09-04): the screen that would let them choose is
-# #740-#743, so until it lands the draw IS the choice and the mission starts straight after. What
-# that scope deliberately leaves unbuilt -- a commit that can be refused, a back-out, a restart
-# buffer -- would each be a mechanism whose only job was to survive until that screen, which is
-# #731's own anti-scaffolding ruling. Note "no saving during the phase" needs nothing at all here:
-# this is synchronous inside the mission-start door, so no frame passes in which a save is possible.
+# THE PLAYER NOW LINGERS HERE (#739, replacing #737's "not yet"): the draw is the OPENING position
+# rather than the answer, and begin_mission holds the board in the phase instead of playing on. So
+# the three things #737 left unbuilt -- a commit that can be refused, a ring that can undeploy, a
+# save refusal -- are built, now that there is something for each of them to serve rather than a
+# mechanism whose only job was to survive until this ticket.
+#
+# The RESTART BUFFER is the one piece still out, filed as its own ticket rather than parked here
+# (#763): the walk below is deterministic over the same roster, cap and zone, so a retry re-draws
+# the same characters onto the same cells and only HAND placements are re-made.
 #
 # WHERE IT IS CALLED IS THE WHOLE DESIGN. It sits at the two FRESH-START doors, beside the arm
 # decision the director already forks on (#182) -- never inside apply_scenario, which every board

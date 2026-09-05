@@ -129,7 +129,7 @@ const ENTRIES: Array[Dictionary] = [
 		"does": "Advance the conversation. Dialog opens over the board, and the board waits underneath until the line is done.",
 		"action": "dialogic_default_action"},
 	{"key": "Escape", "context": Context.BOARD, "when": "",
-		"does": "Pause: the menu with Restart, Save and Load, Glossary, Settings and Quit. Everything there is reachable mid-battle, and Resume puts you back exactly where you were.",
+		"does": "Pause: the menu with Restart, Save and Load, Glossary, Settings and Quit. Resume puts you back exactly where you were. Save is the one row that is not always live -- it is greyed while you are still placing your force, because a slot is a mid-battle snapshot and there is no battle yet.",
 		"action": "ui_cancel"},
 	{"key": "W / Up", "context": Context.CAMERA, "when": "",
 		"does": "Pan the view forward, bounded to the board plus a margin.",
