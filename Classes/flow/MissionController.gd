@@ -24,6 +24,9 @@ var _select_screen: MissionSelectScreen
 # The pre-mission screen (#740), open for exactly as long as _deploying is. Held rather than looked
 # up, the way _select_screen is, because game.menu_is_up() has to ask about it every frame.
 var _premission_screen: PreMissionScreen
+# Its board-side twin (#774): the corner affordance that is up exactly while the screen is not, so
+# the phase never leaves the frame with nothing on it. Same lifecycle, same one owner.
+var _premission_bar: PreMissionBar
 # The roster as ENTRY ORDER, which is the order #740's card grid draws in. Node order cannot answer
 # it: deploy_unit and undeploy_unit REPARENT, so units_root and reserve_root both reshuffle every
 # time the player changes their mind and the grid would reorder under them mid-decision.
@@ -221,15 +224,21 @@ func _open_deployment() -> void:
 	_deploying = true
 	game.clear_selection()   # -> _base_state(), which now answers PRE_MISSION
 	_premission_screen = PreMissionScreen.open(game, self)
+	_premission_bar = PreMissionBar.open(game, self)
+	_premission_bar.set_shown(false)   # the screen is what the phase opens ON; the bar is its swap
 
 
-# THE screen's whole lifecycle, in one place because every path that ends the phase has to take it
+# THE menu's whole lifecycle, in one place because every path that ends the phase has to take it
 # (#740). Freeing rather than hiding: the screen holds references to Unit nodes the next
-# load_scenario frees, which is the #107 stale-reference shape.
+# load_scenario frees, which is the #107 stale-reference shape. #774's bar rides here rather than
+# growing a second teardown -- reset, commit and abandon already all come through this one door.
 func _close_deployment_menu() -> void:
 	if is_instance_valid(_premission_screen):
 		_premission_screen.queue_free()
 	_premission_screen = null
+	if is_instance_valid(_premission_bar):
+		_premission_bar.queue_free()
+	_premission_bar = null
 
 
 # Is the pre-mission menu on screen RIGHT NOW? game.menu_is_up() reads this, which is what puts the
@@ -239,12 +248,17 @@ func deployment_menu_is_up() -> bool:
 	return is_instance_valid(_premission_screen) and _premission_screen.visible
 
 
-# The board preview, and back (#731 ruling 6). The screen is HIDDEN rather than freed so the
-# player's scroll position and any open row survive a look at the board.
+# The board preview, and back (#731 ruling 6). The screen is HIDDEN rather than freed so the player's
+# scroll position and any open row survive a look at the board. ONE act with two halves since #774:
+# the screen and the bar are each other's complement, so a swap that moved only one of them would
+# leave the phase showing two surfaces or none.
 func toggle_deployment_menu() -> void:
 	if not is_instance_valid(_premission_screen):
 		return
-	_premission_screen.set_shown(not _premission_screen.visible)
+	var shown := not _premission_screen.visible
+	_premission_screen.set_shown(shown)
+	if is_instance_valid(_premission_bar):
+		_premission_bar.set_shown(not shown)
 
 
 # The phase's one exit (#739). Refused with nothing on the board -- a mission cannot start with no

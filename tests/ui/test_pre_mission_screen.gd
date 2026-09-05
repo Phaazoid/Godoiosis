@@ -185,6 +185,11 @@ func test_abandoning_closes_the_screen() -> void:
 
 	assert_object(_screen()).override_failure_message(
 		"the screen survived Abandon, holding units the next mission will free").is_null()
+	# #774's bar rides the same teardown, and this is the exit with no clear_board behind it: a
+	# survivor here would sit over Mission Select offering to begin a mission nobody is in.
+	for child in game.ui_layer.get_children():
+		assert_bool(child is PreMissionBar).override_failure_message(
+			"the board-side bar survived Abandon").is_false()
 
 
 func test_a_board_swap_closes_the_screen() -> void:
