@@ -366,13 +366,14 @@ func _item_row(item: Item) -> Control:
 	return row
 
 
-# THE one place the card asks "can this unit use this", so #744 has one line to widen. can_equip is
-# a bare bool today, so the sentence is generic; when that ticket gives it a reason string this
-# returns it and every tooltip above improves with no edit here.
+# THE one place the card asks "can this unit use this", and since #744 it is a pass-through: the gate
+# itself owns the sentence, so every tooltip and warning above improved without an edit here. That is
+# also where the dev's ruling landed -- an invalid readout needs a unit to be validated against, so
+# it lives on the card and never in the stash.
 func _equip_block_reason(equippable: EquippableData) -> String:
 	if equippable == null:
 		return ""   # a non-equippable carried item has no gate to fail
-	return "" if equippable.can_equip(unit) else "This unit cannot equip it."
+	return equippable.can_equip_reason(unit)
 
 
 static func _clear(container: Node) -> void:

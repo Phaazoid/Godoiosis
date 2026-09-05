@@ -24,12 +24,30 @@ enum TargetMode { UNIT, MAP, BOTH }
 func copy_equippable() -> EquippableData:
 	return duplicate(true)
 
-# May this unit equip this? Default = yes; each kind states its own disqualifier — armor reads
-# the wearer's BODY stats, a rune reads aura+affinity (#157). Enforced at the equip doors and
-# re-enforced at Unit._enforce_gear_gates, so "no" here also means "comes off when it becomes no".
-# Deliberately NOT the two-handed wield lock — that is a firing question (Unit.can_wield_equipped).
-func can_equip(_wielder: Unit) -> bool:
-	return true
+# WHY this unit may not equip this — "" means they may (#744). Each kind states its own
+# disqualifier here: armor reads the wearer's BODY stats, a rune reads aura+affinity (#157).
+#
+# THE REASON IS THE RULE AND THE BOOLEAN IS DERIVED FROM IT, which is what stops a refusal and its
+# explanation from drifting apart — TransmutationData.channel_block_reason's shape, one class family
+# down, and #108's lesson that a seam unable to say what content needs grows a second one. It had
+# grown three: armor's wielder-free requirement_text, a hardcoded "can't channel" on the equip
+# button, and a generic "cannot equip it" on the pre-mission card.
+#
+# SO A KIND OVERRIDES THIS, NEVER can_equip. Overriding the boolean puts the two answers back in
+# separate places, which is the state this replaced; tests/items/test_equip_reason.gd refuses it.
+#
+# Build the sentence only on the way OUT, the way channel_block_reason does: can_equip runs inside
+# Unit._enforce_gear_gates on every stat settle, so the success path must allocate nothing.
+#
+# Deliberately NOT the two-handed wield lock — that is a firing question (Unit.can_wield_equipped),
+# and #776 owns saying so.
+func can_equip_reason(_wielder: Unit) -> String:
+	return ""
+
+# Enforced at the equip doors and re-enforced at Unit._enforce_gear_gates, so "no" here also means
+# "comes off when it becomes no".
+func can_equip(wielder: Unit) -> bool:
+	return can_equip_reason(wielder).is_empty()
 
 # --- Attack-source surface ---
 # Every default here is the INERT answer, so a kind that can't fire (armor) needs no override.
