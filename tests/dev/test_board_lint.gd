@@ -212,10 +212,14 @@ func test_a_board_naming_no_roster_says_nothing_about_rosters() -> void:
 
 # --- the deployment pair (#736) -------------------------------------------------------------------
 #
-# Every case here pins the TIER as well as the text, both directions, because the tier is the whole
-# argument: DEGRADES is what lets the dev commit a half-authored board while building toward #737,
-# and BLOCKS is the CI gate that would stop him. #737 raises the first of these, and asserting the
-# absence is what makes that a two-surface change rather than a silent half-landing.
+# Every case here pins the TIER as well as the text, in BOTH directions, because the tier is the
+# whole argument -- BLOCKS is the CI gate, "no shipped board may ever be in this state".
+#
+# The no-zone finding MOVED from DEGRADES to BLOCKS in #737, and asserting the absence is what made
+# that a two-surface change rather than a silent half-landing. #736 filed it low because nothing in
+# that tree read a roster, so such a board simply played as authored; #737's draw is what makes it
+# a board that opens with nothing to command. The cap finding did not move: fewer units deploy than
+# the author asked for, and the mission plays.
 
 func _a_real_roster() -> String:
 	var real: Array[String] = RosterCatalog.saved_rosters()
@@ -225,18 +229,18 @@ func _a_real_roster() -> String:
 	return real[0]
 
 
-func test_a_board_that_offers_a_roster_and_paints_no_deployment_zone_warns() -> void:
+func test_a_board_that_offers_a_roster_and_paints_no_deployment_zone_blocks() -> void:
 	_spawn(Team.Faction.PLAYER, 0)
 	var roster := _a_real_roster()
 	if roster == "":
 		return
 	game.scenario_manager.current_roster = roster
-	_assert_reports(BoardLint.Severity.DEGRADES, "paints no Deployment zone")
-	_assert_silent(BoardLint.Severity.BLOCKS, "Deployment zone")
+	_assert_reports(BoardLint.Severity.BLOCKS, "paints no Deployment zone")
+	_assert_silent(BoardLint.Severity.DEGRADES, "Deployment zone")
 
 	# Non-vacuous: paint one and the finding goes.
 	game.zone_manager.paint_cell("landing", ZoneManager.Kind.DEPLOYMENT, Vector2i(0, 0))
-	_assert_silent(BoardLint.Severity.DEGRADES, "paints no Deployment zone")
+	_assert_silent(BoardLint.Severity.BLOCKS, "paints no Deployment zone")
 
 
 func test_a_board_with_no_roster_is_never_asked_about_deployment() -> void:
@@ -246,6 +250,9 @@ func test_a_board_with_no_roster_is_never_asked_about_deployment() -> void:
 	game.scenario_manager.current_roster = ""
 	game.scenario_manager.current_deployment_cap = 6
 	_assert_silent(BoardLint.Severity.DEGRADES, "Deployment")
+	# Both tiers, since the no-zone half became BLOCKS in #737: a rule that lost its roster gate
+	# would now RED every board that exists, which is the sharper version of the same mistake.
+	_assert_silent(BoardLint.Severity.BLOCKS, "Deployment")
 
 
 func test_a_cap_larger_than_the_zone_holds_warns() -> void:

@@ -37,6 +37,15 @@ var unit_data_source: UnitData = null
 # persist through Update. Sticky across loads by construction -- the snapshot entry respawns with
 # no unit_data_source. Battle-scoped on purpose: it describes this board's session, not the cast.
 var dev_edited := false
+# Drawn from the mission's Roster by the pre-mission phase (#737) rather than authored onto this
+# board. Battle-scoped and non-@export like dev_edited above, and read at exactly one place: an
+# AUTHORED capture SKIPS these units. Without that, playing a roster mission and then pressing
+# Update writes the drawn force into the file's own unit_entries, and the next boot draws a second
+# force on top of it -- silently, into a mission file, from an ordinary evening's authoring.
+#
+# A save slot captures them like anything else: a resume has to restore the force that was actually
+# standing there, which is why this rides the `authored` fork rather than refusing outright.
+var drawn_from_roster := false
 var inventory : Array[Item] = []
 var squad: Squad
 var pending_grid : TileMapLayer

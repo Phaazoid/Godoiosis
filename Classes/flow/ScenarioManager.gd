@@ -70,7 +70,7 @@ var current_camera_start: CameraPose = null
 # Which roster the CURRENT board offers (#735), by name; "" = no pre-mission phase. Same store and
 # same four writers as the look right above -- apply_scenario sets it from the loaded board,
 # clear_board zeroes it, the dev Scenario tab writes it when you pick one, capture_scenario reads
-# it back out. Nothing resolves it to a Roster yet; #737 is the first reader.
+# it back out. MissionController.deploy_roster resolves it at the mission-start doors (#737).
 var current_roster := ""
 
 # How many of that roster the CURRENT board lets the player deploy (#736); 0 = as many as the
@@ -193,6 +193,14 @@ func capture_scenario(scenario_name: String, authored := false) -> ScenarioData:
 	for unit: Unit in units_root.get_children():
 		if unit.is_queued_for_deletion():
 			continue
+		# #737: an AUTHORED save records what this BOARD authors, and a roster draw is authored by
+		# the roster. Recording them would make the next boot draw a second force on top of the one
+		# it just wrote in -- and Update is reachable straight after a mission-select boot, so the
+		# trip is play, F1, tweak something, Update. A full capture (a save slot, a bug report) keeps
+		# them: it is restoring a battle, not re-authoring a board. Residual, worth knowing: a squad
+		# the player later builds ACROSS the two kinds loses its drawn members from an authored save.
+		if authored and unit.drawn_from_roster:
+			continue
 
 		var entry := ScenarioUnitEntry.new()
 		if authored and unit.unit_data_source != null and not unit.dev_edited:
@@ -264,7 +272,7 @@ func apply_scenario(scenario: ScenarioData) -> void:
 	# correctly applies nothing.
 	current_look_preset = scenario.look_preset
 	current_camera_start = scenario.camera_start   # #234, same signal, same reason: read from board_loaded
-	current_roster = scenario.roster              # #735: nothing reads it before #737, but the store is board state
+	current_roster = scenario.roster              # #735; the mission-start doors draw from it (#737)
 	current_deployment_cap = scenario.deployment_cap   # #736: its other half, and BoardLint reads it today
 
 	var leaders_by_squad_id := {}

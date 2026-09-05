@@ -151,6 +151,7 @@ func _close_mission_select() -> void:
 func begin_mission(path: String, armed := true) -> void:
 	_close_mission_select()
 	game.scenario_manager.load_scenario(path)   # routes through clear_board() -> reset()
+	deploy_roster()   # BEFORE the arm, and it matters -- see the function
 	# armed=false is the watch-only boot (#375: a lesson needs a student -- demo mode has no player
 	# to advance dialog or follow instructions). Must be decided HERE, not disarmed after: the intro
 	# starts DEFERRED (the layout-ready trap), so a late disarm cannot un-start it.
@@ -159,6 +160,71 @@ func begin_mission(path: String, armed := true) -> void:
 	else:
 		game.scenario_director.disarm()
 	_begin_turn()
+
+# The pre-mission phase, as much of it as exists (#737). A board that names a Roster (#735) draws
+# from it onto its DEPLOYMENT zone (#736), up to its cap, and then plays. Returns how many stood up.
+#
+# The PLAYER does not linger here yet (dev, 2026-09-04): the screen that would let them choose is
+# #740-#743, so until it lands the draw IS the choice and the mission starts straight after. What
+# that scope deliberately leaves unbuilt -- a commit that can be refused, a back-out, a restart
+# buffer -- would each be a mechanism whose only job was to survive until that screen, which is
+# #731's own anti-scaffolding ruling. Note "no saving during the phase" needs nothing at all here:
+# this is synchronous inside the mission-start door, so no frame passes in which a save is possible.
+#
+# WHERE IT IS CALLED IS THE WHOLE DESIGN. It sits at the two FRESH-START doors, beside the arm
+# decision the director already forks on (#182) -- never inside apply_scenario, which every board
+# load crosses. A save slot records `roster` like any other field, so a deploy down there would fire
+# on resume_from_slot ON TOP of the units the save just restored, and again on the dev-tools Load
+# and on F2, neither of which is a mission starting.
+#
+# And BEFORE the arm, not after. spawn_unit creates a solo squad per unit, which emits
+# squad_created, which an ARMED ScenarioDirector answers by firing SQUAD_FORMED beats and advancing
+# the lesson -- so a three-unit draw would play its "now you move as one" payoff three times before
+# the player had touched anything. The director's own header says it: a loading board must never
+# trip a lesson or a beat.
+#
+# A restart re-runs it. That is why there is no buffer to preserve: the walk is deterministic over
+# the same roster, cap and zone, so the same characters land on the same cells.
+func deploy_roster() -> int:
+	var scenario_manager: ScenarioManager = game.scenario_manager
+	# "" resolves to null, which is every board saved before #735 and every board that simply has no
+	# pre-mission phase. A NAMED roster that will not resolve push_errors and is a BLOCKS finding on
+	# Check board -- substituting a different pool would hand the player a different mission.
+	var roster: Roster = RosterCatalog.resolve(scenario_manager.current_roster)
+	if roster == null:
+		return 0
+
+	# Legality is asked HERE and passed in, never inside the walk: game.can_spawn_at IS spawn_unit's
+	# gate, so a cell this accepts is one that spawn cannot refuse, while the headless host's spawn
+	# answers differently. One question, asked by whoever can actually answer it.
+	var open_cells: Array[Vector2i] = []
+	for cell: Vector2i in game.zone_manager.cells_of_kind(ZoneManager.Kind.DEPLOYMENT):
+		if game.can_spawn_at(cell):
+			open_cells.append(cell)
+
+	var deployed := 0
+	for row: Dictionary in PreMission.deployment_plan(roster.entries, open_cells,
+			scenario_manager.current_deployment_cap):
+		var entry: ScenarioUnitEntry = row[PreMission.ENTRY]
+		# Un-duplicated, exactly as apply_scenario passes it (#177): UnitFactory copies anyway, and
+		# an outer duplicate destroys the resource_path a reference entry exists to keep.
+		var unit: Unit = game.spawn_unit(entry.unit_data, row[PreMission.CELL])
+		if unit == null:
+			continue   # the cells were filtered, so this is a bug rather than a blocked cell
+		unit.drawn_from_roster = true
+		if entry.state_saved:
+			entry.apply_unit_state(unit)   # the snapshot half of #177's fork, same as the loader's
+		deployed += 1
+
+	if deployed > 0:
+		# apply_scenario's own last two calls, repeated because the board has mutated AGAIN since it
+		# made them. This is #134's write-point trap exactly, and that function's comment names it:
+		# the mission HUD refreshed before these units existed, so an EXTRACT objective would read
+		# its progress off the authored cast alone and sit stale until the first turn event.
+		game.refresh_end_turn_button()
+		game.refresh_mission_status()
+	return deployed
+
 
 func _on_sandbox_chosen() -> void:
 	_close_mission_select()
@@ -195,6 +261,7 @@ func can_restart() -> bool:
 
 func restart_mission() -> void:
 	game.scenario_manager.reload_current()
+	deploy_roster()   # a restart re-runs the same deterministic draw; see deploy_roster
 	game.scenario_director.mission_started()   # a restart is a fresh start (#182); arms before turn 1
 	_begin_turn()
 

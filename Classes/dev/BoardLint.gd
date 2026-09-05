@@ -224,17 +224,22 @@ static func _check_roster(game, found: Array[Dictionary]) -> void:
 # depths, and the roster gate is what makes either mean anything -- a cap on a board with no pool
 # caps nothing, so it is not a finding.
 #
-# DEGRADES, where _check_roster directly above is BLOCKS, and the two comments would read as a
-# contradiction without this: the tier is judged against WHAT THE CODE IN THIS TREE DOES with the
-# board, never against what a downstream ticket will do with it. Nothing reads the roster before
-# #737, so a board naming one with no zone painted boots into turn 1 with its authored cast and
-# plays exactly as before -- it degrades. A roster name that does not RESOLVE is different in kind
-# rather than in degree: no authoring session passes through "names a file that is not there" on
-# purpose, it is a typo or a deletion, while naming a roster before painting its zone is a state
-# every session building toward #737 passes through and would commit. That is _check_ai_factions'
-# "a thing the dev WANTS" argument, and BLOCKS is the CI gate, so filing this there would hand him
-# a hard stop halfway through authoring the feature it exists for. #737 raises it when the phase
-# is real and the board genuinely stops working.
+# The no-zone half is BLOCKS as of #737, raised from the DEGRADES #736 filed it at -- and the tier
+# moving is the rule working, not a reversal of it. A tier is judged against WHAT THE CODE IN THIS
+# TREE DOES with the board, and #736's tree read no roster at all, so such a board booted with its
+# authored cast and played exactly as before. Now the draw is real: no zone means nobody deploys,
+# and a board whose player force IS the roster then opens on a turn with nothing to command --
+# _on_turn_started's auto-skip bounces PLAYER to ENEMY forever, and MissionRules.is_contested never
+# latches because it needs an active player unit, so there is no defeat either. No win, no loss,
+# only Quit. That is _check_objectives' own shape: declared, with no geometry to satisfy it.
+#
+# The cap half stays DEGRADES: fewer units deploy than the author asked for, and the board plays.
+#
+# The tier the SIBLING sits at is a different question, and _check_roster above stays BLOCKS on a
+# distinction worth keeping written down: a dangling NAME is never a state anyone authors on
+# purpose -- it is a typo or a deletion -- where a roster named before its zone is painted is a
+# state every authoring session passes through. That is _check_ai_factions' "a thing the dev WANTS"
+# argument, and it is why the two were ever at different tiers.
 #
 # Note the interaction: this asks only whether a roster is NAMED, so a board naming a missing
 # roster reports both findings. That is correct -- they are different faults and each needs fixing.
@@ -247,9 +252,10 @@ static func _check_deployment(game, found: Array[Dictionary]) -> void:
 	# and a cap compared against a double-counted total is a cap compared against nothing.
 	var cells: Array[Vector2i] = zones.cells_of_kind(ZoneManager.Kind.DEPLOYMENT)
 	if cells.is_empty():
-		_add(found, Severity.DEGRADES,
-			("This board offers roster '%s' but paints no Deployment zone -- there is nowhere to "
-			+ "put the units it offers. Paint one on the Tile Brush tab.") % scenario_manager.current_roster)
+		_add(found, Severity.BLOCKS,
+			("This board offers roster '%s' but paints no Deployment zone -- nobody deploys, so if "
+			+ "the roster IS this mission's force it opens with nothing to command. Paint one on "
+			+ "the Tile Brush tab.") % scenario_manager.current_roster)
 		return
 	var cap: int = scenario_manager.current_deployment_cap
 	if cap > 0 and cap > cells.size():

@@ -1199,19 +1199,30 @@ func spawn_sandbox() -> void:
 # it, and without this a mid-battle save taken while someone is drowning DROPS that unit on load --
 # apply_scenario only push_warnings when a spawn refuses. The loader passes the entry's own saved
 # lifecycle; every other caller places a unit on its feet and keeps the default.
+# May a unit be PLACED here? spawn_unit's own gate, split out (#737) because the pre-mission draw
+# has to know before it has a unit to build -- and a hand-rolled copy of it there would be a second
+# answer to a question this one has already had three of (#109).
+#
+# Three clauses, in the order spawn_unit has always asked them and BoardLint._check_placement
+# borrows: off the map, nothing may stand there, someone already does. The middle one is
+# BoardContext.is_walkable, the ONE walkability answer (#109) -- the inline `walkable` custom-data
+# read it replaced could not see tile state, so dev-mode refused a FROZEN water tile that movement,
+# pathing and knockback all treat as solid ground. Occupancy stays SEPARATE from that: is_walkable
+# answers "may a unit stand here", never "is someone already standing here".
+#
+# `is_body` is the #116 exception: a drowning unit legitimately lies where nothing may stand.
+#TODO later change the walkability half for various unit types, i.e. flyers can spawn on rocks, etc
+func can_spawn_at(pos: Vector2i, is_body := false) -> bool:
+	if grid.get_cell_tile_data(pos) == null:
+		return false
+	if not is_body and not _board().is_walkable(pos):
+		return false
+	return get_unit_at_cell(pos) == null
+
 func spawn_unit(data: UnitData, pos: Vector2i, is_body := false) -> Unit:
 	var unit: Unit = UnitFactory.create_unit(data, grid, pos)
 
-	if grid.get_cell_tile_data(pos) == null:
-		unit.queue_free()
-		return null  # outside the map
-
-	# One walkability answer for the whole game (#109). The inline `walkable` custom-data read this
-	# replaced couldn't see tile state, so dev-mode refused to place a unit on a FROZEN water tile
-	# that movement, pathing and knockback all treat as solid ground. Occupancy stays a SEPARATE
-	# question: is_walkable answers "may a unit stand here", never "is someone already standing here".
-	#TODO later change the walkability half for various unit types, i.e. flyers can spawn on rocks, etc
-	if (not is_body and not _board().is_walkable(pos)) or get_unit_at_cell(pos) != null:
+	if not can_spawn_at(pos, is_body):
 		unit.queue_free()
 		return null
 
