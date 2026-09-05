@@ -165,7 +165,7 @@ func legal_targets(handle: String) -> Dictionary:
 		if not Reach.can_hit_cell_from(unit, origin, aim, aiming, board):
 			continue
 		var victims := RulesService.gather_attack_victims(unit, \
-				Reach.get_affected_cells_from(unit, origin, aim, aiming), board, aiming)
+				Reach.get_affected_cells_from(unit, origin, aim, aiming, board), board, aiming)
 		if victims.is_empty():
 			continue   # queue_attack refuses an aim that hits nobody; so does this
 		var names: Array[String] = []
@@ -247,7 +247,7 @@ func queue_attack(handle: String, aim: Vector2i) -> Dictionary:
 	# mirroring the player's click exactly.
 	if not Reach.can_hit_cell_from(unit, origin, aim, aiming, _board()):
 		return {"ok": false, "error": "%s cannot hit %s from %s" % [handle, str(aim), str(origin)]}
-	var affected := Reach.get_affected_cells_from(unit, origin, aim, aiming)
+	var affected := Reach.get_affected_cells_from(unit, origin, aim, aiming, _board())
 	var victims := RulesService.gather_attack_victims(unit, affected, _board(), aiming)
 	if victims.is_empty():
 		return {"ok": false, "error": "no valid targets at %s" % str(aim)}
@@ -322,12 +322,13 @@ func overwatch(handle: String, aim: Vector2i) -> Dictionary:
 	if aiming == null or not unit.attack_can_overwatch(aiming):
 		return {"ok": false, "error": "%s's attack cannot stand watch" % handle}
 	var origin := unit.get_projected_destination()
-	if not Reach.is_directional_attack(aiming) and not Reach.can_hit_cell_from(unit, origin, aim, aiming, _board()):
+	# The player's click gate, which is now one predicate rather than this pair (#756): a directional
+	# aim needs a facing whose spread survives the terrain, a point aim needs the cell itself. The
+	# dud-aim refusal that stood below is inside it -- a facing watching no cells is not aimable.
+	if not Reach.can_aim_at(unit, origin, aim, aiming, _board()):
 		return {"ok": false, "error": "%s cannot aim at %s from %s" % [handle, str(aim), str(origin)]}
 	var action := OverwatchAction.new()
 	action.init(unit, aim, aiming)
-	if action.watched_cells_from(origin).is_empty():
-		return {"ok": false, "error": "%s's aim at %s watches no cells" % [handle, str(aim)]}
 	if not squad_manager.queue_action(unit.squad, action):
 		return {"ok": false, "error": "%s can't stand watch now (already has a main action, or another squad is active)" % handle}
 	return {"ok": true, "summary": "%s -> overwatch %s" % [handle, str(aim)]}

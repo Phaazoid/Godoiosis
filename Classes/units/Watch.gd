@@ -6,10 +6,12 @@ class_name Watch
 # this is the answer, and a resolver pass can carry a list of these with nothing else attached.
 #
 # The FOOTPRINT is frozen here and nowhere earlier. A queued OverwatchAction re-derives its cells
-# from the actor's projected cell every resolve, exactly like a stored attack aim does (#15), so
-# re-planning the walk that precedes it moves the preview honestly; the geometry only becomes a
-# fact when the order executes and the watcher is standing where it will stand. What IS frozen at
-# declare is the attack and the aim (OverwatchAction's `fired_attack` / `target_cell` stamps).
+# every resolve, from the actor's projected cell and the board's terrain, exactly like a stored
+# attack aim does (#15), so re-planning the walk that precedes it moves the preview honestly; the
+# geometry only becomes a fact when the order executes, arming the cells THAT PASS stamped (#756 —
+# the resolve owns them, because a spread's shape is a question about the board and no action can
+# reach one at execute time). What is frozen at DECLARE is the attack and the aim
+# (OverwatchAction's `fired_attack` / `target_cell` stamps).
 #
 # Lifetime is the shared standing-reaction grammar: arms at its queue slot, absorbs exactly one
 # trigger, lapses when the owner's faction's next turn begins (Unit.lapse_watch, from the turn-start

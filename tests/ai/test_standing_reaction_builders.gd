@@ -37,7 +37,8 @@ func _context(board: Dictionary) -> BoardContext:
 	var units: Array[Unit] = []
 	for child in board.units_root.get_children():
 		units.append(child as Unit)
-	return BoardContext.new(board.grid, units, board.squad_manager)
+	# The heights the builder made, not a flat stand-in: a watch aim reads the terrain since #756.
+	return BoardContext.new(board.grid, units, board.squad_manager, null, null, board.board_heights)
 
 
 # A weapon carrying a watchable extra -- what a Carbine is, without depending on that content.
@@ -96,7 +97,7 @@ func test_a_queued_watch_always_has_a_real_footprint() -> void:
 	assert_vector(watch.target_cell).override_failure_message(
 			"the watch aimed at its own cell -- that footprint is empty and arms nothing"
 			).is_not_equal(watcher.movement.cell)
-	assert_int(watch.watched_cells_from(watcher.movement.cell).size()).override_failure_message(
+	assert_int(watch.watched_cells_from(watcher.movement.cell, _context(board)).size()).override_failure_message(
 			"the queued watch covers no cells, so arm_watch will silently refuse it").is_greater(0)
 
 
@@ -124,6 +125,51 @@ func test_a_watcher_faces_the_route_in_not_the_straight_line() -> void:
 	assert_vector(watch.target_cell).override_failure_message(
 			"the watch faced the straight line to the enemy instead of the route it must actually walk"
 			).is_equal(Vector2i(4, 3))
+
+
+# A WATCH IT COULD NOT FIRE IS A DUD AIM, and since #756 the terrain is one of the things that can
+# make it one: a watcher in a pit, with a weapon that reaches nothing above it, has no facing whose
+# footprint survives — so it must decline and spend its main action on something else, exactly as it
+# declines a facing that yields no cells at all. The rim is a real plateau the enemy stands on, so
+# every facing still passes the ROUTE test the case above is about; only the shot is refused.
+func _pit_board(rim_height: int) -> Dictionary:
+	var board: Dictionary = BB.build(self)
+	auto_free(board.root)
+	BB.paint_rect(board.grid, Rect2i(0, 0, 8, 8))
+	for x in range(8):
+		for y in range(8):
+			if Vector2i(x, y) != Vector2i(4, 4):
+				board.board_heights.set_cell(Vector2i(x, y), rim_height)
+	return board
+
+
+func _pit_watcher(board: Dictionary) -> Unit:
+	var watcher: Unit = BB.spawn(board, H.make_unit_data({}, PLAYER), Vector2i(4, 4))
+	watcher.equipped_weapon = _watch_weapon()
+	# Reaches nothing above its own footing, so a raised rim is out of the shot's range.
+	for attack in (watcher.equipped_weapon as WeaponInstance).template.extra_attacks:
+		attack.up_tolerance = 0
+	BB.spawn(board, H.make_unit_data({}, ENEMY), Vector2i(6, 4))
+	return watcher
+
+
+func test_a_watcher_declines_when_the_terrain_cuts_every_facing() -> void:
+	var board := _pit_board(4)   # a rim two levels up, all the way round
+	var watcher := _pit_watcher(board)
+
+	assert_bool(AITactics.queue_main_action(watcher, _context(board), board.squad_manager, WATCH_ONLY)) \
+		.override_failure_message("the watcher queued a watch whose shot cannot leave the pit") \
+		.is_false()
+
+
+# Non-vacuity twin: the identical fixture on flat ground DOES watch, so the case above is measuring
+# the terrain rather than a broken setup.
+func test_the_same_watcher_on_flat_ground_still_watches() -> void:
+	var board := _pit_board(0)
+	var watcher := _pit_watcher(board)
+
+	assert_bool(AITactics.queue_main_action(watcher, _context(board), board.squad_manager, WATCH_ONLY)) \
+		.is_true()
 
 
 # A CORPSE CAN NEVER ARRIVE, and this is #720's pathology one door over. `nearest_enemy` ranks a body

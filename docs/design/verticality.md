@@ -6,7 +6,7 @@ grill-style. Every ruling below is his; the rationale is recorded because almost
 re-derivable from the code. Numbers (tolerances, drop damage, the 2D offset) are deliberately absent —
 they are feel values and get knobs, not guesses (`CLAUDE.md` → the tuning rule).
 
-**Canon checked through #711 (2026-09-03).**
+**Canon checked through #756 (2026-09-04).**
 
 The one-line version: **a cell has a height, height changes only via ramps, ramps are chokepoints
 rather than tolls, and what height buys you is REACH — not damage, not to-hit.**
@@ -417,13 +417,34 @@ stopped short by the terrain* — is expressed entirely by the two numbers the d
   tighter"): the Carbine ships unlimited. *(Written when the trace was still deferred; it shipped
   the same day — see the line-of-sight section.)*
 
-### Directional spreads are EXEMPT in v1 [DECIDED 2026-08-20]
+### Directional spreads are EXEMPT in v1 [DECIDED 2026-08-20] — ~~EXEMPT~~ **TRUNCATED** [REVISED 2026-09-04, [#756](https://github.com/Phaazoid/Godoiosis/issues/756)]
 
-A ForwardWide/ForwardLine aim is a *direction*, so "is this cell too high" is a question about which
-cells the spread covers — the footprint / 3D-blast-extent question, which this doc already defers.
-`vertical_aim_ok` returns true for any directional attack (aims, counters, the overlay's blocked set
-alike), declared rather than silent. When blast extent lands, that is where a spread's per-cell
-height rule belongs.
+The v1 ruling was that a ForwardWide/ForwardLine aim is a *direction*, so "is this cell too high" is
+a question about which cells the spread covers — the footprint / 3D-blast-extent question this doc
+defers — and `vertical_aim_ok` therefore returned true for any directional attack. **The dev found
+it in play as an Overwatch bug** (2026-09-04: *"I've found a bug with overwatch - it ignores terrain
+height"*), which is what the exemption looks like from the board: the Carbine's point-aimed Shot
+obeys tolerance and the sight trace while the same gun watches a line straight through a cliff.
+
+**A spread is now TRUNCATED at the first cell its shot cannot reach** (*"truncate, and all 8"*), and
+that applies to every directional attack, not to watches alone — Line Snipe, Cleave, Spring, Zap
+Cannon, Splash, Freeze, Lance and Overwatch. **A cell BEHIND a cut cell is cut whether or not its own
+line is clear**, which is the whole difference between truncating and filtering: a target in a dip
+past a ledge the shot cannot clear has a clean line of its own and is still unreachable.
+
+**A spread advances as a FRONT** (his second ruling the same day, chosen over the alternative below):
+each lane is a straight ray parallel to the facing, traced from the shooter's own cell *carried
+sideways onto that lane*, at the shooter's height. So a lane never crosses its neighbours, and a line
+attack — plus a wide spread's centre lane — is bit-for-bit the point gate. The rejected alternative
+was one ray per cell fanned out of the shooter's cell: `GridUtils.cells_crossed` is supercover, so a
+diagonal clips the corner between the centre cell and the cell beside the shooter, which cuts a
+Cleave to its middle cell at a one-level ledge and **loses both side lanes when cleaving down off a
+plateau edge** — the *"standing on a cliff edge still shoots down past it"* purpose broken for
+spreads. Both shapes are pinned in `tests/weapons/test_vertical_tolerance.gd`.
+
+The 3D-blast-extent deferral below keeps only its other half: a POINT aim's splash is still
+board-blind, because whether a blast covers a *volume* is a different question from how far a spread
+gets. The fork was put to the dev rendered as two board diagrams rather than described.
 
 ### Why it is a separate check and not added to distance
 
@@ -459,13 +480,20 @@ answer identically with nothing left to keep movement-only.) Bare fists are
 STEP too — punching is melee. The earlier melee worry ("I don't like not being able to melee up a
 slope") is exactly what the half step preserves.
 
-### The aim, not the footprint
+### The aim, not the footprint — amended by [#756](https://github.com/Phaazoid/Godoiosis/issues/756)
 
-The vertical check attaches to the **aim** question (`Reach.can_hit_cell_from` /
-`get_all_attack_cells_from`), not the **footprint** question (`get_affected_cells_from`). Whether a
-blast covers a volume is a different question from whether the shot could be placed there. This
-roughly halves how much of `Reach` has to learn about the board — and `Reach` is currently entirely
-board-blind, so that matters.
+The vertical check attached to the **aim** question (`Reach.can_hit_cell_from` /
+`get_all_attack_cells_from`) and not the **footprint** question (`get_affected_cells_from`), on the
+argument that whether a blast covers a volume is a different question from whether the shot could be
+placed there — which halved how much of `Reach` had to learn about the board.
+
+**Half of that split survives and half is repealed.** A directional SPREAD's footprint reads the
+board now (`get_affected_cells_from` takes it as a REQUIRED parameter, the `movement_cost`
+precedent), because a spread has no single aim cell to attach the check to: its cells *are* the
+question. A POINT aim's splash is still board-blind, and that is the deferred blast-extent
+question, unchanged. `Reach` is no longer board-blind in general, so the sentence that argued from
+its being so no longer carries weight; what keeps the scope honest instead is that patterns stay
+pure geometry — the truncation lives in `Reach`, which already owned the sight trace.
 
 ### What this buys, all from one rule
 
@@ -927,8 +955,10 @@ Split so each is one reviewable diff and one feel-check, per the bite-sized-part
 2. **Height → reach.** Per-attack asymmetric tolerances in `Reach` (aim methods only), plus
    `ResolvedOutcome.elevation_delta`, plus the "in range but blocked" preview treatment.
    **BUILT as [#258](https://github.com/Phaazoid/Godoiosis/issues/258) (2026-08-20), reworked in
-   review the same day** — see *Targeting* above (the STEP melee rule, lob-vs-gun, the directional
-   exemption) and *Line of sight* (the sight trace, pulled forward from the deferred list).
+   review the same day** — see *Targeting* above (the STEP melee rule, lob-vs-gun, and the
+   directional exemption that [#756](https://github.com/Phaazoid/Godoiosis/issues/756) replaced with
+   truncation on 2026-09-04) and *Line of sight* (the sight trace, pulled forward from the
+   deferred list).
 3. **Falls.** Drop damage, void removal, the tumble, the no-push-uphill rule. Closes the
    #116 / #120 interlock.
    **BUILT as [#259](https://github.com/Phaazoid/Godoiosis/issues/259) (2026-08-20)** with the
@@ -1262,6 +1292,10 @@ itself.
   Explicitly **not** part of this arc — recorded as a supported direction. On a heightmap it needs no
   volume math: it is one more authored number, "the blast covers cells whose surface is within V of
   the impact point," so a fireball on a terrace does not catch the men on the plateau above.
+  **Narrowed by [#756](https://github.com/Phaazoid/Godoiosis/issues/756) (2026-09-04):** a directional
+  SPREAD no longer waits on this, having been given its own rule — it truncates at the first cell its
+  shot cannot reach. What stays deferred is a POINT aim's splash, the volume question this bullet is
+  really about.
 - **A projectile graphic riding the sight line** — dev, 2026-08-20: *"we can add a little graphic
   of a fire following it when it goes off, for when the advanced battle zoom is disabled"*. The
   trajectory function is already the one home the flight path would read.

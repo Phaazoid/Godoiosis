@@ -384,11 +384,13 @@ static func _attack_candidates(unit: Unit, board: BoardContext, origin: Vector2i
 			if not reach.has(at):
 				continue
 			# The player's vertical gate, mirrored (#258): a point aim above the attack's tolerance
-			# is refused at the click, so the AI must not author one. Directional attacks pass, as
-			# they do at the click.
-			if not Reach.vertical_aim_ok(attack, origin, at, board):
+			# is refused at the click, so the AI must not author one. A DIRECTIONAL attack is judged
+			# by the footprint below instead (#756) — it aims a facing, so "is this cell too high"
+			# is answered per spread cell by the truncation, and asking it of the aim would refuse
+			# a whole spread over one unreachable target.
+			if not Reach.is_directional_attack(attack) and not Reach.vertical_aim_ok(attack, origin, at, board):
 				continue
-			var affected := Reach.get_affected_cells_from(unit, origin, at, attack)
+			var affected := Reach.get_affected_cells_from(unit, origin, at, attack, board)
 			if RulesService.gather_attack_victims(unit, affected, board, attack).is_empty():
 				continue
 			unit.active_attack = attack
@@ -651,7 +653,7 @@ static func _watch_aim(unit: Unit, origin: Vector2i, attack: AttackData, enemy: 
 	var best_hops := -1
 	for dir in AttackPattern.CARDINAL_DIRECTIONS:
 		var aim: Vector2i = origin + dir
-		if Reach.get_affected_cells_from(unit, origin, aim, attack).is_empty():
+		if Reach.get_affected_cells_from(unit, origin, aim, attack, board).is_empty():
 			continue
 		var field := RulesService.path_hops(enemy.movement.cell, board, enemy, -1, {aim: true}, true)
 		if not field.has(aim):
@@ -663,7 +665,7 @@ static func _watch_aim(unit: Unit, origin: Vector2i, attack: AttackData, enemy: 
 	if best_hops >= 0:
 		return best
 	var facing := GridUtils.cardinal_direction_i_between(origin, enemy.movement.cell)
-	if facing != Vector2i.ZERO and not Reach.get_affected_cells_from(unit, origin, origin + facing, attack).is_empty():
+	if facing != Vector2i.ZERO and not Reach.get_affected_cells_from(unit, origin, origin + facing, attack, board).is_empty():
 		return origin + facing
 	return origin
 
@@ -1001,6 +1003,12 @@ static func _nearest_standable_attack_cell(unit: Unit, goal: Vector2i, aiming: A
 # `goal`), never inverted. can_traverse then drops walls and is_standable_for drops occupied cells,
 # which are the same two rules compute_move_range's own BFS enforces. Shared by the approach picker
 # and by target selection so the two cannot disagree about where a fight can be had from (#127).
+#
+# Since #756 that clause reaches DIRECTIONAL attacks too, in its point form: the straight line from
+# the firing cell to the goal, which for a line spread is exactly the lane the shot would run down.
+# It is an APPROXIMATION for a wide spread's side lanes, where the true question is which facing's
+# truncated footprint covers the goal — conservative, so the cost is a firing position declined
+# rather than one wrongly offered, and the candidate builder's own footprint read is authoritative.
 static func _standable_attack_cells(unit: Unit, goal: Vector2i, aiming: AttackData, board: BoardContext) -> Dictionary:
 	var cells := {}
 	for cell in Reach.get_all_attack_cells_from(unit, goal, aiming):

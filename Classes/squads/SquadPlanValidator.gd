@@ -240,9 +240,13 @@ static func _revalidate_rescue_targets(actions: Array[BaseAction], board: BoardC
 # gather_attack_victims without a board: same eligibility rule (RulesService.is_attack_victim),
 # positions from Unit.projected_cell with both axes TRUE, unlike projected_cell_for above --
 # a refused move moves nobody, and you must be able to aim where a shove will land (#105).
-static func aim_finds_a_target(aim: AttackAction, actions: Array[BaseAction], units: Array[Unit]) -> bool:
+#
+# The board it DOES take is the footprint's (#756): a spread the terrain truncates covers fewer
+# cells, so a candidate whose only victim stands past a ledge must whiff at the queue gate exactly
+# as it will whiff at the resolve. The eligibility question above still asks no board.
+static func aim_finds_a_target(aim: AttackAction, actions: Array[BaseAction], units: Array[Unit], board: BoardContext) -> bool:
 	var origin := Unit.projected_cell(aim.actor, actions, true, true)
-	var footprint := Reach.get_affected_cells_from(aim.actor, origin, aim.target_cell, aim.fired_attack)
+	var footprint := Reach.get_affected_cells_from(aim.actor, origin, aim.target_cell, aim.fired_attack, board)
 	for unit in units:
 		if not is_instance_valid(unit):
 			continue

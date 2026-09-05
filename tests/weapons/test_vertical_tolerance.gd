@@ -119,12 +119,110 @@ func test_a_ramp_cell_is_judged_at_its_low_side() -> void:
 	assert_bool(Reach.vertical_aim_ok(_attack(2, 4), Vector2i(1, 0), Vector2i(2, 0), board)).is_true()
 
 
-# Directional spreads are exempt in v1 (dev call, 2026-08-20): their per-cell height question is
-# the deferred footprint/blast-extent question, so even a zero-tolerance spread passes the gate.
-func test_directional_attacks_are_exempt() -> void:
+# --- Directional spreads TRUNCATE (#756, dev 2026-09-04: "truncate, and all 8") ----------------
+#
+# The v1 exemption is repealed. A spread is cut at the first cell a lane cannot reach, and a cell
+# BEHIND a cut cell is cut whether or not its own trace is clear.
+
+func _line(length: int, up := -1, down := -1) -> AttackData:
+	var attack := _attack(up, down)
+	var line := ForwardLinePattern.new()
+	line.length = length
+	attack.attack_pattern = line
+	return attack
+
+
+func _wide(length: int, width: int) -> AttackData:
+	var attack := _attack(-1, -1)
+	var spread := ForwardWidePattern.new()
+	spread.length = length
+	spread.width = width
+	attack.attack_pattern = spread
+	return attack
+
+
+func _aimed_east(attack: AttackData, board: BoardContext, length := 2) -> Array[Vector2i]:
+	return Reach.get_affected_cells_from(null, Vector2i.ZERO, Vector2i(length, 0), attack, board)
+
+
+# The headline: a line stops at the ledge it cannot see over. The raised cell itself is an ENDPOINT
+# of its own lane and is hit; what stands ON it is what the shot cannot get past.
+func test_a_line_stops_at_the_ledge_it_cannot_see_over() -> void:
+	var heights := BoardHeights.new()
+	heights.set_cell(Vector2i(1, 0), 4)   # two levels up
+	heights.set_cell(Vector2i(2, 0), 4)   # the plateau behind it
+	var cells := _aimed_east(_line(2), _board_with(heights))
+	assert_array(cells).contains_exactly([Vector2i(1, 0)])
+
+
+# Non-vacuity twin: identical geometry, flat, and the whole line lands.
+func test_the_same_line_on_flat_ground_keeps_every_cell() -> void:
+	var cells := _aimed_east(_line(2), _board_with(BoardHeights.new()))
+	assert_array(cells).contains_exactly([Vector2i(1, 0), Vector2i(2, 0)])
+
+
+# TRUNCATION, NOT A FILTER — the one case that tells them apart. The shooter stands on a plateau
+# with a dip in front of it: the near cell is below a down-tolerance of 1 and is refused, while the
+# far cell is back at the shooter's own height with a clear line of its own. A filter keeps it; the
+# front stops at the dip.
+func test_a_cell_behind_an_unreachable_one_is_cut_though_its_own_line_is_clear() -> void:
+	var heights := BoardHeights.new()
+	heights.set_cell(Vector2i(0, 0), 2)   # the shooter's plateau
+	heights.set_cell(Vector2i(2, 0), 2)   # the far side of the dip, level with it
+	var board := _board_with(heights)
+	var attack := _line(2, -1, 1)         # reaches one height unit down
+	assert_bool(Reach.vertical_aim_ok(attack, Vector2i(0, 0), Vector2i(2, 0), board)) \
+		.override_failure_message("the far cell must pass on its own, or this case cannot see the cut") \
+		.is_true()
+	assert_array(_aimed_east(attack, board)).is_empty()
+
+
+# A WIDE spread is cut LANE BY LANE: a column blocked in one lane leaves its neighbours standing.
+func test_a_wide_spread_cuts_one_lane_and_keeps_its_neighbours() -> void:
+	var heights := BoardHeights.new()
+	heights.set_cell(Vector2i(1, 1), 4)   # a pillar in the right-hand lane, one cell ahead
+	var cells := _aimed_east(_wide(2, 3), _board_with(heights))
+	assert_bool(cells.has(Vector2i(2, 1))).override_failure_message(
+			"the pillar's own lane must be cut behind it").is_false()
+	for kept in [Vector2i(1, -1), Vector2i(1, 0), Vector2i(1, 1), Vector2i(2, -1), Vector2i(2, 0)]:
+		assert_bool(cells.has(kept)).override_failure_message(
+				"%s is in another lane and should still be hit" % str(kept)).is_true()
+
+
+# THE DEV'S OPTION B (2026-09-04): a spread advances as a FRONT, each lane traced from the shooter's
+# cell carried sideways onto that lane. Fanning one ray per cell out of the shooter's own cell
+# instead would clip the diagonal corner — cells_crossed is supercover — and cut a Cleave to its
+# middle cell here. Every raised cell is a lane endpoint, so the whole front lands.
+func test_a_cleave_up_a_ledge_keeps_its_side_lanes() -> void:
+	var heights := BoardHeights.new()
+	for x_offset in [-1, 0, 1]:
+		heights.set_cell(Vector2i(1, x_offset), 4)
+	var cells := Reach.get_affected_cells_from(null, Vector2i.ZERO, Vector2i(1, 0), _wide(1, 3), _board_with(heights))
+	assert_array(cells).contains_exactly_in_any_order([Vector2i(1, -1), Vector2i(1, 0), Vector2i(1, 1)])
+
+
+# The same ruling from the other side: cleaving DOWN off a plateau edge. Under the fanned-ray
+# alternative the plateau cells BESIDE the shooter block its own side lanes, which is #218's
+# "standing on a cliff edge still shoots down past it" broken for spreads.
+func test_a_cleave_down_off_a_plateau_edge_keeps_its_side_lanes() -> void:
+	var heights := BoardHeights.new()
+	for y in [-1, 0, 1]:
+		heights.set_cell(Vector2i(0, y), 4)   # the shooter's plateau, three cells wide
+	var cells := Reach.get_affected_cells_from(null, Vector2i.ZERO, Vector2i(1, 0), _wide(1, 3), _board_with(heights))
+	assert_array(cells).contains_exactly_in_any_order([Vector2i(1, -1), Vector2i(1, 0), Vector2i(1, 1)])
+
+
+# A null board reads flat here as everywhere else — every heights-less fixture is unaffected.
+func test_a_null_board_leaves_a_spread_whole() -> void:
+	assert_array(Reach.get_affected_cells_from(null, Vector2i.ZERO, Vector2i(2, 0), _line(2), null)) \
+		.contains_exactly([Vector2i(1, 0), Vector2i(2, 0)])
+
+
+# The gate's own directional clause is gone: a zero-tolerance spread is judged like anything else.
+func test_a_directional_attack_is_no_longer_exempt_from_the_gate() -> void:
 	var attack := _attack(0, 0)
 	attack.attack_pattern = ForwardWidePattern.new()
-	assert_bool(Reach.vertical_aim_ok(attack, Vector2i(0, 0), Vector2i(1, 0), _step_board(5))).is_true()
+	assert_bool(Reach.vertical_aim_ok(attack, Vector2i(0, 0), Vector2i(1, 0), _step_board(5))).is_false()
 
 
 # can_hit_cell_from = membership AND tolerance: a reachable cell past the tolerance is refused,
@@ -143,7 +241,12 @@ func test_blocked_cells_are_the_unreachable_subset_of_the_union() -> void:
 	assert_array(Reach.blocked_cells_from(null, Vector2i(0, 0), weapon_main, null)).is_empty()
 
 
-func test_blocked_cells_are_empty_for_a_directional_attack() -> void:
-	var attack := _attack(0, 0)
-	attack.attack_pattern = ForwardWidePattern.new()
-	assert_array(Reach.blocked_cells_from(null, Vector2i(0, 0), attack, _step_board(5))).is_empty()
+# The hatch a SPREAD draws is the union minus what every facing can still reach (#756) — it was
+# unconditionally empty while directional attacks were exempt.
+func test_blocked_cells_for_a_directional_attack_are_what_the_terrain_cut() -> void:
+	var heights := BoardHeights.new()
+	heights.set_cell(Vector2i(1, 0), 4)
+	heights.set_cell(Vector2i(2, 0), 4)
+	var blocked := Reach.blocked_cells_from(null, Vector2i(0, 0), _line(2), _board_with(heights))
+	assert_array(blocked).contains_exactly([Vector2i(2, 0)])
+	assert_array(Reach.blocked_cells_from(null, Vector2i(0, 0), _line(2), null)).is_empty()

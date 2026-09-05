@@ -27,8 +27,10 @@ class_name Reach
 # Verticality (#258): the aim question also asks the attack's own vertical rule (MELEE = the step rule,
 # up/down tolerance for everything else) AND walks its sight trace -- can_hit_cell_from takes the
 # board for exactly that (required, not optional: an optional would give one question two answers,
-# the movement_cost precedent). The FOOTPRINT question (get_affected_cells_from) stays board-blind
-# on purpose -- whether a blast covers a volume is the deferred 3D-blast-extent question (#218).
+# the movement_cost precedent). The FOOTPRINT question takes the board too since #756: a directional
+# SPREAD is TRUNCATED at the first cell the shot cannot reach (dev, 2026-09-04 -- "truncate, and all
+# 8"), lane by lane. A point aim's splash stays board-blind -- whether a blast covers a volume is the
+# deferred 3D-blast-extent question (#218).
 #
 # THE DRAWN PATH IS THE RULE (dev, 2026-08-20): sight_trace's trajectory is one function that both
 # the legality check and the in-game bead readout evaluate, so what the player sees can never
@@ -40,10 +42,23 @@ static func get_attack_cells_from(unit: Unit, origin_cell: Vector2i, target_hint
 		return GridUtils.cells_within_manhattan_range(origin_cell, 1)
 	return pattern.get_selectable_cells(unit, origin_cell, target_hint_cell)
 
+# Would an aim at target_cell AFFECT target_cell? A point aim: in reach AND past the vertical gate.
+# A directional aim (#756): the cell survives the truncated spread of the facing it implies.
 static func can_hit_cell_from(unit: Unit, origin_cell: Vector2i, target_cell: Vector2i, attack: AttackData, board: BoardContext) -> bool:
+	if is_directional_attack(attack):
+		return get_affected_cells_from(unit, origin_cell, target_cell, attack, board).has(target_cell)
 	if not vertical_aim_ok(attack, origin_cell, target_cell, board):
 		return false
 	return get_attack_cells_from(unit, origin_cell, target_cell, attack).has(target_cell)
+
+# May this aim be DECLARED at all -- the click handler's, the hover's and the headless twin's one
+# gate (#756; three inline copies before it). A directional attack aims a DIRECTION, so the clicked
+# cell need not be in the spread, but a facing whose spread truncates to nothing is a dud order
+# (the AI's own refusal in AITactics._watch_aim). A point aim must hit the cell itself.
+static func can_aim_at(unit: Unit, origin_cell: Vector2i, cell: Vector2i, attack: AttackData, board: BoardContext) -> bool:
+	if is_directional_attack(attack):
+		return not get_affected_cells_from(unit, origin_cell, cell, attack, board).is_empty()
+	return can_hit_cell_from(unit, origin_cell, cell, attack, board)
 
 # The sightline's height above a shooter's feet -- the SPRITE'S CENTER (dev, 2026-08-20: the line
 # "should originate from the center of the sprite"). A RULE constant, not a knob: it defines what a
@@ -65,15 +80,26 @@ class SightTrace:
 # the attack's own VERTICAL RULE (MELEE -- same step or a facing half step, judged by the
 # movement system's own RulesService.height_step_ok; RANGED for everything else, -1 = unlimited),
 # and a CLEAR SIGHT TRACE (the bead path below). A null attack (bare fists) is melee. A
-# null board reads flat, matching BoardContext's null-heights contract. Directional attacks are
-# EXEMPT in v1 -- their spread is the footprint question -- so the gate reaches point aims,
-# counters, and the AI's mirrors of both.
+# null board reads flat, matching BoardContext's null-heights contract. This is the POINT form:
+# the trace runs from the shooter's own cell. A spread's cells are judged lane by lane instead
+# (_lane_aim_ok, #756), which for a line and a wide spread's centre lane is this exact question.
 static func vertical_aim_ok(attack: AttackData, origin_cell: Vector2i, target_cell: Vector2i, board: BoardContext) -> bool:
-	if board == null or is_directional_attack(attack):
+	return _lane_aim_ok(attack, origin_cell, origin_cell, target_cell, board)
+
+
+# The per-cell question a SPREAD asks (#756, dev 2026-09-04: a spread advances as a FRONT). The
+# vertical rule is judged from the SHOOTER's cell; the trace runs down the LANE -- a straight ray
+# parallel to the facing, from the shooter's cell carried sideways onto that lane, at the shooter's
+# own height. So a side lane never crosses the centre lane, and a Cleave up a one-level ledge hits
+# all three raised cells. The rejected alternative was one ray per cell fanned from the shooter,
+# which clips the diagonal corner (cells_crossed is supercover on purpose) -- that cuts a Cleave to
+# its middle cell at a ledge and loses both side lanes when cleaving down off a plateau edge.
+static func _lane_aim_ok(attack: AttackData, shooter_cell: Vector2i, lane_base: Vector2i, target_cell: Vector2i, board: BoardContext) -> bool:
+	if board == null:
 		return true
-	if not _vertical_rule_ok(attack, origin_cell, target_cell, board):
+	if not _vertical_rule_ok(attack, shooter_cell, target_cell, board):
 		return false
-	return not sight_trace(attack, origin_cell, target_cell, board).blocked
+	return not _trace(attack, lane_base, target_cell, float(board.elevation_at(shooter_cell)), board).blocked
 
 
 static func _vertical_rule_ok(attack: AttackData, origin_cell: Vector2i, target_cell: Vector2i, board: BoardContext) -> bool:
@@ -116,8 +142,15 @@ static func draws_sight_trace(attack: AttackData) -> bool:
 # acceptable for v1 (dev, 2026-09-02) because no single-edge wall is authored anywhere -- every wall
 # in the sheet is a full run or a corner L.
 static func sight_trace(attack: AttackData, origin_cell: Vector2i, target_cell: Vector2i, board: BoardContext) -> SightTrace:
-	var trace := SightTrace.new()
 	var origin_h := 0.0 if board == null else float(board.elevation_at(origin_cell))
+	return _trace(attack, origin_cell, target_cell, origin_h, board)
+
+
+# The trace body, with the ORIGIN HEIGHT as a parameter rather than read off origin_cell: a spread's
+# side lane starts beside the shooter but is fired from the shooter's own height (#756). sight_trace
+# is the point form; nothing else reads this directly.
+static func _trace(attack: AttackData, origin_cell: Vector2i, target_cell: Vector2i, origin_h: float, board: BoardContext) -> SightTrace:
+	var trace := SightTrace.new()
 	var target_h := 0.0 if board == null else float(board.elevation_at(target_cell))
 	var clearance := 0.0 if attack == null else float(attack.arc_clearance)
 	var p0 := Vector2(origin_cell) + Vector2(0.5, 0.5)
@@ -162,12 +195,23 @@ static func _closest_t(p0: Vector2, span: Vector2, point: Vector2) -> float:
 		return 0.0
 	return clampf((point - p0).dot(span) / len_sq, 0.0, 1.0)
 
-# The reach-union cells a point aim could never legally target -- what the overlay draws in the
-# blocked state. Empty for a directional attack (exempt) and on a flat board. Presentation only;
-# the gate itself is can_hit_cell_from.
+# The reach-union cells an aim could never legally affect -- what the overlay draws in the blocked
+# state. A point aim: the cells past its vertical gate. A directional attack (#756): the union minus
+# every facing's truncated spread, so the hatch shows exactly the cells a spread is cut short of.
+# Empty on a flat board. Presentation only; the gate itself is can_hit_cell_from.
 static func blocked_cells_from(unit: Unit, origin_cell: Vector2i, attack: AttackData, board: BoardContext) -> Array[Vector2i]:
 	var blocked: Array[Vector2i] = []
-	for cell in get_all_attack_cells_from(unit, origin_cell, attack):
+	var union := get_all_attack_cells_from(unit, origin_cell, attack)
+	if is_directional_attack(attack):
+		var reachable: Dictionary[Vector2i, bool] = {}
+		for dir in AttackPattern.CARDINAL_DIRECTIONS:
+			for cell in get_affected_cells_from(unit, origin_cell, origin_cell + dir, attack, board):
+				reachable[cell] = true
+		for cell in union:
+			if not reachable.has(cell):
+				blocked.append(cell)
+		return blocked
+	for cell in union:
 		if not vertical_aim_ok(attack, origin_cell, cell, board):
 			blocked.append(cell)
 	return blocked
@@ -179,12 +223,61 @@ static func get_all_attack_cells_from(unit: Unit, origin_cell: Vector2i, attack:
 		return GridUtils.cells_within_manhattan_range(origin_cell, 1)
 	return pattern.get_all_selectable_cells(unit, origin_cell)
 
-# The AoE footprint an aim at target_cell actually lands on.
-static func get_affected_cells_from(unit: Unit, origin_cell: Vector2i, target_cell: Vector2i, attack: AttackData) -> Array[Vector2i]:
+# The AoE footprint an aim at target_cell actually lands on. A directional SPREAD is TRUNCATED by
+# the terrain (#756, dev 2026-09-04: "truncate, and all 8") -- see _truncate below. A point aim's
+# splash is untouched: whether a blast covers a volume is still #218's deferred question.
+#
+# The board is REQUIRED, not optional -- the movement_cost precedent an optional board would break,
+# since a footprint answered without one is a different answer to the same question. A null board
+# reads flat, which is what leaves every heights-less fixture and the flat 2D view unchanged.
+static func get_affected_cells_from(unit: Unit, origin_cell: Vector2i, target_cell: Vector2i, attack: AttackData, board: BoardContext) -> Array[Vector2i]:
 	var pattern := _pattern_of(attack)
 	if pattern == null:
 		return [target_cell]
-	return pattern.get_affected_cells(unit, origin_cell, target_cell)
+	var cells := pattern.get_affected_cells(unit, origin_cell, target_cell)
+	if board == null or not pattern.is_directional():
+		return cells
+	return _truncate(cells, origin_cell, GridUtils.cardinal_direction_i_between(origin_cell, target_cell), attack, board)
+
+
+# THE TRUNCATION (#756). A spread advances as a FRONT: each lane is judged from near to far, and the
+# first cell a lane cannot reach ends that lane -- everything behind it is cut whether or not its own
+# trace is clear. That last clause is the whole difference between truncating and filtering: a cell
+# in a dip past a ledge the shot cannot clear has a clean line of its own and is still unreachable.
+#
+# The predecessor is `cell - dir`, which for a lane's FIRST cell is the cell beside the shooter and
+# not in the spread at all -- ungated, so a lane always gets to try its first cell. Both patterns
+# emit near-to-far (i = 1..length), so a predecessor is always decided before its successor; that is
+# a property of the emission order rather than a sort, and a pattern that ever emits otherwise would
+# need to say so. A zero direction (an aim at the shooter's own cell) truncates nothing -- the
+# pattern already answered empty for it.
+static func _truncate(cells: Array[Vector2i], origin_cell: Vector2i, dir: Vector2i, attack: AttackData, board: BoardContext) -> Array[Vector2i]:
+	if dir == Vector2i.ZERO:
+		return cells
+	var in_spread: Dictionary[Vector2i, bool] = {}
+	for cell in cells:
+		in_spread[cell] = true
+	var kept: Dictionary[Vector2i, bool] = {}
+	var out: Array[Vector2i] = []
+	for cell in cells:
+		var predecessor := cell - dir
+		if in_spread.has(predecessor) and not kept.has(predecessor):
+			continue   # the lane already ended short of here
+		if not _lane_aim_ok(attack, origin_cell, _lane_base(cell, origin_cell, dir), cell, board):
+			continue
+		kept[cell] = true
+		out.append(cell)
+	return out
+
+
+# The cell a lane is fired FROM: the shooter's own cell carried sideways onto this lane, which is
+# `cell` walked back along the facing to the shooter's row. For a line (and a wide spread's centre
+# lane) that IS the shooter's cell, which is why those two are bit-for-bit the point gate. It is
+# never in the spread, so the trace's endpoint exclusion keeps its old meaning exactly: what stands
+# beside the shooter no more blocks its own lane out than the shooter's cell blocks a point shot.
+static func _lane_base(cell: Vector2i, origin_cell: Vector2i, dir: Vector2i) -> Vector2i:
+	var delta := cell - origin_cell
+	return cell - dir * (delta.x * dir.x + delta.y * dir.y)
 
 # Does this attack aim by facing (forward line/wide) rather than at a specific cell? The
 # ATTACK_TARGETING click handler and hover preview both branch on this: a directional attack
