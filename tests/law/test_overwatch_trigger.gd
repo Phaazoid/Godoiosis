@@ -306,6 +306,98 @@ func test_a_shove_triggered_shot_plays_after_the_volley_that_threw_them() -> voi
 	_break_volleys(plan)
 
 
+# --- The watch reads the TERRAIN (#756) --------------------------------------------------------
+#
+# A watch is an aimed attack held in reserve, so its footprint is truncated like any other spread:
+# the cells it covers are the cells the shot could actually reach. Driven through the real queue,
+# because the trigger asks Watch.covers and only a resolve knows what the pass armed.
+
+const WATCH_LINE_LENGTH := 3
+
+# A watcher at (0,0) aiming a length-3 line EAST, queued as a real order so resolve_plan derives
+# the footprint. Its weapon's main IS the line, so nothing here depends on authored content.
+func _line_watcher(cell := Vector2i(0, 0)) -> Unit:
+	var unit := H.spawn_solo(self, _sm, ENEMY, cell, {Stats.Stat.STR: 4}, true, 6)
+	var main := (unit.get_equipped_weapon() as WeaponInstance).template.main_attack
+	var line := ForwardLinePattern.new()
+	line.length = WATCH_LINE_LENGTH
+	main.attack_pattern = line
+	var watch := OverwatchAction.new()
+	watch.init(unit, cell + Vector2i(1, 0), main)
+	unit.squad._queue_action(watch)
+	return unit
+
+
+func _heights_board(units_in: Array, heights: BoardHeights) -> BoardContext:
+	var units: Array[Unit] = []
+	units.assign(units_in)
+	return BoardContext.new(_sm.grid, units, _sm, null, null, heights)
+
+
+# Take the watcher's own turn for real: the resolve stamps the footprint, execution arms it. Going
+# through both is the point — the trigger reads a LIVE watch, and what makes the live one right is
+# that the pass handed it its cells.
+func _arm_queued_watch(watcher: Unit, board: BoardContext) -> ResolvedPlan:
+	var plan := _sm.resolve_plan(watcher.squad, board)
+	for action in watcher.squad.action_queue:
+		action.execute()
+	return plan
+
+
+# A pillar one cell along the watched line: the watch covers the pillar's own cell and nothing
+# behind it, so a walker who crosses BEHIND the pillar is never shot at.
+func test_a_watch_covers_only_what_its_shot_can_reach() -> void:
+	var heights := BoardHeights.new()
+	heights.set_cell(Vector2i(1, 0), 4)   # two levels up, one cell along the aim
+	var watcher := _line_watcher()
+	var crosser := H.spawn_solo(self, _sm, PLAYER, Vector2i(3, 1), {Stats.Stat.MHP: 60}, false)
+	var walk := MoveAction.new()
+	walk.init(crosser, [Vector2i(3, 1), Vector2i(3, 0)], null)   # enters the far end of the line
+	crosser.squad._queue_action(walk)
+
+	var board := _heights_board([watcher, crosser], heights)
+	_arm_queued_watch(watcher, board)
+	var plan := _sm.resolve_plan(crosser.squad, board)
+
+	assert_array(plan.watch_shots).override_failure_message(
+			"the watch fired past a ledge its own shot cannot clear").is_empty()
+	_break_volleys(plan)
+
+
+# Non-vacuity twin, and the reason it is not just "the fixture never fires": the SAME walk into the
+# SAME cell on flat ground takes the shot.
+func test_the_same_crossing_on_flat_ground_takes_the_shot() -> void:
+	var watcher := _line_watcher()
+	var crosser := H.spawn_solo(self, _sm, PLAYER, Vector2i(3, 1), {Stats.Stat.MHP: 60}, false)
+	var walk := MoveAction.new()
+	walk.init(crosser, [Vector2i(3, 1), Vector2i(3, 0)], null)
+	crosser.squad._queue_action(walk)
+
+	var board := _heights_board([watcher, crosser], BoardHeights.new())
+	_arm_queued_watch(watcher, board)
+	var plan := _sm.resolve_plan(crosser.squad, board)
+
+	assert_int(plan.watch_shots.size()).is_equal(1)
+	_break_volleys(plan)
+
+
+# EXECUTION ARMS WHAT THE PASS STAMPED. No action can reach a board in execute(), so a watch that
+# re-derived its own geometry there would arm the untruncated spread — the queue would preview one
+# footprint and the live watch would hold another (Law #2).
+func test_an_executed_watch_arms_the_footprint_the_resolve_stamped() -> void:
+	var heights := BoardHeights.new()
+	heights.set_cell(Vector2i(1, 0), 4)
+	var watcher := _line_watcher()
+
+	var plan := _arm_queued_watch(watcher, _heights_board([watcher], heights))
+	assert_int(plan.watches.size()).override_failure_message(
+			"the resolve projected no watch at all, so this case measures nothing").is_equal(1)
+
+	assert_object(watcher.watch).is_not_null()
+	assert_array(watcher.watch.footprint).override_failure_message(
+			"execution armed cells the resolve had already cut").contains_exactly([Vector2i(1, 0)])
+
+
 # The two partitions are TOTAL and disjoint -- every shot plays exactly once. A shot that fell out
 # of both would simply never be seen, and nothing else in the pass would notice.
 func test_every_triggered_shot_plays_exactly_once() -> void:

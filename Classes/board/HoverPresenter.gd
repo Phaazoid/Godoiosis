@@ -186,10 +186,11 @@ func _hover_attack_targeting(cell: Vector2i) -> void:
 				and Reach.get_attack_cells_from(attacker, origin, cell, aiming).has(cell):
 			game.overlay_manager.show_sight_trace(Reach.sight_trace(aiming, origin, cell, board))
 			trace_shown = true
-		# Directional: any non-zero facing is a legal aim (the whole spread is the target).
-		# Point: the hovered cell itself must be in range AND within vertical tolerance (#258).
-		if Reach.is_directional_attack(aiming) or Reach.can_hit_cell_from(attacker, origin, cell, aiming, board):
-			preview_cells = Reach.get_affected_cells_from(attacker, origin, cell, aiming)
+		# Directional: a facing whose spread the terrain leaves standing (#756 -- it was any non-zero
+		# facing before truncation). Point: the hovered cell itself must be in range AND within
+		# vertical tolerance (#258). One predicate, the same one the click commits through.
+		if Reach.can_aim_at(attacker, origin, cell, aiming, board):
+			preview_cells = Reach.get_affected_cells_from(attacker, origin, cell, aiming, board)
 			# A null pick is bare fists -- unit-only by definition, so it has no hits_map/hits_units
 			# to ask and answers as UNIT.
 			pulse_tiles = aiming != null and aiming.hits_map()

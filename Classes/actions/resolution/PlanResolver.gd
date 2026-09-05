@@ -890,7 +890,7 @@ static func _resolve_cell_effects(action: AttackAction, board: BoardContext, ter
 	# order's own stamped attack (#102) — not, as before, from whatever the attacker happens to
 	# have picked right now. The deposit lands exactly where the blast did — every cell, occupied
 	# or not.
-	for cell in Reach.get_affected_cells_from(attacker, action.origin_cell, action.target_cell, action.fired_attack):
+	for cell in Reach.get_affected_cells_from(attacker, action.origin_cell, action.target_cell, action.fired_attack, board):
 		var effect := _resolve_cell_effect_at(cell, elements, board, terrain_reactions)
 		if effect != null:
 			effects.append(effect)

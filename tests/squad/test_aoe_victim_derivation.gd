@@ -84,6 +84,47 @@ func test_resolve_drops_a_target_who_moves_out_of_the_blast() -> void:
 	assert_object(after.attacks[0].target).is_null()
 	_break_volleys(after)
 
+# --- The blast is TRUNCATED by the terrain (#756) ----------------------------------------------
+#
+# The same derivation, one input along: a spread stops at the first cell its shot cannot reach, so
+# whether an enemy is a victim is a question about the ground between them. The resolve is where
+# that has to hold, because it is the resolve the queue previews and execution replays.
+
+# A three-cell line east, fired by an attacker at the origin over two enemies at (1,0) and (2,0).
+func _line_volley(heights: BoardHeights) -> ResolvedPlan:
+	var attacker := H.spawn_solo(self, _sm, PLAYER, Vector2i(0, 0), {Stats.Stat.LDR: 3})
+	var line := ForwardLinePattern.new()
+	line.length = 3
+	(attacker.get_equipped_weapon() as WeaponInstance).template.main_attack.attack_pattern = line
+	var near := H.spawn_solo(self, _sm, Team.Faction.ENEMY, Vector2i(1, 0), {Stats.Stat.MHP: 60})
+	var far := H.spawn_solo(self, _sm, Team.Faction.ENEMY, Vector2i(2, 0), {Stats.Stat.MHP: 60})
+	_sm.active_squad = attacker.squad
+	attacker.squad._queue_action(AttackAction.declare(attacker, attacker.movement.cell, Vector2i(1, 0)))
+
+	var units: Array[Unit] = [attacker, near, far]
+	return _sm.resolve_plan(attacker.squad, BoardContext.new(_sm.grid, units, _sm, null, null, heights))
+
+
+func test_a_volley_stops_at_the_ledge_and_spares_who_stands_behind_it() -> void:
+	var heights := BoardHeights.new()
+	heights.set_cell(Vector2i(1, 0), 4)   # the near enemy is on a ledge two levels up
+	heights.set_cell(Vector2i(2, 0), 4)   # the far one shelters behind it
+	var plan := _line_volley(heights)
+
+	assert_int(plan.attacks.size()).override_failure_message(
+			"the shot should reach the near enemy alone").is_equal(1)
+	assert_vector(plan.attacks[0].target.movement.cell).is_equal(Vector2i(1, 0))
+	_break_volleys(plan)
+
+
+# Non-vacuity twin: the same two enemies on flat ground are both hit.
+func test_the_same_volley_on_flat_ground_hits_both() -> void:
+	var plan := _line_volley(BoardHeights.new())
+
+	assert_int(plan.attacks.size()).is_equal(2)
+	_break_volleys(plan)
+
+
 func _board_with(units_in: Array) -> BoardContext:
 	var units: Array[Unit] = []
 	units.assign(units_in)

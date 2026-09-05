@@ -27,6 +27,14 @@ var fired_attack: AttackData = null   # what will fire, stamped at declare — n
 # GuardAction.resolved_spent's twin, for the same reason and by the same R8 pattern.
 var resolved_spent := false
 
+# The footprint the resolver last projected, and the cell it was aimed from — rewritten every
+# resolve beside resolved_spent, and what execute() arms. Since #756 the geometry asks the BOARD (a
+# spread is truncated by the terrain) and no action can reach one at execute time: an order applies
+# what the pass decided, exactly as AttackAction applies the knockback landing the resolve stamped.
+# An EMPTY footprint is the "nothing to arm" sentinel, which is already Unit.arm_watch's own refusal.
+var resolved_anchor: Vector2i = Vector2i.ZERO
+var resolved_footprint: Array[Vector2i] = []
+
 
 func init(watching_unit: Unit, aim_cell: Vector2i, attack: AttackData) -> void:
 	actor = watching_unit
@@ -36,17 +44,18 @@ func init(watching_unit: Unit, aim_cell: Vector2i, attack: AttackData) -> void:
 
 
 # THE footprint rule, and the only spelling of it. The resolver asks it from the actor's PROJECTED
-# cell each pass so re-planning the walk that precedes the declaration moves the preview honestly;
-# execution asks it from where the actor actually ended up. Same function, two positional sources —
-# GuardWard.in_range's shape, and the reason no footprint is stored on this order.
-func watched_cells_from(origin: Vector2i) -> Array[Vector2i]:
-	return Reach.get_affected_cells_from(actor, origin, target_cell, fired_attack)
+# cell each pass so re-planning the walk that precedes the declaration moves the preview honestly,
+# and STAMPS the answer (resolved_footprint) for execution to arm from — the pass owns the geometry
+# now that the geometry reads the board (#756), where before this took two positional sources and
+# execution re-derived from where the actor had landed. The resolve runs immediately before the
+# orders execute (OrderExecutor.execute_orders), so the stamp is this pass's own.
+func watched_cells_from(origin: Vector2i, board: BoardContext) -> Array[Vector2i]:
+	return Reach.get_affected_cells_from(actor, origin, target_cell, fired_attack, board)
 
 
 func execute() -> void:
 	begin_execution()
-	var origin := actor.movement.cell
-	actor.arm_watch(origin, target_cell, watched_cells_from(origin), fired_attack, resolved_spent)
+	actor.arm_watch(resolved_anchor, target_cell, resolved_footprint, fired_attack, resolved_spent)
 	finish_execution()
 
 

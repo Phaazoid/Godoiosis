@@ -354,7 +354,7 @@ func _candidate_aim_connects(squad: Squad, action: BaseAction) -> bool:
 		return true
 	var aim := action as AttackAction
 	var one: Array[BaseAction] = [action]
-	var found := SquadPlanValidator.aim_finds_a_target(aim, _hypothetical_actions(squad, one), _all_units())
+	var found := SquadPlanValidator.aim_finds_a_target(aim, _hypothetical_actions(squad, one), _all_units(), board_source.call())
 	if not SquadPlanValidator.aim_whiffs(aim, found):
 		return true
 	aim.add_validation_error("Nothing to hit on that cell")
@@ -745,9 +745,13 @@ func _resolve_actions(squad: Squad, actions: Array[BaseAction], board: BoardCont
 		# The geometry only becomes frozen when the order executes and the watcher has arrived.
 		if action.action_type == BaseAction.ActionType.OVERWATCH:
 			var watch_order := action as OverwatchAction
-			watch_order.resolved_spent = false   # a re-resolve must not inherit last pass's verdict
+			# None of the three may inherit last pass's answer: the footprint is re-derived from
+			# this pass's projected cell, and since #756 from this board's terrain as well.
+			watch_order.resolved_spent = false
 			var watch_origin := watch_order.actor.get_projected_destination()
-			var watched := watch_order.watched_cells_from(watch_origin)
+			var watched := watch_order.watched_cells_from(watch_origin, board)
+			watch_order.resolved_anchor = watch_origin
+			watch_order.resolved_footprint = watched
 			if not watched.is_empty():
 				var armed := Watch.make(watch_order.actor, watch_origin, watch_order.target_cell,
 						watched, watch_order.fired_attack)
@@ -758,7 +762,7 @@ func _resolve_actions(squad: Squad, actions: Array[BaseAction], board: BoardCont
 			continue
 		var aim := action as AttackAction
 		var origin := aim.actor.get_projected_destination()
-		var affected := Reach.get_affected_cells_from(aim.actor, origin, aim.target_cell, aim.fired_attack)
+		var affected := Reach.get_affected_cells_from(aim.actor, origin, aim.target_cell, aim.fired_attack, board)
 		var victims := RulesService.gather_attack_victims(aim.actor, affected, board, aim.fired_attack)
 		var group: Array[AttackAction] = []
 		if victims.is_empty():
@@ -817,7 +821,7 @@ func _resolve_actions(squad: Squad, actions: Array[BaseAction], board: BoardCont
 		# victim -- #148's bug one layer down from where it was reported. A player-AIMED heal keeps
 		# its enemy splash; that is agency, and only the derived reaction is restricted (dev call).
 		var healing := c_attack != null and c_attack.heals
-		var c_affected := Reach.get_affected_cells_from(aim.actor, c_origin, c_aim_cell, c_attack)
+		var c_affected := Reach.get_affected_cells_from(aim.actor, c_origin, c_aim_cell, c_attack, board)
 		var c_victims := RulesService.gather_attack_victims(aim.actor, c_affected, board, c_attack, healing)
 		for ctr in CounterAttackAction.create_counter_volley(aim.actor, c_origin, c_victims, aim.source_attack):
 			plan.counters.append(ctr)
