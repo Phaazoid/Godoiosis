@@ -23,8 +23,8 @@ func test_a_frame_much_taller_than_its_row_still_reads_in_that_row() -> void:
 	_fill(img, Rect2i(40, 10, 20, 20))
 	_fill(img, Rect2i(100, 5, 20, 45))    # ...the leap: taller, and starts ABOVE its row
 	_fill(img, Rect2i(70, 10, 20, 20))
-	_fill(img, Rect2i(10, 55, 20, 20))    # row 2, tucked under the leap
-	_fill(img, Rect2i(40, 55, 20, 20))
+	_fill(img, Rect2i(10, 45, 20, 20))    # row 2 -- and it OVERLAPS the leap, by 5 rows of its own 20
+	_fill(img, Rect2i(40, 45, 20, 20))
 	var read := LooseSheet.read(img, Rect2i(Vector2i.ZERO, SHEET), [1, 1, 1, 1, 1, 1])
 	assert_array(read["errors"]).is_empty()
 	var order: Array[Vector2i] = []
@@ -33,7 +33,7 @@ func test_a_frame_much_taller_than_its_row_still_reads_in_that_row() -> void:
 	assert_array(order).override_failure_message(
 			"frames came back in %s -- reading order is rows top to bottom, each left to right" % [order]
 			).is_equal([Vector2i(10, 10), Vector2i(40, 10), Vector2i(70, 10), Vector2i(100, 5),
-					Vector2i(10, 55), Vector2i(40, 55)])
+					Vector2i(10, 45), Vector2i(40, 45)])
 
 
 # A sprite's parts may touch only at a corner -- an axe blade meeting a hand diagonally -- and that
