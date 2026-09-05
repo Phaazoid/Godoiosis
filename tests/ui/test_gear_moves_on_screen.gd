@@ -239,12 +239,22 @@ func test_holding_gear_over_a_card_previews_what_it_would_do() -> void:
 	assert_str(wearable.can_equip_reason(card.unit)).override_failure_message(
 		"fixture: the vest refuses this unit, so the preview would show a reason instead").is_empty()
 
-	var before: Array[String] = []
-	for stat: Stats.Stat in card._stat_values:
-		before.append((card._stat_values[stat] as Label).text)
-
 	screen._on_gear_clicked(wearable, null)
 	await await_idle_frame()
+
+	# Captured AFTER the selection settles, because the claim is about the HOVER. Picking something up
+	# redraws both lists on purpose -- the rows have to show what is in hand -- so a snapshot taken
+	# before that would red against correct code and say nothing about what it meant to pin.
+	#
+	# The LABELS, not their text: "annotated in place" is a claim about node identity, and text alone
+	# cannot see a rebuild that restores the same values -- which is what a hover routed through
+	# refresh() does, while freeing the row the cursor is standing on.
+	var before: Array[String] = []
+	var nodes: Array[Label] = []
+	for stat: Stats.Stat in card._stat_values:
+		before.append((card._stat_values[stat] as Label).text)
+		nodes.append(card._stat_values[stat])
+
 	screen._on_card_hovered(card)
 
 	var arrows := 0
@@ -256,8 +266,13 @@ func test_holding_gear_over_a_card_previews_what_it_would_do() -> void:
 
 	screen._on_gear_unhovered(card)
 	var after: Array[String] = []
+	var i := 0
 	for stat: Stats.Stat in card._stat_values:
 		after.append((card._stat_values[stat] as Label).text)
+		assert_object(card._stat_values[stat]).override_failure_message(
+			"the card REBUILT to clear its preview, so the row the cursor is on has been freed and "
+			+ "its mouse_exited will never fire").is_same(nodes[i])
+		i += 1
 	assert_array(after).override_failure_message(
 		"the preview outlived the hover that opened it").is_equal(before)
 
