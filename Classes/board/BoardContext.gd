@@ -50,7 +50,7 @@ func is_walkable(cell: Vector2i) -> bool:
 	#
 	# The FROZEN short-circuit deliberately runs BEFORE the tile lookup: the headless fixtures
 	# carry a bare grid with no TileSet, and ice-over-water is the one thing they need to answer.
-	if terrain_states != null and terrain_states.has_state(cell, Terrain.TileState.FROZEN):
+	if has_tile_state(cell, Terrain.TileState.FROZEN):
 		return true
 	# #109's rule (a tile that doesn't declare the flag is NOT walkable, and the guard that stops
 	# get_custom_data raising) lives in GridUtils.walkable_of since #552, because the meshlib
@@ -74,9 +74,33 @@ func terrain_kind_at(cell: Vector2i) -> Terrain.Kind:
 # whoever stands on it. Sibling of terrain_kind_at, same rationale — the resolver's mitigation
 # stage and the inspect panel's DEF readout both come through here, so they can't drift.
 func cover_def_at(cell: Vector2i) -> int:
+	return Terrain.COVER_DEF if has_tile_state(cell, Terrain.TileState.COVER) else 0
+
+# The rules' read-points for a cell's dynamic tile STATE — the null-safe forms of the store's own
+# two accessors, siblings of terrain_kind_at for the same two reasons: a board built without a
+# state store reads empty rather than crashing, and a fixture can stub them.
+#
+# `is_walkable` and `cover_def_at` each carried their own `terrain_states != null` guard before
+# #694 wanted a third; one guard, one place (Law #4). Both spellings are here because the callers
+# genuinely differ — a caller naming ONE state wants has_tile_state, while a caller asking a
+# question OVER the states (Terrain.is_burning, which owns which members count as fire) needs the
+# array and must not enumerate FIRE_STATES itself.
+func tile_states_at(cell: Vector2i) -> Array[Terrain.TileState]:
 	if terrain_states == null:
-		return 0
-	return Terrain.COVER_DEF if terrain_states.has_state(cell, Terrain.TileState.COVER) else 0
+		return []
+	return terrain_states.states_at(cell)
+
+func has_tile_state(cell: Vector2i, state: Terrain.TileState) -> bool:
+	if terrain_states == null:
+		return false
+	return terrain_states.has_state(cell, state)
+
+# Is the prop standing on this cell ALIGHT (#272's prop_lit column)? Sibling of terrain_kind_at,
+# and null-safe on the GRID as well as the tile, because a stub board carries no TileMapLayer.
+func prop_lit_at(cell: Vector2i) -> bool:
+	if grid == null:
+		return false
+	return GridUtils.prop_lit_of(grid.get_cell_tile_data(cell))
 
 # The rules' read-points for elevation (#257), siblings of terrain_kind_at / cover_def_at and there
 # for the same reason: methods rather than inline store reads, so a fixture board can stub them.

@@ -189,3 +189,76 @@ func test_rune_carving_hits_allies_includes_a_friendly() -> void:
 	var units: Array[Unit] = [alch, ally]
 	var victims := RulesService.gather_attack_victims(alch, [Vector2i(0, 1)], _StubBoard.new(_sm.grid, units, _sm, {}), alch.get_fired_attack())
 	assert_array(victims).contains([ally])
+
+
+# --- #694: empowerment reaches the resolver, keyed on the THREADED position -------------------
+#
+# Materia's own rules are pinned in tests/runes/test_materia_sources.gd. What these cases pin is
+# the WIRE: that the one production damage chokepoint asks Materia at all, and asks it about the
+# cell the caster will actually be standing on when the cast resolves.
+
+const SPRING := Vector2i(5, 5)     # the lone water tile these cases stand beside
+
+func _water_carving(power: int) -> TransmutationData:
+	var t: TransmutationData = TransmutationData.new()
+	t.power = power
+	t.sigils.assign([Elemental.Element.WATER])
+	t.targets = EquippableData.TargetMode.UNIT
+	return t
+
+# A damageless shove, the Gust shape -- it must move the caster without downing them, or the
+# cast that follows would be refused for a reason that has nothing to do with materia.
+func _shove(distance: int) -> TransmutationData:
+	var t: TransmutationData = TransmutationData.new()
+	t.sigils.assign([Elemental.Element.AIR])
+	t.deals_no_damage = true
+	t.hits_allies = true
+	t.knockback = distance
+	t.targets = EquippableData.TargetMode.UNIT
+	return t
+
+func _spring_board(units: Array[Unit]) -> _StubBoard:
+	return _StubBoard.new(_sm.board_source.call().grid, units, _sm, { SPRING: Terrain.Kind.WATER })
+
+func test_a_cast_made_standing_on_a_source_is_empowered() -> void:
+	var caster: Unit = H.spawn_solo(self, _sm, PLAYER, SPRING)
+	caster.unit_instance.aura = { Elemental.Element.WATER: 3 }
+	var foe: Unit = H.spawn_solo(self, _sm, ENEMY, SPRING + Vector2i(1, 0))
+	var cast: AttackAction = AttackAction.create(caster, caster.movement.cell, foe, foe.movement.cell)
+	cast.fired_attack = _water_carving(5)
+
+	var plan: ResolvedPlan = ResolvedPlan.new()
+	plan.attacks.append(cast)
+	var no_reactions: Array[ElementalReaction] = []
+	PlanResolver.resolve(plan, no_reactions, _spring_board([caster, foe]))
+
+	assert_int(cast.resolved.base_damage).is_equal(9)   # 5 power + 3 aura + 1 spring
+
+# THE case for the threaded read (dev ruling, 2026-09-05): the aim is frozen at declare, the BODY
+# is not. A squadmate's shove earlier in the same pass carries the caster off the bank, and the
+# cast that follows resolves unempowered. Reading action.origin_cell instead leaves this at 9 --
+# every other case in this suite stays green, which is why this one is written first.
+func test_a_caster_shoved_off_the_source_this_pass_casts_unempowered() -> void:
+	var caster: Unit = H.spawn_solo(self, _sm, PLAYER, SPRING)
+	caster.unit_instance.aura = { Elemental.Element.WATER: 3 }
+	var shover: Unit = H.spawn_solo(self, _sm, PLAYER, SPRING - Vector2i(0, 1))
+	var foe: Unit = H.spawn_solo(self, _sm, ENEMY, SPRING + Vector2i(1, 0))
+
+	# Shoved straight away from the shover, two cells -- clear of the spring's reach, not merely
+	# off the tile itself, since standing NEXT to water still empowers.
+	var shove: AttackAction = AttackAction.create(
+		shover, shover.movement.cell, caster, caster.movement.cell)
+	shove.fired_attack = _shove(2)
+	var cast: AttackAction = AttackAction.create(
+		caster, caster.movement.cell, foe, foe.movement.cell)
+	cast.fired_attack = _water_carving(5)
+
+	var plan: ResolvedPlan = ResolvedPlan.new()
+	plan.attacks.append(shove)
+	plan.attacks.append(cast)
+	var no_reactions: Array[ElementalReaction] = []
+	PlanResolver.resolve(plan, no_reactions, _spring_board([caster, shover, foe]))
+
+	assert_bool(shove.resolved.knockback_applied) \
+		.override_failure_message("the shove never moved the caster -- the case proves nothing").is_true()
+	assert_int(cast.resolved.base_damage).is_equal(8)   # 5 power + 3 aura, no spring

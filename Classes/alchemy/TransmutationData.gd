@@ -39,12 +39,24 @@ func cost() -> int:
 # 2 Fire scales twice off fire aura. A leeway-covered (0-aura) element adds nothing.
 # A utility carving (#126) skips the scaling entirely: aura still GATES channeling, it just
 # never adds damage to a damageless effect.
-func base_damage(wielder: Unit) -> int:
+#
+# `empowered` (#694) is the elements the caster may draw materia from where they stand — PASSED,
+# never looked up, because a carving has no board and must not grow one (Law #4). It is +1
+# EFFECTIVE aura and enters the loop rather than the total, so a 2-Fire carving beside a fire
+# gains +2, exactly as its two sigils already weight the wielder's own aura.
+#
+# It is SCALING ONLY. Nothing here may reach the channeling ladder below: the anchor, the deficit
+# and the wildcard pools all read wielder.get_element_aura directly, and RuneData.can_equip_reason
+# derives from channel_block_reason — so leaving that accessor alone is what keeps empowerment out
+# of all three at once. Never make get_element_aura position-aware.
+func base_damage(wielder: Unit, empowered: Array[Elemental.Element] = []) -> int:
 	if deals_no_damage:
 		return 0
 	var scaling := 0
 	for e in sigils:
 		scaling += wielder.get_element_aura(e)
+		if empowered.has(e):
+			scaling += 1
 	return power + scaling
 
 # --- Channeling: anchor + wildcards (dev, 2026-08-10 — REPLACES the 2026-07-04 temper/leeway

@@ -47,6 +47,43 @@ func test_repeated_sigils_weight_the_scaling() -> void:
 	var t: TransmutationData = _carving([Elemental.Element.FIRE, Elemental.Element.FIRE, Elemental.Element.EARTH], 5)
 	assert_int(t.base_damage(u)).is_equal(13)   # 5 + 3 + 3 + 2
 
+# --- materia empowerment (#694): +1 EFFECTIVE aura in an element the caster can draw on ---
+# WHERE that list comes from is Materia's (tests/runes/test_materia_sources.gd); here it is
+# passed in, because a carving has no board and must never grow one.
+
+func test_empowerment_adds_one_per_matching_sigil() -> void:
+	var u: Unit = _alchemist({ Elemental.Element.FIRE: 7 })
+	var t: TransmutationData = _carving([Elemental.Element.FIRE], 5)
+	assert_int(t.base_damage(u, [Elemental.Element.FIRE])).is_equal(13)   # 12 + 1
+
+# It is +1 AURA, not +1 damage, so a repeated sigil weights it exactly as it weights the real
+# pool -- the reason it enters the loop rather than the total.
+func test_empowerment_weights_with_repeated_sigils() -> void:
+	var u: Unit = _alchemist({ Elemental.Element.FIRE: 3, Elemental.Element.EARTH: 2 })
+	var t: TransmutationData = _carving([Elemental.Element.FIRE, Elemental.Element.FIRE, Elemental.Element.EARTH], 5)
+	assert_int(t.base_damage(u, [Elemental.Element.FIRE])).is_equal(15)   # 13 + 1 + 1
+
+func test_empowerment_in_an_element_the_carving_lacks_does_nothing() -> void:
+	var u: Unit = _alchemist({ Elemental.Element.FIRE: 7 })
+	var t: TransmutationData = _carving([Elemental.Element.FIRE], 5)
+	assert_int(t.base_damage(u, [Elemental.Element.WATER])).is_equal(12)   # unchanged
+
+# Empowerment is SCALING, and a utility carving suppresses scaling entirely (#126) -- which is
+# the structural reason #695's authored form exists: the fallback can never reach one.
+func test_a_damageless_carving_gains_nothing_from_empowerment() -> void:
+	var u: Unit = _alchemist({ Elemental.Element.AIR: 4 })
+	var t: TransmutationData = _carving([Elemental.Element.AIR], 5)
+	t.deals_no_damage = true
+	assert_int(t.base_damage(u, [Elemental.Element.AIR])).is_equal(0)
+
+# An element the wielder has NO pool in still gains the point: empowerment is drawn from the
+# ground, not from talent. (Whether the carving may be channelled at all is a different
+# question, asked below and deliberately untouched by any of this.)
+func test_empowerment_applies_without_a_pool_in_that_element() -> void:
+	var u: Unit = _alchemist({ Elemental.Element.FIRE: 2 })
+	var t: TransmutationData = _carving([Elemental.Element.FIRE, Elemental.Element.WATER], 5)
+	assert_int(t.base_damage(u, [Elemental.Element.WATER])).is_equal(8)   # 5 + 2 + 0 + 1
+
 # --- channeling gate: anchor + wildcards (dev 2026-08-10, replacing the 2026-07-04 temper/
 # trained-leeway/strain model — repeal record in transmutation-model-proposal.md). One case per
 # row of the plan's worked-examples table. NB the dev's own two illustration carvings were
