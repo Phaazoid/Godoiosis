@@ -442,4 +442,4 @@ func _on_deploy_toggled(unit: Unit) -> void:
 
 
 func _on_begin() -> void:
-	_controller.commit_deployment()
+	_controller.confirm_and_commit()

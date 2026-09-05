@@ -280,6 +280,31 @@ func commit_deployment() -> bool:
 	return true
 
 
+# The same act with a question in front of it (dev, 2026-09-05: an accidental press must not start a
+# battle prematurely). It lives on the CONTROLLER rather than on either button because the commit has
+# THREE doors -- the bar, the screen, and the Enter key -- and a confirm bolted to one of them is a
+# confirm the other two walk around.
+#
+# The refusal comes first and UNASKED, through commit_deployment itself: a card that asks about an act
+# already destined to be refused is two dead ends where one would do, and routing it through the real
+# exit is what stops the wording becoming a second copy.
+func confirm_and_commit() -> void:
+	if not _deploying:
+		return
+	if deployed_roster_count() == 0:
+		commit_deployment()   # refuses, and speaks
+		return
+	var sure: bool = await ConfirmCard.ask(game,
+		"Begin the mission with the force you have placed? There is no coming back to the loadout "
+		+ "once the battle starts.", "Begin Mission", "Not Yet")
+	# No re-read of _deploying after the await, deliberately: the phase CAN end while the card is up
+	# (a dev key is exempt from the modal freeze, so F2 reaches the board), and commit_deployment's
+	# own first line already refuses outside the phase. A guard here would be a second copy of that
+	# one, and an unfalsifiable one -- nothing could ever reach it that the act does not already stop.
+	if sure:
+		commit_deployment()
+
+
 func is_deploying() -> bool:
 	return _deploying
 

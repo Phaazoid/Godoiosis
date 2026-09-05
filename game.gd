@@ -272,7 +272,7 @@ func _input(event: InputEvent) -> void:
 	# and Esc, up there, is not. Its own action rather than ui_accept, which is Enter AND Space, and
 	# Space is the camera recentre.
 	if event.is_action_pressed("commit_deployment") and not ModalLock.any_open(get_tree()):
-		mission_controller.commit_deployment()
+		mission_controller.confirm_and_commit()   # #774: the key asks too, or it walks around the card
 	# The board preview and back (#740). Here beside commit for the same reason: _unhandled_input
 	# stands down under a 3D host, and this key has to work from both views.
 	if event.is_action_pressed("toggle_deployment_view") and not ModalLock.any_open(get_tree()):

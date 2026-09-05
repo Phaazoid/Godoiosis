@@ -167,6 +167,11 @@ func test_beginning_the_mission_from_the_screen_closes_it() -> void:
 
 	_screen()._on_begin()
 	await await_idle_frame()
+	# #774 put a confirm in front of the commit, on all three of its doors.
+	for child in game.ui_layer.get_children():
+		if child is ConfirmCard:
+			child.answered.emit(true)
+	await await_idle_frame()
 
 	assert_object(_screen()).override_failure_message(
 		"the screen outlived the mission it started").is_null()

@@ -79,6 +79,21 @@ func _bar() -> PreMissionBar:
 	return null
 
 
+# The action's own event, built the way project.godot binds it -- on physical_keycode.
+func _press(physical: int) -> void:
+	var key := InputEventKey.new()
+	key.physical_keycode = physical
+	key.pressed = true
+	game._input(key)
+
+
+func _confirm() -> ConfirmCard:
+	for child in game.ui_layer.get_children():
+		if child is ConfirmCard:
+			return child
+	return null
+
+
 func _screen() -> PreMissionScreen:
 	for child in game.ui_layer.get_children():
 		if child is PreMissionScreen:
@@ -113,8 +128,10 @@ func test_the_bar_stands_in_for_the_screen_and_hands_the_frame_back() -> void:
 
 
 # A pressed signal wired to nothing is legal GDScript, so the button gets driven rather than the
-# controller. commit_deployment's own rules are pinned elsewhere; this is the wire.
-func test_begin_from_the_bar_starts_the_mission() -> void:
+# controller. commit_deployment's own rules are pinned elsewhere; what this walks is the wire, and
+# since the dev asked for a confirm the card IS part of that wire rather than something behind it --
+# an accidental press must not start a battle.
+func test_begin_from_the_bar_asks_first_and_then_starts_the_mission() -> void:
 	if not await _enter_phase():
 		return
 	mc.toggle_deployment_menu()
@@ -122,13 +139,69 @@ func test_begin_from_the_bar_starts_the_mission() -> void:
 	assert_int(mc.deployed_roster_count()).override_failure_message(
 		"precondition: the phase drew nobody onto the board").is_greater(0)
 
+	# Empty first: a refusal is NOT asked about. A card in front of an act already destined to fail is
+	# two dead ends where one would do, and out here the banner carrying the reason is in plain sight.
+	var placed: Array[Unit] = []
+	for unit: Unit in mc.roster_units():
+		if unit.get_parent() == game.units_root:
+			placed.append(unit)
+	for unit: Unit in placed:
+		game.undeploy_unit(unit)
 	_bar()._begin_button.pressed.emit()
+	await await_idle_frame()
+	assert_object(_confirm()).override_failure_message(
+		"Begin asked about a commit it was going to refuse anyway").is_null()
+	assert_bool(mc.is_deploying()).is_true()
+
+	assert_bool(game.deploy_unit(placed[0], mc.open_deployment_cells()[0])).is_true()
+	await await_idle_frame()
+
+	# The KEY for this press and the button for the next: the card belongs to the act, not to one
+	# door, and Enter is the door most likely to be hit by accident.
+	_press(KEY_ENTER)
+	await await_idle_frame()
+	var card := _confirm()
+	assert_object(card).override_failure_message(
+		"Enter started the battle without asking").is_not_null()
+
+	card.answered.emit(false)
+	await await_idle_frame()
+	assert_bool(mc.is_deploying()).override_failure_message(
+		"answering No started the mission anyway").is_true()
+	assert_bool(_bar().visible).override_failure_message(
+		"No left the player somewhere other than where they were").is_true()
+
+	_bar()._begin_button.pressed.emit()
+	await await_idle_frame()
+	_confirm().answered.emit(true)
 	await await_idle_frame()
 
 	assert_bool(mc.is_deploying()).override_failure_message(
 		"Begin on the bar did not start the mission").is_false()
 	assert_object(_bar()).override_failure_message(
 		"the bar outlived the mission it started").is_null()
+
+
+# The reported defect, and the shape of it rather than the pixel: a control whose GROUND comes from
+# the palette and whose INK comes from the theme goes unreadable the moment the palette changes.
+# ALL FOUR font states, because hover and pressed fall back to the theme independently -- fixing only
+# font_color brings the bug back on mouse-over. What the ink IS is not asserted here; the pairing's
+# readability is tests/ui/test_queue_palette.gd's law.
+func test_both_buttons_carry_their_own_ink_in_every_state() -> void:
+	if not await _enter_phase():
+		return
+	var bar := _bar()
+	var pairs := {
+		bar._loadout_button: QueueStyle.ink(QueueStyle.Role.HEADER_TEXT),
+		bar._begin_button: QueueStyle.ink(QueueStyle.Role.EXECUTE_TEXT),
+	}
+	for button: Button in pairs:
+		for state: String in ["font_color", "font_hover_color", "font_pressed_color"]:
+			assert_bool(button.has_theme_color_override(state)).override_failure_message(
+				"%s falls back to the theme for %s, so the palette can hide its label"
+				% [button.text, state]).is_true()
+			assert_object(button.get_theme_color(state)).override_failure_message(
+				"%s wears the wrong ink for %s" % [button.text, state]).is_equal(pairs[button])
 
 
 # THE case this ticket exists for. Tab was bound, registered in Controls.gd and named in a tooltip,
@@ -139,17 +212,13 @@ func test_begin_from_the_bar_starts_the_mission() -> void:
 func test_the_tab_key_reaches_the_swap() -> void:
 	if not await _enter_phase():
 		return
-	var key := InputEventKey.new()
-	key.physical_keycode = KEY_TAB
-	key.pressed = true
-
-	game._input(key)
+	_press(KEY_TAB)
 	await await_idle_frame()
 	assert_bool(_screen().visible).override_failure_message(
 		"Tab did not reach the swap -- the key is bound and dead").is_false()
 	assert_bool(_bar().visible).is_true()
 
-	game._input(key)
+	_press(KEY_TAB)
 	await await_idle_frame()
 	assert_bool(_screen().visible).override_failure_message(
 		"Tab swaps one way only").is_true()

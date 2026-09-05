@@ -22,15 +22,28 @@ class_name PreMissionBar
 # phase's entry, freed by _close_deployment_menu, swapped with the screen by toggle_deployment_menu.
 # The two are never up together, and inside the phase never both down.
 #
-# NEITHER BUTTON GREYS. Begin with nobody placed is refused with a VOICE (#739), and the screen's own
-# Begin carries the same rule -- two surfaces, one refusal.
+# NEITHER BUTTON GREYS, which is the OPPOSITE of what the SCREEN does with the same act, on one
+# shared reason. commit_deployment's refusal speaks through TurnBanner, a plain child of Game: under
+# the screen's CanvasLayer that banner cannot be seen at all, so the screen has to grey its Begin and
+# say why in a tooltip. Out here the banner is in plain sight, so the button can stay live and let the
+# refusal speak. Two surfaces, two answers, one question -- can the player hear the no.
+#
+# BEGIN ASKS FIRST (dev, 2026-09-05). The card lives on MissionController.confirm_and_commit rather
+# than on this button, because the commit has three doors and a confirm on one is a confirm the other
+# two walk around.
 #
 # No cinematic term, and that is a declaration rather than an omission: the director is unarmed until
 # commit_deployment, so no playback pass can start while this is on screen.
 
 const CORNER_MARGIN := MissionStatusPanel.CORNER_MARGIN
-const SLOT_HEIGHT := MissionStatusPanel.BUTTON_CLEARANCE - MissionStatusPanel.CORNER_MARGIN
-const BUTTON_SEPARATION := 6
+# The corner's WHOLE height budget, and where it comes from: MissionStatusPanel lifts itself
+# BUTTON_CLEARANCE above the margin this row sits in, so a row taller than that runs under the
+# objectives. End Turn spends 36 of the 44. This spends 40 -- the dev read the first pass as squashed
+# -- and leaves the remaining 4 as the gap that keeps the two surfaces reading as separate.
+const HEIGHT_CEILING := MissionStatusPanel.BUTTON_CLEARANCE
+const BUTTON_HEIGHT := 40
+const BUTTON_MIN_WIDTH := 150   # both alike: a pair sized to its longest label reads as one control
+const BUTTON_SEPARATION := 8
 
 var _controller: MissionController
 var _loadout_button: Button
@@ -58,13 +71,14 @@ func _build() -> void:
 		"Back to the roster, the stash and the contract (Tab).", _controller.toggle_deployment_menu)
 	_loadout_button.add_theme_stylebox_override("normal", QueueStyle.row_box(false, false))
 	_loadout_button.add_theme_stylebox_override("hover", QueueStyle.row_box(false, true))
+	_ink(_loadout_button, QueueStyle.Role.HEADER_TEXT)
 	row.add_child(_loadout_button)
 
 	_begin_button = _button("Begin Mission",
-		"Start the battle with the force you have placed (Enter).", _controller.commit_deployment)
+		"Start the battle with the force you have placed (Enter).", _controller.confirm_and_commit)
 	_begin_button.add_theme_stylebox_override("normal", QueueStyle.execute_box())
 	_begin_button.add_theme_stylebox_override("hover", QueueStyle.execute_hover_box())
-	_begin_button.add_theme_color_override("font_color", QueueStyle.ink(QueueStyle.Role.EXECUTE_TEXT))
+	_ink(_begin_button, QueueStyle.Role.EXECUTE_TEXT)
 	row.add_child(_begin_button)
 
 	# From the row's own minimum size, after both buttons are in it -- the MissionStatusPanel idiom.
@@ -80,9 +94,21 @@ func _button(text: String, tip: String, action: Callable) -> Button:
 	button.text = text
 	button.tooltip_text = UiText.wrap(tip)
 	button.focus_mode = Control.FOCUS_NONE
-	button.custom_minimum_size.y = SLOT_HEIGHT
+	button.custom_minimum_size = Vector2(BUTTON_MIN_WIDTH, BUTTON_HEIGHT)
 	button.pressed.connect(action)
 	return button
+
+
+# ALL FOUR STATES, because a Button's hover/pressed/disabled inks fall back to the THEME's when only
+# font_color is set -- and the theme's are authored for the dark shipped ground. Loadout's box is a
+# queue ROW, which under Parchment is near-white paper, so the label vanished the moment the palette
+# changed (dev, 2026-09-05) and would have come back on hover even after a normal-state-only fix.
+# HEADER_TEXT is the role to pair with a row because it is one of the ones that INVERTS with its
+# ground; TITLE_TEXT and EXECUTE_TEXT deliberately do not, so neither can sit on paper.
+func _ink(button: Button, role: QueueStyle.Role) -> void:
+	var tint := QueueStyle.ink(role)
+	for state: String in ["font_color", "font_hover_color", "font_pressed_color", "font_focus_color"]:
+		button.add_theme_color_override(state, tint)
 
 
 # The board preview and back (#731 ruling 6) -- the other half of the screen's own set_shown. No
