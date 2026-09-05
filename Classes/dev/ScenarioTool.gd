@@ -84,8 +84,8 @@ func refresh_look_row() -> void:
 # a NAME resolved against a folder, so the dropdown lists the folder and a stale name stays
 # selectable rather than silently reading as "(none)".
 #
-# No live side-effect twin to the look row's apply_preset call: nothing reads a roster until #737,
-# and there is nothing on screen a pick could change.
+# No live side-effect twin to the look row's apply_preset call: a roster is read at the mission-
+# START door (#737), never on this page, so there is nothing on screen a pick could change.
 func refresh_roster_row() -> void:
 	if _roster_row != null:
 		remove_child(_roster_row)

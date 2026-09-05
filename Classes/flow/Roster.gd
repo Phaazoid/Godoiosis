@@ -3,9 +3,10 @@ class_name Roster
 
 # Who a mission OFFERS, and what loose gear it offers them (#735, the foundation of #731's
 # pre-mission phase). A mission names one of these; the player picks from it, up to the mission's
-# cap, and places the picks in the deployment zone. Nothing reads a roster to spawn from yet --
-# that is #737/#738. Rosters are PLURAL and per-mission on purpose (dev, 2026-09-04): the same
-# characters can carry different state in different missions, which is the balance-testing lever.
+# cap, and places the picks in the deployment zone. MissionController.deploy_roster is what reads
+# one (#737) -- today it draws for the player, and #740 is the screen that hands the choosing over.
+# Rosters are PLURAL and per-mission on purpose (dev, 2026-09-04): the same characters can carry
+# different state in different missions, which is the balance-testing lever.
 #
 # A roster entry IS a ScenarioUnitEntry, deliberately, and that is the whole design. #731 ruling 1
 # made `cell`/`squad_id`/`is_leader` OUTPUTS of the pre-mission phase, so an entry that has not been
