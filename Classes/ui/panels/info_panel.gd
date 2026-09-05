@@ -7,6 +7,10 @@ extends VBoxContainer
 # tests/ui/test_info_panel_text.gd assert what each line states without standing up a panel;
 # tests/ui/test_tooltip_rendering.gd covers the other half -- that this panel feeds them the
 # inspected unit's own numbers -- against a real populated scene.
+#
+# Its LIMB VOCABULARY moved to UnitInstance in #740, beside the enum it names: the pre-mission card
+# reads the same short and long labels, and this file has no class_name for a second surface to
+# reach. What stays here is the CHIP -- the battle-scoped at-risk colour is not the card's question.
 
 const DIM_COLOR := Color(0.6, 0.62, 0.6)
 const NATURAL_COLOR := Color(0.75, 0.78, 0.75)
@@ -17,18 +21,6 @@ const CRISIS_COLOR := Color(0.95, 0.35, 0.3)
 const TERRAIN_BUFF_COLOR := Color(0.95, 0.85, 0.3)   # a TEMPORARY source (terrain you stand on)
 const NO_TINT := Color(0, 0, 0, 0)                   # alpha 0 = leave the theme's colour alone
 
-const LIMB_SHORT: Dictionary[UnitInstance.LimbSlot, String] = {
-	UnitInstance.LimbSlot.ARM_L: "LA",
-	UnitInstance.LimbSlot.ARM_R: "RA",
-	UnitInstance.LimbSlot.LEG_L: "LL",
-	UnitInstance.LimbSlot.LEG_R: "RL",
-}
-const LIMB_FULL: Dictionary[UnitInstance.LimbSlot, String] = {
-	UnitInstance.LimbSlot.ARM_L: "Left arm",
-	UnitInstance.LimbSlot.ARM_R: "Right arm",
-	UnitInstance.LimbSlot.LEG_L: "Left leg",
-	UnitInstance.LimbSlot.LEG_R: "Right leg",
-}
 
 @onready var hp_bar: ProgressBar = $HPRow/HPBar
 @onready var hp_value: Label = $HPRow/HPValue
@@ -99,19 +91,19 @@ func _refresh_limbs():
 
 func _limb_chip(inst: UnitInstance, slot: UnitInstance.LimbSlot, at_risk: int) -> Label:
 	var chip := Label.new()
-	chip.text = LIMB_SHORT[slot]
+	chip.text = UnitInstance.LIMB_SHORT[slot]
 	chip.mouse_filter = Control.MOUSE_FILTER_STOP
 	var fitting: UnitInstance.LimbFitting = inst.limbs[slot]
 	match fitting.state:
 		UnitInstance.LimbState.EMPTY:
 			chip.add_theme_color_override("font_color", EMPTY_COLOR)
-			chip.tooltip_text = "%s: maimed" % LIMB_FULL[slot]
+			chip.tooltip_text = "%s: maimed" % UnitInstance.LIMB_FULL[slot]
 		UnitInstance.LimbState.PROSTHETIC:
 			chip.add_theme_color_override("font_color", PROSTHETIC_COLOR)
-			chip.tooltip_text = "%s: prosthetic (stat %d)" % [LIMB_FULL[slot], inst.limb_stat(slot)]
+			chip.tooltip_text = "%s: prosthetic (stat %d)" % [UnitInstance.LIMB_FULL[slot], inst.limb_stat(slot)]
 		_:
 			chip.add_theme_color_override("font_color", NATURAL_COLOR)
-			chip.tooltip_text = "%s: natural" % LIMB_FULL[slot]
+			chip.tooltip_text = "%s: natural" % UnitInstance.LIMB_FULL[slot]
 	if slot == at_risk:
 		chip.add_theme_color_override("font_color", AT_RISK_COLOR)
 		chip.tooltip_text += " — NEXT AT RISK (Will can't cover another down)"

@@ -10,6 +10,11 @@ class_name MissionStatusPanel
 # MissionController stays authoritative, this panel only draws what it is handed on refresh, and
 # game.refresh_mission_status() is the one caller. Rules and counts are read off the controller,
 # never re-derived here.
+#
+# THE ROWS THEMSELVES HAVE A SECOND READER since #740: the pre-mission contract shows the same
+# briefing before the battle that this shows during it. `briefing_rows` is that one builder -- a
+# static, so the screen needs no panel instance -- and this file is the only place the wording,
+# the ordering and the two headers live.
 
 const CORNER_MARGIN := 8
 const BUTTON_CLEARANCE := 44   # the End Turn button's reserved corner slot below us: 36 high + its 8 margin (#189)
@@ -38,22 +43,34 @@ func _ready() -> void:
 func clear() -> void:
 	_panel.visible = false
 
+# THE briefing, as a list of rows -- what the corner HUD draws during the battle and what the
+# pre-mission contract draws before it (#740). ONE builder, because the two surfaces answer the
+# same question and a second implementation would drift the moment a lose condition gains a
+# readout: the SquadManager.contact_breaks split, one domain over.
+#
+# Static, and every fact still comes off the controller -- this re-derives nothing.
+static func briefing_rows(controller: MissionController, board: BoardContext) -> Array[Label]:
+	var rows: Array[Label] = []
+	if not controller.objectives.is_empty():   # a lesson-only board has no OBJECTIVES header to earn
+		rows.append(_build_header("OBJECTIVES"))
+	for objective in controller.objectives:
+		rows.append(_build_row(objective, controller, board))
+	# What LOSES it (#101), under its own header: a countdown listed among the objectives reads as
+	# something to achieve. Driven off the declared list, so the next condition needs no edit here.
+	if not controller.lose_conditions.is_empty():
+		rows.append(_build_header("FAIL IF"))
+	for condition in controller.lose_conditions:
+		rows.append(_build_lose_row(condition, controller))
+	return rows
+
 func show_status(controller: MissionController, board: BoardContext, instruction := "") -> void:
 	# Immediate free, not queue_free: the panel re-lays out from minimum size below, and a dying
 	# child still counts toward it until end of frame.
 	for child in _rows.get_children():
 		_rows.remove_child(child)
 		child.free()
-	if not controller.objectives.is_empty():   # a lesson-only board has no OBJECTIVES header to earn
-		_rows.add_child(_build_header("OBJECTIVES"))
-	for objective in controller.objectives:
-		_rows.add_child(_build_row(objective, controller, board))
-	# What LOSES it (#101), under its own header: a countdown listed among the objectives reads as
-	# something to achieve. Driven off the declared list, so the next condition needs no edit here.
-	if not controller.lose_conditions.is_empty():
-		_rows.add_child(_build_header("FAIL IF"))
-	for condition in controller.lose_conditions:
-		_rows.add_child(_build_lose_row(condition, controller))
+	for row: Label in briefing_rows(controller, board):
+		_rows.add_child(row)
 	# The tutorial's instruction row (#182): what to do NOW. Drawn last, below the win conditions,
 	# and only handed to us -- ScenarioDirector owns the text, game.refresh_mission_status() the read.
 	if instruction != "":
@@ -72,7 +89,7 @@ func show_status(controller: MissionController, board: BoardContext, instruction
 	_panel.offset_top -= BUTTON_CLEARANCE
 	_panel.offset_bottom -= BUTTON_CLEARANCE
 
-func _build_header(text: String) -> Label:
+static func _build_header(text: String) -> Label:
 	var header := Label.new()
 	header.text = text
 	header.add_theme_font_size_override("font_size", 11)
@@ -80,7 +97,7 @@ func _build_header(text: String) -> Label:
 	return header
 
 # One declared lose condition. Rules and counts come off the controller, never re-derived here.
-func _build_lose_row(condition: MissionRules.LoseCondition, controller: MissionController) -> Label:
+static func _build_lose_row(condition: MissionRules.LoseCondition, controller: MissionController) -> Label:
 	var label := Label.new()
 	label.add_theme_font_size_override("font_size", 13)
 	# Declared with nothing to fire on -- the objectives' unpainted-geometry row, same doctrine: the
@@ -99,10 +116,10 @@ func _build_lose_row(condition: MissionRules.LoseCondition, controller: MissionC
 	label.modulate = PENDING_COLOR
 	return label
 
-func _lose_title(condition: MissionRules.LoseCondition) -> String:
+static func _lose_title(condition: MissionRules.LoseCondition) -> String:
 	return String(MissionRules.LoseCondition.keys()[condition]).capitalize()
 
-func _build_row(objective: MissionRules.Objective, controller: MissionController, board: BoardContext) -> Label:
+static func _build_row(objective: MissionRules.Objective, controller: MissionController, board: BoardContext) -> Label:
 	var label := Label.new()
 	label.add_theme_font_size_override("font_size", 13)
 	# Declared but unpainted: the mission is unwinnable and the row must say so, never vanish
@@ -130,5 +147,5 @@ func _build_row(objective: MissionRules.Objective, controller: MissionController
 	label.modulate = PENDING_COLOR
 	return label
 
-func _title(objective: MissionRules.Objective) -> String:
+static func _title(objective: MissionRules.Objective) -> String:
 	return String(MissionRules.Objective.keys()[objective]).capitalize()

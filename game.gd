@@ -273,6 +273,10 @@ func _input(event: InputEvent) -> void:
 	# Space is the camera recentre.
 	if event.is_action_pressed("commit_deployment") and not ModalLock.any_open(get_tree()):
 		mission_controller.commit_deployment()
+	# The board preview and back (#740). Here beside commit for the same reason: _unhandled_input
+	# stands down under a 3D host, and this key has to work from both views.
+	if event.is_action_pressed("toggle_deployment_view") and not ModalLock.any_open(get_tree()):
+		mission_controller.toggle_deployment_menu()
 
 func _unhandled_input(event: InputEvent) -> void:
 	# A 3D host (#222) picks board cells itself and calls _on_left_click/_on_right_click
@@ -670,8 +674,20 @@ func _board_locked_for_player() -> bool:
 func playback_owns_board() -> bool:
 	return camera_controller.playback_locked or game_state == GameState.AI_TURN
 
+# A full-screen surface is up, so the board behind it is not the player's to click.
+#
+# THE PRE-MISSION SCREEN JOINS THIS RATHER THAN EATING CLICKS ITSELF (#740), and the reason is
+# measured: battle3d picks board cells with its own raycast and calls _on_left_click DIRECTLY
+# (battle3d.gd, "the game refuses clicks while the board is locked"), so a full-rect Control that
+# swallows input is entirely transparent to the 3D view -- which is the SHIPPED one. This predicate
+# is the only thing both doors ask, plus the camera rig's manual-input gate, so joining it locks
+# all three at once and unlocks all three the moment the player toggles to the board preview.
+#
+# It reads VISIBILITY, not existence: hiding the screen IS the board preview.
 func menu_is_up() -> bool:
-	return game_state == GameState.MISSION_OVER or game_state == GameState.MENU
+	if game_state == GameState.MISSION_OVER or game_state == GameState.MENU:
+		return true
+	return mission_controller.deployment_menu_is_up()
 
 func can_control(unit: Unit) -> bool:
 	if unit == null:

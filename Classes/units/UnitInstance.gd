@@ -54,6 +54,22 @@ var weapon_proficiency: Dictionary[WeaponData.WeaponType, int] = {}
 enum LimbSlot { ARM_L, ARM_R, LEG_L, LEG_R }
 enum LimbState { NATURAL, EMPTY, PROSTHETIC }
 
+# What a slot is CALLED, at two lengths -- the chip and its tooltip. Beside the enum rather than in
+# a panel, because since #740 two surfaces read it: the inspect panel's limb row during a battle
+# and the pre-mission card's before one. Glossary's shape, one domain down.
+const LIMB_SHORT: Dictionary[LimbSlot, String] = {
+	LimbSlot.ARM_L: "LA",
+	LimbSlot.ARM_R: "RA",
+	LimbSlot.LEG_L: "LL",
+	LimbSlot.LEG_R: "RL",
+}
+const LIMB_FULL: Dictionary[LimbSlot, String] = {
+	LimbSlot.ARM_L: "Left arm",
+	LimbSlot.ARM_R: "Right arm",
+	LimbSlot.LEG_L: "Left leg",
+	LimbSlot.LEG_R: "Right leg",
+}
+
 # --- Jobs (docs/design/jobs.md, #61) ---
 var jobs: Array[String] = []   # open, uncapped job ids; the unit's entire job state
 

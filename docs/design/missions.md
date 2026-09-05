@@ -2,7 +2,7 @@
 
 **Status: ALL FOUR SLICES BUILT 2026-07-28 ([#96](https://github.com/Phaazoid/Godoiosis/issues/96)).** Filed 2026-07-27, when the project acquired a win condition for the first time. Before this, Iosis had ten interlocking systems and no way to finish a battle — which meant a design question could be answered *"is this coherent?"* but never *"does this improve play?"*
 
-**Canon checked through #763 (2026-09-05).**
+**Canon checked through #768 (2026-09-05).**
 
 ## What a mission is
 
@@ -28,7 +28,7 @@ A board that names a roster **spawns all of it and draws from that onto its depl
 
 ### The undeployed half is real (#738)
 
-The whole roster spawns as real `Unit` nodes, into **`game.reserve_root`** — because every readout the pre-mission screen needs takes a **wielder** (`can_equip`, `get_live_abilities`, the base → limb → jobs → effects → gear chain), and an undeployed unit answered by a second implementation reading `UnitInstance` directly would drift the first time a stat source is added. `Unit._ready` guards *only* its grid setup behind `if pending_grid`, so an off-board unit has still run `initialize()` and `_seed_starting_kit()`. It is also what makes this the one way a roster unit reaches the board: the draw deploys out of the same set #740's screen will let the player choose from.
+The whole roster spawns as real `Unit` nodes, into **`game.reserve_root`** — because every readout the pre-mission screen needs takes a **wielder** (`can_equip`, `get_live_abilities`, the base → limb → jobs → effects → gear chain), and an undeployed unit answered by a second implementation reading `UnitInstance` directly would drift the first time a stat source is added. `Unit._ready` guards *only* its grid setup behind `if pending_grid`, so an off-board unit has still run `initialize()` and `_seed_starting_kit()`. It is also what makes this the one way a roster unit reaches the board: the draw deploys out of the same set #740's screen lets the player choose from.
 
 **Two rules, and the reserve exists only where both hold.** It is **not under `units_root`** — nine readers across six files take that node to mean *a unit on the board*, so undeployed units there are living player units, the #96 defeat floor never fires, `present_factions` never drops PLAYER, and the AI weighs phantoms at the origin. (The floor, not rout: rout asks about *hostile* factions, so extra player units do not touch it.) And it is **inside `clear_board`'s teardown** — a holding parent outside it survives a board swap pointing into a board that has been freed. `visible = false` is a third, smaller rule: a `Unit` is a `Node2D` with sprites, so ten parked under a visible node draw stacked at the origin in the flat 2D view, where the 3D side is safe by construction because `UnitMirror` scans `units_root`.
 
@@ -53,6 +53,30 @@ The whole roster spawns as real `Unit` nodes, into **`game.reserve_root`** — b
 **What the player may do while standing there.** A click on one of their units opens the ring — the same widget, with nothing to say about a turn: Squad Up / Join / Leave / Disband through their own gates unchanged, plus Undeploy and Inspect. `MainActionMenu.populate` early-returns into `_pre_mission_options` *before* any gate that reads `unit.squad`, because a unit the phase has just undeployed does not have one. A click on an empty deployment cell offers the units still waiting — `ActionMenuController` already takes an arbitrary tree and already routes non-verb leaves through synthetic ids, so the ring *is* the dropdown and no widget was built for it. Undeploy is gated on `drawn_from_roster`: authored units are additive and belong to the board (ruling 2c), and enemies are `units_root` children too.
 
 **Saving is refused during the phase, at `ScenarioManager.save_to_slot` rather than at the pause-menu row.** A slot is a mid-battle snapshot and `capture_scenario` walks `units_root`, so the reserve is invisible to it: a save taken here would record only the units already placed, and the resume — which correctly bypasses the phase — would come back with the rest of the roster gone and no way to finish choosing. The pause menu greys its own row and names the reason; the refusal underneath is the gate.
+
+### The screen itself (#740 + #743)
+
+**Four regions, from his sketch**: the roster's cards top-left, the stash down the whole right side, and along the bottom the force placed so far with the mission's contract cut into it. `PreMissionScreen` is a `ModalCard` that is not a card — unframed, opaque, claiming no `ModalLock` — the way `MissionSelectScreen` is not one, and for a sharper reason: the board underneath has to keep running, because Tab swaps to it.
+
+**It locks the board by joining `game.menu_is_up()`, not by eating clicks.** `battle3d` picks board cells with its own raycast and calls `game._on_left_click` **directly**, gated only on `_board_locked_for_player()` — so a full-rect Control that swallows input is entirely transparent to the 3D view, which is the shipped one, and would have been correct only in the dev-only flat view. Joining that one predicate covers both click doors *and* the camera rig's manual-input gate, and hands all three back the moment the player swaps to the board. It reads **visibility, not existence**: hiding the screen *is* the preview, which is why the screen is hidden rather than freed — the scroll position and anything open survive the look.
+
+**The backdrop is opaque and that is load-bearing.** Nothing is frozen behind it, so `CameraController`'s WASD poll and `HoverPresenter._process` are still running; translucent, the player would watch the board pan under their own menu. Same rule as `MissionSelectScreen`, different reason (that one hides an abandoned board).
+
+**`MissionController` owns the lifecycle and closes it at every exit** — commit, `reset()` (F2, a board swap, Load Game) and **`abandon_mission`, which needs its own call** because that path never reaches `clear_board`, so nothing else would ever take the screen down and it would outlive its mission holding units the next load frees.
+
+**The card**: the unit fills the left (sprite, name, limbs, job, live abilities, the eight effective stats), what it *carries* fills the right as the same row the stash uses — six of them, because that is `MAX_INVENTORY_SIZE` — and the strip along the bottom is weight and effective DEF plus the deploy toggle. Every number is read, never re-derived: `get_effective_stat`, `get_effective_def`, `get_weight`, `get_live_abilities`, which is exactly what ruling 7 spawns the whole roster as real `Unit`s to make possible.
+
+**The block reason lives on the card and nowhere else** (dev, 2026-09-05). `EquippableData.can_equip` takes a **wielder**, so the stash — which has no unit selected — structurally cannot say whether a thing is usable. #744 widens `can_equip` to a reason string; until then the card marks the row and says so generically, through one helper that ticket has a single line to change.
+
+**Nothing in the card may demand width from its content.** The grid divides its row three ways and an `HFlowContainer`'s minimum width is its widest child, so one long ability name would walk the whole column out of the region — #685's failure, one surface over. Every content-bearing label is `clip_text` with the full string on hover, so the card's minimum size is a constant.
+
+**Two extractions rather than second implementations.** `MissionStatusPanel.briefing_rows` is now the one builder for the objective and FAIL-IF rows, so the briefing *before* the battle and the status *during* it cannot word a condition differently. `UnitInstance.LIMB_SHORT`/`LIMB_FULL` moved beside the enum they name, `info_panel` being a scene script with no `class_name` whose vocabulary had gained a second reader.
+
+**Begin carries its own refusal.** `commit_deployment`'s "Deploy someone first" speaks through `TurnBanner`, a plain child of Game, while this screen sits on a `CanvasLayer` — so under the menu that banner cannot be seen at all, and a dead Begin button would be silent. It disables at zero with the reason on hover; the banner still covers the Enter-on-the-board path.
+
+**`MissionController._roster_units` keeps the roster in ENTRY order.** Deploying and undeploying *reparent* between `units_root` and `reserve_root`, so both lists reshuffle every time the player changes their mind and a grid drawn off either would reorder mid-decision. Worth knowing that this is currently belt-and-braces for the grid — `_refresh_cards` rebuilds only when the roster's size changes, so the order settles at build time either way — and is kept as the contract underneath rather than deleted; the store's own guarantee is what the suite pins.
+
+Still deferred: #741's gear moves, #742's job picker, #744's reasons, #745's tooltip pass. Weight reads 0 for everyone until #120's authoring pass (dev's call — the slot is shown so the gap is visible rather than forgotten).
 
 ## Objectives: declared explicitly, located by zones
 
