@@ -37,7 +37,13 @@ if [ "${1:-}" = "--batch" ]; then
   printf '{"id":%d,"cmds":%s}' "$id" "$2" > "$CMD"
 else
   [ $# -ge 1 ] || { echo "usage: send.sh <cmd> ['<json args>']  |  send.sh --batch '<json array>'" >&2; exit 1; }
-  args="${2:-{\}}"
+  # NOT `args="${2:-{\}}"`. Bash keeps the backslash, so the default expands to the literal `{\}`,
+  # Godot's JSON.parse_string rejects it, the bridge never answers that id, and this script hangs
+  # until it times out. Found by a playtest agent on the first unattended run -- and I had already
+  # hit and fixed this exact expansion in a throwaway copy of this script earlier the same day,
+  # then reintroduced it when writing the version that ships.
+  args="${2:-}"
+  [ -z "$args" ] && args='{}'
   printf '{"id":%d,"cmd":"%s","args":%s}' "$id" "$1" "$args" > "$CMD"
 fi
 
