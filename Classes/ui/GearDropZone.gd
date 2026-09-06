@@ -52,10 +52,12 @@ func _gui_input(event: InputEvent) -> void:
 	if click.pressed:
 		_press_at = click.position
 		return
-	var began_here := _press_at != Vector2.INF
-	var travelled := _press_at.distance_to(click.position) if began_here else INF
+	# INF when this row never saw the press -- the pointer arrived from somewhere else, and that is
+	# nobody's click. Vector2.INF answers INF to distance_to, so the sentinel needs no second guard
+	# beside the comparison; one of those was here, and a mutant deleting it changed nothing.
+	var travelled := _press_at.distance_to(click.position)
 	_press_at = Vector2.INF
-	if began_here and travelled <= CLICK_SLOP:
+	if travelled <= CLICK_SLOP:
 		clicked.emit(_dragged_item(), owner_unit)
 
 

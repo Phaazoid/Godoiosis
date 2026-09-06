@@ -2,7 +2,7 @@
 
 **Status: ALL FOUR SLICES BUILT 2026-07-28 ([#96](https://github.com/Phaazoid/Godoiosis/issues/96)).** Filed 2026-07-27, when the project acquired a win condition for the first time. Before this, Iosis had ten interlocking systems and no way to finish a battle — which meant a design question could be answered *"is this coherent?"* but never *"does this improve play?"*
 
-**Canon checked through #786 (2026-09-05).**
+**Canon checked through #789 (2026-09-06).**
 
 ## What a mission is
 
@@ -173,6 +173,10 @@ signal, and a refresh frees every row to rebuild them — the emitting one inclu
 outright ("Attempted to free a locked object"). The first move a player made would have errored rather
 than happened. `PreMissionScreen._redraw` defers, and that is a rule for any surface that rebuilds
 itself in response to one of its own children.
+
+**A CLICK IS THE RELEASE, AND THAT IS WHAT MAKES DRAGGING POSSIBLE AT ALL** ([#789](https://github.com/Phaazoid/Godoiosis/issues/789), 2026-09-06, found in play). The rule directly above is what broke it: `GearDropZone` acted on the **press**, the screen answered by redrawing, and the deferred redraw freed the very row the pointer was still holding down one idle frame later. Godot asks `_get_drag_data` only after **~10px of travel while held**, which takes several frames — so the drag source was always destroyed before it could be asked, and `_get_drag_data` never ran once in the shipped build. Clicking worked, because a click is over by then. The travelled distance separates the two at Godot's own threshold: a gesture that reaches it becomes a drag and the release never arrives here, one that does not is a click, and there is no gap or overlap between them, so a completed drag cannot also pick the item straight back up. `Vector2.INF` marks *this row never saw the press*, and answers `INF` to `distance_to`, so the one comparison covers that case too.
+
+**And the suite could not have caught it**, which its own header had said since #741: every case drives `_get_drag_data`/`_can_drop_data`/`_drop_data` directly, so all of them stayed green while nothing ever called them. What a headless suite *can* see is the source **surviving its own press** — a state, not a gesture — and that is the case that now leads the file. The travelling lesson: when a suite declares a blind spot, the declaration names the shape of the bug that will eventually arrive through it.
 
 **The selection is DATA, never a row.** A successful move frees every row on screen, so a selection
 holding a node dangles at the exact moment the feature starts working (#107's shape).
