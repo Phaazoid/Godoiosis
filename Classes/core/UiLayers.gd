@@ -20,3 +20,8 @@ const INVENTORY_POPUP := 10   # the in-panel item action popup (inventory_panel.
 const ACTION_MENU := 20       # the unit's radial action menu -- over the HUD, under any takeover
 const MENU_SCREEN := 100      # a full-screen takeover -- MissionSelectScreen
 const MODAL_CARD := 200       # a modal card; out-ranks everything, including a menu screen
+# A drag preview is the one thing that must out-rank whatever surface it was picked up FROM, and it
+# needs stating here because Godot makes the preview TOP-LEVEL: that breaks the relative-z chain, so
+# it inherits nothing from the surface it came from and draws at 0 unless told otherwise -- under an
+# opaque menu, i.e. invisible, which is exactly what shipped (#798).
+const DRAG_PREVIEW := 300
