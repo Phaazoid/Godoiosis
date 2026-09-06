@@ -285,8 +285,7 @@ func job_option_text(job_id: String) -> String:
 			piece.display_name, "" if demand == "" else " (needs %s)" % demand])
 
 	lines.append_array(_ability_deltas(ids))
-	return "
-".join(lines)
+	return "\n".join(lines)
 
 
 # Gained and lost, by ability ID — the same key AbilityData.add_live dedupes on, so a job and a worn

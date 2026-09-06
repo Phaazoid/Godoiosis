@@ -185,7 +185,18 @@ func test_the_option_tooltip_names_the_armour_the_job_would_take_off() -> void:
 	assert_str(tip).contains(plate.display_name)
 	assert_str(tip).contains("comes off")
 	# The demand is read off the piece, never authored as prose -- retuning the gate rewords this.
-	assert_str(tip).contains("DEX")
+	assert_str(tip).contains(plate.requirement_text())
+
+	# ...AND THE NUMBERS REACH THE PLAYER. Both transitions are built from what the model predicts,
+	# because the tooltip is the only place these are read: a mutant that previewed DEF as unchanged
+	# passed every other case in this file, and its tooltip warned that the plate comes off while
+	# claiming the defence it was worn for had not moved.
+	var ids: Array[String] = ["tank"]
+	var unit := card.unit
+	assert_int(unit.previewed_def_for_jobs(ids)).is_not_equal(unit.get_effective_def())
+	assert_str(tip).contains("DEF %d → %d" % [unit.get_effective_def(), unit.previewed_def_for_jobs(ids)])
+	assert_str(tip).contains("DEX %d → %d" % [
+		unit.get_effective_stat(Stats.Stat.DEX), unit.previewed_stat_for_jobs(Stats.Stat.DEX, ids)])
 	# ...and the option that changes nothing says so rather than warning about a piece it keeps.
 	assert_str(popup.get_item_tooltip(_index_of(card._job_picker, ""))).not_contains(plate.display_name)
 
