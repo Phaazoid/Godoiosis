@@ -16,7 +16,7 @@ extends GdUnitTestSuite
 
 const MAIN_SCENE := "res://Scenes/Main.tscn"
 const H := preload("res://tests/support/squad_fixtures.gd")
-const P := preload("res://tests/support/pattern_fixtures.gd")
+const P := preload("res://tests/support/shape_fixtures.gd")
 const GRASS_SOURCE := 0
 const GRASS_ATLAS := Vector2i(5, 0)
 const CORROSION := Elemental.Element.CORROSION
@@ -56,13 +56,13 @@ func _spitter_template() -> WeaponData:
 	charged.display_name = "Pressurised Spray"
 	charged.elemental_damage_type = CORROSION
 	charged.power = 20
-	charged.attack_pattern = P.point(2)
+	P.point(charged, 2)
 
 	var spray := WeaponAttackData.new()
 	spray.display_name = "Spray"
 	spray.elemental_damage_type = CORROSION
 	spray.power = 4
-	spray.attack_pattern = P.point(2)
+	P.point(spray, 2)
 	spray.empowered_form = charged
 
 	var t := WeaponData.new()
