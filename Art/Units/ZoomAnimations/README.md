@@ -47,7 +47,7 @@ conversion was verified **zero differing pixels**, with no alpha anywhere in the
 The `.gif` files themselves are inert: nothing imports them, and no catalog scans this folder
 (`SpawnTool`'s sprite scan is `Art/Units/MapSprites/` only).
 
-## Only the Sage is machine-readable, and this is why
+## Two kinds of sheet, and only the Sage is READ
 
 The Sage is a **card-format** sheet: every frame sits in a fixed 66x42 rectangle with its duration
 printed above it, the animation's name to the left of the row it starts, and a return pointer under
@@ -67,5 +67,30 @@ The other three are older rips with **none** of it, and no tool recovers what is
   frame.
 
 Dev ruling (2026-08-28): *"All of these are very old uploads, there doesn't exist others as clean as
-the sage's."* So the three are kept for reference and for whatever hand-assisted path #629's
-follow-up settles on; the automatic pipeline is the Sage's alone for now.
+the sage's."* So no better sources are coming. What the other three
+get instead is RECONSTRUCTION rather than reading -- the next section, and the Brigand has it.
+
+## The other three are RECONSTRUCTED, and the Brigand is the first (#603 / #635, 2026-09-05)
+
+`LooseSheet` reads a sheet that has none of the above. It cuts frames out of a band as connected
+regions of not-page ink, drops anything too small to be a frame (that is the printed animation name,
+which sits inside the band), and **re-cards** what is left: every frame gets one shared card size,
+its ink bottom flush with the card's ground line and its ink centred across it. What comes out is
+the same uniform artifact a card sheet produces, so everything downstream is unchanged.
+
+**It gives back registration it cannot actually know, and the difference matters when you look at
+one.** Vertical is right by construction — the lowest ink *is* the ground, which is why the
+Brigand's leap keeps its height off the shadow drawn under it. Horizontal is a guess that drifts:
+an axe swung out to one side widens the bounding box that way and walks the body the other. On the
+shipped Brigand the worst frame-to-frame shift is about 10 texels, a third of a cell, at the two
+frames where the swing arc appears. Two other anchors were measured — the ink centre of the bottom
+rows, and of the lower half — and both were worse. Hand-authored per-frame offsets are the only real
+cure; that is [#635](https://github.com/Phaazoid/Godoiosis/issues/635)'s own fork 2 and is unpicked.
+
+**Timing is typed into the manifest**, since the sheet prints none: the Brigand's axe attack is 12
+frames over 74 GBA frames (~1.23 s), authored to be tuned by eye rather than measured off anything.
+
+`Brigand_Frames.png` is generated like `Sage_Frames.png` and edited the same way — through the
+manifest, never by hand — with one difference worth knowing: **a rect in it is NOT a rect on the
+source.** Every frame has been moved to sit on its card's ground, so unlike the Sage atlas you
+cannot find a frame's coordinates on the original sheet by eye.

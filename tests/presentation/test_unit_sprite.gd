@@ -95,3 +95,33 @@ func test_set_downed_swaps_both_ways() -> void:
 	assert_object(sprite.texture).is_same(data.downed_sprite)
 	sprite.set_downed(false)
 	assert_object(sprite.texture).is_same(data.map_sprite)
+
+
+# --- which zoom set belongs to a piece of art (#603) ---------------------------------------------
+
+# The convention, asserted as a convention: a family with no file on disk answers NULL rather than
+# erroring or inventing one. Most families have none and this is asked on every blow of every
+# battle, so the quiet answer is the whole contract.
+func test_a_family_with_no_zoom_set_answers_null() -> void:
+	UnitSprite3D._zoom_sets.clear()
+	var art := ImageTexture.new()   # no resource_path, so no family to look up
+	assert_object(UnitSprite3D.zoom_set_for(art)).is_null()
+	assert_object(UnitSprite3D.zoom_set_for(null)).is_null()
+
+
+# The MISS is cached too, and that is the load-bearing half: an uncached miss hits the disk on every
+# swing of every unit whose art has no set, which is nearly all of them.
+func test_the_lookup_answers_from_its_cache_the_second_time() -> void:
+	UnitSprite3D._zoom_sets.clear()
+	var art: Texture2D = load("res://Art/Units/MapSprites/Brigand.png")
+	var first := UnitSprite3D.zoom_set_for(art)
+	assert_object(first).override_failure_message(
+			"the Brigand has a zoom set on disk; the cache case needs one to hold").is_not_null()
+	assert_object(UnitSprite3D.zoom_set_for(art)).is_same(first)
+	# A miss is an ENTRY, not an absence -- the difference between asking the disk once and asking
+	# it forever.
+	UnitSprite3D._zoom_sets.clear()
+	var absent: Texture2D = load("res://Art/Units/MapSprites/Recruit.png")
+	assert_object(UnitSprite3D.zoom_set_for(absent)).is_null()
+	assert_bool(UnitSprite3D._zoom_sets.has("Recruit")).override_failure_message(
+			"the miss was not remembered; the next swing asks the disk again").is_true()

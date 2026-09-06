@@ -7,7 +7,7 @@ its child [#49 Action Queue UX](https://github.com/Phaazoid/Godoiosis/issues/49)
 This is a *guidelines* doc, not a spec — it captures the principles we're holding the work to,
 plus the running order of the queue-UX checklist. Update it as items land.
 
-**Canon checked through #763 (2026-09-05).**
+**Canon checked through #776 (2026-09-05).**
 
 ## Principles
 
@@ -1866,6 +1866,8 @@ halves of its tween and is *awaited* before `take_damage` runs, so the sprite is
 instant the death signal fires — there is no swing to freeze mid-. What 2c ships is the **impact
 freeze**; the anticipation freeze needs frames to freeze between, which is
 [#603](https://github.com/Phaazoid/Godoiosis/issues/603).
+
+**Premise changed 2026-09-05 (#603 slice 1).** A Brigand now swings a 1.23s frame animation while the beat awaits an 0.18s tween, so the sprite is NOT back at rest when the death signal fires -- for a family with an animation set there is a swing to freeze mid- after all. The freeze itself is still not wired to it; what changed is that it became possible.
 
 **Superseded, not forgotten:** #520's original scope named a *keyframe/segment layer over `pose()`*.
 It was never built and is not owed — the published-fact channels (`directed_line` / `framed_span` /

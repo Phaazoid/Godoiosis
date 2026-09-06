@@ -120,10 +120,9 @@ func _handle_selector_key(event: InputEvent) -> void:
 # tuned for 32px map art. A dev key rather than a panel because there is nothing here to tune yet --
 # the values are all on the sheet.
 #
-# The set is found by CONVENTION -- `Resources/ZoomAnimations/<art family>.tres` -- and NOT off a
-# field on UnitData. Where a unit's animations are authored is #603's fork 3 and is deliberately
-# unpicked (per weapon family? per unit? one shared vocabulary?), so adding the field now would be
-# pre-building a seam whose shape is still an open question. A convention costs nothing to delete.
+# HOW a set is found moved to `UnitSprite3D.zoom_set_for` when #603 gave the mirror the same
+# question -- the convention and the reason it is a convention are written up there. This key keeps
+# what is its own: cycling through the set, and saying so when a family has nothing to play.
 #
 # Here rather than in battle3d for the two-windows rule: this entry is forwarded from BOTH OS
 # windows, and a key handled in the 3D scene alone is dead whenever the dev-tools window has focus.
@@ -144,22 +143,19 @@ func _handle_zoom_animation_key(event: InputEvent) -> void:
 	if sprite == null:
 		return
 
-	# Keyed on the MAP SPRITE, never on the unit's name -- a zoom sheet is the same ART FAMILY as the
-	# map art, which is why `ZoomAnimations/Sage.png` is named to pair with `MapSprites/Sage.png`.
-	# A character is NOT its sprite: the one unit on the board this could be tried against is named
-	# **Celest** and is drawn with the Sage art, so keying on display_name found nothing, for every
-	# unit, always. The AUTHORED `unit_data.map_sprite` rather than the live Sprite2D's texture,
-	# since a family is a fact about the art and must not depend on what the unit is doing.
+	# Keyed on the MAP SPRITE, never on the unit's name, and looked up through the ONE home that
+	# rule now has (UnitSprite3D.zoom_set_for): #603 made the mirror ask the same question on every
+	# blow, and two copies of "which set belongs to this art" would drift the day the convention
+	# changes. The WARNING stays here rather than moving with it -- a dev who pressed K wants to be
+	# told there is nothing to play, while the mirror asks it of every unit in every battle and must
+	# stay silent.
 	var art: Texture2D = null if unit.unit_data == null else unit.unit_data.map_sprite
-	var family := "" if art == null else art.resource_path.get_file().get_basename()
-	if family.is_empty():
+	var frames := UnitSprite3D.zoom_set_for(art)
+	if frames == null:
+		var family := "" if art == null else art.resource_path.get_file().get_basename()
+		push_warning("%s is drawn with '%s', which has no zoom animation set in Resources/ZoomAnimations/"
+				% [sprite.display_name, family])
 		return
-	var path := "res://Resources/ZoomAnimations/%s.tres" % family
-	if not ResourceLoader.exists(path):
-		push_warning("%s is drawn with '%s', which has no zoom animation set (looked for %s)"
-				% [sprite.display_name, family, path])
-		return
-	var frames: SpriteFrames = load(path)
 	var names := frames.get_animation_names()
 	if names.is_empty():
 		return

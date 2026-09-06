@@ -121,7 +121,22 @@ func animation_offset() -> Vector2:
 		return Vector2.ZERO
 	return sprite.position - base_position
 
+# A COUNTER, not a signal, and it is what the 3D mirror watches to know a blow was swung (#603).
+# The mirror is a poll -- it re-reads the 2D game every frame and owns no wires but death's -- and a
+# swing is a discrete event a poll cannot otherwise see: `animation_offset()` moves for the invalid
+# order shake too, and by the time the mirror next runs the tween may be anywhere. A version the
+# mirror compares against its own last-seen value is #308's idiom, and it cannot miss one.
+var lunges := 0
+# Which way that swing was aimed, in the same 2D vector the lunge itself uses. The mirror faces the
+# 3D sprite with it: a standing unit's facing is only re-judged when it MOVES, so an attacker would
+# otherwise swing with its back to the victim.
+var lunge_direction := Vector2.ZERO
+
 func play_attack_lunge(direction: Vector2):
+	# Counted BEFORE the early-out: the swing was ordered whether or not this unit has a 2D sprite to
+	# move, and the 3D mirror must see it either way.
+	lunges += 1
+	lunge_direction = direction
 	if sprite == null:
 		return
 		

@@ -263,6 +263,10 @@ var _camera_right := Vector3.ZERO   # last camera basis facing was judged agains
 # stale the moment one hides, and the next time it appears the whole hidden loss reads as damage
 # taken this frame and bursts.
 var _last_hp: Dictionary[int, int] = {}
+# How many swings each mirrored unit had played when this node last looked (#603). Beside _last_hp
+# and for its reason: both watch a 2D fact that MOVES ON, and a poll reading only the current value
+# cannot tell "has attacked" from "is attacking again".
+var _last_lunge: Dictionary[int, int] = {}
 var _debris: HealthBlockDebris
 
 
@@ -347,6 +351,10 @@ func reconcile() -> void:
 			var sprite := UnitSprite3D.for_unit_data(unit.unit_data)
 			add_child(sprite)
 			_mirrored[id] = sprite
+			# Seeded from what this unit has ALREADY swung, never from zero: a unit that reaches the
+			# mirror after its first blow -- a mid-pass spawn, a #739 redeploy -- would otherwise read
+			# as having just attacked and play a swing on the frame it appears.
+			_last_lunge[id] = unit.visuals.lunges
 		if not _bars.has(id):
 			var bar := UnitHealthBar.new()
 			add_child(bar)
@@ -371,6 +379,7 @@ func reconcile() -> void:
 			_mirrored[id].queue_free()
 			_mirrored.erase(id)
 			_last_hp.erase(id)
+			_last_lunge.erase(id)
 			if _bars.has(id):
 				_bars[id].queue_free()
 				_bars.erase(id)
@@ -540,6 +549,43 @@ func _sync(unit: Unit, sprite: UnitSprite3D) -> void:
 	if not unit.movement.sliding and Vector2(step.x, step.z).length_squared() > 0.000001:
 		sprite.last_step = step
 		sprite.flip_h = sprite.facing_flip_for(step)
+
+	# LAST, and only for a unit still standing: set_downed above interrupts a swing on purpose, and
+	# starting one here would put the gesture back on a body that is falling.
+	if not downed:
+		_settle_swing(unit, sprite)
+
+
+# A swing the 2D game has played since this node last looked, mirrored as a frame animation (#603).
+#
+# THE FIRST REAL GESTURE THE ZOOM PLAYS. Until now the sprites carried a blow with the same 0.18s
+# placeholder lunge on the board and in the zoom, and every distinction #524 computes and #519 times
+# was expressed only by how long the camera waited. A unit whose ART FAMILY has an animation set
+# swings it instead; every other unit is untouched, which is what makes this shippable while three
+# of the four sheets are still unreadable (#635).
+#
+# It plays in EVERY zoom mode, cinematic and board alike. The 3D sprite is the same sprite in all
+# three, and #410's standing ruling is that placeholder art ships throughout rather than being gated
+# on a mode. Whether a gesture should fork on the beat's profile is #603's fork 4, unpicked.
+func _settle_swing(unit: Unit, sprite: UnitSprite3D) -> void:
+	var id := unit.get_instance_id()
+	var swings: int = unit.visuals.lunges
+	if _last_lunge.get(id, swings) == swings:
+		return
+	_last_lunge[id] = swings
+	var frames := UnitSprite3D.zoom_set_for(unit.unit_data.map_sprite if unit.unit_data != null else null)
+	if frames == null or not frames.has_animation(&"attack"):
+		return   # most families have none, and silence is the right answer for them
+	# FACE THE BLOW. A standing unit's facing is only re-judged when it MOVES, so an attacker that
+	# has not walked this pass is still wearing whatever facing it last stepped into -- which is a
+	# coin flip against the victim. `last_step` is written too, so a camera orbit re-judges the new
+	# facing rather than the stale one.
+	var aim: Vector2 = unit.visuals.lunge_direction
+	if aim.length_squared() > 0.000001:
+		var step := Vector3(aim.x, 0.0, aim.y)   # a 2D y is board DEPTH, never height
+		sprite.last_step = step
+		sprite.flip_h = sprite.facing_flip_for(step)
+	sprite.play_animation(frames, &"attack")
 
 
 # --- The hover health readout (#229) -------------------------------------------------

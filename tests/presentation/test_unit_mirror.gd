@@ -26,6 +26,9 @@ func before_test() -> void:
 
 
 func after_test() -> void:
+	# The family cache is process-scoped and these cases INJECT into it; left behind, a fake set
+	# would be the answer another suite gets for real art.
+	UnitSprite3D._zoom_sets.clear()
 	await DialogFixtures.end_all_dialog(self)   # the mission door arms #182 dialog; end it or it leaks
 	get_tree().root.remove_child(_scene)
 	_scene.free()
@@ -361,3 +364,82 @@ func _queue_any_player_move() -> Unit:
 			break
 		_game.exit_current_mode()
 	return null
+
+
+# --- the swing reaches the 3D sprite (#603) ------------------------------------------------------
+
+# THE WIRE, and it is the point of the ticket: the 2D game plays an attack lunge, and the mirrored
+# sprite plays a frame animation. Nothing here asserts WHICH frames -- that is the sheet's content
+# and LooseSheet's suite -- only that the gesture crossed.
+#
+# The set is INJECTED into UnitSprite3D's family cache rather than relying on a unit whose art
+# happens to ship one, so the case survives the day a roster is re-cast or a sheet is replaced. That
+# direct set is a precondition, not the thing under test, and the case says so.
+func test_a_lunge_in_the_2d_game_plays_the_mirrored_sprite_s_swing() -> void:
+	var unit := _live_units()[0]
+	var family := _family_of(unit)
+	UnitSprite3D._zoom_sets[family] = _swing_set()
+	var sprite := _mirror.sprite_for(unit)
+	assert_bool(sprite.is_animating()).override_failure_message(
+			"the sprite was already animating before the lunge; the case proves nothing").is_false()
+
+	unit.visuals.play_attack_lunge(Vector2.LEFT)
+	await await_idle_frame()
+	assert_bool(sprite.is_animating()).override_failure_message(
+			"the 2D game swung and the 3D sprite did not (#603)").is_true()
+
+
+# The negative, and it is what makes the feature shippable while three of the four zoom sheets are
+# unreadable (#635): a unit whose ART FAMILY has no set swings exactly as it did before -- the 2D
+# lunge, mirrored as an offset, and no frames.
+func test_a_family_with_no_animation_set_swings_as_it_always_did() -> void:
+	var unit := _live_units()[0]
+	UnitSprite3D._zoom_sets[_family_of(unit)] = null
+	var sprite := _mirror.sprite_for(unit)
+	unit.visuals.play_attack_lunge(Vector2.LEFT)
+	await await_idle_frame()
+	assert_bool(sprite.is_animating()).override_failure_message(
+			"a family with no set played frames from somewhere").is_false()
+
+
+# A unit that reaches the mirror having ALREADY swung must not swing on the frame it appears. The
+# ledger is seeded from the unit's own count when its sprite is built, so this drives the real
+# arrival path: raise the count first, then let reconcile build the sprite.
+func test_a_unit_mirrored_after_it_has_already_swung_does_not_swing_on_arrival() -> void:
+	var unit := _live_units()[0]
+	var family := _family_of(unit)
+	UnitSprite3D._zoom_sets[family] = _swing_set()
+	# Out of the mirror entirely, so its sprite and its ledger entry are dropped...
+	var parent := unit.get_parent()
+	parent.remove_child(unit)
+	await await_idle_frame()
+	# ...swing while unmirrored, then come back. The count is raised directly here rather than through
+	# play_attack_lunge: that call tweens, and a node outside the tree cannot make a Tween. Whether
+	# the counter itself is wired is the case above; this one is about what the LEDGER does with a
+	# unit that arrives mid-count.
+	unit.visuals.lunges += 1
+	parent.add_child(unit)
+	await await_idle_frame()
+	await await_idle_frame()
+	var sprite := _mirror.sprite_for(unit)
+	assert_object(sprite).override_failure_message("the unit was not re-mirrored").is_not_null()
+	assert_bool(sprite.is_animating()).override_failure_message(
+			"a unit swung on the frame it was mirrored, replaying a blow already struck").is_false()
+
+
+func _family_of(unit: Unit) -> String:
+	return unit.unit_data.map_sprite.resource_path.get_file().get_basename()
+
+
+# Two frames of a solid colour, long enough that a case can still see it playing a frame later.
+func _swing_set() -> SpriteFrames:
+	var frames := SpriteFrames.new()
+	frames.remove_animation(&"default")
+	frames.add_animation(&"attack")
+	frames.set_animation_speed(&"attack", 60.0)
+	frames.set_animation_loop(&"attack", false)
+	var img := Image.create(8, 8, false, Image.FORMAT_RGBA8)
+	img.fill(Color.RED)
+	for i in 2:
+		frames.add_frame(&"attack", ImageTexture.create_from_image(img), 60.0)
+	return frames
