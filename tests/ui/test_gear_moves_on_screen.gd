@@ -97,6 +97,75 @@ func _card() -> PreMissionCard:
 	return null
 
 
+# --- what the cursor carries (#798) -------------------------------------------------------------
+
+# It was BUILT and SIZED and POSITIONED correctly the whole time and drew nothing, so the assertion
+# that matters is the one nothing else was making: the preview out-ranks the surface it was lifted
+# out of. Godot makes it TOP-LEVEL, which severs the relative-z chain, and this screen is opaque at
+# UiLayers.MENU_SCREEN -- so a preview left at the default 0 is painted over by its own menu.
+#
+# Compared against the LIVE screen rather than the constant: the claim is a relationship between two
+# surfaces, and pinning both ends to the same table would pass however that table was rewritten.
+func test_the_drag_preview_out_ranks_the_screen_it_was_lifted_out_of() -> void:
+	if not await _enter_phase():
+		return
+	var row := _stash_rows()[0]
+	var preview: Control = auto_free(row.build_drag_preview(Vector2.ZERO))
+	assert_object(preview).is_not_null()
+	assert_int(preview.z_index).override_failure_message(
+		"the preview draws under the menu it came from").is_greater(_screen().z_index)
+	assert_bool(preview.z_as_relative).override_failure_message(
+		"relative z inherits nothing on a top-level node -- it has to be absolute").is_false()
+
+
+func test_the_preview_is_the_size_of_the_row_and_hangs_from_where_it_was_grabbed() -> void:
+	if not await _enter_phase():
+		return
+	var row := _stash_rows()[0]
+	var grab := Vector2(40, 8)
+	var preview: Control = auto_free(row.build_drag_preview(grab))
+	add_child(preview)
+	await await_idle_frame()
+
+	var plate: Control = preview.get_child(0)
+	assert_vector(plate.position).override_failure_message(
+		"the preview hangs off the cursor instead of sitting under the point it was picked up by"
+		).is_equal(-grab)
+	assert_float(plate.size.x).override_failure_message(
+		"the preview shrink-wrapped its label, so the grab offset points outside it"
+		).is_greater_equal(row.size.x)
+	assert_bool(preview.modulate.a < 1.0).override_failure_message(
+		"a fully opaque preview reads as the row having moved, not as one being carried").is_true()
+
+
+func test_the_preview_names_the_piece_being_carried() -> void:
+	if not await _enter_phase():
+		return
+	var row := _stash_rows()[0]
+	var preview: Control = auto_free(row.build_drag_preview(Vector2.ZERO))
+	var found := ""
+	for node: Node in _walk(preview):
+		var label := node as Label
+		if label != null:
+			found = label.text
+	assert_str(found).is_equal(row.item.display_name)
+
+
+# An EMPTY slot drags nothing, so it must not offer a preview of nothing either.
+func test_an_empty_slot_offers_no_drag_at_all() -> void:
+	if not await _enter_phase():
+		return
+	var card := _card()
+	var empty: GearRow = null
+	for node: Node in _walk(card):
+		var row := node as GearRow
+		if row != null and row.item == null:
+			empty = row
+			break
+	assert_object(empty).override_failure_message("the card drew no empty slots").is_not_null()
+	assert_object(empty._get_drag_data(Vector2.ZERO)).is_null()
+
+
 # --- press and release are not the same moment (#789) ----------------------------------------------
 
 func _mouse(row: GearRow, at: Vector2, pressed: bool) -> void:
