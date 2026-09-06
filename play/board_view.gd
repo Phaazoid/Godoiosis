@@ -415,13 +415,37 @@ static func _carving_str(rune: RuneData, wielder: Unit, attack: AttackData) -> S
 		s += " (blocked: %s)" % reason
 	return s
 
+# Range plus stamp (#803). A self-anchored pattern is "Facing[...]"; an anchored one keeps the
+# "Manhattan[min-max+]" spelling and adds its stamp only when it is more than the aimed cell.
 static func _pattern_str(p: AttackPattern) -> String:
 	if p == null:
 		return "melee[1]"
-	if p is ManhattanRangePattern:
-		return "Manhattan[%d-%d%s]" % [p.min_range, p.max_range, ("+" if p.max_and_a_half else "")]
-	if p is ForwardWidePattern:
-		return "ForwardWide[L%d W%d]" % [p.length, p.width]
-	if p is ForwardLinePattern:
-		return "ForwardLine[L%d]" % p.length
-	return "pattern?"
+	if p.is_directional():
+		return "Facing[%s]" % _stamp_str(p)
+	var s := "Manhattan[%d-%d%s]" % [p.min_range, p.max_range, ("+" if p.max_and_a_half else "")]
+	if p.stamp.size() != 1 or p.stamp[0] != Vector2i.ZERO:
+		s += " " + _stamp_str(p)
+	return s
+
+
+# The stamp as rows, forward-most first, '/' between rows: '#' a covered cell, '.' a gap, and the
+# centre '@' when covered or '+' when not, so the orientation reads. The box always includes the
+# centre. A cleave is "###/.+.", a three-cell line "#/#/#/+", a cross ".#./#@#/.#.".
+static func _stamp_str(p: AttackPattern) -> String:
+	var lo := Vector2i.ZERO
+	var hi := Vector2i.ZERO
+	for c in p.stamp:
+		lo = Vector2i(mini(lo.x, c.x), mini(lo.y, c.y))
+		hi = Vector2i(maxi(hi.x, c.x), maxi(hi.y, c.y))
+	var rows: PackedStringArray = []
+	for y in range(lo.y, hi.y + 1):
+		var row := ""
+		for x in range(lo.x, hi.x + 1):
+			var c := Vector2i(x, y)
+			var filled := p.stamp.has(c)
+			if c == Vector2i.ZERO:
+				row += "@" if filled else "+"
+			else:
+				row += "#" if filled else "."
+		rows.append(row)
+	return "/".join(rows)

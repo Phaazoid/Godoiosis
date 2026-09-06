@@ -11,6 +11,8 @@
 # AI suites, _context passes that store through.
 extends GdUnitTestSuite
 
+const P := preload("res://tests/support/pattern_fixtures.gd")
+
 const H := preload("res://tests/support/squad_fixtures.gd")
 const BB := preload("res://play/board_builder.gd")
 
@@ -63,9 +65,7 @@ func _springspear() -> WeaponInstance:
 	spring.requires_readiness = true
 	spring.consumes_readiness = true
 	spring.hits_allies = true
-	var line := ForwardLinePattern.new()
-	line.length = 2
-	spring.attack_pattern = line
+	spring.attack_pattern = P.line(2)
 	t.main_attack = stab
 	t.extra_attacks.append(spring)
 	return WeaponInstance.make(t)

@@ -7,6 +7,8 @@
 # entry (Unit.can_fire_default_attack) and countering (Unit.attack_source_can_counter).
 extends GdUnitTestSuite
 
+const P := preload("res://tests/support/pattern_fixtures.gd")
+
 const H := preload("res://tests/support/squad_fixtures.gd")
 
 const PLAYER := Team.Faction.PLAYER
@@ -22,10 +24,7 @@ func _carbine_template(ranged: bool = false) -> WeaponData:
 	shot.requires_readiness = true
 	shot.consumes_readiness = true
 	if ranged:
-		var pattern := ManhattanRangePattern.new()
-		pattern.max_range = 2
-		pattern.min_range = 2
-		shot.attack_pattern = pattern
+		shot.attack_pattern = P.point(2, 2)
 	var t := WeaponData.new()
 	t.weapon_type = WeaponData.WeaponType.CARBINE
 	t.main_attack = shot

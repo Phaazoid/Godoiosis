@@ -6,6 +6,8 @@
 # shooting back.
 extends GdUnitTestSuite
 
+const P := preload("res://tests/support/pattern_fixtures.gd")
+
 const BoardBuilder := preload("res://play/board_builder.gd")
 const PlaySession := preload("res://play/play_session.gd")
 
@@ -24,10 +26,7 @@ func _carbine() -> WeaponInstance:
 	shot.power = 4
 	shot.requires_readiness = true
 	shot.consumes_readiness = true
-	var pattern := ManhattanRangePattern.new()
-	pattern.max_range = 2
-	pattern.min_range = 2
-	shot.attack_pattern = pattern
+	shot.attack_pattern = P.point(2, 2)
 	var t := WeaponData.new()
 	t.weapon_type = WeaponData.WeaponType.CARBINE
 	t.main_attack = shot
@@ -105,9 +104,7 @@ func test_a_counter_spends_a_shot() -> void:
 	t.weapon_type = WeaponData.WeaponType.CHAINSWORD
 	t.main_attack = WeaponAttackData.new()
 	t.main_attack.power = 3
-	var reach := ManhattanRangePattern.new()
-	reach.max_range = 2
-	t.main_attack.attack_pattern = reach
+	t.main_attack.attack_pattern = P.point(2)
 	foe.add_item(WeaponInstance.make(t))
 
 	sess.end_turn()   # hand the turn to ENEMY
@@ -127,9 +124,7 @@ func test_an_empty_carbine_does_not_counter() -> void:
 	t.weapon_type = WeaponData.WeaponType.CHAINSWORD
 	t.main_attack = WeaponAttackData.new()
 	t.main_attack.power = 3
-	var reach := ManhattanRangePattern.new()
-	reach.max_range = 2
-	t.main_attack.attack_pattern = reach
+	t.main_attack.attack_pattern = P.point(2)
 	foe.add_item(WeaponInstance.make(t))
 	var foe_hp := foe.get_current_hp()
 

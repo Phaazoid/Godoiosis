@@ -1,14 +1,14 @@
 [gd_resource type="Resource" script_class="RuneData" format=3 uid="uid://krrct0mrxntj"]
 
 [ext_resource type="Script" uid="uid://bgbidu2bbf33l" path="res://Classes/alchemy/TransmutationData.gd" id="1_bs7q6"]
-[ext_resource type="Script" uid="uid://bbbfksnb0tted" path="res://Classes/weapons/patterns/ForwardLinePattern.gd" id="2_4h6r8"]
-[ext_resource type="Script" uid="uid://dsxc14gee2d01" path="res://Classes/weapons/patterns/ManhattanRangePattern.gd" id="3_q6jik"]
+[ext_resource type="Script" uid="uid://cjmftk6nqeklw" path="res://Classes/weapons/patterns/AttackPattern.gd" id="2_4h6r8"]
 [ext_resource type="Texture2D" uid="uid://d26i1cvn6ffwl" path="res://Art/Icons/ElementIcons/Fire.png" id="4_qddlg"]
 [ext_resource type="Script" uid="uid://ckrp1phgirys0" path="res://Classes/alchemy/RuneData.gd" id="5_h6ami"]
 
 [sub_resource type="Resource" id="Resource_nf0vl"]
 script = ExtResource("2_4h6r8")
-length = 5
+max_range = 0
+stamp = Array[Vector2i]([Vector2i(0, -1), Vector2i(0, -2), Vector2i(0, -3), Vector2i(0, -4), Vector2i(0, -5)])
 
 [sub_resource type="Resource" id="Resource_vbu1b"]
 script = ExtResource("1_bs7q6")
@@ -19,11 +19,10 @@ attack_pattern = SubResource("Resource_nf0vl")
 hits_allies = true
 
 [sub_resource type="Resource" id="Resource_mkp6h"]
-script = ExtResource("3_q6jik")
+script = ExtResource("2_4h6r8")
+min_range = 2
 max_range = 2
 max_and_a_half = true
-min_range = 2
-metadata/_custom_type_script = "uid://dsxc14gee2d01"
 
 [sub_resource type="Resource" id="Resource_vd2sa"]
 script = ExtResource("1_bs7q6")

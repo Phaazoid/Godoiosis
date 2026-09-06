@@ -1,11 +1,12 @@
 [gd_resource type="Resource" script_class="TransmutationData" format=3]
 
-[ext_resource type="Script" path="res://Classes/weapons/patterns/ForwardLinePattern.gd" id="1_hxcn7"]
+[ext_resource type="Script" uid="uid://cjmftk6nqeklw" path="res://Classes/weapons/patterns/AttackPattern.gd" id="1_hxcn7"]
 [ext_resource type="Script" path="res://Classes/alchemy/TransmutationData.gd" id="2_24q66"]
 
 [sub_resource type="Resource" id="Resource_xrrob"]
 script = ExtResource("1_hxcn7")
-length = 3
+max_range = 0
+stamp = Array[Vector2i]([Vector2i(0, -1), Vector2i(0, -2), Vector2i(0, -3)])
 
 [resource]
 script = ExtResource("2_24q66")

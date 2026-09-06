@@ -7,6 +7,8 @@
 # only ever report a catalogue.
 extends GdUnitTestSuite
 
+const P := preload("res://tests/support/pattern_fixtures.gd")
+
 const BoardBuilder := preload("res://play/board_builder.gd")
 const PlaySession := preload("res://play/play_session.gd")
 const BoardView := preload("res://play/board_view.gd")
@@ -45,9 +47,7 @@ func _line_carving(display_name: String, power: int, length: int) -> Transmutati
 	var t := TransmutationData.new()
 	t.display_name = display_name
 	t.power = power
-	var p := ForwardLinePattern.new()
-	p.length = length
-	t.attack_pattern = p
+	t.attack_pattern = P.line(length)
 	t.sigils.assign([FIRE] as Array[Elemental.Element])
 	return t
 
@@ -56,10 +56,7 @@ func _wide_carving(display_name: String, power: int, length: int, width: int) ->
 	var t := TransmutationData.new()
 	t.display_name = display_name
 	t.power = power
-	var p := ForwardWidePattern.new()
-	p.length = length
-	p.width = width
-	t.attack_pattern = p
+	t.attack_pattern = P.wide(length, width)
 	t.sigils.assign([FIRE] as Array[Elemental.Element])
 	return t
 
@@ -96,8 +93,8 @@ func test_a_rune_line_names_every_carvings_power_and_pattern() -> void:
 	# The size/count head is kept — it is the one thing the old line got right.
 	assert_str(text).contains("rune[LARGE x2]")
 	# ...and each carving now carries what actually decides a move: damage and reach.
-	assert_str(text).contains("Emberline pow4 ForwardLine[L3]")
-	assert_str(text).contains("Emberwash pow2 ForwardWide[L2 W1]")
+	assert_str(text).contains("Emberline pow4 Facing[#/#/#/+]")
+	assert_str(text).contains("Emberwash pow2 Facing[#/#/+]")
 
 
 func test_a_carvings_element_comes_from_its_sigils() -> void:
@@ -107,7 +104,7 @@ func test_a_carvings_element_comes_from_its_sigils() -> void:
 	_give_aura(alch, FIRE)
 	alch.add_item(_rune_of([_line_carving("Emberline", 4, 3)]))
 
-	assert_str(_overview()).contains("ForwardLine[L3]/FIRE")
+	assert_str(_overview()).contains("Facing[#/#/#/+]/FIRE")
 
 
 # ==============================================================================
@@ -140,8 +137,8 @@ func test_an_unchannelable_carving_is_still_listed_and_carries_its_reason() -> v
 
 	var text := _overview()
 
-	assert_str(text).contains("Emberline pow4 ForwardLine[L3]")
-	assert_str(text).contains("Emberstorm pow6 ForwardLine[L3]")
+	assert_str(text).contains("Emberline pow4 Facing[#/#/#/+]")
+	assert_str(text).contains("Emberstorm pow6 Facing[#/#/#/+]")
 	assert_str(text).contains("blocked:")
 
 
