@@ -122,7 +122,7 @@ A cast is **empowered** in element *E* when the caster is **on or adjacent to** 
 
 ### Carried pure — the vial
 
-> **Renamed 2026-09-05** (dev's call). Issues, PRs and commits written before that date call this same item a **flask** — [#697](https://github.com/Phaazoid/Godoiosis/issues/697) and [#97](https://github.com/Phaazoid/Godoiosis/issues/97) carry the old word in their history. Nothing about the item changed but its name; **vial** is the only spelling canon uses.
+> **Renamed 2026-09-05** (dev's call). Anything written before that date — commits, PR conversations, and the closed doctrine issue [#693](https://github.com/Phaazoid/Godoiosis/issues/693) with its comments, left standing as the dated record — calls this same item a **flask**. Nothing about it changed but its name; **vial** is the only spelling canon uses.
 
 Element-tagged vials, plus rare **alkahest-pure** that matches anything. **Burned per empowered cast, as part of the cast** — no separate action — and it grants **exactly what a source grants, never more**: portability *is* the premium ([#697](https://github.com/Phaazoid/Godoiosis/issues/697)). Supply is the authored, faucet-free economy ([progression.md](progression.md)); there is no crafting.
 
