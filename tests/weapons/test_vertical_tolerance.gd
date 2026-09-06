@@ -6,7 +6,7 @@
 # gate CONJOINS with membership rather than replacing it.
 extends GdUnitTestSuite
 
-const P := preload("res://tests/support/pattern_fixtures.gd")
+const P := preload("res://tests/support/shape_fixtures.gd")
 
 const NO_UNITS: Array[Unit] = []
 
@@ -128,13 +128,13 @@ func test_a_ramp_cell_is_judged_at_its_low_side() -> void:
 
 func _line(length: int, up := -1, down := -1) -> AttackData:
 	var attack := _attack(up, down)
-	attack.attack_pattern = P.line(length)
+	P.line(attack, length)
 	return attack
 
 
 func _wide(length: int, width: int) -> AttackData:
 	var attack := _attack(-1, -1)
-	attack.attack_pattern = P.wide(length, width)
+	P.wide(attack, length, width)
 	return attack
 
 
@@ -218,7 +218,7 @@ func test_a_null_board_leaves_a_spread_whole() -> void:
 # The gate's own directional clause is gone: a zero-tolerance spread is judged like anything else.
 func test_a_directional_attack_is_no_longer_exempt_from_the_gate() -> void:
 	var attack := _attack(0, 0)
-	attack.attack_pattern = P.wide()
+	P.wide(attack)
 	assert_bool(Reach.vertical_aim_ok(attack, Vector2i(0, 0), Vector2i(1, 0), _step_board(5))).is_false()
 
 

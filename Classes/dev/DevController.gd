@@ -273,7 +273,7 @@ func resolve_pending(cell: Vector2i) -> void:
 
 # Independent deep copy of `source` at `cell`. UnitData is duplicated so the copy owns its
 # identity; runtime state (stats, HP) lives on the instance, copied post-spawn; inventory items
-# are duplicate(true)'d (shallow would share the nested attack_pattern - CLAUDE.md "Sharp edges").
+# are duplicate(true)'d (shallow would share the nested attack data - CLAUDE.md "Sharp edges"; a NAMED attack_shape is shared by design since #808, being an ext_resource that duplicate leaves alone).
 func duplicate_unit(source: Unit, cell: Vector2i) -> Unit:
 	var data: UnitData = source.unit_data.duplicate(true)
 	var copy = game.spawn_unit(data, cell)

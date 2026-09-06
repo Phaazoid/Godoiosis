@@ -1,14 +1,7 @@
 [gd_resource type="Resource" script_class="TransmutationData" format=3 uid="uid://df4pvueay4oiy"]
 
-[ext_resource type="Script" uid="uid://cjmftk6nqeklw" path="res://Classes/weapons/patterns/AttackPattern.gd" id="1_mq7ng"]
 [ext_resource type="Script" uid="uid://bgbidu2bbf33l" path="res://Classes/alchemy/TransmutationData.gd" id="1_o3s3f"]
 [ext_resource type="Texture2D" uid="uid://d26i1cvn6ffwl" path="res://Art/Icons/ElementIcons/Fire.png" id="2_bcr2w"]
-
-[sub_resource type="Resource" id="Resource_mq7ng"]
-script = ExtResource("1_mq7ng")
-min_range = 2
-max_range = 2
-max_and_a_half = true
 
 [resource]
 script = ExtResource("1_o3s3f")
@@ -18,7 +11,9 @@ icon = ExtResource("2_bcr2w")
 display_name = "Fireball"
 damage_kind = 3
 power = 5
-attack_pattern = SubResource("Resource_mq7ng")
+min_range = 2
+max_range = 2
+max_and_a_half = true
 hits_allies = true
 targets = 2
 up_tolerance = 6

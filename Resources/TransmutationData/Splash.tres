@@ -1,13 +1,8 @@
 [gd_resource type="Resource" script_class="TransmutationData" format=3]
 
 [ext_resource type="Script" path="res://Classes/alchemy/TransmutationData.gd" id="1_6nsqn"]
-[ext_resource type="Script" uid="uid://cjmftk6nqeklw" path="res://Classes/weapons/patterns/AttackPattern.gd" id="1_hwgco"]
 [ext_resource type="Texture2D" path="res://Art/Icons/StateIcons/WetIcon.png" id="2_emron"]
-
-[sub_resource type="Resource" id="Resource_hwgco"]
-script = ExtResource("1_hwgco")
-max_range = 0
-stamp = Array[Vector2i]([Vector2i(-1, -1), Vector2i(0, -1), Vector2i(1, -1), Vector2i(-1, -2), Vector2i(0, -2), Vector2i(1, -2)])
+[ext_resource type="Resource" uid="uid://cu0du4b08ervn" path="res://Resources/AttackShapes/Wide 3 Deep 2.tres" id="3_shape0"]
 
 [resource]
 script = ExtResource("1_6nsqn")
@@ -16,7 +11,8 @@ popup = "It wasn't very effective"
 icon = ExtResource("2_emron")
 display_name = "Splash"
 power = 2
-attack_pattern = SubResource("Resource_hwgco")
+max_range = 0
+attack_shape = ExtResource("3_shape0")
 hits_allies = true
 targets = 2
 deals_no_damage = true

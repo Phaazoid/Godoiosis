@@ -659,7 +659,7 @@ static func _try_overwatch(unit: Unit, board: BoardContext, squad_manager: Squad
 # component. That is the tie-break's price and the lever if it ever bites -- `nearest_enemy` one
 # frame up already floods the same class, so this path was never flood-free.
 #
-# A DUD AIM MUST NEVER BE QUEUED. A self-anchored `AttackPattern.get_selectable_cells` answers empty
+# A DUD AIM MUST NEVER BE QUEUED. A self-anchored `Reach.get_attack_cells_from` answers empty
 # for a hint that yields no cardinal direction, and from there the failure is entirely silent -- the resolver
 # arms nothing, `Unit.arm_watch` refuses on an empty footprint, and no queue gate looks at an
 # OverwatchAction at all, so the unit would spend its main action on air behind a legal-looking row.
@@ -674,7 +674,7 @@ static func _try_overwatch(unit: Unit, board: BoardContext, squad_manager: Squad
 static func _watch_aim(unit: Unit, origin: Vector2i, attack: AttackData, enemy: Unit, board: BoardContext) -> Vector2i:
 	var footprints := {}   # dir -> the cells that facing actually covers, truncation included
 	var wanted := {}       # their union, and the hop field's `until`
-	for dir in AttackPattern.CARDINAL_DIRECTIONS:
+	for dir in GridUtils.CARDINAL_DIRECTIONS:
 		var cells := Reach.get_affected_cells_from(unit, origin, origin + dir, attack, board)
 		if cells.is_empty():
 			continue
@@ -688,7 +688,7 @@ static func _watch_aim(unit: Unit, origin: Vector2i, attack: AttackData, enemy: 
 	var best := origin
 	var best_hops := -1
 	var best_covered := 0
-	for dir in AttackPattern.CARDINAL_DIRECTIONS:
+	for dir in GridUtils.CARDINAL_DIRECTIONS:
 		if not footprints.has(dir):
 			continue
 		var lane: Array[Vector2i] = footprints[dir]

@@ -299,7 +299,7 @@ tests/
 The hard part of Tier-2 was standing up real `Unit`/`SquadManager` nodes cheaply. The reusable moves, all encoded here:
 
 - **`spawn_unit` / `spawn_solo`** — instance `Scenes/unit.tscn`, set `unit_data` *before* it enters the tree (else `_ready` push_errors), `auto_free` it, then place it by writing `movement.cell` **directly** (a plain field — no grid/`TileMapLayer` needed, since we never call `movement.set_cell`). `spawn_solo` also wraps it in its own squad.
-- **Pattern-less weapons** — `make_weapon()` leaves `attack_pattern` null, so `CombatComponent` reach falls back to Manhattan range 1. Counter geometry becomes trivial: distance ≤ 1 can hit, ≥ 2 cannot.
+- **Shapeless weapons** — `make_weapon()` leaves `attack_shape` null and the range at its default 1, so an attack covers the cell it is aimed at and reaches the four neighbours -- its own cell is NOT among them (`min_range` 1 means adjacent, #808; a self-aim authors `min_range` 0). Counter geometry becomes trivial: distance ≤ 1 can hit, ≥ 2 cannot.
 - **`make_manager`** — builds a tiny in-tree graph so the manager's `@onready` siblings resolve and its squads aren't orphans:
   ```
   GameRoot (Node, added to the suite tree + auto_free'd)

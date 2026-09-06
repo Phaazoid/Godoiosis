@@ -7,7 +7,7 @@
 # exactly one trigger and then lapses when its owner's turn comes round again.
 extends GdUnitTestSuite
 
-const P := preload("res://tests/support/pattern_fixtures.gd")
+const P := preload("res://tests/support/shape_fixtures.gd")
 
 const H := preload("res://tests/support/squad_fixtures.gd")
 
@@ -321,7 +321,7 @@ const WATCH_LINE_LENGTH := 3
 func _line_watcher(cell := Vector2i(0, 0)) -> Unit:
 	var unit := H.spawn_solo(self, _sm, ENEMY, cell, {Stats.Stat.STR: 4}, true, 6)
 	var main := (unit.get_equipped_weapon() as WeaponInstance).template.main_attack
-	main.attack_pattern = P.line(WATCH_LINE_LENGTH)
+	P.line(main, WATCH_LINE_LENGTH)
 	var watch := OverwatchAction.new()
 	watch.init(unit, cell + Vector2i(1, 0), main)
 	unit.squad._queue_action(watch)

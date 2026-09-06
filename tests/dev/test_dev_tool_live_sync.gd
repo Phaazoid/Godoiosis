@@ -15,7 +15,7 @@
 # a shipped .tres is served from the resource cache to every suite in the run.
 extends GdUnitTestSuite
 
-const P := preload("res://tests/support/pattern_fixtures.gd")
+const P := preload("res://tests/support/shape_fixtures.gd")
 
 const TEMP_PATH := "user://__test_live_sync.tres"
 const OTHER_PATH := "user://__test_live_sync_other.tres"
@@ -101,27 +101,29 @@ func test_a_mod_granting_the_attack_sees_the_edit_without_being_touched() -> voi
 # The commit point is UPDATE, not every keystroke (dev ruling 2026-08-27). The editor's form stays
 # live afterwards, and what it holds must not reach the board until the next save -- including on
 # a NESTED resource, which is why _adopt copies a duplicate(true) snapshot rather than assigning
-# the edited object's own sub-resources across.
+# the edited object's own sub-resources across. The shape here is UNNAMED, which is what makes it
+# nested at all -- see the named case below, where duplicate(true) shares rather than copies.
 func test_editing_on_after_a_save_does_not_reach_the_board_until_the_next_one() -> void:
 	var live := _staged_live_attack()
-	live.attack_pattern = P.point(3)
+	P.point(live, 3)
+	live.attack_shape = P.shape([Vector2i.ZERO] as Array[Vector2i])   # unnamed: no file, so nobody else holds it
 
 	var edited := _editor_copy(live)
 	edited.power = EDITED_POWER
 	assert_bool(DevWidgets.save_over(edited, TEMP_PATH, null)).is_true()
 
 	edited.power = 999
-	var edited_pattern := edited.attack_pattern
-	edited_pattern.max_range = 9
+	var edited_shape: AttackShape = edited.attack_shape
+	edited_shape.stamp = [Vector2i.ZERO, Vector2i(0, -1)]
 
 	assert_int(live.power).is_equal(EDITED_POWER)
-	var live_pattern := live.attack_pattern
-	assert_int(live_pattern.max_range).is_equal(3)
+	var live_shape: AttackShape = live.attack_shape
+	assert_int(live_shape.stamp.size()).is_equal(1)
 
 	assert_bool(DevWidgets.save_over(edited, TEMP_PATH, null)).is_true()
 	assert_int(live.power).is_equal(999)
-	live_pattern = live.attack_pattern
-	assert_int(live_pattern.max_range).is_equal(9)
+	live_shape = live.attack_shape
+	assert_int(live_shape.stamp.size()).is_equal(2)
 
 
 # Save As: nothing is cached at a fresh path, so nobody holds a stale reference and the cheap
@@ -149,3 +151,56 @@ func test_saving_the_live_object_itself_is_unchanged() -> void:
 	assert_int(live.power).is_equal(EDITED_POWER)
 	assert_object(load(TEMP_PATH)).is_same(live)
 	assert_str(live.resource_path).is_equal(TEMP_PATH)
+
+
+const SHAPE_PATH := "user://__test_live_sync_shape.tres"
+
+
+# THE OTHER HALF OF THE COMMIT-POINT RULE, and the fact the whole shape library rests on (#808):
+# duplicate(true) SHARES a sub-resource that owns a resource_path and COPIES one that does not.
+# Measured in 4.7.1 rather than assumed -- _adopt's own comment has claimed it since #589, and if it
+# ever stops being true the Attack Editor's Save As silently forks every attack that shares a shape.
+#
+# It is why the editor stages a COPY of a named shape instead of letting the grid edit the library
+# object: without that, a click would reach every attack holding it before Update, and take_over_path
+# on Save As would drag them all onto the new file.
+func test_a_named_shape_is_shared_by_the_editors_copy_while_an_unnamed_one_is_not() -> void:
+	var named := P.shape([Vector2i.ZERO] as Array[Vector2i], "Shared")
+	assert_int(ResourceSaver.save(named, SHAPE_PATH)).is_equal(OK)
+	var live := _staged_live_attack()
+	live.attack_shape = ResourceLoader.load(SHAPE_PATH) as AttackShape
+
+	var edited := _editor_copy(live)
+	assert_object(edited.attack_shape).override_failure_message(
+		"a shape WITH a file must survive duplicate(true) as the same object, or every attack "
+		+ "sharing it forks the moment the editor loads one").is_same(live.attack_shape)
+
+	live.attack_shape = P.shape([Vector2i.ZERO] as Array[Vector2i])   # unnamed: no file
+	var copied := _editor_copy(live)
+	assert_object(copied.attack_shape).override_failure_message(
+		"an unnamed shape has no other holder, so the editor's copy must get its own"
+	).is_not_same(live.attack_shape)
+	DirAccess.remove_absolute(SHAPE_PATH)
+
+
+# What the tool's Update does with the staged copy: saving it over the library path ADOPTS onto the
+# object the board is holding, so the shared edit lands at the commit point and every attack that
+# names the shape sees it at once.
+func test_saving_a_staged_shape_reaches_every_attack_that_names_it() -> void:
+	var named := P.shape([Vector2i.ZERO] as Array[Vector2i], "Shared")
+	assert_int(ResourceSaver.save(named, SHAPE_PATH)).is_equal(OK)
+	var library := ResourceLoader.load(SHAPE_PATH) as AttackShape
+	var one := WeaponAttackData.new()
+	var two := WeaponAttackData.new()
+	one.attack_shape = library
+	two.attack_shape = library
+
+	var staged := library.duplicate() as AttackShape        # what the grid edits
+	staged.stamp = [Vector2i.ZERO, Vector2i(0, -1)]
+	assert_int(one.attack_shape.stamp.size()).override_failure_message(
+		"the staged copy must not reach a holder before the save").is_equal(1)
+
+	assert_bool(DevWidgets.save_over(staged, SHAPE_PATH, null)).is_true()
+	assert_int(one.attack_shape.stamp.size()).is_equal(2)
+	assert_int(two.attack_shape.stamp.size()).is_equal(2)
+	DirAccess.remove_absolute(SHAPE_PATH)

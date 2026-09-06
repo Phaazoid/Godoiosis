@@ -9,7 +9,7 @@
 # outcomes), which is the only way to pin a fall or a skipped counter without standing up terrain.
 extends GdUnitTestSuite
 
-const P := preload("res://tests/support/pattern_fixtures.gd")
+const P := preload("res://tests/support/shape_fixtures.gd")
 
 const H := preload("res://tests/support/squad_fixtures.gd")
 
@@ -183,7 +183,7 @@ func test_a_swing_at_open_ground_stages_its_footprint() -> void:
 # A line of the given length on the unit's own template, so declare() fires it.
 func _give_a_line(unit: Unit, length: int) -> void:
 	var weapon: WeaponInstance = unit.get_equipped_weapon() as WeaponInstance
-	weapon.template.main_attack.attack_pattern = P.line(length)
+	P.line(weapon.template.main_attack, length)
 # --- fact cases: hand-built plans -----------------------------------------------------------
 
 # One blast is one shot however many it hits -- #410 rules an AoE striking three victims a single

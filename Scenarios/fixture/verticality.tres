@@ -12,7 +12,6 @@
 [ext_resource type="Resource" path="res://Resources/Units/Noemie.tres" id="10_msbg6"]
 [ext_resource type="Script" path="res://Classes/weapons/instances/CarbineWeaponInstance.gd" id="11_a5n8y"]
 [ext_resource type="Script" path="res://Classes/alchemy/TransmutationData.gd" id="11_r05ue"]
-[ext_resource type="Script" uid="uid://cjmftk6nqeklw" path="res://Classes/weapons/patterns/AttackPattern.gd" id="12_1i7v3"]
 [ext_resource type="Script" path="res://Classes/weapons/WeaponModData.gd" id="12_tlmki"]
 [ext_resource type="Resource" path="res://Resources/Weapons/MainVarieties/Carbine.tres" id="13_locj7"]
 [ext_resource type="Texture2D" path="res://Art/Icons/ElementIcons/Fire.png" id="13_xxtr1"]
@@ -144,15 +143,11 @@ cell = Vector2i(7, 1)
 squad_id = 7
 is_leader = true
 
-[sub_resource type="Resource" id="Resource_8ep1q"]
-script = ExtResource("12_1i7v3")
-max_range = 3
-
 [sub_resource type="Resource" id="Resource_qleu1"]
 script = ExtResource("11_r05ue")
 sigils = Array[int]([6])
 display_name = "Gust"
-attack_pattern = SubResource("Resource_8ep1q")
+max_range = 3
 hits_allies = true
 knockback = 2
 deals_no_damage = true
@@ -228,15 +223,11 @@ cell = Vector2i(11, 2)
 squad_id = 9
 is_leader = true
 
-[sub_resource type="Resource" id="Resource_8qimr"]
-script = ExtResource("12_1i7v3")
-max_range = 3
-
 [sub_resource type="Resource" id="Resource_c6jo3"]
 script = ExtResource("11_r05ue")
 sigils = Array[int]([6])
 display_name = "Gust"
-attack_pattern = SubResource("Resource_8qimr")
+max_range = 3
 hits_allies = true
 knockback = 2
 deals_no_damage = true
@@ -311,12 +302,6 @@ cell = Vector2i(6, 3)
 squad_id = 11
 is_leader = true
 
-[sub_resource type="Resource" id="Resource_hfh5k"]
-script = ExtResource("12_1i7v3")
-min_range = 2
-max_range = 2
-max_and_a_half = true
-
 [sub_resource type="Resource" id="Resource_sokeq"]
 script = ExtResource("11_r05ue")
 sigils = Array[int]([1])
@@ -324,7 +309,9 @@ popup = "Fireball!"
 icon = ExtResource("13_xxtr1")
 display_name = "Fireball"
 power = 5
-attack_pattern = SubResource("Resource_hfh5k")
+min_range = 2
+max_range = 2
+max_and_a_half = true
 hits_allies = true
 targets = 2
 up_tolerance = 6
@@ -449,15 +436,11 @@ weapon_battle_states = Dictionary[int, Dictionary]({
 }
 })
 
-[sub_resource type="Resource" id="Resource_ml4lp"]
-script = ExtResource("12_1i7v3")
-max_range = 3
-
 [sub_resource type="Resource" id="Resource_f5uu1"]
 script = ExtResource("11_r05ue")
 sigils = Array[int]([6])
 display_name = "Gust"
-attack_pattern = SubResource("Resource_ml4lp")
+max_range = 3
 hits_allies = true
 knockback = 2
 deals_no_damage = true

@@ -7,7 +7,7 @@
 # only ever report a catalogue.
 extends GdUnitTestSuite
 
-const P := preload("res://tests/support/pattern_fixtures.gd")
+const P := preload("res://tests/support/shape_fixtures.gd")
 
 const BoardBuilder := preload("res://play/board_builder.gd")
 const PlaySession := preload("res://play/play_session.gd")
@@ -47,7 +47,7 @@ func _line_carving(display_name: String, power: int, length: int) -> Transmutati
 	var t := TransmutationData.new()
 	t.display_name = display_name
 	t.power = power
-	t.attack_pattern = P.line(length)
+	P.line(t, length)
 	t.sigils.assign([FIRE] as Array[Elemental.Element])
 	return t
 
@@ -56,7 +56,7 @@ func _wide_carving(display_name: String, power: int, length: int, width: int) ->
 	var t := TransmutationData.new()
 	t.display_name = display_name
 	t.power = power
-	t.attack_pattern = P.wide(length, width)
+	P.wide(t, length, width)
 	t.sigils.assign([FIRE] as Array[Elemental.Element])
 	return t
 
@@ -154,4 +154,4 @@ func test_a_weapon_line_is_unchanged_by_the_wielder_parameter() -> void:
 	template.main_attack.power = 6
 	fighter.add_item(WeaponInstance.make(template))
 
-	assert_str(_overview()).contains("CHAINSWORD pow6 melee[1]/ctr")
+	assert_str(_overview()).contains("CHAINSWORD pow6 Manhattan[1-1]/ctr")
