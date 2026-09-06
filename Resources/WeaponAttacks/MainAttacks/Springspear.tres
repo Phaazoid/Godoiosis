@@ -10,6 +10,7 @@ metadata/_custom_type_script = "uid://dsxc14gee2d01"
 [resource]
 script = ExtResource("2_wad")
 display_name = "Stab"
+damage_kind = 2
 power = 3
 attack_pattern = SubResource("Resource_main")
 requires_readiness = true

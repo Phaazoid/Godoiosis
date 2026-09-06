@@ -37,8 +37,8 @@ enum Mode { TRANSMUTATION, WEAPON_ATTACK, FAMILY }
 # coverage law in tests/dev/test_property_tips.gd have to agree about which fields are skipped --
 # a field skipped in one and not the other is a field that either loses its tooltip or fails a law
 # it was never drawn by.
-const POOL_SKIP := ["display_name", "scaling_blend"]                # name and blend have bespoke UI above
-const CARVING_SKIP := ["display_name", "sigils", "flourishes"]     # the latter two get bespoke UI
+const POOL_SKIP := ["display_name", "scaling_blend", "damage_kind"]        # name, blend and kind have bespoke UI
+const CARVING_SKIP := ["display_name", "sigils", "flourishes", "damage_kind"]   # the latter three get bespoke UI
 
 var _mode := Mode.TRANSMUTATION
 var current: AttackData = null
@@ -296,10 +296,29 @@ func populate():
 			_populate_sigils(carving)
 			_populate_flourishes(carving)
 			DevWidgets.build_resource_editor(editor_container, current, populate, CARVING_SKIP)
+			_populate_kind(current)
 		Mode.WEAPON_ATTACK:
 			DevWidgets.build_resource_editor(editor_container, current, populate, POOL_SKIP)
+			_populate_kind(current)
 			_populate_blend()
 			_populate_carriers()
+
+# The damage-kind row (#424), bespoke rather than reflective for one reason: NONE is on the roster so
+# delivered_kind() can answer it, and must never be OFFERED -- a heal or a no-damage attack reads as
+# None by rule, so the row says so and draws no picker. The reflective row would list all eight.
+func _populate_kind(attack: AttackData) -> void:
+	var first := editor_container.get_child_count()
+	if attack.delivered_kind() == AttackData.Kind.NONE:
+		DevWidgets.add_label(editor_container, "Damage kind: None (a heal or no-damage attack delivers no kind)")
+	else:
+		var names: Array[String] = []
+		for key: String in AttackData.Kind.keys():
+			var value: int = AttackData.Kind[key]
+			if value != AttackData.Kind.NONE:
+				names.append("%s:%d" % [key.capitalize(), value])
+		DevWidgets.add_enum_option(editor_container, "Damage kind", ",".join(names), attack.damage_kind,
+			func(v: int): attack.damage_kind = v as AttackData.Kind)
+	DevWidgets._tip_rows_from(editor_container, first, DevWidgets.property_tip(attack, "damage_kind"))
 
 # The family form: its main (edited live, in place) AND its extras. Extras render whether or not
 # there is a main -- the old early return on a null `current` made a main-less family's extras
@@ -316,6 +335,7 @@ func _populate_family() -> void:
 		DevWidgets.add_lineedit(editor_container, "Display name", edited.display_name, func(s: String): edited.display_name = s)
 		DevWidgets.add_label(editor_container, "Editing the MAIN attack for %s — changes every weapon of this family." % family_label)
 		DevWidgets.build_resource_editor(editor_container, current, populate, POOL_SKIP)
+		_populate_kind(current)
 		_populate_blend()
 	_populate_extras(family_label)
 

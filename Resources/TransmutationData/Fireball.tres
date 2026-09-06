@@ -17,6 +17,7 @@ sigils = Array[int]([1])
 popup = "Fireball!"
 icon = ExtResource("2_bcr2w")
 display_name = "Fireball"
+damage_kind = 3
 power = 5
 attack_pattern = SubResource("Resource_mq7ng")
 hits_allies = true

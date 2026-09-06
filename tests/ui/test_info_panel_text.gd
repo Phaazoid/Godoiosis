@@ -168,3 +168,16 @@ func test_ability_tooltip_without_description_is_a_single_line() -> void:
 	assert_str(tip).contains("Taunt")
 	assert_str(tip).contains("Reaction")
 	assert_int(tip.split("\n").size()).is_equal(1)   # no dangling blank line
+
+
+# --- def_tooltip: armour coverage (#424) ---
+
+func test_def_tooltip_lists_the_kinds_the_piece_covers() -> void:
+	var tip: String = InfoPanel.def_tooltip("Scrap Plate", 10, 5, 10, 0, 10, "vs blunt, slash, pierce")
+	assert_str(tip).contains("Covers: blunt, slash, pierce")
+
+
+func test_def_tooltip_says_nothing_about_coverage_for_a_piece_that_covers_all() -> void:
+	# "" is what every piece authored before kinds existed answers; the row stays as it was.
+	var tip: String = InfoPanel.def_tooltip("Scrap Plate", 10, 5, 10, 0, 10)
+	assert_str(tip).not_contains("Covers")

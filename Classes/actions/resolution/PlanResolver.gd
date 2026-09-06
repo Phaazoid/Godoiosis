@@ -413,7 +413,9 @@ static func _resolve_one(action: AttackAction, reactions: Array[ElementalReactio
 	# final damage (E8): round(base * mult + bonus), then flat DEF mitigation (#84), never negative.
 	# DEF subtracts AFTER elemental scaling and BEFORE the 0-floor; a revved Chainsword attacker
 	# pierces it entirely. Iron Will (below) stays the last clamp — an absolute cap on damage taken.
+	outcome.kind = _source_kind(action)
 	var mitigation := _mitigation_for(action, target, target_hypo, board, outcome)
+	outcome.mitigation = mitigation
 	outcome.damage = max(0, int(round(base * mult + bonus)) - mitigation)
 
 	# Insulation (a granted PASSIVE ability, #90 — from gear today, from any source the kit knows
@@ -535,11 +537,14 @@ static func _surviving_elements(elements: Array[Elemental.Element], target: Unit
 # read from RulesService's shared breakdown so the inspect panel's DEF readout is the same number.
 # DEF is gear-and-terrain only (stats.md — no base DEF), so "ignore DEF bonuses" means ignore all
 # of it: a revved Chainsword attacker (WeaponInstance.ignores_def()) returns 0, armor AND cover.
+# Since #424 the armour term also answers to the hit's KIND (RulesService.def_against): a piece that
+# does not cover the kind contributes nothing, cover still does. Reads the kind already stamped on
+# the outcome rather than re-deriving it, so the number and its explanation cannot disagree.
 static func _mitigation_for(action: AttackAction, target: Unit, target_hypo: _Hypo, board: BoardContext, outcome: ResolvedOutcome) -> int:
 	var weapon := action.actor.get_equipped_weapon() as WeaponInstance
 	if weapon != null and weapon.ignores_def():
 		return 0   # brace_bonus stays 0: a Chainsword pierces it with the rest of DEF
-	var def := RulesService.def_breakdown(target, target_hypo.position, board)
+	var def := RulesService.def_against(target, target_hypo.position, board, outcome.kind)
 	# The brace bonus (#414): extra DEF the blocker brings to a hit it ABSORBED, on top of its own
 	# armour and cover, and only ever on a substituted instance -- which is why it is added here and
 	# not inside def_breakdown, whose sum is also the inspect panel's standing DEF readout. Stamped
@@ -598,6 +603,19 @@ static func _source_base_damage(action: AttackAction, board: BoardContext = null
 		if weapon != null:
 			return weapon.base_damage(attacker, action.fired_attack as WeaponAttackData)
 	return attacker.get_effective_stat(Stats.Stat.STR)
+
+# The kind the hit DELIVERS (#424), _source_elements' shape: a carving answers its own authored field,
+# a weapon attack answers the wielding weapon (a fitted mod may have replaced it), and a null stamp
+# is bare fists -- BLUNT, the one kind with no resource to author it on.
+static func _source_kind(action: AttackAction) -> AttackData.Kind:
+	if action.fired_attack is TransmutationData:
+		return action.fired_attack.delivered_kind()
+	if action.fired_attack is WeaponAttackData:
+		var weapon := action.actor.get_equipped_weapon() as WeaponInstance
+		if weapon != null:
+			return weapon.effective_kind(action.actor, action.fired_attack)
+		return action.fired_attack.delivered_kind()
+	return AttackData.Kind.BLUNT
 
 static func _source_elements(action: AttackAction) -> Array[Elemental.Element]:
 	if action.fired_attack is TransmutationData:

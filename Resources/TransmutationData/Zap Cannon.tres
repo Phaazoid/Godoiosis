@@ -11,6 +11,7 @@ length = 5
 script = ExtResource("2_l1t8p")
 sigils = Array[int]([1, 1, 6])
 display_name = "Zap Cannon"
+damage_kind = 4
 power = 7
 attack_pattern = SubResource("Resource_1bq0e")
 hits_allies = true

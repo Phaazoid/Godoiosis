@@ -396,6 +396,18 @@ static func def_breakdown(unit: Unit, cell: Vector2i, board: BoardContext) -> Di
 	var result: Dictionary[String, int] = {"armor": armor, "cover": cover, "total": armor + cover}
 	return result
 
+# The breakdown AGAINST ONE HIT (#424): the standing sum above with the armour term zeroed when the
+# worn piece does not cover the hit's kind. Layered on def_breakdown rather than beside it, so the
+# panel's standing readout and the number the resolver subtracts are still one composition -- the
+# kind gate is the only thing this adds, and it lives here so the queue row can explain a subtraction
+# without restating it. Cover is kind-blind: a wall stops a fireball as well as a bullet.
+static func def_against(unit: Unit, cell: Vector2i, board: BoardContext, kind: AttackData.Kind) -> Dictionary[String, int]:
+	var def := def_breakdown(unit, cell, board)
+	if unit.worn_armor != null and not unit.worn_armor.covers(kind):
+		def["armor"] = 0
+		def["total"] = def["cover"]
+	return def
+
 # Hop-distance (BFS over cells `unit` can traverse) from `source` -> { cell: hops }. Unweighted by
 # design: it answers how terrain CONNECTS, not what a move costs. Read it as the counterpart to
 # compute_move_range -- that says where you can stand THIS turn, this says how much of the way is

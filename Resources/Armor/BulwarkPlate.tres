@@ -7,6 +7,7 @@
 [resource]
 script = ExtResource("1_armor")
 def_power = 3
+covered_kinds = Array[int]([0, 1, 2])
 flat_def = 1
 stat_minimums = Dictionary[int, int]({
 6: 8

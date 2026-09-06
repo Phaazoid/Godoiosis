@@ -18,6 +18,7 @@ scaling_blend = Dictionary[int, int]({
 requires_readiness = true
 consumes_readiness = true
 display_name = "Shot"
+damage_kind = 2
 power = 4
 attack_pattern = SubResource("Resource_main")
 metadata/_custom_type_script = "uid://ddqeee7njjjq2"

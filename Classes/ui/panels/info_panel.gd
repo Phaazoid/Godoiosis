@@ -136,16 +136,18 @@ func _refresh_stats():
 	_add_stat("WT", str(unit.get_weight()), Glossary.Term.WEIGHT, weight_tooltip(unit.get_weight()))
 	var armor_name := ""
 	var armor_power := 0
+	var armor_coverage := ""
 	if unit.worn_armor != null:
 		armor_name = unit.worn_armor.display_name
 		armor_power = unit.worn_armor.def_power
+		armor_coverage = unit.worn_armor.coverage_text()
 	# One shared breakdown (the resolver sums the same call). Yellow = a temporary source is
 	# contributing — terrain you're standing on, not gear you own.
 	var def := RulesService.def_breakdown(unit, unit.movement.cell, board)
 	var def_color: Color = TERRAIN_BUFF_COLOR if def["cover"] > 0 else NO_TINT
 	_add_stat("DEF", str(def["total"]), Glossary.Term.DEF, def_tooltip(
 		armor_name, armor_power, unit.get_effective_stat(Stats.Stat.CON),
-		def["armor"], def["cover"], def["total"]), def_color)
+		def["armor"], def["cover"], def["total"], armor_coverage), def_color)
 	_add_stat("LDR", str(unit.get_effective_ldr()), Glossary.term_for_stat(Stats.Stat.LDR),
 		"LDR %d %+d PER band" % [
 			unit.get_effective_stat(Stats.Stat.LDR),
@@ -278,7 +280,7 @@ static func effect_source_text(source_name: String, delta: int, turns_remaining:
 static func weight_tooltip(carried: int) -> String:
 	return "Carried gear %d\nTracked only -- no effect yet" % carried
 
-static func def_tooltip(armor_name: String, def_power: int, con: int, armor_def: int, cover_def: int, total: int) -> String:
+static func def_tooltip(armor_name: String, def_power: int, con: int, armor_def: int, cover_def: int, total: int, coverage: String = "") -> String:
 	# `total` is passed, not re-added: RulesService.def_breakdown already composed it, and a
 	# second addition of a number that already exists is a seam waiting to diverge — the next
 	# DEF source added there would reach the value and miss this line.
@@ -287,6 +289,11 @@ static func def_tooltip(armor_name: String, def_power: int, con: int, armor_def:
 		lines.append("No armor worn")
 	else:
 		lines.append("%s: %d armor x CON %d = %d" % [armor_name, def_power, con, armor_def])
+		# Which kinds the piece answers (#424): "" when it covers everything, which is what every piece
+		# authored before kinds existed still does. The standing readout shows the full number; the
+		# queue row is where a specific hit learns whether the piece covers it.
+		if coverage != "":
+			lines.append("Covers: %s" % coverage.trim_prefix("vs "))
 	if cover_def > 0:
 		lines.append("Cover (terrain): +%d" % cover_def)
 	lines.append("Total: %d" % total)

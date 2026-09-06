@@ -60,6 +60,34 @@ enum VerticalRule { RANGED, MELEE }
 # mod-grantable through WeaponModData.can_overwatch_override -- the watch is the attack, so nothing
 # about its geometry or payload is duplicated here.
 @export var can_overwatch := false
+
+# The physical DELIVERY of this attack's damage (#424) -- how the force arrives, which is what armour
+# has an answer to. SEPARATE from the element set: a Fireball deals FIRE-kind damage and, separately,
+# applies the fire effect; an ice spear deals PIERCE-kind damage and applies the ice effect. One kind
+# per attack and one damage number, so mitigation stays a single subtraction. AUTHORED, never derived
+# from sigils or family (dev, 2026-09-05: "too many of the transmutations pull from flavor rather than
+# derivation" -- sheer cold is COLD, an ice spear is PIERCE). Members keep their order: BLUNT is the
+# storage's own zero, and NONE is LAST because it is never authored -- delivered_kind() answers it
+# for anything that deals no damage or heals, so "does this attack deal damage" keeps its one answer.
+# The physical three, mechanically: PIERCE is a point (0D), SLASH a line (1D), BLUNT a plane (2D).
+enum Kind { BLUNT, SLASH, PIERCE, FIRE, SHOCK, COLD, CORROSION, NONE }
+@export var damage_kind: Kind = Kind.BLUNT
+
+# What this attack would deliver if it delivered `kind`: NONE for a heal or a pure-utility attack,
+# the kind itself otherwise. ONE home for that rule -- delivered_kind() reads it for the authored
+# field, WeaponInstance.effective_kind for the field with a mod's override composed on top.
+func deliver(kind: Kind) -> Kind:
+	if heals or deals_no_damage:
+		return Kind.NONE
+	return kind
+
+func delivered_kind() -> Kind:
+	return deliver(damage_kind)
+
+# Player-facing spelling, lower case so it sits inside a sentence ("Damage 12, slash").
+static func kind_name(kind: Kind) -> String:
+	return Kind.keys()[kind].to_lower()
+
 func hits_map() -> bool:
 	return targets == EquippableData.TargetMode.MAP or targets == EquippableData.TargetMode.BOTH
 
@@ -69,12 +97,14 @@ func hits_units() -> bool:
 # How a readout PHRASES this attack's payload. The number stays per-kind (a carving scales off
 # aura, a weapon attack off its weapon — #72 keeps damage math off this base), but the three-state
 # question damages/heals/neither is answered HERE, so the two kinds can never word it differently.
-func payload_text(amount: int) -> String:
+# Takes the DELIVERED kind rather than reading damage_kind (#424): a fitted mod may have replaced
+# it, and the caller holds the composed answer.
+func payload_text(amount: int, kind: Kind) -> String:
 	if deals_no_damage:
 		return "No damage"
 	if heals:
 		return "Heals %d" % amount
-	return "Damage %d" % amount
+	return "Damage %d, %s" % [amount, kind_name(kind)]
 
 # The targeting channel's readout token (#135 round 2) — same one-spelling rule as payload_text,
 # deliberately its own function: payload and targeting are different questions. Concise parens by
@@ -111,5 +141,6 @@ static func property_tips() -> Dictionary:
 		"heals": "Reinterprets the damage number as HP restored instead. An attack is either damage or a heal, never both.",
 		"deals_no_damage": "Pure utility: scaling is suppressed, so neither aura nor a weapon's stat blend can sneak damage into a damageless effect. Mutually exclusive with Heals.",
 		"pierces_guard": "Ignores a Guard -- the hit lands on whoever it was aimed at, bodyguard or no.",
+		"damage_kind": "How the damage ARRIVES -- the thing armour can answer. Blunt is a plane (hammer, fist, thrown rock, a jet of water), slash a line (blade), pierce a point (spear, bullet, arrow, ice spear). Fire, shock, cold and corrosion are non-physical deliveries. SEPARATE from the element: a fireball is Fire kind AND applies the fire effect; an ice spear is Pierce AND applies the ice effect. Ignored on a heal or a no-damage attack, which read as None.",
 		"can_overwatch": "Makes this an OVERWATCH attack, and only that -- it is aimed as a standing watch and never fired directly, so it does not appear in the attack menu, the AI never picks it, and it cannot be a weapon's main. It fires on the first enemy who enters the aimed cells during someone else's turn, once, then it is spent.",
 	}

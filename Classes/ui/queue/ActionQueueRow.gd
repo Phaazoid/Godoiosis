@@ -213,6 +213,13 @@ func _show_hp_delta(outcome: ResolvedOutcome, subject: Unit) -> void:
 	# The "->" spelling is load-bearing: tests/presentation/test_predicted_health.gd finds this
 	# label by searching for it and parses split("->")[1].
 	readout.text = "%d->%d" % [hp_before, hp_after]
+	# The number explains itself on hover (#424, Law #2): what kind the hit delivered and what the
+	# target's DEF did with it, read off the outcome's own stamps so this can never name a
+	# subtraction other than the one made.
+	var tip := damage_tip(outcome, subject)
+	readout.tooltip_text = tip
+	readout_card.tooltip_text = tip
+	readout.mouse_filter = Control.MOUSE_FILTER_STOP
 
 	# Team-color the readout: green when a friendly is losing HP, red for an enemy.
 	var friendly := true
@@ -220,6 +227,21 @@ func _show_hp_delta(outcome: ResolvedOutcome, subject: Unit) -> void:
 		friendly = not Team.is_enemy(subject.get_faction(), Team.Faction.PLAYER)
 	var role: QueueStyle.Role = QueueStyle.Role.READOUT_ALLY if friendly else QueueStyle.Role.READOUT_ENEMY
 	_show_readout(QueueStyle.ink(role))
+
+# The damage number's hover text (#424): the delivered kind, then the mitigation and why. A heal or a
+# utility hit has no kind and says nothing. Static and string-only so tests/ui can read it without a
+# scene, the def_tooltip shape.
+static func damage_tip(outcome: ResolvedOutcome, subject: Unit) -> String:
+	if outcome.kind == AttackData.Kind.NONE:
+		return ""
+	var kind := AttackData.kind_name(outcome.kind)
+	var lines: Array[String] = ["%s damage" % kind.capitalize()]
+	if subject != null and is_instance_valid(subject) and subject.worn_armor != null \
+			and not subject.worn_armor.covers(outcome.kind):
+		lines.append("%s does not cover %s" % [subject.worn_armor.display_name, kind])
+	if outcome.mitigation > 0:
+		lines.append("DEF %d subtracted" % outcome.mitigation)
+	return UiText.wrap("\n".join(lines))
 
 # The number wears the same tinted card the elemental chips do (dev, 2026-09-03: the digits "are a
 # bit odd on their own... the damage numbers should have that feel too"). One card language across

@@ -211,3 +211,117 @@ func test_def_breakdown_total_is_what_the_resolver_subtracts() -> void:
 
 	var shown := RulesService.def_breakdown(target, Vector2i(1, 0), board)
 	assert_int(attack.resolved.damage).is_equal(10 - shown["total"])
+
+
+# --- damage kinds (#424): armour answers only the kinds it covers ---
+#
+# A piece that lists kinds stops ONLY those; a piece that lists none stops everything, which is what
+# every piece authored before kinds existed still does. Cover is kind-blind. The kind and the
+# subtraction are stamped on the outcome so the queue row explains the number it shows (Law #2).
+
+func _armor_covering(def_power: int, kinds: Array[AttackData.Kind]) -> ArmorData:
+	var armor := _make_armor(def_power)
+	armor.covered_kinds = kinds
+	return armor
+
+
+func test_an_uncovered_kind_zeroes_the_armor_term_and_not_cover() -> void:
+	var attacker := H.spawn_solo(self, _sm, PLAYER, Vector2i(0, 0), {Stats.Stat.STR: 4})
+	var target := H.spawn_solo(self, _sm, ENEMY, Vector2i(1, 0), {Stats.Stat.MHP: 20, Stats.Stat.CON: 5})
+	target.worn_armor = _armor_covering(4, [AttackData.Kind.SLASH])   # the swing below is BLUNT
+	var board := _board_with_cover(Vector2i(1, 0))
+
+	var attack := _attack(attacker, target)   # base 10, the fixture main's kind is the zero: BLUNT
+	var plan := ResolvedPlan.new()
+	plan.attacks.append(attack)
+	PlanResolver.resolve(plan, ReactionCatalog.get_all(), board)
+
+	assert_int(attack.resolved.damage).is_equal(10 - Terrain.COVER_DEF)
+	var against := RulesService.def_against(target, Vector2i(1, 0), board, AttackData.Kind.BLUNT)
+	assert_int(against["armor"]).is_equal(0)
+	assert_int(against["cover"]).is_equal(Terrain.COVER_DEF)
+	assert_int(against["total"]).is_equal(Terrain.COVER_DEF)
+
+
+func test_a_covered_kind_is_mitigated_in_full() -> void:
+	var attacker := H.spawn_solo(self, _sm, PLAYER, Vector2i(0, 0), {Stats.Stat.STR: 4})
+	var target := H.spawn_solo(self, _sm, ENEMY, Vector2i(1, 0), {Stats.Stat.MHP: 20, Stats.Stat.CON: 5})
+	target.worn_armor = _armor_covering(4, [AttackData.Kind.SLASH, AttackData.Kind.BLUNT])
+
+	var attack := _attack(attacker, target)
+	var plan := ResolvedPlan.new()
+	plan.attacks.append(attack)
+	PlanResolver.resolve(plan)
+
+	assert_int(attack.resolved.damage).is_equal(10 - target.get_effective_def())
+
+
+func test_a_piece_listing_no_kinds_covers_every_kind() -> void:
+	# The storage default: a piece authored before kinds existed keeps stopping a fireball.
+	var attacker := H.spawn_solo(self, _sm, PLAYER, Vector2i(0, 0), {Stats.Stat.STR: 4})
+	var target := H.spawn_solo(self, _sm, ENEMY, Vector2i(1, 0), {Stats.Stat.MHP: 20, Stats.Stat.CON: 5})
+	target.worn_armor = _make_armor(4)
+
+	var attack := _attack(attacker, target)
+	(attack.fired_attack as WeaponAttackData).damage_kind = AttackData.Kind.FIRE
+	var plan := ResolvedPlan.new()
+	plan.attacks.append(attack)
+	PlanResolver.resolve(plan)
+
+	assert_int(attack.resolved.damage).is_equal(10 - target.get_effective_def())
+
+
+func test_the_outcome_stamps_the_kind_and_the_subtraction_it_made() -> void:
+	var attacker := H.spawn_solo(self, _sm, PLAYER, Vector2i(0, 0), {Stats.Stat.STR: 4})
+	var target := H.spawn_solo(self, _sm, ENEMY, Vector2i(1, 0), {Stats.Stat.MHP: 20, Stats.Stat.CON: 5})
+	target.worn_armor = _make_armor(4)
+
+	var attack := _attack(attacker, target)
+	(attack.fired_attack as WeaponAttackData).damage_kind = AttackData.Kind.SLASH
+	var plan := ResolvedPlan.new()
+	plan.attacks.append(attack)
+	PlanResolver.resolve(plan)
+
+	assert_that(attack.resolved.kind).is_equal(AttackData.Kind.SLASH)
+	assert_int(attack.resolved.mitigation).is_equal(10 - attack.resolved.damage)
+	assert_int(attack.resolved.mitigation).is_greater(0)   # premise: something was subtracted
+
+
+func test_a_fitted_mod_changes_what_armor_answers() -> void:
+	# The WIRE from the mod to the mitigation stage: the resolver must read the COMPOSED kind. A
+	# mutant reading the authored field passes every other case in this file.
+	var attacker := H.spawn_solo(self, _sm, PLAYER, Vector2i(0, 0), {Stats.Stat.STR: 4})
+	var target := H.spawn_solo(self, _sm, ENEMY, Vector2i(1, 0), {Stats.Stat.MHP: 20, Stats.Stat.CON: 5})
+	target.worn_armor = _armor_covering(4, [AttackData.Kind.BLUNT])   # covers the AUTHORED kind
+
+	var attack := _attack(attacker, target)
+	attacker.unit_instance.set_proficiency(WeaponData.WeaponType.CHAINSWORD, 3)
+	var spike := WeaponModData.new()
+	spike.overrides_kind = true
+	spike.kind = AttackData.Kind.PIERCE
+	assert_bool((attacker.equipped_weapon as WeaponInstance).fit(0, spike)) \
+		.override_failure_message("fixture: the spike must fit, or the override is simply absent") \
+		.is_true()
+	var plan := ResolvedPlan.new()
+	plan.attacks.append(attack)
+	PlanResolver.resolve(plan)
+
+	assert_that(attack.resolved.kind).is_equal(AttackData.Kind.PIERCE)
+	assert_int(attack.resolved.damage).is_equal(10)   # plate covers blunt; the spike made it pierce
+
+
+func test_bare_fists_are_blunt() -> void:
+	# The one attack with no resource to author a kind on; the resolver answers BLUNT for a null stamp.
+	var attacker := H.spawn_solo(self, _sm, PLAYER, Vector2i(0, 0), {Stats.Stat.STR: 4})
+	var target := H.spawn_solo(self, _sm, ENEMY, Vector2i(1, 0), {Stats.Stat.MHP: 20, Stats.Stat.CON: 5})
+	target.worn_armor = _armor_covering(4, [AttackData.Kind.BLUNT])
+
+	attacker.equipped_weapon = null
+	var attack := H.stamped_attack(attacker, target)   # no weapon -> null stamp -> STR damage
+	assert_object(attack.fired_attack).is_null()
+	var plan := ResolvedPlan.new()
+	plan.attacks.append(attack)
+	PlanResolver.resolve(plan)
+
+	assert_that(attack.resolved.kind).is_equal(AttackData.Kind.BLUNT)
+	assert_int(attack.resolved.damage).is_equal(4 - target.get_effective_def())

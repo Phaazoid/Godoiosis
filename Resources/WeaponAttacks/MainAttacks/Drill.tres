@@ -14,6 +14,7 @@ scaling_blend = Dictionary[int, int]({
 6: 20
 })
 display_name = "Gouge"
+damage_kind = 2
 power = 3
 attack_pattern = SubResource("Resource_main")
 vertical_rule = 1

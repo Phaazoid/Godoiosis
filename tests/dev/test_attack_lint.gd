@@ -86,3 +86,35 @@ func test_carriers_round_trips_against_every_family() -> void:
 func test_an_attack_with_no_file_has_no_carriers() -> void:
 	assert_array(AttackLint.carriers_of(WeaponAttackData.new())).is_empty()
 	assert_array(AttackLint.carriers_of(null)).is_empty()
+
+
+# --- damage kind (#424): NONE is a rule, never an authoring ---
+
+func test_a_damaging_attack_stored_as_none_is_blocked_and_named() -> void:
+	var attack := _manhattan(2, 2)
+	attack.damage_kind = AttackData.Kind.NONE
+	var findings := AttackLint.check(attack)
+	assert_array(findings).is_not_empty()
+	assert_int(findings[0]["severity"]).is_equal(AttackLint.Severity.BLOCKS)
+	assert_str(findings[0]["text"]).contains("Probe")
+	assert_str(findings[0]["text"]).contains("None")
+
+
+func test_none_on_a_heal_is_the_rule_and_not_a_fault() -> void:
+	var attack := _manhattan(2, 2)
+	attack.heals = true
+	attack.damage_kind = AttackData.Kind.NONE
+	assert_array(AttackLint.check(attack)).is_empty()
+
+
+func test_none_on_a_no_damage_attack_is_clean() -> void:
+	var attack := _manhattan(2, 2)
+	attack.deals_no_damage = true
+	attack.damage_kind = AttackData.Kind.NONE
+	assert_array(AttackLint.check(attack)).is_empty()
+
+
+func test_an_authored_kind_is_clean() -> void:
+	var attack := _manhattan(2, 2)
+	attack.damage_kind = AttackData.Kind.CORROSION
+	assert_array(AttackLint.check(attack)).is_empty()
