@@ -2,7 +2,7 @@
 # burn. Canon: docs/design/alchemy-kit.md -> Materia -> Carried pure -- the vial.
 #
 # THE ONE LAW is what most of these guard: nothing here may refuse a cast. use_block_reason is the
-# only refusal in the ticket and it refuses a WASTED BURN, never a working.
+# only refusal in the ticket and it refuses a WASTED BURN, never a cast.
 #
 # The board is stubbed rather than painted (test_materia_sources.gd's idiom) -- the fixture grid has
 # no TileSet, and the on-a-source cases are what make the burn rule interesting.

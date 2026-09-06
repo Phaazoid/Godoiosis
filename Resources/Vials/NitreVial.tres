@@ -4,8 +4,8 @@
 
 [resource]
 script = ExtResource("1_vial")
-element = 1
+element = 6
 is_alkahest = false
-display_name = "Vial of Sulfur"
-description = "Concentrated fire, held in glass. Broken over a cast, it lends the caster a furnace they need not stand beside."
+display_name = "Vial of Nitre"
+description = "The air's own salt. The old masters held that every breath and every flame draws on a hidden nitre; this is that, refined. It is also why powder burns."
 weight = 1

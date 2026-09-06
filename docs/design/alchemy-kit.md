@@ -6,7 +6,7 @@
 
 Supersedes the wiki's **tiered rune tree** and the **stale top half of `Alchemy.docx`** (one-rune-per-element, aura-from-casting — the dev confirmed that section is an old layer), plus all **crit / hit / avo / AP / random-level-up** framing (Law #1; `Stats Overview.docx` is otherwise pre-determinism-era). Empty wiki stubs: `Alcahest & elemental affinities.docx`, `Rune Combination Psuedocode.docx`.
 
-**Canon checked through #786 (2026-09-05).**
+**Canon checked through #793 (2026-09-06).**
 
 Tags: **[LOCKED]** · **[PROPOSED]** (awaiting sign-off) · **[WORKSHOP]** (actively being designed) · **[OPEN]** (fork).
 
@@ -135,8 +135,9 @@ Element-tagged vials, plus rare **alkahest-pure** that matches anything. **Burne
 - **The charge waits.** One at a time; a second `Use` replaces the first and the button names what it overwrites, so the trade is readable *before* the item is gone. It survives across turns until a cast draws on it, and it **rides a mid-battle save** — a charge that evaporated on load would eat a scarce item silently.
 - **The burn is DIFFERENTIAL: the charge is spent iff the outcome without it would differ.** One rule covers every case — the terrain already granting that element (stand by the river and the vial stays in your bag), no sigil matching, a `deals_no_damage` carving whose base is 0 either way, and a multi-sigil carving where only one element needed the help. It stays the right question once #695 makes empowerment an authored *form* rather than a +1.
 - **Spent at execution, never at plan time**, on the readiness precedent's exact terms. That is the whole of why re-aiming, undoing, reordering or cancelling a plan costs nothing: the plan never held the charge, so there is no reservation to release. The queue shows the burn as a chip before Execute (Law #2).
-- **Deferred, and filed rather than parked:** choosing *per cast* which working spends the vial. Today the charge is consumed by whichever cast first benefits, which the player does not pick — see the tracker.
+- **Deferred, and filed rather than parked:** choosing *per cast* which cast spends the vial. Today the charge is consumed by whichever cast first benefits, which the player does not pick — see the tracker.
 - **It gates nothing.** The one refusal in the system is `VialData.use_block_reason`, and it refuses only a burn that would buy the holder something they already have. Nothing about a vial can refuse a *cast*.
+- **Every element has a vial as of 2026-09-06** — sulfur, mercury, salt, **nitre** (air) and **ichor** (aether), plus alkahest. So **air and aether are empowerable TODAY by the carried path**, even while their terrain sources wait (#783, #696): a vial is not positional, and that is exactly the case it exists for. What the substances ARE is [alchemy-lore.md](../story/world/alchemy-lore.md) → *Materia — the minerals*.
 
 ### Repeal record — the three availability bands (2026-08-29)
 
