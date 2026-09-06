@@ -97,6 +97,74 @@ func _card() -> PreMissionCard:
 	return null
 
 
+# --- press and release are not the same moment (#789) ----------------------------------------------
+
+func _mouse(row: GearRow, at: Vector2, pressed: bool) -> void:
+	var click := InputEventMouseButton.new()
+	click.button_index = MOUSE_BUTTON_LEFT
+	click.pressed = pressed
+	click.position = at
+	row._gui_input(click)
+
+
+# THE case the drag bug needed and no existing one could have caught. Every case in this file drives
+# the three callbacks directly, so all of them stayed green while _get_drag_data was never once
+# called in the real build: the row the pointer was holding got freed one idle frame after the press,
+# and Godot asks for drag data only after ~10px of travel, which takes several frames.
+#
+# This is the half of that a headless suite CAN see -- the source surviving its own press -- and it
+# fails against the shipped code by the frame it was written to describe.
+func test_a_press_leaves_the_row_alive_for_the_drag_to_start_from() -> void:
+	if not await _enter_phase():
+		return
+	var row := _stash_rows()[0]
+	_mouse(row, Vector2.ZERO, true)
+	await await_idle_frame()
+	await await_idle_frame()
+	assert_bool(is_instance_valid(row) and row.is_inside_tree()).override_failure_message(
+		"the row was freed one frame after the press, so Godot's drag threshold can never be reached "
+		+ "and _get_drag_data is never asked").is_true()
+	assert_object(_screen()._selected_item).override_failure_message(
+		"the press alone picked something up -- the release is what decides").is_null()
+
+
+func test_a_press_and_release_in_the_same_spot_is_the_click() -> void:
+	if not await _enter_phase():
+		return
+	var row := _stash_rows()[0]
+	var item := row.item   # read BEFORE: a successful click redraws, and the redraw frees this row
+	_mouse(row, Vector2(4, 4), true)
+	_mouse(row, Vector2(5, 6), false)   # a real hand never releases on the exact pixel
+	await await_idle_frame()
+	assert_object(_screen()._selected_item).override_failure_message(
+		"a click no longer picks anything up").is_same(item)
+
+
+# A gesture that travelled far enough to have BECOME a drag must not also register as a click, or
+# every completed drag would be followed by picking the item straight back up.
+func test_a_gesture_that_travelled_is_not_also_a_click() -> void:
+	if not await _enter_phase():
+		return
+	var row := _stash_rows()[0]
+	_mouse(row, Vector2(4, 4), true)
+	_mouse(row, Vector2(4 + GearDropZone.CLICK_SLOP + 1, 4), false)
+	await await_idle_frame()
+	assert_object(_screen()._selected_item).override_failure_message(
+		"a dragged gesture also fired the click path").is_null()
+
+
+# A release with no press of ours in front of it -- the pointer came in from somewhere else -- is
+# nobody's click.
+func test_a_release_this_row_never_saw_the_press_for_is_not_a_click() -> void:
+	if not await _enter_phase():
+		return
+	var row := _stash_rows()[0]
+	_mouse(row, Vector2(4, 4), false)
+	await await_idle_frame()
+	assert_object(_screen()._selected_item).is_null()
+
+
+
 # Click to pick up, click to put down -- and Esc to let go. The selection is DATA, never a row: every
 # successful move redraws both lists and frees every row in them, so a selection holding a node would
 # dangle at the exact moment the feature starts working (#107's shape).
