@@ -802,6 +802,11 @@ static func _cell_box(fill: Color, edge: Color, width: int) -> StyleBoxFlat:
 	box.set_corner_radius_all(2)
 	return box
 
+# The picker's "no resource" row -- ItemEditorTool spells the same idea NO_MAIN_KEY for its own
+# bespoke picker, and the reason is identical: a field with nothing in it is a state the control
+# must be able to both SHOW and SET.
+const NO_RESOURCE_KEY := "(none)"
+
 static func _add_resource_swapper(container: Node, resource: Resource, prop: Dictionary, value: Resource, rebuild: Callable) -> void:
 	var base_type: String = prop.hint_string
 	var candidates := []
@@ -824,12 +829,23 @@ static func _add_resource_swapper(container: Node, resource: Resource, prop: Dic
 	var current_class := ""
 	if value != null and value.get_script() != null:
 		current_class = value.get_script().get_global_name()
+	# (none) is a REAL row, not decoration: a field with no resource is a legitimate authored state
+	# (a pattern-less attack reaches bare adjacency, which AttackLint deliberately passes), so the
+	# picker has to be able to express it -- ItemEditorTool's NO_MAIN_KEY, for the same reason.
+	# Without it a single-candidate field was a DEAD END: add_item auto-selects the first row, so a
+	# null value DISPLAYED as set, and re-picking the row already showing emits nothing, leaving no
+	# click anywhere in the control that could assign the resource. Found in play (#804 follow-up).
+	option.add_item(NO_RESOURCE_KEY)
+	for entry in candidates:
+		option.add_item(entry["class"])
+	# NEVER trust add_item's own selection -- it silently selects the first row it is given, which
+	# is what made the control lie about a null field. Say what is true, always.
+	option.select(0)
 	for i in candidates.size():
-		option.add_item(candidates[i]["class"])
 		if candidates[i]["class"] == current_class:
-			option.select(i)
+			option.select(i + 1)
 	option.item_selected.connect(func(idx):
-		resource.set(prop.name, load(candidates[idx]["path"]).new())
+		resource.set(prop.name, null if idx == 0 else load(candidates[idx - 1]["path"]).new())
 		rebuild.call()
 	)
 	row.add_child(label)

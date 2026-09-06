@@ -288,3 +288,75 @@ func _is_cell_array(resource: Resource, prop_name: String) -> bool:
 		if prop.name == prop_name:
 			return DevWidgets._is_cell_array(prop)
 	return false
+
+
+# --- the resource picker, which was a dead end (#804 follow-up, found in play) ----------------
+
+# The pattern picker specifically -- NOT the first OptionButton, which is an enum row: a
+# WeaponAttackData field serializes before the inherited AttackData ones.
+func _picker() -> OptionButton:
+	for node in _all_of_class(_box, "OptionButton", []):
+		var option := node as OptionButton
+		for i in option.item_count:
+			if option.get_item_text(i) == "AttackPattern":
+				return option
+	return null
+
+
+func _all_of_class(node: Node, klass: String, found: Array[Node]) -> Array[Node]:
+	for child in node.get_children():
+		if child.is_class(klass):
+			found.append(child)
+		_all_of_class(child, klass, found)
+	return found
+
+
+func _attack_with_no_pattern() -> WeaponAttackData:
+	var attack := WeaponAttackData.new()
+	attack.attack_pattern = null
+	return attack
+
+
+func test_a_null_field_shows_none_rather_than_claiming_a_class() -> void:
+	# add_item auto-selects the row it is given, so the picker DISPLAYED a class on a null field.
+	var attack := _attack_with_no_pattern()
+	DevWidgets.build_resource_editor(_box, attack, func(): pass)
+	var picker := _picker()
+	assert_str(picker.get_item_text(picker.selected)).override_failure_message(
+		"the picker claims a resource is set on a field that is null"
+	).is_equal(DevWidgets.NO_RESOURCE_KEY)
+
+
+func test_picking_the_class_assigns_it() -> void:
+	# The dead end: with one candidate the only row was the one already showing, and re-picking the
+	# current row emits nothing -- so no click anywhere in the control could give the field a value.
+	var attack := _attack_with_no_pattern()
+	DevWidgets.build_resource_editor(_box, attack, func(): pass)
+	var picker := _picker()
+	var pattern_row := -1
+	for i in picker.item_count:
+		if picker.get_item_text(i) == "AttackPattern":
+			pattern_row = i
+	assert_int(pattern_row).override_failure_message("no AttackPattern row to pick").is_greater(0)
+	picker.emit_signal("item_selected", pattern_row)
+	assert_object(attack.attack_pattern).override_failure_message(
+		"picking the class did not assign one -- the control is a dead end"
+	).is_not_null()
+
+
+func test_picking_none_clears_it() -> void:
+	# A pattern-less attack reaches bare adjacency and AttackLint deliberately passes it, so the
+	# state has to stay reachable rather than being a one-way door.
+	var attack := WeaponAttackData.new()
+	attack.attack_pattern = AttackPattern.new()
+	DevWidgets.build_resource_editor(_box, attack, func(): pass)
+	_picker().emit_signal("item_selected", 0)
+	assert_object(attack.attack_pattern).is_null()
+
+
+func test_a_field_that_already_has_one_selects_its_own_row() -> void:
+	var attack := WeaponAttackData.new()
+	attack.attack_pattern = AttackPattern.new()
+	DevWidgets.build_resource_editor(_box, attack, func(): pass)
+	var picker := _picker()
+	assert_str(picker.get_item_text(picker.selected)).is_equal("AttackPattern")
