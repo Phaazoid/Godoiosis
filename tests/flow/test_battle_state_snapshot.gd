@@ -3,7 +3,7 @@
 #
 # The reason this is a whole suite rather than a few more cases next door: battle state is
 # deliberately NOT @export where it lives, on either side. Weapon readiness/charge/rev/ammo are
-# plain vars on WeaponInstance subclasses so make()/copy_equippable() re-arm a weapon every mission;
+# plain vars on WeaponInstance subclasses so make()/copy_for_grant() re-arm a weapon every mission;
 # lifecycle, element states, Crisis and rally are plain vars on the transient Unit for the same
 # reason. So none of it rides along for free — every field here is captured EXPLICITLY, and a field
 # someone forgets fails silently and invisibly (the whole layer was silently absent from saves for

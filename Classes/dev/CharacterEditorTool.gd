@@ -407,7 +407,7 @@ func _equippable_catalog() -> Dictionary:
 
 # The kit: what the character carries into any board, seeded through the gated doors at spawn
 # (#177). Slot picks stage the catalog FILE resource itself -- no copy -- so a save writes an
-# ExtResource reference and the spawn grants copy_equippable() copies off it.
+# ExtResource reference and the spawn grants copy_for_grant() copies off it.
 func _add_kit_section() -> void:
 	DevWidgets.add_label(editor_container, "Starting inventory (no Equip checked = auto-equip decides)")
 	var catalog := _equippable_catalog()

@@ -64,7 +64,7 @@ func test_kit_items_are_granted_as_copies_and_auto_equip() -> void:
 	var carried := unit.inventory[0] as WeaponInstance
 	assert_object(carried).is_not_null()
 	assert_bool(carried == authored).is_false()               # a copy, never the authored resource
-	assert_object(carried.template).is_same(authored.template)  # copy_equippable keeps the template SHARED
+	assert_object(carried.template).is_same(authored.template)  # copy_for_grant keeps the template SHARED
 	assert_object(unit.get_equipped_weapon()).is_same(carried)  # add_item's auto-equip picked it up
 
 

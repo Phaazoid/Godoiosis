@@ -138,7 +138,7 @@ func test_inventory_round_trips_and_template_stays_shared() -> void:
 	var loaded_second := b.inventory[1] as WeaponInstance
 	assert_object(loaded_first).is_not_null()
 	assert_object(loaded_second).is_not_null()
-	# the copy_equippable guarantee, through BOTH copies (capture + apply): the loaded
+	# the copy_for_grant guarantee, through BOTH copies (capture + apply): the loaded
 	# instance still SHARES its family template — never a deep-dup fork
 	assert_object(loaded_first.template).is_same(first.template)
 	assert_object(loaded_second.template).is_same(second.template)
@@ -207,14 +207,14 @@ func test_worn_armor_round_trips() -> void:
 	# every field of the model rides along -- gates and granted abilities are as persistent as DEF
 	assert_int(b.worn_armor.flat_def).is_equal(1)
 	assert_int(b.worn_armor.stat_minimums[Stats.Stat.CON]).is_equal(6)
-	# The whole chain has to survive, not just the field: copy_equippable carries granted_abilities,
+	# The whole chain has to survive, not just the field: copy_for_grant carries granted_abilities,
 	# and the reconstituted wearer is still immune (#90). Compared by ID rather than identity on
 	# purpose -- duplicate(true) forks a pathless AbilityData like this fixture's, which is harmless
 	# precisely because the kit matches on id. A real authored .tres has a resource_path and stays shared.
 	assert_int(b.worn_armor.granted_abilities.size()).is_equal(1)
 	assert_int(b.worn_armor.granted_abilities[0].id).is_equal(Abilities.Id.INSULATED_SHOCK)
 	assert_bool(b.is_immune_to(Elemental.Element.SHOCK)).is_true()
-	assert_object(b.worn_armor).is_not_same(armor)   # copy_equippable, not the shared source
+	assert_object(b.worn_armor).is_not_same(armor)   # copy_for_grant, not the shared source
 
 func test_worn_armor_is_the_carried_copy_not_a_duplicate() -> void:
 	# The index, not a parallel copy: what the unit WEARS must be the very object sitting in its

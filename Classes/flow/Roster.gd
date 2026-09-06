@@ -33,7 +33,7 @@ class_name Roster
 # Loose gear this mission's roster starts with. Same element type as ScenarioUnitEntry.inventory
 # and UnitData.starting_inventory, and the same authoring source: standalone .tres out of
 # Resources/Weapons/WeaponVariants/, Resources/Armor/ and the rune variants. Granted to a unit as a
-# copy_equippable() copy at deploy time, never shared -- the rule starting_inventory already states.
+# copy_for_grant() copy at deploy time, never shared -- the rule starting_inventory already states.
 #
 # Loose MODS are not here and cannot be: WeaponModData extends Resource, not Item, so it has no
 # icon, no description, and structurally cannot sit in an inventory. #732 carries both halves.

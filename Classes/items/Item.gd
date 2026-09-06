@@ -34,3 +34,14 @@ static func property_tips() -> Dictionary:
 # is storage, and for a WeaponInstance the stored value is usually empty on purpose.
 func describe() -> String:
 	return description
+
+
+# THE one door for how a unit receives its OWN copy of a carried thing -- grants and saves both.
+# Default is a full deep copy; WeaponInstance overrides it to keep its shared template UN-copied.
+#
+# It lives on Item rather than EquippableData because the three authoring doors (UnitData
+# .starting_inventory, Roster.stash, ScenarioUnitEntry.inventory) carry Item, and a door typed
+# Item cannot call a method named for equippables. Was `copy_equippable()` until #697; renamed
+# rather than joined by a second copy door, which would have been two answers to one question.
+func copy_for_grant() -> Item:
+	return duplicate(true)

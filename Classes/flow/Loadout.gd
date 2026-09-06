@@ -9,7 +9,7 @@ extends RefCounted
 # would have mutated the authored Roster for the rest of the session -- every later resolve() in the
 # same run returning the depleted one -- which is #731 ruling 3 (edits do not persist between
 # missions) broken by the first drag. The unit side never had this problem: ScenarioUnitEntry grants
-# gear through copy_equippable(). The stash simply never got the same treatment, because until this
+# gear through copy_for_grant(). The stash simply never got the same treatment, because until this
 # ticket nothing could move it.
 #
 # So the stash here is COPIES, and the phase owns them. MissionController builds one in deploy_roster
@@ -32,7 +32,7 @@ static func from_roster(roster: Roster) -> Loadout:
 		return made
 	for item: EquippableData in roster.stash:
 		if item != null:
-			made.stash.append(item.copy_equippable())
+			made.stash.append(item.copy_for_grant())
 	return made
 
 
@@ -73,7 +73,7 @@ func move(item: EquippableData, from: Unit, to: Unit) -> String:
 		stash.erase(item)
 
 	if to != null:
-		# No copy_equippable() here, deliberately. The stash was copied when the phase opened and a
+		# No copy_for_grant() here, deliberately. The stash was copied when the phase opened and a
 		# unit's kit was copied when it spawned, so this object already has exactly one owner --
 		# copying again would leave the battle-state identity of a WeaponInstance behind (#87's
 		# per-inventory-index states), and two units would carry sibling objects the save cannot

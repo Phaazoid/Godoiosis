@@ -75,5 +75,6 @@ static func instantiate_entry(entry) -> EquippableData:
 	if entry is WeaponData:
 		return WeaponInstance.make(entry)
 	if entry is EquippableData:
-		return entry.copy_equippable()
+		# Cast: the copy door is typed Item since #697; this path only ever reaches equippables.
+		return entry.copy_for_grant() as EquippableData
 	return null

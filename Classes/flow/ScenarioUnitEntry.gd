@@ -74,7 +74,7 @@ class_name ScenarioUnitEntry
 @export var watch_attack_index := -1
 @export var watch_spent := false
 
-# Snapshot the unit's persistent side of the seam. Inventory copies via copy_equippable()
+# Snapshot the unit's persistent side of the seam. Inventory copies via copy_for_grant()
 # — never duplicate(true), which would fork a WeaponInstance off its shared template. An
 # installed prosthetic saves as the INDEX of its carried instance so load can re-link.
 func capture_unit_state(unit: Unit) -> void:
@@ -98,18 +98,18 @@ func capture_unit_state(unit: Unit) -> void:
 		if equippable == null:
 			continue
 		sources.append(equippable)
-		inventory.append(equippable.copy_equippable())
+		inventory.append(equippable.copy_for_grant())
 
 	equipped_index = sources.find(unit.get_equipped_weapon())
 	if unit.has_equipped_weapon() and equipped_index == -1:
 		# equipped directly without an inventory slot (fixtures do this) — save it anyway
 		equipped_index = inventory.size()
-		inventory.append(unit.get_equipped_weapon().copy_equippable())
+		inventory.append(unit.get_equipped_weapon().copy_for_grant())
 	worn_armor_index = sources.find(unit.worn_armor)
 	if unit.worn_armor != null and worn_armor_index == -1:
 		# worn without an inventory slot (dev/fixtures do this) — save it anyway
 		worn_armor_index = inventory.size()
-		inventory.append(unit.worn_armor.copy_equippable())
+		inventory.append(unit.worn_armor.copy_for_grant())
 
 	limb_states = {}
 	limb_prosthetic_stats = {}
@@ -198,7 +198,7 @@ func apply_unit_state(unit: Unit) -> void:
 	for i in inventory.size():
 		if inventory[i] == null:
 			continue
-		if not unit.add_item(inventory[i].copy_equippable()):
+		if not unit.add_item(inventory[i].copy_for_grant()):
 			push_warning("Scenario load: inventory full — dropped '%s'" % inventory[i].display_name)
 	# add_item auto-equips the first equippable; the save's explicit choice wins either way.
 	# Direct assign, never the gated door (#157) — a save is authoritative, same as the armor

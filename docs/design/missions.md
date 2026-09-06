@@ -132,7 +132,7 @@ so the preview would stick for ever one frame after appearing. Pinned by NODE ID
 text — a rebuild that restores the same values is invisible to a text compare, which a mutant proved.
 
 **And the flavour wire was broken.** `WeaponInstance.make()` has never copied its template's
-`description` and `copy_equippable` only copies instance-to-instance, so authoring a line on a family
+`description` and `copy_for_grant` only copies instance-to-instance, so authoring a line on a family
 reached nothing a player could hover. `Item.describe()` is the one door now and `WeaponInstance`
 reads THROUGH to its template — re-wording a family re-words every weapon built on it, saved
 scenarios included, with no migration. Only then were the seven base-weapon descriptions worth
@@ -145,7 +145,7 @@ which `test_derived_readouts.gd` enforces over every authored weapon file. Weigh
 whatever `RosterCatalog.resolve()` returned, and that is Godot's resource **cache** — the same object
 for every resolve in a session. The first item moved out would have depleted the authored `Roster` for
 every mission after it, which is ruling 3 broken by one drag. Nothing on disk was ever at risk (nothing
-saves a roster); the cached object was. `Loadout.from_roster` copies through `copy_equippable()`, the
+saves a roster); the cached object was. `Loadout.from_roster` copies through `copy_for_grant()`, the
 same grant the unit side already made in `apply_unit_state`, and `MissionController` builds one in
 `deploy_roster` — where the Roster is already in hand — and drops it in `reset()`, the pair of edges
 `_roster_units` lives on.

@@ -19,11 +19,6 @@ extends Item
 # and TransmutationData.targets are this enum. APPEND-ONLY (serializes as an int in .tres).
 enum TargetMode { UNIT, MAP, BOTH }
 
-# Grant/save copy: how a unit receives its own copy of this equippable. Default = full
-# deep copy; WeaponInstance overrides to keep its shared template UN-copied.
-func copy_equippable() -> EquippableData:
-	return duplicate(true)
-
 # WHY this unit may not equip this — "" means they may (#744). Each kind states its own
 # disqualifier here: armor reads the wearer's BODY stats, a rune reads aura+affinity (#157).
 #

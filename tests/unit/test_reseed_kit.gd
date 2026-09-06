@@ -1,4 +1,4 @@
-# #589: a unit's gear is a copy_equippable() copy made at spawn, so which mods are FITTED to a
+# #589: a unit's gear is a copy_for_grant() copy made at spawn, so which mods are FITTED to a
 # weapon and which weapons are in a character's kit are per-instance composition -- the live-shared
 # refs that carry an attack's or a mod's DATA reach them, and a change to the composition itself
 # does not. Re-seeding is the dev answer: throw the gear away and re-grant it from the character

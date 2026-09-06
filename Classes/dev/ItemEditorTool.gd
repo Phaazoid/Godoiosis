@@ -151,7 +151,7 @@ func _editable_copy(entry: Resource) -> Resource:
 	if entry is WeaponData:
 		return entry
 	var equippable := entry as EquippableData
-	return equippable.copy_equippable() if equippable != null else entry.duplicate(true)
+	return equippable.copy_for_grant() if equippable != null else entry.duplicate(true)
 
 # display_name is declared separately on Item and on WeaponModData -- two content roots that agree
 # on the name but share no base (CLAUDE.md), so a Resource-typed field cannot reach it statically.

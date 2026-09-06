@@ -178,7 +178,7 @@ func _seed_starting_kit(source: UnitData) -> void:
 		var authored := source.starting_inventory[i]
 		if authored == null:
 			continue
-		var granted := authored.copy_equippable()
+		var granted := authored.copy_for_grant()
 		var weapon := granted as WeaponInstance
 		if weapon != null and weapon.get_script() == WeaponInstance and weapon.template != null \
 				and weapon.template.weapon_type != WeaponData.WeaponType.NONE:
@@ -231,7 +231,7 @@ func can_reseed_kit() -> bool:
 # GEAR only: jobs and proficiency come along because the file authors them as part of the kit, but
 # HP, Will, limb STATE, element states and lifecycle are this unit's battle, not its loadout.
 # Battle state (ammo, rev, spring load) resets with the weapons — the grant is a fresh
-# copy_equippable, exactly what a spawn hands back.
+# copy_for_grant, exactly what a spawn hands back.
 #
 # The clear is DIRECT rather than remove_item, matching ScenarioUnitEntry.apply_unit_state: an
 # installed prosthetic refuses to be dropped, and the seed re-links every fitting anyway. Jobs clear
