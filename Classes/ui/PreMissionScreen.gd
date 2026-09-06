@@ -303,6 +303,7 @@ func _refresh_cards() -> void:
 			card.gear_clicked.connect(_on_gear_clicked)
 			card.gear_hovered.connect(_on_gear_hovered)
 			card.gear_unhovered.connect(_on_gear_unhovered)
+			card.job_picked.connect(_on_job_picked)
 			card.mouse_entered.connect(_on_card_hovered.bind(card))
 			card.mouse_exited.connect(_on_gear_unhovered.bind(card))
 			card.selected_item = _selected_item if _selected_owner == unit else null
@@ -477,6 +478,15 @@ func _on_deploy_toggled(unit: Unit) -> void:
 
 func _on_begin() -> void:
 	_controller.confirm_and_commit()
+
+
+# The card offers the job; the screen performs it, the same division every gear move keeps. Deferred
+# like every other mutation here so that one place decides when the screen redraws -- and the redraw
+# is real work either way: the ability chips, the stat grid and the derived strip all follow a job.
+func _on_job_picked(target: Unit, job_id: String) -> void:
+	_last_refusal = target.set_sole_job(job_id)
+	_hover_note = ""
+	_redraw()
 
 
 # --- moving gear (#741) --------------------------------------------------------------------------
