@@ -526,9 +526,9 @@ const CLASS_KNOBS: Array[Dictionary] = [
 	# property because the store is a static on ElementPalette, which KNOBS cannot reach.
 	#
 	# TUNE THEM AS A SET, against the queue panel's slate ground AND against each other -- the whole
-	# job of these seven is that a glance at a row says which element without reading a word.
+	# job of these eight is that a glance at a row says which element without reading a word.
 	{"group": "Element colours", "label": "Fire", "static": "ELEMENT_FIRE", "script": ELEMENT_PALETTE_SCRIPT,
-		"tip": "Fire's colour wherever the UI names an element. The loudest of the seven by default, since a burn is usually the consequence a player most wants to spot in a queued plan."},
+		"tip": "Fire's colour wherever the UI names an element. The loudest of the set by default, since a burn is usually the consequence a player most wants to spot in a queued plan."},
 	{"group": "Element colours", "label": "Water", "static": "ELEMENT_WATER", "script": ELEMENT_PALETTE_SCRIPT,
 		"tip": "Water's colour -- and, since a state borrows the colour of the element that deposits it, what a WET chip wears. Tune it against Ice, which is the one it can be confused with."},
 	{"group": "Element colours", "label": "Shock", "static": "ELEMENT_SHOCK", "script": ELEMENT_PALETTE_SCRIPT,
@@ -541,24 +541,26 @@ const CLASS_KNOBS: Array[Dictionary] = [
 		"tip": "Air's colour. Carried by damageless utility carvings like Gust, which means it is often the only mark a row has that anything elemental happened at all."},
 	{"group": "Element colours", "label": "Aether", "static": "ELEMENT_AETHER", "script": ELEMENT_PALETTE_SCRIPT,
 		"tip": "Aether's colour. The rarest of the sigils, so it can afford to be the most distinctive -- nothing else on screen should be near it."},
+	{"group": "Element colours", "label": "Corrosion", "static": "ELEMENT_CORROSION", "script": ELEMENT_PALETTE_SCRIPT,
+		"tip": "Corrosion's colour -- the Chemical Spitter's element (#97). Not a sigil and not aura-bearing, so it never appears on a carving; where you WILL see it is a Spray's rail and a Vitriol vial. Its near-neighbours are Earth and Air, which is the pair to tune it against."},
 
 	# --- THE ACTION QUEUE.S OWN COLOURS (#685 round 4) -----------------------------------------
 	#
-	# Not an element: what the WORLD did to a unit. Its own group because the seven above are about
+	# Not an element: what the WORLD did to a unit. Its own group because the element rows above are about
 	# elements wherever they are drawn, while this one is a value this panel invents.
 	{"group": "Action queue", "label": "World event text", "static": "EVENT_TINT", "script": QUEUE_STYLE_SCRIPT,
 		"tip": "The pill an action-queue row wears for a consequence the WORLD caused rather than an element -- Fell, Drowning, Into the void, Insulated. It shipped as the rail.s structural grey once and was unreadable against the row, so the one thing it must not be is another grey. Keep it OFF the element wheel: every element colour is saturated, so a near-neutral reads as 'not elemental' at a glance."},
 
-	# ...and the two values that turn those seven element colours into INK on the PARCHMENT palette
+	# ...and the two values that turn those element colours into INK on the PARCHMENT palette
 	# (round 5). A player picks the palette in Settings; these are what the dev authors inside one.
 	#
 	# INERT WHILE SLATE IS LIVE, which is #422's cost pointed the other way -- the alternative is
 	# authored in source, exactly as OverlayManager's aim palettes are. Tune them with Parchment
-	# picked, where the panel repaints under the slider. The seven element rows above are inert under
+	# picked, where the panel repaints under the slider. The element rows above are inert under
 	# NEITHER palette, which is the whole reason parchment adapts them rather than re-authoring them.
 	{"group": "Action queue", "label": "Parchment ink depth", "static": "PARCHMENT_INK_DEPTH",
 		"script": QUEUE_STYLE_SCRIPT, "min": 0.2, "max": 0.9, "step": 0.01,
-		"tip": "How dark an element reads as ink on the parchment palette's cream rows. Its HUE never moves -- fire is orange in both palettes -- so this is the whole of how heavily the seven sit on the page. Too high and they wash out against the paper; too low and they all read as one dark smudge."},
+		"tip": "How dark an element reads as ink on the parchment palette's cream rows. Its HUE never moves -- fire is orange in both palettes -- so this is the whole of how heavily they sit on the page. Too high and they wash out against the paper; too low and they all read as one dark smudge."},
 	{"group": "Action queue", "label": "Parchment ink saturation", "static": "PARCHMENT_INK_SATURATION",
 		"script": QUEUE_STYLE_SCRIPT, "min": 1.0, "max": 3.0, "step": 0.05,
 		"tip": "How far the element colours are pushed toward pure hue before being inked onto parchment. The slate set is tuned to GLOW on a dark ground, so the palest of them (Ice, Air) go to mud at ink depth without this. A gain rather than a floor, so your relative choices stay in order -- it clamps at fully saturated, which is the one place they can flatten."},
@@ -1260,6 +1262,7 @@ static func read_static(name: String) -> Variant:
 		"ELEMENT_EARTH": return ElementPalette.ELEMENT_EARTH
 		"ELEMENT_AIR": return ElementPalette.ELEMENT_AIR
 		"ELEMENT_AETHER": return ElementPalette.ELEMENT_AETHER
+		"ELEMENT_CORROSION": return ElementPalette.ELEMENT_CORROSION
 		"EVENT_TINT": return QueueStyle.EVENT_TINT
 		"PARCHMENT_INK_DEPTH": return QueueStyle.PARCHMENT_INK_DEPTH
 		"PARCHMENT_INK_SATURATION": return QueueStyle.PARCHMENT_INK_SATURATION
@@ -1654,6 +1657,10 @@ static func write_static(host: Node3D, name: String, value: Variant) -> void:
 			return
 		"ELEMENT_AETHER":
 			ElementPalette.ELEMENT_AETHER = value
+			_restyle_action_queue(host)
+			return
+		"ELEMENT_CORROSION":
+			ElementPalette.ELEMENT_CORROSION = value
 			_restyle_action_queue(host)
 			return
 		"EVENT_TINT":

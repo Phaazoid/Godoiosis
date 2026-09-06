@@ -43,7 +43,7 @@ func _fire(weapon: CarbineWeaponInstance, count: int) -> void:
 func test_starts_with_a_full_magazine() -> void:
 	var w := _carbine()
 	assert_int(w.shots_remaining).is_equal(CarbineWeaponInstance.MAGAZINE_SIZE)
-	assert_bool(w.can_reload()).is_false()   # nothing to top off
+	assert_bool(w.can_reload(null)).is_false()   # nothing to top off
 	assert_bool(w.is_attack_fireable(w.template.main_attack)).is_true()
 
 func test_a_partial_magazine_still_fires_and_can_top_off() -> void:
@@ -53,22 +53,22 @@ func test_a_partial_magazine_still_fires_and_can_top_off() -> void:
 	_fire(w, 1)
 	assert_int(w.shots_remaining).is_equal(CarbineWeaponInstance.MAGAZINE_SIZE - 1)
 	assert_bool(w.is_attack_fireable(w.template.main_attack)).is_true()
-	assert_bool(w.can_reload()).is_true()
+	assert_bool(w.can_reload(null)).is_true()
 
 func test_an_empty_magazine_cannot_fire() -> void:
 	var w := _carbine()
 	_fire(w, CarbineWeaponInstance.MAGAZINE_SIZE)
 	assert_int(w.shots_remaining).is_equal(0)
 	assert_bool(w.is_attack_fireable(w.template.main_attack)).is_false()
-	assert_bool(w.can_reload()).is_true()
+	assert_bool(w.can_reload(null)).is_true()
 
 func test_reload_refills_the_whole_magazine() -> void:
 	var w := _carbine()
 	_fire(w, CarbineWeaponInstance.MAGAZINE_SIZE)
-	w.reload()
+	w.reload(null)
 	assert_int(w.shots_remaining).is_equal(CarbineWeaponInstance.MAGAZINE_SIZE)
 	assert_bool(w.is_attack_fireable(w.template.main_attack)).is_true()
-	assert_bool(w.can_reload()).is_false()
+	assert_bool(w.can_reload(null)).is_false()
 
 func test_shots_never_go_negative() -> void:
 	var w := _carbine()
@@ -125,12 +125,19 @@ func test_empty_carbine_cannot_fire_its_default_attack() -> void:
 	assert_bool(unit.can_fire_default_attack()).is_false()
 	assert_bool(unit.has_any_fireable_attack()).is_false()   # no secondary to fall back on
 
-func test_weapon_action_appears_only_once_there_is_something_to_reload() -> void:
+func test_the_weapon_slice_opens_for_a_reload_verb_whether_or_not_it_can_fire() -> void:
+	# REVERSED by #97 (dev ruling): the slice opens on a family HAVING a rearm, not on the rearm
+	# being available right now. A refused reload lists greyed with its reason, and a slice gated on
+	# availability would hide the one row that explains why -- which for the Chemical Spitter ("no
+	# matching vial to inject") is exactly when the player needs telling. The Carbine pays the cost:
+	# its button now lights on a full magazine too, where before it stayed dark.
 	var unit := _armed_unit()
-	assert_bool(unit.has_weapon_actions()).is_false()   # nothing to reload, no secondaries
+	assert_bool(unit.has_weapon_actions()).is_true()    # full, but the verb exists and will explain itself
+	assert_bool(unit.can_reload_weapon()).is_false()    # ...and it is refused, so the row greys
+	assert_str(unit.reload_block_reason()).is_equal("The magazine is full.")
 	_fire(unit.get_equipped_weapon() as CarbineWeaponInstance, 1)
-	assert_bool(unit.has_weapon_actions()).is_true()    # top-off is a real choice
-	assert_bool(unit.can_reload_weapon()).is_true()
+	assert_bool(unit.can_reload_weapon()).is_true()     # top-off is a real choice
+	assert_str(unit.reload_block_reason()).is_empty()
 
 func test_reload_action_rearms_a_carbine_through_the_generic_seam() -> void:
 	var unit := _armed_unit()

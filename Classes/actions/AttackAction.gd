@@ -164,6 +164,14 @@ func execute():
 	if not is_secondary_hit and resolved != null and resolved.burned_vial != null:
 		actor.attunement = null
 
+	# Tank spend (#97), the same shape one economy over: the resolver already decided whether the
+	# empowered form is what fired, threading the count across the pass so a counter and a watch
+	# shot cannot both claim the last charge. Here there is only the spending.
+	if not is_secondary_hit and resolved != null and resolved.charge_spent:
+		var tank := actor.get_equipped_weapon() as WeaponInstance
+		if tank != null:
+			tank.spend_charge()
+
 	finish_execution()
 
 func get_action_icon() -> Texture2D:

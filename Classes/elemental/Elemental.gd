@@ -20,6 +20,12 @@ enum Element {
 	EARTH,
 	AIR,
 	AETHER,
+	# Not a sigil and not aura-bearing -- an exotic result tag like ICE and SHOCK, and inert for
+	# now: no reaction, no paired State, no terrain source (#97). It exists because the Chemical
+	# Spitter's identity is corrosion and its Spray had nothing to be tagged with.
+	# NOT the same thing as AttackData.Kind.CORROSION, which is the DELIVERY axis (#424) -- the two
+	# vocabularies already share FIRE and SHOCK for the same reason, so a grep hits both.
+	CORROSION,
 }
 
 enum State {

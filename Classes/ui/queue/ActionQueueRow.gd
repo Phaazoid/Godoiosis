@@ -34,6 +34,7 @@ const BADGE_DROWNED := "Drown"
 const BADGE_VOID := "Void"
 const BADGE_INSULATED := "Shrug"
 const BADGE_VIAL := "Vial"
+const BADGE_TANK := "Tank"
 
 @onready var rail: ColorRect = $Frame/Rail
 @onready var actor_texture: TextureRect = $Frame/Pad/Body/Line/ActorTexture
@@ -173,6 +174,12 @@ func _build_consequence(outcome: ResolvedOutcome) -> void:
 		var ink := QueueStyle.element_ink(burned.element) if not burned.is_alkahest \
 				else QueueStyle.ink(QueueStyle.Role.EVENT_TINT)
 		consequence.add_child(_chip(ink, BADGE_VIAL, UiText.wrap("Burns %s" % burned.display_name)))
+	# The TANK spend (#97), the vial burn's twin one economy over and there for the same Law #2
+	# reason: this shot is the supercharged one and the next will not be. The resolver threads the
+	# count across the pass, so two shots in one pass cannot both wear this.
+	if outcome.charge_spent:
+		consequence.add_child(_chip(QueueStyle.ink(QueueStyle.Role.EVENT_TINT), BADGE_TANK,
+			UiText.wrap("Spends a supercharged shot")))
 	# No visibility toggle: the container holds the line's horizontal EXPAND whether or not it has
 	# chips, which is what keeps the cancel X on the right edge of a row that has none. It WRAPS
 	# rather than clips, so a crowded hit costs the row a second line instead of losing a word.

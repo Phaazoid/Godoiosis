@@ -48,6 +48,20 @@ func granted_elements() -> Array[Elemental.Element]:
 	return only
 
 
+# Does this vial ANSWER for `element`? The injection question (#97), and deliberately not the same
+# one granted_elements() answers, which is "what casts does this empower" -- empowerment is
+# aura-scaled and only sigils carry aura, so that list is sigil-shaped for alkahest.
+#
+# They disagree in exactly one cell, alkahest x an exotic element, and that is the intended answer
+# on both sides: alkahest matches ANYTHING (canon's word, alchemy-kit.md -> Sources), so it charges
+# a Corrosion spitter, while still granting only the five sigils to a caster because there is no
+# such thing as corrosion aura.
+func matches(other: Elemental.Element) -> bool:
+	if is_alkahest:
+		return true
+	return element != Elemental.Element.NONE and element == other
+
+
 # WHY this unit may not use this vial -- "" means they may. can_equip_reason's shape (#744): the
 # REASON is the rule and any boolean is derived from it, so the button's label and the refusal can
 # never drift apart.
@@ -58,6 +72,13 @@ func granted_elements() -> Array[Elemental.Element]:
 func use_block_reason(user: Unit) -> String:
 	if user == null:
 		return "There is nobody to use it."
+	# A non-sigil vial (Vitriol, #97) can empower no cast at all -- empowerment pays out as aura
+	# scaling and only sigils carry aura -- so attuning to one spends the item for nothing. Asked of
+	# the AUTHORED fields rather than of granted_elements(), which answers [CORROSION] for Vitriol
+	# and would make the refusal read as "this vial grants nothing", which is a different and false
+	# claim. Still not a gate on any cast: what it refuses is the burn, exactly as the rule below.
+	if not is_alkahest and not Elemental.is_sigil_element(element):
+		return "%s empowers no casting -- it is spitter fuel." % display_name
 	var held := user.attunement
 	if held == null:
 		return ""

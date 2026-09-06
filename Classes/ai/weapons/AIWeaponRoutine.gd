@@ -54,7 +54,7 @@ static func table() -> Dictionary:
 			WeaponData.WeaponType.SPRINGSPEAR: SpringspearWeaponRoutine.new(),
 			WeaponData.WeaponType.CARBINE: AIWeaponRoutine.new(),           # a dry magazine has no candidates; RELOAD follows on its own
 			WeaponData.WeaponType.KINETIC_MACE: AIWeaponRoutine.new(),      # the score already prices the shove (header)
-			WeaponData.WeaponType.CHEMICAL_SPITTER: AIWeaponRoutine.new(),  # no signature mechanic yet
+			WeaponData.WeaponType.CHEMICAL_SPITTER: AIWeaponRoutine.new(),  # the tank GATES nothing (#97), so nothing to refuse
 			WeaponData.WeaponType.PROSTHETIC: AIWeaponRoutine.new(),        # no signature mechanic
 		}
 	return _table

@@ -54,12 +54,13 @@ func test_chainsword_shows_weapon_action_via_rev_with_no_secondary_attacks() -> 
 
 
 func test_bare_weapon_with_nothing_extra_has_no_weapon_actions() -> void:
-	# A weapon with no secondaries and no self-ability. The fixture default (CHAINSWORD) still revs
-	# and the Carbine now reloads (#84), so this needs the one family left with no signature at all:
-	# Chemical Spitter, still a pure pass-through pending the materia pass.
+	# A weapon with no secondaries and no self-ability. The fixture default (CHAINSWORD) still revs,
+	# the Carbine reloads (#84), and as of #97 the Chemical Spitter owns a Tank Injection -- which
+	# opens the slice whether or not it can be used, so that a refusal has somewhere to be read.
+	# The Prosthetic is the last family with no signature verb at all.
 	var unit := H.spawn_unit(self, Team.Faction.PLAYER, Vector2i(0, 0), {}, false)
 	var template := WeaponData.new()
-	template.weapon_type = WeaponData.WeaponType.CHEMICAL_SPITTER
+	template.weapon_type = WeaponData.WeaponType.PROSTHETIC
 	template.main_attack = WeaponAttackData.new()
 	unit.equipped_weapon = WeaponInstance.make(template)
 	assert_bool(unit.has_weapon_actions()).is_false()
@@ -75,7 +76,7 @@ func test_bare_weapon_with_nothing_extra_has_no_weapon_actions() -> void:
 func test_a_watchable_attack_opens_the_weapon_row_only_when_it_can_fire() -> void:
 	var unit := H.spawn_unit(self, Team.Faction.PLAYER, Vector2i(0, 0), {}, false)
 	var template := WeaponData.new()
-	template.weapon_type = WeaponData.WeaponType.CHEMICAL_SPITTER   # the one family with no signature
+	template.weapon_type = WeaponData.WeaponType.PROSTHETIC   # the last family with no signature verb (#97 gave the Spitter one)
 	template.main_attack = WeaponAttackData.new()
 	unit.equipped_weapon = WeaponInstance.make(template)
 	assert_bool(unit.has_weapon_actions()).is_false()   # the baseline: nothing to do in the slice

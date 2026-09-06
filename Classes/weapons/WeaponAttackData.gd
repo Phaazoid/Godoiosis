@@ -39,8 +39,19 @@ extends AttackData
 # the wielding WeaponInstance's call: a bool for the Springspear, a magazine for the Carbine, a
 # charge bank for the mace.
 
+# What this attack BECOMES while its weapon is supercharged (#97) — the weapon-side twin of the
+# empowered form a carving authors at a source (#695). null = this attack has no charged shape and
+# fires the same however full the tank is, which is every attack in the game but the Spitter's.
+#
+# A whole authored attack rather than a delta, because that is what "authored" has to mean here:
+# the dev's ruling was that the supercharge changes RANGE, and range is geometry, which lives on
+# AttackPattern. A number added to power could never have said it.
+#
+# ONE LEVEL ONLY. An empowered form's own empowered_form is never read, and AttackLint refuses one.
+@export var empowered_form: WeaponAttackData = null
 
-# The four fields this subclass adds (#473); the shared ones are AttackData's answer, merged in
+
+# The five fields this subclass adds (#473); the shared ones are AttackData's answer, merged in
 # rather than restated. Forgetting the merge loses every base tip silently, which is what
 # tests/dev/test_property_tips.gd's coverage law is for.
 static func property_tips() -> Dictionary:
@@ -51,5 +62,6 @@ static func property_tips() -> Dictionary:
 		"requires_readiness": "This attack can only be fired while its weapon is READY. What ready MEANS is the weapon family's own call: a magazine with shots left on a Carbine, a wound spring on a Springspear, banked charge on a Kinetic Mace.",
 		"consumes_readiness": "Firing leaves the weapon un-ready -- spends a shot, releases the spring, drains the bank. Independent of Requires Readiness: an attack can spend without needing.",
 		"builds_readiness": "Firing RESTORES readiness to the weapon -- reloads, winds, banks charge. The third state: needs one / spends one / banks one.",
+		"empowered_form": "What this attack BECOMES while its weapon is supercharged -- the Chemical Spitter's tank is the only thing that supercharges one today. A whole other attack, so it may differ in range, shape, power, anything. Leave it empty and the attack fires the same however full the tank is.",
 	})
 	return tips

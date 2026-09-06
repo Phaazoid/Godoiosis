@@ -75,6 +75,22 @@ func is_attack_fireable(_attack: WeaponAttackData) -> bool:
 func consume_readiness_for(_attack: WeaponAttackData) -> void:
 	pass
 
+# Supercharge seam (#97) — default: this family has no charge to spend, so its main is always its
+# main. The Chemical Spitter's tank overrides it. Sits beside readiness and is deliberately NOT it:
+# readiness gates what may fire, this only changes WHAT the same order fires.
+func is_supercharged() -> bool:
+	return tank_charges() > 0
+
+# How many supercharges are banked. The resolver seeds its per-pass thread from this; is_supercharged
+# is derived from it so a family declares ONE number rather than a number and a boolean.
+func tank_charges() -> int:
+	return 0
+
+# Spend one supercharge. Driven by the outcome's charge_spent stamp at execution, never from here,
+# so the preview and the spend read one fact.
+func spend_charge() -> void:
+	pass
+
 # The self-abilities themselves — can_reload/reload/reload_label, can_rev/rev/tick_rev, can_burrow —
 # are declared as inert virtuals on EquippableData (promoted there 2026-07-27), because Unit
 # delegates them straight to whatever is equipped and shouldn't have to cast first. Families
@@ -231,11 +247,14 @@ func active_modules(wielder: Unit) -> Array[WeaponModData]:
 # GRANTS deliberately do not come through here — available_attacks reads active_modules straight,
 # because "which attacks does this mod change" and "which attacks does it add" are different
 # questions. A MAIN_ATTACK mod still hands over whatever it grants; it just doesn't buff it.
+#
+# Asked of is_main_form rather than of effective_main directly (#97): the supercharge makes what
+# effective_main answers depend on the TANK, and a stamp frozen under the other form would silently
+# lose every MAIN_ATTACK mod's power, element, kind and knockback. Both forms are the main.
 func _mods_for(wielder: Unit, attack: WeaponAttackData) -> Array[WeaponModData]:
 	var result: Array[WeaponModData] = []
-	var main := effective_main(wielder)
 	for mod in active_modules(wielder):
-		if mod.applies_to == WeaponModData.AppliesTo.EVERY_ATTACK or attack == main:
+		if mod.applies_to == WeaponModData.AppliesTo.EVERY_ATTACK or is_main_form(wielder, attack):
 			result.append(mod)
 	return result
 
@@ -263,12 +282,34 @@ func repertoire(wielder: Unit) -> Array[AttackData]:
 # through the normal door can only carry one -- this is the answer for a hand-edited .tres, and
 # it is first rather than last so fitting into a LATER space cannot silently move the main.
 func effective_main(wielder: Unit) -> WeaponAttackData:
+	var main := base_main(wielder)
+	# The supercharge substitution (#97), applied AFTER the mod replacement so a mod-replaced main
+	# keeps its own empowered form rather than losing one. THE single point the whole feature enters
+	# the pipeline: the menu, Reach, the resolver, the queue row and the AI all read this, so none of
+	# them learns what a tank is.
+	if main != null and main.empowered_form != null and is_supercharged():
+		return main.empowered_form
+	return main
+
+# The main BEFORE the supercharge, which is the answer to "what does this weapon fire" in the
+# weapon's own terms -- what a mod replaced, or the template's. Split out because the tank asks it
+# (an empowered form is what a vial BUYS and so cannot be what qualifies one) and because
+# is_main_form needs both sides.
+func base_main(wielder: Unit) -> WeaponAttackData:
 	if template == null:
 		return null
 	for mod in active_modules(wielder):
 		if mod.replaces_main != null:
 			return mod.replaces_main
 	return template.main_attack
+
+# Is this attack THE main, under either form? One question with two right answers, which is why it
+# is asked here rather than by comparing against whichever form happens to be live.
+func is_main_form(wielder: Unit, attack: AttackData) -> bool:
+	var main := base_main(wielder)
+	if main == null or attack == null:
+		return false
+	return attack == main or attack == main.empowered_form
 
 func default_attack(wielder: Unit) -> AttackData:
 	return effective_main(wielder)
@@ -285,9 +326,10 @@ func secondary_attacks(wielder: Unit) -> Array[AttackData]:
 	var result: Array[AttackData] = []
 	if template == null:
 		return result
-	var main := effective_main(wielder)
+	# is_main_form, not `!= effective_main`: while a tank is hot the main IS the empowered form, and
+	# comparing against it alone would offer the BASE form here as though it were a second attack.
 	for a in selectable_attacks(wielder):
-		if a != main:
+		if not is_main_form(wielder, a):
 			result.append(a)
 	return result
 
