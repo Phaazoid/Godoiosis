@@ -28,7 +28,7 @@ Distilled from playtesting-the-imagination. New ideas get checked against these.
 
 ### ✅ Probably include (liked / called out)
 - The **old-alchemy lean** as the spine of flavor: **Tria Prima**, **the four humours**, **the seven planetary metals**, the seven operations — deep cuts welcome.
-- **Vitriol** as the single corrosion+toxin element (absorbs the old POISON/ACID — see Rework).
+- **Vitriol** as the single corrosion+toxin element (absorbs the old POISON/ACID — see Rework). **PARTLY BUILT 2026-09-06 (#97): `Elemental.Element.CORROSION` exists and a Vial of Vitriol is authored, but both are INERT — no reaction, no paired State, no terrain source. It arrived because the Chemical Spitter needed an element to be tagged with, not because the toxin design landed; the absorb-POISON/ACID half is still this bank entry.**
 - **Motion & repositioning**: magnetism hauling armor-wearers, gusts blasting units back, **Telesma** (renamed force) for kinetic shoves. Positioning payoff.
 - **Vision / command-range denial**: smokescreen that cuts a leader's LDR range and shreds squad cohesion.
 - **Counter-denial (gated)**: STAGGERED (big SOUND), FROZEN, or shocking conductive-armor → can't counter.

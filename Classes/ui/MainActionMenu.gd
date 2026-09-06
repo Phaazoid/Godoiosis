@@ -279,8 +279,13 @@ func _weapon_children(unit: Unit) -> Array:
 	for atk: AttackData in unit.get_weapon_secondary_attacks():
 		children.append(_attack_leaf(unit, atk))
 	children.append_array(_overwatch_rows(unit))
-	if unit.can_reload_weapon():
-		children.append(_self_verb_leaf(unit.reload_label(), BaseAction.ActionType.RELOAD))
+	# Reload LISTS AND GREYS with its reason (#97), the same rule this file already applies to an
+	# unfireable attack -- a hidden verb cannot tell "the tank is full" from "you carry no matching
+	# vial", and the second is precisely when the player wants the hint. Rev and Burrow below stay
+	# hidden-when-unavailable: their refusals are self-evident from the weapon's own status line.
+	if unit.has_reload_verb():
+		children.append(_self_verb_leaf(unit.reload_label(), BaseAction.ActionType.RELOAD,
+			unit.reload_block_reason()))
 	if unit.can_rev_weapon():
 		children.append(_self_verb_leaf("Rev", BaseAction.ActionType.REV))
 	if unit.can_burrow_weapon():
@@ -288,8 +293,8 @@ func _weapon_children(unit: Unit) -> Array:
 	return children
 
 
-func _self_verb_leaf(label: String, type: BaseAction.ActionType) -> Dictionary:
-	return _synthetic_leaf(_entry(label),
+func _self_verb_leaf(label: String, type: BaseAction.ActionType, blocked_reason: String = "") -> Dictionary:
+	return _synthetic_leaf(_entry(label, blocked_reason),
 		func(picking_unit: Unit) -> void: game.queue_simple_action(picking_unit, type))
 
 

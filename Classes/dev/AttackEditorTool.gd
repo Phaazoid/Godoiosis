@@ -37,7 +37,7 @@ enum Mode { TRANSMUTATION, WEAPON_ATTACK, FAMILY }
 # coverage law in tests/dev/test_property_tips.gd have to agree about which fields are skipped --
 # a field skipped in one and not the other is a field that either loses its tooltip or fails a law
 # it was never drawn by.
-const POOL_SKIP := ["display_name", "scaling_blend", "damage_kind", "attack_shape"]        # name, blend, kind and shape have bespoke UI
+const POOL_SKIP := ["display_name", "scaling_blend", "damage_kind", "attack_shape", "empowered_form"]   # all five have bespoke UI
 const CARVING_SKIP := ["display_name", "sigils", "flourishes", "damage_kind", "attack_shape"]   # the latter four get bespoke UI
 
 # The shape picker's two non-file rows, in the order they are added -- (none) FIRST, for the reason
@@ -46,6 +46,7 @@ const CARVING_SKIP := ["display_name", "sigils", "flourishes", "damage_kind", "a
 const NO_SHAPE_KEY := "(none - the aimed cell alone)"
 const NEW_SHAPE_KEY := "(new shape)"
 const UNNAMED_SHAPE_KEY := "(unnamed - Save as... to name it)"
+const NO_EMPOWERED_KEY := "(none — fires the same however full the tank is)"
 
 var _mode := Mode.TRANSMUTATION
 var current: AttackData = null
@@ -330,6 +331,7 @@ func populate():
 			DevWidgets.build_resource_editor(editor_container, current, populate, POOL_SKIP)
 			_populate_shape()
 			_populate_kind(current)
+			_populate_empowered_form(current as WeaponAttackData)
 			_populate_blend()
 			_populate_carriers()
 
@@ -367,6 +369,7 @@ func _populate_family() -> void:
 		DevWidgets.build_resource_editor(editor_container, current, populate, POOL_SKIP)
 		_populate_shape()
 		_populate_kind(current)
+		_populate_empowered_form(current as WeaponAttackData)
 		_populate_blend()
 	_populate_extras(family_label)
 
@@ -586,6 +589,39 @@ func _save_named_shape() -> bool:
 	if path == "":
 		return true   # unnamed: it rides along inside the attack's own file
 	return DevWidgets.save_over(_shape_copy, path, status_label)
+# The empowered-form picker (#97), and it is `replaces_main`'s row rather than the reflective one
+# for that row's exact two reasons. A lone object @export auto-renders as a resource swapper that
+# can only ever `.new()`, which EMBEDS an inline sub-resource -- invisible to every catalog and to
+# the reachability law, and unshareable between attacks. And the nested editor it then draws writes
+# into the live charged object while Update saves only the file we loaded, so the dev's range edits
+# would vanish at relaunch with no symptom at all.
+func _populate_empowered_form(attack: WeaponAttackData) -> void:
+	if attack == null:
+		return
+	var first := editor_container.get_child_count()
+	var choices := _attack_choices(NO_EMPOWERED_KEY)
+	choices.erase(attack.display_name)   # never itself; AttackLint refuses it, this never offers it
+	var current_key := NO_EMPOWERED_KEY
+	for k: String in choices:
+		if choices[k] == attack.empowered_form:
+			current_key = k
+	DevWidgets.add_option(editor_container, "Empowered form", choices.keys(), current_key,
+		func(s: String):
+			attack.empowered_form = choices[s]
+			populate()
+	)
+	DevWidgets._tip_rows_from(editor_container, first, DevWidgets.property_tip(attack, "empowered_form"))
+
+
+# Every authored weapon attack, by display name -- ItemEditorTool._main_choices' shape, and a
+# library attack sharing a main's name loses so one name is one entry.
+func _attack_choices(none_key: String) -> Dictionary:
+	var choices := {none_key: null}
+	for source: Dictionary in [WeaponAttackCatalog.get_mains(), WeaponAttackCatalog.get_library()]:
+		for k in source:
+			if not choices.has(k):
+				choices[k] = source[k]
+	return choices
 
 # The scaling sliders (#485). Drawn in both attack modes and NOT for a carving, which scales off
 # the wielder's aura and has no blend to edit -- the cast is what says so rather than a mode check.

@@ -590,6 +590,21 @@ static func _source_base_damage(action: AttackAction, board: BoardContext = null
 	if action.fired_attack is WeaponAttackData:
 		var weapon := attacker.get_equipped_weapon() as WeaponInstance
 		if weapon != null:
+			# The supercharge spend (#97). The FORM was chosen at declare time and is frozen on the
+			# stamp; what is decided here is only whether this pass still has a charge to pay for
+			# it -- threaded on the hypo, because counters and watch shots all resolve before
+			# anything executes and a live read would let two of them claim one charge.
+			#
+			# Lead volley member only, mirroring the readiness and vial gates: one order spends
+			# once however many victims it reaches.
+			var base := weapon.base_main(attacker)
+			var charged: bool = base != null and base.empowered_form == action.fired_attack
+			if charged and not action.is_secondary_hit:
+				var hypo_state := _hypo_for(attacker, hypo)
+				if hypo_state.charges > 0:
+					hypo_state.charges -= 1
+					if outcome != null:
+						outcome.charge_spent = true
 			return weapon.base_damage(attacker, action.fired_attack as WeaponAttackData)
 	return attacker.get_effective_stat(Stats.Stat.STR)
 
@@ -874,6 +889,8 @@ static func _hypo_for(unit: Unit, hypo: Dictionary) -> _Hypo:
 		h.start_in_crisis = unit.in_crisis
 		h.can_maim = unit.unit_instance.next_maim_slot() != -1
 		h.crisis_armed = LethalityRules.crisis_armed_for(unit)
+		var held := unit.get_equipped_weapon() as WeaponInstance
+		h.charges = held.tank_charges() if held != null else 0
 		hypo[unit] = h
 	return hypo[unit]
 
@@ -906,6 +923,11 @@ class _Hypo extends LethalityRules.Situation:
 	# the moment execution starts applying what the plan predicted.
 	var start_lifecycle: Unit.LifecycleState = Unit.LifecycleState.ACTIVE
 	var start_in_crisis := false
+	# The equipped weapon's supercharges left THIS PASS (#97), seeded from the live tank and drawn
+	# down as the pass resolves. It is here rather than read live because reactive fire resolves
+	# before anything executes: a counter and a standing watch in one enemy pass would otherwise
+	# each see the same last charge and each preview a charged shot.
+	var charges := 0
 
 # Cell-effect stage (#50 / the #47 cell-effect channel). A map-hitting attack deposits its
 # element(s) across EVERY cell of its blast footprint — AoE parity with damage, which already

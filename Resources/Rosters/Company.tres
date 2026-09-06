@@ -24,6 +24,7 @@
 [ext_resource type="Resource" path="res://Resources/Vials/AlkahestVial.tres" id="22_alkavial"]
 [ext_resource type="Resource" path="res://Resources/Vials/IchorVial.tres" id="23_ichorvial"]
 [ext_resource type="Resource" path="res://Resources/Vials/NitreVial.tres" id="24_nitrevial"]
+[ext_resource type="Resource" path="res://Resources/Vials/VitriolVial.tres" id="25_vitriolvial"]
 
 [sub_resource type="Resource" id="Resource_aldin"]
 script = ExtResource("2_entry")
@@ -78,4 +79,4 @@ state_saved = false
 [resource]
 script = ExtResource("1_roster")
 entries = Array[ExtResource("2_entry")]([SubResource("Resource_aldin"), SubResource("Resource_aster"), SubResource("Resource_bram"), SubResource("Resource_celest"), SubResource("Resource_dorian"), SubResource("Resource_isaac"), SubResource("Resource_noemie"), SubResource("Resource_rebecca"), SubResource("Resource_ross"), SubResource("Resource_torv")])
-stash = Array[ExtResource("13_equippable")]([ExtResource("14_bulwark"), ExtResource("15_mail"), ExtResource("16_ballast"), ExtResource("17_fire"), ExtResource("18_gun"), ExtResource("19_firevial"), ExtResource("20_watervial"), ExtResource("21_earthvial"), ExtResource("22_alkavial"), ExtResource("23_ichorvial"), ExtResource("24_nitrevial")])
+stash = Array[ExtResource("13_equippable")]([ExtResource("14_bulwark"), ExtResource("15_mail"), ExtResource("16_ballast"), ExtResource("17_fire"), ExtResource("18_gun"), ExtResource("19_firevial"), ExtResource("20_watervial"), ExtResource("21_earthvial"), ExtResource("22_alkavial"), ExtResource("23_ichorvial"), ExtResource("24_nitrevial"), ExtResource("25_vitriolvial")])

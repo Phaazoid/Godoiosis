@@ -44,6 +44,11 @@ var knockback_landing_index: int = 0
 # spent. Recorded rather than re-derived so the queue row can name it and execute() can spend it
 # from the same answer (brace_bonus's reason, one stage over).
 var burned_vial: VialData = null
+# This hit SPENT a supercharge out of the weapon's tank (#97). burned_vial's twin one economy over:
+# the resolver stamps it when the empowered form is what actually fired, and both execution twins
+# and the queue row read THIS rather than re-asking the live tank -- which is what stops a counter
+# and a watch shot in one pass from each claiming the same charge.
+var charge_spent: bool = false
 var brace_bonus: int = 0
 # The kind this hit DELIVERED and the DEF subtracted from it (#424), stamped in the same breath as
 # the mitigation so the queue row can say "DEF 6 vs slash" or "plate does not cover fire" without a

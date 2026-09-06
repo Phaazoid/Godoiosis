@@ -29,6 +29,8 @@
 # what is true of every family at once.
 extends GdUnitTestSuite
 
+const H := preload("res://tests/support/squad_fixtures.gd")
+
 # One row per WeaponType. `state` names the verb that moves a fresh instance off its default battle
 # state, or "" for a family that has none. The three booleans are the self-ability verbs the family
 # answers true to AFTER being disturbed (Springspear and Carbine only offer a reload once something
@@ -45,9 +47,24 @@ const FAMILIES := {
 	WeaponData.WeaponType.DRILL:
 		{"state": "", "rev": false, "reload": false, "burrow": true},
 	WeaponData.WeaponType.CHEMICAL_SPITTER:
-		{"state": "", "rev": false, "reload": false, "burrow": false},
+		{"state": "inject", "rev": false, "reload": false, "burrow": false},
 	WeaponData.WeaponType.PROSTHETIC:
 		{"state": "", "rev": false, "reload": false, "burrow": false},
+}
+
+# Which families OWN a rearm verb at all — the wielder-free question, separate from `reload` above
+# because #97 made the two genuinely different. `reload` is "may it rearm right now, after its state
+# verb ran"; this is "does this family have the verb", which is what opens the Weapon Action slice.
+# The Spitter is why they had to split: injecting FILLS its tank, so it owns the verb and refuses it
+# in the same breath, and one boolean could not say both.
+const RELOAD_VERB := {
+	WeaponData.WeaponType.CHAINSWORD: false,
+	WeaponData.WeaponType.SPRINGSPEAR: true,
+	WeaponData.WeaponType.CARBINE: true,
+	WeaponData.WeaponType.KINETIC_MACE: false,
+	WeaponData.WeaponType.DRILL: false,
+	WeaponData.WeaponType.CHEMICAL_SPITTER: true,
+	WeaponData.WeaponType.PROSTHETIC: false,
 }
 
 
@@ -59,7 +76,23 @@ func _fresh(family: WeaponData.WeaponType) -> WeaponInstance:
 	var template := WeaponData.new()
 	template.weapon_type = family
 	template.main_attack = WeaponAttackData.new()
+	if family == WeaponData.WeaponType.CHEMICAL_SPITTER:
+		# The tank matches against the weapon's own authored element, so a family whose main has
+		# none is uninjectable by construction. NONE is the default everywhere else and harmless.
+		template.main_attack.elemental_damage_type = Elemental.Element.CORROSION
 	return WeaponInstance.make(template)
+
+
+# Somebody carrying a vial the given weapon will take. Only the Chemical Spitter's verb reads a
+# wielder, so this exists for that one row rather than for the table.
+func _holder_with_a_matching_vial(weapon: WeaponInstance) -> Unit:
+	var unit := H.spawn_unit(self, Team.Faction.PLAYER, Vector2i.ZERO, {}, false)
+	unit.equipped_weapon = weapon
+	var vial := VialData.new()
+	vial.display_name = "Test Vitriol"
+	vial.element = Elemental.Element.CORROSION
+	unit.add_item(vial)
+	return unit
 
 
 # An attack that spends whatever its family banks, and one that banks it. The flags are the
@@ -86,6 +119,11 @@ func _disturb(weapon: WeaponInstance, family: WeaponData.WeaponType) -> void:
 			weapon.consume_readiness_for(_spender())
 		"bank":
 			weapon.consume_readiness_for(_builder())
+		"inject":
+			# Driven through the REAL door (#97), not by writing `charges`: the injection is the
+			# only verb in this table that reads the wielder, so a direct set would prove the
+			# storage is per-instance while leaving the seam that fetches it untested.
+			weapon.reload(_holder_with_a_matching_vial(weapon))
 
 
 func _is_stateful(family: WeaponData.WeaponType) -> bool:
@@ -135,6 +173,13 @@ func test_every_weapon_type_declares_a_family_row() -> void:
 	# ...and no row for a type that no longer exists.
 	for family: WeaponData.WeaponType in FAMILIES:
 		assert_bool(WeaponData.WeaponType.values().has(family)).is_true()
+
+	# The second table partitions the same way, and separately -- it is the one a new family is
+	# likeliest to be left out of, since a family with no rearm still needs its `false` stated.
+	for family: WeaponData.WeaponType in FAMILIES:
+		assert_bool(RELOAD_VERB.has(family)).override_failure_message(
+			"WeaponType.%s has no row in RELOAD_VERB -- say whether it owns a rearm verb."
+			% _family_name(family)).is_true()
 
 
 func test_disturbing_a_stateful_family_actually_changes_its_state() -> void:
@@ -206,9 +251,16 @@ func test_a_familys_verbs_never_leak_onto_another_family() -> void:
 
 		assert_bool(weapon.can_rev()).override_failure_message(
 			"%s.can_rev() disagrees with its declared row" % name).is_equal(bool(row["rev"]))
-		assert_bool(weapon.can_reload()).override_failure_message(
+		# Null wielder: only the Spitter reads one, and its row here says "cannot rearm right now"
+		# for two different true reasons (nobody holding it, and the tank it just filled) -- which
+		# is why OWNERSHIP is its own column below rather than being inferred from this answer.
+		assert_bool(weapon.can_reload(null)).override_failure_message(
 			"%s.can_reload() disagrees with its declared row (checked after its state verb ran)" % name
 			).is_equal(bool(row["reload"]))
+		assert_bool(weapon.has_reload_verb()).override_failure_message(
+			"%s.has_reload_verb() disagrees with its declared row -- this is what OPENS the Weapon"
+			+ " Action slice, so a wrong answer either hides the verb or lights a dead button" % name
+			).is_equal(bool(RELOAD_VERB[family]))
 		assert_bool(weapon.can_burrow()).override_failure_message(
 			"%s.can_burrow() disagrees with its declared row" % name).is_equal(bool(row["burrow"]))
 
