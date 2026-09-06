@@ -246,10 +246,10 @@ static func get_affected_cells_from(unit: Unit, origin_cell: Vector2i, target_ce
 # in a dip past a ledge the shot cannot clear has a clean line of its own and is still unreachable.
 #
 # The predecessor is `cell - dir`, which for a lane's FIRST cell is the cell beside the shooter and
-# not in the spread at all -- ungated, so a lane always gets to try its first cell. Both patterns
-# emit near-to-far (i = 1..length), so a predecessor is always decided before its successor; that is
-# a property of the emission order rather than a sort, and a pattern that ever emits otherwise would
-# need to say so. A zero direction (an aim at the shooter's own cell) truncates nothing -- the
+# not in the spread at all -- ungated, so a lane always gets to try its first cell. The pattern
+# EMITS near-to-far along the facing (AttackPattern.place sorts its stamp so, #803 -- a rule, not
+# a habit), so a predecessor is always decided before its successor whatever shape the stamp is.
+# A zero direction (an aim at the shooter's own cell) truncates nothing -- the
 # pattern already answered empty for it.
 static func _truncate(cells: Array[Vector2i], origin_cell: Vector2i, dir: Vector2i, attack: AttackData, board: BoardContext) -> Array[Vector2i]:
 	if dir == Vector2i.ZERO:

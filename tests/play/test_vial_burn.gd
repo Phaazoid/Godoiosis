@@ -10,6 +10,8 @@
 # are what say so.
 extends GdUnitTestSuite
 
+const P := preload("res://tests/support/pattern_fixtures.gd")
+
 const BoardBuilder := preload("res://play/board_builder.gd")
 const PlaySession := preload("res://play/play_session.gd")
 
@@ -32,9 +34,7 @@ func _fireball() -> TransmutationData:
 	t.power = 4
 	t.sigils.assign([FIRE])
 	t.targets = EquippableData.TargetMode.UNIT
-	var pattern := ManhattanRangePattern.new()
-	pattern.max_range = 2
-	t.attack_pattern = pattern
+	t.attack_pattern = P.point(2)
 	return t
 
 # An alchemist with fire aura, a rune carrying one fireball, and a foe two cells away. No water,

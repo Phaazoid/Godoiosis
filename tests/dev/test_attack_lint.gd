@@ -10,13 +10,12 @@
 # MESSAGES rather than thresholds.
 extends GdUnitTestSuite
 
+const P := preload("res://tests/support/pattern_fixtures.gd")
+
 
 func _manhattan(max_range: int, min_range: int) -> WeaponAttackData:
 	var attack := WeaponAttackData.new()
-	var pattern := ManhattanRangePattern.new()
-	pattern.max_range = max_range
-	pattern.min_range = min_range
-	attack.attack_pattern = pattern
+	attack.attack_pattern = P.point(max_range, min_range)
 	attack.display_name = "Probe"
 	return attack
 
@@ -37,13 +36,29 @@ func test_an_ordinary_range_pair_is_clean() -> void:
 
 
 func test_the_rule_is_selects_no_cells_and_not_min_above_max() -> void:
-	# A directional pattern has no min/max at all. It is judged by the same question, which is the
-	# point of asking Reach rather than reading a pattern's numbers.
+	# A self-anchored pattern has no ring at all. It is judged by the same question, which is the
+	# point of asking Reach rather than reading a pattern's numbers -- and the hint says which half.
 	var attack := WeaponAttackData.new()
-	var pattern := ForwardLinePattern.new()
-	pattern.length = 0
-	attack.attack_pattern = pattern
-	assert_array(AttackLint.check(attack)).is_not_empty()
+	attack.attack_pattern = P.line(0)
+	var findings := AttackLint.check(attack)
+	assert_array(findings).is_not_empty()
+	assert_str(findings[0]["text"]).contains("stamp is empty")
+
+
+func test_an_empty_stamp_at_range_is_blocked_as_landing_nowhere() -> void:
+	# The ring is intact, so the reaches-anything check passes; the stamp is what is empty (#803).
+	var attack := _manhattan(2, 1)
+	attack.attack_pattern.stamp = []
+	var findings := AttackLint.check(attack)
+	assert_int(findings.size()).is_equal(1)
+	assert_int(findings[0]["severity"]).is_equal(AttackLint.Severity.BLOCKS)
+	assert_str(findings[0]["text"]).contains("lands on no cells")
+
+
+func test_a_stamp_beyond_the_aimed_cell_is_clean() -> void:
+	var attack := _manhattan(2, 1)
+	attack.attack_pattern.stamp = [Vector2i.ZERO, Vector2i.UP, Vector2i.DOWN, Vector2i.LEFT, Vector2i.RIGHT]
+	assert_array(AttackLint.check(attack)).is_empty()
 
 
 func test_a_pattern_less_attack_is_fireable_rather_than_flagged() -> void:

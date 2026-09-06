@@ -19,8 +19,7 @@
 [ext_resource type="Script" uid="uid://cvvknuw621ar2" path="res://Classes/units/UnitData.gd" id="16_3jx33"]
 [ext_resource type="Resource" path="res://Resources/Weapons/WeaponVariants/Drill.tres" id="17_cv4cp"]
 [ext_resource type="Script" uid="uid://bgbidu2bbf33l" path="res://Classes/alchemy/TransmutationData.gd" id="18_qsyhc"]
-[ext_resource type="Script" uid="uid://bbbfksnb0tted" path="res://Classes/weapons/patterns/ForwardLinePattern.gd" id="19_uj0ip"]
-[ext_resource type="Script" uid="uid://cuvfasmongryk" path="res://Classes/weapons/patterns/ForwardWidePattern.gd" id="20_ihlrs"]
+[ext_resource type="Script" uid="uid://cjmftk6nqeklw" path="res://Classes/weapons/patterns/AttackPattern.gd" id="19_uj0ip"]
 [ext_resource type="Texture2D" uid="uid://c0sxhv5hl83yc" path="res://Art/Icons/StateIcons/WetIcon.png" id="21_56m1w"]
 [ext_resource type="Script" uid="uid://ckrp1phgirys0" path="res://Classes/alchemy/RuneData.gd" id="22_p0bb0"]
 [ext_resource type="Texture2D" uid="uid://bo1qvlq27vqqs" path="res://Art/Units/MapSprites/Mage_Downed.png" id="23_nrv7u"]
@@ -55,7 +54,6 @@
 [ext_resource type="Resource" path="res://Resources/Weapons/WeaponVariants/Smasher.tres" id="52_g2al6"]
 [ext_resource type="Resource" path="res://Resources/Weapons/WeaponVariants/TorvArm.tres" id="53_o5xut"]
 [ext_resource type="Resource" path="res://Resources/Weapons/WeaponVariants/TorvLeg.tres" id="54_mk6g8"]
-[ext_resource type="Script" uid="uid://dsxc14gee2d01" path="res://Classes/weapons/patterns/ManhattanRangePattern.gd" id="55_k6c8t"]
 [ext_resource type="Texture2D" uid="uid://ysa7poog58u7" path="res://Art/Units/MapSprites/Priest_Downed.png" id="56_2n0v3"]
 [ext_resource type="Texture2D" uid="uid://b6203vr2vlac3" path="res://Art/Units/MapSprites/Priest.png" id="57_k4pjl"]
 [ext_resource type="Texture2D" uid="uid://cpxuk13uu7yem" path="res://Art/Units/MapSprites/Priest_Moving.png" id="58_wuqe3"]
@@ -274,7 +272,8 @@ squad_id = 2
 
 [sub_resource type="Resource" id="Resource_p0bb0"]
 script = ExtResource("19_uj0ip")
-length = 3
+max_range = 0
+stamp = Array[Vector2i]([Vector2i(0, -1), Vector2i(0, -2), Vector2i(0, -3)])
 
 [sub_resource type="Resource" id="Resource_nrv7u"]
 script = ExtResource("18_qsyhc")
@@ -287,9 +286,9 @@ hits_allies = true
 targets = 2
 
 [sub_resource type="Resource" id="Resource_yf3dj"]
-script = ExtResource("20_ihlrs")
-length = 2
-metadata/_custom_type_script = "uid://cuvfasmongryk"
+script = ExtResource("19_uj0ip")
+max_range = 0
+stamp = Array[Vector2i]([Vector2i(-1, -1), Vector2i(0, -1), Vector2i(1, -1), Vector2i(-1, -2), Vector2i(0, -2), Vector2i(1, -2)])
 
 [sub_resource type="Resource" id="Resource_ubnfa"]
 script = ExtResource("18_qsyhc")
@@ -602,9 +601,9 @@ weapon_battle_states = Dictionary[int, Dictionary]({
 })
 
 [sub_resource type="Resource" id="Resource_h5w62"]
-script = ExtResource("55_k6c8t")
-max_range = 2
+script = ExtResource("19_uj0ip")
 min_range = 0
+max_range = 2
 
 [sub_resource type="Resource" id="Resource_jibd0"]
 script = ExtResource("18_qsyhc")

@@ -4,6 +4,8 @@
 # ground units), never loaded content.
 extends GdUnitTestSuite
 
+const P := preload("res://tests/support/pattern_fixtures.gd")
+
 const NO_UNITS: Array[Unit] = []
 
 
@@ -21,10 +23,7 @@ func _wall_board(height: int) -> BoardContext:
 func _shot(clearance: int, max_range: int = 3) -> AttackData:
 	var attack := AttackData.new()
 	attack.arc_clearance = clearance
-	var pattern := ManhattanRangePattern.new()
-	pattern.min_range = 1
-	pattern.max_range = max_range
-	attack.attack_pattern = pattern
+	attack.attack_pattern = P.point(max_range, 1)
 	return attack
 
 

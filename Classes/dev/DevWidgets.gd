@@ -548,7 +548,34 @@ static func _add_property_control(container: Node, resource: Resource, prop: Dic
 				add_option(container, label, prop.hint_string.split(","), value, func(s): resource.set(prop.name, s))
 			else:
 				add_lineedit(container, label, value, func(s): resource.set(prop.name, s))
+		TYPE_ARRAY:
+			# An Array[Vector2i] as text (#803) -- the attack stamp, typed by coordinate until the
+			# grid editor (#804) lands. Any other array is still not drawn.
+			if prop.hint_string == CELLS_HINT:
+				add_lineedit(container, label, cells_to_text(value), func(s): resource.set(prop.name, cells_from_text(s)))
 	_tip_rows_from(container, first, tip)
+
+
+# What get_property_list reports as the hint_string of an exported Array[Vector2i].
+const CELLS_HINT := "Vector2i"
+
+# "x,y x,y ...": one pair per cell, whitespace or ';' between pairs, parens tolerated.
+static func cells_to_text(cells: Array) -> String:
+	var parts: PackedStringArray = []
+	for c in cells:
+		parts.append("%d,%d" % [c.x, c.y])
+	return " ".join(parts)
+
+# A half-typed pair is skipped rather than refused: the row applies on every keystroke, and the
+# cell arrives once its second number does.
+static func cells_from_text(text: String) -> Array[Vector2i]:
+	var out: Array[Vector2i] = []
+	for token in text.replace(";", " ").replace("(", " ").replace(")", " ").split(" ", false):
+		var xy := token.split(",")
+		if xy.size() != 2 or not xy[0].is_valid_int() or not xy[1].is_valid_int():
+			continue
+		out.append(Vector2i(int(xy[0]), int(xy[1])))
+	return out
 
 static func _add_resource_swapper(container: Node, resource: Resource, prop: Dictionary, value: Resource, rebuild: Callable) -> void:
 	var base_type: String = prop.hint_string
@@ -556,6 +583,13 @@ static func _add_resource_swapper(container: Node, resource: Resource, prop: Dic
 	for entry in ProjectSettings.get_global_class_list():
 		if entry["base"] == base_type:
 			candidates.append(entry)
+	# A type with no subclasses is still a type a null field needs to be GIVEN (#803: AttackPattern
+	# became the one concrete pattern, and a new attack had no way to get one). Offered only when
+	# nothing extends it, so a picker over a family never lists the family's own base.
+	if candidates.is_empty():
+		for entry in ProjectSettings.get_global_class_list():
+			if entry["class"] == base_type:
+				candidates.append(entry)
 	if candidates.is_empty():
 		return
 	var row := HBoxContainer.new()

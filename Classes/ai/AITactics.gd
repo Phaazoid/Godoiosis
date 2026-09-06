@@ -635,8 +635,8 @@ static func _try_overwatch(unit: Unit, board: BoardContext, squad_manager: Squad
 	return squad_manager.queue_action(unit.squad, action)
 
 
-# Which cell to aim the watch at -- a FACING for a directional attack (Overwatch.tres is a
-# ForwardLinePattern), the cell itself for a point one. The return is always `origin + dir`, and
+# Which cell to aim the watch at -- a FACING for a directional attack (Overwatch.tres is
+# self-anchored, max range 0), the cell itself for a point one. The return is always `origin + dir`, and
 # stays adjacent: OverwatchAction re-derives the facing from it and the queue row names it.
 #
 # RANKED OVER THE WHOLE FOOTPRINT, never the cell in front (#769). A watch fires when an enemy
@@ -659,8 +659,8 @@ static func _try_overwatch(unit: Unit, board: BoardContext, squad_manager: Squad
 # component. That is the tie-break's price and the lever if it ever bites -- `nearest_enemy` one
 # frame up already floods the same class, so this path was never flood-free.
 #
-# A DUD AIM MUST NEVER BE QUEUED. `ForwardLinePattern.get_selectable_cells` answers empty for a hint
-# that yields no cardinal direction, and from there the failure is entirely silent -- the resolver
+# A DUD AIM MUST NEVER BE QUEUED. A self-anchored `AttackPattern.get_selectable_cells` answers empty
+# for a hint that yields no cardinal direction, and from there the failure is entirely silent -- the resolver
 # arms nothing, `Unit.arm_watch` refuses on an empty footprint, and no queue gate looks at an
 # OverwatchAction at all, so the unit would spend its main action on air behind a legal-looking row.
 # Returning `origin` is this function's way of saying "no facing works", and the caller refuses.

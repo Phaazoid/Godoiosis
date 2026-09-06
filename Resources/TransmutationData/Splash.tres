@@ -1,13 +1,13 @@
 [gd_resource type="Resource" script_class="TransmutationData" format=3]
 
 [ext_resource type="Script" path="res://Classes/alchemy/TransmutationData.gd" id="1_6nsqn"]
-[ext_resource type="Script" path="res://Classes/weapons/patterns/ForwardWidePattern.gd" id="1_hwgco"]
+[ext_resource type="Script" uid="uid://cjmftk6nqeklw" path="res://Classes/weapons/patterns/AttackPattern.gd" id="1_hwgco"]
 [ext_resource type="Texture2D" path="res://Art/Icons/StateIcons/WetIcon.png" id="2_emron"]
 
 [sub_resource type="Resource" id="Resource_hwgco"]
 script = ExtResource("1_hwgco")
-length = 2
-metadata/_custom_type_script = "uid://cuvfasmongryk"
+max_range = 0
+stamp = Array[Vector2i]([Vector2i(-1, -1), Vector2i(0, -1), Vector2i(1, -1), Vector2i(-1, -2), Vector2i(0, -2), Vector2i(1, -2)])
 
 [resource]
 script = ExtResource("1_6nsqn")

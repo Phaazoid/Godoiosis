@@ -6,6 +6,8 @@
 # BoardContext stub -- the fixture grid is a bare TileMapLayer with no TileSet to paint.
 extends GdUnitTestSuite
 
+const P := preload("res://tests/support/pattern_fixtures.gd")
+
 const H := preload("res://tests/support/squad_fixtures.gd")
 
 const PLAYER := Team.Faction.PLAYER
@@ -32,9 +34,7 @@ func _fire_attacker(mode: EquippableData.TargetMode) -> Unit:
 # AoE-parity tests can put trees at several cells the one aim covers.
 func _fire_line_attacker(mode: EquippableData.TargetMode, length: int) -> Unit:
 	var u: Unit = _fire_attacker(mode)
-	var line := ForwardLinePattern.new()
-	line.length = length
-	(u.get_equipped_weapon() as WeaponInstance).template.main_attack.attack_pattern = line
+	(u.get_equipped_weapon() as WeaponInstance).template.main_attack.attack_pattern = P.line(length)
 	return u
 
 func _fire_burns_tree() -> TerrainReaction:
