@@ -164,3 +164,52 @@ func test_a_channelable_carving_still_queues() -> void:
 	aim.fired_attack = affordable
 
 	assert_bool(_sm.queue_action(alch.squad, aim)).is_true()
+
+
+# --- #694: empowerment is POWER, never PERMISSION -------------------------------------------
+#
+# The anchor, the deficit and both wildcard pools all read wielder.get_element_aura directly, and
+# RuneData.can_equip_reason derives from channel_block_reason (#744) -- so leaving that accessor
+# position-blind is the ONE thing keeping materia out of all three gates at once.
+#
+# Each case below proves the source is genuinely LIVE by asserting that base_damage DOES move for
+# the same wielder and carving. Without that half a green result would only mean the fixture never
+# empowered anything, which is exactly the vacuous negative this pair exists to avoid.
+
+const EMPOWERED_WATER: Array[Elemental.Element] = [Elemental.Element.WATER]
+
+func test_standing_on_a_source_does_not_grant_the_anchor() -> void:
+	# No aura anywhere: the Rebecca rule, per-carving. A river cannot lend what talent must hold.
+	var dry: Unit = _alchemist({})
+	var wet_carving: TransmutationData = _carving([Elemental.Element.WATER], "Splash")
+
+	assert_bool(wet_carving.can_channel(dry, Elemental.Element.WATER)) \
+		.override_failure_message("a materia source granted the anchor").is_false()
+	assert_str(wet_carving.channel_block_reason(dry, Elemental.Element.WATER)).is_not_empty()
+	# ...and the source really is live for this pair, so the refusal above is not vacuous:
+	assert_int(wet_carving.base_damage(dry, EMPOWERED_WATER)) \
+		.is_greater(wet_carving.base_damage(dry))
+
+
+func test_standing_on_a_source_does_not_widen_the_wildcard_budget() -> void:
+	# Anchored in fire, but the water sigils outrun every pool: deficit 2 against a capacity of 1.
+	var alch: Unit = _alchemist({ FIRE: 1 })
+	var stretched: TransmutationData = _carving(
+		[FIRE, Elemental.Element.WATER, Elemental.Element.WATER], "Steam")
+
+	assert_bool(stretched.can_channel(alch, FIRE)) \
+		.override_failure_message("a materia source paid a wildcard deficit").is_false()
+	assert_int(stretched.base_damage(alch, EMPOWERED_WATER)) \
+		.is_greater(stretched.base_damage(alch))
+
+
+func test_a_rune_does_not_become_equippable_beside_a_source() -> void:
+	# The equip gate walks inscriptions asking can_channel, so it inherits the rule above -- but
+	# it is its own door and #157 force-unequips through it, so it is asserted rather than assumed.
+	var dry: Unit = _alchemist({})
+	var wet_carving: TransmutationData = _carving([Elemental.Element.WATER], "Splash")
+	var rune: RuneData = _rune([wet_carving])
+
+	assert_bool(rune.can_equip(dry)) \
+		.override_failure_message("a materia source made a dead rune equippable").is_false()
+	assert_str(rune.can_equip_reason(dry)).is_not_empty()
