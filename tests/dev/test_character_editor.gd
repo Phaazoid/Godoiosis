@@ -110,7 +110,7 @@ func test_slot_pick_stages_the_catalog_file_itself() -> void:
 	# The by-construction fix for the hand-inlined-WeaponInstance trap: a slot pick stages the
 	# catalog FILE resource, so a save writes an ExtResource reference, never an embedded copy.
 	var tool := _tool()
-	var catalog := tool._equippable_catalog()
+	var catalog := tool._item_catalog()
 	if catalog.is_empty():   # content-absent: warn, never fail (tests/README.md rule 9)
 		push_warning("the equippable catalog is empty, so no slot pick can stage a file")
 		return

@@ -389,7 +389,11 @@ func _stage_unit_name(new_name: String) -> void:
 # Weapons, armor, and authored rune variants in one ordered list, so a unit can equip any of
 # them. Built here and reused by both the picker and the pick handler so their indices stay in
 # lockstep. #30 D.
-func _equippable_catalog() -> Dictionary:
+# Everything a unit can be given, by display name. NOT equippables only since #697 -- a vial is
+# CARRIED and never slotted, and leaving it out made the four authored ones unreachable from any
+# editor. The Equip/Wear checkbox beside each slot already reads `is EquippableData` and greys
+# itself, so a carried non-equippable needs nothing else here.
+func _item_catalog() -> Dictionary:
 	var items := {}
 	var weapons := WeaponCatalog.get_editable()
 	for k in weapons:
@@ -400,12 +404,15 @@ func _equippable_catalog() -> Dictionary:
 	var runes := RuneCatalog.get_editable()
 	for k in runes:
 		items[k] = runes[k]
+	var vials := VialCatalog.get_editable()
+	for k in vials:
+		items[k] = vials[k]
 	return items
 
 func _add_inventory_section(into: VBoxContainer):
 	DevWidgets.add_label(into, "Inventory")
 
-	var weapons := _equippable_catalog()   # name -> EquippableData (weapons + authored runes)
+	var weapons := _item_catalog()   # name -> Item (weapons, armor, runes, vials)
 	var weapon_keys := weapons.keys()
 	var equip_group := ButtonGroup.new()
 
@@ -487,7 +494,7 @@ func _on_slot_picked(index: int, opt_index: int):
 	if opt_index == 0:
 		_set_slot(index, null)
 	else:
-		var items := _equippable_catalog()
+		var items := _item_catalog()
 		_set_slot(index, items[items.keys()[opt_index - 1]])
 
 func _set_slot(index: int, entry: Resource):
