@@ -6,7 +6,7 @@
 
 Supersedes the wiki's **tiered rune tree** and the **stale top half of `Alchemy.docx`** (one-rune-per-element, aura-from-casting — the dev confirmed that section is an old layer), plus all **crit / hit / avo / AP / random-level-up** framing (Law #1; `Stats Overview.docx` is otherwise pre-determinism-era). Empty wiki stubs: `Alcahest & elemental affinities.docx`, `Rune Combination Psuedocode.docx`.
 
-**Canon checked through #782 (2026-09-05).**
+**Canon checked through #784 (2026-09-05).**
 
 Tags: **[LOCKED]** · **[PROPOSED]** (awaiting sign-off) · **[WORKSHOP]** (actively being designed) · **[OPEN]** (fork).
 
@@ -37,7 +37,7 @@ Five layers — three *identity/growth*, two *loadout/fuel*:
 | **Aura** (per element) | *How hard does it hit?* | Damage scaling, stored as a **per-element map** on the unit (`UnitInstance.aura`). Most units hold **little or none**; a trained alchemist has a **primary** element (high) + often one or two **tertiaries** (low). A channeled transmutation scales off the **sum** of the wielder's aura across its constituent elements. Grows **modestly** — authored sources + capped proficiency goals, **not** free casting ([progression.md](progression.md)). |
 | **Proficiency** | *What can you do with it?* | Practice unlocks more advanced transmutations/inscriptions. Capped training goals, anti-grind. |
 | **Rune** | *Your customizable focus.* | A **blank, element-agnostic** runestone an alchemist **inscribes** with transmutation carvings; sized **S/M/L** = how much it can hold; reusable; scarce at the supply level. (Model below.) |
-| **Materia** | *Supercharge + etching medium.* | **Never a gate.** Empowers a cast you could already make — from **position** (a matching source or vein) or from a **carried flask**. Also etches runes + feeds mechanist gear. |
+| **Materia** | *Supercharge + etching medium.* | **Never a gate.** Empowers a cast you could already make — from **position** (a matching source or vein) or from a **carried vial**. Also etches runes + feeds mechanist gear. |
 
 > **Aura × Rune × Materia → Transmutation → (element tags + statuses) → Combinatrix.** The combinatrix is the wiki's own **deterministic replacement for crits** ("combos replace the notion of critical hits") — exactly what Law #1 needs.
 
@@ -94,7 +94,7 @@ Note what the law does *not* repeal. Transmutations already needed no fuel to fi
 
 ### Empowerment
 
-A cast is **empowered** in element *E* when the caster is **on or adjacent to** (Manhattan 1) a source of *E*, **or** burns a matching carried flask as part of the cast. What that buys:
+A cast is **empowered** in element *E* when the caster is **on or adjacent to** (Manhattan 1) a source of *E*, **or** burns a matching carried vial as part of the cast. What that buys:
 
 - **Normally, an authored empowered form** — each carving answers, in its own terms, what it becomes at a source (a fireball that becomes a wall, a gust that becomes a gale). This is the norm, not a premium tier ([#695](https://github.com/Phaazoid/Godoiosis/issues/695)).
 - **Otherwise the fallback: +1 effective aura in that element, scaling only** — used when nothing special suits the carving, or when raw power simply *is* the fitting answer. It is the limb tax's mirror twin: aura already moves by ±1, the wound takes a point and the river lends one.
@@ -118,23 +118,25 @@ A cast is **empowered** in element *E* when the caster is **on or adjacent to** 
 
 **Sources are permanent and empowerment consumes nothing.** A source changes only when the *terrain* changes — a fire burns out or is doused, FROZEN water is no source until it melts, and **mechanist terraforming** (drills) can open or bury a vein, so positioning/pathing matter and the alchemy economy is still reshapeable mid-battle. **Maps can still break the rules:** extreme environments (a fallout zone; the Still Point's null field) override source availability as an authored, per-map dial.
 
-**Ambient is the alchemist's channel only.** A fire-spitter parked beside a bonfire gets nothing — *machines burn, alchemists commune.* Mechanists supercharge from a flask and nothing else; that asymmetry is the class identity.
+**Ambient is the alchemist's channel only.** A fire-spitter parked beside a bonfire gets nothing — *machines burn, alchemists commune.* Mechanists supercharge from a vial and nothing else; that asymmetry is the class identity.
 
-### Carried pure — the flask
+### Carried pure — the vial
 
-Element-tagged flasks, plus rare **alkahest-pure** that matches anything. **Burned per empowered cast, as part of the cast** — no separate action — and it grants **exactly what a source grants, never more**: portability *is* the premium ([#697](https://github.com/Phaazoid/Godoiosis/issues/697)). Supply is the authored, faucet-free economy ([progression.md](progression.md)); there is no crafting.
+> **Renamed 2026-09-05** (dev's call). Issues, PRs and commits written before that date call this same item a **flask** — [#697](https://github.com/Phaazoid/Godoiosis/issues/697) and [#97](https://github.com/Phaazoid/Godoiosis/issues/97) carry the old word in their history. Nothing about the item changed but its name; **vial** is the only spelling canon uses.
 
-- **Explicitly NOT per-shot ammo — re-scoped, not repealed.** *Casting* never requires consumption; the flask is an **opt-in** upgrade. The one declared exception is the **chemical spitter's injection** ([#97](https://github.com/Phaazoid/Godoiosis/issues/97)), where one flask loads a tank of supercharged shots and a dry tank returns to a weaker baseline rather than to nothing.
+Element-tagged vials, plus rare **alkahest-pure** that matches anything. **Burned per empowered cast, as part of the cast** — no separate action — and it grants **exactly what a source grants, never more**: portability *is* the premium ([#697](https://github.com/Phaazoid/Godoiosis/issues/697)). Supply is the authored, faucet-free economy ([progression.md](progression.md)); there is no crafting.
+
+- **Explicitly NOT per-shot ammo — re-scoped, not repealed.** *Casting* never requires consumption; the vial is an **opt-in** upgrade. The one declared exception is the **chemical spitter's injection** ([#97](https://github.com/Phaazoid/Godoiosis/issues/97)), where one vial loads a tank of supercharged shots and a dry tank returns to a weaker baseline rather than to nothing.
 - **Three jobs:** **supercharges casts** · **etches/customizes runes** · feeds the **mechanist** economy (spitter injection, weapon imbuing).
 
 ### Repeal record — the three availability bands (2026-08-29)
 
 The model this replaces was **[LOCKED]** and read: *ambient* (terrain-keyed, free, weak — "the average transmutation runs fine on ambient"), *carried pure* (the combat-grade substitute/upgrade), *rare-reagent* (required, no ambient path). It is repealed because the first two bands describe a **gate that rarely bites**, and a gate that rarely bites surfaces only ever as a surprise refusal — all cost when it fires, no texture when it does not. Aura already answers both *may I channel this* and *how hard does it hit*, so a materia gate was a second gate on a settled question (Law #4).
 
-What survives, deliberately: **rare-reagent** as the law's one exception (#698); *carried pure is brought to the fight* as the flask; *terrain is the materia map* as the source layer; and *maps can break the rules* as the per-map dial. What is gone is the framing that ordinary casting draws on a supply at all.
+What survives, deliberately: **rare-reagent** as the law's one exception (#698); *carried pure is brought to the fight* as the vial; *terrain is the materia map* as the source layer; and *maps can break the rules* as the per-map dial. What is gone is the framing that ordinary casting draws on a supply at all.
 
-- **[RESOLVED]** consumption/recharge of carried materia (a flask is spent per empowered cast; nothing else is consumed) and ambient infinite vs thinning (**infinite** — sources are terrain facts, not stock).
-- **[OPEN — tuning]** the size of the +1 fallback; the flask supply curve. **Dowsing** for hidden veins is no longer a materia question — a hidden vein is a *perception* mechanic, folded into the hidden-information grill ([grill-queue.md](grill-queue.md) entry 17), where the Dowser job's Vein-sense hook belongs with it.
+- **[RESOLVED]** consumption/recharge of carried materia (a vial is spent per empowered cast; nothing else is consumed) and ambient infinite vs thinning (**infinite** — sources are terrain facts, not stock).
+- **[OPEN — tuning]** the size of the +1 fallback; the vial supply curve. **Dowsing** for hidden veins is no longer a materia question — a hidden vein is a *perception* mechanic, folded into the hidden-information grill ([grill-queue.md](grill-queue.md) entry 17), where the Dowser job's Vein-sense hook belongs with it.
 
 ## Transmutations — the content unit (the carving = the attack) **[first code 2026-06-27]**
 
@@ -204,8 +206,8 @@ Every wiki "chance of crit / 20% shock / Hit-50 / Avo" → a **deterministic com
 
 1. **[RATIFIED 2026-06-27, numbers + gates grilled 2026-07-04] Rune customization model** — the **capacity-board** won: blank element-agnostic rune (until *tempered* by its first carving); inscribe transmutation carvings; **size = two knobs** (circle cap 1/2/3 + capacity 1/3/6, pseudo-locked); channeling = anchor + wildcards since 2026-08-10 (see Channeling above; the temper/leeway/strain version this fork originally ratified is repealed). *Still open (tuning, not shape):* multi-element scaling (**sum** of auras now — vs primary-only); size fixed-at-mining vs upgradable; materia-offset numbers are **retired 2026-08-29** — they were strain's offsets, and strain left the system in 2026-08-10 (its math went to the "strain as a job ability" issue); the ratified materia model has no offsets at all.
 2. **[RESOLVED 2026-07-05] Affinity expansion** — **genetic and immutable**: affinities are never gained or changed; existing ones are *grown* (scarce, event-sized points — see the Aura data model above). The old "place aura points to start a new element" is dead. *Note REVERSED 2026-07-04, re-cut 2026-08-10:* 0 aura anywhere channels **nothing** (the Rebecca rule, now the per-carving anchor); "uses a rune poorly without full affinity" is realized by **wildcards** — one point of any gap covered free on any rune, more on a matching-temper stone. Canon flavor: aura is born, **depth of wielding is trained**.
-3. **[REFRAMED 2026-06-27, floors resolved 2026-07-04] Aura is a stat, not a spent resource** — earlier framing had a `canCast` *decrement*; the ratified model makes aura a **persistent per-element value** that both **scales** a transmutation (Σ over its elements) and **gates channeling** (the anchor + wildcard-covered deficits since 2026-08-10 — the spare-pool accounting *measures against* capacity, it never spends, so this stance survived the model swap intact). No per-cast spend, and that **survived the materia pass** (2026-08-29): baseline casting consumes nothing, and the flask burn is an **opt-in upgrade** to a cast you could already make — never the price of making it. Open: sum vs primary scaling.
-4. **[RESOLVED 2026-08-29 — grill 9, [#693](https://github.com/Phaazoid/Godoiosis/issues/693)] Materia** — the three bands are repealed for **supercharge, never a gate** (see *Materia — model* above). Consumption/recharge: nothing is consumed but an opt-in flask; ambient is **infinite**, being terrain rather than stock. Dowsing left the fork — a hidden vein is a perception question, folded into [grill-queue.md](grill-queue.md) entry 17. Build tickets: [#694](https://github.com/Phaazoid/Godoiosis/issues/694) (sources + payload), [#695](https://github.com/Phaazoid/Godoiosis/issues/695) (empowered forms), [#696](https://github.com/Phaazoid/Godoiosis/issues/696) (veins), [#697](https://github.com/Phaazoid/Godoiosis/issues/697) (flasks). *Still open:* the exotic reagent gate ([#698](https://github.com/Phaazoid/Godoiosis/issues/698)) and the tuning knobs.
+3. **[REFRAMED 2026-06-27, floors resolved 2026-07-04] Aura is a stat, not a spent resource** — earlier framing had a `canCast` *decrement*; the ratified model makes aura a **persistent per-element value** that both **scales** a transmutation (Σ over its elements) and **gates channeling** (the anchor + wildcard-covered deficits since 2026-08-10 — the spare-pool accounting *measures against* capacity, it never spends, so this stance survived the model swap intact). No per-cast spend, and that **survived the materia pass** (2026-08-29): baseline casting consumes nothing, and the vial burn is an **opt-in upgrade** to a cast you could already make — never the price of making it. Open: sum vs primary scaling.
+4. **[RESOLVED 2026-08-29 — grill 9, [#693](https://github.com/Phaazoid/Godoiosis/issues/693)] Materia** — the three bands are repealed for **supercharge, never a gate** (see *Materia — model* above). Consumption/recharge: nothing is consumed but an opt-in vial; ambient is **infinite**, being terrain rather than stock. Dowsing left the fork — a hidden vein is a perception question, folded into [grill-queue.md](grill-queue.md) entry 17. Build tickets: [#694](https://github.com/Phaazoid/Godoiosis/issues/694) (sources + payload), [#695](https://github.com/Phaazoid/Godoiosis/issues/695) (empowered forms), [#696](https://github.com/Phaazoid/Godoiosis/issues/696) (veins), [#697](https://github.com/Phaazoid/Godoiosis/issues/697) (vials). *Still open:* the exotic reagent gate ([#698](https://github.com/Phaazoid/Godoiosis/issues/698)) and the tuning knobs.
 5. **[RESOLVED 2026-06-16] Summons** (automaton/golem/demon/puppet/dragon-taming) → **deferred.** Liked, but too complex for now; revisit post-Milestone-A.
 6. **[RESOLVED 2026-06-16] Defense stat** → **no RES.** Physical→DEF; elemental→specific gear + possible armor proficiency.
 7. **[OPEN] Dual-cast / joint transmutation** between alchemists (Stone lore + some L5 runes imply it) — squad-flavored co-cast?
