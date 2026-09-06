@@ -110,7 +110,7 @@ func test_the_attack_tooltip_itemises_power_and_scaling() -> void:
 	assert_str(detail).contains("4 power")
 	assert_str(detail).contains("STR 100%")
 	# The headline survives above it -- the scaling line is an ADDITION, not a replacement.
-	assert_str(detail).contains(main.payload_text(weapon.base_damage(unit, main)))
+	assert_str(detail).contains(main.payload_text(weapon.base_damage(unit, main), weapon.effective_kind(unit, main)))
 
 func test_a_damageless_attack_prints_no_blend() -> void:
 	# Scaling is suppressed entirely for a utility attack (#126), so naming a blend would describe

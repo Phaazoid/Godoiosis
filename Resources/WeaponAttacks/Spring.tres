@@ -10,6 +10,7 @@ metadata/_custom_type_script = "uid://bbbfksnb0tted"
 [resource]
 script = ExtResource("2_wad")
 display_name = "Spring"
+damage_kind = 2
 power = 5
 attack_pattern = SubResource("Resource_main")
 hits_allies = true

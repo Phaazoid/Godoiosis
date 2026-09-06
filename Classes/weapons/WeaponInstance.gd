@@ -170,6 +170,11 @@ func fit_block_reason(index: int, mod: WeaponModData) -> String:
 		if already != null:
 			var whose: String = already.display_name if already.display_name != "" else "Another fitted mod"
 			return "%s already replaces this weapon's main attack — a weapon has one main." % whose
+	if mod.overrides_kind:
+		var holder := _kind_overrider()
+		if holder != null:
+			var name: String = holder.display_name if holder.display_name != "" else "Another fitted mod"
+			return "%s already changes this weapon's damage kind -- one kind-changing mod at a time, so fitting order can never decide what armour does to a swing." % name
 	var capacity: int = template.mod_spaces[index]
 	if used_capacity(index) + mod.size > capacity:
 		return "Space %d holds %d of %d — this needs %d more." % [index + 1, used_capacity(index), capacity, mod.size]
@@ -185,6 +190,15 @@ func _main_replacer() -> WeaponModData:
 	for i in range(space_count()):
 		for mod: WeaponModData in space(i):
 			if mod.replaces_main != null:
+				return mod
+	return null
+
+# The fitted mod overriding the damage kind, if any (#424). Same every-space scan and the same reason:
+# a parked kind-changer still occupies the one kind an attack delivers.
+func _kind_overrider() -> WeaponModData:
+	for i in range(space_count()):
+		for mod: WeaponModData in space(i):
+			if mod.overrides_kind:
 				return mod
 	return null
 
@@ -329,7 +343,7 @@ func attack_detail(wielder: Unit, attack: AttackData) -> String:
 	if weapon_attack == null:
 		return ""
 	var damage := base_damage(wielder, weapon_attack)
-	var headline := "%s %s" % [weapon_attack.payload_text(damage), weapon_attack.targets_text()]
+	var headline := "%s %s" % [weapon_attack.payload_text(damage, effective_kind(wielder, weapon_attack)), weapon_attack.targets_text()]
 	if weapon_attack.deals_no_damage:
 		return headline   # scaling is suppressed entirely (#126) -- printing a blend would be a lie
 	var mods := _mods_for(wielder, weapon_attack)
@@ -414,6 +428,20 @@ func get_elements(wielder: Unit, attack: WeaponAttackData) -> Array[Elemental.El
 
 # The two overrides a fitted mod may make (#529), composed the same way power and elements are and
 # gated by the same applies_to selector -- one answer to what a mod reaches, not one per field.
+# The kind the attack DELIVERS for this wielder (#424): the authored kind, replaced by the one fitted
+# kind-overriding mod that reaches it, then AttackData.deliver applies the heal / no-damage rule --
+# one home for that rule, so a modded utility swing cannot come out blunt. A carving never comes
+# through here; it has no mods and answers delivered_kind() itself.
+func effective_kind(wielder: Unit, attack: AttackData) -> AttackData.Kind:
+	var weapon_attack := attack as WeaponAttackData
+	if weapon_attack == null:
+		return attack.delivered_kind()
+	var kind := weapon_attack.damage_kind
+	for mod in _mods_for(wielder, weapon_attack):
+		if mod.overrides_kind:
+			kind = mod.kind
+	return weapon_attack.deliver(kind)
+
 func effective_knockback(wielder: Unit, attack: AttackData) -> int:
 	var weapon_attack := attack as WeaponAttackData
 	if weapon_attack == null:

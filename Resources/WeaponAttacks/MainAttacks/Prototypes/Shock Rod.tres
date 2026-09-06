@@ -6,5 +6,6 @@
 script = ExtResource("1_o52ed")
 elemental_damage_type = 3
 display_name = "Jolt"
+damage_kind = 4
 power = 4
 vertical_rule = 1

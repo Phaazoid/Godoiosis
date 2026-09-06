@@ -5,6 +5,7 @@
 [resource]
 script = ExtResource("1_armor")
 def_power = 2
+covered_kinds = Array[int]([0, 1, 2])
 stat_maximums = Dictionary[int, int]({
 4: 4
 })

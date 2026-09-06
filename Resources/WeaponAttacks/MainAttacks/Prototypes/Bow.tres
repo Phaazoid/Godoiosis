@@ -16,5 +16,6 @@ scaling_blend = Dictionary[int, int]({
 5: 50
 })
 display_name = "Loose"
+damage_kind = 2
 power = 3
 attack_pattern = SubResource("Resource_juf0b")

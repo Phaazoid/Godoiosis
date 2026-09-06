@@ -38,6 +38,7 @@ static func check(attack: AttackData) -> Array[Dictionary]:
 		return found
 	_check_reaches_anything(attack, found)
 	_check_blend_totals(attack, found)
+	_check_kind_is_authored(attack, found)
 	return found
 
 
@@ -61,6 +62,19 @@ static func _check_blend_totals(attack: AttackData, found: Array[Dictionary]) ->
 	var name := attack.display_name if attack.display_name != "" else "This attack"
 	_add(found, Severity.DEGRADES, "%s's scaling blend totals %d, not %d, so what it really scales off is %s -- not what the numbers say." % [
 		name, total, Stats.BLEND_TOTAL, Stats.blend_text(weapon_attack.scaling_blend)])
+
+
+# NONE is the kind of a heal or a utility attack and nothing else -- delivered_kind() answers it from
+# those flags, so the stored field never needs to say it, and the editor never offers it. The one door
+# left is a hand-edited .tres, and a damaging attack stored as NONE would read as armour-proof to
+# every piece that lists its kinds, silently. BLOCKS, like the range fault: it is a file that lies.
+static func _check_kind_is_authored(attack: AttackData, found: Array[Dictionary]) -> void:
+	if attack.damage_kind != AttackData.Kind.NONE:
+		return
+	if attack.deliver(AttackData.Kind.BLUNT) == AttackData.Kind.NONE:
+		return   # a heal or a utility attack delivers NONE by rule, whatever the field says
+	var name := attack.display_name if attack.display_name != "" else "This attack"
+	_add(found, Severity.BLOCKS, "%s deals damage but its kind is None -- None is only for heals and no-damage attacks. Pick how the damage arrives." % name)
 
 
 # Reach's own union-over-facings query, so a directional spread is judged by the same call the red

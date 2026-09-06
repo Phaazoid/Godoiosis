@@ -559,3 +559,57 @@ func test_the_widest_row_still_fits_inside_its_section() -> void:
 			% [row.get_global_rect().end.x, dock.get_global_rect().end.x]) \
 		.is_less_equal(dock.get_global_rect().end.x)
 	assert_object(attacker).is_not_null()
+
+
+# --- the damage number explains itself (#424) ---
+#
+# The kind the hit delivered and what the target's DEF did with it, on the number's own hover.
+# Read off the LABEL the player hovers, not off damage_tip() alone: a tip that is composed and never
+# assigned is the transparent-surface failure (#506), and the label's default mouse filter would make
+# it dead text even when assigned.
+
+func test_the_damage_number_says_what_kind_it_delivered() -> void:
+	var no_states: Array[Elemental.State] = []
+	await _queue_elemental_attack(Elemental.Element.NONE, no_states)
+	var row := _attack_row()
+	assert_object(row).is_not_null()
+
+	assert_str(row.readout.tooltip_text).contains("Blunt damage")   # the fixture main's kind is the zero
+	assert_int(row.readout.mouse_filter).is_not_equal(Control.MOUSE_FILTER_IGNORE)
+
+
+func test_the_damage_number_says_when_armor_does_not_cover_the_kind() -> void:
+	var attacker := _spawn(Team.Faction.PLAYER, Vector2i(1, 1))
+	var victim := _spawn(Team.Faction.ENEMY, Vector2i(2, 1))
+	var plate := ArmorData.new()
+	plate.display_name = "Fencing Jacket"
+	plate.flat_def = 3
+	plate.covered_kinds = [AttackData.Kind.SLASH]   # the swing below is BLUNT
+	victim.worn_armor = plate
+	attacker.equipped_weapon = H.make_weapon(4)
+	game.squad_manager.active_squad = attacker.squad
+	game.squad_manager.queue_action(attacker.squad, H.stamped_attack(attacker, victim))
+	game.refresh_action_queue(attacker.squad)
+	await await_idle_frame()
+
+	var row := _attack_row()
+	assert_object(row).is_not_null()
+	assert_str(row.readout.tooltip_text).contains("Fencing Jacket does not cover blunt")
+
+
+func test_the_damage_number_names_the_def_it_subtracted() -> void:
+	var attacker := _spawn(Team.Faction.PLAYER, Vector2i(1, 1))
+	var victim := _spawn(Team.Faction.ENEMY, Vector2i(2, 1))
+	var plate := ArmorData.new()
+	plate.flat_def = 3
+	victim.worn_armor = plate
+	attacker.equipped_weapon = H.make_weapon(4)
+	game.squad_manager.active_squad = attacker.squad
+	game.squad_manager.queue_action(attacker.squad, H.stamped_attack(attacker, victim))
+	game.refresh_action_queue(attacker.squad)
+	await await_idle_frame()
+
+	var row := _attack_row()
+	var outcome := (row.action as AttackAction).resolved
+	assert_int(outcome.mitigation).is_greater(0)   # premise: the jacket paid out
+	assert_str(row.readout.tooltip_text).contains("DEF %d subtracted" % outcome.mitigation)

@@ -45,6 +45,11 @@ var knockback_landing_index: int = 0
 # from the same answer (brace_bonus's reason, one stage over).
 var burned_vial: VialData = null
 var brace_bonus: int = 0
+# The kind this hit DELIVERED and the DEF subtracted from it (#424), stamped in the same breath as
+# the mitigation so the queue row can say "DEF 6 vs slash" or "plate does not cover fire" without a
+# second derivation. `kind` is the composed answer (mods included); NONE for a heal or utility hit.
+var kind: AttackData.Kind = AttackData.Kind.NONE
+var mitigation: int = 0
 var fall_damage: int = 0    # the drop's own component (#259), already folded into `damage` above
 var fall_levels: int = 0    # how far the unit actually FELL (#259 follow-up): the flight drop plus
 							# any tumble-then-plummet. The distance fall_damage is derived from and

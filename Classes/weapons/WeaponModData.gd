@@ -45,6 +45,15 @@ enum Override { UNCHANGED, ON, OFF }
 # rearranging fitted mods must not change what an attack does (design law #1), and a safety device
 # a later mod could silently cancel is worse than no safety device at all.
 
+@export var overrides_kind: bool = false
+@export var kind: AttackData.Kind = AttackData.Kind.BLUNT
+# REPLACES the damage kind of the attacks applies_to names (#424) -- a spiked head makes a mace's
+# swing PIERCE. A bool plus a kind rather than an UNCHANGED member on the roster, because AttackData.Kind
+# is the roster armour reads and a sentinel there would be a value armour could be authored against.
+# `false` is the storage's own default and means unchanged. Two mods overriding the kind on one weapon
+# is refused at the FIT (fit_block_reason), never composed: fitting order must not decide what armour
+# does to a swing (design law #1), and there is no OFF-beats-ON reading of two different kinds.
+
 @export var can_overwatch_override: Override = Override.UNCHANGED
 # Whether the attacks applies_to names may be declared as a standing watch, overriding what each one
 # authored (#413) -- Watchman's Sear's original job. Same OFF-beats-ON composition as
@@ -141,6 +150,8 @@ static func property_tips() -> Dictionary:
 		"scaling_change": "How this mod re-mixes damage scaling. You author the absolute percentages you want; what is STORED is the shift from the family main attack's own blend, so the attacks Applies To names move by the same amount and keep their own character.",
 		"family": "Which weapon family this mod fits. Required once it changes scaling -- the shift is measured against that family's main attack and means nothing on another. Leave it unset for a mod that fits anything.",
 		"added_element": "An element this mod adds ON TOP of whatever the attack already carries, on whichever attacks Applies To names. NONE = adds nothing.",
+		"overrides_kind": "Whether this mod REPLACES the damage kind of the attacks it affects. Only one kind-changing mod fits a weapon at a time.",
+		"kind": "The damage kind the affected attacks deliver while Overrides Kind is on -- a spiked head turns a mace's blunt swing into pierce. Ignored otherwise.",
 		"knockback_delta": "Tiles this mod ADDS to the shove of the attacks it affects. Stacks with other mods; 0 changes nothing. A negative total is no shove, never a pull.",
 		"hits_allies_override": "Whether the attacks this mod affects splash allies, overriding what each attack authored. Unchanged leaves them alone. Off wins over On no matter which space each mod sits in, so rearranging your mods never changes what an attack does.",
 		"can_overwatch_override": "Whether the attacks this mod affects are OVERWATCH attacks -- On makes them watch-only, aimed as a standing watch and never fired directly. Unchanged leaves each attack's own setting alone; Off wins over On whichever space each mod sits in, same as ally splash above.",

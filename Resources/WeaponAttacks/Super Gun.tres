@@ -12,6 +12,7 @@ min_range = 1
 [resource]
 script = ExtResource("2_p0lyu")
 display_name = "Super Gun"
+damage_kind = 2
 power = 9
 attack_pattern = SubResource("Resource_iwbj5")
 hits_allies = true

@@ -13,5 +13,6 @@ scaling_blend = Dictionary[int, int]({
 4: 40
 })
 display_name = "Cleave"
+damage_kind = 1
 power = 3
 attack_pattern = SubResource("Resource_5w2v2")

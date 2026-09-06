@@ -15,6 +15,7 @@ scaling_blend = Dictionary[int, int]({
 4: 30
 })
 display_name = "Lance"
+damage_kind = 2
 power = 5
 attack_pattern = SubResource("Resource_mrekx")
 hits_allies = true

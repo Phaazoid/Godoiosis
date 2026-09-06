@@ -26,7 +26,7 @@ enum Term {
 	# Squads
 	SQUAD, LEADER, COHESION, SQUAD_SIZE,
 	# Stats (one per Stats.Stat, plus the derived readout rows)
-	MHP, STR, LDR, WIL, DEX, PER, CON, COH, MOV, WEIGHT, DEF,
+	MHP, STR, LDR, WIL, DEX, PER, CON, COH, MOV, WEIGHT, DEF, DAMAGE_KIND,
 	# Actions (one per MainActionMenu.ACTION_DATA row, one per MainActionMenu.CATEGORIES row --
 	# a radial category is a row the player hovers and so owes a readout like any other (#467) --
 	# plus ATTACK_TARGETING, the channel axis)
@@ -277,7 +277,17 @@ static func _build_entries() -> Dictionary:
 	e[Term.DEF] = {"category": Category.STATS, "title": "Defense (DEF)",
 		"short": "Subtracted from incoming damage: armor scaled by CON, plus terrain cover.",
 		"long": "Damage mitigation. Worn armor contributes its power scaled by CON, dug-in Cover "
-			+ "adds +%d, and the total comes straight off every incoming hit." % Terrain.COVER_DEF}
+			+ "adds +%d, and the total comes straight off every incoming hit. " % Terrain.COVER_DEF
+			+ "Armor only answers the damage KINDS it covers -- plate stops a blade and lets a fireball "
+			+ "through; Cover stops everything."}
+	e[Term.DAMAGE_KIND] = {"category": Category.STATS, "title": "Damage kinds",
+		"short": "How a hit arrives: blunt, slash, pierce, fire, shock, cold or corrosion. Armor covers some kinds and not others.",
+		"long": "Every damaging attack delivers ONE kind. Pierce is a point (spear, bullet, ice spear), "
+			+ "slash a line (blade), blunt a plane (hammer, fist, a jet of water); fire, shock, cold and "
+			+ "corrosion are not physical at all. A piece of armor lists the kinds its DEF applies to, and a "
+			+ "kind it does not list goes straight through. Separate from the element a hit carries: a "
+			+ "fireball is fire-kind damage AND applies the fire effect, an ice spear is pierce AND applies "
+			+ "the ice effect -- insulation stops the effect, only DEF stops the damage."}
 
 	# Actions — the short line doubles as the action menu's hover tooltip.
 	e[Term.EXECUTE_ORDERS] = {"category": Category.ACTIONS, "title": "Execute Orders",

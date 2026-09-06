@@ -7,6 +7,28 @@ extends EquippableData
 @export var def_power: int = 0
 @export var flat_def: int = 0
 
+# Which damage kinds this piece's DEF applies to (#424). EMPTY means every kind -- the storage's own
+# default, so a piece authored before kinds existed keeps stopping everything until someone says
+# otherwise. A piece that lists kinds stops ONLY those: plate lists the three physical kinds and a
+# fireball goes straight through it. On/off deliberately, not a number per kind (dev, 2026-09-05:
+# "too early to make a call"); a per-kind table would be a superset of this list if content ever
+# asks. Cover and the brace bonus are kind-blind; only armour carries this.
+@export var covered_kinds: Array[AttackData.Kind] = []
+
+# Does this piece's DEF apply to a hit delivered as `kind`? The one reader of covered_kinds'
+# empty-means-all rule; RulesService.def_against asks it and nothing else does.
+func covers(kind: AttackData.Kind) -> bool:
+	return covered_kinds.is_empty() or covered_kinds.has(kind)
+
+# "vs blunt, slash, pierce" for the readouts, or "" when the piece covers everything.
+func coverage_text() -> String:
+	if covered_kinds.is_empty():
+		return ""
+	var names: Array[String] = []
+	for kind: AttackData.Kind in covered_kinds:
+		names.append(AttackData.kind_name(kind))
+	return "vs " + ", ".join(names)
+
 # Wear gates, generalized past #55's single con_requirement: a piece can demand a floor on any
 # stat AND a ceiling on any other (bulky rigs only a slow unit can move in). Empty = no gate.
 @export var stat_minimums: Dictionary[Stats.Stat, int] = {}
@@ -88,6 +110,9 @@ func mechanical_text(wearer: Unit) -> String:
 			lines.append("DEF %d  (flat)" % total)
 		else:
 			lines.append("DEF 0")
+		var coverage := coverage_text()
+		if coverage != "":
+			lines[lines.size() - 1] += "  " + coverage
 	var gate := requirement_text()
 	if gate != "":
 		lines.append("Requires: %s" % gate)

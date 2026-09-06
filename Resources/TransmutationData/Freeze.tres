@@ -12,6 +12,7 @@ script = ExtResource("2_24q66")
 sigils = Array[int]([2, 2])
 flourishes = Array[int]([4, 3])
 display_name = "Freeze"
+damage_kind = 5
 power = 4
 attack_pattern = SubResource("Resource_xrrob")
 hits_allies = true
