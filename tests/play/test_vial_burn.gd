@@ -91,8 +91,22 @@ func test_queueing_then_cancelling_spends_nothing() -> void:
 	var vial := _attune(hero)
 
 	assert_bool(sess.queue_attack(sess.handle_for(hero), Vector2i(2, 0)).ok).is_true()
+
+	# RESOLVE FIRST, and that is the whole case rather than a setup line. queue_attack alone stamps
+	# no outcome headless, so a cancel test that skipped this would pass for the wrong reason -- it
+	# would prove only that nothing resolved, not that resolving spends nothing. The game resolves on
+	# EVERY queue edit (refresh_action_queue), so this is what the player's plan-time path actually
+	# does, and it is what a spend moved into the resolver would be caught by.
+	var plan: ResolvedPlan = sess.squad_manager.resolve_plan(hero.squad, sess._board())
+	assert_object((plan.attacks[0] as AttackAction).resolved.burned_vial).override_failure_message(
+			"fixture: the resolve recorded no burn, so this case could not see a plan-time spend"
+			).is_same(vial)
+	assert_object(hero.attunement).override_failure_message(
+			"RESOLVING spent the charge -- the resolver must mutate no live state").is_same(vial)
+
 	assert_bool(sess.cancel(sess.handle_for(hero)).ok).is_true()
-	assert_object(hero.attunement).is_same(vial)
+	assert_object(hero.attunement).override_failure_message(
+			"a cancelled plan spent the charge").is_same(vial)
 
 
 # Law #2: the burn is visible in the resolved plan BEFORE Execute, not discovered afterwards.
