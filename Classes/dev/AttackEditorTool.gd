@@ -147,6 +147,12 @@ func _on_new_pressed():
 		return
 	current_template = null
 	current = TransmutationData.new() if _mode == Mode.TRANSMUTATION else WeaponAttackData.new()
+	# A new attack arrives WITH geometry, so the stamp grid is there to draw on immediately (#804
+	# follow-up, found in play). An attack with no pattern reaches bare adjacency and is a legal but
+	# useless starting point, and reaching one from here meant assigning a pattern through the
+	# resource picker -- which cannot be done, see DevWidgets._add_resource_swapper. Clearing it
+	# back to nothing is still expressible there, through the picker's own (none) row.
+	current.attack_pattern = AttackPattern.new()
 	_loaded_name = ""
 	name_input.text = ""
 	load_dropdown.select(-1)

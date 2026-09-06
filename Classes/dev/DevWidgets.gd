@@ -536,28 +536,53 @@ static func _add_property_control(container: Node, resource: Resource, prop: Dic
 	match prop.type:
 		TYPE_INT:
 			if prop.hint == PROPERTY_HINT_ENUM:
-				add_enum_option(container, label, prop.hint_string, value, func(v): resource.set(prop.name, v))
+				add_enum_option(container, label, prop.hint_string, value, func(v): _write(resource, prop.name, v))
 			else:
-				add_spinbox(container, label, value, func(v): resource.set(prop.name, int(v)))
+				add_spinbox(container, label, value, func(v): _write(resource, prop.name, int(v)))
 		TYPE_FLOAT:
-			add_spinbox(container, label, value, func(v): resource.set(prop.name, v))
+			add_spinbox(container, label, value, func(v): _write(resource, prop.name, v))
 		TYPE_BOOL:
-			add_checkbox(container, label, value, func(v): resource.set(prop.name, v))
+			add_checkbox(container, label, value, func(v): _write(resource, prop.name, v))
 		TYPE_STRING:
 			if prop.hint == PROPERTY_HINT_ENUM:
-				add_option(container, label, prop.hint_string.split(","), value, func(s): resource.set(prop.name, s))
+				add_option(container, label, prop.hint_string.split(","), value, func(s): _write(resource, prop.name, s))
 			else:
-				add_lineedit(container, label, value, func(s): resource.set(prop.name, s))
+				add_lineedit(container, label, value, func(s): _write(resource, prop.name, s))
 		TYPE_ARRAY:
-			# An Array[Vector2i] as text (#803) -- the attack stamp, typed by coordinate until the
-			# grid editor (#804) lands. Any other array is still not drawn.
-			if prop.hint_string == CELLS_HINT:
-				add_lineedit(container, label, cells_to_text(value), func(s): resource.set(prop.name, cells_from_text(s)))
+			# A centred cell STAMP gets a clickable grid (#804); any other Array[Vector2i] keeps the
+			# coordinate row #803 shipped. The RESOURCE says which of its fields is which -- see
+			# _is_grid_field. Any other array is still not drawn.
+			if _is_cell_array(prop):
+				if _is_grid_field(resource, prop.name):
+					add_cell_grid(container, label, resource, prop.name)
+				else:
+					add_lineedit(container, label, cells_to_text(value), func(s): _write(resource, prop.name, cells_from_text(s)))
 	_tip_rows_from(container, first, tip)
 
 
-# What get_property_list reports as the hint_string of an exported Array[Vector2i].
-const CELLS_HINT := "Vector2i"
+# The one write every reflectively-drawn row goes through (#804), so a panel that must react to a
+# field it does not own has ONE signal to listen to. `_adopt` has emitted `changed` since #589 and
+# its own comment called it "the hook a panel can redraw off; nothing listens yet" -- the stamp
+# grid's anchor caption is the first listener, and it reads `max_range`, three rows above its own.
+# A rebuild driven off a row's signal was the alternative and is refused: it frees the SpinBox
+# mid-edit, which is #741's trap.
+static func _write(resource: Resource, prop_name: String, value: Variant) -> void:
+	resource.set(prop_name, value)
+	resource.emit_changed()
+
+
+# Is this exported Array an Array[Vector2i]?
+#
+# **get_property_list reports a typed array's ELEMENT as "<TYPE_ id>:", never as a class name** --
+# an Array[Vector2i] comes back "6:", 6 being TYPE_VECTOR2I, with the trailing half carrying the
+# element's own hint. #803 compared that against the literal "Vector2i" and therefore matched
+# NOTHING: the stamp's coordinate row never drew in the running Attack Editor at all, and the
+# stamp was authorable only through Godot's own inspector. Nothing caught it because the tips law
+# checks the property TABLE and the live-sync suite drives a scalar -- no case asked whether the
+# row existed. That is the "test the wire" law, and #804's grid cases are what now ask it.
+static func _is_cell_array(prop: Dictionary) -> bool:
+	var hint: String = prop.hint_string
+	return hint.get_slice(":", 0) == str(TYPE_VECTOR2I)
 
 # "x,y x,y ...": one pair per cell, whitespace or ';' between pairs, parens tolerated.
 static func cells_to_text(cells: Array) -> String:
@@ -576,6 +601,211 @@ static func cells_from_text(text: String) -> Array[Vector2i]:
 			continue
 		out.append(Vector2i(int(xy[0]), int(xy[1])))
 	return out
+
+
+# ==============================================================================
+#  The cell-stamp grid (#804)
+# ==============================================================================
+
+const GRID_CELL_PX := 26
+const GRID_MIN_SPAN := 5     # odd, and always leaves one clickable ring around the centre
+const GRID_MAX_SPAN := 15
+const GRID_STEP := 2         # odd sizes only: a stamp grid must have a centre
+
+const CELL_EMPTY := Color("1b1d22")
+const CELL_EMPTY_HOVER := Color("2a2d34")
+const CELL_FILLED := Color("4a7fbd")
+const CELL_FILLED_HOVER := Color("5b90ce")
+const CELL_EDGE := Color("3a3d45")
+const CELL_FILLED_EDGE := Color("649ada")
+const CELL_CENTRE_EDGE := Color("8b909c")
+
+
+# Does this resource call this field a CENTRED stamp -- offsets around 0,0 (#804)? Asked of the
+# resource rather than inferred from Array[Vector2i], because ScenarioUnitEntry.watch_cells is that
+# type too and holds ABSOLUTE board cells: a grid centred on 0,0 would be a lie about it. Nothing
+# draws that entry reflectively today, and this is what keeps it that way by construction.
+# property_tips()'s exact shape -- a static the class declares beside its own @export.
+static func _is_grid_field(resource: Resource, prop_name: String) -> bool:
+	if not resource.has_method("grid_fields"):
+		return false
+	var fields: PackedStringArray = resource.call("grid_fields")
+	return fields.has(prop_name)
+
+
+# The sentence under the grid, answered by the RESOURCE: the widget knows how to draw a centred
+# grid, and only the pattern knows what its own centre means. "" if it does not say.
+static func _grid_caption(resource: Resource, prop_name: String) -> String:
+	if not resource.has_method("grid_caption"):
+		return ""
+	return str(resource.call("grid_caption", prop_name))
+
+
+static func _cells_of(resource: Resource, prop_name: String) -> Array[Vector2i]:
+	var cells: Array[Vector2i] = []
+	cells.assign(resource.get(prop_name))
+	return cells
+
+
+# The smallest odd span that shows every authored cell, floored so there is always a ring to click
+# into and capped so no stamp can demand a grid wider than the panel.
+static func _stamp_span(cells: Array[Vector2i]) -> int:
+	var reach := 0
+	for c in cells:
+		reach = maxi(reach, maxi(absi(c.x), absi(c.y)))
+	return clampi(reach * 2 + 1, GRID_MIN_SPAN, GRID_MAX_SPAN)
+
+
+# The clickable stamp grid: an odd-sized board of toggle cells around a marked centre, UP forward.
+#
+# The grid SIZE is the widget's own view and is never stored (dev ruling, 2026-09-06: "the size of
+# the widget I'm authoring in, nothing else") -- derived from the stamp's own extent, grown by the
+# stepper, re-derived whenever the form is rebuilt. It rides a Dictionary rather than a captured
+# int because **a GDScript lambda captures by VALUE**: assigning to a captured local would move a
+# copy the next press cannot see.
+#
+# The coordinate line #803 shipped SURVIVES underneath, so a shape can still be copied between
+# attacks -- two RENDERS of one store, both writing through _write, never two stores. Setting
+# `text` in code does not emit `text_changed`, which is what keeps the two from looping.
+#
+# NOTHING here rebuilds the form. A cell restyles itself in place; the stepper and the line rebuild
+# only the cells, and neither is a cell. That is #741's rule -- a redraw run inside a row's own
+# signal tries to free the node that emitted it -- and it is why no path needs a deferral.
+static func add_cell_grid(container: Node, label_text: String, resource: Resource, prop_name: String) -> void:
+	add_label(container, label_text)
+	var state := {"span": _stamp_span(_cells_of(resource, prop_name))}
+
+	var stepper := HBoxContainer.new()
+	var minus := Button.new()
+	minus.text = "-"
+	var size_label := Label.new()
+	var plus := Button.new()
+	plus.text = "+"
+	stepper.add_child(minus)
+	stepper.add_child(size_label)
+	stepper.add_child(plus)
+	container.add_child(stepper)
+
+	# ASCII on purpose: the dev window runs Godot's default theme font, and a missing arrow glyph
+	# would draw as a box in the one place the direction has to be unambiguous.
+	var forward := Label.new()
+	forward.text = "^ forward"
+	container.add_child(forward)
+
+	var grid := GridContainer.new()
+	container.add_child(grid)
+
+	var caption := Label.new()
+	caption.text = _grid_caption(resource, prop_name)
+	container.add_child(caption)
+
+	# The redraw rides the same Dictionary, which is what lets the coordinate line's handler reach a
+	# Callable defined after it -- the lookup happens at call time, where capturing it would not.
+	var line := add_lineedit(container, "Cells", cells_to_text(_cells_of(resource, prop_name)),
+		func(s: String) -> void:
+			var typed := cells_from_text(s)
+			_write(resource, prop_name, typed)
+			# GROW only. A stamp mid-edit is briefly smaller than what is being typed, and
+			# re-deriving would collapse the grid and re-expand it on the next keystroke.
+			state["span"] = maxi(int(state["span"]), _stamp_span(typed))
+			state["redraw"].call())
+	var edit: LineEdit = line.get_child(1) as LineEdit
+
+	state["redraw"] = func() -> void:
+		var span: int = state["span"]
+		size_label.text = "%d x %d" % [span, span]
+		minus.disabled = span - GRID_STEP < _stamp_span(_cells_of(resource, prop_name))
+		plus.disabled = span >= GRID_MAX_SPAN
+		_fill_cell_grid(grid, resource, prop_name, span, edit)
+
+	minus.pressed.connect(func() -> void:
+		state["span"] = maxi(GRID_MIN_SPAN, int(state["span"]) - GRID_STEP)
+		state["redraw"].call())
+	plus.pressed.connect(func() -> void:
+		state["span"] = mini(GRID_MAX_SPAN, int(state["span"]) + GRID_STEP)
+		state["redraw"].call())
+
+	# The caption follows the anchor live, off the write hook rather than a poll or a rebuild. The
+	# connection is dropped with the label: a lambda has no object to auto-disconnect against, so a
+	# rebuilt form would otherwise leave it firing into a freed node.
+	if caption.text != "":
+		var sync := func() -> void:
+			caption.text = _grid_caption(resource, prop_name)
+		resource.changed.connect(sync)
+		caption.tree_exiting.connect(func() -> void:
+			if resource.changed.is_connected(sync):
+				resource.changed.disconnect(sync))
+
+	state["redraw"].call()
+
+
+# One toggle button per cell of the span, row-major from the FORWARD row (-y) down. Rebuilt whole
+# by the stepper and the coordinate line; a click never comes through here.
+static func _fill_cell_grid(grid: GridContainer, resource: Resource, prop_name: String, span: int, line: LineEdit) -> void:
+	for child in grid.get_children():
+		grid.remove_child(child)
+		child.queue_free()
+	grid.columns = span
+	grid.add_theme_constant_override("h_separation", 2)
+	grid.add_theme_constant_override("v_separation", 2)
+	var half := (span - 1) / 2
+	var cells := _cells_of(resource, prop_name)
+	for y in range(-half, half + 1):
+		for x in range(-half, half + 1):
+			grid.add_child(_cell_button(Vector2i(x, y), cells.has(Vector2i(x, y)), resource, prop_name, line))
+
+
+static func _cell_button(offset: Vector2i, filled: bool, resource: Resource, prop_name: String, line: LineEdit) -> Button:
+	var cell := Button.new()
+	cell.toggle_mode = true
+	cell.button_pressed = filled
+	# Out of the focus chain: a 15x15 grid is 225 stops between two spinboxes, and a stamp is a
+	# mouse gesture.
+	cell.focus_mode = Control.FOCUS_NONE
+	cell.custom_minimum_size = Vector2(GRID_CELL_PX, GRID_CELL_PX)
+	_style_cell(cell, filled, offset == Vector2i.ZERO)
+	cell.toggled.connect(func(on: bool) -> void:
+		var next: Array[Vector2i] = []
+		for c in _cells_of(resource, prop_name):
+			if c != offset:
+				next.append(c)
+		if on:
+			next.append(offset)
+		# Reading order, so the stored array and the .tres it saves into stay stable rather than
+		# following whatever order the cells were clicked in.
+		next.sort_custom(func(a: Vector2i, b: Vector2i) -> bool:
+			return a.y < b.y if a.y != b.y else a.x < b.x)
+		_write(resource, prop_name, next)
+		_style_cell(cell, on, offset == Vector2i.ZERO)
+		line.text = cells_to_text(next))
+	return cell
+
+
+# Every state is painted explicitly rather than leaning on the theme's pressed look: a stamp cell
+# has to read as filled or empty at a glance, and the CENTRE has to read as the centre in both.
+static func _style_cell(cell: Button, filled: bool, centre: bool) -> void:
+	var edge := CELL_CENTRE_EDGE if centre else (CELL_FILLED_EDGE if filled else CELL_EDGE)
+	var width := 2 if centre else 1
+	var base := CELL_FILLED if filled else CELL_EMPTY
+	var hover := CELL_FILLED_HOVER if filled else CELL_EMPTY_HOVER
+	cell.add_theme_stylebox_override("normal", _cell_box(base, edge, width))
+	cell.add_theme_stylebox_override("pressed", _cell_box(base, edge, width))
+	cell.add_theme_stylebox_override("hover", _cell_box(hover, edge, width))
+	cell.add_theme_stylebox_override("hover_pressed", _cell_box(hover, edge, width))
+
+
+static func _cell_box(fill: Color, edge: Color, width: int) -> StyleBoxFlat:
+	var box := StyleBoxFlat.new()
+	box.bg_color = fill
+	box.border_color = edge
+	box.set_border_width_all(width)
+	box.set_corner_radius_all(2)
+	return box
+
+# The picker's "no resource" row -- ItemEditorTool spells the same idea NO_MAIN_KEY for its own
+# bespoke picker, and the reason is identical: a field with nothing in it is a state the control
+# must be able to both SHOW and SET.
+const NO_RESOURCE_KEY := "(none)"
 
 static func _add_resource_swapper(container: Node, resource: Resource, prop: Dictionary, value: Resource, rebuild: Callable) -> void:
 	var base_type: String = prop.hint_string
@@ -599,12 +829,26 @@ static func _add_resource_swapper(container: Node, resource: Resource, prop: Dic
 	var current_class := ""
 	if value != null and value.get_script() != null:
 		current_class = value.get_script().get_global_name()
+	# (none) is a REAL row, not decoration: a field with no resource is a legitimate authored state
+	# (a pattern-less attack reaches bare adjacency, which AttackLint deliberately passes), so the
+	# picker has to be able to express it -- ItemEditorTool's NO_MAIN_KEY, for the same reason.
+	# Without it a single-candidate field was a DEAD END: add_item auto-selects the first row, so a
+	# null value DISPLAYED as set, and re-picking the row already showing emits nothing, leaving no
+	# click anywhere in the control that could assign the resource. Found in play (#804 follow-up).
+	# (none) IS ROW ZERO, and that ordering is load-bearing rather than cosmetic: add_item silently
+	# selects the first row it is given, so putting the empty state first is exactly what makes the
+	# control's own auto-selection tell the truth about a null field. Reorder these two lines and
+	# the picker goes back to claiming a class is set on a field that has none. An explicit
+	# select(0) sat here and was DEAD -- a mutant deleting it changed nothing, which is what named
+	# the ordering as the mechanism.
+	option.add_item(NO_RESOURCE_KEY)
+	for entry in candidates:
+		option.add_item(entry["class"])
 	for i in candidates.size():
-		option.add_item(candidates[i]["class"])
 		if candidates[i]["class"] == current_class:
-			option.select(i)
+			option.select(i + 1)
 	option.item_selected.connect(func(idx):
-		resource.set(prop.name, load(candidates[idx]["path"]).new())
+		resource.set(prop.name, null if idx == 0 else load(candidates[idx - 1]["path"]).new())
 		rebuild.call()
 	)
 	row.add_child(label)

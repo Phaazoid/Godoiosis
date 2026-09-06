@@ -109,5 +109,28 @@ static func property_tips() -> Dictionary:
 		"min_range": "The CLOSEST cell this attack can be aimed at, in Manhattan steps. 1 = adjacent. 0 = the attacker's own cell as well (a self-heal). Above 1 leaves a dead zone it cannot hit at all, which is how a carbine cannot shoot what has closed on it.\nMUST NOT EXCEED Max Range: nothing refuses the pair, the attack simply reaches no cells and stops showing any range at all.",
 		"max_range": "The FURTHEST cell this attack can be aimed at, in Manhattan steps (no diagonals). RAISE THIS to make an attack longer-ranged.\n0 is special: the stamp sits on the ATTACKER and the attack aims a FACING -- the player points a direction and the whole stamp fires that way. That is what a cleave or a line is.",
 		"max_and_a_half": "Adds a half step to the outer ring, bevelling its diagonal corners -- a reach of 2 and a half rather than 2 or 3.",
-		"stamp": "The cells the attack COVERS once aimed, as offsets from where it lands: 0,0 is the aimed cell (the attacker's own, at Max Range 0), UP is forward, so 0,-1 is one cell ahead and 1,-1 is ahead and to the right. Turned to face the aim. Typed here as 'x,y x,y ...' until the grid editor lands; 0,0 alone is a single-target attack, and an empty stamp covers nothing.",
+		"stamp": "The cells the attack COVERS once aimed, as offsets from where it lands. Click them on the grid: the centre is where the attack lands and the top of the grid is FORWARD, so the cell above the centre is one ahead. The whole shape turns to face the aim. The centre alone is a single-target attack, and an empty stamp covers nothing.",
 	}
+
+
+# Which of this resource's fields are CENTRED CELL STAMPS -- offsets around a 0,0 origin, which is
+# what makes a clickable grid the right editor for them (#804). property_tips()'s shape and for its
+# reason: the declaration lives beside the @export it describes, and DevWidgets asks with
+# has_method, so the widget stays generic and no table anywhere can drift from the field.
+#
+# DECLARED rather than inferred from the type, and that is the whole point: ScenarioUnitEntry
+# .watch_cells is an Array[Vector2i] too and holds ABSOLUTE board cells, so a grid centred on 0,0
+# would be a lie about it. Nothing draws that entry reflectively today -- this keeps it that way by
+# construction rather than by nobody having tried.
+static func grid_fields() -> PackedStringArray:
+	return ["stamp"]
+
+
+# The sentence under that grid, which has to say what the CENTRE is -- and that is the ANCHOR rule,
+# so the pattern answers it rather than the widget: the editor knows how to draw a centred grid,
+# and only the pattern knows what its own centre means. Reads through is_directional() so the
+# caption cannot drift from the rule it describes.
+func grid_caption(_field: String) -> String:
+	if is_directional():
+		return "Centre is the attacker. Aimed by facing."
+	return "Centre is the aimed cell. Aimed at a cell."

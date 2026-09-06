@@ -117,3 +117,44 @@ func test_a_family_with_no_main_can_still_gain_extras() -> void:
 	assert_object(add).is_not_null()
 	add.pressed.emit()
 	assert_int(family.attacks().size()).is_equal(1)
+
+
+# --- a new attack arrives with geometry (#804 follow-up, found in play) -----------------------
+
+# The bug: New built a bare WeaponAttackData, and the ONLY way to give it a pattern was the
+# resource picker -- which could not do it (see test_stamp_grid.gd's dead-end cases). So a brand
+# new attack could never be given a shape at all, and the stamp grid never appeared.
+#
+# Driven through the real button, not the handler, because "the row exists and does nothing" is the
+# exact failure this whole arc keeps paying for.
+func test_a_brand_new_attack_arrives_with_geometry_to_draw_on() -> void:
+	_editor._on_weapon_attack_mode_selected()   # the MODE is setup, not the thing under test
+	await await_idle_frame()
+	_editor.new_button.emit_signal("pressed")
+	await await_idle_frame()
+	var made: AttackData = _editor.current
+	assert_object(made).is_not_null()
+	assert_object(made.attack_pattern).override_failure_message(
+		"New made an attack with no pattern -- there is no way to give it one, so its grid never draws"
+	).is_not_null()
+
+
+func test_the_new_attacks_grid_is_actually_drawn() -> void:
+	# The pattern existing is not the same as the row appearing: #803 shipped a field nothing drew.
+	_editor._on_weapon_attack_mode_selected()   # the MODE is setup, not the thing under test
+	await await_idle_frame()
+	_editor.new_button.emit_signal("pressed")
+	await await_idle_frame()
+	assert_object(_find_class(_editor, "GridContainer")).override_failure_message(
+		"no stamp grid in the form after New"
+	).is_not_null()
+
+
+func _find_class(node: Node, klass: String) -> Node:
+	for child in node.get_children():
+		if child.is_class(klass):
+			return child
+		var deeper := _find_class(child, klass)
+		if deeper != null:
+			return deeper
+	return null
