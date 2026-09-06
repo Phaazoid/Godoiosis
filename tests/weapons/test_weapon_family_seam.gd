@@ -1,7 +1,7 @@
 # The WeaponInstance family seam, stated once and checked against EVERY family (2026-08-01, suite
 # audit). Three properties belong to the BASE CLASS, not to any one family:
 #
-#   1. battle state never survives copy_equippable()  -- a mission boundary resets it for free,
+#   1. battle state never survives copy_for_grant()  -- a mission boundary resets it for free,
 #      which is the entire reason those fields are non-@export;
 #   2. two instances of a family track their state independently -- the #73 bug the subclass seam
 #      exists to prevent (a unit can carry two of the same weapon);
@@ -156,7 +156,7 @@ func test_disturbing_a_stateful_family_actually_changes_its_state() -> void:
 # --- the three seam properties ---
 
 func test_battle_state_never_survives_a_copy() -> void:
-	# Non-@export state + copy_equippable()/make() is how a mission boundary resets a weapon for
+	# Non-@export state + copy_for_grant()/make() is how a mission boundary resets a weapon for
 	# free (#87): the snapshot has to put a magazine back EXPLICITLY, so nothing is carried by
 	# accident. Checked for every family, including the stateless ones, where {} must stay {}.
 	for family: WeaponData.WeaponType in FAMILIES:
@@ -164,13 +164,13 @@ func test_battle_state_never_survives_a_copy() -> void:
 		var default_state := weapon.capture_battle_state()
 		_disturb(weapon, family)
 		_assert_disturbed(weapon, family, default_state)
-		var copy := weapon.copy_equippable() as WeaponInstance
+		var copy := weapon.copy_for_grant() as WeaponInstance
 
 		assert_that(copy.capture_battle_state()).override_failure_message(
 			"A copied %s carried its battle state across (%s) -- a new mission would start mid-economy."
 			% [_family_name(family), str(weapon.capture_battle_state())]
 			).is_equal(default_state)
-		# The other half of copy_equippable's contract: the family template stays SHARED. A bare
+		# The other half of copy_for_grant's contract: the family template stays SHARED. A bare
 		# duplicate(true) would deep-copy it and silently fork the weapon off its family.
 		assert_object(copy.template).override_failure_message(
 			"A copied %s no longer shares its template -- editing the family would stop reaching it."

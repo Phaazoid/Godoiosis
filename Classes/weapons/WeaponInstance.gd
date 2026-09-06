@@ -5,7 +5,7 @@ extends EquippableData
 # prototype) + this item's own fitted mods — the only per-weapon state (weapons.md).
 # display_name (inherited) is this weapon's custom pet name; "" falls back to the template's.
 # NEVER duplicate(true) one — that deep-copies the shared template and severs live sync.
-# Create via make(), copy via copy_equippable().
+# Create via make(), copy via copy_for_grant().
 
 @export var template: WeaponData
 @export var limb_kind: WeaponData.LimbKind = WeaponData.LimbKind.ARM
@@ -103,7 +103,7 @@ func apply_battle_state(_state: Dictionary) -> void:
 # Copy for grants/saves: template stays SHARED (the point of the model); each space's LIST is
 # copied while its mods are not — fitted mods are authored content refs, so sharing them is
 # correct and keeps them as ExtResource refs in saved files.
-func copy_equippable() -> EquippableData:
+func copy_for_grant() -> Item:
 	var w := make(template)
 	w.display_name = display_name
 	w.icon = icon

@@ -351,7 +351,7 @@ static func _resolve_one(action: AttackAction, reactions: Array[ElementalReactio
 		outcome.elevation_delta = board.elevation_at(target_hypo.position) - board.elevation_at(action.origin_cell)
 
 	# --- base damage stage (E1: the calc that used to live in AttackAction.create) ---
-	var base := _source_base_damage(action, board, hypo)
+	var base := _source_base_damage(action, board, hypo, outcome)
 	outcome.base_damage = base
 
 	# A heal short-circuits here: reinterprets `base` as HP restored, skips every hurt-only stage below.
@@ -561,14 +561,38 @@ static func _mitigation_for(action: AttackAction, target: Unit, target_hypo: _Hy
 # now the same answer on both sides — STR damage here, adjacency-1 in Reach.
 # A rune fails the WeaponAttackData check -> contributes nothing in melee (its attack rides on
 # fired_attack instead). #30/#72.
-static func _source_base_damage(action: AttackAction, board: BoardContext = null, hypo: Dictionary = {}) -> int:
+static func _source_base_damage(action: AttackAction, board: BoardContext = null, hypo: Dictionary = {},
+		outcome: ResolvedOutcome = null) -> int:
 	var attacker := action.actor
 	if action.fired_attack is TransmutationData:
+		var carving := action.fired_attack as TransmutationData
 		# Materia empowerment (#694) is read at the caster's THREADED position, not the frozen
 		# origin_cell the geometry uses: a shove earlier in this pass moves the BODY, and a body
 		# knocked off the bank casts unempowered. The aim it declared is what stays frozen.
-		var empowered := Materia.empowered_at(projected_position(attacker, hypo), board)
-		return (action.fired_attack as TransmutationData).base_damage(attacker, empowered)
+		var terrain := Materia.empowered_at(projected_position(attacker, hypo), board)
+		var charge := attacker.attunement_elements()
+		if charge.is_empty():
+			return carving.base_damage(attacker, terrain)
+
+		# A burned vial (#697) is NOT positional, so it unions in HERE rather than inside Materia,
+		# beside the terrain answer -- the spot Materia.sources_at's header reserved for it.
+		var empowered := terrain.duplicate()
+		for element: Elemental.Element in charge:
+			if not empowered.has(element):
+				empowered.append(element)
+
+		# THE BURN IS DIFFERENTIAL: the charge is spent only when it CHANGED the answer. That one
+		# rule covers every case at once -- terrain already granting the element, no sigil matching
+		# it, a deals_no_damage carving whose base is 0 either way -- and it stays the right question
+		# when #695 turns empowerment into an authored form rather than a +1.
+		#
+		# Recorded on the outcome rather than re-derived downstream (brace_bonus's precedent): the
+		# queue row names the vial from here and AttackAction.execute spends it from here, so the
+		# preview and the spend cannot disagree (Law #2).
+		var with_charge := carving.base_damage(attacker, empowered)
+		if outcome != null and with_charge != carving.base_damage(attacker, terrain):
+			outcome.burned_vial = attacker.attunement
+		return with_charge
 	if action.fired_attack is WeaponAttackData:
 		var weapon := attacker.get_equipped_weapon() as WeaponInstance
 		if weapon != null:

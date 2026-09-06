@@ -1,6 +1,6 @@
 # Chainsword Rev (#84): the family's signature main-action mechanic. Rev state lives on the
 # WEAPON instance (mirroring #73's readiness seam on SpringspearWeaponInstance) so two chainswords
-# in one inventory rev independently, and it resets every mission via make()/copy_equippable().
+# in one inventory rev independently, and it resets every mission via make()/copy_for_grant().
 # Covers the state machine (rev -> ticks down -> expires -> refresh), the DEF-pierce accessor
 # (ignores_def), the base-class no-op defaults (no other family revs), and the battle-scoped
 # reset on copy. The resolver-side effect (revved attacks pierce DEF) is proven end-to-end in

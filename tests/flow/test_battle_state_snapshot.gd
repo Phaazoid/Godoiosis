@@ -3,7 +3,7 @@
 #
 # The reason this is a whole suite rather than a few more cases next door: battle state is
 # deliberately NOT @export where it lives, on either side. Weapon readiness/charge/rev/ammo are
-# plain vars on WeaponInstance subclasses so make()/copy_equippable() re-arm a weapon every mission;
+# plain vars on WeaponInstance subclasses so make()/copy_for_grant() re-arm a weapon every mission;
 # lifecycle, element states, Crisis and rally are plain vars on the transient Unit for the same
 # reason. So none of it rides along for free — every field here is captured EXPLICITLY, and a field
 # someone forgets fails silently and invisibly (the whole layer was silently absent from saves for
@@ -471,3 +471,50 @@ func test_an_armed_watch_round_trips_with_the_attack_it_was_aimed_with() -> void
 	assert_array(loaded.watch.footprint).is_equal(footprint)
 	assert_int(loaded.watch.anchor_cell.x).is_equal(0)
 	assert_int(loaded.watch.aim_cell.x).is_equal(2)
+
+
+# --- what the pipe CARRIES (#697) ----------------------------------------------------------------
+
+# capture_unit_state used to drop any inventory entry that was not an EquippableData, with a
+# push_warning and nothing else -- the narrow authoring type showing through as a rule. #697 widened
+# the three doors to Item and deleted the refusal, so THIS is the case that stands where the warning
+# was: a carried non-equippable has to come back.
+func test_a_carried_non_equippable_survives_the_save() -> void:
+	var a: Unit = H.spawn_unit(self, Team.Faction.PLAYER, Vector2i.ZERO, {}, false)
+	var vial := VialData.new()
+	vial.element = Elemental.Element.FIRE
+	vial.display_name = "Vial of Sulfur"
+	assert_bool(a.add_item(vial)).is_true()
+
+	var loaded := _round_trip(a)
+
+	var carried: Array = loaded.inventory.filter(func(i): return i is VialData)
+	assert_array(carried).override_failure_message(
+			"the vial was dropped by the save -- the pipe is still narrower than it claims").is_not_empty()
+	assert_int((carried[0] as VialData).element).is_equal(Elemental.Element.FIRE)
+
+# A vial is carried, never slotted, so a save must not come back with one in the weapon slot.
+func test_a_carried_vial_is_not_restored_as_a_weapon() -> void:
+	var a: Unit = H.spawn_unit(self, Team.Faction.PLAYER, Vector2i.ZERO, {}, false)
+	var vial := VialData.new()
+	vial.element = Elemental.Element.WATER
+	vial.display_name = "Vial of Mercury"
+	a.add_item(vial)
+
+	assert_bool(_round_trip(a).has_equipped_weapon()).is_false()
+
+# The burned charge is battle state and rides the save. One that evaporated across a mid-battle load
+# would eat a scarce item with no message anywhere -- silently, which is this suite's whole subject.
+func test_the_vial_charge_round_trips() -> void:
+	var a: Unit = H.spawn_unit(self, Team.Faction.PLAYER, Vector2i.ZERO, {}, false)
+	var vial := VialData.new()
+	vial.element = Elemental.Element.EARTH
+	vial.display_name = "Vial of Salt"
+	a.add_item(vial)
+	assert_str(a.use_vial(a.inventory.find(vial))).is_equal("")
+
+	var loaded := _round_trip(a)
+
+	assert_object(loaded.attunement).override_failure_message(
+			"the charge was spent by the save -- a burned vial vanished for nothing").is_not_null()
+	assert_array(loaded.attunement_elements()).is_equal([Elemental.Element.EARTH])

@@ -35,7 +35,7 @@
 [ext_resource type="Texture2D" uid="uid://d26i1cvn6ffwl" path="res://Art/Icons/ElementIcons/Fire.png" id="27_4ji6m"]
 [ext_resource type="Script" uid="uid://ckrp1phgirys0" path="res://Classes/alchemy/RuneData.gd" id="28_8jbv5"]
 [ext_resource type="Resource" uid="uid://fx3dcqyslgbe" path="res://Resources/Weapons/MainVarieties/Springspear.tres" id="32_8ihxj"]
-[ext_resource type="Script" uid="uid://cbb6calgu7yux" path="res://Classes/items/EquippableData.gd" id="90_equipdata"]
+[ext_resource type="Script" uid="uid://jytv7xrjv6l1" path="res://Classes/items/Item.gd" id="90_equipdata"]
 [ext_resource type="Script" uid="uid://bsnik7hj876qc" path="res://Classes/weapons/instances/ChainswordWeaponInstance.gd" id="wi_chainsword"]
 [ext_resource type="Script" uid="uid://dro6dvoog6jyi" path="res://Classes/weapons/instances/SpringspearWeaponInstance.gd" id="wi_springspear"]
 

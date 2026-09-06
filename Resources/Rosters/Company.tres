@@ -12,7 +12,7 @@
 [ext_resource type="Resource" path="res://Resources/Units/Rebecca.tres" id="10_rebecca"]
 [ext_resource type="Resource" path="res://Resources/Units/Ross.tres" id="11_ross"]
 [ext_resource type="Resource" path="res://Resources/Units/Torv.tres" id="12_torv"]
-[ext_resource type="Script" path="res://Classes/items/EquippableData.gd" id="13_equippable"]
+[ext_resource type="Script" uid="uid://jytv7xrjv6l1" path="res://Classes/items/Item.gd" id="13_equippable"]
 [ext_resource type="Resource" path="res://Resources/Armor/BulwarkPlate.tres" id="14_bulwark"]
 [ext_resource type="Resource" path="res://Resources/Armor/RivetedMail.tres" id="15_mail"]
 [ext_resource type="Resource" path="res://Resources/Armor/BallastHarness.tres" id="16_ballast"]

@@ -26,7 +26,7 @@ class_name ScenarioUnitEntry
 @export var stats: Dictionary[Stats.Stat, int] = {}
 @export var current_hp := -1     # -1 = unsaved; live HP is always >= 1
 @export var current_will := -1   # -1 = unsaved; 0 is a legal saved value
-@export var inventory: Array[EquippableData] = []
+@export var inventory: Array[Item] = []
 @export var equipped_index := -1   # into inventory; -1 = unarmed. Replaced the equipped_weapon copy (#83).
 @export var worn_armor_index := -1   # into inventory; -1 = unarmored. Mirrors equipped_index (#65).
 @export var weapon_proficiency: Dictionary[WeaponData.WeaponType, int] = {}
@@ -42,6 +42,9 @@ class_name ScenarioUnitEntry
 # (not @export'd on Unit/WeaponInstance, so a mission boundary still resets for free). ---
 @export var weapon_battle_states: Dictionary[int, Dictionary] = {}   # inventory index -> that weapon's own keys
 @export var element_states: Array[Elemental.State] = []
+# The burned vial this unit is attuned to (#697), or null. Battle-scoped like the rest of this
+# block: a mission boundary clears it for free because Unit does not @export it.
+@export var attunement: VialData = null
 @export var stat_effects: Array[StatEffect] = []
 @export var lifecycle_state: Unit.LifecycleState = Unit.LifecycleState.ACTIVE   # DEAD never saves: a corpse is absent, not stored
 @export var downed_turns_remaining := -1   # -1 = not counting, same sentinel Unit uses
@@ -74,7 +77,7 @@ class_name ScenarioUnitEntry
 @export var watch_attack_index := -1
 @export var watch_spent := false
 
-# Snapshot the unit's persistent side of the seam. Inventory copies via copy_equippable()
+# Snapshot the unit's persistent side of the seam. Inventory copies via copy_for_grant()
 # — never duplicate(true), which would fork a WeaponInstance off its shared template. An
 # installed prosthetic saves as the INDEX of its carried instance so load can re-link.
 func capture_unit_state(unit: Unit) -> void:
@@ -89,27 +92,28 @@ func capture_unit_state(unit: Unit) -> void:
 	is_alkahest_affine = inst.is_alkahest_affine
 	affinity_saved = true
 
-	var sources: Array[EquippableData] = []   # pre-copy identities, for the index lookups below
+	# Every carried thing, not just the slottable ones. This used to drop a non-EquippableData with
+	# a push_warning, which was the narrow authoring type showing through as a rule -- #697 widened
+	# the three doors to Item and the refusal went with them. `sources` stays index-parallel with
+	# `inventory`, which is what the two find() lookups below depend on.
+	var sources: Array[Item] = []   # pre-copy identities, for the index lookups below
 	inventory = []
-	for item in unit.inventory:
-		var equippable := item as EquippableData
-		if item != null and equippable == null:
-			push_warning("Scenario save: '%s' is not equippable — dropped" % item.display_name)
-		if equippable == null:
+	for item: Item in unit.inventory:
+		if item == null:
 			continue
-		sources.append(equippable)
-		inventory.append(equippable.copy_equippable())
+		sources.append(item)
+		inventory.append(item.copy_for_grant())
 
 	equipped_index = sources.find(unit.get_equipped_weapon())
 	if unit.has_equipped_weapon() and equipped_index == -1:
 		# equipped directly without an inventory slot (fixtures do this) — save it anyway
 		equipped_index = inventory.size()
-		inventory.append(unit.get_equipped_weapon().copy_equippable())
+		inventory.append(unit.get_equipped_weapon().copy_for_grant())
 	worn_armor_index = sources.find(unit.worn_armor)
 	if unit.worn_armor != null and worn_armor_index == -1:
 		# worn without an inventory slot (dev/fixtures do this) — save it anyway
 		worn_armor_index = inventory.size()
-		inventory.append(unit.worn_armor.copy_equippable())
+		inventory.append(unit.worn_armor.copy_for_grant())
 
 	limb_states = {}
 	limb_prosthetic_stats = {}
@@ -140,6 +144,10 @@ func capture_unit_state(unit: Unit) -> void:
 			weapon_battle_states[i] = weapon_state
 
 	element_states = unit.element_states.duplicate()
+	# The vial charge rides the save (#697): one that evaporated across a mid-battle load would
+	# eat a scarce item with no message anywhere. Shared, not copied -- it is already this unit's
+	# own burned instance and nothing else holds it.
+	attunement = unit.attunement
 	stat_effects = []
 	for effect in unit.stat_effects:
 		stat_effects.append(effect.duplicate(true))
@@ -198,7 +206,7 @@ func apply_unit_state(unit: Unit) -> void:
 	for i in inventory.size():
 		if inventory[i] == null:
 			continue
-		if not unit.add_item(inventory[i].copy_equippable()):
+		if not unit.add_item(inventory[i].copy_for_grant()):
 			push_warning("Scenario load: inventory full — dropped '%s'" % inventory[i].display_name)
 	# add_item auto-equips the first equippable; the save's explicit choice wins either way.
 	# Direct assign, never the gated door (#157) — a save is authoritative, same as the armor
@@ -233,6 +241,7 @@ func apply_unit_state(unit: Unit) -> void:
 				fitting.prosthetic_item = carried   # re-link: the exact carried instance, by index
 
 	unit.element_states = element_states.duplicate()
+	unit.attunement = attunement
 	unit.in_crisis = in_crisis
 	unit.crisis_surge_pending = crisis_surge_pending
 	unit.rally_count = rally_count

@@ -39,6 +39,11 @@ var knockback_landing_index: int = 0
 # The brace bonus actually subtracted from this hit (#414) — non-zero only when a Guard substituted
 # and the attack did not pierce DEF. Already folded into the mitigation; recorded so the queue row
 # can name it without re-deriving (Law #2's spirit applied to a readout).
+# The vial this hit BURNED (#697), or null. Set by the resolver only when the caster's attunement
+# actually changed the damage -- standing on a matching source pays instead, and then nothing is
+# spent. Recorded rather than re-derived so the queue row can name it and execute() can spend it
+# from the same answer (brace_bonus's reason, one stage over).
+var burned_vial: VialData = null
 var brace_bonus: int = 0
 var fall_damage: int = 0    # the drop's own component (#259), already folded into `damage` above
 var fall_levels: int = 0    # how far the unit actually FELL (#259 follow-up): the flight drop plus

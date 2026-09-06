@@ -7,7 +7,7 @@
 [ext_resource type="Texture2D" path="res://Art/Units/MapSprites/Fighter_Moving.png" id="5_6al02"]
 [ext_resource type="Texture2D" path="res://Art/Units/Portraits/hair_mcgee_orange.png" id="6_gl24e"]
 [ext_resource type="Script" path="res://Classes/units/UnitData.gd" id="7_m50pb"]
-[ext_resource type="Script" path="res://Classes/items/EquippableData.gd" id="8_kgmcy"]
+[ext_resource type="Script" uid="uid://jytv7xrjv6l1" path="res://Classes/items/Item.gd" id="8_kgmcy"]
 [ext_resource type="Resource" path="res://Resources/Weapons/WeaponVariants/Drill.tres" id="9_251rx"]
 
 [resource]

@@ -55,6 +55,11 @@ var equipped_weapon: EquippableData = null
 var worn_armor: ArmorData = null   # DEF seam (#55), real content since #89. Carried in `inventory`
 								   # like a weapon but filling its OWN slot — set only via
 								   # wear_armor(), the one place the wear gate lives.
+# The burned vial this unit is currently attuned to (#697), or null. ONE at a time: a second Use
+# replaces the first, which is why this is a slot and not a list. Set by the inventory panel's Use
+# verb; cleared by AttackAction.execute when a cast actually draws on it, never at plan time —
+# the readiness precedent, and the whole reason cancelling a plan costs nothing.
+var attunement: VialData = null
 
 var _projected_knockback_cell: Vector2i
 var _has_projected_knockback := false
@@ -178,7 +183,7 @@ func _seed_starting_kit(source: UnitData) -> void:
 		var authored := source.starting_inventory[i]
 		if authored == null:
 			continue
-		var granted := authored.copy_equippable()
+		var granted := authored.copy_for_grant()
 		var weapon := granted as WeaponInstance
 		if weapon != null and weapon.get_script() == WeaponInstance and weapon.template != null \
 				and weapon.template.weapon_type != WeaponData.WeaponType.NONE:
@@ -231,7 +236,7 @@ func can_reseed_kit() -> bool:
 # GEAR only: jobs and proficiency come along because the file authors them as part of the kit, but
 # HP, Will, limb STATE, element states and lifecycle are this unit's battle, not its loadout.
 # Battle state (ammo, rev, spring load) resets with the weapons — the grant is a fresh
-# copy_equippable, exactly what a spawn hands back.
+# copy_for_grant, exactly what a spawn hands back.
 #
 # The clear is DIRECT rather than remove_item, matching ScenarioUnitEntry.apply_unit_state: an
 # installed prosthetic refuses to be dropped, and the seed re-links every fitting anyway. Jobs clear
@@ -520,17 +525,17 @@ func get_weight() -> int:
 # NOT GATED HERE. can_equip_reason (#744) decides whether the player is shown these at all, and that
 # is a surface's decision: previewing a piece a unit cannot wear is a lie, but the arithmetic is the
 # same arithmetic and a model that refused to do it would only push the refusal somewhere worse.
-func previewed_stat(stat: Stats.Stat, candidate: EquippableData) -> int:
+func previewed_stat(stat: Stats.Stat, candidate: Item) -> int:
 	var gear := _candidate_gear(candidate)
 	return get_body_stat(stat) + _gear_modifier_for(stat, gear[0], gear[1])
 
 
-func previewed_def(candidate: EquippableData) -> int:
+func previewed_def(candidate: Item) -> int:
 	var gear := _candidate_gear(candidate)
 	return _def_for(gear[0], previewed_stat(Stats.Stat.CON, candidate))
 
 
-func previewed_weight(candidate: EquippableData, incoming: bool) -> int:
+func previewed_weight(candidate: Item, incoming: bool) -> int:
 	if candidate == null or not incoming:
 		return get_weight()
 	return get_weight() + candidate.get_effective_weight()
@@ -539,7 +544,7 @@ func previewed_weight(candidate: EquippableData, incoming: bool) -> int:
 # The substitution itself: [armor, weapons] with the candidate in whichever slot it fills. A weapon
 # displaces the EQUIPPED one rather than joining the list -- a unit swings one thing -- while
 # prosthetics stay, because a fitted limb contributes whatever else is in hand.
-func _candidate_gear(candidate: EquippableData) -> Array:
+func _candidate_gear(candidate: Item) -> Array:
 	var armor := worn_armor
 	var weapons: Array[WeaponInstance] = _mod_sources()
 	var as_armor := candidate as ArmorData
@@ -1148,6 +1153,32 @@ func get_element_aura(element: Elemental.Element) -> int:
 	if unit_instance == null:
 		return 0
 	return unit_instance.get_element_aura(element)
+
+# What a burned vial empowers this unit in (#697) — [] when nothing is attuned. Deliberately NOT
+# folded into get_element_aura above: that accessor must stay blind to materia, because the anchor,
+# the channel deficit, both wildcard pools and the equip gate all read it, and making it aware would
+# leak empowerment into every one of those gates at once. Empowerment is a damage-time term only.
+func attunement_elements() -> Array[Elemental.Element]:
+	if attunement == null:
+		var none: Array[Elemental.Element] = []
+		return none
+	return attunement.granted_elements()
+
+# Attune to a vial, spending it out of inventory. Returns "" on success, or the refusal — the
+# reason is asked first and the act is this same call's second half, so nothing can act on a
+# judgement made a frame ago (Loadout.move's shape).
+func use_vial(index: int) -> String:
+	if index < 0 or index >= inventory.size():
+		return "There is nothing in that slot."
+	var vial := inventory[index] as VialData
+	if vial == null:
+		return "That is not a vial."
+	var refusal := vial.use_block_reason(self)
+	if refusal != "":
+		return refusal
+	attunement = vial
+	inventory[index] = null   # burned: the item is gone, the charge is what remains
+	return ""
 
 func has_any_affinity() -> bool:
 	return unit_instance != null and unit_instance.has_any_affinity()

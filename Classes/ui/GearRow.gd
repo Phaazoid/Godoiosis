@@ -8,14 +8,14 @@ extends GearDropZone
 # An EMPTY slot is a real row with a null item: it drags nothing and accepts anything its unit can
 # take, which is what makes the card's six slots the drop target a player aims at.
 
-var item: EquippableData = null
+var item: Item = null
 
 
-func carry(gear: EquippableData) -> void:
+func carry(gear: Item) -> void:
 	item = gear
 
 
-func _dragged_item() -> EquippableData:
+func _dragged_item() -> Item:
 	return item
 
 

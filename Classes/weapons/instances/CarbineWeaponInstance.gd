@@ -6,7 +6,7 @@ extends WeaponInstance
 # the economy gates the MAIN attack, and there is no secondary, so an empty magazine leaves the
 # weapon with nothing to fire until a Reload main action. shots_remaining is battle-scoped runtime
 # state on THIS instance (non-@export, like ready/charge/revved_turns_remaining): it never
-# serializes, so make()/copy_equippable() hand back a full magazine every mission. Topping off a
+# serializes, so make()/copy_for_grant() hand back a full magazine every mission. Topping off a
 # partial magazine is legal — spending a turn now beats getting caught dry.
 const MAGAZINE_SIZE := 2
 

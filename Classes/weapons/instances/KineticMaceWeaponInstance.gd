@@ -3,7 +3,7 @@ extends WeaponInstance
 
 # Kinetic Mace's signature: charge -> Blowback (#84). `charge` is battle-scoped runtime state on
 # THIS instance (non-@export, mirrors SpringspearWeaponInstance.ready / Chainsword's rev timer):
-# resets each mission via make()/copy_equippable(), tracks per-physical-weapon. Reuses the #73
+# resets each mission via make()/copy_for_grant(), tracks per-physical-weapon. Reuses the #73
 # readiness seam, reinterpreted as a COUNTER rather than a bool (the generalization #84 flagged).
 #
 # Every question here is answered by the ATTACK'S OWN AUTHORED FLAGS (#108). This class used to

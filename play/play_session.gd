@@ -660,6 +660,13 @@ func _apply_attack(atk: AttackAction, events: Array[String]) -> void:
 		var weapon := actor.get_equipped_weapon() as WeaponInstance
 		if weapon != null:
 			weapon.consume_readiness_for(atk.fired_attack as WeaponAttackData)
+	# The vial burn (#697) belongs to that same post-fire economy and mirrors it for the same
+	# reason: this executor bypasses AttackAction.execute entirely, so without this line a headless
+	# cast draws on a charge and never spends it -- the play path handing back a stronger alchemist
+	# than the game does. The resolver already decided WHETHER the charge paid (it records one only
+	# when the attunement changed the damage), so there is nothing to judge here.
+	if not atk.is_secondary_hit and r.burned_vial != null:
+		actor.attunement = null
 
 # ---- mission metadata & outcome (#96, #612) ----
 

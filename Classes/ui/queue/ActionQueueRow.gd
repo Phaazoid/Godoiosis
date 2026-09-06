@@ -33,6 +33,7 @@ const BADGE_FELL := "Fell %d"
 const BADGE_DROWNED := "Drown"
 const BADGE_VOID := "Void"
 const BADGE_INSULATED := "Shrug"
+const BADGE_VIAL := "Vial"
 
 @onready var rail: ColorRect = $Frame/Rail
 @onready var actor_texture: TextureRect = $Frame/Pad/Body/Line/ActorTexture
@@ -163,6 +164,15 @@ func _build_consequence(outcome: ResolvedOutcome) -> void:
 		_add_event(BADGE_DROWNED, PlanResolver.DROWNING_POPUP)
 	if outcome.removed:
 		_add_event(BADGE_VOID, PlanResolver.VOID_POPUP)
+	# The vial BURN (#697). Law #2's plainest case: this cast spends an item out of the caster's
+	# inventory, and a plan that spent one the player never saw spent is the queue lying. Element-
+	# tinted rather than EVENT_TINT because the burn is an elemental fact, and the vial names itself
+	# on hover -- the badge stays one short word for the dock's sake.
+	if outcome.burned_vial != null:
+		var burned := outcome.burned_vial
+		var ink := QueueStyle.element_ink(burned.element) if not burned.is_alkahest \
+				else QueueStyle.ink(QueueStyle.Role.EVENT_TINT)
+		consequence.add_child(_chip(ink, BADGE_VIAL, UiText.wrap("Burns %s" % burned.display_name)))
 	# No visibility toggle: the container holds the line's horizontal EXPAND whether or not it has
 	# chips, which is what keeps the cancel X on the right edge of a row that has none. It WRAPS
 	# rather than clips, so a crowded hit costs the row a second line instead of losing a word.

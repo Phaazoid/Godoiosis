@@ -6,7 +6,7 @@
 [ext_resource type="Texture2D" path="res://Art/Units/MapSprites/Recruit_Moving.png" id="4_pyl5k"]
 [ext_resource type="Texture2D" path="res://Art/Units/Portraits/hair_mcgee_sky.png" id="5_7kq8x"]
 [ext_resource type="Script" path="res://Classes/units/UnitData.gd" id="6_aj7iu"]
-[ext_resource type="Script" path="res://Classes/items/EquippableData.gd" id="7_0vfyr"]
+[ext_resource type="Script" uid="uid://jytv7xrjv6l1" path="res://Classes/items/Item.gd" id="7_0vfyr"]
 [ext_resource type="Resource" path="res://Resources/Weapons/WeaponVariants/vroom.tres" id="8_an8jc"]
 
 [resource]

@@ -1,0 +1,11 @@
+[gd_resource type="Resource" script_class="VialData" format=3]
+
+[ext_resource type="Script" uid="uid://d17anh5wjjtq0" path="res://Classes/alchemy/VialData.gd" id="1_vial"]
+
+[resource]
+script = ExtResource("1_vial")
+element = 1
+is_alkahest = false
+display_name = "Vial of Sulfur"
+description = "Concentrated fire, held in glass. Broken over a working, it lends the cast a furnace it need not stand beside."
+weight = 1

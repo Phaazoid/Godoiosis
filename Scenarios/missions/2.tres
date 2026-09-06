@@ -5,7 +5,7 @@
 [ext_resource type="Script" uid="uid://cw4xhmsnr71ao" path="res://Classes/flow/ScenarioData.gd" id="2_nd7cn"]
 [ext_resource type="Script" uid="uid://8ryqq4dv281h" path="res://Classes/flow/TutorialStep.gd" id="3_s62aq"]
 [ext_resource type="Script" uid="uid://dbb0pgdet8qo0" path="res://Classes/flow/ScenarioUnitEntry.gd" id="4_stn5m"]
-[ext_resource type="Script" uid="uid://cbb6calgu7yux" path="res://Classes/items/EquippableData.gd" id="5_iwu1s"]
+[ext_resource type="Script" uid="uid://jytv7xrjv6l1" path="res://Classes/items/Item.gd" id="5_iwu1s"]
 [ext_resource type="Script" uid="uid://6vu10nf3p58m" path="res://Classes/units/StatEffect.gd" id="6_r1p0o"]
 [ext_resource type="Resource" path="res://Resources/Units/Bandit.tres" id="7_vhyx4"]
 [ext_resource type="Script" uid="uid://bu1j3q4jhqcpf" path="res://Classes/weapons/instances/DrillWeaponInstance.gd" id="8_35mrr"]

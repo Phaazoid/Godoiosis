@@ -14,6 +14,10 @@ class_name UnitInfoPanelControl
 @onready var squad_panel = $UnitInfoPanel/Margin/VBox/SquadInfoPanel
 @onready var states_bar = $UnitInfoPanel/Margin/VBox/UnitStatesBar
 
+# The player changed what this unit carries or holds. Forwarded rather than handled here: the
+# panel knows nothing about the queue, and the plan's numbers are the game's to re-resolve (#697).
+signal loadout_changed
+
 var current_unit: Unit
 var current_board: BoardContext   # kept so a live refresh can recompute terrain-dependent DEF
 
@@ -28,6 +32,7 @@ var _content_shown := false
 func _ready() -> void:
 	$UnitInfoPanel/Margin/VBox/HeaderRow/CloseButton.pressed.connect(clear)
 	inventory_panel.loadout_changed.connect(_refresh_derived_rows)
+	inventory_panel.loadout_changed.connect(loadout_changed.emit)
 
 func set_unit(unit: Unit, can_act := false, board: BoardContext = null):
 	if current_unit == unit:

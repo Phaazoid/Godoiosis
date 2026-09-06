@@ -238,6 +238,15 @@ func _wire_signals() -> void:
 	# The per-squad redraw clears the whole channel, so it has to know the standing set too.
 	overlay_manager.standing_rings_drawer = draw_standing_rings
 
+	# A LOADOUT EDIT MOVES THE QUEUE'S NUMBERS, so it has to re-resolve like any other edit (Law #2).
+	# The inspect panel's verbs mutate the unit on the spot -- Equip swaps which weapon a queued
+	# attack fires with, Use attunes a caster (#697) -- and until this wire existed the rows kept
+	# showing damage from before the change, right up until the next queue edit happened to refresh
+	# them. refresh_action_queue already refuses to re-derive mid-pass (#361), so this is safe on
+	# every edge the panel can be open on.
+	unit_info_panel.loadout_changed.connect(func() -> void:
+		refresh_action_queue(squad_manager.active_squad))
+
 	squad_action_queue_control.execute_requested.connect(_on_queue_execute_requested)
 	squad_action_queue_control.cancel_requested.connect(_on_queue_cancel_requested)
 	squad_action_queue_control.reorder_requested.connect(_on_queue_reorder)

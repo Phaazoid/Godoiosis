@@ -1,0 +1,11 @@
+[gd_resource type="Resource" script_class="VialData" format=3]
+
+[ext_resource type="Script" uid="uid://d17anh5wjjtq0" path="res://Classes/alchemy/VialData.gd" id="1_vial"]
+
+[resource]
+script = ExtResource("1_vial")
+element = 0
+is_alkahest = true
+display_name = "Vial of Alkahest"
+description = "The universal solvent, and so the universal source. It answers to any working at all, which is why so few of them exist."
+weight = 1

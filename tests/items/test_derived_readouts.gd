@@ -66,7 +66,7 @@ func test_a_retuned_plate_rewords_its_own_def_line() -> void:
 # --- the flavour half ------------------------------------------------------------------------
 
 # THE WIRE #745's body got wrong, and the reason the content pass could not have worked without it:
-# WeaponInstance.make() has never copied its template's description, and copy_equippable only copies
+# WeaponInstance.make() has never copied its template's description, and copy_for_grant only copies
 # instance-to-instance -- so authoring a line on a family reached nothing a player could hover.
 # describe() reads THROUGH, so re-wording a family re-words every weapon built on it, saved scenarios
 # included, with no migration.

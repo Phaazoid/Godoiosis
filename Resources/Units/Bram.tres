@@ -6,7 +6,6 @@
 [ext_resource type="Script" path="res://Classes/jobs/AbilityData.gd" id="2_t8aii"]
 [ext_resource type="Texture2D" path="res://Art/Units/MapSprites/Basic_Soldier_Moving.png" id="3_t8aii"]
 [ext_resource type="Texture2D" path="res://Art/Units/Portraits/hair_mcgee.png" id="4_1fjdo"]
-[ext_resource type="Script" path="res://Classes/items/EquippableData.gd" id="7_1fjdo"]
 
 [resource]
 script = ExtResource("1_v2kxy")

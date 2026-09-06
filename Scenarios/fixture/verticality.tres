@@ -4,7 +4,7 @@
 [ext_resource type="Script" path="res://Classes/flow/ScenarioData.gd" id="2_wrqg6"]
 [ext_resource type="Script" path="res://Classes/flow/TutorialStep.gd" id="3_211jy"]
 [ext_resource type="Script" path="res://Classes/flow/ScenarioUnitEntry.gd" id="4_3y2qc"]
-[ext_resource type="Script" path="res://Classes/items/EquippableData.gd" id="5_m6wh3"]
+[ext_resource type="Script" uid="uid://jytv7xrjv6l1" path="res://Classes/items/Item.gd" id="5_m6wh3"]
 [ext_resource type="Script" path="res://Classes/units/StatEffect.gd" id="6_hgf7g"]
 [ext_resource type="Resource" path="res://Resources/Units/Aldin.tres" id="7_x7u54"]
 [ext_resource type="Resource" path="res://Resources/Units/Torv.tres" id="8_khs2m"]

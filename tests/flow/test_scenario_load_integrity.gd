@@ -84,7 +84,7 @@ func test_inventory_weapons_resolve_main_attack() -> void:
 
 func test_inventory_weapon_families_are_mapped() -> void:
 	# #82: an unmapped weapon_type makes WeaponInstance.make() push_error and return null —
-	# a scenario holding one would break at copy_equippable time on load.
+	# a scenario holding one would break at copy_for_grant time on load.
 	var problems: Array[String] = []
 	var scenarios := _loaded_scenarios()
 	for path in scenarios:
@@ -107,7 +107,7 @@ func test_saved_weapons_are_family_instances() -> void:
 	# stored 40 of them as the bare base class until 2026-07-29 (#114's side finding).
 	#
 	# That was LATENT, not live — measured, not assumed: `apply_unit_state` adds each item via
-	# `copy_equippable()`, which routes through `make(template)` and rebuilds the correct
+	# `copy_for_grant()`, which routes through `make(template)` and rebuilds the correct
 	# subclass, so the board was always right and the saved file was always wrong. This case
 	# exists because that is a bad thing to depend on. Correctness rested entirely on every
 	# path copying rather than assigning, the file said something untrue about itself, and

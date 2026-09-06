@@ -2,7 +2,7 @@
 # readiness flags (#108): charge lives on the WEAPON instance (the #73 seam read as a counter),
 # an attack with builds_readiness banks +1 (capped), one with consumes_readiness spends 1, one with
 # requires_readiness is gated at 0, and the whole thing resets each mission via make()/
-# copy_equippable(). The family used to infer the spender from `knockback > 0` — a private second
+# copy_for_grant(). The family used to infer the spender from `knockback > 0` — a private second
 # answer to what these flags already say (design law #4) — so several cases below exist purely to
 # pin the decoupling. The displacement itself (shove distance, collisions, Law-#2 preview==exec)
 # is proven on a real board in tests/play/test_knockback.gd.
