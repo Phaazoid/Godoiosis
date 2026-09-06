@@ -1,12 +1,7 @@
 [gd_resource type="Resource" script_class="WeaponAttackData" format=3 uid="uid://b82qw8n45g5o2"]
 
-[ext_resource type="Script" uid="uid://cjmftk6nqeklw" path="res://Classes/weapons/patterns/AttackPattern.gd" id="1_wrrfn"]
 [ext_resource type="Script" uid="uid://ddqeee7njjjq2" path="res://Classes/weapons/WeaponAttackData.gd" id="2_wad"]
-
-[sub_resource type="Resource" id="Resource_hdsxh"]
-script = ExtResource("1_wrrfn")
-max_range = 0
-stamp = Array[Vector2i]([Vector2i(0, -1), Vector2i(0, -2), Vector2i(0, -3), Vector2i(0, -4)])
+[ext_resource type="Resource" uid="uid://c6rr2o2dxu4hj" path="res://Resources/AttackShapes/Line 4.tres" id="3_shape0"]
 
 [resource]
 script = ExtResource("2_wad")
@@ -19,6 +14,7 @@ consumes_readiness = true
 display_name = "Overwatch"
 damage_kind = 2
 power = 4
-attack_pattern = SubResource("Resource_hdsxh")
+max_range = 0
+attack_shape = ExtResource("3_shape0")
 can_overwatch = true
 metadata/_custom_type_script = "uid://ddqeee7njjjq2"

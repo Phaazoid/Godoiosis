@@ -10,12 +10,12 @@
 # MESSAGES rather than thresholds.
 extends GdUnitTestSuite
 
-const P := preload("res://tests/support/pattern_fixtures.gd")
+const P := preload("res://tests/support/shape_fixtures.gd")
 
 
 func _manhattan(max_range: int, min_range: int) -> WeaponAttackData:
 	var attack := WeaponAttackData.new()
-	attack.attack_pattern = P.point(max_range, min_range)
+	P.point(attack, max_range, min_range)
 	attack.display_name = "Probe"
 	return attack
 
@@ -36,10 +36,10 @@ func test_an_ordinary_range_pair_is_clean() -> void:
 
 
 func test_the_rule_is_selects_no_cells_and_not_min_above_max() -> void:
-	# A self-anchored pattern has no ring at all. It is judged by the same question, which is the
-	# point of asking Reach rather than reading a pattern's numbers -- and the hint says which half.
+	# A self-anchored attack has no ring at all. It is judged by the same question, which is the
+	# point of asking Reach rather than reading the numbers -- and the hint says which half.
 	var attack := WeaponAttackData.new()
-	attack.attack_pattern = P.line(0)
+	P.line(attack, 0)
 	var findings := AttackLint.check(attack)
 	assert_array(findings).is_not_empty()
 	assert_str(findings[0]["text"]).contains("stamp is empty")
@@ -48,7 +48,7 @@ func test_the_rule_is_selects_no_cells_and_not_min_above_max() -> void:
 func test_an_empty_stamp_at_range_is_blocked_as_landing_nowhere() -> void:
 	# The ring is intact, so the reaches-anything check passes; the stamp is what is empty (#803).
 	var attack := _manhattan(2, 1)
-	attack.attack_pattern.stamp = []
+	attack.attack_shape = P.shape([] as Array[Vector2i])
 	var findings := AttackLint.check(attack)
 	assert_int(findings.size()).is_equal(1)
 	assert_int(findings[0]["severity"]).is_equal(AttackLint.Severity.BLOCKS)
@@ -57,13 +57,15 @@ func test_an_empty_stamp_at_range_is_blocked_as_landing_nowhere() -> void:
 
 func test_a_stamp_beyond_the_aimed_cell_is_clean() -> void:
 	var attack := _manhattan(2, 1)
-	attack.attack_pattern.stamp = [Vector2i.ZERO, Vector2i.UP, Vector2i.DOWN, Vector2i.LEFT, Vector2i.RIGHT]
+	var plus: Array[Vector2i] = [Vector2i.ZERO, Vector2i.UP, Vector2i.DOWN, Vector2i.LEFT, Vector2i.RIGHT]
+	attack.attack_shape = P.shape(plus)
 	assert_array(AttackLint.check(attack)).is_empty()
 
 
-func test_a_pattern_less_attack_is_fireable_rather_than_flagged() -> void:
-	# Bare fists reach adjacency through Reach's own fallback -- flagging them would be a false
-	# positive, and is exactly what reading the pattern instead of Reach would produce.
+func test_a_shapeless_attack_is_fireable_rather_than_flagged() -> void:
+	# A shapeless attack covers the cell it is aimed at, and bare fists reach adjacency through
+	# Reach own fallback -- flagging either would be a false positive, and is exactly what reading
+	# the numbers instead of asking Reach would produce.
 	assert_array(AttackLint.check(WeaponAttackData.new())).is_empty()
 	assert_array(AttackLint.check(null)).is_empty()
 

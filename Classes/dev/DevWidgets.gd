@@ -633,10 +633,15 @@ static func _is_grid_field(resource: Resource, prop_name: String) -> bool:
 	return fields.has(prop_name)
 
 
-# The sentence under the grid, answered by the RESOURCE: the widget knows how to draw a centred
-# grid, and only the pattern knows what its own centre means. "" if it does not say.
+# The sentence under the grid, answered by a RESOURCE: the widget knows how to draw a centred grid,
+# and only the content knows what its own centre means. "" if it does not say.
+#
+# Not necessarily the resource holding the FIELD, which is why add_cell_grid takes a caption source
+# (#808): what a stamp's centre means is the ANCHOR rule, and the anchor is derived from the RANGE.
+# Since the range moved onto AttackData and the stamp into a shared AttackShape, the shape cannot
+# answer for its own grid -- the attack firing it can, and does.
 static func _grid_caption(resource: Resource, prop_name: String) -> String:
-	if not resource.has_method("grid_caption"):
+	if resource == null or not resource.has_method("grid_caption"):
 		return ""
 	return str(resource.call("grid_caption", prop_name))
 
@@ -671,8 +676,10 @@ static func _stamp_span(cells: Array[Vector2i]) -> int:
 # NOTHING here rebuilds the form. A cell restyles itself in place; the stepper and the line rebuild
 # only the cells, and neither is a cell. That is #741's rule -- a redraw run inside a row's own
 # signal tries to free the node that emitted it -- and it is why no path needs a deferral.
-static func add_cell_grid(container: Node, label_text: String, resource: Resource, prop_name: String) -> void:
+static func add_cell_grid(container: Node, label_text: String, resource: Resource, prop_name: String,
+		caption_source: Resource = null) -> void:
 	add_label(container, label_text)
+	var captioner: Resource = caption_source if caption_source != null else resource
 	var state := {"span": _stamp_span(_cells_of(resource, prop_name))}
 
 	var stepper := HBoxContainer.new()
@@ -696,7 +703,7 @@ static func add_cell_grid(container: Node, label_text: String, resource: Resourc
 	container.add_child(grid)
 
 	var caption := Label.new()
-	caption.text = _grid_caption(resource, prop_name)
+	caption.text = _grid_caption(captioner, prop_name)
 	container.add_child(caption)
 
 	# The redraw rides the same Dictionary, which is what lets the coordinate line's handler reach a
@@ -730,11 +737,11 @@ static func add_cell_grid(container: Node, label_text: String, resource: Resourc
 	# rebuilt form would otherwise leave it firing into a freed node.
 	if caption.text != "":
 		var sync := func() -> void:
-			caption.text = _grid_caption(resource, prop_name)
-		resource.changed.connect(sync)
+			caption.text = _grid_caption(captioner, prop_name)
+		captioner.changed.connect(sync)
 		caption.tree_exiting.connect(func() -> void:
-			if resource.changed.is_connected(sync):
-				resource.changed.disconnect(sync))
+			if captioner.changed.is_connected(sync):
+				captioner.changed.disconnect(sync))
 
 	state["redraw"].call()
 
@@ -1069,7 +1076,7 @@ const ADOPT_SKIP := ["resource_path", "resource_name", "resource_local_to_scene"
 #
 # Through a duplicate(true) SNAPSHOT rather than straight off `edited`: a deep copy leaves path'd
 # sub-resources shared, so ext_resource references survive the save, while giving `live` its OWN
-# inline ones (an AttackPattern, a nested effect). Assigning `edited`'s objects directly would leave
+# inline ones (an unnamed AttackShape, a nested effect). Assigning `edited`'s objects directly would leave
 # the editor's still-open form sharing them, and later keystrokes would then reach the board on
 # nested fields but not on scalars -- half-live, which is worse than neither.
 #

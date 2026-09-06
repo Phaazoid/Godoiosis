@@ -10,7 +10,25 @@ extends Resource
 
 @export var display_name: String = ""
 @export var power: int = 0
-@export var attack_pattern: AttackPattern
+# THE GEOMETRY, in two halves (#808). RANGE is where the attack may be AIMED, in Manhattan steps,
+# and lives here; SHAPE is the set of cells it then covers and lives in its own shared, named
+# resource, so a line fired at range and a line swung in melee are ONE shape with two ranges.
+#
+# THE ANCHOR IS DERIVED FROM THE RANGE, never a flag (dev, 2026-09-06):
+#   max_range == 0  -- the shape sits on the ATTACKER and the aim is a FACING: the player points a
+#                      cardinal and the whole shape fires that way (the directional path, #25).
+#   max_range >= 1  -- the shape sits on the AIMED cell, and the aim is that cell.
+# Either way the shape is TURNED to the aim's cardinal. Reach owns the placement, since answering
+# "where does this land" needs both halves and Reach is where that question already lives.
+#
+# A NULL SHAPE COVERS THE ANCHOR CELL ALONE. That is the single-target attack -- most of the
+# authored roster -- and it is deliberately not a file: a "Single" shape in the library would say
+# nothing about the variety the library exists to show. An EMPTY stamp is a different thing and
+# covers nothing at all, which AttackLint blocks.
+@export var min_range := 1
+@export var max_range := 1
+@export var max_and_a_half := false   # .5 step: bevel in the diagonal corners of the max ring
+@export var attack_shape: AttackShape
 @export var can_counter := true
 @export var hits_allies := false
 @export var hits_self := false
@@ -115,6 +133,22 @@ func targets_text() -> String:
 	return "(tile)" if targets == EquippableData.TargetMode.MAP else "(unit)"
 
 
+
+# Does this attack aim by FACING rather than at a cell? Derived from the range and never stored --
+# game.gd's targeting and the hover branch read it through Reach.is_directional_attack, and the
+# AI's watch picker loops the four facings when it answers true. See #25.
+func is_directional() -> bool:
+	return max_range == 0
+
+# The sentence under the Attack Editor's stamp grid, which has to say what the CENTRE is -- and
+# that is the ANCHOR rule, so the attack answers it rather than the widget or the shape. The SHAPE
+# cannot: it holds no range, which is the whole reason this lives here after #808. Reads through
+# is_directional() so the caption cannot drift from the rule it describes.
+func grid_caption(_field: String) -> String:
+	if is_directional():
+		return "Centre is the attacker. Aimed by facing."
+	return "Centre is the aimed cell. Aimed at a cell."
+
 # What each field MEANS, for the dev tools' reflective editor (#473). Every field above carries a
 # comment already, but a comment reaches nobody editing in the running game -- the Attack Editor
 # draws these rows from get_property_list() and had no text on any of them, which is how a range
@@ -128,7 +162,10 @@ func targets_text() -> String:
 static func property_tips() -> Dictionary:
 	return {
 		"power": "Base damage before scaling. A weapon attack scales this off its weapon's stat blend and fitted mods; a carving scales it off the wielder's aura.",
-		"attack_pattern": "The geometry: a RANGE (where it may be aimed) plus a STAMP (the cells it then covers). Pick AttackPattern here if the attack has none yet; its fields appear indented underneath.",
+		"min_range": "The CLOSEST cell this attack can be aimed at, in Manhattan steps. 1 = adjacent. 0 = the attacker's own cell as well (a self-heal). Above 1 leaves a dead zone it cannot hit at all, which is how a carbine cannot shoot what has closed on it.\nMUST NOT EXCEED Max Range: nothing refuses the pair, the attack simply reaches no cells and stops showing any range at all.",
+		"max_range": "The FURTHEST cell this attack can be aimed at, in Manhattan steps (no diagonals). RAISE THIS to make an attack longer-ranged.\n0 is special: the shape sits on the ATTACKER and the attack aims a FACING -- the player points a direction and the whole shape fires that way. That is what a cleave or a line is.",
+		"max_and_a_half": "Adds a half step to the outer ring, bevelling its diagonal corners -- a reach of 2 and a half rather than 2 or 3.",
+		"attack_shape": "The SHAPE this attack covers once aimed, picked from the shared library. Shapes are shared BY REFERENCE: editing one changes every attack that uses it. No shape at all = the aimed cell alone.",
 		"can_counter": "May this attack be used when countering? A weapon always counters with its MAIN attack whatever is picked, so this only matters on a main.",
 		"hits_allies": "Splash reaches your own side too, not just enemies.",
 		"hits_self": "The attacker is a legal victim of its own attack.",

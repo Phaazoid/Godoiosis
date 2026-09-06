@@ -1,12 +1,6 @@
 [gd_resource type="Resource" script_class="WeaponAttackData" format=3]
 
-[ext_resource type="Script" uid="uid://cjmftk6nqeklw" path="res://Classes/weapons/patterns/AttackPattern.gd" id="1_sqb7e"]
 [ext_resource type="Script" uid="uid://ddqeee7njjjq2" path="res://Classes/weapons/WeaponAttackData.gd" id="2_4i624"]
-
-[sub_resource type="Resource" id="Resource_juf0b"]
-script = ExtResource("1_sqb7e")
-min_range = 2
-max_range = 3
 
 [resource]
 script = ExtResource("2_4i624")
@@ -17,4 +11,5 @@ scaling_blend = Dictionary[int, int]({
 display_name = "Loose"
 damage_kind = 2
 power = 3
-attack_pattern = SubResource("Resource_juf0b")
+min_range = 2
+max_range = 3

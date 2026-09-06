@@ -25,7 +25,6 @@ func after_test() -> void:
 
 func _attack() -> WeaponAttackData:
 	var attack := WeaponAttackData.new()
-	attack.attack_pattern = AttackPattern.new()
 	return attack
 
 
@@ -41,7 +40,7 @@ func _labels(node: Node, found: Dictionary) -> Dictionary:
 
 
 func test_a_tip_comes_off_the_resources_own_table() -> void:
-	var tip := DevWidgets.property_tip(AttackPattern.new(), "min_range")
+	var tip := DevWidgets.property_tip(AttackData.new(), "min_range")
 	assert_str(tip).contains("CLOSEST")
 
 
@@ -53,7 +52,7 @@ func test_a_tip_is_found_on_a_base_class_table() -> void:
 
 func test_a_field_with_no_entry_answers_empty_rather_than_failing() -> void:
 	assert_str(DevWidgets.property_tip(WeaponAttackData.new(), "not_a_field")).is_equal("")
-	assert_str(DevWidgets.property_tip(AttackPattern.new(), "anything")).is_equal("")
+	assert_str(DevWidgets.property_tip(AttackShape.new(), "anything")).is_equal("")
 
 
 func test_the_text_reaches_the_built_control() -> void:
@@ -95,7 +94,7 @@ func test_every_field_the_attack_editor_draws_carries_text() -> void:
 	var missing: Array[String] = []
 	_untipped(WeaponAttackData.new(), AttackEditorTool.POOL_SKIP, missing)
 	_untipped(TransmutationData.new(), AttackEditorTool.CARVING_SKIP, missing)
-	_untipped(AttackPattern.new(), [], missing)
+	_untipped(AttackShape.new(), [], missing)
 	assert_array(missing).is_empty()
 
 

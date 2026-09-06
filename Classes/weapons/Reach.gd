@@ -20,9 +20,17 @@ class_name Reach
 # Made static 2026-07-26, matching the RulesService/GridUtils precedent; the Unit is now just the
 # first parameter, and the scene tree carries one fewer node per unit.
 #
-# A null attack, or one with no pattern (bare fists, a rune with nothing channelable), falls back to
-# adjacency: selectable = Manhattan range 1, affected = the aimed cell alone. That fallback is
-# load-bearing in the tests -- a pattern-less weapon is how they get trivial geometry.
+# A null attack (bare fists, a rune with nothing channelable) falls back to adjacency: selectable =
+# Manhattan range 1, affected = the aimed cell alone. That fallback is load-bearing in the tests --
+# an attack-less weapon is how they get trivial geometry.
+#
+# GEOMETRY LIVES HERE SINCE #808, because it takes BOTH halves of an attack: the RANGE, which is
+# AttackData's, and the SHAPE, which is a shared AttackShape resource with no range of its own.
+# AttackPattern used to hold the pair and answer these three questions itself; splitting it so a
+# shape can be named and reused left nothing that could answer them alone, and Reach is where
+# "where does this attack reach" already lived. A NULL SHAPE COVERS THE ANCHOR CELL ALONE, which is
+# what makes the old pattern-less fallback the ordinary case rather than a second branch: an attack
+# with no shape and the default range 1 reaches exactly what a null attack does.
 #
 # Verticality (#258): the aim question also asks the attack's own vertical rule (MELEE = the step rule,
 # up/down tolerance for everything else) AND walks its sight trace -- can_hit_cell_from takes the
@@ -36,11 +44,19 @@ class_name Reach
 # the legality check and the in-game bead readout evaluate, so what the player sees can never
 # disagree with what the gate decides.
 
-static func get_attack_cells_from(unit: Unit, origin_cell: Vector2i, target_hint_cell: Vector2i, attack: AttackData) -> Array[Vector2i]:
-	var pattern := _pattern_of(attack)
-	if pattern == null:
+# The cells an aim may be DECLARED at. Self-anchored: the shape placed for the facing the hint
+# implies -- the pointed cell need not be a member, and a hint with no cardinal answers empty (a dud
+# order, refused upstream). Anchored: the range ring, board-blind.
+static func get_attack_cells_from(_unit: Unit, origin_cell: Vector2i, target_hint_cell: Vector2i, attack: AttackData) -> Array[Vector2i]:
+	if attack == null:
 		return GridUtils.cells_within_manhattan_range(origin_cell, 1)
-	return pattern.get_selectable_cells(unit, origin_cell, target_hint_cell)
+	if attack.is_directional():
+		var dir := GridUtils.cardinal_direction_i_between(origin_cell, target_hint_cell)
+		if dir == Vector2i.ZERO:
+			return []
+		return _place(attack, origin_cell, dir)
+	var all_cells := GridUtils.cells_within_blended_range(origin_cell, attack.max_range, attack.max_and_a_half)
+	return all_cells.filter(func(cell): return GridUtils.manhattan_distance(origin_cell, cell) >= attack.min_range)
 
 # Would an aim at target_cell AFFECT target_cell? A point aim: in reach AND past the vertical gate.
 # A directional aim (#756): the cell survives the truncated spread of the facing it implies.
@@ -204,7 +220,7 @@ static func blocked_cells_from(unit: Unit, origin_cell: Vector2i, attack: Attack
 	var union := get_all_attack_cells_from(unit, origin_cell, attack)
 	if is_directional_attack(attack):
 		var reachable: Dictionary[Vector2i, bool] = {}
-		for dir in AttackPattern.CARDINAL_DIRECTIONS:
+		for dir in GridUtils.CARDINAL_DIRECTIONS:
 			for cell in get_affected_cells_from(unit, origin_cell, origin_cell + dir, attack, board):
 				reachable[cell] = true
 		for cell in union:
@@ -216,12 +232,19 @@ static func blocked_cells_from(unit: Unit, origin_cell: Vector2i, attack: Attack
 			blocked.append(cell)
 	return blocked
 
-# Union over all four facings — what the red targeting overlay draws.
+# Union over all four facings — what the red targeting overlay draws. An anchored attack's ring does
+# not turn with a facing, so it is asked once.
 static func get_all_attack_cells_from(unit: Unit, origin_cell: Vector2i, attack: AttackData) -> Array[Vector2i]:
-	var pattern := _pattern_of(attack)
-	if pattern == null:
+	if attack == null:
 		return GridUtils.cells_within_manhattan_range(origin_cell, 1)
-	return pattern.get_all_selectable_cells(unit, origin_cell)
+	if not attack.is_directional():
+		return get_attack_cells_from(unit, origin_cell, origin_cell, attack)
+	var cells: Array[Vector2i] = []
+	for dir in GridUtils.CARDINAL_DIRECTIONS:
+		for cell in get_attack_cells_from(unit, origin_cell, origin_cell + dir, attack):
+			if not cells.has(cell):
+				cells.append(cell)
+	return cells
 
 # The AoE footprint an aim at target_cell actually lands on. A directional SPREAD is TRUNCATED by
 # the terrain (#756, dev 2026-09-04: "truncate, and all 8") -- see _truncate below. A point aim's
@@ -230,14 +253,22 @@ static func get_all_attack_cells_from(unit: Unit, origin_cell: Vector2i, attack:
 # The board is REQUIRED, not optional -- the movement_cost precedent an optional board would break,
 # since a footprint answered without one is a different answer to the same question. A null board
 # reads flat, which is what leaves every heights-less fixture and the flat 2D view unchanged.
-static func get_affected_cells_from(unit: Unit, origin_cell: Vector2i, target_cell: Vector2i, attack: AttackData, board: BoardContext) -> Array[Vector2i]:
-	var pattern := _pattern_of(attack)
-	if pattern == null:
+static func get_affected_cells_from(_unit: Unit, origin_cell: Vector2i, target_cell: Vector2i, attack: AttackData, board: BoardContext) -> Array[Vector2i]:
+	if attack == null:
 		return [target_cell]
-	var cells := pattern.get_affected_cells(unit, origin_cell, target_cell)
-	if board == null or not pattern.is_directional():
+	var dir := GridUtils.cardinal_direction_i_between(origin_cell, target_cell)
+	var cells: Array[Vector2i] = []
+	if attack.is_directional():
+		if dir == Vector2i.ZERO:
+			return []
+		cells = _place(attack, origin_cell, dir)
+	else:
+		# An aim at the attacker's OWN cell (min_range 0, a self-heal) has no cardinal and places the
+		# shape unturned, grid-up as forward.
+		cells = _place(attack, target_cell, AttackShape.FORWARD if dir == Vector2i.ZERO else dir)
+	if board == null or not attack.is_directional():
 		return cells
-	return _truncate(cells, origin_cell, GridUtils.cardinal_direction_i_between(origin_cell, target_cell), attack, board)
+	return _truncate(cells, origin_cell, dir, attack, board)
 
 
 # THE TRUNCATION (#756). A spread advances as a FRONT: each lane is judged from near to far, and the
@@ -246,11 +277,11 @@ static func get_affected_cells_from(unit: Unit, origin_cell: Vector2i, target_ce
 # in a dip past a ledge the shot cannot clear has a clean line of its own and is still unreachable.
 #
 # The predecessor is `cell - dir`, which for a lane's FIRST cell is the cell beside the shooter and
-# not in the spread at all -- ungated, so a lane always gets to try its first cell. The pattern
-# EMITS near-to-far along the facing (AttackPattern.place sorts its stamp so, #803 -- a rule, not
-# a habit), so a predecessor is always decided before its successor whatever shape the stamp is.
-# A zero direction (an aim at the shooter's own cell) truncates nothing -- the
-# pattern already answered empty for it.
+# not in the spread at all -- ungated, so a lane always gets to try its first cell. The shape EMITS
+# near-to-far along the facing (AttackShape.place sorts its stamp so, #803 -- a rule, not a habit),
+# so a predecessor is always decided before its successor whatever shape the stamp is.
+# A zero direction (an aim at the shooter's own cell) truncates nothing -- the footprint above
+# already answered empty for it.
 static func _truncate(cells: Array[Vector2i], origin_cell: Vector2i, dir: Vector2i, attack: AttackData, board: BoardContext) -> Array[Vector2i]:
 	if dir == Vector2i.ZERO:
 		return cells
@@ -284,8 +315,15 @@ static func _lane_base(cell: Vector2i, origin_cell: Vector2i, dir: Vector2i) -> 
 # targets a DIRECTION (the whole spread fires), a point attack needs the clicked cell in range.
 # Takes only the attack -- the unit was never consulted for this question. See #25.
 static func is_directional_attack(attack: AttackData) -> bool:
-	var pattern := _pattern_of(attack)
-	return pattern != null and pattern.is_directional()
+	return attack != null and attack.is_directional()
 
-static func _pattern_of(attack: AttackData) -> AttackPattern:
-	return attack.attack_pattern if attack != null else null
+
+# The attack's shape set down on `anchor`, turned to `dir`. A NULL SHAPE IS THE ANCHOR CELL ALONE
+# (#808) -- most authored attacks are single-target and deliberately name no shape file, so this is
+# the ordinary case rather than a fallback. An EMPTY stamp is a different thing and covers nothing,
+# which AttackLint blocks.
+static func _place(attack: AttackData, anchor: Vector2i, dir: Vector2i) -> Array[Vector2i]:
+	var shape := attack.attack_shape
+	if shape == null:
+		return [anchor]
+	return shape.place(anchor, dir)

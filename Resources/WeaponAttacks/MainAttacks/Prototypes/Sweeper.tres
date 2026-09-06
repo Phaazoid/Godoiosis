@@ -1,12 +1,7 @@
 [gd_resource type="Resource" script_class="WeaponAttackData" format=3]
 
-[ext_resource type="Script" uid="uid://cjmftk6nqeklw" path="res://Classes/weapons/patterns/AttackPattern.gd" id="1_qgxbu"]
 [ext_resource type="Script" uid="uid://ddqeee7njjjq2" path="res://Classes/weapons/WeaponAttackData.gd" id="2_ij5xu"]
-
-[sub_resource type="Resource" id="Resource_5w2v2"]
-script = ExtResource("1_qgxbu")
-max_range = 0
-stamp = Array[Vector2i]([Vector2i(-1, -1), Vector2i(0, -1), Vector2i(1, -1)])
+[ext_resource type="Resource" uid="uid://dvheq8kre3rrk" path="res://Resources/AttackShapes/Wide 3.tres" id="3_shape0"]
 
 [resource]
 script = ExtResource("2_ij5xu")
@@ -17,4 +12,5 @@ scaling_blend = Dictionary[int, int]({
 display_name = "Cleave"
 damage_kind = 1
 power = 3
-attack_pattern = SubResource("Resource_5w2v2")
+max_range = 0
+attack_shape = ExtResource("3_shape0")

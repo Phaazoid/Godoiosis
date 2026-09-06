@@ -1,19 +1,14 @@
 [gd_resource type="Resource" script_class="WeaponAttackData" format=3]
 
-[ext_resource type="Script" uid="uid://cjmftk6nqeklw" path="res://Classes/weapons/patterns/AttackPattern.gd" id="1_orbn3"]
 [ext_resource type="Script" path="res://Classes/weapons/WeaponAttackData.gd" id="2_p0lyu"]
-
-[sub_resource type="Resource" id="Resource_iwbj5"]
-script = ExtResource("1_orbn3")
-max_range = 10
-max_and_a_half = true
 
 [resource]
 script = ExtResource("2_p0lyu")
 display_name = "Super Gun"
 damage_kind = 2
 power = 9
-attack_pattern = SubResource("Resource_iwbj5")
+max_range = 10
+max_and_a_half = true
 hits_allies = true
 scaling_blend = Dictionary[int, int]({
 4: 40,

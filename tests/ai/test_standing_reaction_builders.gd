@@ -10,7 +10,7 @@
 # every walk down its unreachable fallback and measure nothing.
 extends GdUnitTestSuite
 
-const P := preload("res://tests/support/pattern_fixtures.gd")
+const P := preload("res://tests/support/shape_fixtures.gd")
 
 const H := preload("res://tests/support/squad_fixtures.gd")
 const BB := preload("res://play/board_builder.gd")
@@ -55,7 +55,7 @@ func _watch_weapon(length := 1) -> WeaponInstance:
 	watch.display_name = "Watch"
 	watch.power = 3
 	watch.can_overwatch = true
-	watch.attack_pattern = P.line(length)
+	P.line(watch, length)
 	var extras: Array[WeaponAttackData] = [watch]
 	template.extra_attacks = extras
 	return WeaponInstance.make(template)

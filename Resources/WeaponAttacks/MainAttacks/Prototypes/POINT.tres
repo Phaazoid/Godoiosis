@@ -1,12 +1,7 @@
 [gd_resource type="Resource" script_class="WeaponAttackData" format=3]
 
-[ext_resource type="Script" uid="uid://cjmftk6nqeklw" path="res://Classes/weapons/patterns/AttackPattern.gd" id="1_35l5w"]
 [ext_resource type="Script" uid="uid://ddqeee7njjjq2" path="res://Classes/weapons/WeaponAttackData.gd" id="2_c5p18"]
-
-[sub_resource type="Resource" id="Resource_mrekx"]
-script = ExtResource("1_35l5w")
-max_range = 0
-stamp = Array[Vector2i]([Vector2i(0, -1), Vector2i(0, -2), Vector2i(0, -3), Vector2i(0, -4), Vector2i(0, -5), Vector2i(0, -6)])
+[ext_resource type="Resource" uid="uid://d1jjr7scvgdqe" path="res://Resources/AttackShapes/Line 6.tres" id="3_shape0"]
 
 [resource]
 script = ExtResource("2_c5p18")
@@ -17,5 +12,6 @@ scaling_blend = Dictionary[int, int]({
 display_name = "Lance"
 damage_kind = 2
 power = 5
-attack_pattern = SubResource("Resource_mrekx")
+max_range = 0
+attack_shape = ExtResource("3_shape0")
 hits_allies = true

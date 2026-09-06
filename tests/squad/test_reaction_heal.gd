@@ -31,6 +31,7 @@
 extends GdUnitTestSuite
 
 const H := preload("res://tests/support/squad_fixtures.gd")
+const P := preload("res://tests/support/shape_fixtures.gd")
 
 const PLAYER := Team.Faction.PLAYER
 const ENEMY := Team.Faction.ENEMY
@@ -54,6 +55,12 @@ func _make_healer(unit: Unit, power: int = 4, hits_self: bool = false) -> void:
 	weapon.template.main_attack.heals = true
 	weapon.template.main_attack.hits_allies = true
 	weapon.template.main_attack.hits_self = hits_self
+	if hits_self:
+		# Reaching your own cell is a RANGE question and hits_self is a VICTIM one, so a healer that
+		# patches itself needs both. It used to need only the flag, because an attack with no
+		# geometry fell back to a Manhattan-1 ring that happened to include the origin; since #808
+		# every attack has a real range and min_range 1 means adjacent, so the self-aim is authored.
+		weapon.template.main_attack.min_range = 0
 	unit.equipped_weapon = weapon
 
 # Queue one real attack and resolve the attacker's whole plan — the production path, so victim
@@ -94,8 +101,8 @@ func test_a_reacting_healer_heals_a_hurt_squadmate_and_never_the_attacker() -> v
 		assert_object(reaction.target).is_not_same(attacker)
 	_break_volleys(plan)
 
-# hits_self (#123) is what makes the caster its own legal target, and Manhattan-1 reach already
-# covers its own cell. A lone attacked healer with nobody else to help patches itself up.
+# hits_self (#123) is what makes the caster its own legal target, and min_range 0 is what puts its
+# own cell in reach -- see _make_healer. A lone attacked healer with nobody else to help patches itself up.
 func test_a_healer_heals_itself_when_it_is_the_only_valid_target() -> void:
 	var attacker := H.spawn_solo(self, _sm, ENEMY, Vector2i(0, 0))
 	var healer := H.spawn_solo(self, _sm, PLAYER, Vector2i(1, 0), TOUGH_LEADER)
@@ -133,7 +140,11 @@ func test_an_aoe_reaction_heal_does_not_heal_the_enemy_in_its_blast() -> void:
 	var healer := H.spawn_solo(self, _sm, PLAYER, Vector2i(2, 0))
 	_sm.join_squad(healer, defender.squad)
 	_make_healer(healer)
-	(healer.get_equipped_weapon() as WeaponInstance).template.main_attack.attack_pattern = TwoCellBlast.new()
+	# The aimed cell plus the one beyond it, along the aim -- a two-cell blast, so the test exercises
+	# the volley and not the geometry. A stamp turns with the aim, which on this axis-aligned board is
+	# exactly what the retired hand-rolled pattern spelled as a fixed world direction.
+	var blast: Array[Vector2i] = [Vector2i.ZERO, Vector2i(0, -1)]
+	P.stamped((healer.get_equipped_weapon() as WeaponInstance).template.main_attack, 3, blast)
 	defender.set_current_hp(20)
 
 	var plan := _resolve_attack_on(attacker, defender, [attacker, defender, healer] as Array[Unit])
@@ -399,12 +410,6 @@ func test_a_heal_aimed_at_an_enemy_still_draws_their_reaction() -> void:
 
 # A fixed 2-cell blast (the aimed cell + the cell to its LEFT), borrowed from test_counter_aoe.gd:
 # exercises the reaction volley's victim gather rather than real pattern geometry.
-class TwoCellBlast extends AttackPattern:
-	func get_affected_cells(_user: Unit, _origin_cell: Vector2i, target_cell: Vector2i) -> Array[Vector2i]:
-		return [target_cell, target_cell + Vector2i.LEFT]
-	func get_selectable_cells(_user: Unit, origin_cell: Vector2i, _facing_hint: Vector2i) -> Array[Vector2i]:
-		return GridUtils.cells_within_manhattan_range(origin_cell, 3)
-
 # Volley siblings link into a shared self-referential array (a RefCounted cycle, #35) — break both
 # lists so the derived plan doesn't leak after the test.
 func _break_volleys(plan: ResolvedPlan) -> void:

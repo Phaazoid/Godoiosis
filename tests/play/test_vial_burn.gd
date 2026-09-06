@@ -10,7 +10,7 @@
 # are what say so.
 extends GdUnitTestSuite
 
-const P := preload("res://tests/support/pattern_fixtures.gd")
+const P := preload("res://tests/support/shape_fixtures.gd")
 
 const BoardBuilder := preload("res://play/board_builder.gd")
 const PlaySession := preload("res://play/play_session.gd")
@@ -34,7 +34,7 @@ func _fireball() -> TransmutationData:
 	t.power = 4
 	t.sigils.assign([FIRE])
 	t.targets = EquippableData.TargetMode.UNIT
-	t.attack_pattern = P.point(2)
+	P.point(t, 2)
 	return t
 
 # An alchemist with fire aura, a rune carrying one fireball, and a foe two cells away. No water,

@@ -121,12 +121,13 @@ func test_a_family_with_no_main_can_still_gain_extras() -> void:
 
 # --- a new attack arrives with geometry (#804 follow-up, found in play) -----------------------
 
-# The bug: New built a bare WeaponAttackData, and the ONLY way to give it a pattern was the
-# resource picker -- which could not do it (see test_stamp_grid.gd's dead-end cases). So a brand
-# new attack could never be given a shape at all, and the stamp grid never appeared.
+# The bug: New built a bare WeaponAttackData, and the ONLY way to give it geometry was the resource
+# picker -- which could not do it (see test_stamp_grid.gd's dead-end cases). So a brand new attack
+# could never be given a shape at all, and the stamp grid never appeared.
 #
-# Driven through the real button, not the handler, because "the row exists and does nothing" is the
-# exact failure this whole arc keeps paying for.
+# Since #808 a new attack is fireable the moment it exists (range 1, no shape = the aimed cell), and
+# the SHAPE row is the door to a footprint. Both halves are driven through the real controls, because
+# "the row exists and does nothing" is the exact failure this whole arc keeps paying for.
 func test_a_brand_new_attack_arrives_with_geometry_to_draw_on() -> void:
 	_editor._on_weapon_attack_mode_selected()   # the MODE is setup, not the thing under test
 	await await_idle_frame()
@@ -134,20 +135,58 @@ func test_a_brand_new_attack_arrives_with_geometry_to_draw_on() -> void:
 	await await_idle_frame()
 	var made: AttackData = _editor.current
 	assert_object(made).is_not_null()
-	assert_object(made.attack_pattern).override_failure_message(
-		"New made an attack with no pattern -- there is no way to give it one, so its grid never draws"
-	).is_not_null()
+	assert_int(made.max_range).override_failure_message(
+		"New made an attack with no reach, so nothing can be aimed and no grid is worth drawing"
+	).is_greater(0)
+	assert_object(made.attack_shape).override_failure_message(
+		"New should arrive SHAPELESS -- a single-target attack, which the shape row then adds to"
+	).is_null()
 
 
-func test_the_new_attacks_grid_is_actually_drawn() -> void:
-	# The pattern existing is not the same as the row appearing: #803 shipped a field nothing drew.
+func test_starting_a_new_shape_draws_the_grid() -> void:
+	# A shape existing is not the same as the row appearing: #803 shipped a field nothing drew, and
+	# #807 shipped a picker with no reachable row. So this presses the real one.
 	_editor._on_weapon_attack_mode_selected()   # the MODE is setup, not the thing under test
 	await await_idle_frame()
 	_editor.new_button.emit_signal("pressed")
 	await await_idle_frame()
 	assert_object(_find_class(_editor, "GridContainer")).override_failure_message(
-		"no stamp grid in the form after New"
+		"a shapeless attack drew a stamp grid over nothing"
+	).is_null()
+
+	var picker := _shape_picker()
+	assert_object(picker).override_failure_message("no shape picker in the form").is_not_null()
+	var row := -1
+	for i in picker.item_count:
+		if picker.get_item_text(i) == AttackEditorTool.NEW_SHAPE_KEY:
+			row = i
+	assert_int(row).override_failure_message("no (new shape) row to pick").is_greater(0)
+	picker.item_selected.emit(row)
+	await await_idle_frame()
+
+	assert_object(_editor.current.attack_shape).override_failure_message(
+		"picking (new shape) assigned nothing -- the control is a dead end again"
 	).is_not_null()
+	assert_object(_find_class(_editor, "GridContainer")).override_failure_message(
+		"no stamp grid in the form after starting a shape"
+	).is_not_null()
+
+
+func _shape_picker() -> OptionButton:
+	for node in _all_class(_editor, "OptionButton", []):
+		var option := node as OptionButton
+		for i in option.item_count:
+			if option.get_item_text(i) == AttackEditorTool.NEW_SHAPE_KEY:
+				return option
+	return null
+
+
+func _all_class(node: Node, klass: String, found: Array[Node]) -> Array[Node]:
+	for child in node.get_children():
+		if child.is_class(klass):
+			found.append(child)
+		_all_class(child, klass, found)
+	return found
 
 
 func _find_class(node: Node, klass: String) -> Node:

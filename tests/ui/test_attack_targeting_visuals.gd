@@ -17,7 +17,7 @@
 # Fixture is #114's -- the instanced root MUST be named "Main" under /root.
 extends GdUnitTestSuite
 
-const P := preload("res://tests/support/pattern_fixtures.gd")
+const P := preload("res://tests/support/shape_fixtures.gd")
 
 const MAIN_SCENE := "res://Scenes/Main.tscn"
 const H := preload("res://tests/support/squad_fixtures.gd")
@@ -49,8 +49,8 @@ func after_test() -> void:
 	_main.free()
 
 
-# A pattern-less weapon (Reach falls back to Manhattan 1, so reach is five known cells) and one
-# enemy standing on one of them.
+# A shapeless weapon at the default range 1 -- reach is the four neighbours -- and one enemy
+# standing on one of them.
 func _armed_attacker(targets: EquippableData.TargetMode) -> Unit:
 	var attacker: Unit = game.spawn_unit(H.make_unit_data({}, PLAYER), ATTACKER_CELL)
 	var foe: Unit = game.spawn_unit(H.make_unit_data({}, ENEMY), FOE_CELL)
@@ -77,8 +77,12 @@ func _aim_at(attacker: Unit, cell: Vector2i) -> void:
 	game.hover_presenter._hover_attack_targeting(cell)
 
 
+# The four cells the fixture's weapon reaches, stated rather than re-derived through Reach -- an
+# assertion that asks the code under test what it should be proves nothing. min_range 1 means
+# ADJACENT, so the attacker's own cell is deliberately not among them (#808).
 func _reach_cells() -> Array[Vector2i]:
-	return GridUtils.cells_within_manhattan_range(ATTACKER_CELL, 1)
+	return [ATTACKER_CELL + Vector2i.UP, ATTACKER_CELL + Vector2i.DOWN,
+		ATTACKER_CELL + Vector2i.LEFT, ATTACKER_CELL + Vector2i.RIGHT]
 
 
 func _tiles_pulsing() -> bool:
@@ -309,7 +313,7 @@ func test_hovering_an_aim_stores_its_sight_trace_and_exit_clears_it() -> void:
 
 func test_a_wall_covered_aim_stores_a_blocked_trace() -> void:
 	var attacker := _armed_attacker(EquippableData.TargetMode.UNIT)
-	(attacker.get_equipped_weapon() as WeaponInstance).template.main_attack.attack_pattern = P.point(2, 1)
+	P.point((attacker.get_equipped_weapon() as WeaponInstance).template.main_attack, 2, 1)
 	game.board_heights.set_cell(Vector2i(1, 2), 6)   # a wall between (1,1) and the target at (1,3)
 
 	_aim_at(attacker, Vector2i(1, 3))

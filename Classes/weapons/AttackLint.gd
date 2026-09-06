@@ -79,30 +79,29 @@ static func _check_kind_is_authored(attack: AttackData, found: Array[Dictionary]
 
 
 # Reach's own union-over-facings query, so a directional spread is judged by the same call the red
-# overlay draws with. A null user is safe: no pattern reads it.
+# overlay draws with. A null user is safe: no geometry reads it.
 static func _check_reaches_anything(attack: AttackData, found: Array[Dictionary]) -> void:
 	if not Reach.get_all_attack_cells_from(null, PROBE_ORIGIN, attack).is_empty():
 		return
 	var name := attack.display_name if attack.display_name != "" else "This attack"
 	var text := "%s can be aimed at NO cells at all -- it will not show any range in game, and nothing will refuse to fire it." % name
-	var pattern := attack.attack_pattern
-	if pattern != null:
-		# The hint names the pair that has actually bitten rather than making the reader find it.
-		# A self-anchored pattern (max range 0) has no ring to empty; only its stamp can be.
-		if pattern.is_directional():
-			text += " Its stamp is empty, so no facing covers anything."
-		elif pattern.min_range > pattern.max_range:
-			text += " Min Range (%d) is above Max Range (%d)." % [pattern.min_range, pattern.max_range]
+	# The hint names the pair that has actually bitten rather than making the reader find it.
+	# A self-anchored attack (max range 0) has no ring to empty; only its shape can be.
+	if attack.is_directional():
+		text += " Its shape's stamp is empty, so no facing covers anything."
+	elif attack.min_range > attack.max_range:
+		text += " Min Range (%d) is above Max Range (%d)." % [attack.min_range, attack.max_range]
 	_add(found, Severity.BLOCKS, text)
 
 
-# The fault the check above cannot see (#803): an attack aimed at a CELL whose stamp is empty. Its
-# ring is intact, so it can be aimed anywhere in range and then lands on nothing. Self-anchored
-# patterns are the check above's business (an empty stamp is an empty union there), so this asks
-# only the anchored half and the two never both fire for one fault.
+# The fault the check above cannot see (#803): an attack aimed at a CELL whose shape covers nothing.
+# Its ring is intact, so it can be aimed anywhere in range and then lands on nothing. Self-anchored
+# attacks are the check above's business (an empty stamp is an empty union there), so this asks only
+# the anchored half and the two never both fire for one fault. A NULL shape is not this fault --
+# since #808 that means the aimed cell alone, which is what most attacks author.
 static func _check_affects_anything(attack: AttackData, found: Array[Dictionary]) -> void:
-	var pattern := attack.attack_pattern
-	if pattern == null or pattern.is_directional() or not pattern.stamp.is_empty():
+	var shape := attack.attack_shape
+	if shape == null or attack.is_directional() or not shape.stamp.is_empty():
 		return
 	var name := attack.display_name if attack.display_name != "" else "This attack"
 	_add(found, Severity.BLOCKS, "%s can be aimed but its stamp is empty, so it lands on no cells at all -- add at least 0,0." % name)

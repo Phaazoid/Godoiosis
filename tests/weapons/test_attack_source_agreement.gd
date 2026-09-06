@@ -10,7 +10,7 @@
 # assert through resolve_plan, not by inspecting which function got called.
 extends GdUnitTestSuite
 
-const P := preload("res://tests/support/pattern_fixtures.gd")
+const P := preload("res://tests/support/shape_fixtures.gd")
 
 const H := preload("res://tests/support/squad_fixtures.gd")
 
@@ -28,17 +28,20 @@ class _StubBoard extends BoardContext:
 
 # --- fixture helpers -------------------------------------------------------
 
-func _manhattan(r: int) -> AttackPattern:
-	return P.point(r)
 
-func _wide(w: int, length: int = 1) -> AttackPattern:
-	return P.wide(length, w)
+# Geometry arrives as a Callable rather than as a resource: since #808 it is two halves (a range on
+# the attack, a shape beside it), so there is nothing a builder could hand back that carries both.
+func _manhattan(r: int) -> Callable:
+	return func(a: AttackData) -> void: P.point(a, r)
 
-func _atk(power: int, pattern: AttackPattern, can_counter: bool = true, hits_allies: bool = false) -> WeaponAttackData:
+func _wide(w: int, length: int = 1) -> Callable:
+	return func(a: AttackData) -> void: P.wide(a, length, w)
+
+func _atk(power: int, geometry: Callable, can_counter: bool = true, hits_allies: bool = false) -> WeaponAttackData:
 	var a := WeaponAttackData.new()
 	a.display_name = "atk"
 	a.power = power
-	a.attack_pattern = pattern
+	geometry.call(a)
 	a.can_counter = can_counter
 	a.hits_allies = hits_allies
 	return a

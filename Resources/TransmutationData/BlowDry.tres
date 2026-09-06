@@ -1,17 +1,12 @@
 [gd_resource type="Resource" script_class="TransmutationData" format=3]
 
 [ext_resource type="Script" uid="uid://bgbidu2bbf33l" path="res://Classes/alchemy/TransmutationData.gd" id="1_bldry"]
-[ext_resource type="Script" uid="uid://cjmftk6nqeklw" path="res://Classes/weapons/patterns/AttackPattern.gd" id="2_bldry"]
-
-[sub_resource type="Resource" id="Resource_bldrypat"]
-script = ExtResource("2_bldry")
-max_range = 2
 
 [resource]
 script = ExtResource("1_bldry")
 display_name = "Blow Dry"
 sigils = Array[int]([1])
-attack_pattern = SubResource("Resource_bldrypat")
+max_range = 2
 hits_allies = true
 deals_no_damage = true
 metadata/_custom_type_script = "uid://bgbidu2bbf33l"

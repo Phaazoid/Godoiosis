@@ -17,9 +17,9 @@ class_name AttackEditorTool
 # lists FAMILIES (not saved attacks), selecting one loads that family's main_attack LIVE (never
 # duplicated, since edits must stay shared/in-place), there's no "new" (a main is always tied to
 # an existing family, never created from scratch), and Save overwrites the attack's OWN
-# resource_path instead of a chosen pool filename. attack_pattern gets a class-picker + its own
-# params for free in every mode via DevWidgets.build_resource_editor's existing recursion into
-# nested Resource fields — no bespoke pattern UI needed anywhere.
+# resource_path instead of a chosen pool filename. The RANGE trio draws reflectively in every mode;
+# the SHAPE gets the bespoke row below, because a shared library file needs picking, naming and
+# deleting that no reflective control can express (#808).
 #
 # FAMILY also carries the family's EXTRA_ATTACKS (#473), which is what closed the loop the Weapon
 # Attack mode had been authoring into: WeaponAttackCatalog's library had exactly ONE reader in the
@@ -37,12 +37,26 @@ enum Mode { TRANSMUTATION, WEAPON_ATTACK, FAMILY }
 # coverage law in tests/dev/test_property_tips.gd have to agree about which fields are skipped --
 # a field skipped in one and not the other is a field that either loses its tooltip or fails a law
 # it was never drawn by.
-const POOL_SKIP := ["display_name", "scaling_blend", "damage_kind"]        # name, blend and kind have bespoke UI
-const CARVING_SKIP := ["display_name", "sigils", "flourishes", "damage_kind"]   # the latter three get bespoke UI
+const POOL_SKIP := ["display_name", "scaling_blend", "damage_kind", "attack_shape"]        # name, blend, kind and shape have bespoke UI
+const CARVING_SKIP := ["display_name", "sigils", "flourishes", "damage_kind", "attack_shape"]   # the latter four get bespoke UI
+
+# The shape picker's two non-file rows, in the order they are added -- (none) FIRST, for the reason
+# DevWidgets._add_resource_swapper spells out: add_item silently selects the row it is handed, so
+# the empty state has to be row zero or the control claims a shape on an attack that has none.
+const NO_SHAPE_KEY := "(none - the aimed cell alone)"
+const NEW_SHAPE_KEY := "(new shape)"
+const UNNAMED_SHAPE_KEY := "(unnamed - Save as... to name it)"
 
 var _mode := Mode.TRANSMUTATION
 var current: AttackData = null
 var current_template: WeaponData = null   # FAMILY only: which family "current" belongs to
+# The shape the GRID edits: a COPY of the library resource `current.attack_shape` points at, never
+# the library resource itself (#808). Editing the shared object directly would break the dev's own
+# ruling twice over -- the commit point is Update, not every keystroke (2026-08-27), and Save As
+# could not fork, since take_over_path would move the object every other attack is still holding.
+# An UNNAMED shape has no library object to protect, so the attack points straight at this copy and
+# is saved with it embedded.
+var _shape_copy: AttackShape = null
 var _items := {}
 # Which dropdown entry "current" was loaded from ("" = a New attack). Pool modes load a COPY with
 # no resource_path, so nothing else records this -- and Update's load-gate needs it (2026-08-11).
@@ -71,6 +85,7 @@ func _on_family_mode_selected():
 	if _items.is_empty():
 		current_template = null
 		current = null
+		_shape_copy = null
 		_loaded_name = ""
 		name_input.text = ""
 		populate()
@@ -133,6 +148,7 @@ func _load_selected():
 		current_template = null
 		current = picked.duplicate(true)
 	_loaded_name = target
+	_stage_shape()
 	_refresh_buttons()
 	populate()
 
@@ -147,12 +163,11 @@ func _on_new_pressed():
 		return
 	current_template = null
 	current = TransmutationData.new() if _mode == Mode.TRANSMUTATION else WeaponAttackData.new()
-	# A new attack arrives WITH geometry, so the stamp grid is there to draw on immediately (#804
-	# follow-up, found in play). An attack with no pattern reaches bare adjacency and is a legal but
-	# useless starting point, and reaching one from here meant assigning a pattern through the
-	# resource picker -- which cannot be done, see DevWidgets._add_resource_swapper. Clearing it
-	# back to nothing is still expressible there, through the picker's own (none) row.
-	current.attack_pattern = AttackPattern.new()
+	# A new attack arrives FIREABLE with no shape at all: the range defaults to 1 and a null shape
+	# covers the aimed cell, which is an ordinary single-target attack rather than the useless state
+	# a pattern-less attack used to be (#808). The shape row is where it gains a footprint -- either
+	# by adopting a library shape or by starting a new one.
+	_stage_shape()
 	_loaded_name = ""
 	name_input.text = ""
 	load_dropdown.select(-1)
@@ -172,7 +187,7 @@ func _on_update_pressed():
 	if reason != "":
 		status_label.text = reason
 		return
-	if _refuse_unfireable(current):
+	if _refuse_unfireable(_staged_attack()):
 		return
 	if _mode == Mode.FAMILY:
 		# TWO files, because a family references its main by ext_resource: saving one saves nothing
@@ -187,6 +202,7 @@ func _on_update_pressed():
 		var main_path: String = current.resource_path if current != null else ""
 		var victim := "family '%s'" % target
 		victim += " and its main attack" if main_path != "" else " (extras only -- its main has no file yet)"
+		victim += _shape_victim()
 		# Confirmed as well as load-gated (#380's convention), both branches: the gate cannot
 		# catch a mis-click at the attack you DID load.
 		DevWidgets.confirm_overwrite(self, victim, "the editor's values",
@@ -198,11 +214,13 @@ func _on_update_pressed():
 		push_warning(msg)
 		status_label.text = msg
 		return
-	DevWidgets.confirm_overwrite(self, "attack '%s'" % target, "the editor's values",
+	DevWidgets.confirm_overwrite(self, "attack '%s'%s" % [target, _shape_victim()], "the editor's values",
 		func() -> void: _update_confirmed(path))
 
 
 func _update_confirmed(path: String) -> void:
+	if not _save_named_shape():
+		return
 	if DevWidgets.save_over(current, path, status_label):
 		_loaded_name = current.display_name   # a rename moves the loaded identity with it
 		_refresh_list(current.display_name)
@@ -212,6 +230,8 @@ func _update_confirmed(path: String) -> void:
 # back -- save_over already puts its own failure in the status label, and the half that landed is
 # on disk either way.
 func _update_family_confirmed(family_path: String, main_path: String) -> void:
+	if not _save_named_shape():
+		return
 	if main_path != "" and not DevWidgets.save_over(current, main_path, status_label):
 		return
 	if not DevWidgets.save_over(current_template, family_path, status_label):
@@ -273,11 +293,13 @@ func _on_save_as_pressed():
 		return
 	if DevWidgets.refuse_illegal_name(chosen_name, "attack", status_label):
 		return
-	if _refuse_unfireable(current):
+	if _refuse_unfireable(_staged_attack()):
 		return
 	var dir := TransmutationCatalog.CARVING_DIR if _mode == Mode.TRANSMUTATION else WeaponAttackCatalog.LIBRARY_DIR
 	var path := dir + chosen_name + ".tres"
 	if DevWidgets.refuse_existing_file(path, "attack", status_label):
+		return
+	if not _save_named_shape():
 		return
 	current.display_name = chosen_name
 	if DevWidgets.save_over(current, path, status_label):
@@ -302,9 +324,11 @@ func populate():
 			_populate_sigils(carving)
 			_populate_flourishes(carving)
 			DevWidgets.build_resource_editor(editor_container, current, populate, CARVING_SKIP)
+			_populate_shape()
 			_populate_kind(current)
 		Mode.WEAPON_ATTACK:
 			DevWidgets.build_resource_editor(editor_container, current, populate, POOL_SKIP)
+			_populate_shape()
 			_populate_kind(current)
 			_populate_blend()
 			_populate_carriers()
@@ -341,9 +365,227 @@ func _populate_family() -> void:
 		DevWidgets.add_lineedit(editor_container, "Display name", edited.display_name, func(s: String): edited.display_name = s)
 		DevWidgets.add_label(editor_container, "Editing the MAIN attack for %s — changes every weapon of this family." % family_label)
 		DevWidgets.build_resource_editor(editor_container, current, populate, POOL_SKIP)
+		_populate_shape()
 		_populate_kind(current)
 		_populate_blend()
 	_populate_extras(family_label)
+
+
+# The SHAPE row (#808): pick one from the shared library, start a new one, name one, or delete one,
+# with the stamp grid underneath. Bespoke rather than reflective because none of those verbs is a
+# property edit -- and because the grid's caption has to come from the ATTACK, the shape having no
+# range to derive an anchor from.
+#
+# What the grid edits is `_shape_copy`, never the library resource. See its declaration.
+func _populate_shape() -> void:
+	if current == null:
+		return
+	var library := AttackShapeCatalog.get_library()
+	var row := HBoxContainer.new()
+	var label := Label.new()
+	label.text = "Shape"
+	row.add_child(label)
+
+	# The rows, in the order they are added, so the index the picker reports maps straight back.
+	var keys: Array[String] = [NO_SHAPE_KEY, NEW_SHAPE_KEY]
+	var named: Array[String] = []
+	for k in library:
+		named.append(k)
+	named.sort()
+	keys.append_array(named)
+	# One row for "a shape the library cannot name": never saved, or saved and since deleted. Both
+	# are held shapes, and the picker has to be able to SHOW a held shape whatever its provenance.
+	var unnamed := current.attack_shape != null and _library_key_for(library) == ""
+	if unnamed:
+		keys.append(UNNAMED_SHAPE_KEY)
+
+	var picker := OptionButton.new()
+	for k in keys:
+		picker.add_item(k)
+	picker.select(_shape_row_index(keys, library, unnamed))
+	picker.item_selected.connect(func(idx: int) -> void: _on_shape_picked(keys[idx], library))
+	row.add_child(picker)
+	editor_container.add_child(row)
+
+	if _shape_copy == null:
+		DevWidgets.add_label(editor_container, "No shape: this attack covers the cell it is aimed at.")
+		return
+
+	_populate_shape_users()
+	var first := editor_container.get_child_count()
+	DevWidgets.add_cell_grid(editor_container, "Stamp", _shape_copy, "stamp", current)
+	DevWidgets._tip_rows_from(editor_container, first, DevWidgets.property_tip(current, "attack_shape"))
+
+	var save_row := HBoxContainer.new()
+	var name_field := LineEdit.new()
+	name_field.placeholder_text = "shape name"
+	name_field.custom_minimum_size = Vector2(160, 0)
+	save_row.add_child(name_field)
+	var save_as := Button.new()
+	save_as.text = "Save shape as..."
+	save_as.pressed.connect(func() -> void: _on_shape_save_as(name_field.text.strip_edges()))
+	save_row.add_child(save_as)
+	var shape_path: String = _shape_copy.resource_path if _shape_copy != null else ""
+	if shape_path != "" or (current.attack_shape != null and current.attack_shape.resource_path != ""):
+		var delete := Button.new()
+		delete.text = "Delete shape"
+		delete.pressed.connect(_on_shape_delete_pressed)
+		save_row.add_child(delete)
+	editor_container.add_child(save_row)
+
+
+# Which library row the picker opens on. A named shape names itself; an unnamed one is its own row;
+# nothing at all is row zero, which is where (none) has to sit for the same reason the resource
+# swapper's does.
+func _shape_row_index(keys: Array[String], library: Dictionary, unnamed: bool) -> int:
+	if current.attack_shape == null:
+		return 0
+	if unnamed:
+		return keys.find(UNNAMED_SHAPE_KEY)
+	return keys.find(_library_key_for(library))
+
+
+# The library's name for the shape this attack holds, "" if the library does not have it. Matched on
+# resource_path rather than identity: the catalog scan and the attack's own load are the same cached
+# object today, but a path compare cannot be broken by a cache miss (AttackLint.carriers_of's rule).
+func _library_key_for(library: Dictionary) -> String:
+	var path: String = current.attack_shape.resource_path if current.attack_shape != null else ""
+	if path == "":
+		return ""
+	for k in library:
+		var shape: AttackShape = library[k]
+		if shape.resource_path == path:
+			return k
+	return ""
+
+
+func _on_shape_picked(key: String, library: Dictionary) -> void:
+	match key:
+		NO_SHAPE_KEY:
+			current.attack_shape = null
+		NEW_SHAPE_KEY:
+			# Unnamed, so the attack points straight at the staged copy: there is no shared object to
+			# protect yet, and the attack saves with it embedded until Save shape as... names it.
+			current.attack_shape = AttackShape.new()
+		UNNAMED_SHAPE_KEY:
+			pass   # already what is held; re-picking it is a no-op rather than a re-fork
+		_:
+			if library.has(key):
+				current.attack_shape = library[key]
+	_stage_shape()
+	populate()
+
+
+# Every FILE that names this shape, so an edit says out loud how far it reaches. Read at draw time
+# off the repo rather than off a catalog: an attack embedded in a mission or a rune is in no
+# catalog, and those are exactly the referrers a caption listing only saved attacks would hide.
+func _populate_shape_users() -> void:
+	var path := ""
+	if current.attack_shape != null:
+		path = current.attack_shape.resource_path
+	if path == "":
+		DevWidgets.add_label(editor_container, "Unnamed shape -- this attack alone. Save it to share it.")
+		return
+	var users := AttackShapeCatalog.users_of(path)
+	if users.is_empty():
+		DevWidgets.add_label(editor_container, "Used by nothing else yet.")
+	else:
+		DevWidgets.add_label(editor_container, "Used by %d file(s): %s -- editing this shape changes all of them."
+			% [users.size(), ", ".join(users)])
+
+
+func _on_shape_save_as(chosen_name: String) -> void:
+	if _shape_copy == null:
+		return
+	if chosen_name == "":
+		var msg := "Needs a name to save the shape"
+		push_warning(msg)
+		status_label.text = msg
+		return
+	if DevWidgets.refuse_illegal_name(chosen_name, "shape", status_label):
+		return
+	var path := AttackShapeCatalog.LIBRARY_DIR + chosen_name + ".tres"
+	if DevWidgets.refuse_existing_file(path, "shape", status_label):
+		return
+	_shape_copy.display_name = chosen_name
+	if not DevWidgets.save_over(_shape_copy, path, status_label):
+		return
+	# save_over take_over_path'd it, so the copy IS the library file now -- the attack adopts it and
+	# the grid moves onto a fresh copy of it. Only THIS attack re-points; every other user of the
+	# shape it came from is untouched, which is what makes Save As a fork.
+	current.attack_shape = _shape_copy
+	_stage_shape()
+	status_label.text = "Saved shape %s" % chosen_name
+	populate()
+
+
+func _on_shape_delete_pressed() -> void:
+	var shape := current.attack_shape
+	var path: String = shape.resource_path if shape != null else ""
+	if path == "":
+		return
+	# A dangling ext_resource is a hard PARSE error that takes the whole referring file down, so a
+	# shape in use is refused rather than warned about (CLAUDE.md's ContentRepair edge).
+	var users := AttackShapeCatalog.users_of(path)
+	if not users.is_empty():
+		var msg := "%s is used by %s -- re-point them first" % [path.get_file(), ", ".join(users)]
+		push_warning(msg)
+		status_label.text = msg
+		return
+	DevWidgets.confirm_delete(self, "shape '%s'" % path.get_file(), func() -> void:
+		if DevWidgets.delete_saved_file(path, "shape", status_label):
+			current.attack_shape = null
+			_stage_shape()
+			populate())
+
+
+# The shape the grid edits. A NAMED shape is copied, so nothing reaches the board (or the other
+# attacks holding it) before Update; an UNNAMED one has no other holder, so it is edited directly
+# and saved embedded.
+func _stage_shape() -> void:
+	_shape_copy = null
+	if current == null or current.attack_shape == null:
+		return
+	var shape := current.attack_shape
+	_shape_copy = shape.duplicate() as AttackShape if shape.resource_path != "" else shape
+
+
+# The attack as it would be SAVED -- the editor's own values plus the staged stamp. The lint has to
+# judge this rather than `current`, whose shape is still the library object the grid is not editing.
+func _staged_attack() -> AttackData:
+	if current == null or _shape_copy == null:
+		return current
+	var probe := current.duplicate() as AttackData   # shallow: only the shape reference differs
+	probe.attack_shape = _shape_copy
+	return probe
+
+
+# The clause an overwrite confirm appends when a named shape is going to be written alongside the
+# attack -- FAMILY mode's two-file confirm, one file further out. An unnamed shape is embedded in
+# the attack's own file and is not a second victim.
+func _shape_victim() -> String:
+	if _shape_copy == null or current == null or current.attack_shape == null:
+		return ""
+	var path: String = current.attack_shape.resource_path
+	if path == "":
+		return ""
+	var users := AttackShapeCatalog.users_of(path)
+	var clause := " and the shared shape '%s'" % path.get_file()
+	if users.size() > 1:
+		clause += " (used by %d files)" % users.size()
+	return clause
+
+
+# Write the staged stamp back over the library file it came from. save_over adopts onto the object
+# every other attack is holding, so the shared edit lands at the COMMIT point and not before.
+# Returns false only on a real write failure, which save_over has already reported.
+func _save_named_shape() -> bool:
+	if _shape_copy == null or current == null or current.attack_shape == null:
+		return true
+	var path: String = current.attack_shape.resource_path
+	if path == "":
+		return true   # unnamed: it rides along inside the attack's own file
+	return DevWidgets.save_over(_shape_copy, path, status_label)
 
 # The scaling sliders (#485). Drawn in both attack modes and NOT for a carving, which scales off
 # the wielder's aura and has no blend to edit -- the cast is what says so rather than a mode check.

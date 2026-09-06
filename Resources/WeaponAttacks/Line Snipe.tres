@@ -1,12 +1,7 @@
 [gd_resource type="Resource" script_class="WeaponAttackData" format=3]
 
 [ext_resource type="Script" path="res://Classes/weapons/WeaponAttackData.gd" id="1_e0www"]
-[ext_resource type="Script" uid="uid://cjmftk6nqeklw" path="res://Classes/weapons/patterns/AttackPattern.gd" id="1_w8rux"]
-
-[sub_resource type="Resource" id="Resource_w8rux"]
-script = ExtResource("1_w8rux")
-max_range = 0
-stamp = Array[Vector2i]([Vector2i(0, -1), Vector2i(0, -2), Vector2i(0, -3), Vector2i(0, -4), Vector2i(0, -5), Vector2i(0, -6)])
+[ext_resource type="Resource" uid="uid://d1jjr7scvgdqe" path="res://Resources/AttackShapes/Line 6.tres" id="2_shape0"]
 
 [resource]
 script = ExtResource("1_e0www")
@@ -18,6 +13,7 @@ scaling_blend = Dictionary[int, int]({
 display_name = "Line Snipe"
 damage_kind = 2
 power = 5
-attack_pattern = SubResource("Resource_w8rux")
+max_range = 0
+attack_shape = ExtResource("2_shape0")
 hits_allies = true
 can_overwatch = true

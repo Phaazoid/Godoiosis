@@ -11,7 +11,7 @@
 #      already true of Equip before a vial existed.
 extends GdUnitTestSuite
 
-const P := preload("res://tests/support/pattern_fixtures.gd")
+const P := preload("res://tests/support/shape_fixtures.gd")
 
 const MAIN_SCENE := "res://Scenes/Main.tscn"
 const H := preload("res://tests/support/squad_fixtures.gd")
@@ -81,7 +81,7 @@ func _fireball() -> TransmutationData:
 	t.power = 4
 	t.sigils.assign([FIRE])
 	t.targets = EquippableData.TargetMode.UNIT
-	t.attack_pattern = P.point(3)
+	P.point(t, 3)
 	return t
 
 

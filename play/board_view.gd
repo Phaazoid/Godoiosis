@@ -359,11 +359,10 @@ static func _weapon_str(e: EquippableData, wielder: Unit) -> String:
 	var w := inst.template
 	var main: WeaponAttackData = w.main_attack
 	var main_power: int = main.power if main != null else 0
-	var main_pattern: AttackPattern = main.attack_pattern if main != null else null
-	# Show the PATTERN, not just the weapon_type enum — two "CHAINSWORD"s can be a wildly
-	# different shape (omnidirectional Manhattan vs a 1-tile directional ForwardWide), which
-	# decides reach AND who can counter. Hiding it once made a correct no-counter look like a bug.
-	var s := "%s pow%d %s" % [WeaponData.WeaponType.keys()[w.weapon_type], main_power, _pattern_str(main_pattern)]
+	# Show the GEOMETRY, not just the weapon_type enum — two "CHAINSWORD"s can be a wildly different
+	# shape (an omnidirectional point attack at range vs a one-cell-deep cleave), which decides reach
+	# AND who can counter. Hiding it once made a correct no-counter look like a bug.
+	var s := "%s pow%d %s" % [WeaponData.WeaponType.keys()[w.weapon_type], main_power, _pattern_str(main)]
 	if w.extra_attacks.size() > 0:
 		s += " +%datk" % w.extra_attacks.size()   # stock alternates beyond the main (#72)
 	if main != null and main.elemental_damage_type != Elemental.Element.NONE:
@@ -390,7 +389,7 @@ static func _rune_str(rune: RuneData, wielder: Unit) -> String:
 	return head + "  " + "; ".join(parts)
 
 static func _carving_str(rune: RuneData, wielder: Unit, attack: AttackData) -> String:
-	var s := "%s pow%d %s" % [attack.display_name, attack.power, _pattern_str(attack.attack_pattern)]
+	var s := "%s pow%d %s" % [attack.display_name, attack.power, _pattern_str(attack)]
 	# A carving's element is its SIGILS (repeats = weight, so dedupe). elemental_damage_type is
 	# WeaponAttackData-only — reading it on a TransmutationData is a runtime error, not a blank.
 	var carving := attack as TransmutationData
@@ -415,23 +414,25 @@ static func _carving_str(rune: RuneData, wielder: Unit, attack: AttackData) -> S
 		s += " (blocked: %s)" % reason
 	return s
 
-# Range plus stamp (#803). A self-anchored pattern is "Facing[...]"; an anchored one keeps the
-# "Manhattan[min-max+]" spelling and adds its stamp only when it is more than the aimed cell.
-static func _pattern_str(p: AttackPattern) -> String:
-	if p == null:
+# Range plus shape (#803, re-split at #808 -- the range is the attack's, the shape its own resource).
+# A self-anchored attack is "Facing[...]"; an anchored one keeps the "Manhattan[min-max+]" spelling
+# and adds its stamp only when it covers more than the aimed cell.
+static func _pattern_str(a: AttackData) -> String:
+	if a == null:
 		return "melee[1]"
-	if p.is_directional():
-		return "Facing[%s]" % _stamp_str(p)
-	var s := "Manhattan[%d-%d%s]" % [p.min_range, p.max_range, ("+" if p.max_and_a_half else "")]
-	if p.stamp.size() != 1 or p.stamp[0] != Vector2i.ZERO:
-		s += " " + _stamp_str(p)
+	var shape := a.attack_shape
+	if a.is_directional():
+		return "Facing[%s]" % (_stamp_str(shape) if shape != null else "@")
+	var s := "Manhattan[%d-%d%s]" % [a.min_range, a.max_range, ("+" if a.max_and_a_half else "")]
+	if shape != null and (shape.stamp.size() != 1 or shape.stamp[0] != Vector2i.ZERO):
+		s += " " + _stamp_str(shape)
 	return s
 
 
 # The stamp as rows, forward-most first, '/' between rows: '#' a covered cell, '.' a gap, and the
 # centre '@' when covered or '+' when not, so the orientation reads. The box always includes the
 # centre. A cleave is "###/.+.", a three-cell line "#/#/#/+", a cross ".#./#@#/.#.".
-static func _stamp_str(p: AttackPattern) -> String:
+static func _stamp_str(p: AttackShape) -> String:
 	var lo := Vector2i.ZERO
 	var hi := Vector2i.ZERO
 	for c in p.stamp:

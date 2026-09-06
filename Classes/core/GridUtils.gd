@@ -15,6 +15,11 @@ const TILE_SIZE := 16
 # spelled the same idea Vector2i(-999999,-999999).
 const NO_CELL := Vector2i(-999, -999)
 
+# The four facings, in the order the AI and the targeting overlay walk them. Lived on the attack
+# pattern until #808 split range from shape: it is AIMING vocabulary, not stamp vocabulary, and
+# both readers (Reach's union-over-facings, AITactics' watch picker) are asking a grid question.
+const CARDINAL_DIRECTIONS: Array[Vector2i] = [Vector2i.UP, Vector2i.DOWN, Vector2i.LEFT, Vector2i.RIGHT]
+
 const TERRAIN_ICONS: Dictionary[Terrain.Kind, Texture2D] = {
 	Terrain.Kind.GRASS: preload("res://Art/Icons/TerrainIcons/Grass.png"),
 	Terrain.Kind.ROCK: preload("res://Art/Icons/TerrainIcons/Rock.png"),
