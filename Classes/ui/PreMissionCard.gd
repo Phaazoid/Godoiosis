@@ -15,6 +15,9 @@ class_name PreMissionCard
 # the right, and the strip along the bottom is derived numbers plus the deploy toggle. The card is
 # deliberately roomier than its content needs -- room to add later is the point (dev, 2026-09-05).
 #
+# THE JOB PICKER IS THE ONE THING ON THIS CARD THAT WRITES (#742), and it writes through the screen,
+# not from here -- the card judges nothing and owns no state, exactly as it does not judge a gear move.
+#
 # WHY THE ITEM LIST IS THE STASH'S OWN ROW, and why the block reason lives HERE: EquippableData
 # .can_equip takes a WIELDER, so the stash -- which has no unit selected -- structurally cannot say
 # whether a thing is usable. That reading belongs to the card and nowhere else (dev, 2026-09-05).
@@ -32,6 +35,9 @@ signal gear_clicked(item: EquippableData, owner_unit: Unit)
 # because only it knows whether something is already in hand.
 signal gear_hovered(item: EquippableData, card: PreMissionCard)
 signal gear_unhovered(card: PreMissionCard)
+# A job was chosen from this card's picker (#742). The SCREEN performs it, for the same reason it owns
+# every gear move: the card judges nothing and writes nothing.
+signal job_picked(target: Unit, job_id: String)
 
 # The inspect panel owns the ability tooltip wording and its builders are static for exactly this
 # reason -- one sentence, two surfaces. Preloaded because that file is a scene script with no
@@ -42,6 +48,8 @@ const CARD_HEIGHT := 208
 const ITEM_COLUMN := 128
 const SPRITE := 52
 const CHIP_MIN_W := 30
+const JOB_PICKER_MIN_W := 84
+const NO_JOB_LABEL := "— none —"
 
 # The eight, in Stats.Stat declaration order, two columns of four. Read off the enum rather than
 # listed here, so a ninth stat appears without an edit.
@@ -59,7 +67,7 @@ var selected_item: EquippableData
 var _deploy_button: Button
 var _controller: MissionController
 var _limbs_row: HFlowContainer
-var _job_label: Label
+var _job_picker: OptionButton
 var _abilities_row: HFlowContainer
 var _stats_grid: GridContainer
 var _items_column: VBoxContainer
@@ -158,10 +166,7 @@ func _build_unit_half() -> Control:
 	_limbs_row.add_theme_constant_override("v_separation", 2)
 	meta.add_child(_limbs_row)
 
-	_job_label = Label.new()
-	_job_label.clip_text = true
-	_job_label.add_theme_font_size_override("font_size", 11)
-	meta.add_child(_job_label)
+	meta.add_child(_build_job_picker())
 
 	_abilities_row = HFlowContainer.new()
 	_abilities_row.add_theme_constant_override("h_separation", 3)
@@ -177,6 +182,138 @@ func _build_unit_half() -> Control:
 	_stats_grid.add_theme_constant_override("v_separation", 0)
 	left.add_child(_stats_grid)
 	return left
+
+
+# --- the job picker (#742) ------------------------------------------------------------------------
+
+# BUILT ONCE AND NEVER REBUILT. _refresh_job below only moves the selection, because the refresh that
+# follows a pick would otherwise replace the very control the pick came out of.
+#
+# fit_to_longest_item is the knob that matters here, not clip_text: it defaults TRUE, which makes an
+# OptionButton's minimum width its widest ITEM — one long job name and the card's column walks out of
+# the region, which is the law in this file's header and the #685 failure one surface over.
+func _build_job_picker() -> Control:
+	_job_picker = OptionButton.new()
+	_job_picker.flat = true            # it is the job ROW with a caret, not a widget dropped on the card
+	_job_picker.clip_text = true
+	_job_picker.fit_to_longest_item = false
+	_job_picker.custom_minimum_size.x = JOB_PICKER_MIN_W
+	_job_picker.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_job_picker.focus_mode = Control.FOCUS_NONE   # Tab belongs to the board swap (#774)
+	_job_picker.add_theme_font_size_override("font_size", 11)
+	# ALL the states, because a Button falls back to the THEME's hover/pressed/focus inks
+	# independently — a normal-state-only override comes undone the moment the cursor lands on it,
+	# which is the parchment bug #774 had to fix on the board's own buttons. Disabled keeps the dimmer
+	# ink deliberately: greyed has to READ as greyed in both palettes.
+	for state: String in ["font_color", "font_hover_color", "font_pressed_color", "font_focus_color"]:
+		_job_picker.add_theme_color_override(state, QueueStyle.ink(QueueStyle.Role.TITLE_TEXT))
+	_job_picker.add_theme_color_override("font_disabled_color",
+		QueueStyle.ink(QueueStyle.Role.HEADER_TEXT))
+
+	# Sorted by display name: get_jobs() is a filesystem scan, so an unsorted list would order itself
+	# differently on a different machine. "None" leads, and it is a real choice — every roster
+	# character today authors no starting job, so it is the state the control opens in.
+	_job_picker.add_item(NO_JOB_LABEL)
+	_job_picker.set_item_metadata(0, "")
+	var ids: Array[String] = []
+	for id: String in JobCatalog.get_jobs():
+		ids.append(id)
+	ids.sort_custom(func(a: String, b: String) -> bool:
+		return _job_name(a).naturalnocasecmp_to(_job_name(b)) < 0)
+	for id: String in ids:
+		_job_picker.add_item(_job_name(id))
+		_job_picker.set_item_metadata(_job_picker.item_count - 1, id)
+
+	_job_picker.item_selected.connect(_on_job_item_selected)
+	# The POPUP owns about_to_popup, not the OptionButton — it is a Window of its own.
+	_job_picker.get_popup().about_to_popup.connect(_refresh_job_options)
+	return _job_picker
+
+
+func _job_name(id: String) -> String:
+	var job: JobData = JobCatalog.get_job(id)
+	return job.display_name if job != null and job.display_name != "" else id
+
+
+func _on_job_item_selected(index: int) -> void:
+	job_picked.emit(unit, String(_job_picker.get_item_metadata(index)))
+
+
+# What picking each option would DO, refreshed every time the list opens because the unit's gear and
+# stats move underneath it.
+#
+# A TOOLTIP rather than #745's in-place annotation on the stat grid, and the reason is physical: the
+# popup is its own window and it opens OVER that grid, so an annotation under the list is one the
+# player cannot see while choosing.
+func _refresh_job_options() -> void:
+	var popup: PopupMenu = _job_picker.get_popup()
+	for i in _job_picker.item_count:
+		popup.set_item_tooltip(i, UiText.wrap(job_option_text(String(_job_picker.get_item_metadata(i)))))
+
+
+# Every number here is DERIVED at read time from the same walk the change itself makes, never authored
+# (the Glossary's rule) — so retuning a nudge rewords this for free. The gear line is the one that
+# earns the tooltip: a pick can take armour off, and picking the old job back does not put it on.
+func job_option_text(job_id: String) -> String:
+	var held: Array[String] = unit.unit_instance.jobs
+	if held.size() == 1 and held[0] == job_id:
+		return "%s — held now." % _job_name(job_id)
+	if held.is_empty() and job_id == "":
+		return "No job — held now."
+
+	var ids: Array[String] = []
+	if job_id != "":
+		ids.append(job_id)
+
+	var lines: Array[String] = []
+	var deltas: Array[String] = []
+	for stat: Stats.Stat in Stats.STAT_DEFAULTS:
+		var now := unit.get_effective_stat(stat)
+		var then := unit.previewed_stat_for_jobs(stat, ids)
+		if now != then:
+			deltas.append("%s %d → %d" % [String(Stats.Stat.keys()[stat]), now, then])
+	var def_now := unit.get_effective_def()
+	var def_then := unit.previewed_def_for_jobs(ids)
+	if def_now != def_then:
+		deltas.append("DEF %d → %d" % [def_now, def_then])
+	lines.append(", ".join(deltas) if not deltas.is_empty() else "No change to the numbers.")
+
+	for piece: EquippableData in unit.gear_lost_under_jobs(ids):
+		var armor := piece as ArmorData
+		var demand := armor.requirement_text() if armor != null else ""
+		lines.append("%s comes off%s, and picking the old job back does not put it on." % [
+			piece.display_name, "" if demand == "" else " (needs %s)" % demand])
+
+	lines.append_array(_ability_deltas(ids))
+	return "\n".join(lines)
+
+
+# Gained and lost, by ability ID — the same key AbilityData.add_live dedupes on, so a job and a worn
+# piece granting the same thing reads as no change rather than as both.
+func _ability_deltas(ids: Array[String]) -> Array[String]:
+	var now_live: Array[AbilityData] = unit.get_live_abilities()
+	var then_live: Array[AbilityData] = unit.previewed_abilities_for_jobs(ids)
+	var now_ids: Dictionary[Abilities.Id, bool] = {}
+	for ability: AbilityData in now_live:
+		now_ids[ability.id] = true
+	var then_ids: Dictionary[Abilities.Id, bool] = {}
+	for ability: AbilityData in then_live:
+		then_ids[ability.id] = true
+
+	var lines: Array[String] = []
+	var gained: Array[String] = []
+	for ability: AbilityData in then_live:
+		if not now_ids.has(ability.id):
+			gained.append(ability.display_name)
+	if not gained.is_empty():
+		lines.append("Gains %s." % ", ".join(gained))
+	var lost: Array[String] = []
+	for ability: AbilityData in now_live:
+		if not then_ids.has(ability.id):
+			lost.append(ability.display_name)
+	if not lost.is_empty():
+		lines.append("Loses %s." % ", ".join(lost))
+	return lines
 
 
 # --- what they carry -----------------------------------------------------------------------------
@@ -242,22 +379,39 @@ func _refresh_limbs() -> void:
 			"Every limb natural"))
 
 
+# MOVES THE SELECTION, BUILDS NOTHING. See _build_job_picker.
 func _refresh_job() -> void:
 	var jobs: Array[String] = unit.unit_instance.jobs
-	# One job at a time is bound at the ROSTER (#731 ruling 10), not here -- so this reads whatever
-	# is authored and names all of them rather than pretending the second does not exist.
-	if jobs.is_empty():
-		_job_label.text = "Job · none"
-		_job_label.tooltip_text = "This unit holds no job."
-		_job_label.add_theme_color_override("font_color", QueueStyle.ink(QueueStyle.Role.HEADER_TEXT))
+	var refusal := unit.job_change_block_reason("")
+	_job_picker.disabled = refusal != ""
+	if refusal != "":
+		# More than one job held. One-job-at-a-time binds at the ROSTER (#731 ruling 10), so a picker
+		# that replaced here would perform the exact silent truncation that ruling rejected: it names
+		# all of them and declines instead. RosterLint files the authoring mistake behind it.
+		# select(-1) comes FIRST — it clears the text this line then writes.
+		_job_picker.select(-1)
+		var names: Array[String] = []
+		for id: String in jobs:
+			names.append(_job_name(id))
+		_job_picker.text = ", ".join(names)
+		_job_picker.tooltip_text = UiText.wrap(refusal)
 		return
-	var names: Array[String] = []
-	for id: String in jobs:
-		var job: JobData = JobCatalog.get_job(id)
-		names.append(job.display_name if job != null else id)
-	_job_label.text = "Job · " + ", ".join(names)
-	_job_label.tooltip_text = _job_label.text
-	_job_label.add_theme_color_override("font_color", QueueStyle.ink(QueueStyle.Role.TITLE_TEXT))
+
+	var held := jobs[0] if not jobs.is_empty() else ""
+	var matched := false
+	for i in _job_picker.item_count:
+		if String(_job_picker.get_item_metadata(i)) == held:
+			_job_picker.select(i)
+			matched = true
+			break
+	if not matched:
+		# A job id no catalogue file answers -- apply_unit_state assigns jobs directly, so a save or a
+		# roster entry can carry one. Show the raw id rather than claiming "none"; picking replaces it,
+		# which is the repair.
+		_job_picker.select(-1)
+		_job_picker.text = held
+	_job_picker.tooltip_text = UiText.wrap(
+		"The job this unit fights under. One at a time — picking another replaces it.")
 
 
 func _refresh_abilities() -> void:

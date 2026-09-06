@@ -2,7 +2,7 @@
 
 **Status: ALL FOUR SLICES BUILT 2026-07-28 ([#96](https://github.com/Phaazoid/Godoiosis/issues/96)).** Filed 2026-07-27, when the project acquired a win condition for the first time. Before this, Iosis had ten interlocking systems and no way to finish a battle — which meant a design question could be answered *"is this coherent?"* but never *"does this improve play?"*
 
-**Canon checked through #772 (2026-09-05).**
+**Canon checked through #786 (2026-09-05).**
 
 ## What a mission is
 
@@ -88,6 +88,10 @@ end the phase while the card is up.
 
 **The card**: the unit fills the left (sprite, name, limbs, job, live abilities, the eight effective stats), what it *carries* fills the right as the same row the stash uses — six of them, because that is `MAX_INVENTORY_SIZE` — and the strip along the bottom is weight and effective DEF plus the deploy toggle. Every number is read, never re-derived: `get_effective_stat`, `get_effective_def`, `get_weight`, `get_live_abilities`, which is exactly what ruling 7 spawns the whole roster as real `Unit`s to make possible.
 
+**The job is the one thing on the card the player can EDIT** ([#742](https://github.com/Phaazoid/Godoiosis/issues/742), 2026-09-05). Its title area is a single-select picker over the whole `JobCatalog` — no certification, no cost, no gate, because #61 parked all three — with *none* leading the list, which is where every roster character actually starts: nothing under `Resources/Units/` authors a starting job at all. It writes through `Unit.set_sole_job`, never into `unit_instance.jobs`, and the card judges nothing: the screen performs the pick, exactly as it performs a gear move. One-at-a-time binds at the **roster** (ruling 10) so the model stays uncapped for enemies; a unit somehow holding two is named and the picker declines rather than silently truncating — the outcome that ruling rejected when it refused to cap the picker instead.
+
+**A JOB CAN TAKE ARMOUR OFF, AND THAT IS WHY EACH OPTION CARRIES ITS COST.** Wear gates read the **body** — base → limb → jobs → effects — so a job's `stat_nudges` moves the answer, `_settle_stat_change` strips what no longer fits, and *picking the old job back does not put it back on*. It is reachable in shipped content: the Ballast Harness demands DEX 4 or less, Celest has DEX 4, Water Walker nudges DEX +3. So each option's tooltip states what picking it would do — the stats and DEF that move, the piece that comes off and what it demanded, the abilities gained and lost — built by `Unit.with_jobs`, which lends the unit the hypothetical body: it swaps the job list, **takes off the gear that body cannot hold**, asks, and puts all three back. The strip is not an extra; without it DEF previews unchanged and an ability granted by the doomed plate never shows as lost, which are the two readings the warning exists for. A **tooltip** rather than #745's in-place annotation, for a physical reason: the popup is its own window and it opens over the card's stat grid.
+
 **The block reason lives on the card and nowhere else** (dev, 2026-09-05). `EquippableData.can_equip_reason` takes a **wielder**, so the stash — which has no unit selected — structurally cannot say whether a thing is usable. [#744](https://github.com/Phaazoid/Godoiosis/issues/744) built the sentence and the card's one helper became a pass-through, so every row and tooltip started naming the actual gap without an edit to either surface. The stash's own question is the *wielder-free* one — `ArmorData.requirement_text`, what a piece demands with nobody holding it — and the two share one grammar (`_gate_text`) so a gate cannot be spelled two ways on two surfaces. What the equip gate still cannot see is the **wield lock**: `can_wield_equipped` is a firing question, so a one-armed unit equipping a two-handed weapon is refused nothing here and finds out at turn 1 ([#776](https://github.com/Phaazoid/Godoiosis/issues/776)).
 
 **Nothing in the card may demand width from its content.** The grid divides its row three ways and an `HFlowContainer`'s minimum width is its widest child, so one long ability name would walk the whole column out of the region — #685's failure, one surface over. Every content-bearing label is `clip_text` with the full string on hover, so the card's minimum size is a constant.
@@ -105,8 +109,6 @@ end the phase while the card is up.
 The ring paid for it: `DEPLOY_GROUP` held one verb and so collapsed to a terminal slice named for its only child, which a second verb breaks. It is **Placement** now — what the pair answers together, where the unit stands and whether it stands at all.
 
 **`MissionController._roster_units` keeps the roster in ENTRY order.** Deploying and undeploying *reparent* between `units_root` and `reserve_root`, so both lists reshuffle every time the player changes their mind and a grid drawn off either would reorder mid-decision. Worth knowing that this is currently belt-and-braces for the grid — `_refresh_cards` rebuilds only when the roster's size changes, so the order settles at build time either way — and is kept as the contract underneath rather than deleted; the store's own guarantee is what the suite pins.
-
-Still deferred: #742's job picker.
 
 ### What the numbers say before you commit ([#745](https://github.com/Phaazoid/Godoiosis/issues/745))
 
@@ -404,7 +406,7 @@ Campaign layer (mission ordering, unlocks, roster carried between missions, betw
 
 ## What this unblocks
 
-- [#70](https://github.com/Phaazoid/Godoiosis/issues/70) — between-missions-only job swap, blocked purely because no mission-boundary concept existed (`set_main_job`/`set_sub_job` carry a `TODO(campaign layer)`).
+- [#70](https://github.com/Phaazoid/Godoiosis/issues/70) — between-missions-only job swap. **Satisfied by construction since [#742](https://github.com/Phaazoid/Godoiosis/issues/742) (2026-09-05)** rather than enforced: the pre-mission phase is the only player-facing place a job changes, so there is no mid-mission swap to refuse. The dev editors stay unrestricted, which is correct — they are dev tools. Worth re-reading the ticket on that basis; what it may still want is the CAMPAIGN half (progress pausing, dormant jobs), which needs #186 and belongs with the trio in [jobs.md](jobs.md) *Parked*.
 - [#87](https://github.com/Phaazoid/Godoiosis/issues/87) — the mid-battle-save split above. **BUILT 2026-07-30**; `restore_progress()` is the restore half, and `ScenarioData` now carries the captured zones, the `contested` latch and the round count (#101).
 - ~~[#101](https://github.com/Phaazoid/Godoiosis/issues/101) — lose conditions.~~ **BUILT and CLOSED 2026-08-26** (see *Losing on purpose* above); it did reuse `check()` and the objectives list wholesale, exactly as predicted. Its unbuilt half became [#571](https://github.com/Phaazoid/Godoiosis/issues/571) and [#572](https://github.com/Phaazoid/Godoiosis/issues/572).
 

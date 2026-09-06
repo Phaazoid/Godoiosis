@@ -389,10 +389,39 @@ func _settle_stat_change() -> void:
 # not wearing it. Triggered by a buff lapsing, a debuff, or a maim. Two parallel clauses that can't
 # cascade: armor's gate reads body stats, a rune's reads aura+affinity (#157) — neither reads gear.
 func _enforce_gear_gates() -> void:
+	_strip_gear(_gear_failing_gates())
+
+# The same JUDGEMENT with no nulling — "what would come off, standing as this unit stands right now".
+# Split out of the enforce above for #742: the job picker asks it of a HYPOTHETICAL body (see
+# with_jobs) rather than growing a second reading of the same gates, which is the drift #744 collapsed
+# one layer down. One judgement, so the warning and the strip can never name different pieces.
+func _gear_failing_gates() -> Array[EquippableData]:
+	var failing: Array[EquippableData] = []
 	if worn_armor != null and not worn_armor.can_equip(self):
-		worn_armor = null
+		failing.append(worn_armor)
 	if equipped_weapon != null and not equipped_weapon.can_equip(self):
-		equipped_weapon = null
+		failing.append(equipped_weapon)
+	return failing
+
+# What is actually ON this unit right now, in _gear_failing_gates' own order. The pair those gates
+# judge, and the pair a job preview diffs — see gear_lost_under_jobs.
+func _worn_gear() -> Array[EquippableData]:
+	var worn: Array[EquippableData] = []
+	if worn_armor != null:
+		worn.append(worn_armor)
+	if equipped_weapon != null:
+		worn.append(equipped_weapon)
+	return worn
+
+# ...and the nulling with no judgement. An INSTALLED PROSTHETIC that stops being wieldable leaves the
+# equip slot and stays a limb — _mod_sources reads the fitting, not the slot — so there is deliberately
+# nothing here that touches unit_instance.limbs.
+func _strip_gear(pieces: Array[EquippableData]) -> void:
+	for piece: EquippableData in pieces:
+		if piece == worn_armor:
+			worn_armor = null
+		elif piece == equipped_weapon:
+			equipped_weapon = null
 
 func _on_instance_died():
 	die()
@@ -524,6 +553,90 @@ func _candidate_gear(candidate: EquippableData) -> Array:
 		if as_weapon != null and not weapons.has(as_weapon):
 			weapons.append(as_weapon)
 	return [armor, weapons]
+
+
+# --- Changing a job (#742) ------------------------------------------------------------------------
+
+# THE one place a job changes for a player. It REPLACES rather than adds, because one-job-at-a-time
+# binds at the ROSTER (#731 ruling 10) — the model stays uncapped, since an enemy's held jobs are its
+# readable kit (docs/design/jobs.md). "" = done, else why not.
+#
+# It settles, and that is the whole reason this exists rather than callers reaching into
+# unit_instance.jobs: a job moves body stats, and WEAR GATES READ BODY STATS, so a pick can strip the
+# armour a unit is standing in. One door means the strip, the HP re-clamp and the signal are not three
+# things every caller has to remember.
+func set_sole_job(job_id: String) -> String:
+	var refusal := job_change_block_reason(job_id)
+	if refusal != "":
+		return refusal
+	unit_instance.jobs.clear()
+	if job_id != "":
+		unit_instance.add_job(job_id)
+	_settle_stat_change()
+	return ""
+
+# "" = this unit's job may be set to that. The REASON rather than a bool (#166's shape), so a picker
+# that greys can say why it did.
+func job_change_block_reason(job_id: String) -> String:
+	if unit_instance.jobs.size() > 1:
+		return "%s holds %d jobs. This picker sets one, so changing it here would quietly drop the rest." % [
+			get_unit_name(), unit_instance.jobs.size()]
+	if job_id != "" and JobCatalog.get_job(job_id) == null:
+		return "No job with the id '%s' is in the catalogue." % job_id
+	return ""
+
+
+# --- What a job WOULD do (#742) -------------------------------------------------------------------
+
+# Ask a question of this unit as if it held these jobs: the job list is swapped, THE GEAR THE NEW BODY
+# CANNOT HOLD IS TAKEN OFF, the question is asked, and all three are put back.
+#
+# THE GEAR HALF IS NOT AN EXTRA, IT IS THE POINT. Swapping jobs alone answers with the old plate still
+# on — DEF would preview unchanged and an ability granted by that plate would not show as lost — so
+# the two readings the preview exists for are exactly the two a bare swap cannot produce.
+#
+# Around a PURE READ only: no await, no signal, no mutation in the question. The alternative is a
+# parallel spelling of every wear gate, and a preview that can disagree with the change it is
+# previewing is worse than a swap. #745 passed explicit arguments instead for the opposite reason —
+# a candidate ITEM is not the unit's yet, so there was no state to lend it.
+func with_jobs(job_ids: Array[String], question: Callable) -> Variant:
+	var held_jobs: Array[String] = unit_instance.jobs
+	var held_armor := worn_armor
+	var held_weapon := equipped_weapon
+	unit_instance.jobs = job_ids.duplicate()
+	_strip_gear(_gear_failing_gates())
+	var answer: Variant = question.call()
+	unit_instance.jobs = held_jobs
+	worn_armor = held_armor
+	equipped_weapon = held_weapon
+	return answer
+
+# What the wear gates would take off if this unit held these jobs. The piece stays in inventory either
+# way — this is what stops being WORN, which is also what does not come back when the old job is picked
+# again, and therefore the one consequence of a pick worth warning about before the click.
+#
+# A DIFF OF THE SAME FUNCTION UNDER BOTH BODIES, not a second reading of the gates: asking
+# _gear_failing_gates inside the swap answers "nothing", because with_jobs has already taken those
+# pieces off by then. Both sides come from _worn_gear, so the two halves cannot drift.
+func gear_lost_under_jobs(job_ids: Array[String]) -> Array[EquippableData]:
+	var kept: Array[EquippableData] = with_jobs(job_ids, _worn_gear)
+	var lost: Array[EquippableData] = []
+	for piece: EquippableData in _worn_gear():
+		if not kept.has(piece):
+			lost.append(piece)
+	return lost
+
+func previewed_stat_for_jobs(stat: Stats.Stat, job_ids: Array[String]) -> int:
+	var value: int = with_jobs(job_ids, func() -> int: return get_effective_stat(stat))
+	return value
+
+func previewed_def_for_jobs(job_ids: Array[String]) -> int:
+	var value: int = with_jobs(job_ids, get_effective_def)
+	return value
+
+func previewed_abilities_for_jobs(job_ids: Array[String]) -> Array[AbilityData]:
+	var live: Array[AbilityData] = with_jobs(job_ids, get_live_abilities)
+	return live
 
 
 func get_weapon_proficiency(family: WeaponData.WeaponType) -> int:
