@@ -42,6 +42,9 @@ class_name ScenarioUnitEntry
 # (not @export'd on Unit/WeaponInstance, so a mission boundary still resets for free). ---
 @export var weapon_battle_states: Dictionary[int, Dictionary] = {}   # inventory index -> that weapon's own keys
 @export var element_states: Array[Elemental.State] = []
+# The burned vial this unit is attuned to (#697), or null. Battle-scoped like the rest of this
+# block: a mission boundary clears it for free because Unit does not @export it.
+@export var attunement: VialData = null
 @export var stat_effects: Array[StatEffect] = []
 @export var lifecycle_state: Unit.LifecycleState = Unit.LifecycleState.ACTIVE   # DEAD never saves: a corpse is absent, not stored
 @export var downed_turns_remaining := -1   # -1 = not counting, same sentinel Unit uses
@@ -141,6 +144,10 @@ func capture_unit_state(unit: Unit) -> void:
 			weapon_battle_states[i] = weapon_state
 
 	element_states = unit.element_states.duplicate()
+	# The vial charge rides the save (#697): one that evaporated across a mid-battle load would
+	# eat a scarce item with no message anywhere. Shared, not copied -- it is already this unit's
+	# own burned instance and nothing else holds it.
+	attunement = unit.attunement
 	stat_effects = []
 	for effect in unit.stat_effects:
 		stat_effects.append(effect.duplicate(true))
@@ -234,6 +241,7 @@ func apply_unit_state(unit: Unit) -> void:
 				fitting.prosthetic_item = carried   # re-link: the exact carried instance, by index
 
 	unit.element_states = element_states.duplicate()
+	unit.attunement = attunement
 	unit.in_crisis = in_crisis
 	unit.crisis_surge_pending = crisis_surge_pending
 	unit.rally_count = rally_count

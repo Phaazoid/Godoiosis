@@ -55,6 +55,11 @@ var equipped_weapon: EquippableData = null
 var worn_armor: ArmorData = null   # DEF seam (#55), real content since #89. Carried in `inventory`
 								   # like a weapon but filling its OWN slot — set only via
 								   # wear_armor(), the one place the wear gate lives.
+# The burned vial this unit is currently attuned to (#697), or null. ONE at a time: a second Use
+# replaces the first, which is why this is a slot and not a list. Set by the inventory panel's Use
+# verb; cleared by AttackAction.execute when a cast actually draws on it, never at plan time —
+# the readiness precedent, and the whole reason cancelling a plan costs nothing.
+var attunement: VialData = null
 
 var _projected_knockback_cell: Vector2i
 var _has_projected_knockback := false
@@ -1148,6 +1153,32 @@ func get_element_aura(element: Elemental.Element) -> int:
 	if unit_instance == null:
 		return 0
 	return unit_instance.get_element_aura(element)
+
+# What a burned vial empowers this unit in (#697) — [] when nothing is attuned. Deliberately NOT
+# folded into get_element_aura above: that accessor must stay blind to materia, because the anchor,
+# the channel deficit, both wildcard pools and the equip gate all read it, and making it aware would
+# leak empowerment into every one of those gates at once. Empowerment is a damage-time term only.
+func attunement_elements() -> Array[Elemental.Element]:
+	if attunement == null:
+		var none: Array[Elemental.Element] = []
+		return none
+	return attunement.granted_elements()
+
+# Attune to a vial, spending it out of inventory. Returns "" on success, or the refusal — the
+# reason is asked first and the act is this same call's second half, so nothing can act on a
+# judgement made a frame ago (Loadout.move's shape).
+func use_vial(index: int) -> String:
+	if index < 0 or index >= inventory.size():
+		return "There is nothing in that slot."
+	var vial := inventory[index] as VialData
+	if vial == null:
+		return "That is not a vial."
+	var refusal := vial.use_block_reason(self)
+	if refusal != "":
+		return refusal
+	attunement = vial
+	inventory[index] = null   # burned: the item is gone, the charge is what remains
+	return ""
 
 func has_any_affinity() -> bool:
 	return unit_instance != null and unit_instance.has_any_affinity()

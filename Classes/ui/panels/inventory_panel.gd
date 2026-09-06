@@ -143,6 +143,23 @@ func _show_action_popup(index: int):
 			equip_btn.disabled = true
 		vbox.add_child(equip_btn)
 
+	# A vial is CARRIED, never slotted, so its verb is Use rather than Equip (#697). Same shape as
+	# the two branches above: the gate states its own sentence and the button wears it, so the
+	# refusal and the label cannot drift (#744). An allowed Use that OVERWRITES an existing charge
+	# says so on the button — the trade has to be readable before the item is spent, not after.
+	if item is VialData:
+		var vial := item as VialData
+		var use_btn := Button.new()
+		var refusal := vial.use_block_reason(unit)
+		if refusal != "":
+			use_btn.text = "Use — %s" % refusal
+			use_btn.disabled = true
+		else:
+			var replaced := vial.use_replaces(unit)
+			use_btn.text = "Use" if replaced == "" else "Use — replaces %s" % replaced
+			use_btn.pressed.connect(_do_use.bind(index))
+		vbox.add_child(use_btn)
+
 	if not (item is WeaponInstance and unit.unit_instance.is_installed_prosthetic(item.template)):
 		var toss_btn := Button.new()
 		toss_btn.text = "Toss"
@@ -171,6 +188,12 @@ func _apply_change():
 	_close_action_popup()
 	_refresh()
 	loadout_changed.emit()
+
+func _do_use(index: int):
+	if unit != null:
+		unit.use_vial(index)   # the refusal was asked above and wears it on the button
+	selected_index = -1
+	_apply_change()
 
 func _do_equip(index: int):
 	if unit != null:

@@ -154,6 +154,16 @@ func execute():
 		if weapon != null:
 			weapon.consume_readiness_for(fired_attack as WeaponAttackData)
 
+	# Vial burn (#697), on readiness's own terms: same gate, same moment, hit or whiff. The
+	# resolver already decided WHETHER this cast drew on the charge (it only records one when the
+	# attunement changed the damage), so there is nothing to judge here -- only to spend.
+	#
+	# EXECUTION IS THE ONLY PLACE ANYTHING IS SPENT, which is the whole of why cancelling costs
+	# nothing: re-aiming, displacing, undoing and clearing all leave the charge untouched, because
+	# the plan never had it. Readiness needed no reservation for exactly this reason.
+	if not is_secondary_hit and resolved != null and resolved.burned_vial != null:
+		actor.attunement = null
+
 	finish_execution()
 
 func get_action_icon() -> Texture2D:

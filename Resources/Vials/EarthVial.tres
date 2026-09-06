@@ -1,0 +1,11 @@
+[gd_resource type="Resource" script_class="VialData" format=3]
+
+[ext_resource type="Script" uid="uid://d17anh5wjjtq0" path="res://Classes/alchemy/VialData.gd" id="1_vial"]
+
+[resource]
+script = ExtResource("1_vial")
+element = 5
+is_alkahest = false
+display_name = "Vial of Salt"
+description = "Earth reduced to its stubborn essence. Heavy for its size, and the last thing a mason parts with."
+weight = 1

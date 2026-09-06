@@ -132,6 +132,7 @@ func test_every_world_event_badge_fits_the_dock() -> void:
 		ActionQueueRow.BADGE_DROWNED,
 		ActionQueueRow.BADGE_VOID,
 		ActionQueueRow.BADGE_INSULATED,
+		ActionQueueRow.BADGE_VIAL,
 	]
 	var over: Array[String] = []
 	for badge: String in badges:
