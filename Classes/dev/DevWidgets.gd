@@ -835,12 +835,15 @@ static func _add_resource_swapper(container: Node, resource: Resource, prop: Dic
 	# Without it a single-candidate field was a DEAD END: add_item auto-selects the first row, so a
 	# null value DISPLAYED as set, and re-picking the row already showing emits nothing, leaving no
 	# click anywhere in the control that could assign the resource. Found in play (#804 follow-up).
+	# (none) IS ROW ZERO, and that ordering is load-bearing rather than cosmetic: add_item silently
+	# selects the first row it is given, so putting the empty state first is exactly what makes the
+	# control's own auto-selection tell the truth about a null field. Reorder these two lines and
+	# the picker goes back to claiming a class is set on a field that has none. An explicit
+	# select(0) sat here and was DEAD -- a mutant deleting it changed nothing, which is what named
+	# the ordering as the mechanism.
 	option.add_item(NO_RESOURCE_KEY)
 	for entry in candidates:
 		option.add_item(entry["class"])
-	# NEVER trust add_item's own selection -- it silently selects the first row it is given, which
-	# is what made the control lie about a null field. Say what is true, always.
-	option.select(0)
 	for i in candidates.size():
 		if candidates[i]["class"] == current_class:
 			option.select(i + 1)
