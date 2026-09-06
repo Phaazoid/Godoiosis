@@ -6,7 +6,7 @@ grill-style. Every ruling below is his; the rationale is recorded because almost
 re-derivable from the code. Numbers (tolerances, drop damage, the 2D offset) are deliberately absent —
 they are feel values and get knobs, not guesses (`CLAUDE.md` → the tuning rule).
 
-**Canon checked through #803 (2026-09-06).**
+**Canon checked through #808 (2026-09-06).**
 
 The one-line version: **a cell has a height, height changes only via ramps, ramps are chokepoints
 rather than tolls, and what height buys you is REACH — not damage, not to-hit.**
@@ -449,7 +449,7 @@ gets. The fork was put to the dev rendered as two board diagrams rather than des
 ### Why it is a separate check and not added to distance
 
 The first proposal was "add the height difference to the distance cost". The weapon roster kills it.
-`AttackPattern` defaults to `min_range = 1, max_range = 1` (it was `ManhattanRangePattern` until [#803](https://github.com/Phaazoid/Godoiosis/issues/803) folded the three pattern classes into one), and ChainSword, Kinetic Mace,
+`AttackData` defaults to `min_range = 1, max_range = 1` (the range lived on `AttackPattern` until #808 split range from shape, and on `ManhattanRangePattern` before [#803](https://github.com/Phaazoid/Godoiosis/issues/803) folded the three pattern classes into one), and ChainSword, Kinetic Mace,
 Springspear, TheJaw and Blowback all take the defaults. **The Carbine is `min_range = 2,
 max_range = 2`** — and under the additive model a target one level up at Manhattan 1 becomes
 1 + 1 = 2, landing *inside* [2,2]. The gun could shoot the man on the ledge directly above it but not
@@ -1315,7 +1315,7 @@ itself.
 
 Design session [#218](https://github.com/Phaazoid/Godoiosis/issues/218) (2026-08-14). Code:
 `RulesService` (`movement_cost` / `can_traverse` / `path_hops`), `SquadCohesion`, `Reach`,
-`AttackPattern`, `PlanResolver._resolve_knockback`, `ScenarioData`, `TerrainStateManager`.
+`AttackData`, `PlanResolver._resolve_knockback`, `ScenarioData`, `TerrainStateManager`.
 See [terrain.md](terrain.md) (the tile model and the state store), [weapons.md](weapons.md) (patterns
 as pure geometry, `arc_clearance`), [presentation-effects.md](presentation-effects.md) (the Triangle
 Strategy / FFT reference shelf), [philosophy.md](philosophy.md) (Axioms 3 and 4),

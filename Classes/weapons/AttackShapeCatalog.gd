@@ -42,7 +42,9 @@ static func _collect_users(dir_path: String, shape_path: String, users: Array[St
 		_collect_users(dir_path.path_join(sub), shape_path, users)
 	for file in ResourceDir.files_with_extension(dir_path, ResourceCatalog.RESOURCE_EXT):
 		var path := dir_path.path_join(file)
-		if path == shape_path:
-			continue   # the shape's own file names its own path in its header
+		# NO self-reference guard, and that is measured rather than assumed: a .tres never names its
+		# own path -- the [gd_resource] header carries a uid and nothing else -- so a shape can never
+		# be found as its own user. One sat here and was DEAD; deleting it reddened nothing, which is
+		# what named the file format as the mechanism. The #807 select(0) lesson, one ticket on.
 		if FileAccess.get_file_as_string(path).contains(shape_path):
 			users.append(file)

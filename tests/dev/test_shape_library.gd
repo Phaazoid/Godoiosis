@@ -217,10 +217,7 @@ func test_users_of_finds_a_referrer_a_catalog_cannot_see() -> void:
 	).is_true()
 
 
-func test_a_shape_reports_no_user_for_its_own_file() -> void:
-	# The header names its own path; counting that would make every shape undeletable.
-	var shipped := AttackShapeCatalog.get_library()
-	for key in shipped:
-		var shape: AttackShape = shipped[key]
-		assert_array(AttackShapeCatalog.users_of(shape.resource_path)) \
-			.not_contains([shape.resource_path.get_file()])
+func test_an_unsaved_shape_has_no_users_rather_than_matching_everything() -> void:
+	# The empty path is the one input that could match every file on the disk, which would make a
+	# brand new shape look shared and refuse to delete.
+	assert_array(AttackShapeCatalog.users_of("")).is_empty()

@@ -2,7 +2,7 @@
 
 **Status: WORKING DESIGN (agreed direction, open questions flagged).** Decided 2026-06-15 with the developer; a couple of forks pending a co-dev chat. Not settled like the squad spec, but the core stance (no leveling, fixed stats) is firm. Supersedes the wiki's `Stats Overview.docx` leveling section (random stat-on-level-up — dead under Law #1).
 
-**Canon checked through #68 (2026-07-16).**
+**Canon checked through #808 (2026-09-06).**
 
 ## Core stance
 
@@ -25,7 +25,7 @@ Why this fits Iosis: matches the top axiom *"setting up the battle should be hal
 - With a goal set, the unit gains proficiency **up to a per-mission cap** each time it "does the thing." Past the cap, extra reps do nothing → **grinding is mechanically pointless** (the strongest form of the wiki's "grind a chainsword army → just stupid" stance).
 - **Benched units with a goal** get slower automatic training during missions they sit out → no bench-rot, shrinks the late-unit gap. Fielding trains faster → an **"attention economy"**: focus is the soft resource you spend.
 - **Tier thresholds** (focused missions to reach the next tier) are a **dev-controlled difficulty dial**, independent of the economy.
-- Proficiency tiers **unlock new secondary attacks / attack patterns** (qualitative growth; drops onto the existing `AttackPattern` resources) — a primary "feels-good" beat. Aura points may grant **damage multipliers** — keep **modest**; large multipliers are vertical power that rebuilds a power curve and a late-unit gap.
+- Proficiency tiers **unlock new secondary attacks / attack patterns** (qualitative growth; drops onto the existing `AttackShape` library) — a primary "feels-good" beat. Aura points may grant **damage multipliers** — keep **modest**; large multipliers are vertical power that rebuilds a power curve and a late-unit gap.
 
 Open: what counts as "doing the thing"; the no-opportunity case (partial fill vs nothing); D&D-style sticky commitment → preferred form is "momentum" (same goal ramps the rate, switching resets the *rate* but never loses accrued proficiency; harsh switch penalties would rebuild the grind wall). The proficiency/abilities layer is its own system to design later.
 

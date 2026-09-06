@@ -4,7 +4,7 @@
 
 Supersedes the wiki's `Battle Mechanics/Elemental Combinatrix.docx` and `Systems Mechanics/Terrain Modification.docx`. Kept-but-era-checked: the *combinatrix concept* survives (the author flagged it keep-not-deprecate), but every "20% chance of shock," "hit/Avo advantage," "AP cost," and "move randomly 1 square" is **dead under Law #1** and re-expressed deterministically here.
 
-**Canon checked through #799 (2026-09-06).**
+**Canon checked through #808 (2026-09-06).**
 
 ## What it is
 
@@ -52,7 +52,7 @@ Derived-from-plan logic — same family as `SquadManager.calculate_reactions_for
 
 ## Reactions as data
 
-Small resources, edited in the reflection-based dev editor (same grain as `WeaponData` / `AttackPattern`). Proposed `ElementalReaction` shape:
+Small resources, edited in the reflection-based dev editor (same grain as `WeaponData` / `AttackShape`). Proposed `ElementalReaction` shape:
 
 | field | meaning |
 |---|---|
