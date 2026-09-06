@@ -19,7 +19,7 @@ extends Object
 const REACH := 1   # playtest-tunable
 
 # What THIS cell offers, ignoring reach -- the terrain fact. Veins (#696) extend HERE, and the
-# empowerment overlay (#699) draws it. A carried flask (#697) is NOT positional and never enters:
+# empowerment overlay (#699) draws it. A carried vial (#697) is NOT positional and never enters:
 # it unions in at the call site, beside whatever this returns.
 #
 # Air and Aether are deliberately absent (dev, 2026-09-05). Air's "what counts as high ground" is
