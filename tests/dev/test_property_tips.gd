@@ -25,7 +25,7 @@ func after_test() -> void:
 
 func _attack() -> WeaponAttackData:
 	var attack := WeaponAttackData.new()
-	attack.attack_pattern = ManhattanRangePattern.new()
+	attack.attack_pattern = AttackPattern.new()
 	return attack
 
 
@@ -41,7 +41,7 @@ func _labels(node: Node, found: Dictionary) -> Dictionary:
 
 
 func test_a_tip_comes_off_the_resources_own_table() -> void:
-	var tip := DevWidgets.property_tip(ManhattanRangePattern.new(), "min_range")
+	var tip := DevWidgets.property_tip(AttackPattern.new(), "min_range")
 	assert_str(tip).contains("CLOSEST")
 
 
@@ -95,9 +95,7 @@ func test_every_field_the_attack_editor_draws_carries_text() -> void:
 	var missing: Array[String] = []
 	_untipped(WeaponAttackData.new(), AttackEditorTool.POOL_SKIP, missing)
 	_untipped(TransmutationData.new(), AttackEditorTool.CARVING_SKIP, missing)
-	_untipped(ManhattanRangePattern.new(), [], missing)
-	_untipped(ForwardLinePattern.new(), [], missing)
-	_untipped(ForwardWidePattern.new(), [], missing)
+	_untipped(AttackPattern.new(), [], missing)
 	assert_array(missing).is_empty()
 
 

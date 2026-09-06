@@ -21,6 +21,8 @@
 # A(0,0) and B(1,1) are each orthogonally adjacent to both M1(1,0) and M2(0,1).
 extends GdUnitTestSuite
 
+const P := preload("res://tests/support/pattern_fixtures.gd")
+
 const H := preload("res://tests/support/squad_fixtures.gd")
 const BB := preload("res://play/board_builder.gd")
 
@@ -522,7 +524,7 @@ func test_an_aoe_that_also_catches_a_body_beats_the_same_shot_that_does_not() ->
 	var weapon: WeaponInstance = attacker.get_equipped_weapon() as WeaponInstance
 	var sweep: WeaponAttackData = WeaponAttackData.new()
 	sweep.power = 3                                    # same power as main: the ONLY difference is reach
-	sweep.attack_pattern = ForwardLinePattern.new()    # length 2 -- the aimed cell and one beyond
+	sweep.attack_pattern = P.line(2)    # length 2 -- the aimed cell and one beyond
 	var extras: Array[WeaponAttackData] = [sweep]
 	weapon.template.extra_attacks = extras
 	var upright: Unit = _spawn(board, ENEMY, Vector2i(1, 0))
@@ -572,7 +574,7 @@ func test_a_target_the_plan_has_already_killed_is_not_aimed_at() -> void:
 	var lance: WeaponAttackData = WeaponAttackData.new()
 	lance.power = 3
 	lance.hits_allies = true
-	lance.attack_pattern = ForwardLinePattern.new()   # length 2: (1,0) then (0,0)
+	lance.attack_pattern = P.line(2)   # length 2: (1,0) then (0,0)
 	var extras: Array[WeaponAttackData] = [lance]
 	weapon.template.extra_attacks = extras
 

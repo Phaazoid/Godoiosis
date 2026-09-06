@@ -17,6 +17,8 @@
 # Fixture is #114's -- the instanced root MUST be named "Main" under /root.
 extends GdUnitTestSuite
 
+const P := preload("res://tests/support/pattern_fixtures.gd")
+
 const MAIN_SCENE := "res://Scenes/Main.tscn"
 const H := preload("res://tests/support/squad_fixtures.gd")
 
@@ -307,10 +309,7 @@ func test_hovering_an_aim_stores_its_sight_trace_and_exit_clears_it() -> void:
 
 func test_a_wall_covered_aim_stores_a_blocked_trace() -> void:
 	var attacker := _armed_attacker(EquippableData.TargetMode.UNIT)
-	var pattern := ManhattanRangePattern.new()
-	pattern.min_range = 1
-	pattern.max_range = 2
-	(attacker.get_equipped_weapon() as WeaponInstance).template.main_attack.attack_pattern = pattern
+	(attacker.get_equipped_weapon() as WeaponInstance).template.main_attack.attack_pattern = P.point(2, 1)
 	game.board_heights.set_cell(Vector2i(1, 2), 6)   # a wall between (1,1) and the target at (1,3)
 
 	_aim_at(attacker, Vector2i(1, 3))

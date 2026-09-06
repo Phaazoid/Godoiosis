@@ -127,7 +127,7 @@ func test_a_damageless_attack_prints_no_blend() -> void:
 
 func test_the_lint_flags_a_blend_that_does_not_total_100() -> void:
 	var short_blend := _attack(3, {Stats.Stat.STR: 60, Stats.Stat.DEX: 30})
-	short_blend.attack_pattern = ManhattanRangePattern.new()
+	short_blend.attack_pattern = AttackPattern.new()
 	var findings := AttackLint.check(short_blend)
 	assert_array(findings).is_not_empty()
 	assert_int(findings[0]["severity"]).is_equal(AttackLint.Severity.DEGRADES)
@@ -135,14 +135,14 @@ func test_the_lint_flags_a_blend_that_does_not_total_100() -> void:
 
 func test_a_blend_totalling_100_passes_the_lint() -> void:
 	var ok := _attack(3, {Stats.Stat.STR: 60, Stats.Stat.DEX: 40})
-	ok.attack_pattern = ManhattanRangePattern.new()
+	ok.attack_pattern = AttackPattern.new()
 	assert_array(AttackLint.check(ok)).is_empty()
 
 func test_a_carving_has_no_blend_and_is_not_flagged_for_one() -> void:
 	# TransmutationData scales off the wielder's aura, so it has no scaling_blend at all -- the
 	# rule must skip it rather than read a missing field as a zero total.
 	var carving := TransmutationData.new()
-	carving.attack_pattern = ManhattanRangePattern.new()
+	carving.attack_pattern = AttackPattern.new()
 	assert_array(AttackLint.check(carving)).is_empty()
 
 func test_every_shipped_attack_totals_100() -> void:

@@ -15,6 +15,8 @@
 # a shipped .tres is served from the resource cache to every suite in the run.
 extends GdUnitTestSuite
 
+const P := preload("res://tests/support/pattern_fixtures.gd")
+
 const TEMP_PATH := "user://__test_live_sync.tres"
 const OTHER_PATH := "user://__test_live_sync_other.tres"
 
@@ -102,26 +104,24 @@ func test_a_mod_granting_the_attack_sees_the_edit_without_being_touched() -> voi
 # the edited object's own sub-resources across.
 func test_editing_on_after_a_save_does_not_reach_the_board_until_the_next_one() -> void:
 	var live := _staged_live_attack()
-	var pattern := ForwardLinePattern.new()
-	pattern.length = 3
-	live.attack_pattern = pattern
+	live.attack_pattern = P.point(3)
 
 	var edited := _editor_copy(live)
 	edited.power = EDITED_POWER
 	assert_bool(DevWidgets.save_over(edited, TEMP_PATH, null)).is_true()
 
 	edited.power = 999
-	var edited_pattern := edited.attack_pattern as ForwardLinePattern
-	edited_pattern.length = 9
+	var edited_pattern := edited.attack_pattern
+	edited_pattern.max_range = 9
 
 	assert_int(live.power).is_equal(EDITED_POWER)
-	var live_pattern := live.attack_pattern as ForwardLinePattern
-	assert_int(live_pattern.length).is_equal(3)
+	var live_pattern := live.attack_pattern
+	assert_int(live_pattern.max_range).is_equal(3)
 
 	assert_bool(DevWidgets.save_over(edited, TEMP_PATH, null)).is_true()
 	assert_int(live.power).is_equal(999)
-	live_pattern = live.attack_pattern as ForwardLinePattern
-	assert_int(live_pattern.length).is_equal(9)
+	live_pattern = live.attack_pattern
+	assert_int(live_pattern.max_range).is_equal(9)
 
 
 # Save As: nothing is cached at a fresh path, so nobody holds a stale reference and the cheap

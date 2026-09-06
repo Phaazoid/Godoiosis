@@ -7,7 +7,7 @@
 [ext_resource type="Script" uid="uid://8ryqq4dv281h" path="res://Classes/flow/TutorialStep.gd" id="3_rblmy"]
 [ext_resource type="Texture2D" uid="uid://fru8tri4sat1" path="res://Art/Units/MapSprites/Archer.png" id="6_5bmpp"]
 [ext_resource type="Texture2D" uid="uid://dxn02ap1cedsy" path="res://Art/Units/MapSprites/Sage_Downed.png" id="6_k5dlx"]
-[ext_resource type="Script" uid="uid://bbbfksnb0tted" path="res://Classes/weapons/patterns/ForwardLinePattern.gd" id="7_facq7"]
+[ext_resource type="Script" uid="uid://cjmftk6nqeklw" path="res://Classes/weapons/patterns/AttackPattern.gd" id="7_facq7"]
 [ext_resource type="Script" uid="uid://df2c8ssuh18ff" path="res://Classes/weapons/WeaponModData.gd" id="7_owa6k"]
 [ext_resource type="Texture2D" uid="uid://5j5clrlw0olr" path="res://Art/Units/Portraits/faceless_one.png" id="7_qfk2f"]
 [ext_resource type="Script" uid="uid://cvvknuw621ar2" path="res://Classes/units/UnitData.gd" id="8_1v4i7"]
@@ -31,7 +31,6 @@
 [ext_resource type="Texture2D" uid="uid://btayn3n3cf8k0" path="res://Art/Units/MapSprites/Recruit_Downed.png" id="23_facq7"]
 [ext_resource type="Script" uid="uid://bgbidu2bbf33l" path="res://Classes/alchemy/TransmutationData.gd" id="25_facq7"]
 [ext_resource type="Texture2D" uid="uid://bwd4se3jxnvtg" path="res://Art/Units/MapSprites/Recruit_Moving.png" id="25_gscw2"]
-[ext_resource type="Script" uid="uid://dsxc14gee2d01" path="res://Classes/weapons/patterns/ManhattanRangePattern.gd" id="26_gscw2"]
 [ext_resource type="Texture2D" uid="uid://d26i1cvn6ffwl" path="res://Art/Icons/ElementIcons/Fire.png" id="27_4ji6m"]
 [ext_resource type="Script" uid="uid://ckrp1phgirys0" path="res://Classes/alchemy/RuneData.gd" id="28_8jbv5"]
 [ext_resource type="Resource" uid="uid://fx3dcqyslgbe" path="res://Resources/Weapons/MainVarieties/Springspear.tres" id="32_8ihxj"]
@@ -47,7 +46,8 @@ distance = 13.401895
 
 [sub_resource type="Resource" id="Resource_8jbv5"]
 script = ExtResource("7_facq7")
-length = 5
+max_range = 0
+stamp = Array[Vector2i]([Vector2i(0, -1), Vector2i(0, -2), Vector2i(0, -3), Vector2i(0, -4), Vector2i(0, -5)])
 
 [sub_resource type="Resource" id="Resource_8ihxj"]
 script = ExtResource("25_facq7")
@@ -58,11 +58,10 @@ attack_pattern = SubResource("Resource_8jbv5")
 hits_allies = true
 
 [sub_resource type="Resource" id="Resource_5w2v2"]
-script = ExtResource("26_gscw2")
+script = ExtResource("7_facq7")
+min_range = 2
 max_range = 2
 max_and_a_half = true
-min_range = 2
-metadata/_custom_type_script = "uid://dsxc14gee2d01"
 
 [sub_resource type="Resource" id="Resource_3peij"]
 script = ExtResource("25_facq7")
@@ -361,11 +360,10 @@ weapon_battle_states = Dictionary[int, Dictionary]({
 })
 
 [sub_resource type="Resource" id="Resource_f5dmr"]
-script = ExtResource("26_gscw2")
+script = ExtResource("7_facq7")
+min_range = 2
 max_range = 2
 max_and_a_half = true
-min_range = 2
-metadata/_custom_type_script = "uid://dsxc14gee2d01"
 
 [sub_resource type="Resource" id="Resource_a1ncn"]
 script = ExtResource("25_facq7")
@@ -438,11 +436,10 @@ limb_states = Dictionary[int, int]({
 })
 
 [sub_resource type="Resource" id="Resource_qrxbn"]
-script = ExtResource("26_gscw2")
+script = ExtResource("7_facq7")
+min_range = 2
 max_range = 2
 max_and_a_half = true
-min_range = 2
-metadata/_custom_type_script = "uid://dsxc14gee2d01"
 
 [sub_resource type="Resource" id="Resource_tnex3"]
 script = ExtResource("25_facq7")
@@ -849,11 +846,10 @@ weapon_battle_states = Dictionary[int, Dictionary]({
 })
 
 [sub_resource type="Resource" id="Resource_3kvyv"]
-script = ExtResource("26_gscw2")
+script = ExtResource("7_facq7")
+min_range = 2
 max_range = 2
 max_and_a_half = true
-min_range = 2
-metadata/_custom_type_script = "uid://dsxc14gee2d01"
 
 [sub_resource type="Resource" id="Resource_n2b8h"]
 script = ExtResource("25_facq7")
@@ -926,11 +922,10 @@ limb_states = Dictionary[int, int]({
 })
 
 [sub_resource type="Resource" id="Resource_rsc80"]
-script = ExtResource("26_gscw2")
+script = ExtResource("7_facq7")
+min_range = 2
 max_range = 2
 max_and_a_half = true
-min_range = 2
-metadata/_custom_type_script = "uid://dsxc14gee2d01"
 
 [sub_resource type="Resource" id="Resource_3efpw"]
 script = ExtResource("25_facq7")

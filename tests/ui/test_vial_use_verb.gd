@@ -11,6 +11,8 @@
 #      already true of Equip before a vial existed.
 extends GdUnitTestSuite
 
+const P := preload("res://tests/support/pattern_fixtures.gd")
+
 const MAIN_SCENE := "res://Scenes/Main.tscn"
 const H := preload("res://tests/support/squad_fixtures.gd")
 const GRASS_SOURCE := 0
@@ -79,9 +81,7 @@ func _fireball() -> TransmutationData:
 	t.power = 4
 	t.sigils.assign([FIRE])
 	t.targets = EquippableData.TargetMode.UNIT
-	var pattern := ManhattanRangePattern.new()
-	pattern.max_range = 3
-	t.attack_pattern = pattern
+	t.attack_pattern = P.point(3)
 	return t
 
 

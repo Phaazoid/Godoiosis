@@ -10,6 +10,8 @@
 # every walk down its unreachable fallback and measure nothing.
 extends GdUnitTestSuite
 
+const P := preload("res://tests/support/pattern_fixtures.gd")
+
 const H := preload("res://tests/support/squad_fixtures.gd")
 const BB := preload("res://play/board_builder.gd")
 
@@ -53,9 +55,7 @@ func _watch_weapon(length := 1) -> WeaponInstance:
 	watch.display_name = "Watch"
 	watch.power = 3
 	watch.can_overwatch = true
-	var line := ForwardLinePattern.new()
-	line.length = length
-	watch.attack_pattern = line
+	watch.attack_pattern = P.line(length)
 	var extras: Array[WeaponAttackData] = [watch]
 	template.extra_attacks = extras
 	return WeaponInstance.make(template)
@@ -78,7 +78,7 @@ func _queued_guard(unit: Unit) -> GuardAction:
 # --- Overwatch ----------------------------------------------------------------------------------
 
 # A DUD AIM MUST NEVER BE QUEUED, and nothing downstream would catch one. A hint that yields no
-# cardinal direction makes ForwardLinePattern answer with no cells; from there the failure is silent
+# cardinal direction makes a self-anchored AttackPattern answer with no cells; from there the failure is silent
 # all the way down -- the resolver arms nothing, Unit.arm_watch refuses an empty footprint, and no
 # queue gate inspects an OverwatchAction at all. The unit would have spent its main action on air
 # behind a legal-looking row, so the assertion is on the FOOTPRINT, never on the row.

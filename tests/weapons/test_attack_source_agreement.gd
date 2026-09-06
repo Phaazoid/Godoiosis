@@ -10,6 +10,8 @@
 # assert through resolve_plan, not by inspecting which function got called.
 extends GdUnitTestSuite
 
+const P := preload("res://tests/support/pattern_fixtures.gd")
+
 const H := preload("res://tests/support/squad_fixtures.gd")
 
 const PLAYER := Team.Faction.PLAYER
@@ -26,16 +28,11 @@ class _StubBoard extends BoardContext:
 
 # --- fixture helpers -------------------------------------------------------
 
-func _manhattan(r: int) -> ManhattanRangePattern:
-	var p := ManhattanRangePattern.new()
-	p.max_range = r
-	return p
+func _manhattan(r: int) -> AttackPattern:
+	return P.point(r)
 
-func _wide(w: int, length: int = 1) -> ForwardWidePattern:
-	var p := ForwardWidePattern.new()
-	p.length = length
-	p.width = w
-	return p
+func _wide(w: int, length: int = 1) -> AttackPattern:
+	return P.wide(length, w)
 
 func _atk(power: int, pattern: AttackPattern, can_counter: bool = true, hits_allies: bool = false) -> WeaponAttackData:
 	var a := WeaponAttackData.new()

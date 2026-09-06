@@ -19,7 +19,7 @@
 [ext_resource type="Script" uid="uid://bu1j3q4jhqcpf" path="res://Classes/weapons/instances/DrillWeaponInstance.gd" id="17_22von"]
 [ext_resource type="Resource" uid="uid://bv7tui68o7xfr" path="res://Resources/Weapons/MainVarieties/Drill.tres" id="18_gvau7"]
 [ext_resource type="Script" uid="uid://bgbidu2bbf33l" path="res://Classes/alchemy/TransmutationData.gd" id="19_j3sob"]
-[ext_resource type="Script" uid="uid://dsxc14gee2d01" path="res://Classes/weapons/patterns/ManhattanRangePattern.gd" id="20_q5eac"]
+[ext_resource type="Script" uid="uid://cjmftk6nqeklw" path="res://Classes/weapons/patterns/AttackPattern.gd" id="20_q5eac"]
 [ext_resource type="Script" uid="uid://ckrp1phgirys0" path="res://Classes/alchemy/RuneData.gd" id="21_qlc3e"]
 
 [sub_resource type="Resource" id="Resource_5qx3r"]
@@ -465,7 +465,6 @@ limb_states = Dictionary[int, int]({
 [sub_resource type="Resource" id="Resource_1vgbo"]
 script = ExtResource("20_q5eac")
 max_range = 3
-metadata/_custom_type_script = "uid://dsxc14gee2d01"
 
 [sub_resource type="Resource" id="Resource_mpdgd"]
 script = ExtResource("19_j3sob")
@@ -537,7 +536,6 @@ limb_states = Dictionary[int, int]({
 [sub_resource type="Resource" id="Resource_mab6h"]
 script = ExtResource("20_q5eac")
 max_range = 3
-metadata/_custom_type_script = "uid://dsxc14gee2d01"
 
 [sub_resource type="Resource" id="Resource_mfdw7"]
 script = ExtResource("19_j3sob")
@@ -773,7 +771,6 @@ limb_states = Dictionary[int, int]({
 [sub_resource type="Resource" id="Resource_7puip"]
 script = ExtResource("20_q5eac")
 max_range = 3
-metadata/_custom_type_script = "uid://dsxc14gee2d01"
 
 [sub_resource type="Resource" id="Resource_inpo2"]
 script = ExtResource("19_j3sob")

@@ -11,6 +11,8 @@
 # project (get_projected_unit_from_cell reads the active squad).
 extends GdUnitTestSuite
 
+const P := preload("res://tests/support/pattern_fixtures.gd")
+
 const H := preload("res://tests/support/squad_fixtures.gd")
 
 const PLAYER := Team.Faction.PLAYER
@@ -93,9 +95,7 @@ func test_resolve_drops_a_target_who_moves_out_of_the_blast() -> void:
 # A three-cell line east, fired by an attacker at the origin over two enemies at (1,0) and (2,0).
 func _line_volley(heights: BoardHeights) -> ResolvedPlan:
 	var attacker := H.spawn_solo(self, _sm, PLAYER, Vector2i(0, 0), {Stats.Stat.LDR: 3})
-	var line := ForwardLinePattern.new()
-	line.length = 3
-	(attacker.get_equipped_weapon() as WeaponInstance).template.main_attack.attack_pattern = line
+	(attacker.get_equipped_weapon() as WeaponInstance).template.main_attack.attack_pattern = P.line(3)
 	var near := H.spawn_solo(self, _sm, Team.Faction.ENEMY, Vector2i(1, 0), {Stats.Stat.MHP: 60})
 	var far := H.spawn_solo(self, _sm, Team.Faction.ENEMY, Vector2i(2, 0), {Stats.Stat.MHP: 60})
 	_sm.active_squad = attacker.squad

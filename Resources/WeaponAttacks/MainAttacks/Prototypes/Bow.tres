@@ -1,13 +1,12 @@
 [gd_resource type="Resource" script_class="WeaponAttackData" format=3]
 
-[ext_resource type="Script" uid="uid://dsxc14gee2d01" path="res://Classes/weapons/patterns/ManhattanRangePattern.gd" id="1_sqb7e"]
+[ext_resource type="Script" uid="uid://cjmftk6nqeklw" path="res://Classes/weapons/patterns/AttackPattern.gd" id="1_sqb7e"]
 [ext_resource type="Script" uid="uid://ddqeee7njjjq2" path="res://Classes/weapons/WeaponAttackData.gd" id="2_4i624"]
 
 [sub_resource type="Resource" id="Resource_juf0b"]
 script = ExtResource("1_sqb7e")
-max_range = 3
 min_range = 2
-metadata/_custom_type_script = "uid://dsxc14gee2d01"
+max_range = 3
 
 [resource]
 script = ExtResource("2_4i624")

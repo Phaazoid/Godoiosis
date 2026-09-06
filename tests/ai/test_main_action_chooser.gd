@@ -3,8 +3,10 @@
 # walks the archetype's priority list -- first buildable candidate wins. Fixture conventions
 # mirror test_rune_firing.gd (runes), test_ability_chassis_live_kit.gd (live abilities), and
 # test_weapon_instance_readiness.gd (sprung weapons). Grid-free: pattern-less reach is
-# Manhattan 1; the one pattern used (ForwardLinePattern) is pure geometry.
+# Manhattan 1; the one pattern used (a self-anchored line) is pure geometry.
 extends GdUnitTestSuite
+
+const P := preload("res://tests/support/pattern_fixtures.gd")
 
 const H := preload("res://tests/support/squad_fixtures.gd")
 const F := preload("res://tests/support/job_fixtures.gd")
@@ -144,12 +146,10 @@ func test_friendly_splash_loses_to_a_clean_shot_at_the_same_victim() -> void:
 	var weapon: WeaponInstance = attacker.get_equipped_weapon() as WeaponInstance
 	weapon.template.main_attack.power = 6
 	weapon.template.main_attack.hits_allies = true
-	weapon.template.main_attack.attack_pattern = ForwardLinePattern.new()   # length 2
+	weapon.template.main_attack.attack_pattern = P.line(2)
 	var clean: WeaponAttackData = WeaponAttackData.new()
 	clean.power = 3
-	var reach: ManhattanRangePattern = ManhattanRangePattern.new()
-	reach.max_range = 2                                    # far enough to skip the ally entirely
-	clean.attack_pattern = reach
+	clean.attack_pattern = P.point(2)   # far enough to skip the ally entirely
 	var extras: Array[WeaponAttackData] = [clean]
 	weapon.template.extra_attacks = extras
 	var _friend: Unit = H.spawn_solo(self, _sm, ENEMY, Vector2i(1, 0), { Stats.Stat.MHP: 50 })
@@ -167,7 +167,7 @@ func test_clear_line_queues_the_same_attack() -> void:
 	var weapon: WeaponInstance = attacker.get_equipped_weapon() as WeaponInstance
 	weapon.template.main_attack.power = 6
 	weapon.template.main_attack.hits_allies = true
-	weapon.template.main_attack.attack_pattern = ForwardLinePattern.new()
+	weapon.template.main_attack.attack_pattern = P.line(2)
 	var victim: Unit = H.spawn_solo(self, _sm, PLAYER, Vector2i(2, 0), { Stats.Stat.MHP: 50 })
 
 	var units: Array[Unit] = [attacker, victim]

@@ -128,7 +128,7 @@ func targets_text() -> String:
 static func property_tips() -> Dictionary:
 	return {
 		"power": "Base damage before scaling. A weapon attack scales this off its weapon's stat blend and fitted mods; a carving scales it off the wielder's aura.",
-		"attack_pattern": "The geometry -- which cells this attack may be aimed at. Pick the class here; that class's own fields appear indented underneath.",
+		"attack_pattern": "The geometry: a RANGE (where it may be aimed) plus a STAMP (the cells it then covers). Pick AttackPattern here if the attack has none yet; its fields appear indented underneath.",
 		"can_counter": "May this attack be used when countering? A weapon always counters with its MAIN attack whatever is picked, so this only matters on a main.",
 		"hits_allies": "Splash reaches your own side too, not just enemies.",
 		"hits_self": "The attacker is a legal victim of its own attack.",

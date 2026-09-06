@@ -8,9 +8,9 @@ class_name AttackLint
 #
 # The verdict comes from Reach, never from the pattern's own numbers, and that is the whole design.
 # Reach carries the bare-fists fallback, so a pattern-less attack reads as fireable at adjacency
-# instead of being flagged; and a pattern class added later answers here without this file changing.
-# The rule is "an attack must be able to select at least one cell", NOT "min must not exceed max" --
-# the second is one way to break the first.
+# instead of being flagged. The rule is "an attack must be able to select at least one cell", NOT
+# "min must not exceed max" -- the second is one way to break the first. Its twin since #803 is
+# "and land on at least one": a stamp can be empty while the ring is not.
 #
 # Both faults are AUTHORING mistakes and both are entirely silent, which is why they need a lint at
 # all. An impossible range pair simply selects nothing, so the attack stops showing any range in
@@ -37,6 +37,7 @@ static func check(attack: AttackData) -> Array[Dictionary]:
 	if attack == null:
 		return found
 	_check_reaches_anything(attack, found)
+	_check_affects_anything(attack, found)
 	_check_blend_totals(attack, found)
 	_check_kind_is_authored(attack, found)
 	return found
@@ -85,15 +86,26 @@ static func _check_reaches_anything(attack: AttackData, found: Array[Dictionary]
 	var name := attack.display_name if attack.display_name != "" else "This attack"
 	var text := "%s can be aimed at NO cells at all -- it will not show any range in game, and nothing will refuse to fire it." % name
 	var pattern := attack.attack_pattern
-	if pattern is ManhattanRangePattern:
-		# The one pattern with two interacting numbers, and the one that has actually bitten: the
-		# hint names the pair rather than making the reader find it.
-		var manhattan: ManhattanRangePattern = pattern
-		if manhattan.min_range > manhattan.max_range:
-			text += " Min Range (%d) is above Max Range (%d)." % [manhattan.min_range, manhattan.max_range]
-	elif pattern != null:
-		text += " Its %s selects nothing at this size." % pattern.get_script().get_global_name()
+	if pattern != null:
+		# The hint names the pair that has actually bitten rather than making the reader find it.
+		# A self-anchored pattern (max range 0) has no ring to empty; only its stamp can be.
+		if pattern.is_directional():
+			text += " Its stamp is empty, so no facing covers anything."
+		elif pattern.min_range > pattern.max_range:
+			text += " Min Range (%d) is above Max Range (%d)." % [pattern.min_range, pattern.max_range]
 	_add(found, Severity.BLOCKS, text)
+
+
+# The fault the check above cannot see (#803): an attack aimed at a CELL whose stamp is empty. Its
+# ring is intact, so it can be aimed anywhere in range and then lands on nothing. Self-anchored
+# patterns are the check above's business (an empty stamp is an empty union there), so this asks
+# only the anchored half and the two never both fire for one fault.
+static func _check_affects_anything(attack: AttackData, found: Array[Dictionary]) -> void:
+	var pattern := attack.attack_pattern
+	if pattern == null or pattern.is_directional() or not pattern.stamp.is_empty():
+		return
+	var name := attack.display_name if attack.display_name != "" else "This attack"
+	_add(found, Severity.BLOCKS, "%s can be aimed but its stamp is empty, so it lands on no cells at all -- add at least 0,0." % name)
 
 
 static func _add(found: Array[Dictionary], severity: Severity, text: String) -> void:
