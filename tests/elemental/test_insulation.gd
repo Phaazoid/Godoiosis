@@ -3,10 +3,11 @@
 # immunity (job-ideas.md). The model is "the element is erased from the hit" -- canon's own phrase
 # for this shape is "immune to SHOCK reactions" (elemental-interactions.md's GROUNDED state).
 #
-# The load-bearing distinction, and the reason this suite exists: a weapon merely TAGGED with a
-# blocked element still lands its physical swing (insulation, not a force field), but a carving
-# whose damage IS the element -- it scales off the wielder's AURA, not their body -- is stopped
-# outright. PlanResolver tells them apart by whether fired_attack is a TransmutationData.
+# The load-bearing distinction, and the reason this suite exists: insulation strips the ELEMENT --
+# the effect never fires, no reaction keys on it -- and NOTHING ELSE. The damage still lands as an
+# ordinary hit of its kind, for DEF to answer (#424, dev 2026-09-05: "immune to shock damage" is
+# spelled as armour covering SHOCK). Until #424 a carving whose damage WAS the element was turned
+# aside entirely -- a hit that never arrived -- and that outcome is REPEALED; see the arrival cases.
 extends GdUnitTestSuite
 
 const H := preload("res://tests/support/squad_fixtures.gd")
@@ -98,9 +99,10 @@ func _attack(attacker: Unit, target: Unit) -> AttackAction:
 	return H.stamped_attack(attacker, target)
 
 
-# --- the carving half: damage that IS elemental is stopped outright ---
+# --- the carving half: the effect is stripped, the damage lands ---
 
-func test_a_lightning_carving_is_nullified_entirely() -> void:
+func test_an_insulated_carving_lands_its_damage_and_none_of_its_effect() -> void:
+	# The Weave has no DEF, so the bolt's whole number lands -- and nothing keyed on SHOCK can fire.
 	var alch: Unit = _alchemist({ Elemental.Element.FIRE: 4 })
 	var foe: Unit = H.spawn_solo(self, _sm, ENEMY, Vector2i(1, 0), {Stats.Stat.MHP: 50})
 	foe.worn_armor = _insulated_against(Elemental.Element.SHOCK)
@@ -112,11 +114,14 @@ func test_a_lightning_carving_is_nullified_entirely() -> void:
 	var no_reactions: Array[ElementalReaction] = []
 	PlanResolver.resolve(plan, no_reactions)
 
-	assert_int(atk.resolved.damage).is_equal(0)   # would have been power 5 + fire aura 4
+	assert_int(atk.resolved.damage).is_equal(9)   # power 5 + fire aura 4 -- NOT turned aside (#424)
+	assert_array(atk.resolved.elements).is_empty()   # SHOCK never reached the target
+	assert_bool(atk.resolved.insulated).is_true()
 
 
-func test_the_same_carving_hurts_an_unarmored_target() -> void:
-	# Control for the test above -- proves the 0 comes from the armor, not a broken fixture.
+func test_the_same_carving_reaches_an_unarmored_target() -> void:
+	# Control: the NUMBER is the same either way now, so what separates the two is whether the
+	# element arrived -- the rail, the reactions and the states all key on that.
 	var alch: Unit = _alchemist({ Elemental.Element.FIRE: 4 })
 	var foe: Unit = H.spawn_solo(self, _sm, ENEMY, Vector2i(1, 0), {Stats.Stat.MHP: 50})
 
@@ -128,6 +133,8 @@ func test_the_same_carving_hurts_an_unarmored_target() -> void:
 	PlanResolver.resolve(plan, no_reactions)
 
 	assert_int(atk.resolved.damage).is_equal(9)
+	assert_array(atk.resolved.elements).contains([Elemental.Element.SHOCK])
+	assert_bool(atk.resolved.insulated).is_false()
 
 
 func test_insulation_is_element_specific() -> void:
@@ -200,12 +207,11 @@ func test_an_unarmored_target_still_gets_electrocuted() -> void:
 	assert_bool(shock.resolved.states_removed.has(Elemental.State.WET)).is_true()
 
 
-# --- a turned-aside attack is not a 0-damage hit (dev call 2026-07-24) ---
+# --- an insulated hit still ARRIVES (#424 repealed the 2026-07-24 turn-aside) ---
 
-func test_a_downed_insulated_unit_survives_a_lightning_bolt() -> void:
-	# The exemption that makes insulation mean something. Normally ANY hit finishes a downed unit,
-	# 0-damage ones included (stats.md, ratified). But a fully-blocked carving never ARRIVED --
-	# it isn't a hit that did nothing, it's an attack that didn't land -- so it can't finish them.
+func test_an_insulated_bolt_still_finishes_a_downed_unit() -> void:
+	# The sharpest consequence of the repeal: insulation is not a shield. A downed unit in the Weave
+	# takes the bolt's number like any other hit, so the ordinary downed rule applies to it.
 	var alch: Unit = _alchemist({ Elemental.Element.FIRE: 4 })
 	var foe: Unit = H.spawn_solo(self, _sm, ENEMY, Vector2i(1, 0), {Stats.Stat.MHP: 50})
 	foe.worn_armor = _insulated_against(Elemental.Element.SHOCK)
@@ -218,16 +224,13 @@ func test_a_downed_insulated_unit_survives_a_lightning_bolt() -> void:
 	var no_reactions: Array[ElementalReaction] = []
 	PlanResolver.resolve(plan, no_reactions)
 
-	assert_int(atk.resolved.damage).is_equal(0)
-	assert_int(atk.resolved.lethality).is_equal(ResolvedOutcome.Lethality.NONE)
+	assert_int(atk.resolved.damage).is_equal(9)
+	assert_int(atk.resolved.lethality).is_equal(ResolvedOutcome.Lethality.KILLED)
 
 
 func test_an_unblocked_bolt_still_finishes_a_downed_unit() -> void:
-	# Control: the same downed unit, same bolt, armor that grants the WRONG ability -- the ratified
-	# downed rule applies. Since #90 there is only one insulation id authored (SHOCK), so "insulated
-	# against fire" is no longer expressible; granting an unrelated ability is the stronger control
-	# anyway, because it rules out ANY ability-granting armor exempting a downed unit. TAUNT rather
-	# than IRON_WILL deliberately: a damage cap would confound the numbers on the way through.
+	# Control: armor that grants an unrelated ability (TAUNT rather than IRON_WILL, so no damage cap
+	# confounds the number) -- the same downed rule, the same answer.
 	var alch: Unit = _alchemist({ Elemental.Element.FIRE: 4 })
 	var foe: Unit = H.spawn_solo(self, _sm, ENEMY, Vector2i(1, 0), {Stats.Stat.MHP: 50})
 	foe.worn_armor = _armor_granting(Abilities.Id.TAUNT)
@@ -243,62 +246,28 @@ func test_an_unblocked_bolt_still_finishes_a_downed_unit() -> void:
 	assert_int(atk.resolved.lethality).is_equal(ResolvedOutcome.Lethality.KILLED)
 
 
-func test_a_zero_damage_hit_still_ARRIVES_where_a_turned_aside_one_never_did() -> void:
-	# The narrowness check. Insulation exempts a TURNED-ASIDE attack, not every harmless one — and
-	# REWRITTEN 2026-08-08 (#126) because the fact it used to lean on was repealed: a 0-damage hit no
-	# longer finishes a downed unit, so "it still kills the body" can't tell the two apart any more.
-	#
-	# What still separates them is arrival. A 0-damage hit LANDED — it deposits, it triggers on-hit
-	# effects, and it SHOVES. A turned-aside one never arrived, so PlanResolver's insulation branch
-	# returns before the displacement stage and it does none of that. Both halves asserted here,
-	# because either alone passes against the bug where insulation swallows an ordinary weak swing.
-	var weakling: Unit = H.spawn_solo(self, _sm, PLAYER, Vector2i(0, 0), {Stats.Stat.STR: 0}, true, 0)
+func test_an_insulated_carving_still_arrives_and_shoves() -> void:
+	# "Arrives" asserted on the thing the old branch withheld: the displacement stage runs, so a bolt
+	# carrying knockback moves an insulated target -- while its effect is still stripped. A mutant
+	# restoring the old early return reds this on the shove alone.
+	var alch: Unit = _alchemist({ Elemental.Element.FIRE: 4 })
 	var foe: Unit = H.spawn_solo(self, _sm, ENEMY, Vector2i(1, 0), {Stats.Stat.MHP: 50})
 	foe.worn_armor = _insulated_against(Elemental.Element.SHOCK)
 	var board := _sm.board_source.call() as BoardContext
 	var no_reactions: Array[ElementalReaction] = []
 
-	# The physical swing: 0 damage, but it arrived — so it moves the target.
-	var swing := _attack(weakling, foe)
-	swing.fired_attack.knockback = 1
-	var swing_plan := ResolvedPlan.new()
-	swing_plan.attacks.append(swing)
-	PlanResolver.resolve(swing_plan, no_reactions, board)
-
-	assert_int(swing.resolved.damage).is_equal(0)
-	assert_bool(swing.resolved.knockback_applied).is_true()
-
-	# The blocked bolt: identical 0 on the sheet, and it displaces nobody.
-	foe.movement.cell = Vector2i(1, 0)
-	var alch: Unit = _alchemist({ Elemental.Element.FIRE: 4 })
 	var bolt := H.stamped_attack(alch, foe)
 	var carving := _lightning_bolt(5)
 	carving.knockback = 1
 	bolt.fired_attack = carving
-	var bolt_plan := ResolvedPlan.new()
-	bolt_plan.attacks.append(bolt)
-	PlanResolver.resolve(bolt_plan, no_reactions, board)
-
-	assert_int(bolt.resolved.damage).is_equal(0)
-	assert_bool(bolt.resolved.knockback_applied).is_false()
-
-
-func test_a_blocked_bolt_leaves_a_living_target_untouched() -> void:
-	# The whole outcome is inert, not just the damage number: no HP change, no lethality.
-	var alch: Unit = _alchemist({ Elemental.Element.FIRE: 4 })
-	var foe: Unit = H.spawn_solo(self, _sm, ENEMY, Vector2i(1, 0), {Stats.Stat.MHP: 50})
-	foe.worn_armor = _insulated_against(Elemental.Element.SHOCK)
-
-	var atk := H.stamped_attack(alch, foe)
-	atk.fired_attack = _lightning_bolt(5)
 	var plan := ResolvedPlan.new()
-	plan.attacks.append(atk)
-	var no_reactions: Array[ElementalReaction] = []
-	PlanResolver.resolve(plan, no_reactions)
+	plan.attacks.append(bolt)
+	PlanResolver.resolve(plan, no_reactions, board)
 
-	assert_int(atk.resolved.target_hp_after).is_equal(foe.get_current_hp())
-	assert_bool(atk.resolved.knockback_applied).is_false()
-	assert_array(atk.resolved.states_added).is_empty()
+	assert_int(bolt.resolved.damage).is_equal(9)
+	assert_bool(bolt.resolved.knockback_applied).is_true()
+	assert_array(bolt.resolved.states_added).is_empty()
+	assert_int(bolt.resolved.target_hp_after).is_equal(foe.get_current_hp() - 9)
 
 
 # --- legibility + the deliberate non-filter ---
@@ -344,8 +313,8 @@ func test_the_ground_is_not_insulated() -> void:
 
 
 func test_insulation_does_not_stack_with_def() -> void:
-	# The Weave grants no DEF (that's its whole cost). A blocked hit reads 0 because the element
-	# was erased, NOT because mitigation ate it -- so an unblocked element still pays full price.
+	# The Weave grants no DEF (that is its whole cost): an insulated bolt pays no mitigation at all, and
+	# an unblocked element still pays full price. Immunity to the DAMAGE is DEF covering SHOCK (#424).
 	var weave := _insulated_against(Elemental.Element.SHOCK)
 	var foe: Unit = H.spawn_solo(self, _sm, ENEMY, Vector2i(1, 0), {Stats.Stat.MHP: 50, Stats.Stat.CON: 9})
 	foe.worn_armor = weave

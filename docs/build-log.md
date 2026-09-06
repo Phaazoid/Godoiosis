@@ -421,3 +421,26 @@ says to build ad hoc.
   than trusted. Tests: `tests/dev/test_dev_tool_save_uid.gd` drives the real save path and asserts the
   header uid (file text + `ResourceUID`) AND an ext_resource uid survive, falsified red against the
   removed restore; `tests/law/test_resource_uid_references.gd` stays the repo-law guard.
+
+## Damage kinds — #424 (2026-09-06, PRs #794 + the insulation repeal)
+
+Grilled 2026-09-04/05 (rulings on the issue). `AttackData.Kind` — BLUNT the zero, SLASH, PIERCE,
+FIRE, SHOCK, COLD, CORROSION, NONE last and never authored — landed on the shared attack base,
+AUTHORED on every attack and carving (dev: flavour, not derivation — an ice spear is PIERCE, sheer
+cold is COLD) and separate from the element set, which stays the EFFECT axis. `deliver()` is the
+one home for the NONE rule; `WeaponInstance.effective_kind` composes a mod's `overrides_kind`
+replacement and `fit_block_reason` refuses a second kind-changer. `ArmorData.covered_kinds` (empty
+= all, the storage default) gates the armour term through `RulesService.def_against`, LAYERED on
+`def_breakdown` so the panel and the resolver stay one composition; the resolver stamps
+`outcome.kind` and `outcome.mitigation` so the queue row's damage number explains itself on hover.
+Content: 18 attacks and carvings authored (Spray is CORROSION, Bite SLASH, Freeze COLD); Bulwark
+Plate, Riveted Mail and Ballast Harness cover the physical three, so a fireball goes through plate.
+
+The second PR repealed #90's never-arrives outcome: insulation strips the element and nothing
+else, the damage lands as a hit of its kind, and immunity to the damage is DEF covering that kind.
+Two tests died with the rule they pinned (a downed insulated unit surviving a bolt; a blocked bolt
+leaving a living target untouched); the arrival case was rewritten to pin the repeal. The
+"alchemic wards" idea collapsed into #799 (a temporary DEF term by kind). Left open by ruling: a
+per-kind DEF table — the list is its subset. Falsified in PR 1: the resolver reading the authored
+kind instead of the composed one, `def_against` zeroing cover with armour, and the queue row
+composing its tip but never assigning it — each reddened exactly one case.

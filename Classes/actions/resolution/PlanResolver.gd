@@ -369,7 +369,6 @@ static func _resolve_one(action: AttackAction, reactions: Array[ElementalReactio
 	outcome.hp_before = target_hypo.hp   # threaded pre-hit HP (R4), not the live board value
 	var incoming := _source_elements(action)
 	var elements := _surviving_elements(incoming, target)
-	var fully_insulated := not incoming.is_empty() and elements.is_empty()
 	outcome.elements = elements.duplicate()   # what REACHED the target — the queue row's element rail
 	if elements.size() < incoming.size():
 		outcome.insulated = true
@@ -418,20 +417,10 @@ static func _resolve_one(action: AttackAction, reactions: Array[ElementalReactio
 	outcome.mitigation = mitigation
 	outcome.damage = max(0, int(round(base * mult + bonus)) - mitigation)
 
-	# Insulation (a granted PASSIVE ability, #90 — from gear today, from any source the kit knows
-	# tomorrow): an attack whose damage IS elemental -- a rune carving,
-	# which scales off the wielder's AURA rather than their body -- is TURNED ASIDE ENTIRELY when
-	# the armor blocks every element it carries. Deliberately NOT modelled as a 0-damage hit: a
-	# 0-damage hit still ARRIVES (states, deposits, on-hit effects, and since #126 a shove -- the
-	# early return below is what keeps this one from displacing anybody). The bolt never arrived,
-	# so it does none of that. A weapon merely TAGGED with a blocked element skips this branch and
-	# still lands its swing: insulation, not a shield.
-	if fully_insulated and action.fired_attack is TransmutationData:
-		outcome.damage = 0
-		outcome.lethality = ResolvedOutcome.Lethality.NONE
-		outcome.target_hp_after = target_hypo.hp
-		action.resolved = outcome
-		return
+	# Insulation (a granted PASSIVE ability, #90) strips the ELEMENT and nothing else since #424 (dev,
+	# 2026-09-05): the effect never fires, and the damage lands as an ordinary hit of its KIND for DEF to
+	# answer. The old branch here turned a fully-insulated carving aside entirely -- a hit that never
+	# arrived -- and that outcome is REPEALED: "immune to shock damage" is spelled as DEF covering SHOCK.
 
 	# Falls (#259): the landing must be known BEFORE the rung is named, because fall damage can
 	# change it -- so the landing computes here, off a PROVISIONAL rung (a hit that alone kills
