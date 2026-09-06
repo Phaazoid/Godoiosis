@@ -44,6 +44,8 @@ Impact frames in battle zoom
 
 In fire emblem, when you are selecting an attack on an enemy unit, it is easy to cycle through your available weapons and compare what each of them will do in the situation before comitting.  We need an analogue of that here, not just for different weapons in inventory, but for all attacks available from all weapons.  
 
+Level preview menu character cards need to show off Aura/Weapon affinity as well
+
 
 *(empty — swept 2026-09-03)*
 
