@@ -404,16 +404,16 @@ func _on_job_toggled(id: String, pressed: bool) -> void:
 
 # The Unit Editor's weapons+armor+runes merge, CALLED rather than copied (Law #4) -- one answer
 # to "what can a dev put in a hand".
-func _equippable_catalog() -> Dictionary:
+func _item_catalog() -> Dictionary:
 	var unit_editor: UnitEditorTool = get_node("%Unit Editor")
-	return unit_editor._equippable_catalog()
+	return unit_editor._item_catalog()
 
 # The kit: what the character carries into any board, seeded through the gated doors at spawn
 # (#177). Slot picks stage the catalog FILE resource itself -- no copy -- so a save writes an
 # ExtResource reference and the spawn grants copy_for_grant() copies off it.
 func _add_kit_section() -> void:
 	DevWidgets.add_label(editor_container, "Starting inventory (no Equip checked = auto-equip decides)")
-	var catalog := _equippable_catalog()
+	var catalog := _item_catalog()
 	var keys: Array = catalog.keys()
 	var equip_group := ButtonGroup.new()
 	equip_group.allow_unpress = true
@@ -477,7 +477,7 @@ func _on_slot_picked(index: int, opt_index: int) -> void:
 		current.starting_inventory.resize(Unit.MAX_INVENTORY_SIZE)
 	var entry: EquippableData = null
 	if opt_index > 0:
-		var catalog := _equippable_catalog()
+		var catalog := _item_catalog()
 		entry = catalog[catalog.keys()[opt_index - 1]]
 	current.starting_inventory[index] = entry
 	if current.starting_equipped_index == index:
