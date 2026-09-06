@@ -14,8 +14,8 @@ scaling_blend = Dictionary[int, int]({
 4: 40
 })
 display_name = "Slash"
-damage_kind = 1
 power = 3
 attack_pattern = SubResource("Resource_main")
 vertical_rule = 1
+damage_kind = 1
 metadata/_custom_type_script = "uid://ddqeee7njjjq2"
