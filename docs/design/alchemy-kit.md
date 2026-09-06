@@ -6,7 +6,7 @@
 
 Supersedes the wiki's **tiered rune tree** and the **stale top half of `Alchemy.docx`** (one-rune-per-element, aura-from-casting — the dev confirmed that section is an old layer), plus all **crit / hit / avo / AP / random-level-up** framing (Law #1; `Stats Overview.docx` is otherwise pre-determinism-era). Empty wiki stubs: `Alcahest & elemental affinities.docx`, `Rune Combination Psuedocode.docx`.
 
-**Canon checked through #784 (2026-09-05).**
+**Canon checked through #786 (2026-09-05).**
 
 Tags: **[LOCKED]** · **[PROPOSED]** (awaiting sign-off) · **[WORKSHOP]** (actively being designed) · **[OPEN]** (fork).
 
@@ -94,7 +94,7 @@ Note what the law does *not* repeal. Transmutations already needed no fuel to fi
 
 ### Empowerment
 
-A cast is **empowered** in element *E* when the caster is **on or adjacent to** (Manhattan 1) a source of *E*, **or** burns a matching carried vial as part of the cast. What that buys:
+A cast is **empowered** in element *E* when the caster is **on or adjacent to** (Manhattan 1) a source of *E*, **or** is **attuned** to a matching (or alkahest) vial they have used. What that buys:
 
 - **Normally, an authored empowered form** — each carving answers, in its own terms, what it becomes at a source (a fireball that becomes a wall, a gust that becomes a gale). This is the norm, not a premium tier ([#695](https://github.com/Phaazoid/Godoiosis/issues/695)).
 - **Otherwise the fallback: +1 effective aura in that element, scaling only** — used when nothing special suits the carving, or when raw power simply *is* the fitting answer. It is the limb tax's mirror twin: aura already moves by ±1, the wound takes a point and the river lends one.
@@ -124,10 +124,19 @@ A cast is **empowered** in element *E* when the caster is **on or adjacent to** 
 
 > **Renamed 2026-09-05** (dev's call). Anything written before that date — commits, PR conversations, and the closed doctrine issue [#693](https://github.com/Phaazoid/Godoiosis/issues/693) with its comments, left standing as the dated record — calls this same item a **flask**. Nothing about it changed but its name; **vial** is the only spelling canon uses.
 
-Element-tagged vials, plus rare **alkahest-pure** that matches anything. **Burned per empowered cast, as part of the cast** — no separate action — and it grants **exactly what a source grants, never more**: portability *is* the premium ([#697](https://github.com/Phaazoid/Godoiosis/issues/697)). Supply is the authored, faucet-free economy ([progression.md](progression.md)); there is no crafting.
+Element-tagged vials, plus rare **alkahest-pure** that matches anything. **Burned per empowered cast** — no separate *action* — and it grants **exactly what a source grants, never more**: portability *is* the premium ([#697](https://github.com/Phaazoid/Godoiosis/issues/697)). Supply is the authored, faucet-free economy ([progression.md](progression.md)); there is no crafting.
 
 - **Explicitly NOT per-shot ammo — re-scoped, not repealed.** *Casting* never requires consumption; the vial is an **opt-in** upgrade. The one declared exception is the **chemical spitter's injection** ([#97](https://github.com/Phaazoid/Godoiosis/issues/97)), where one vial loads a tank of supercharged shots and a dry tank returns to a weaker baseline rather than to nothing.
 - **Three jobs:** **supercharges casts** · **etches/customizes runes** · feeds the **mechanist** economy (spitter injection, weapon imbuing).
+
+**BUILT 2026-09-05 (#697), and the shape the dev chose is Use-then-cast rather than choose-at-cast:**
+
+- **`Use` is an inspect-panel verb**, sitting where `Equip` sits for a weapon. It spends the item on the spot and leaves the unit **attuned**. *"No separate action"* therefore means **no queued action** — popping a vial costs no order and no turn; the item itself is the whole cost.
+- **The charge waits.** One at a time; a second `Use` replaces the first and the button names what it overwrites, so the trade is readable *before* the item is gone. It survives across turns until a cast draws on it, and it **rides a mid-battle save** — a charge that evaporated on load would eat a scarce item silently.
+- **The burn is DIFFERENTIAL: the charge is spent iff the outcome without it would differ.** One rule covers every case — the terrain already granting that element (stand by the river and the vial stays in your bag), no sigil matching, a `deals_no_damage` carving whose base is 0 either way, and a multi-sigil carving where only one element needed the help. It stays the right question once #695 makes empowerment an authored *form* rather than a +1.
+- **Spent at execution, never at plan time**, on the readiness precedent's exact terms. That is the whole of why re-aiming, undoing, reordering or cancelling a plan costs nothing: the plan never held the charge, so there is no reservation to release. The queue shows the burn as a chip before Execute (Law #2).
+- **Deferred, and filed rather than parked:** choosing *per cast* which working spends the vial. Today the charge is consumed by whichever cast first benefits, which the player does not pick — see the tracker.
+- **It gates nothing.** The one refusal in the system is `VialData.use_block_reason`, and it refuses only a burn that would buy the holder something they already have. Nothing about a vial can refuse a *cast*.
 
 ### Repeal record — the three availability bands (2026-08-29)
 
