@@ -360,3 +360,13 @@ func test_a_field_that_already_has_one_selects_its_own_row() -> void:
 	DevWidgets.build_resource_editor(_box, attack, func(): pass)
 	var picker := _picker()
 	assert_str(picker.get_item_text(picker.selected)).is_equal("AttackPattern")
+
+
+func test_the_none_row_is_first_because_add_item_selects_whatever_it_is_given_first() -> void:
+	# The ordering IS the mechanism, not a tidy default: add_item auto-selects row 0, so the empty
+	# state has to BE row 0 for a null field to display honestly. A mutant deleting an explicit
+	# select(0) beside it changed nothing, which is what exposed that.
+	DevWidgets.build_resource_editor(_box, _attack_with_no_pattern(), func(): pass)
+	assert_str(_picker().get_item_text(0)).override_failure_message(
+		"(none) is not row 0, so a null field will display as though a class were set"
+	).is_equal(DevWidgets.NO_RESOURCE_KEY)
