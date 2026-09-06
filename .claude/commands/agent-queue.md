@@ -4,7 +4,7 @@ description: Work the Iosis GitHub issue queue — advance every open issue whos
 
 You are working the **Iosis issue queue**. Your job is to advance each issue that is **your turn** one step, then hand back. Repo: `Phaazoid/Godoiosis` (gh is authed). Work from `C:\Iosis\Godoiosis`.
 
-## 1. Pull the queue — whose turn is DERIVED, never labelled
+## 1. Pull the queue — whose turn is DERIVED, and a CLAIMED issue is not yours
 
 **The last thing said on an issue tells you whose turn it is.** Every comment Claude posts leads with `🤖 Claude says:` (see `CLAUDE.md`), so:
 
@@ -14,11 +14,14 @@ You are working the **Iosis issue queue**. Your job is to advance each issue tha
 
 ```
 gh issue list --repo Phaazoid/Godoiosis --state open --limit 400 \
-  --json number,title,body,comments,labels,milestone --jq '
+  --json number,title,body,comments,labels,milestone,assignees --jq '
   .[] | (if (.comments|length) > 0 then (.comments|last|.body) else .body end) as $last
   | select((($last // "") | startswith("🤖 Claude says:")) | not)
+  | select([.assignees[].login] | all(. == "Phaazoid"))
   | "\(.number)\t\([.labels[].name]|map(select(startswith("priority/")))|join(","))\t\(.title)"'
 ```
+
+**A CLAIMED issue is not yours — the `assignees` clause is the codev check (`CLAUDE.md`, dev rule 2026-09-06).** `c3potheds` works this tracker too, and **nothing in a comment thread reveals that somebody is mid-build on a ticket** — their work leaves no trace on the issue until they push — so a claim is the only signal that exists. `all` is **vacuously true on an empty array**, which yields exactly the three cases wanted: **unassigned → free**, **assigned to you → yours**, **assigned to anyone else → skipped**. That last case includes an issue assigned to you *and* someone else, deliberately: a second name means somebody joined, and that is a conversation rather than a race. The clause was verified against live GitHub data rather than asserted — a tracker with zero assignees cannot exercise the non-empty case at all, so it was run over `cli/cli` with the login swapped: 60 issues became 59, the issue assigned to the chosen login survived, and the one assigned to somebody else was the only thing dropped.
 
 **Work `priority/P1-soon` first** — that is the demo backlog, and it is the one tier the dev has said he intends to finish.
 
@@ -42,6 +45,14 @@ You write the code now (contract changed 2026-08-05 — CLAUDE.md's collaboratio
 - **Small bugfix that touches neither, or `tests/` / `docs/` / `CLAUDE.md` work**: just do it. Post a comment with what changed, why, and how you verified it — including what you did *not* check.
 - **Blocked on a human decision / design fork**: post a comment stating exactly the decision needed and the options. Posting it *is* the hand-back — no label to set.
 
+**Claim it the moment you decide to act — BEFORE building, not after.**
+
+```
+gh issue edit N --repo Phaazoid/Godoiosis --add-assignee @me
+```
+
+Only for issues you are actually advancing this run — never one you merely read and skipped, and never as a reservation over an umbrella's children you are not building (dev ruling, 2026-09-06; that over-claiming is what left the old `agent/*` labels carrying no information). The claim then **stays** through plan → build → review → merge, and is released only if the work is abandoned, re-scoped, or parked on something nobody is chasing.
+
 Keep each issue to **one reviewable diff**, and don't leave the tree holding several issues' worth of unreviewed edits.
 
 Honor the design laws — no randomness; the action queue never lies (preview == execution; derived actions are computed, not stored); future AI uses the player's `SquadManager.queue_action` API. Don't bake anything still fluid (elemental specifics, runes, final weapon numbers) into a "fix."
@@ -58,12 +69,23 @@ NEVER pass non-ASCII via an inline `-b "..."` / PowerShell here-string — PS 5.
 - **leads with** `🤖 Claude says:`
 - **ends with** `— Claude (Opus 4.8) · <today's date>`
 
-## 4. Flip the label
+## 4. Hand back — and leave the claim alone
 
 After acting on an issue: **nothing.** The comment you just posted is the hand-back — the selector in step 1 will skip that issue on the next run because your comment is now the newest one. When the dev replies (including "this needs rework"), it becomes yours again automatically.
+
+**The claim from step 2 does NOT come off here.** An assignment says *this side owns this thread*, not *hands on it right now* (dev ruling, 2026-09-06). Dropping it at hand-back would advertise the issue as free for exactly as long as his answer is pending — which is precisely the window in which codev would pick it up, and the collision this whole convention exists to prevent.
 
 The one thing you must not do is post a comment **without** the `🤖 Claude says:` lead — that would leave the issue looking like the dev spoke last, and you would pick it straight back up next run.
 
 ## 5. Stop and report
 
 When every issue that was your turn has been advanced — or the rest genuinely need human input — stop and summarize per issue: what you did and what it's now waiting on. Do **not** close issues yourself unless explicitly asked. Verify any non-ASCII you posted via `gh api` (capturing gh stdout on the PS console re-mojibakes the display), not by eyeballing the terminal.
+
+**Report the claims too, every run:**
+
+```
+gh issue list --repo Phaazoid/Godoiosis --state open --assignee @me
+gh issue list --repo Phaazoid/Godoiosis --state open --assignee c3potheds
+```
+
+Give the first as *what this side is holding* and the second as *what was skipped as codev's*. **A claim left on work nobody is doing is the one way this convention rots** — the same drift that killed the `agent/*` labels — so the run that can create a stale claim is the run that has to show it. Anything in the first list you do not recognize is a claim to drop.
