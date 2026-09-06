@@ -25,7 +25,7 @@ class_name UnitData
 # spawns exactly as before. Inventory entries should reference standalone equippable .tres
 # (Item Editor output) — they are granted as copy_for_grant() copies, never shared.
 @export var starting_jobs: Array[String] = []
-@export var starting_inventory: Array[EquippableData] = []
+@export var starting_inventory: Array[Item] = []
 @export var starting_equipped_index := -1   # into starting_inventory; -1 = add_item's auto-equip decides
 @export var starting_worn_index := -1       # into starting_inventory; -1 = nothing worn
 @export var starting_proficiency: Dictionary[WeaponData.WeaponType, int] = {}

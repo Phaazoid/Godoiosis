@@ -26,7 +26,7 @@ class_name ScenarioUnitEntry
 @export var stats: Dictionary[Stats.Stat, int] = {}
 @export var current_hp := -1     # -1 = unsaved; live HP is always >= 1
 @export var current_will := -1   # -1 = unsaved; 0 is a legal saved value
-@export var inventory: Array[EquippableData] = []
+@export var inventory: Array[Item] = []
 @export var equipped_index := -1   # into inventory; -1 = unarmed. Replaced the equipped_weapon copy (#83).
 @export var worn_armor_index := -1   # into inventory; -1 = unarmored. Mirrors equipped_index (#65).
 @export var weapon_proficiency: Dictionary[WeaponData.WeaponType, int] = {}
@@ -89,16 +89,17 @@ func capture_unit_state(unit: Unit) -> void:
 	is_alkahest_affine = inst.is_alkahest_affine
 	affinity_saved = true
 
-	var sources: Array[EquippableData] = []   # pre-copy identities, for the index lookups below
+	# Every carried thing, not just the slottable ones. This used to drop a non-EquippableData with
+	# a push_warning, which was the narrow authoring type showing through as a rule -- #697 widened
+	# the three doors to Item and the refusal went with them. `sources` stays index-parallel with
+	# `inventory`, which is what the two find() lookups below depend on.
+	var sources: Array[Item] = []   # pre-copy identities, for the index lookups below
 	inventory = []
-	for item in unit.inventory:
-		var equippable := item as EquippableData
-		if item != null and equippable == null:
-			push_warning("Scenario save: '%s' is not equippable — dropped" % item.display_name)
-		if equippable == null:
+	for item: Item in unit.inventory:
+		if item == null:
 			continue
-		sources.append(equippable)
-		inventory.append(equippable.copy_for_grant())
+		sources.append(item)
+		inventory.append(item.copy_for_grant())
 
 	equipped_index = sources.find(unit.get_equipped_weapon())
 	if unit.has_equipped_weapon() and equipped_index == -1:

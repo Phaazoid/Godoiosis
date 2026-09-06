@@ -21,7 +21,7 @@ extends RefCounted
 # #744 collapsed one layer down. The stash is addressed as a NULL unit at both ends, so all four
 # directions the dev listed are one function rather than four near-copies.
 
-var stash: Array[EquippableData] = []
+var stash: Array[Item] = []
 
 
 # Copies, never the authored array -- see the header. A null entry is authoring noise and is dropped
@@ -30,7 +30,7 @@ static func from_roster(roster: Roster) -> Loadout:
 	var made := Loadout.new()
 	if roster == null:
 		return made
-	for item: EquippableData in roster.stash:
+	for item: Item in roster.stash:
 		if item != null:
 			made.stash.append(item.copy_for_grant())
 	return made
@@ -39,7 +39,7 @@ static func from_roster(roster: Roster) -> Loadout:
 # WHY this move cannot happen -- "" means it can. `from` and `to` are the OWNERS, with null meaning
 # the stash; every refusal is the owning end's own sentence rather than one worded here, so the
 # reason a card gives and the reason a stash row gives are the same string.
-func move_block_reason(item: EquippableData, from: Unit, to: Unit) -> String:
+func move_block_reason(item: Item, from: Unit, to: Unit) -> String:
 	if item == null:
 		return "There is nothing to move."
 	if from == to:
@@ -60,7 +60,7 @@ func move_block_reason(item: EquippableData, from: Unit, to: Unit) -> String:
 
 # Performs it, or says why not -- "" on success. The reason is asked FIRST and the act is the same
 # call's second half, so nothing can act on a judgement the caller made a frame ago.
-func move(item: EquippableData, from: Unit, to: Unit) -> String:
+func move(item: Item, from: Unit, to: Unit) -> String:
 	var refusal := move_block_reason(item, from, to)
 	if refusal != "" or from == to:
 		return refusal

@@ -520,17 +520,17 @@ func get_weight() -> int:
 # NOT GATED HERE. can_equip_reason (#744) decides whether the player is shown these at all, and that
 # is a surface's decision: previewing a piece a unit cannot wear is a lie, but the arithmetic is the
 # same arithmetic and a model that refused to do it would only push the refusal somewhere worse.
-func previewed_stat(stat: Stats.Stat, candidate: EquippableData) -> int:
+func previewed_stat(stat: Stats.Stat, candidate: Item) -> int:
 	var gear := _candidate_gear(candidate)
 	return get_body_stat(stat) + _gear_modifier_for(stat, gear[0], gear[1])
 
 
-func previewed_def(candidate: EquippableData) -> int:
+func previewed_def(candidate: Item) -> int:
 	var gear := _candidate_gear(candidate)
 	return _def_for(gear[0], previewed_stat(Stats.Stat.CON, candidate))
 
 
-func previewed_weight(candidate: EquippableData, incoming: bool) -> int:
+func previewed_weight(candidate: Item, incoming: bool) -> int:
 	if candidate == null or not incoming:
 		return get_weight()
 	return get_weight() + candidate.get_effective_weight()
@@ -539,7 +539,7 @@ func previewed_weight(candidate: EquippableData, incoming: bool) -> int:
 # The substitution itself: [armor, weapons] with the candidate in whichever slot it fills. A weapon
 # displaces the EQUIPPED one rather than joining the list -- a unit swings one thing -- while
 # prosthetics stay, because a fitted limb contributes whatever else is in hand.
-func _candidate_gear(candidate: EquippableData) -> Array:
+func _candidate_gear(candidate: Item) -> Array:
 	var armor := worn_armor
 	var weapons: Array[WeaponInstance] = _mod_sources()
 	var as_armor := candidate as ArmorData

@@ -37,4 +37,4 @@ class_name Roster
 #
 # Loose MODS are not here and cannot be: WeaponModData extends Resource, not Item, so it has no
 # icon, no description, and structurally cannot sit in an inventory. #732 carries both halves.
-@export var stash: Array[EquippableData] = []
+@export var stash: Array[Item] = []

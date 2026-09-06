@@ -3,7 +3,7 @@
 [ext_resource type="Script" path="res://Classes/flow/ScenarioData.gd" id="1_02ul2"]
 [ext_resource type="Script" path="res://Classes/flow/DialogBeat.gd" id="1_cl8yi"]
 [ext_resource type="Script" path="res://Classes/flow/ScenarioUnitEntry.gd" id="2_ggi03"]
-[ext_resource type="Script" path="res://Classes/items/EquippableData.gd" id="3_h6kap"]
+[ext_resource type="Script" uid="uid://jytv7xrjv6l1" path="res://Classes/items/Item.gd" id="3_h6kap"]
 [ext_resource type="Script" path="res://Classes/flow/TutorialStep.gd" id="3_ykmmo"]
 [ext_resource type="Script" path="res://Classes/weapons/instances/SpringspearWeaponInstance.gd" id="4_nn2sb"]
 [ext_resource type="Script" path="res://Classes/weapons/WeaponModData.gd" id="5_dv1lo"]

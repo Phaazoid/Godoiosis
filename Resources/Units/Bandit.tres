@@ -6,7 +6,7 @@
 [ext_resource type="Texture2D" path="res://Art/Units/MapSprites/Brigand_Moving.png" id="4_wurcy"]
 [ext_resource type="Texture2D" path="res://Art/Units/Portraits/hair_mcgee_evil.png" id="5_1dwru"]
 [ext_resource type="Script" path="res://Classes/units/UnitData.gd" id="6_u2pba"]
-[ext_resource type="Script" path="res://Classes/items/EquippableData.gd" id="7_eugk5"]
+[ext_resource type="Script" uid="uid://jytv7xrjv6l1" path="res://Classes/items/Item.gd" id="7_eugk5"]
 [ext_resource type="Resource" path="res://Resources/Weapons/WeaponVariants/Drill.tres" id="8_1belm"]
 
 [resource]

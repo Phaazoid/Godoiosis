@@ -12,7 +12,7 @@ extends PanelContainer
 # `owner_unit` null means THE STASH, at both ends, which is what makes stash->unit, unit->stash and
 # unit->unit one call rather than three near-copies.
 
-signal clicked(item: EquippableData, owner_unit: Unit)
+signal clicked(item: Item, owner_unit: Unit)
 
 const PAYLOAD_ITEM := "gear_item"
 const PAYLOAD_FROM := "gear_from"
@@ -36,7 +36,7 @@ func _gui_input(event: InputEvent) -> void:
 
 
 # What this zone offers when picked up. A bare zone is a destination only; GearRow overrides it.
-func _dragged_item() -> EquippableData:
+func _dragged_item() -> Item:
 	return null
 
 

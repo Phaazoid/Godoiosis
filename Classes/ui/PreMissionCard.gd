@@ -30,10 +30,10 @@ class_name PreMissionCard
 signal deploy_toggled(unit: Unit)
 # A row was clicked -- the item under the cursor, or null for an empty slot. The screen holds the
 # selection, because a selection that outlives a redraw cannot live on a row the redraw frees (#107).
-signal gear_clicked(item: EquippableData, owner_unit: Unit)
+signal gear_clicked(item: Item, owner_unit: Unit)
 # The cursor entered or left one of the item rows (#745). The SCREEN decides what a hover means,
 # because only it knows whether something is already in hand.
-signal gear_hovered(item: EquippableData, card: PreMissionCard)
+signal gear_hovered(item: Item, card: PreMissionCard)
 signal gear_unhovered(card: PreMissionCard)
 # A job was chosen from this card's picker (#742). The SCREEN performs it, for the same reason it owns
 # every gear move: the card judges nothing and writes nothing.
@@ -62,7 +62,7 @@ var judge_move: Callable = Callable()
 var perform_move: Callable = Callable()
 # What the screen currently has in hand, so a picked-up row reads as picked up on this side too.
 # Told rather than asked: the card has no business knowing the screen exists.
-var selected_item: EquippableData
+var selected_item: Item
 
 var _deploy_button: Button
 var _controller: MissionController
@@ -511,7 +511,7 @@ func _item_row(item: Item) -> Control:
 	var row := GearRow.new()
 	row.custom_minimum_size.y = 20
 	row.wire(unit, judge_move, perform_move)
-	row.clicked.connect(func(gear: EquippableData, owner_unit: Unit) -> void:
+	row.clicked.connect(func(gear: Item, owner_unit: Unit) -> void:
 		gear_clicked.emit(gear, owner_unit))
 	row.mouse_entered.connect(func() -> void: gear_hovered.emit(row.item, self))
 	row.mouse_exited.connect(func() -> void: gear_unhovered.emit(self))
@@ -523,11 +523,13 @@ func _item_row(item: Item) -> Control:
 		row.add_child(empty)
 		return row
 
-	var equippable := item as EquippableData
-	var reason := _equip_block_reason(equippable)
-	row.carry(equippable)
+	# The row CARRIES the item whatever kind it is (#697): a vial is carried, never slotted, and a
+	# row that dropped it would leave it unmovable in this screen. Only the block reason narrows --
+	# equip_block_reason answers "" for anything with no equip gate to fail.
+	var reason := equip_block_reason(item)
+	row.carry(item)
 	row.add_theme_stylebox_override("panel",
-		QueueStyle.row_box(reason != "", equippable != null and equippable == selected_item))
+		QueueStyle.row_box(reason != "", item == selected_item))
 
 	var line := HBoxContainer.new()
 	line.add_theme_constant_override("separation", 4)
@@ -557,9 +559,14 @@ func _item_row(item: Item) -> Control:
 # itself owns the sentence, so every tooltip and warning above improved without an edit here. That is
 # also where the dev's ruling landed -- an invalid readout needs a unit to be validated against, so
 # it lives on the card and never in the stash.
-func _equip_block_reason(equippable: EquippableData) -> String:
+#
+# PUBLIC and Item-typed since #697, because the screen's hover preview was asking the same question
+# with its own copy of the null rule. It takes an Item so the narrowing cast lives HERE and nowhere
+# else: a carried thing with no equip slot (a vial) has no gate to fail, so it answers "".
+func equip_block_reason(item: Item) -> String:
+	var equippable := item as EquippableData
 	if equippable == null:
-		return ""   # a non-equippable carried item has no gate to fail
+		return ""
 	return equippable.can_equip_reason(unit)
 
 
@@ -578,7 +585,7 @@ static func _clear(container: Node) -> void:
 # and mouse_exited never fires on a freed node -- so the preview would stick for ever, one frame
 # after it appeared. Labels are rewritten in place and put back the same way (#741's law, arriving
 # from the other direction).
-func show_preview(candidate: EquippableData, incoming: bool) -> void:
+func show_preview(candidate: Item, incoming: bool) -> void:
 	if candidate == null:
 		clear_preview()
 		return

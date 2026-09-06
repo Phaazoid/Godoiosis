@@ -48,7 +48,7 @@ var _stash_hint: Label
 # THE SELECTION IS DATA, NEVER A ROW (#741). Every successful move redraws both lists and frees every
 # row in them, so a selection holding a node would dangle on the first move that worked -- #107's
 # shape, arriving at the exact moment the feature starts functioning. Owner null means the stash.
-var _selected_item: EquippableData
+var _selected_item: Item
 var _selected_owner: Unit
 var _last_refusal := ""
 # What a hover is currently saying, kept apart from _last_refusal so a preview cannot erase the
@@ -321,7 +321,7 @@ func _refresh_stash() -> void:
 		child.free()
 	# The LIVE stash, off the controller -- never RosterCatalog.resolve(), which hands back the cached
 	# authored Roster and would have had the first move out of here deplete it for the session (#741).
-	for item: EquippableData in _controller.loadout().stash:
+	for item: Item in _controller.loadout().stash:
 		if item == null:
 			continue
 		var row := GearRow.new()
@@ -493,7 +493,7 @@ func _on_job_picked(target: Unit, job_id: String) -> void:
 
 # The two callables every row and zone is wired with, click path and drag path alike. They are thin
 # on purpose: Loadout owns the rule, and a surface that judged for itself would be a second answer.
-func _judge_move(item: EquippableData, from: Unit, to: Unit) -> String:
+func _judge_move(item: Item, from: Unit, to: Unit) -> String:
 	return _controller.loadout().move_block_reason(item, from, to)
 
 
@@ -506,7 +506,7 @@ func _redraw() -> void:
 	refresh.call_deferred()
 
 
-func _perform_move(item: EquippableData, from: Unit, to: Unit) -> String:
+func _perform_move(item: Item, from: Unit, to: Unit) -> String:
 	var refusal := _controller.loadout().move(item, from, to)
 	_last_refusal = refusal
 	if refusal == "":
@@ -518,7 +518,7 @@ func _perform_move(item: EquippableData, from: Unit, to: Unit) -> String:
 
 # Click to pick up, click again to put down -- the same gesture the drag makes, for a player who
 # would rather not drag one. Clicking the selection itself lets go of it.
-func _on_gear_clicked(item: EquippableData, owner_unit: Unit) -> void:
+func _on_gear_clicked(item: Item, owner_unit: Unit) -> void:
 	if _selected_item != null:
 		if item == _selected_item and owner_unit == _selected_owner:
 			_clear_selection()
@@ -590,7 +590,7 @@ func _on_card_hovered(card: PreMissionCard) -> void:
 # ...and with EMPTY hands, hovering a carried row previews equipping it in place. Deferring to the
 # card-level preview while something is held is deliberate: what the player is deciding then is where
 # the held thing goes, not what the row under the cursor would do.
-func _on_gear_hovered(item: EquippableData, card: PreMissionCard) -> void:
+func _on_gear_hovered(item: Item, card: PreMissionCard) -> void:
 	if _selected_item != null:
 		return
 	_preview(card, item, false)
@@ -605,10 +605,10 @@ func _on_gear_unhovered(card: PreMissionCard) -> void:
 # A PREVIEW OF A PIECE THE UNIT CANNOT USE IS A LIE, so #744's gate decides whether there are numbers
 # at all -- and the sentence takes their place rather than leaving the hover silent, since finding out
 # at the click is exactly the nasty surprise that ticket exists to prevent.
-func _preview(card: PreMissionCard, item: EquippableData, incoming: bool) -> void:
+func _preview(card: PreMissionCard, item: Item, incoming: bool) -> void:
 	if item == null:
 		return
-	var refusal := item.can_equip_reason(card.unit)
+	var refusal := card.equip_block_reason(item)
 	if refusal != "":
 		card.clear_preview()
 		_hover_note = "%s: %s" % [card.unit.get_unit_name(), refusal]

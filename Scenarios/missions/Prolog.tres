@@ -5,7 +5,7 @@
 [ext_resource type="Script" path="res://Classes/flow/ScenarioData.gd" id="1_s6fbn"]
 [ext_resource type="Resource" path="res://Scenarios/dialog/prolog_intro.dtl" id="2_ayygx"]
 [ext_resource type="Script" path="res://Classes/flow/ScenarioUnitEntry.gd" id="2_jc5jw"]
-[ext_resource type="Script" path="res://Classes/items/EquippableData.gd" id="3_d7l08"]
+[ext_resource type="Script" uid="uid://jytv7xrjv6l1" path="res://Classes/items/Item.gd" id="3_d7l08"]
 [ext_resource type="Script" path="res://Classes/flow/TutorialStep.gd" id="3_jbpcb"]
 [ext_resource type="Resource" path="res://Scenarios/dialog/prolog_step_selected.dtl" id="3_rivbd"]
 [ext_resource type="Resource" path="res://Scenarios/dialog/prolog_step_first_join.dtl" id="4_hangl"]

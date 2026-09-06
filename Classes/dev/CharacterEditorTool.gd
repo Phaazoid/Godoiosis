@@ -240,9 +240,12 @@ func _capture_notes(unit: Unit, entry: ScenarioUnitEntry) -> String:
 		msg += ". Note: " + "; ".join(notes)
 	return msg
 
-func _kit_has_weapon(inventory: Array[EquippableData]) -> bool:
+func _kit_has_weapon(inventory: Array[Item]) -> bool:
 	for item in inventory:
-		if item != null and not (item is ArmorData):
+		# "equippable and NOT armor" -- Unit's own auto-equip test (add_item). Asking only "not
+		# armor" read TRUE for any carried non-gear, which since #697 widened this door includes a
+		# vial: a kit holding one vial and nothing else would have been called armed.
+		if item is EquippableData and not (item is ArmorData):
 			return true
 	return false
 
@@ -417,7 +420,7 @@ func _add_kit_section() -> void:
 
 	for i in range(Unit.MAX_INVENTORY_SIZE):
 		var slot_index := i
-		var slot_item: EquippableData = null
+		var slot_item: Item = null
 		if slot_index < current.starting_inventory.size():
 			slot_item = current.starting_inventory[slot_index]
 
@@ -465,7 +468,7 @@ func _add_kit_section() -> void:
 		editor_container.add_child(row)
 
 	for i in range(Unit.MAX_INVENTORY_SIZE, current.starting_inventory.size()):
-		var extra: EquippableData = current.starting_inventory[i]
+		var extra: Item = current.starting_inventory[i]
 		if extra != null:
 			DevWidgets.add_label(editor_container, "  overflow: %s -- past the %d-slot cap, drops at spawn" % [extra.display_name, Unit.MAX_INVENTORY_SIZE])
 

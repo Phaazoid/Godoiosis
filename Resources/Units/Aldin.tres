@@ -6,7 +6,7 @@
 [ext_resource type="Texture2D" path="res://Art/Units/MapSprites/Priest_Moving.png" id="4_fbf2d"]
 [ext_resource type="Texture2D" path="res://Art/Units/Portraits/hair_mcgee_white.png" id="5_5amud"]
 [ext_resource type="Script" path="res://Classes/units/UnitData.gd" id="6_s7xxc"]
-[ext_resource type="Script" path="res://Classes/items/EquippableData.gd" id="7_aedfp"]
+[ext_resource type="Script" uid="uid://jytv7xrjv6l1" path="res://Classes/items/Item.gd" id="7_aedfp"]
 [ext_resource type="Resource" path="res://Resources/RuneVariants/Heal2.tres" id="8_t0fxs"]
 
 [resource]

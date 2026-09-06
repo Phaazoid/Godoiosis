@@ -6,7 +6,7 @@
 [ext_resource type="Texture2D" path="res://Art/Units/MapSprites/Fighter_Moving.png" id="4_e3u22"]
 [ext_resource type="Texture2D" path="res://Art/Units/Portraits/hair_mcgee_red.png" id="5_f2ado"]
 [ext_resource type="Script" path="res://Classes/units/UnitData.gd" id="6_qce3k"]
-[ext_resource type="Script" path="res://Classes/items/EquippableData.gd" id="7_filfp"]
+[ext_resource type="Script" uid="uid://jytv7xrjv6l1" path="res://Classes/items/Item.gd" id="7_filfp"]
 [ext_resource type="Resource" path="res://Resources/Weapons/WeaponVariants/Smasher.tres" id="8_2twdy"]
 [ext_resource type="Resource" path="res://Resources/Weapons/WeaponVariants/TorvArm.tres" id="9_lqayx"]
 [ext_resource type="Resource" path="res://Resources/Weapons/WeaponVariants/TorvLeg.tres" id="10_ok1nu"]

@@ -24,7 +24,7 @@
 [ext_resource type="Resource" path="res://Resources/Weapons/Prototypes/Water Staff.tres" id="20_mf1ly"]
 [ext_resource type="Texture2D" uid="uid://1tsuuc2k6x7a" path="res://Art/Units/MapSprites/Pirate_Moving.png" id="21_u6n6d"]
 [ext_resource type="Resource" path="res://Resources/Weapons/Prototypes/Sweeper.tres" id="25_a1kvu"]
-[ext_resource type="Script" uid="uid://cbb6calgu7yux" path="res://Classes/items/EquippableData.gd" id="90_equipdata"]
+[ext_resource type="Script" uid="uid://jytv7xrjv6l1" path="res://Classes/items/Item.gd" id="90_equipdata"]
 [ext_resource type="Script" uid="uid://bsnik7hj876qc" path="res://Classes/weapons/instances/ChainswordWeaponInstance.gd" id="wi_chainsword"]
 [ext_resource type="Script" uid="uid://co5b1052qg1wu" path="res://Classes/weapons/instances/ChemicalSpitterWeaponInstance.gd" id="wi_chemicalspitter"]
 [ext_resource type="Script" uid="uid://t6htdtobwxob" path="res://Classes/weapons/instances/KineticMaceWeaponInstance.gd" id="wi_kineticmace"]

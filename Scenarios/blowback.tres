@@ -2,7 +2,7 @@
 
 [ext_resource type="Script" path="res://Classes/flow/ScenarioData.gd" id="1_s4xfq"]
 [ext_resource type="Script" path="res://Classes/flow/ScenarioUnitEntry.gd" id="2_prrta"]
-[ext_resource type="Script" path="res://Classes/items/EquippableData.gd" id="3_du6p0"]
+[ext_resource type="Script" uid="uid://jytv7xrjv6l1" path="res://Classes/items/Item.gd" id="3_du6p0"]
 [ext_resource type="Script" path="res://Classes/weapons/instances/SpringspearWeaponInstance.gd" id="4_3nkwa"]
 [ext_resource type="Script" path="res://Classes/weapons/WeaponModData.gd" id="5_g5k0t"]
 [ext_resource type="Resource" path="res://Resources/Weapons/MainVarieties/Springspear.tres" id="6_23pvm"]

@@ -6,7 +6,6 @@
 [ext_resource type="Texture2D" path="res://Art/Units/MapSprites/Archer.png" id="2_eboe8"]
 [ext_resource type="Texture2D" path="res://Art/Units/MapSprites/Archer_Moving.png" id="3_e65li"]
 [ext_resource type="Texture2D" path="res://Art/Units/Portraits/hair_mcgee_sky.png" id="4_7fkxf"]
-[ext_resource type="Script" path="res://Classes/items/EquippableData.gd" id="7_7fkxf"]
 
 [resource]
 script = ExtResource("1_02q80")
