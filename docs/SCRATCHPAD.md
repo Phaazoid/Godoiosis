@@ -36,6 +36,15 @@ Then report a short per-idea summary: where each went, and anything that needs t
 
 ## 📥 Inbox (drop ideas here)
 
+Earth quake transmuation can root opponents, defensive version does no damage, roots self. Can't move, but can't be shoved. Defensive option
+
+Boulder creation transmutation.   Creates big rock.  Normally, rock is non traversable tile (can be destroyed by some drills?) but if used on hill, will roll down hill and big blunt damage
+
+Impact frames in battle zoom
+
+In fire emblem, when you are selecting an attack on an enemy unit, it is easy to cycle through your available weapons and compare what each of them will do in the situation before comitting.  We need an analogue of that here, not just for different weapons in inventory, but for all attacks available from all weapons.  
+
+
 *(empty — swept 2026-09-03)*
 
 ## 🗂 Dispersed (log)
