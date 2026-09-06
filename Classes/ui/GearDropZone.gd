@@ -17,7 +17,13 @@ signal clicked(item: Item, owner_unit: Unit)
 const PAYLOAD_ITEM := "gear_item"
 const PAYLOAD_FROM := "gear_from"
 
+# Godot starts a drag once the pointer has travelled ~10px while held, and only then asks
+# _get_drag_data. A gesture shorter than that is never a drag, so it is a click -- one threshold, two
+# verdicts, no gap between them and no way to be both.
+const CLICK_SLOP := 10.0
+
 var owner_unit: Unit = null
+var _press_at := Vector2.INF
 var judge: Callable = Callable()     # (item, from, to) -> String, "" = allowed
 var perform: Callable = Callable()   # (item, from, to) -> String, "" = done
 
@@ -29,9 +35,29 @@ func wire(unit: Unit, judge_move: Callable, perform_move: Callable) -> void:
 	mouse_filter = Control.MOUSE_FILTER_STOP   # IGNORE would take this out of the drag's reach
 
 
+# A CLICK IS THE RELEASE, NOT THE PRESS, AND THAT IS WHAT MAKES DRAGGING POSSIBLE AT ALL (#789).
+#
+# Acting on the press told the screen to redraw, and the redraw frees every row in both lists to
+# rebuild them -- including the one the pointer is still holding down, one idle frame later. Godot
+# asks _get_drag_data only after ~10px of movement WHILE HELD, which takes several frames, so the
+# drag source was always destroyed before it could be asked and _get_drag_data never ran once.
+# Clicking still worked, because a click is over before the free; dragging could not work at all.
+#
+# The travelled distance is what separates the two, and the threshold is Godot's own: a gesture that
+# reaches it becomes a drag and this never sees the release, one that does not is a click.
 func _gui_input(event: InputEvent) -> void:
 	var click := event as InputEventMouseButton
-	if click != null and click.pressed and click.button_index == MOUSE_BUTTON_LEFT:
+	if click == null or click.button_index != MOUSE_BUTTON_LEFT:
+		return
+	if click.pressed:
+		_press_at = click.position
+		return
+	# INF when this row never saw the press -- the pointer arrived from somewhere else, and that is
+	# nobody's click. Vector2.INF answers INF to distance_to, so the sentinel needs no second guard
+	# beside the comparison; one of those was here, and a mutant deleting it changed nothing.
+	var travelled := _press_at.distance_to(click.position)
+	_press_at = Vector2.INF
+	if travelled <= CLICK_SLOP:
 		clicked.emit(_dragged_item(), owner_unit)
 
 
