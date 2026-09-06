@@ -154,11 +154,21 @@ func _region(title: String, width: int = 0) -> Array:
 
 # A scroll box that fills whatever room its region has left. THE growth law in one place: a list
 # that can grow scrolls rather than pushing the layout out of the viewport (#418).
-func _scroller(parent: Container) -> ScrollContainer:
+#
+# IT TAKES THE CONTENT rather than handing back a parent to add to, and that is the whole fix for a
+# bug that shipped: **a ScrollContainer stretches its child to its own width only when that child's
+# horizontal flags carry SIZE_EXPAND.** Control's default is SIZE_FILL, which does NOT, and a child
+# without it is laid out at its COMBINED MINIMUM instead. Every label on this screen is clip_text --
+# minimum width zero, deliberately, so no long name can widen a region -- so "forgot the flag"
+# renders as rows a pixel or two wide rather than as anything that reads like a mistake in the code.
+# Three of the four regions set it at the call site and the stash did not; now none of them can.
+func _scroller(parent: Container, content: Control) -> ScrollContainer:
 	var scroll := ScrollContainer.new()
 	scroll.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	content.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	scroll.add_child(content)
 	parent.add_child(scroll)
 	return scroll
 
@@ -173,8 +183,7 @@ func _build_roster() -> Control:
 	_grid.columns = GRID_COLUMNS
 	_grid.add_theme_constant_override("h_separation", 10)
 	_grid.add_theme_constant_override("v_separation", 10)
-	_grid.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	_scroller(parts[1]).add_child(_grid)
+	_scroller(parts[1], _grid)
 	return panel
 
 
@@ -190,7 +199,7 @@ func _build_stash() -> Control:
 	_stash_zone.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	_stash_zone.wire(null, _judge_move, _perform_move)   # null owner IS the stash
 	_stash_zone.clicked.connect(_on_gear_clicked)
-	_scroller(parts[1]).add_child(_stash_zone)
+	_scroller(parts[1], _stash_zone)
 
 	_stash_box = VBoxContainer.new()
 	_stash_box.add_theme_constant_override("separation", 4)
@@ -214,8 +223,7 @@ func _build_band() -> Control:
 	_squads_row = HFlowContainer.new()
 	_squads_row.add_theme_constant_override("h_separation", 14)
 	_squads_row.add_theme_constant_override("v_separation", 10)
-	_squads_row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	_scroller(force[1]).add_child(_squads_row)
+	_scroller(force[1], _squads_row)
 	_force_strip_count = force[2]
 	band.add_child(force[0])
 
@@ -228,8 +236,7 @@ func _build_contract() -> Control:
 	var parts := _region("CONTRACT", CONTRACT_WIDTH)
 
 	_objectives_box = VBoxContainer.new()
-	_objectives_box.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	_scroller(parts[1]).add_child(_objectives_box)
+	_scroller(parts[1], _objectives_box)
 
 	var exits := VBoxContainer.new()
 	exits.add_theme_constant_override("separation", 5)
@@ -466,7 +473,7 @@ func _refresh_counts() -> void:
 # --- actions -------------------------------------------------------------------------------------
 
 func _on_deploy_toggled(unit: Unit) -> void:
-	if unit.get_parent() == _controller.game.units_root:
+	if _controller.game.is_deployed(unit):
 		_controller.game.undeploy_unit(unit)
 	else:
 		var open_cells: Array[Vector2i] = _controller.open_deployment_cells()

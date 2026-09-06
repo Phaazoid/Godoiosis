@@ -17,6 +17,9 @@ const GRASS_SOURCE := 0
 const GRASS_ATLAS := Vector2i(5, 0)
 const ROW_WIDTH := 10
 const ZONE_CELLS := 6
+# A visible vertical scrollbar eats width off the content it scrolls; anything wider than this is a
+# region that expanded, anything narrower has collapsed to a minimum.
+const SCROLLBAR_ALLOWANCE := 24.0
 
 var _main: Node
 var game: Node2D
@@ -392,3 +395,53 @@ func test_every_list_that_can_grow_scrolls_inside_its_own_region() -> void:
 		assert_bool(bounded).override_failure_message(
 			"%s can grow and is not inside a ScrollContainer -- it will push the layout out of the "
 			% named[0] + "viewport rather than scroll").is_true()
+		if not bounded:
+			continue
+
+		# ...AND IT HAS TO HAVE A WIDTH ONCE IT IS IN THERE. The ancestry assertion above is blind to
+		# geometry, which is how the stash shipped as rows a pixel or two wide: a ScrollContainer lays
+		# its child out at the child's COMBINED MINIMUM unless the child's flags carry SIZE_EXPAND, and
+		# every label on this screen is clip_text, so that minimum is zero by design. Structure and
+		# geometry are two claims and one cannot cover for the other.
+		var scroll: ScrollContainer = walk
+		assert_float(node.size.x).override_failure_message(
+			"%s is %d px wide inside a %d px scroller -- its content collapsed to its minimum"
+			% [named[0], node.size.x, scroll.size.x]).is_greater(scroll.size.x - SCROLLBAR_ALLOWANCE)
+
+
+# The outline his mockup had and the build did not: a unit that is coming with you is readable from
+# the grid rather than by checking six toggles. Both directions, because a state that cannot be left
+# is a state nobody can trust -- and the colour is asserted against QueueStyle rather than a literal,
+# so the parchment palette moves it without touching this.
+func test_a_deployed_units_card_wears_the_friendly_outline_and_gives_it_back() -> void:
+	if not await _enter_phase(1):
+		return
+	var plain: PreMissionCard = null
+	var placed: PreMissionCard = null
+	for card in _cards():
+		if game.is_deployed(card.unit):
+			placed = card
+		else:
+			plain = card
+	assert_object(placed).override_failure_message("the draw placed nobody").is_not_null()
+	assert_object(plain).override_failure_message("every card is deployed, so there is nothing to "
+		+ "contrast against").is_not_null()
+
+	var ally := QueueStyle.ink(QueueStyle.Role.READOUT_ALLY)
+	assert_object(_border_of(placed)).is_equal(ally)
+	assert_object(_border_of(plain)).is_not_equal(ally)
+
+	# ...and it follows the toggle, rather than being decided once at build time.
+	placed.deploy_toggled.emit(placed.unit)
+	await await_idle_frame()
+	assert_object(_border_of(placed)).override_failure_message(
+		"the card kept its outline after coming off the board").is_not_equal(ally)
+	plain.deploy_toggled.emit(plain.unit)
+	await await_idle_frame()
+	assert_object(_border_of(plain)).override_failure_message(
+		"a card deployed after build never took the outline").is_equal(ally)
+
+
+func _border_of(card: PreMissionCard) -> Color:
+	var box := card.get_theme_stylebox("panel") as StyleBoxFlat
+	return Color.MAGENTA if box == null else box.border_color
