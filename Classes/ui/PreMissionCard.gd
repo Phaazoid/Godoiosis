@@ -352,6 +352,7 @@ func _build_foot() -> Control:
 func refresh() -> void:
 	if not is_instance_valid(unit):
 		return
+	_refresh_frame()
 	_refresh_limbs()
 	_refresh_job()
 	_refresh_abilities()
@@ -468,7 +469,7 @@ func _refresh_foot() -> void:
 		"Weight is the whole inventory's; every item currently weighs 0 until weight is authored. "
 		+ "DEF is the effective value, armour included.")
 
-	var deployed: bool = unit.get_parent() == _controller.game.units_root   # game is untyped: no inference
+	var deployed: bool = _controller.game.is_deployed(unit)   # game is untyped: no inference
 	_deploy_button.text = "✓ Deployed" if deployed else "Deploy"
 	_deploy_button.add_theme_font_size_override("font_size", 11)
 	var blocked := _deploy_block_reason() if not deployed else ""
@@ -479,6 +480,15 @@ func _refresh_foot() -> void:
 
 # Why this unit cannot be placed right now -- "" when it can. Both halves are real and neither
 # implies the other: a full cap with room on the zone, and a full zone under an unreached cap.
+# A unit that is COMING WITH YOU wears the friendly ink around its whole card, which is how the grid
+# reads at a glance rather than by checking six toggles. The same question the toggle's own label
+# asks, through the same door -- a second spelling here is a card that could disagree with its own
+# button.
+func _refresh_frame() -> void:
+	var deployed: bool = _controller.game.is_deployed(unit)
+	add_theme_stylebox_override("panel", QueueStyle.section_box(deployed))
+
+
 func _deploy_block_reason() -> String:
 	if not _controller.can_deploy_another():
 		return "Your force is full — %d of %d placed. Take someone off first." % [

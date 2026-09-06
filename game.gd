@@ -1365,6 +1365,15 @@ func spawn_reserve_unit(data: UnitData) -> Unit:
 	return unit
 
 
+# IS THIS UNIT ON THE BOARD? The one answer, because units_root membership is what "deployed" MEANS
+# and the pre-mission screen asks it from three places -- the deploy toggle's label, the card's
+# outline, and the screen's own toggle handler. Spelled inline at each, the three would be free to
+# disagree about a unit the player is looking at. Deliberately NOT the inverse of "in reserve":
+# deploy_unit below asks that, and a unit belongs to exactly one of the two roots.
+func is_deployed(unit: Unit) -> bool:
+	return unit != null and unit.get_parent() == units_root
+
+
 # Put a reserve unit ON the board -- spawn_unit's board-entry half, over a unit that already exists,
 # through the same gate and the same registration, so a deployed unit is indistinguishable from a
 # spawned one afterwards. False = the cell refused it and the unit is untouched, still in reserve.
@@ -1391,7 +1400,7 @@ func deploy_unit(unit: Unit, cell: Vector2i) -> bool:
 # The grid goes with it, so anything that asks an undeployed unit a CELL question gets a loud
 # push_error from set_cell rather than a stale answer.
 func undeploy_unit(unit: Unit) -> void:
-	if unit == null or unit.get_parent() != units_root:
+	if not is_deployed(unit):
 		push_error("undeploy_unit: not a deployed unit")
 		return
 	squad_manager.release(unit)

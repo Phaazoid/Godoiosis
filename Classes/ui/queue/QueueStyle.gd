@@ -274,9 +274,15 @@ static func panel_box() -> StyleBoxFlat:
 		return box)
 
 
-static func section_box() -> StyleBoxFlat:
-	return _cached("section", func() -> StyleBoxFlat:
-		var box := _flat(ink(Role.SECTION_BG), ink(Role.SECTION_BORDER), 1, 6)
+# ACCENTED is the same card wearing the friendly ink -- a pre-mission unit that is coming with you.
+# The BORDER carries it, never the fill: the fill is the ground every chip and number on that card is
+# read against, and tinting it would fight all of them at once (visual-clarity.md, one motif per
+# meaning). The content margin stays 1.0 across both states ON PURPOSE, so a card does not resize the
+# instant it is deployed -- the border thickens into the padding it already had.
+static func section_box(accented: bool = false) -> StyleBoxFlat:
+	return _cached("section_%s" % accented, func() -> StyleBoxFlat:
+		var border: Color = ink(Role.READOUT_ALLY) if accented else ink(Role.SECTION_BORDER)
+		var box := _flat(ink(Role.SECTION_BG), border, 2 if accented else 1, 6)
 		box.set_content_margin_all(1.0)   # the border alone: the header strip spans the card
 		return box)
 
