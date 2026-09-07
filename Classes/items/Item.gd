@@ -1,8 +1,13 @@
 extends Resource
 class_name Item
 
-# Base vocabulary for anything a unit can hold. Weight lives here, not on the equippable
-# subclasses: anything that can sit in an inventory can weigh something.
+# Base vocabulary for a NAMED, ICONED, DESCRIBED, WEIGHABLE piece of content. Weight lives here, not
+# on the equippable subclasses: anything that can sit in an inventory can weigh something.
+#
+# It read "anything a unit can hold" until #732, which was never true of the whole tree: WeaponData is
+# a shared TEMPLATE and is not carryable at all, and WeaponModData joined it -- a mod is fitted to a
+# weapon and a unit is refused one (Unit.add_block_reason). What is carryable is the subset an
+# inventory door accepts, which is a question those doors answer, not this base.
 
 # Was `item_name` until #141; renamed so all four content roots agree on one field name.
 @export var display_name: String

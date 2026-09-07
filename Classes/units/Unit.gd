@@ -261,7 +261,17 @@ func reseed_kit() -> bool:
 # The inventory is a FIXED array of MAX_INVENTORY_SIZE nulls, so "full" means every slot is spoken
 # for rather than a length check. add_item's bare false is derived from this, so a refusal and the
 # sentence explaining it cannot drift.
-func add_block_reason(_item: Item) -> String:
+func add_block_reason(item: Item) -> String:
+	# A MOD IS FITTED, NOT CARRIED (#732, dev 2026-09-06: "Maybe later down the line they are lootable
+	# on the battlefield, but for now, eh"). It lives on THIS door rather than in the fitting card
+	# because this is the one gate a unit takes anything through, so the click path, the drag path and
+	# the row tooltip all get the same sentence -- and it names the door that does work instead of only
+	# saying no.
+	#
+	# #812 owns the two seeding doors that never ask this at all: UnitData.starting_inventory and
+	# ScenarioUnitEntry.inventory are both Array[Item] and reach add_item directly.
+	if item is WeaponModData:
+		return "A mod is fitted to a weapon, not carried — open the weapon's spaces to fit it."
 	for slot: Item in inventory:
 		if slot == null:
 			return ""

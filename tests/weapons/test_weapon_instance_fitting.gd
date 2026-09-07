@@ -286,3 +286,70 @@ func test_get_elements_excludes_inactive_mod_elements() -> void:
 	var wielder := _wielder()
 	_set_proficiency(wielder, 1)
 	assert_array(w.get_elements(wielder, w.template.main_attack)).is_empty()
+
+# --- One of a kind, coming off, and what a mod NEEDS (#732) ---
+
+# Fitting is unlimited from the catalog now, so nothing but this stopped three Line Snipers stacking
+# +15 power on one weapon for nothing (dev, 2026-09-06: "Let's refuse"). The second assertion is what
+# keeps the clause from being a ban on SIZE: a different mod of the same size still fits.
+func test_one_weapon_takes_one_of_any_given_mod() -> void:
+	var w := WeaponInstance.make(_template(0, {}, 0, [3]))
+	var mod := _mod(1)
+	assert_bool(w.fit(0, mod)).is_true()
+	assert_bool(w.can_fit(0, mod)).is_false()
+	assert_str(w.fit_block_reason(0, mod)).contains("already fitted")
+	assert_bool(w.fit(0, _mod(1))).is_true()
+	assert_int(w.used_capacity(0)).is_equal(2)
+
+# The ORDER of that clause, which is the difference between a useful sentence and a confusing one:
+# dragging a fitted main-replacer into another space must be told it is already ON, not that
+# something already replaces the main -- the something being itself.
+func test_a_mod_already_on_the_weapon_is_named_before_the_clauses_it_would_collide_with() -> void:
+	var w := WeaponInstance.make(_template(0, {}, 0, [1, 2, 3]))
+	var replacer := _mod(1)
+	replacer.replaces_main = WeaponAttackData.new()
+	assert_bool(w.fit(0, replacer)).is_true()
+
+	var reason := w.fit_block_reason(1, replacer)
+	assert_str(reason).contains("already fitted")
+	assert_str(reason).not_contains("replaces this weapon's main")
+	# A DIFFERENT replacer is still refused by the main clause -- the new one narrowed nothing.
+	var second := _mod(1)
+	second.replaces_main = WeaponAttackData.new()
+	assert_str(w.fit_block_reason(1, second)).contains("replaces this weapon's main")
+
+# The mirror of fit, for a caller holding the mod rather than an index.
+func test_unfit_takes_a_mod_off_whichever_space_holds_it() -> void:
+	var w := WeaponInstance.make(_template(0, {}, 0, [1, 2, 3]))
+	var mod := _mod(2)
+	assert_bool(w.fit(2, mod)).is_true()
+	assert_int(w.space_holding(mod)).is_equal(2)
+	assert_bool(w.unfit(mod)).is_true()
+	assert_int(w.space_holding(mod)).is_equal(-1)
+	assert_int(w.used_capacity(2)).is_equal(0)
+	assert_bool(w.unfit(mod)).is_false()   # nothing to take off is false, never a silent success
+
+# A mod authors no proficiency requirement: what it NEEDS is decided by its size against this
+# weapon's capacities, since proficiency N activates spaces 1..N.
+func test_what_a_mod_needs_is_the_lowest_space_big_enough_to_hold_it() -> void:
+	var w := WeaponInstance.make(_template(0, {}, 0, [1, 2, 3]))
+	assert_int(w.lowest_space_for(_mod(1))).is_equal(0)
+	assert_int(w.lowest_space_for(_mod(2))).is_equal(1)
+	assert_int(w.lowest_space_for(_mod(3))).is_equal(2)
+	assert_int(w.lowest_space_for(_mod(4))).is_equal(-1)
+
+# THE INTRINSIC CLAIM, and the case with teeth for it: asking can_fit instead would read "needs
+# space 2" for a size-1 mod the moment space 1 filled, and read 1 again when it emptied -- a fact
+# about the weapon's fill dressed up as a fact about the mod.
+func test_what_a_mod_needs_does_not_move_when_a_space_fills() -> void:
+	var w := WeaponInstance.make(_template(0, {}, 0, [1, 2, 3]))
+	assert_bool(w.fit(0, _mod(1))).is_true()   # space 0 is now full
+	assert_int(w.lowest_space_for(_mod(1))).is_equal(0)
+
+# A weapon nobody holds has nobody's proficiency to be reduced by -- the fitting card can open one
+# out of the stash, and zero would have rendered its every fitted mod inert.
+func test_a_weapon_nobody_holds_reads_every_space_as_active() -> void:
+	var w := WeaponInstance.make(_template(0, {}, 0, [1, 2, 3]))
+	w.fit(2, _mod(1))
+	assert_int(w.active_space_count(null)).is_equal(3)
+	assert_int(w.active_modules(null).size()).is_equal(1)

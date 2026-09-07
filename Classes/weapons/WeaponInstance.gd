@@ -181,6 +181,18 @@ func fit_block_reason(index: int, mod: WeaponModData) -> String:
 	if not mod.fits_family(template.weapon_type):
 		return "Fits %s only — a scaling change is measured against that family's main attack." % \
 			WeaponData.WeaponType.keys()[mod.family].capitalize()
+	# ONE OF A KIND ON ONE WEAPON (#732, dev: "Let's refuse"). Nothing stopped a second copy while the
+	# only fitter was the Item Editor; the fitting card offers the whole catalog, so three Line Snipers
+	# was +15 power for nothing, bought with nothing.
+	#
+	# ASKED HERE -- after family, BEFORE the two clauses below -- because those would otherwise answer
+	# for it and say the wrong thing: dragging a fitted main-replacer into another space would be
+	# refused as "Lob Shot Mod already replaces this weapon's main", which is true, unhelpful, and about
+	# the mod itself. That drag is the second thing this clause covers -- a mod moving between spaces is
+	# one already fitted, and the sentence names the two-step that does it.
+	if space_holding(mod) != -1:
+		var held: String = mod.display_name if mod.display_name != "" else "That mod"
+		return "%s is already fitted to this weapon -- take it off first." % held
 	if mod.replaces_main != null:
 		var already := _main_replacer()
 		if already != null:
@@ -198,6 +210,43 @@ func fit_block_reason(index: int, mod: WeaponModData) -> String:
 
 func can_fit(index: int, mod: WeaponModData) -> bool:
 	return fit_block_reason(index, mod) == ""
+
+# Which space holds this mod, or -1. Fitted mods are SHARED authored refs, so two "copies" of one mod
+# are one object and nothing could tell two holdings apart -- first hit is the only answer there is,
+# and fit_block_reason refusing a second is what makes it the only one there can be.
+func space_holding(mod: WeaponModData) -> int:
+	for i in range(space_count()):
+		if space(i).has(mod):
+			return i
+	return -1
+
+# The mirror of fit (#732): take a mod OFF, wherever it sits. false = this weapon is not holding it.
+# The Item Editor removes through the live array BY INDEX because it has one in hand; a card holding
+# the mod itself does not, which is why this door exists rather than that one being widened.
+func unfit(mod: WeaponModData) -> bool:
+	var index := space_holding(mod)
+	if index == -1:
+		return false
+	space(index).erase(mod)
+	return true
+
+# The lowest space whose CAPACITY admits this mod, ignoring what is in it -- and therefore the
+# proficiency a wielder needs before it can do anything, since proficiency N activates spaces 1..N.
+# -1 = no space on this weapon is big enough to take it at all.
+#
+# INTRINSIC ON PURPOSE (#732). Asking can_fit instead would read "needs Carbine 2" for a size-1 mod
+# whenever space 1 happened to be full, and read 1 again when it emptied -- a fact about the weapon's
+# current fill rather than about the mod, and the fill is already on the space's own header. Family is
+# a separate refusal and deliberately not asked: this answers how BIG the mod is, not whether it belongs.
+#
+# NOT an auto-place seam, and that omission is exactly why: placing something has to know the fill.
+func lowest_space_for(mod: WeaponModData) -> int:
+	if template == null or mod == null:
+		return -1
+	for i in range(space_count()):
+		if template.mod_spaces[i] >= mod.size:
+			return i
+	return -1
 
 # The fitted mod replacing this weapon's main, if any. Scans EVERY space rather than the active
 # ones: fitting has no wielder, so there is no proficiency to ask about, and a mod parked in a
@@ -230,6 +279,13 @@ func fit(index: int, mod: WeaponModData) -> bool:
 func active_space_count(wielder: Unit) -> int:
 	if template == null:
 		return 0
+	# NOBODY'S proficiency applies to a weapon nobody holds (#732): one sitting in the stash reads
+	# UNREDUCED, so the fitting card shows a BUILD rather than a weapon whose every mod is inert. Zero
+	# was the other reading and it teaches the wrong thing -- fitting a stash weapon would appear to do
+	# nothing at all. Every shipped caller passes a real Unit; that card is the first surface that can
+	# ask about an unheld one.
+	if wielder == null:
+		return space_count()
 	var proficiency := wielder.get_weapon_proficiency(template.weapon_type)
 	if proficiency == UnitInstance.UNREDUCED:
 		return space_count()
