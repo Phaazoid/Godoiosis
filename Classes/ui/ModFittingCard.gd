@@ -238,9 +238,12 @@ func _redraw() -> void:
 # selection is kept by IDENTITY, so a mod that swapped the main lands the picker on the new one.
 func _refresh_attacks() -> void:
 	var attacks := _weapon.available_attacks(_wielder)
-	if not attacks.has(_attack):
-		_attack = _weapon.effective_main(_wielder)
 	_picker.clear()
+	# FALLING BACK TO INDEX 0 IS THE FALLBACK, and it is the only one there can be: available_attacks
+	# leads with effective_main, so an attack the fitting just took away lands the picker on whatever
+	# the weapon's main has become. An explicit `_attack = effective_main()` stood here until a mutant
+	# proved it dead -- the assignment below overwrites it either way, and the only case it was
+	# reachable in was the one where the two agreed.
 	var chosen := 0
 	for i in range(attacks.size()):
 		_picker.add_item(attacks[i].display_name)

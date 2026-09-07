@@ -302,9 +302,16 @@ func test_fitting_a_main_replacer_moves_the_readout_onto_the_new_main() -> void:
 	var replacer := WeaponModData.new()
 	replacer.display_name = "Probe Replacer"
 	replacer.replaces_main = swapped
-	var index := weapon.lowest_space_for(replacer)
-	if index == -1 or not weapon.can_fit(index, replacer):
-		push_warning("no space on this weapon can take a size-1 mod, so the swap cannot be walked")
+	# A space that is FREE, not the one lowest_space_for names -- that answers what a mod NEEDS and
+	# ignores fill by design, so on a weapon whose first space is already occupied this guard skipped
+	# the whole case. It did, silently, until a mutant that should have reddened it passed.
+	var index := -1
+	for i in range(weapon.space_count()):
+		if weapon.can_fit(i, replacer):
+			index = i
+			break
+	if index == -1:
+		push_warning("every space on this weapon is full, so the swap cannot be walked")
 		return
 
 	var card := await _open(weapon)
