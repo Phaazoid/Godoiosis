@@ -85,6 +85,16 @@ func _row_for(column: int, needle: String) -> Control:
 	return null
 
 
+# The "offer everything" toggle of a column -- the control, not the field. A case that writes the
+# flag directly cannot see anything the toggle's own handler does, which is how a mutant that
+# emptied the list on the way past went green.
+func _toggle_of(column: int) -> CheckBox:
+	for row: Control in _rows_of(column):
+		if row is CheckBox and (row as CheckBox).text.begins_with("Offer every"):
+			return row
+	return null
+
+
 # --- units ---
 
 func test_ticking_a_character_adds_a_reference_entry() -> void:
@@ -201,15 +211,21 @@ func test_offering_everything_keeps_the_explicit_picks_underneath() -> void:
 	tool_page._on_new_pressed()
 	tool_page._add_character(character)
 
-	tool_page.current.offers_every_character = true
 	tool_page._rebuild()
 	await await_idle_frame()
+
+	# THE CONTROL, not the field: everything this case is about happens inside the toggle's handler.
+	var toggle := _toggle_of(0)
+	assert_object(toggle).override_failure_message("the units column has no toggle").is_not_null()
+	toggle.button_pressed = true
+	await await_idle_frame()
+	assert_bool(tool_page.current.offers_every_character).is_true()
 	assert_int(tool_page.current.entries.size()).override_failure_message(
 		"turning the toggle on threw the curated list away").is_equal(1)
 
-	tool_page.current.offers_every_character = false
-	tool_page._rebuild()
+	_toggle_of(0).button_pressed = false
 	await await_idle_frame()
+	assert_bool(tool_page.current.offers_every_character).is_false()
 	assert_int(tool_page.current.entries.size()).override_failure_message(
 		"the picks did not come back when the toggle went off").is_equal(1)
 
