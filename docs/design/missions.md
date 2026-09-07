@@ -2,7 +2,7 @@
 
 **Status: ALL FOUR SLICES BUILT 2026-07-28 ([#96](https://github.com/Phaazoid/Godoiosis/issues/96)).** Filed 2026-07-27, when the project acquired a win condition for the first time. Before this, Iosis had ten interlocking systems and no way to finish a battle — which meant a design question could be answered *"is this coherent?"* but never *"does this improve play?"*
 
-**Canon checked through #812 (2026-09-06).**
+**Canon checked through #823 (2026-09-07).**
 
 ## What a mission is
 
@@ -44,7 +44,7 @@ The whole roster spawns as real `Unit` nodes, into **`game.reserve_root`** — b
 
 ### The phase the player stands in (#739)
 
-**The draw is the opening position, not the answer.** `begin_mission` holds the board after `deploy_roster` rather than playing on, and `commit_deployment` is the one way out. #737's *"the player does not linger there yet"* is retired by this: three of the four things that scope deliberately left unbuilt — a commit that can be refused, a back-out through the ring, no-saving-during-the-phase — are built here, now that there is something for each to serve rather than a mechanism whose only job was to survive until this ticket. The fourth, a **restart buffer**, stays out and is [#763](https://github.com/Phaazoid/Godoiosis/issues/763): the walk is deterministic, so a retry re-draws the same characters onto the same cells and only *hand* placements are re-made.
+**The draw is the opening position, not the answer.** `begin_mission` holds the board after `deploy_roster` rather than playing on, and `commit_deployment` is the one way out. #737's *"the player does not linger there yet"* is retired by this: three of the four things that scope deliberately left unbuilt — a commit that can be refused, a back-out through the ring, no-saving-during-the-phase — are built here, now that there is something for each to serve rather than a mechanism whose only job was to survive until this ticket. The fourth, a **restart buffer**, landed at [#763](https://github.com/Phaazoid/Godoiosis/issues/763) — see *A restart keeps what you chose* below.
 
 **`MissionController._deploying` is the INTENT; `GameState.PRE_MISSION` is what the board shows for it.** It has to be a flag of its own for the reason `dev_mode_enabled` is one — `game._base_state()` decides what the board rests at and `clear_selection` *writes* `game_state` from it, so a state derived from `game_state` would answer PICKING_TARGET in the middle of a squad pick and rest the board on IDLE afterwards, dropping the player out of deployment the first time they form a squad with every later click reaching the battle ring. Its one entry, `_open_deployment`, sets the flag **and** rests the board on the new base state — setting the flag alone leaves `game_state` wherever the arrival left it. Its one exit, `commit_deployment`, clears the flag **before** `_begin_turn`, because `start_faction_turn` rests on `_base_state()` too and turn 1 would otherwise come to rest inside the phase it just left.
 
@@ -210,6 +210,26 @@ A weapon row in a unit card or in the stash carries a **chip** reading `1/3` —
 **The shape plate** ([#732](https://github.com/Phaazoid/Godoiosis/issues/732) + the dev's ask: *"some way to see the weapon's attack range and pattern, visualized"*) draws one attack's geometry: the cells it may be **aimed** at, the cells it **covers** at a representative aim, and the attacker at the centre, up forward — the Attack Editor's own convention (#804), so the two read as one idea. It derives nothing: both sets come off `Reach`, whose anchored branch never touches the board and whose footprint query returns the untruncated placement for a null one, so the bevel, the `min_range` dead zone and the null-shape fallback stay in one place. **The inks are `OverlayManager`'s live aim colours**, which follow the aim palette #422 lets the player pick — *"the cells you can aim at"* is one meaning and must not have a second colour. It is **not** `DevWidgets.add_cell_grid`: that one builds toggle buttons wired to write the resource and clamps its span to leave a ring you can click into, both authoring concerns.
 
 **The plate is a fixed box and the cell size gives**, with the span capped at what still clears a legibility floor. Past that the drawn aim is pulled in to the plate's edge — otherwise a long shot's footprint lands off-grid and the one ink saying what it **hits** vanishes exactly when the range is most worth showing — and the caption reads *"shown to N"*. **A ring cut off silently would be a lie about where the attack stops.**
+
+### A restart keeps what you chose ([#763](https://github.com/Phaazoid/Godoiosis/issues/763), 2026-09-07)
+
+`restart_mission` reloads the board, which frees every unit and re-runs the deterministic walk. #737 recorded that as costing nothing, and by #739 it cost five things: **who is standing and where, squads, gear moved between units and the stash, jobs, and fitted mods.** The walk being deterministic only ever meant the same *characters* came back — every hand placement was made again by hand, which is what ruling 8 named when it said *making someone rebuild a five-minute loadout to move one unit two tiles is how a good feature becomes a chore*.
+
+**`PreMissionSnapshot` is the buffer, and its rows are `ScenarioUnitEntry`.** `capture_unit_state`/`apply_unit_state` already round-trip gear (through `copy_for_grant`, so a `WeaponInstance` brings its fitted mods), jobs and stats, so reusing that resource adds no field to a type 13 `.tres` files embed. `BoardSnapshot`'s split, one domain over: dumb data, `RefCounted` because it is never saved, with `MissionController` as its one writer and one reader.
+
+**It is taken at the COMMIT**, which is also what keeps the battle-scoped half of a captured entry inert — nothing is downed, in crisis or on watch before turn 1 — and it is the one field of the phase `reset()` must **not** clear, since it holds data rather than references into the board being freed.
+
+**Its life has exactly two edges and neither is a teardown** (dev rulings, 2026-09-07). It is **overwritten** by the next commit anywhere, so no mission door has to remember to clear one: `mission_path` stops a buffer being read by a board it does not describe, and *"for now, b is fine — once we have persistent profiles, it will live in the profile."* And it is **dropped by a restart taken while the phase is still open**, which is the player's one way back to the force the author wrote. That second ruling is the whole reason `restart_mission` reads `_deploying` as its **first** act: `reload_current` routes through `clear_board` → `reset()`, which clears the flag, so the same question asked one line lower answers *no* every time and the ruling silently inverts.
+
+**The pause row renames itself there** — *Reset Loadout* inside the phase, *Restart Mission* everywhere else. Every other restart hands the player their force back; this one is the only door that takes it away, and *"we're kind of hiding this information a bit"* (dev) is what the two labels answer. `loadout` is the phase's own word for the whole of itself, which `confirm_and_commit` already uses.
+
+**Placement is replayed FIRST, and nothing else until it has succeeded.** A staged cell goes through `deploy_unit`, so one the board no longer offers refuses here exactly as it would in the walk, and that unit waits in reserve — a squad saved without a leader degrading to solos. But **nobody standing means the buffer no longer describes this board at all**, and both fresh-start doors gate the phase on a non-zero draw, so a replay that stands nobody falls through to the authored walk rather than opening a battle with the whole roster in reserve. That is why the state, the squads and the stash all wait until the count is known: the fallback needs the units exactly as the draw made them.
+
+**Membership is all a squad carries here.** `apply_scenario` also restores a squad's name, archetype, zone and home cell, because a saved battle can hold AI squads that author all four; the phase has four verbs (form, join, leave, disband) and every one of them is membership, so capturing the rest would be capturing the defaults `create_squad` just wrote.
+
+**The stash is copied out as well as in.** The unit side gets that free, but without it the buffer would hand the player the very objects it is holding — and a mod fitted to a stash weapon afterwards would come back inside the buffer on the next replay. Narrow, and reachable: an in-phase restart drops the buffer and a commit re-takes it, so the door in between is re-entering the same mission from the title.
+
+**Declared out:** a squad built ACROSS a roster unit and an authored player unit comes back with the roster half solo — the residual `capture_scenario` already owns for authored saves, and unreachable in shipped content, Level_1's authored cast being entirely ENEMY.
 
 ## Objectives: declared explicitly, located by zones
 
