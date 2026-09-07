@@ -33,6 +33,9 @@ const LIST_H := 168
 const ROW_H := 20
 
 var _weapon: WeaponInstance
+# WHICH MODS THIS MISSION OFFERS (#812), handed in by whoever opened the card. Empty = the whole
+# authored catalogue, which is what the Item Editor and any board with no roster want.
+var _pool: Array[WeaponModData] = []
 # Null for a weapon nobody is holding -- one sitting in the stash. active_space_count answers
 # UNREDUCED for that, so the card shows the BUILD rather than a weapon whose every mod reads inert.
 var _wielder: Unit
@@ -53,9 +56,11 @@ var _offer_zone: GearDropZone
 var _hint: Label
 
 
-static func open(game_node: Node, weapon: WeaponInstance, wielder: Unit) -> ModFittingCard:
+static func open(game_node: Node, weapon: WeaponInstance, wielder: Unit,
+		pool: Array[WeaponModData] = []) -> ModFittingCard:
 	var card := ModFittingCard.new()
 	card._weapon = weapon
+	card._pool = pool
 	card._wielder = wielder
 	game_node.ui_layer.add_child(card)
 	card._build(game_node)
@@ -367,11 +372,14 @@ func _space_block(index: int) -> Control:
 
 func _refresh_offers() -> void:
 	_clear(_offer_box)
-	var offerable := WeaponModCatalog.offerable_for(_weapon.template.weapon_type)
+	var offerable := WeaponModCatalog.offerable_for(_weapon.template.weapon_type, _pool)
 	if offerable.is_empty():
 		var none := Label.new()
-		none.text = "Nothing authored fits a %s." % \
-			WeaponData.WeaponType.keys()[_weapon.template.weapon_type].capitalize()
+		# The sentence forks on WHY there is nothing, because the two are different problems: an
+		# empty pool is what this MISSION offers; anything else is what exists at all.
+		var family: String = WeaponData.WeaponType.keys()[_weapon.template.weapon_type].capitalize()
+		none.text = ("This mission offers no mods for a %s." % family) if not _pool.is_empty() \
+			else ("Nothing authored fits a %s." % family)
 		none.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 		none.add_theme_font_size_override("font_size", 10)
 		none.add_theme_color_override("font_color", QueueStyle.ink(QueueStyle.Role.HEADER_TEXT))
