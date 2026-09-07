@@ -24,6 +24,11 @@ class_name Reach
 # Manhattan range 1, affected = the aimed cell alone. That fallback is load-bearing in the tests --
 # an attack-less weapon is how they get trivial geometry.
 #
+# A SELF-ANCHORED SHAPE TURNS; AN ANCHORED ONE NEVER DOES (#818, dev 2026-09-07: "the direction
+# input model doesn't make sense for attacks placed at a range"). At max_range 0 the aim IS a
+# direction and the stamp rotates to it; at any other range the shape lands as drawn, so what the
+# grid shows is what the board gets. See get_affected_cells_from for what that retired.
+#
 # GEOMETRY LIVES HERE SINCE #808, because it takes BOTH halves of an attack: the RANGE, which is
 # AttackData's, and the SHAPE, which is a shared AttackShape resource with no range of its own.
 # AttackPattern used to hold the pair and answer these three questions itself; splitting it so a
@@ -263,9 +268,14 @@ static func get_affected_cells_from(_unit: Unit, origin_cell: Vector2i, target_c
 			return []
 		cells = _place(attack, origin_cell, dir)
 	else:
-		# An aim at the attacker's OWN cell (min_range 0, a self-heal) has no cardinal and places the
-		# shape unturned, grid-up as forward.
-		cells = _place(attack, target_cell, AttackShape.FORWARD if dir == Vector2i.ZERO else dir)
+		# AN ANCHORED SHAPE NEVER TURNS (#818): it lands exactly as drawn, grid-up reading as board
+		# north whatever direction the aim came from. Turning it to the attacker-to-target cardinal
+		# is what the dev found wrong in play -- the orientation of a shape you are PLACING was
+		# being driven by where you happened to be standing, so an asymmetric stamp spun as the
+		# cursor swept its own ring. This RETIRES the old min_range-0 special case rather than
+		# adding one: an aim at the attacker's own cell has no cardinal, which used to need its own
+		# clause and is now simply what anchored means.
+		cells = _place(attack, target_cell, AttackShape.FORWARD)
 	if board == null or not attack.is_directional():
 		return cells
 	return _truncate(cells, origin_cell, dir, attack, board)

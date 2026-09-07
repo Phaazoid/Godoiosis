@@ -278,6 +278,28 @@ func test_the_caption_follows_the_anchor() -> void:
 		[attack.grid_caption("stamp")])
 
 
+func test_the_forward_caret_follows_the_anchor_too() -> void:
+	# The caret over the grid answers the SAME question one word long (#818): a self-anchored shape
+	# turns to a facing, an anchored one lands on board north. It rides the caption's own sync, or
+	# the panel says "^ forward" over a caption saying the shape never turns -- two renders of one
+	# fact with one of them stale, which is the failure the live caption exists to prevent.
+	var attack := P.line(_attack(), 2)   # max_range 0: self-anchored
+	_draw(attack)
+	assert_array(_label_texts()).contains([attack.grid_up_label("stamp")])
+	var facing_caret := attack.grid_up_label("stamp")
+
+	var row := _label_row("Max Range")
+	var spin := row.get_child(1) as SpinBox
+	spin.value = 2
+
+	assert_str(attack.grid_up_label("stamp")).is_not_equal(facing_caret)
+	assert_array(_label_texts()).override_failure_message(
+		"the caret still says FORWARD over a shape that no longer turns").contains(
+		[attack.grid_up_label("stamp")])
+	assert_array(_label_texts()).override_failure_message(
+		"the stale caret is still on screen beside the fresh one").not_contains([facing_caret])
+
+
 # --- only a DECLARED stamp gets a grid -------------------------------------------------------
 
 func test_an_undeclared_cell_array_is_not_given_a_centred_grid() -> void:
@@ -391,3 +413,34 @@ func test_the_none_row_is_first_because_add_item_selects_whatever_it_is_given_fi
 	assert_str(_picker().get_item_text(0)).override_failure_message(
 		"(none) is not row 0, so a null field will display as though a class were set"
 	).is_equal(DevWidgets.NO_RESOURCE_KEY)
+
+
+# --- one answer, two surfaces ------------------------------------------------------------------
+
+# The caret over the authoring grid and the caption under the read-only ShapePlate say the same
+# thing about the same attack, because they ASK the same thing (#818). Spelled twice they would be
+# two labels, and the one nobody was looking at when the rule changed is the one that keeps saying
+# "forward" over a shape that no longer turns -- which is how both of them came to be wrong.
+func test_the_editor_and_the_plate_agree_about_what_up_means() -> void:
+	for attack: AttackData in [P.line(_attack(), 2), P.stamped(_attack(), 3, [Vector2i.ZERO] as Array[Vector2i])]:
+		var plate: ShapePlate = auto_free(ShapePlate.new())
+		plate.show_attack(attack)
+		var caption: Label = plate.get_child(1)
+
+		var box := VBoxContainer.new()
+		add_child(box)
+		_draw_into(box, attack)
+		var carets: Array[String] = []
+		for label in _all_labels(box, []):
+			var text: String = (label as Label).text
+			if text.begins_with("^"):
+				carets.append(text)
+
+		assert_array(carets).override_failure_message(
+			"the grid drew no caret at all, so there is nothing for the plate to agree with"
+		).has_size(1)
+		assert_str(caption.text).override_failure_message(
+			"the plate and the editor disagree about which way up is on the same attack"
+		).starts_with(carets[0])
+		remove_child(box)
+		box.free()

@@ -147,10 +147,10 @@ func test_a_blast_covering_both_double_bills_the_blocker() -> void:
 	# Blocker AND ward in one footprint: the blocker takes his own share at normal mitigation plus
 	# the ward's on top. Two hits, one victim.
 	var s := _friendly_fire_board()
-	# The aimed cell plus the one beyond it, along the aim -- a two-cell blast, so the test exercises
-	# the volley and not the geometry. A stamp turns with the aim, which on this axis-aligned board is
-	# exactly what the retired hand-rolled pattern spelled as a fixed world direction.
-	var blast: Array[Vector2i] = [Vector2i.ZERO, Vector2i(0, -1)]
+	# The aimed cell plus the one beside it -- a two-cell blast, so the test exercises the volley and
+	# not the geometry. An ANCHORED stamp does not turn (#818), so an offset here IS a board offset,
+	# which is the retired hand-rolled pattern's own spelling given back to it.
+	var blast: Array[Vector2i] = [Vector2i.ZERO, Vector2i.RIGHT]
 	P.stamped(_main_of(s.splasher), 6, blast)   # covers (2,0) and (3,0)
 	var guard := _guard_order(s.blocker, s.ward)
 	s.splasher.squad._queue_action(guard)
@@ -180,10 +180,10 @@ func test_a_blocker_felled_by_his_own_share_still_blocks_the_wards() -> void:
 	var splasher := _attacker(ENEMY, Vector2i(0, 0))
 	var blocker := _defender(PLAYER, Vector2i(2, 0), 10)   # base damage is 10: one share fells him
 	var ward := _defender(PLAYER, Vector2i(3, 0))
-	# The aimed cell plus the one beyond it, along the aim -- a two-cell blast, so the test exercises
-	# the volley and not the geometry. A stamp turns with the aim, which on this axis-aligned board is
-	# exactly what the retired hand-rolled pattern spelled as a fixed world direction.
-	var blast: Array[Vector2i] = [Vector2i.ZERO, Vector2i(0, -1)]
+	# The aimed cell plus the one beside it -- a two-cell blast, so the test exercises the volley and
+	# not the geometry. An ANCHORED stamp does not turn (#818), so an offset here IS a board offset,
+	# which is the retired hand-rolled pattern's own spelling given back to it.
+	var blast: Array[Vector2i] = [Vector2i.ZERO, Vector2i.RIGHT]
 	P.stamped(_main_of(splasher), 6, blast)   # gathers (2,0) then (3,0)
 	blocker.arm_guard(ward, blocker.get_guard_range())
 

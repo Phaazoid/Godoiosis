@@ -2,8 +2,13 @@ class_name ShapePlate
 extends VBoxContainer
 
 # A read-only picture of ONE attack's geometry (#732): where it may be aimed, and what it covers once
-# it lands. Grid space, attacker at the centre, UP is forward -- the same convention the Attack
-# Editor's stamp grid authors in (#804), so the two read as one idea.
+# it lands. Grid space, attacker at the centre, drawn in the same convention the Attack Editor's
+# stamp grid authors in (#804), so the two read as one idea.
+#
+# WHAT UP MEANS IS THE ATTACK'S ANSWER, not this class's (#818): the attacker's FACING for a
+# self-anchored attack, board NORTH for one placed at range, since an anchored shape no longer turns.
+# Both surfaces read AttackData.grid_up_label for the caption, because a label spelled twice is two
+# labels and one of them goes stale.
 #
 # IT DERIVES NOTHING. Since #808 an attack's geometry is two fields -- the RANGE trio on AttackData
 # and a shared AttackShape -- and Reach is the one place that answers using both. Both queries here
@@ -76,6 +81,9 @@ func show_attack(attack: AttackData) -> void:
 	var reach := drawn_reach(attack)
 	# A facing has no ring to draw -- the aim IS the direction, so the shape on the attacker is the
 	# whole picture. The aimed cell is one step forward, which is what gives the placement its cardinal.
+	# The anchored probe aims straight up for a different reason since #818: that placement no longer
+	# turns, so the aim picks WHERE the footprint sits and not which way it faces, and up keeps it
+	# inside the plate.
 	var directional := attack.is_directional()
 	var aim := Vector2i.UP if directional else Vector2i(0, -reach)
 	var ring: Array[Vector2i] = []
@@ -97,7 +105,8 @@ func show_attack(attack: AttackData) -> void:
 
 	# The clip is DECLARED, never silent: a ring cut off at the plate's edge without a word would be a
 	# lie about where the attack stops.
-	_caption.text = "^ forward" if reach >= attack.max_range else "^ forward · shown to %d" % reach
+	var up: String = attack.grid_up_label("stamp")
+	_caption.text = up if reach >= attack.max_range else "%s · shown to %d" % [up, reach]
 
 
 # The smallest odd span that holds what was drawn, floored so there is always a ring of context and

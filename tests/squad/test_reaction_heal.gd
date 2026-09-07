@@ -140,10 +140,10 @@ func test_an_aoe_reaction_heal_does_not_heal_the_enemy_in_its_blast() -> void:
 	var healer := H.spawn_solo(self, _sm, PLAYER, Vector2i(2, 0))
 	_sm.join_squad(healer, defender.squad)
 	_make_healer(healer)
-	# The aimed cell plus the one beyond it, along the aim -- a two-cell blast, so the test exercises
-	# the volley and not the geometry. A stamp turns with the aim, which on this axis-aligned board is
-	# exactly what the retired hand-rolled pattern spelled as a fixed world direction.
-	var blast: Array[Vector2i] = [Vector2i.ZERO, Vector2i(0, -1)]
+	# The aimed cell plus the one beside it -- a two-cell blast, so the test exercises the volley and
+	# not the geometry. An ANCHORED stamp does not turn (#818), so an offset here IS a board offset,
+	# which is the retired hand-rolled pattern's own spelling given back to it.
+	var blast: Array[Vector2i] = [Vector2i.ZERO, Vector2i.LEFT]
 	P.stamped((healer.get_equipped_weapon() as WeaponInstance).template.main_attack, 3, blast)
 	defender.set_current_hp(20)
 

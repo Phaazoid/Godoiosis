@@ -646,6 +646,17 @@ static func _grid_caption(resource: Resource, prop_name: String) -> String:
 	return str(resource.call("grid_caption", prop_name))
 
 
+# What the arrow over the grid points at, from the same source and for the same reason (#818):
+# an anchored shape does not turn, so "forward" is the wrong word for it. ASCII on purpose (see
+# add_cell_grid), and the default is what every grid said before a resource had an opinion.
+const GRID_UP_DEFAULT := "^ forward"
+
+static func _grid_up_label(resource: Resource, prop_name: String) -> String:
+	if resource == null or not resource.has_method("grid_up_label"):
+		return GRID_UP_DEFAULT
+	return str(resource.call("grid_up_label", prop_name))
+
+
 static func _cells_of(resource: Resource, prop_name: String) -> Array[Vector2i]:
 	var cells: Array[Vector2i] = []
 	cells.assign(resource.get(prop_name))
@@ -696,7 +707,7 @@ static func add_cell_grid(container: Node, label_text: String, resource: Resourc
 	# ASCII on purpose: the dev window runs Godot's default theme font, and a missing arrow glyph
 	# would draw as a box in the one place the direction has to be unambiguous.
 	var forward := Label.new()
-	forward.text = "^ forward"
+	forward.text = _grid_up_label(captioner, prop_name)
 	container.add_child(forward)
 
 	var grid := GridContainer.new()
@@ -735,9 +746,15 @@ static func add_cell_grid(container: Node, label_text: String, resource: Resourc
 	# The caption follows the anchor live, off the write hook rather than a poll or a rebuild. The
 	# connection is dropped with the label: a lambda has no object to auto-disconnect against, so a
 	# rebuilt form would otherwise leave it firing into a freed node.
+	#
+	# THE ARROW RIDES THE SAME SYNC, and must (#818): both say what the range means, so a caret left
+	# on the build-time answer reads "^ forward" over a caption saying the shape never turns, the
+	# instant the range spinbox moves off 0. Two renders of one fact, one of them stale -- #308's
+	# shape, at the size of a label.
 	if caption.text != "":
 		var sync := func() -> void:
 			caption.text = _grid_caption(captioner, prop_name)
+			forward.text = _grid_up_label(captioner, prop_name)
 		captioner.changed.connect(sync)
 		caption.tree_exiting.connect(func() -> void:
 			if captioner.changed.is_connected(sync):

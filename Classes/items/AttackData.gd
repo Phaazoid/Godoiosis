@@ -14,12 +14,14 @@ extends Resource
 # and lives here; SHAPE is the set of cells it then covers and lives in its own shared, named
 # resource, so a line fired at range and a line swung in melee are ONE shape with two ranges.
 #
-# THE ANCHOR IS DERIVED FROM THE RANGE, never a flag (dev, 2026-09-06):
+# THE ANCHOR IS DERIVED FROM THE RANGE, never a flag (dev, 2026-09-06), and so is whether the shape
+# TURNS (dev, 2026-09-07 -- #818):
 #   max_range == 0  -- the shape sits on the ATTACKER and the aim is a FACING: the player points a
-#                      cardinal and the whole shape fires that way (the directional path, #25).
-#   max_range >= 1  -- the shape sits on the AIMED cell, and the aim is that cell.
-# Either way the shape is TURNED to the aim's cardinal. Reach owns the placement, since answering
-# "where does this land" needs both halves and Reach is where that question already lives.
+#                      cardinal and the whole shape TURNS to fire that way (the directional path, #25).
+#   max_range >= 1  -- the shape sits on the AIMED cell and NEVER turns: it lands as drawn, grid-up
+#                      reading as board north, however the aim got there.
+# One question, so one field answers both. Reach owns the placement, since answering "where does
+# this land" needs both halves and Reach is where that question already lives.
 #
 # A NULL SHAPE COVERS THE ANCHOR CELL ALONE. That is the single-target attack -- most of the
 # authored roster -- and it is deliberately not a file: a "Single" shape in the library would say
@@ -146,8 +148,16 @@ func is_directional() -> bool:
 # is_directional() so the caption cannot drift from the rule it describes.
 func grid_caption(_field: String) -> String:
 	if is_directional():
-		return "Centre is the attacker. Aimed by facing."
-	return "Centre is the aimed cell. Aimed at a cell."
+		return "Centre is the attacker. Aimed by facing -- the shape turns to it."
+	return "Centre is the aimed cell. The shape lands as drawn; it never turns."
+
+
+# What the arrow above that grid points at, which is the SAME question one word long, and therefore
+# the same answer's job (#818). Two surfaces read it -- the Attack Editor's authoring grid and the
+# read-only ShapePlate on the mod-fitting card -- and a label spelled twice is two labels: one of
+# them would go on saying "forward" about a shape that no longer turns.
+func grid_up_label(_field: String) -> String:
+	return "^ forward" if is_directional() else "^ board north"
 
 # What each field MEANS, for the dev tools' reflective editor (#473). Every field above carries a
 # comment already, but a comment reaches nobody editing in the running game -- the Attack Editor
@@ -163,7 +173,7 @@ static func property_tips() -> Dictionary:
 	return {
 		"power": "Base damage before scaling. A weapon attack scales this off its weapon's stat blend and fitted mods; a carving scales it off the wielder's aura.",
 		"min_range": "The CLOSEST cell this attack can be aimed at, in Manhattan steps. 1 = adjacent. 0 = the attacker's own cell as well (a self-heal). Above 1 leaves a dead zone it cannot hit at all, which is how a carbine cannot shoot what has closed on it.\nMUST NOT EXCEED Max Range: nothing refuses the pair, the attack simply reaches no cells and stops showing any range at all.",
-		"max_range": "The FURTHEST cell this attack can be aimed at, in Manhattan steps (no diagonals). RAISE THIS to make an attack longer-ranged.\n0 is special: the shape sits on the ATTACKER and the attack aims a FACING -- the player points a direction and the whole shape fires that way. That is what a cleave or a line is.",
+		"max_range": "The FURTHEST cell this attack can be aimed at, in Manhattan steps (no diagonals). RAISE THIS to make an attack longer-ranged.\n0 is special: the shape sits on the ATTACKER and the attack aims a FACING -- the player points a direction and the whole shape TURNS to fire that way. That is what a cleave or a line is.\nAt any other range the shape is PLACED on the aimed cell and never turns: it lands exactly as you drew it, so the grid's top is board north rather than a facing.",
 		"max_and_a_half": "Adds a half step to the outer ring, bevelling its diagonal corners -- a reach of 2 and a half rather than 2 or 3.",
 		"attack_shape": "The SHAPE this attack covers once aimed, picked from the shared library. Shapes are shared BY REFERENCE: editing one changes every attack that uses it. No shape at all = the aimed cell alone.",
 		"can_counter": "May this attack be used when countering? A weapon always counters with its MAIN attack whatever is picked, so this only matters on a main.",
