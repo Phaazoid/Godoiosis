@@ -362,6 +362,33 @@ func test_a_restart_taken_inside_the_phase_puts_the_authors_own_force_back() -> 
 		"a restart taken inside the phase replayed the buffer instead of dropping it").is_equal(
 			[Vector2i(0, 0), Vector2i(1, 0)])
 
+
+# A BUFFER THE BOARD CAN NO LONGER HOLD must not start a battle with nobody in it. Both fresh-start
+# doors gate the phase on a non-zero draw, so a replay that stands nobody has to fall through to the
+# authored walk rather than returning 0 -- otherwise the mission opens with the whole roster in the
+# reserve and the defeat floor waiting for a turn to end.
+#
+# Reached by rewriting the buffer's own cells rather than by repainting the board, because it takes
+# the dev tools between two attempts to reach honestly and the branch is worth a case either way.
+func test_a_buffer_whose_cells_the_board_no_longer_has_redraws_instead_of_starting_empty() -> void:
+	if not await _enter_phase():
+		return
+	assert_bool(mc.reposition(_first_standing(), FAR_CELL)).is_true()
+	assert_bool(mc.commit_deployment()).is_true()
+	await await_idle_frame()
+	for entry: ScenarioUnitEntry in mc._staged.entries:
+		entry.cell = Vector2i(-5, -5)   # off the map entirely: can_spawn_at refuses every one
+
+	mc.restart_mission()
+	await await_idle_frame()
+
+	assert_bool(mc.is_deploying()).override_failure_message(
+		"the mission started with nobody on the board instead of redrawing").is_true()
+	assert_array(_deployed_cells()).override_failure_message(
+		"an unusable buffer left the board half-staged rather than falling back").is_equal(
+			[Vector2i(0, 0), Vector2i(1, 0)])
+
+
 # NOT TESTED, deliberately: the pause row's rename inside the phase. It is one conditional over two
 # literals with no state to get wrong, and a case for it would pin the wording of a button -- which
 # is authored content, and the razor says a suite may not hold it still. Checked by hand instead.
