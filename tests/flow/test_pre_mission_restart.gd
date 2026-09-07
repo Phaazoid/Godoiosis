@@ -260,6 +260,65 @@ func test_gear_taken_out_of_the_stash_is_still_carried_after_a_restart() -> void
 		"the stash refilled itself with gear the player had already taken out").is_equal(stash_left)
 
 
+# THE BUFFER IS NOT THE PHASE'S GEAR, it is a copy of it -- `Loadout`'s own one-owner rule, from the
+# side that only shows up across two replays. The unit half of this is free (apply_unit_state copies
+# on the way in); the stash half is two lines, and without them the buffer holds the very objects the
+# phase is handing the player, so anything they do to one edits what a later replay puts back.
+#
+# The window is narrow and real: an in-phase restart DROPS the buffer (ruling 2), and a commit
+# RE-TAKES it, so what reaches it is the door in between -- re-entering the same mission from the
+# title, which replays the buffer a second time without ever re-capturing it (ruling 1).
+func test_the_buffer_keeps_its_own_copy_of_the_stash() -> void:
+	if not await _enter_phase():
+		return
+	assert_bool(mc.commit_deployment()).is_true()
+	await await_idle_frame()
+	mc.restart_mission()
+	await await_idle_frame()
+
+	var fitting: Array = _a_fittable_stash_mod()
+	if fitting.is_empty():
+		push_warning("no shipped mod fits any weapon in the shipped stash")
+		return
+	var before: int = _mods_fitted_in_stash()
+	assert_bool((fitting[0] as WeaponInstance).fit(fitting[1], fitting[2])).override_failure_message(
+		"precondition: the fitting this case is about was refused").is_true()
+	assert_int(_mods_fitted_in_stash()).is_equal(before + 1)
+
+	mc.begin_mission(SCRATCH)   # the same buffer, replayed a second time
+	await await_idle_frame()
+
+	assert_int(_mods_fitted_in_stash()).override_failure_message(
+		"a mod fitted after the buffer was taken came back inside it").is_equal(before)
+
+
+# The first (weapon, space, mod) the shipped stash and catalogue allow, or [] -- a content
+# precondition, never an assertion about what either of them holds.
+func _a_fittable_stash_mod() -> Array:
+	for item: Item in mc.loadout().stash:
+		var weapon := item as WeaponInstance
+		if weapon == null:
+			continue
+		for index in weapon.space_count():
+			for mod: WeaponModData in WeaponModCatalog.get_mods().values():
+				if weapon.fit_block_reason(index, mod) == "":
+					return [weapon, index, mod]
+	return []
+
+
+# A COUNT, because the shipped stash already ships weapons with mods in them and the razor forbids
+# pinning which.
+func _mods_fitted_in_stash() -> int:
+	var count := 0
+	for item: Item in mc.loadout().stash:
+		var weapon := item as WeaponInstance
+		if weapon == null:
+			continue
+		for index in weapon.space_count():
+			count += weapon.space(index).size()
+	return count
+
+
 # --- squads ---
 
 func test_a_squad_built_in_the_phase_is_a_squad_again() -> void:
