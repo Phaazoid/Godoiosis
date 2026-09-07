@@ -374,14 +374,14 @@ func test_every_space_and_every_row_is_mouse_reachable() -> void:
 
 
 # The chip is a Button inside a 20px row, and a Button's minimum height comes from its font and its
-# stylebox -- so it is the one thing that could push a slot out of the card. The card CLIPS, which is
-# what makes that failure silent, so what this asks is whether the last of the six slots is still
-# inside the rect that clips it.
+# stylebox -- so it is the one thing on the card that could cost a gear slot. It does not, and the
+# reason is MEASURED rather than argued: the card GROWS. CARD_HEIGHT is a minimum, the roster region
+# expands, and the grid row takes the tallest card -- so a 40px chip changes the card's height and
+# clips nothing (mutant, 2026-09-06). An assertion about the card's rect would have been inert, and an
+# earlier draft of this case asserting CARD_HEIGHT failed on main for the same reason.
 #
-# NOT "is the card taller than CARD_HEIGHT": measured 2026-09-06, cards already stretch past it on
-# main, because that is a MINIMUM and the roster region expands. An assertion on it would have blamed
-# the chip for something it did not do -- which is how the first draft of this case failed.
-func test_the_chip_does_not_push_a_slot_out_of_the_card() -> void:
+# What is left has teeth: six slots, drawn, whatever the chip does to the rows they sit in.
+func test_the_card_still_draws_every_gear_slot_with_the_chip_on_it() -> void:
 	if not await _enter_phase():
 		return
 	var screen := _screen()
@@ -392,19 +392,15 @@ func test_the_chip_does_not_push_a_slot_out_of_the_card() -> void:
 		var card := node as PreMissionCard
 		if card == null:
 			continue
-		var rows: Array[GearRow] = []
+		var rows := 0
 		for inner: Node in _walk(card):
-			var row := inner as GearRow
-			if row != null:
-				rows.append(row)
-		if rows.is_empty():
+			if inner is GearRow:
+				rows += 1
+		if rows == 0:
 			continue
 		seen += 1
-		assert_int(rows.size()).override_failure_message(
-			"the card stopped drawing one slot per inventory place").is_equal(Unit.MAX_INVENTORY_SIZE)
-		var last := rows[rows.size() - 1]
-		var why := "the last gear slot is clipped out of its card -- something in the row is taller than the row"
-		assert_float(last.global_position.y + last.size.y).override_failure_message(why) 				.is_less_equal(card.global_position.y + card.size.y)
+		assert_int(rows).override_failure_message(
+			"the card stopped drawing one row per inventory place").is_equal(Unit.MAX_INVENTORY_SIZE)
 	assert_int(seen).is_greater(0)
 
 
