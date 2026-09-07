@@ -153,8 +153,8 @@ const DEFS := {
 		"default": AimPalette.DEFAULT,
 	},
 	Setting.QUEUE_PALETTE: {
-		"title": "Action queue colours",
-		"desc": "Which colours the order panel on the right wears. Slate is dark and matches the unit panel on the opposite edge; Parchment is warm paper with dark ink. The element colours follow either way -- fire is orange in both.",
+		"title": "Menu colours",
+		"desc": "Which colours the order panel and the pre-mission menus wear. Slate is dark and matches the unit panel on the opposite edge; Parchment is warm paper with dark ink. The element colours follow either way -- fire is orange in both.",
 		"options": ["Slate", "Parchment"],
 		"default": QueuePalette.DEFAULT,
 	},

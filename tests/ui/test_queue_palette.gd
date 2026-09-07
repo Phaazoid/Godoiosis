@@ -218,6 +218,95 @@ func test_row_ink_reads_against_the_row_in_both_palettes() -> void:
 				% [QueueStyle.Role.keys()[ground_role], palette]).is_greater(CONTRAST_FLOOR)
 
 
+# #814 widened that pairing into a GRID -- a text role is a weight AND a ground, and under slate
+# every ground is dark so one value answered both. These are the four cells that were missing, each
+# against the grounds its callers actually paint. PAPER is section_box() as well as row_box(): the
+# pre-mission card's own ground is a section, which is where TITLE_TEXT ended up drawing cream on
+# cream at a contrast of exactly zero.
+func test_the_paper_roles_read_on_paper_in_both_palettes() -> void:
+	for palette: int in [PlayerSettings.QueuePalette.DEFAULT, PlayerSettings.QueuePalette.PARCHMENT]:
+		_pick(palette)
+		for ink_role: QueueStyle.Role in [QueueStyle.Role.BODY_TEXT, QueueStyle.Role.NAME_TEXT,
+				QueueStyle.Role.HEADER_TEXT]:
+			var ink := QueueStyle.ink(ink_role)
+			for ground_role: QueueStyle.Role in [QueueStyle.Role.SECTION_BG, QueueStyle.Role.ROW_BG,
+					QueueStyle.Role.ROW_HOVER_BG]:
+				var ground := QueueStyle.ink(ground_role)
+				assert_float(_contrast(ink, ground)).override_failure_message(
+					"%s cannot be read on %s in palette %d -- %.2f against %.2f"
+					% [QueueStyle.Role.keys()[ink_role], QueueStyle.Role.keys()[ground_role],
+						palette, _luma(ink), _luma(ground)]).is_greater(CONTRAST_FLOOR)
+
+
+# ...and its mirror: the roles that sit on the dark outer frame, which does NOT invert. A region's
+# header and the stash hint were reading paper ink here, brown on brown.
+func test_the_frame_roles_read_on_the_frame_in_both_palettes() -> void:
+	for palette: int in [PlayerSettings.QueuePalette.DEFAULT, PlayerSettings.QueuePalette.PARCHMENT]:
+		_pick(palette)
+		var ground := QueueStyle.ink(QueueStyle.Role.PANEL_BG)
+		for ink_role: QueueStyle.Role in [QueueStyle.Role.TITLE_TEXT, QueueStyle.Role.FRAME_TEXT,
+				QueueStyle.Role.FRAME_REFUSED_TEXT]:
+			var ink := QueueStyle.ink(ink_role)
+			assert_float(_contrast(ink, ground)).override_failure_message(
+				"%s cannot be read on the frame in palette %d -- %.2f against %.2f"
+				% [QueueStyle.Role.keys()[ink_role], palette, _luma(ink), _luma(ground)]) \
+				.is_greater(CONTRAST_FLOOR)
+
+
+# A header must stay QUIETER than the count beside it. Without this the frame's two muted roles could
+# both be fixed by making them white, which reads and passes and throws the hierarchy away.
+func test_the_frames_muted_ink_stays_under_its_title_in_both_palettes() -> void:
+	for palette: int in [PlayerSettings.QueuePalette.DEFAULT, PlayerSettings.QueuePalette.PARCHMENT]:
+		_pick(palette)
+		var ground := QueueStyle.ink(QueueStyle.Role.PANEL_BG)
+		var muted := _contrast(QueueStyle.ink(QueueStyle.Role.FRAME_TEXT), ground)
+		var title := _contrast(QueueStyle.ink(QueueStyle.Role.TITLE_TEXT), ground)
+		assert_float(muted).override_failure_message(
+			"palette %d draws its frame header as loud as the count beside it (%.2f vs %.2f)"
+			% [palette, muted, title]).is_less(title)
+
+
+# THE PROVENANCE LAW, and it is what makes "slate does not move" a property rather than a promise.
+# Each of #814's roles took its slate value from what its own sites ALREADY rendered, so only the
+# parchment column is new authorship. BODY_TEXT's is the engine's own Label default -- those labels
+# carried no override at all, which is exactly why a pair test could not see them -- and it is read
+# off ThemeDB rather than retyped, so an engine that changes it reds here and says so.
+func test_every_new_role_still_carries_the_slate_value_it_replaced() -> void:
+	_pick(PlayerSettings.QueuePalette.DEFAULT)
+	assert_object(QueueStyle.ink(QueueStyle.Role.BODY_TEXT)).override_failure_message(
+		"BODY_TEXT no longer matches the engine default its labels used to fall back to -- slate has moved"
+		).is_equal(ThemeDB.get_default_theme().get_color("font_color", "Label"))
+	assert_object(QueueStyle.ink(QueueStyle.Role.NAME_TEXT)).override_failure_message(
+		"NAME_TEXT no longer matches TITLE_TEXT -- the card's unit name has changed colour on slate"
+		).is_equal(QueueStyle.TITLE_TEXT)
+	assert_object(QueueStyle.ink(QueueStyle.Role.FRAME_TEXT)).override_failure_message(
+		"FRAME_TEXT no longer matches HEADER_TEXT -- the region headers have changed colour on slate"
+		).is_equal(QueueStyle.HEADER_TEXT)
+	assert_object(QueueStyle.ink(QueueStyle.Role.FRAME_REFUSED_TEXT)).override_failure_message(
+		"FRAME_REFUSED_TEXT no longer matches ROW_REFUSED_BORDER -- the hints have changed on slate"
+		).is_equal(QueueStyle.ROW_REFUSED_BORDER)
+
+
+# The third projection of _adapt (#814). Its contrast is a property of the adaptation exactly as the
+# element inks' is -- an HSV colour at value v has luma <= v -- so what is worth pinning is that it
+# is IDENTITY under slate, since that is what keeps every authored tint on the shipped panel.
+func test_an_adapted_tint_is_untouched_under_slate_and_inked_under_parchment() -> void:
+	var authored := Color(0.62, 0.82, 1.0)   # the pre-mission card's prosthetic chip
+	_pick(PlayerSettings.QueuePalette.DEFAULT)
+	assert_object(QueueStyle.adapted_ink(authored)).override_failure_message(
+		"slate no longer passes an authored tint through untouched").is_equal(authored)
+
+	_pick(PlayerSettings.QueuePalette.PARCHMENT)
+	var inked := QueueStyle.adapted_ink(authored)
+	assert_float(_hue_gap(inked.h, authored.h)).override_failure_message(
+		"the adaptation moved the tint's HUE, which is the half that carries the meaning") \
+		.is_less(0.02)
+	assert_float(_contrast(inked, QueueStyle.ink(QueueStyle.Role.SECTION_BG))) \
+		.override_failure_message("an adapted tint at luma %.2f cannot be read on a parchment card at %.2f"
+			% [_luma(inked), _luma(QueueStyle.ink(QueueStyle.Role.SECTION_BG))]) \
+		.is_greater(CONTRAST_FLOOR)
+
+
 func test_the_rail_off_state_stays_quiet_in_both_palettes() -> void:
 	for palette: int in [PlayerSettings.QueuePalette.DEFAULT, PlayerSettings.QueuePalette.PARCHMENT]:
 		_pick(palette)

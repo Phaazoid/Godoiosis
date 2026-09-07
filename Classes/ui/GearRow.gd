@@ -64,6 +64,8 @@ func build_drag_preview(grab: Vector2) -> Control:
 	label.clip_text = true
 	label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	label.add_theme_font_size_override("font_size", 11)
-	label.add_theme_color_override("font_color", QueueStyle.ink(QueueStyle.Role.TITLE_TEXT))
+	# The plate is row_box(), i.e. PAPER under parchment -- so this takes the name role that inverts
+	# with it, never TITLE_TEXT, which is the same cream the plate itself is painted (#814).
+	label.add_theme_color_override("font_color", QueueStyle.ink(QueueStyle.Role.NAME_TEXT))
 	plate.add_child(label)
 	return wrapper

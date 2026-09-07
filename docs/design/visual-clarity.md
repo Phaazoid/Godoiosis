@@ -7,7 +7,7 @@ its child [#49 Action Queue UX](https://github.com/Phaazoid/Godoiosis/issues/49)
 This is a *guidelines* doc, not a spec — it captures the principles we're holding the work to,
 plus the running order of the queue-UX checklist. Update it as items land.
 
-**Canon checked through #763 (2026-09-05).**
+**Canon checked through #814 (2026-09-07).**
 
 ## Principles
 
@@ -3058,3 +3058,67 @@ leaves ~15px of budget a real three-digit exchange takes back. It priced the wor
 guessing them: **`Immune` and `Drowned` both failed**, which counting characters would never have
 shown (a proportional font makes `Thermal` overflow where `Chilled` fits). Authored badges are now
 `Fell N` / `Drown` / `Void` / `Shrug`, and two reaction words were retuned with them.
+
+### A text role is a WEIGHT and a GROUND (#814, reported 2026-09-07)
+
+*"I have the parchment style up reading the new loadout menu, and a lot of the text is white on off
+white and unreadable."*
+
+[#774](https://github.com/Phaazoid/Godoiosis/issues/774) named this fault and fixed one instance of
+it. Twelve more were live in the pre-mission surfaces, and the reason they kept happening is that
+`QueueStyle`'s text roles were only ever half a decision. **Under Slate every ground is dark**, so
+one value could answer both *how loud is this text* and *what is it lying on*, and the second
+question was invisible. Parchment inverts the paper and splits them:
+
+|             | on the dark **frame**  | on **paper** (section / row) |
+|-------------|------------------------|------------------------------|
+| **title**   | `TITLE_TEXT`           | `NAME_TEXT`                  |
+| **body**    | *(nothing needs one)*  | `BODY_TEXT`                  |
+| **muted**   | `FRAME_TEXT`           | `HEADER_TEXT`                |
+| **refused** | `FRAME_REFUSED_TEXT`   | `ROW_REFUSED_BORDER`         |
+
+The empty cell stays empty: a role nothing needs is a role that will be picked wrongly.
+
+**Slate did not move, and it is unchanged by construction rather than by inspection.** Each new role
+took its Slate value from what its own sites *already rendered* — the engine's Label default for
+`BODY_TEXT`, `TITLE_TEXT`'s own for `NAME_TEXT`, `HEADER_TEXT`'s for `FRAME_TEXT`,
+`ROW_REFUSED_BORDER`'s for `FRAME_REFUSED_TEXT` — so only the Parchment column is new authorship.
+`test_queue_palette` pins each to its provenance, which is what turns "slate is unchanged" into a
+property; `BODY_TEXT`'s is read off `ThemeDB` rather than retyped, so an engine that changes its own
+default reds and names itself. These are chrome, so authored consts with **no knobs**, per that
+file's own rule that a knob on the chrome is a second place to tune one look.
+
+**A third projection of `_adapt`.** Two chips on the card — a prosthetic's blue, an ability's violet
+— were hard-coded pale tints authored to glow on a dark ground, and pale enough to glow is pale
+enough to vanish on paper (contrast 0.08 and 0.11). Their HUE is what carries the meaning, so they
+take `QueueStyle.adapted_ink()` alongside `element_ink`/`state_ink` rather than a pair of chrome
+roles that would have authored the same two hues a second time.
+
+**The law had to be a TREE WALKER, because a colour-pair test is structurally blind to the failure
+that produced the report.** Five of the twelve sites carried *no `font_color` override at all* and
+drew the engine's near-white: there is no colour to look up, so there is nothing for a pair test to
+compare, which is exactly why the suite was green while the screen was unreadable.
+`tests/ui/test_pre_mission_contrast.gd` builds the real screens under both palettes and asks each
+control what it will actually draw with — `get_theme_color`, i.e. override → theme → engine default
+— against a ground **composited down the ancestor chain**, since a stylebox may be translucent
+(ModalCard's frame is the engine's panel at alpha 0.6). One case, every finding, named by node path:
+a failing case truncates the rest of its suite file, and a sweep whose first finding hides the other
+six is a sweep you run seven times.
+
+**Three things it found that the ticket had not enumerated**, on its first run: `ShapePlate`'s
+caption sits *outside* the plate's own cells and so is on the frame, not on paper; the fitting card's
+"empty" placeholder was wearing `SECTION_BORDER`, a *border* borrowed as ink, at a gap of 0.12 **on
+Slate**, which no palette caused; and the walker's own first version substituted a button's chrome
+for its ground instead of compositing it, which is a reading a translucent box makes wrong.
+
+**And a mutant found the door the walker could not see.** #745's hover rewrites the stat grid in
+place and puts it back, and "back" was spelled as *removing* the `font_color` override — correct only
+while the resting colour is the theme's, i.e. only while the ground is dark in both palettes.
+Restoring that one line leaves the walker, `test_queue_palette` and all of `test_pre_mission_screen`
+green at 32/32, because the walker measures the tree as **built** and never drives the transition.
+The generalizable form: **a sweep over a surface's resting state is blind to every state it can be
+put into** — enumerate the doors that write the same property, not the property.
+
+One consequence outside the roles: `PlayerSettings`' own description still said Parchment dressed
+*"the order panel on the right"*, which stopped being true when the pre-mission surfaces adopted the
+palette. Ruled a whole-UI skin (dev, 2026-09-07), so the setting is now **Menu colours**.

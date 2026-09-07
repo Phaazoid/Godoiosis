@@ -24,6 +24,21 @@ class_name QueueStyle
 # two parchment ink values -- which get rows for the same reason ElementPalette's seven do: they are
 # feel values sitting beside knobs he is already dragging.
 
+# A TEXT ROLE IS A WEIGHT AND A GROUND, and the second half was invisible until #814. Under slate
+# every ground is dark, so one value answered both questions; parchment inverts the paper and splits
+# them. The grid, with the empty cell left empty on purpose -- nothing needs body text on the frame:
+#
+#                     on the dark FRAME          on PAPER (section / row)
+#     title           TITLE_TEXT                 NAME_TEXT
+#     body            --                         BODY_TEXT
+#     muted           FRAME_TEXT                 HEADER_TEXT
+#     refused         FRAME_REFUSED_TEXT         ROW_REFUSED_BORDER
+#
+# Each of the three added there took its SLATE value from what its sites already rendered -- the
+# engine default for BODY_TEXT, TITLE_TEXT's own for NAME_TEXT, HEADER_TEXT's for FRAME_TEXT -- so
+# slate is unchanged by construction and only the parchment column is new authorship. Picking a role
+# by weight alone is what put cream text on a cream card and brown ink on the brown frame.
+
 # Every colour this panel answers for. The enum is what PALETTES is keyed on, so a role added here
 # without a parchment value is caught by test_queue_palette's coverage case rather than by a hole on
 # screen. OverlayManager.AimChannel's shape, one panel further out.
@@ -35,6 +50,10 @@ enum Role {
 	HEADER_BG,
 	HEADER_TEXT,
 	TITLE_TEXT,
+	BODY_TEXT,
+	NAME_TEXT,
+	FRAME_TEXT,
+	FRAME_REFUSED_TEXT,
 	ROW_BG,
 	ROW_BORDER,
 	ROW_HOVER_BG,
@@ -72,6 +91,27 @@ const HEADER_TEXT := Color(0.604, 0.627, 0.671)
 # ground rather than as a second palette. Round 5 gave that second palette back as a CHOICE, which
 # does not change what this value is doing in the slate one.
 const TITLE_TEXT := Color(0.902, 0.827, 0.678)
+
+# The three ground-aware roles (#814). Every value here is what its sites ALREADY rendered, which is
+# what makes slate byte-identical rather than merely close -- test_queue_palette pins each to its
+# provenance, so a tweak here is a deliberate change to the shipped look and not a drift.
+#
+# BODY_TEXT is the engine's own Label default. Those labels carried no override at all, so on slate
+# they were right by accident and on parchment they were white on cream -- the report's own words.
+const BODY_TEXT := Color(1, 1, 1)
+# What a card is OF -- the unit it names, the job it holds, the piece being carried. TITLE_TEXT's
+# value, because that is the role these three sites reached for: correct on the dark card, and the
+# same colour as the cream one. A name in a LIST is a row rather than a heading and takes BODY_TEXT,
+# which is also what those rows already render.
+const NAME_TEXT := Color(0.902, 0.827, 0.678)
+# ...and HEADER_TEXT's, for the muted text that turned out to be sitting on the FRAME rather than on
+# a row: the region headers, the stash hint, the fitting card's readouts.
+const FRAME_TEXT := Color(0.604, 0.627, 0.671)
+
+# A REFUSAL is the fourth weight, and it needed the frame's half for the same reason: those hints
+# borrowed ROW_REFUSED_BORDER, which is the dark red a refused ROW wears on paper. Slate's value,
+# again, so nothing shipped moves.
+const FRAME_REFUSED_TEXT := Color(0.78, 0.35, 0.28)
 
 # A ROW SITS ABOVE ITS SECTION, NOT IN IT. First pass had the row at 0.137 against a 0.09 section
 # card, i.e. a step of nothing -- the dev's reading was that the row "doesn't stand out from the
@@ -136,6 +176,17 @@ const PALETTES := {
 		Role.HEADER_BG: Color(0.878, 0.780, 0.663, 1.0),
 		Role.HEADER_TEXT: Color(0.420, 0.271, 0.188),
 		Role.TITLE_TEXT: Color(0.941, 0.863, 0.776),       # on the dark frame -- stays light
+		# The three that INVERT with their ground (#814). Body is the darkest thing on the paper --
+		# the numbers a player reads off a card -- and a NAME is warmer rather than lighter, echoing
+		# what TITLE_TEXT is doing on the slate side without giving up the page's authority.
+		Role.BODY_TEXT: Color(0.157, 0.110, 0.078),
+		Role.NAME_TEXT: Color(0.208, 0.129, 0.086),
+		# Muted, on the dark frame: light here, where HEADER_TEXT is ink. Kept clearly under
+		# TITLE_TEXT's cream so a region's header still reads quieter than its count.
+		Role.FRAME_TEXT: Color(0.769, 0.694, 0.612),
+		# An alarm on the dark frame: light where the row's refusal is a dark red, and warmer than
+		# FRAME_TEXT beside it so a refusal still reads as one rather than as emphasis.
+		Role.FRAME_REFUSED_TEXT: Color(0.910, 0.494, 0.412),
 		Role.ROW_BG: Color(0.984, 0.945, 0.886),
 		Role.ROW_BORDER: Color(0.769, 0.659, 0.514),
 		Role.ROW_HOVER_BG: Color(0.949, 0.894, 0.812),
@@ -207,6 +258,14 @@ static func element_ink(element: Elemental.Element) -> Color:
 static func state_ink(state: Elemental.State) -> Color:
 	return _adapt(ElementPalette.color_for_state(state))
 
+
+# The third projection of _adapt (#814), for a tint a SURFACE authored inline rather than one off the
+# element wheel -- a prosthetic's blue, an ability's violet. Same argument as the two above: the HUE
+# is what carries the meaning, so only its weight is the ground's business, and a pair of chrome
+# roles would have authored the same two hues twice. Identity under slate, so nothing shipped moves.
+static func adapted_ink(authored: Color) -> Color:
+	return _adapt(authored)
+
 static func _palette() -> int:
 	return PlayerSettings.choice_of(PlayerSettings.Setting.QUEUE_PALETTE)
 
@@ -233,6 +292,10 @@ static func _authored(role: Role) -> Color:
 		Role.HEADER_BG: return HEADER_BG
 		Role.HEADER_TEXT: return HEADER_TEXT
 		Role.TITLE_TEXT: return TITLE_TEXT
+		Role.BODY_TEXT: return BODY_TEXT
+		Role.NAME_TEXT: return NAME_TEXT
+		Role.FRAME_TEXT: return FRAME_TEXT
+		Role.FRAME_REFUSED_TEXT: return FRAME_REFUSED_TEXT
 		Role.ROW_BG: return ROW_BG
 		Role.ROW_BORDER: return ROW_BORDER
 		Role.ROW_HOVER_BG: return ROW_HOVER_BG
