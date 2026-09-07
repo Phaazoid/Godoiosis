@@ -31,6 +31,7 @@ class_name DevOverlay
 @onready var game_tool: GameTool = get_node("%Game")
 @onready var tool_tree: Tree = get_node("%ToolTree")
 @onready var dev_info: DevInfoTool = get_node("%Info")
+@onready var roster_tool: RosterTool = get_node("%Rosters")
 @onready var dev_mode_toggle: CheckButton = %DevModeToggle
 @onready var dev_mode_banner: PanelContainer = %DevModeBanner
 
@@ -57,6 +58,8 @@ const LEAVES: Array[Dictionary] = [
 		"tip": "Author cast characters — the Resources/Units/ files authored saves reference. Update rewrites the character everywhere; Save As or Capture creates."},
 	{"scope": "Project", "label": "Items", "page": "%Item Editor",
 		"tip": "Author items — weapons and runes. Load a preset or start new, edit, name, save."},
+	{"scope": "Project", "label": "Rosters", "page": "%Rosters",
+		"tip": "What a mission OFFERS — the units it fields, the gear its stash starts with, and the mods its fitting card lists. A scenario names one on the Properties page."},
 	{"scope": "Project", "label": "Attacks", "page": "%Attack Editor",
 		"tip": "Author attacks — Transmutation, Weapon Attack, or Weapon Families (edit a family's main in place and pick its extra attacks); toggle at top."},
 	{"scope": "Project", "label": "Objects", "page": "%Objects",

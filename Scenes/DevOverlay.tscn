@@ -17,6 +17,7 @@
 [ext_resource type="Script" path="res://Classes/dev/DialogTool.gd" id="11_dlgt"]
 [ext_resource type="Script" path="res://Classes/dev/ExperimentsTool.gd" id="12_exps"]
 [ext_resource type="Script" path="res://Classes/dev/DevInfoTool.gd" id="13_info"]
+[ext_resource type="Script" path="res://Classes/dev/RosterTool.gd" id="14_rostr"]
 
 [sub_resource type="StyleBoxFlat" id="StyleBoxFlat_1dnd3"]
 bg_color = Color(0.4416867, 0.22230786, 0.4029888, 1)
@@ -572,7 +573,74 @@ layout_mode = 2
 script = ExtResource("9_game1")
 metadata/_tab_index = 8
 
+[node name="Rosters" type="VBoxContainer" parent="Panel/MarginContainer/VBoxContainer/Body/DevTabs" unique_id=990000812]
+unique_name_in_owner = true
+visible = false
+layout_mode = 2
+script = ExtResource("14_rostr")
+metadata/_tab_index = 9
+
+[node name="ExistingRow" type="HBoxContainer" parent="Panel/MarginContainer/VBoxContainer/Body/DevTabs/Rosters" unique_id=990000813]
+layout_mode = 2
+
+[node name="RosterLoadDropdown" type="OptionButton" parent="Panel/MarginContainer/VBoxContainer/Body/DevTabs/Rosters/ExistingRow" unique_id=990000814]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+
+[node name="LoadRosterButton" type="Button" parent="Panel/MarginContainer/VBoxContainer/Body/DevTabs/Rosters/ExistingRow" unique_id=990000815]
+layout_mode = 2
+text = "Load"
+
+[node name="UpdateRosterButton" type="Button" parent="Panel/MarginContainer/VBoxContainer/Body/DevTabs/Rosters/ExistingRow" unique_id=990000816]
+unique_name_in_owner = true
+layout_mode = 2
+text = "Update"
+
+[node name="DeleteRosterButton" type="Button" parent="Panel/MarginContainer/VBoxContainer/Body/DevTabs/Rosters/ExistingRow" unique_id=990000817]
+unique_name_in_owner = true
+layout_mode = 2
+text = "Delete"
+
+[node name="NewRow" type="HBoxContainer" parent="Panel/MarginContainer/VBoxContainer/Body/DevTabs/Rosters" unique_id=990000818]
+layout_mode = 2
+
+[node name="NewRosterButton" type="Button" parent="Panel/MarginContainer/VBoxContainer/Body/DevTabs/Rosters/NewRow" unique_id=990000819]
+layout_mode = 2
+text = "New"
+
+[node name="RosterNameInput" type="LineEdit" parent="Panel/MarginContainer/VBoxContainer/Body/DevTabs/Rosters/NewRow" unique_id=990000820]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+placeholder_text = "New roster name"
+
+[node name="SaveAsRosterButton" type="Button" parent="Panel/MarginContainer/VBoxContainer/Body/DevTabs/Rosters/NewRow" unique_id=990000821]
+unique_name_in_owner = true
+layout_mode = 2
+text = "Save As"
+
+[node name="RosterStatusLabel" type="Label" parent="Panel/MarginContainer/VBoxContainer/Body/DevTabs/Rosters" unique_id=990000822]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_colors/font_color = Color(1, 0.45, 0.35, 1)
+autowrap_mode = 3
+
+[node name="HSeparator" type="HSeparator" parent="Panel/MarginContainer/VBoxContainer/Body/DevTabs/Rosters" unique_id=990000823]
+layout_mode = 2
+
+[node name="RosterPools" type="HBoxContainer" parent="Panel/MarginContainer/VBoxContainer/Body/DevTabs/Rosters" unique_id=990000824]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_vertical = 3
+
 [connection signal="toggled" from="Panel/MarginContainer/VBoxContainer/DevModeBanner/DevModeToggle" to="." method="_on_dev_mode_toggled"]
+[connection signal="item_selected" from="Panel/MarginContainer/VBoxContainer/Body/DevTabs/Rosters/ExistingRow/RosterLoadDropdown" to="Panel/MarginContainer/VBoxContainer/Body/DevTabs/Rosters" method="_on_load_dropdown_item_selected"]
+[connection signal="pressed" from="Panel/MarginContainer/VBoxContainer/Body/DevTabs/Rosters/ExistingRow/LoadRosterButton" to="Panel/MarginContainer/VBoxContainer/Body/DevTabs/Rosters" method="_on_load_pressed"]
+[connection signal="pressed" from="Panel/MarginContainer/VBoxContainer/Body/DevTabs/Rosters/ExistingRow/UpdateRosterButton" to="Panel/MarginContainer/VBoxContainer/Body/DevTabs/Rosters" method="_on_update_pressed"]
+[connection signal="pressed" from="Panel/MarginContainer/VBoxContainer/Body/DevTabs/Rosters/ExistingRow/DeleteRosterButton" to="Panel/MarginContainer/VBoxContainer/Body/DevTabs/Rosters" method="_on_delete_pressed"]
+[connection signal="pressed" from="Panel/MarginContainer/VBoxContainer/Body/DevTabs/Rosters/NewRow/NewRosterButton" to="Panel/MarginContainer/VBoxContainer/Body/DevTabs/Rosters" method="_on_new_pressed"]
+[connection signal="pressed" from="Panel/MarginContainer/VBoxContainer/Body/DevTabs/Rosters/NewRow/SaveAsRosterButton" to="Panel/MarginContainer/VBoxContainer/Body/DevTabs/Rosters" method="_on_save_as_pressed"]
 [connection signal="text_changed" from="Panel/MarginContainer/VBoxContainer/Body/DevTabs/Unit Authoring/AuthoringTabs/Spawn/UnitNameInput" to="Panel/MarginContainer/VBoxContainer/Body/DevTabs/Unit Authoring/AuthoringTabs/Spawn" method="_on_unit_name_input_text_changed"]
 [connection signal="item_selected" from="Panel/MarginContainer/VBoxContainer/Body/DevTabs/Unit Authoring/AuthoringTabs/Spawn/WeaponRow/WeaponDropdown" to="Panel/MarginContainer/VBoxContainer/Body/DevTabs/Unit Authoring/AuthoringTabs/Spawn" method="_on_weapon_dropdown_item_selected"]
 [connection signal="item_selected" from="Panel/MarginContainer/VBoxContainer/Body/DevTabs/Unit Authoring/AuthoringTabs/Spawn/SpriteRow/SpriteDropdown" to="Panel/MarginContainer/VBoxContainer/Body/DevTabs/Unit Authoring/AuthoringTabs/Spawn" method="_on_sprite_dropdown_item_selected"]
