@@ -304,3 +304,32 @@ func test_a_full_capture_keeps_them_because_a_resume_has_to_restore_them() -> vo
 	var snapshot := sm.capture_scenario("mid_battle", false)
 	assert_int(snapshot.unit_entries.size()).override_failure_message(
 		"a save slot dropped the drawn force, so a resume would come back short").is_equal(deployed)
+
+# A roster that says OFFER EVERY CHARACTER (#812) has to DEPLOY, not merely resolve. deploy_roster
+# runs two walks over the offered entries and the second keys `unit_of_entry` BY THE ENTRY -- and
+# offered_entries() SYNTHESIZES entries under that flag, so asking it once per walk hands them two
+# different sets of objects, every lookup misses, and nobody stands up. A mutant proved no other
+# case can see it: the flag is off in every authored roster, and with it off the accessor returns
+# the same array both times.
+#
+# The flag is flipped on the CACHED roster and put back before the assertion, so a failure cannot
+# leak it into the cases that follow.
+func test_a_roster_that_offers_every_character_still_stands_someone_up() -> void:
+	var roster_name := _a_roster()
+	if roster_name == "":
+		return
+	var roster: Roster = RosterCatalog.resolve(roster_name)
+	if roster == null:
+		return
+	var path := _author(roster_name, 3, 4)
+
+	var was: bool = roster.offers_every_character
+	roster.offers_every_character = true
+	mc.begin_mission(path)
+	await await_idle_frame()
+	var stood: int = _units().size()
+	roster.offers_every_character = was
+
+	assert_int(stood).override_failure_message(
+		"a roster offering every character deployed nobody -- the two walks saw different entries"
+		).is_greater(0)
