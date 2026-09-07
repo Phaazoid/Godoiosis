@@ -181,7 +181,6 @@ func _build_lists(parent: Container) -> void:
 	_scroller(right, _offer_zone)
 
 	_offer_box = VBoxContainer.new()
-	_offer_box.mouse_filter = Control.MOUSE_FILTER_IGNORE   # the gap under the last row is the zone's
 	_offer_box.add_theme_constant_override("separation", 4)
 	_offer_box.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_offer_zone.add_child(_offer_box)
@@ -314,21 +313,19 @@ func _space_block(index: int) -> Control:
 	zone.wire(_weapon, _judge_fit.bind(index), _perform_fit.bind(index))
 	zone.clicked.connect(_on_space_clicked.bind(index))
 
-	# IGNORE all the way down, so a click anywhere in the block reaches the ZONE. A Container's
-	# mouse_filter defaults to STOP, and one that ate the press would leave only the rows clickable --
-	# which is the half of "click a space to put it there" that has no row to click.
+	# Nothing here sets mouse_filter, and that is MEASURED rather than assumed: a Container defaults to
+	# PASS (1), so the press reaches the ZONE through it, which is what makes "click a space to put it
+	# there" work where the space has no row to click. A Panel or a PanelContainer added in here would
+	# default to STOP and break exactly that, silently -- the suite has a case for it.
 	var pad := MarginContainer.new()
-	pad.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	for side: String in ["left", "right", "top", "bottom"]:
 		pad.add_theme_constant_override("margin_" + side, 5)
 	zone.add_child(pad)
 	var column := VBoxContainer.new()
-	column.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	column.add_theme_constant_override("separation", 3)
 	pad.add_child(column)
 
 	var head := HBoxContainer.new()
-	head.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	var active: bool = _wielder == null or index < _weapon.active_space_count(_wielder)
 	var title := Label.new()
 	title.text = "Space %d  ·  needs %s %d" % [

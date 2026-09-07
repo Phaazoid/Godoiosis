@@ -358,10 +358,10 @@ func test_every_space_and_every_row_is_mouse_reachable() -> void:
 	for row in _library_rows(card):
 		assert_int(row.mouse_filter).is_equal(Control.MOUSE_FILTER_STOP)
 
-	# ...and nothing INSIDE a space may eat the press on its way to the zone. A Container defaults to
-	# MOUSE_FILTER_STOP, so a plain VBox laid over the block silently takes every click that did not
-	# land on a row -- which is the whole of "click a space to put it there", since an empty space has
-	# no row to click. The rows themselves are the exception: they are meant to stop.
+	# ...and nothing INSIDE a space may eat the press on its way to the zone, or "click a space to put
+	# it there" dies wherever that space has no row to click. Containers default to PASS and are fine;
+	# what this guards against is a Panel or a PanelContainer added in for decoration, which default to
+	# STOP (measured, 2026-09-06). The rows are the exception -- they are meant to stop.
 	for zone in _space_zones(card):
 		for node: Node in _walk(zone):
 			var control := node as Control
