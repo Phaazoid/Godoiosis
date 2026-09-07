@@ -250,6 +250,50 @@ func test_every_word_on_the_pre_mission_menus_can_be_read_in_both_palettes() -> 
 		await await_idle_frame()
 
 
+# A PREVIEW IS A SECOND DOOR ONTO THE SAME LABELS, and the case above cannot see it: it measures the
+# tree as BUILT, while #745's hover rewrites the stat grid in place and then puts it back. "Back" was
+# spelled as REMOVING the font_color override, which is only the resting colour while that colour is
+# the theme's -- i.e. only while the card's ground is dark in both palettes.
+#
+# Found by falsification, not by review: restoring that one line leaves this suite's other case, and
+# all of test_pre_mission_screen, green. What a player would have seen is every number on a card
+# going white-on-cream the moment they hovered a piece of gear and moved away.
+func test_a_hover_puts_the_numbers_back_in_an_ink_that_can_still_be_read() -> void:
+	var roster := _a_roster()
+	if roster == "":
+		push_warning("no rosters are shipped, so the screens cannot be exercised")
+		return
+	PlayerSettings.set_choice(PlayerSettings.Setting.QUEUE_PALETTE,
+			PlayerSettings.QueuePalette.PARCHMENT)
+	QueueStyle._cache.clear()
+
+	mc.begin_mission(_author(roster, 2))
+	await await_idle_frame()
+	var screen := _screen()
+	assert_object(screen).is_not_null()
+
+	var card: PreMissionCard = null
+	for node in _walk(screen):
+		if node is PreMissionCard and not (node as PreMissionCard).unit.inventory.is_empty():
+			card = node
+			break
+	if card == null:
+		push_warning("no roster member carries anything, so no hover can be previewed")
+		return
+
+	# Through the SCREEN's own handlers rather than the card's methods: the screen is what decides
+	# what a hover means, and a preview reached any other way is a preview the player cannot cause.
+	var item: Item = card.unit.inventory[0]
+	screen._on_gear_hovered(item, card)
+	await await_idle_frame()
+	screen._on_gear_unhovered(card)
+	await await_idle_frame()
+
+	var found: Array[String] = _findings(card, SCREEN_BASE, "after a hover")
+	assert_array(found).override_failure_message(
+		"a hover left the card unreadable:\n  %s" % "\n  ".join(found)).is_empty()
+
+
 func _a_stashed_weapon() -> WeaponInstance:
 	for item: Item in mc.loadout().stash:
 		var weapon := item as WeaponInstance
