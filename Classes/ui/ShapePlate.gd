@@ -41,7 +41,10 @@ func _init() -> void:
 
 	_caption = Label.new()
 	_caption.add_theme_font_size_override("font_size", 9)
-	_caption.add_theme_color_override("font_color", QueueStyle.ink(QueueStyle.Role.HEADER_TEXT))
+	# The caption sits OUTSIDE the plate's own cells, on whatever hosts it -- the fitting card's frame
+	# or the Attack Editor's, dark under either palette. HEADER_TEXT is paper ink and read as brown on
+	# brown there; the cells below keep it, because a cell IS a section (#814).
+	_caption.add_theme_color_override("font_color", QueueStyle.ink(QueueStyle.Role.FRAME_TEXT))
 	_caption.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	add_child(_caption)
 

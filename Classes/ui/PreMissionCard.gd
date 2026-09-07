@@ -155,7 +155,9 @@ func _build_unit_half() -> Control:
 	name_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	name_label.tooltip_text = unit.get_unit_name()
 	name_label.mouse_filter = Control.MOUSE_FILTER_STOP
-	name_label.add_theme_color_override("font_color", QueueStyle.ink(QueueStyle.Role.TITLE_TEXT))
+	# NAME_TEXT, not TITLE_TEXT: this card's ground is section_box(), which is PAPER under parchment,
+	# and TITLE_TEXT is the role that stays light for the dark frame -- the same cream, exactly (#814).
+	name_label.add_theme_color_override("font_color", QueueStyle.ink(QueueStyle.Role.NAME_TEXT))
 	identity.add_child(name_label)
 
 	# Beside the sprite: what shape they are in, what they do, and what that grants them.
@@ -209,7 +211,7 @@ func _build_job_picker() -> Control:
 	# which is the parchment bug #774 had to fix on the board's own buttons. Disabled keeps the dimmer
 	# ink deliberately: greyed has to READ as greyed in both palettes.
 	for state: String in ["font_color", "font_hover_color", "font_pressed_color", "font_focus_color"]:
-		_job_picker.add_theme_color_override(state, QueueStyle.ink(QueueStyle.Role.TITLE_TEXT))
+		_job_picker.add_theme_color_override(state, QueueStyle.ink(QueueStyle.Role.NAME_TEXT))
 	_job_picker.add_theme_color_override("font_disabled_color",
 		QueueStyle.ink(QueueStyle.Role.HEADER_TEXT))
 
@@ -340,6 +342,7 @@ func _build_foot() -> Control:
 	_derived_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_derived_label.clip_text = true
 	_derived_label.mouse_filter = Control.MOUSE_FILTER_STOP
+	_derived_label.add_theme_color_override("font_color", QueueStyle.ink(QueueStyle.Role.BODY_TEXT))
 	foot.add_child(_derived_label)
 
 	_deploy_button = Button.new()
@@ -374,8 +377,11 @@ func _refresh_limbs() -> void:
 			continue
 		hurt = true
 		var maimed := fitting.state == UnitInstance.LimbState.EMPTY
+		# The prosthetic blue is adapted rather than authored twice: pale enough to GLOW on slate is
+		# pale enough to vanish on paper, and only its weight may move (#814).
 		_limbs_row.add_child(_chip(UnitInstance.LIMB_SHORT[slot],
-			QueueStyle.ink(QueueStyle.Role.ROW_REFUSED_BORDER) if maimed else Color(0.62, 0.82, 1.0),
+			QueueStyle.ink(QueueStyle.Role.ROW_REFUSED_BORDER) if maimed
+				else QueueStyle.adapted_ink(Color(0.62, 0.82, 1.0)),
 			"%s: %s" % [UnitInstance.LIMB_FULL[slot], "maimed" if maimed else "prosthetic"]))
 	# A whole body is worth saying out loud -- an empty row reads as a card that failed to draw.
 	if not hurt:
@@ -432,7 +438,8 @@ func _refresh_abilities() -> void:
 	# is authoring an icon per ability rather than adding the property (#740's own note, confirmed).
 	for ability: AbilityData in live:
 		var kind := String(AbilityData.AbilityKind.keys()[ability.kind]).capitalize()
-		_abilities_row.add_child(_chip(ability.display_name, Color(0.78, 0.74, 0.94),
+		_abilities_row.add_child(_chip(ability.display_name,
+			QueueStyle.adapted_ink(Color(0.78, 0.74, 0.94)),
 			InfoPanel.ability_tooltip(ability.display_name, kind, ability.description)))
 
 
@@ -451,6 +458,7 @@ func _refresh_stats() -> void:
 		var value := Label.new()
 		value.text = str(unit.get_effective_stat(stat))
 		value.add_theme_font_size_override("font_size", 11)
+		_rest_ink(value)
 		row.add_child(value)
 		_stat_values[stat] = value
 		_stats_grid.add_child(row)
@@ -502,6 +510,13 @@ func _deploy_block_reason() -> String:
 
 
 # --- small builders ------------------------------------------------------------------------------
+
+# THE ONE SPELLING OF "this stat is at its resting colour" (#814). The preview below says it twice
+# more, and it used to say it by REMOVING the override -- which was right only while the resting
+# colour was the theme's, i.e. only while the card's ground was dark in both palettes.
+func _rest_ink(label: Label) -> void:
+	label.add_theme_color_override("font_color", QueueStyle.ink(QueueStyle.Role.BODY_TEXT))
+
 
 # A bounded chip. custom_minimum_size plus clip_text is what stops a long name widening the card:
 # the minimum is a constant, and the full string is on hover.
@@ -555,6 +570,7 @@ func _item_row(item: Item) -> Control:
 	name_label.clip_text = true
 	name_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	name_label.add_theme_font_size_override("font_size", 10)
+	name_label.add_theme_color_override("font_color", QueueStyle.ink(QueueStyle.Role.BODY_TEXT))
 	line.add_child(name_label)
 
 	var chip := ModFittingCard.chip_for(item)
@@ -616,7 +632,7 @@ func show_preview(candidate: Item, incoming: bool) -> void:
 		var label: Label = _stat_values[stat]
 		if now == then:
 			label.text = str(now)
-			label.remove_theme_color_override("font_color")
+			_rest_ink(label)
 			continue
 		label.text = "%d → %d" % [now, then]
 		label.add_theme_color_override("font_color", QueueStyle.ink(
@@ -636,5 +652,5 @@ func clear_preview() -> void:
 	for stat: Stats.Stat in _stat_values:
 		var label: Label = _stat_values[stat]
 		label.text = str(unit.get_effective_stat(stat))
-		label.remove_theme_color_override("font_color")
+		_rest_ink(label)
 	_refresh_foot()

@@ -19,6 +19,11 @@ extends ModalCard
 #
 # THE SELECTION IS DATA, NEVER A ROW (#741's law again): every change redraws both lists and frees
 # every row in them, so a selection holding a node would dangle on the first fit that worked.
+#
+# THIS CARD HAS BOTH OF QueueStyle'S GROUNDS, which is why its text roles look inconsistent and are
+# not (#814): ModalCard's frame is the ENGINE theme's panel, dark under either palette, so everything
+# directly on it takes the FRAME roles -- while the zones inside are section_box()/row_box(), i.e.
+# paper under parchment, and take HEADER_TEXT and BODY_TEXT. Ask which ground a label lands on.
 
 signal closed
 
@@ -126,7 +131,7 @@ func _build_readout(parent: Container) -> void:
 func _readout_label(parent: Container) -> Label:
 	var label := Label.new()
 	label.add_theme_font_size_override("font_size", 11)
-	label.add_theme_color_override("font_color", QueueStyle.ink(QueueStyle.Role.HEADER_TEXT))
+	label.add_theme_color_override("font_color", QueueStyle.ink(QueueStyle.Role.FRAME_TEXT))
 	label.clip_text = true
 	parent.add_child(label)
 	return label
@@ -155,7 +160,7 @@ func _swatch(text: String, tint: Color) -> Control:
 	var label := Label.new()
 	label.text = text
 	label.add_theme_font_size_override("font_size", 9)
-	label.add_theme_color_override("font_color", QueueStyle.ink(QueueStyle.Role.HEADER_TEXT))
+	label.add_theme_color_override("font_color", QueueStyle.ink(QueueStyle.Role.FRAME_TEXT))
 	pair.add_child(label)
 	return pair
 
@@ -196,7 +201,7 @@ func _column(parent: Container, title: String, stretch: int) -> VBoxContainer:
 	var label := Label.new()
 	label.text = title
 	label.add_theme_font_size_override("font_size", 11)
-	label.add_theme_color_override("font_color", QueueStyle.ink(QueueStyle.Role.HEADER_TEXT))
+	label.add_theme_color_override("font_color", QueueStyle.ink(QueueStyle.Role.FRAME_TEXT))
 	column.add_child(label)
 	return column
 
@@ -352,7 +357,9 @@ func _space_block(index: int) -> Control:
 		var empty := Label.new()
 		empty.text = "empty"
 		empty.add_theme_font_size_override("font_size", 10)
-		empty.add_theme_color_override("font_color", QueueStyle.ink(QueueStyle.Role.SECTION_BORDER))
+		# HEADER_TEXT, the muted role for paper -- SECTION_BORDER is a BORDER, and borrowing it as ink
+		# left "empty" at a gap of 0.12 on SLATE, which the walker found and no palette caused (#814).
+		empty.add_theme_color_override("font_color", QueueStyle.ink(QueueStyle.Role.HEADER_TEXT))
 		column.add_child(empty)
 	return zone
 
@@ -415,6 +422,7 @@ func _mod_row(mod: WeaponModData, holder: Object, judge: Callable, perform: Call
 	name_label.text = key if key != "" else _mod_name(mod)
 	name_label.clip_text = true
 	name_label.add_theme_font_size_override("font_size", 11)
+	name_label.add_theme_color_override("font_color", QueueStyle.ink(QueueStyle.Role.BODY_TEXT))
 	column.add_child(name_label)
 
 	# One line of what it does and what it costs (dev, 2026-09-06: "Let's keep it, this is a zoom in
@@ -538,9 +546,9 @@ func _clear_selection() -> void:
 func _refresh_hint() -> void:
 	if _last_refusal != "":
 		_hint.text = _last_refusal
-		_hint.add_theme_color_override("font_color", QueueStyle.ink(QueueStyle.Role.ROW_REFUSED_BORDER))
+		_hint.add_theme_color_override("font_color", QueueStyle.ink(QueueStyle.Role.FRAME_REFUSED_TEXT))
 		return
-	_hint.add_theme_color_override("font_color", QueueStyle.ink(QueueStyle.Role.HEADER_TEXT))
+	_hint.add_theme_color_override("font_color", QueueStyle.ink(QueueStyle.Role.FRAME_TEXT))
 	if _selected == null:
 		_hint.text = "Drag a mod into a space, or click it and click the space it should go in."
 		return
