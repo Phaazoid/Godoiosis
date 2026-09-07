@@ -1,0 +1,11 @@
+[gd_resource type="Resource" script_class="VialData" format=3]
+
+[ext_resource type="Script" uid="uid://d17anh5wjjtq0" path="res://Classes/alchemy/VialData.gd" id="1_vial"]
+
+[resource]
+script = ExtResource("1_vial")
+element = 8
+is_alkahest = false
+display_name = "Vial of Vitriol"
+description = "Oil drawn off green salts and worth more than the salts ever were. Visit the interior of the earth and by rectifying you will find the hidden stone -- the masters made an acrostic of it, and then found it ate through the crucible. No aura answers to it, so no carving does either. A spitter has no such scruples."
+weight = 1

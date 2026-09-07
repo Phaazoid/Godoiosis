@@ -151,13 +151,24 @@ func attack_detail(_wielder: Unit, _attack: AttackData) -> String:
 # Where the line falls: what UNIT delegates lives here; what a deliberate `as WeaponInstance`
 # cast reads stays down on WeaponInstance. That is not a style call — `is_attack_fireable` and
 # `consume_readiness_for` take a `WeaponAttackData`, so widening them to `AttackData` for this
-# base would break every family override's signature. The verbs below take no arguments, so
-# they promote cleanly. Real bodies (and per-family overrides) live on WeaponInstance.
+# base would break every family override's signature. Real bodies (and per-family overrides) live
+# on WeaponInstance.
+#
+# The reload trio TAKES A WIELDER as of #97, and reload_block_reason is the rule the boolean is
+# derived from — can_equip_reason's shape (#744), for the same reason: the Chemical Spitter's rearm
+# consumes a vial out of the wielder's inventory, so "may I rearm" stopped being answerable by the
+# weapon alone, and a menu can only grey what it can explain. Deliberately NOT defaulted to null:
+# a wielder-less call would answer "no matching vial" for a weapon nobody is holding, which is a
+# refusal wearing the wrong reason.
 
-func can_reload() -> bool:
-	return false
+# "" = may rearm. The one rule; can_reload is derived from it and never disagrees.
+func reload_block_reason(_wielder: Unit) -> String:
+	return "This cannot be reloaded."
 
-func reload() -> void:
+func can_reload(wielder: Unit) -> bool:
+	return reload_block_reason(wielder) == ""
+
+func reload(_wielder: Unit) -> void:
 	pass
 
 # What the Weapon Action menu CALLS this rearm. The ORDER is always ActionType.RELOAD — only the
@@ -165,6 +176,12 @@ func reload() -> void:
 # see one verb (#84).
 func reload_label() -> String:
 	return "Reload"
+
+# Does this kind of gear own a rearm verb AT ALL, full or not? Separate from can_reload because the
+# Weapon Action slice opens on this (#97) — a spitter with an empty tank and no vial has no
+# actionable verb, and hiding the slice would hide the greyed row that explains exactly that.
+func has_reload_verb() -> bool:
+	return false
 
 func can_rev() -> bool:
 	return false

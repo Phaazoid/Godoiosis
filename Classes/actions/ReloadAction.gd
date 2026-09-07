@@ -25,7 +25,9 @@ func actor_can_perform() -> bool:
 	return actor.can_reload_weapon()
 
 func get_description() -> String:
-	return "%s reloads" % actor.get_unit_name()
+	# The family's own word, not "reloads" -- a Springspear springs and a Spitter injects, and the
+	# queue row is the one place the player reads what the order IS.
+	return "%s: %s" % [actor.get_unit_name(), actor.reload_label()]
 
 func get_action_icon() -> Texture2D:
 	return RELOAD_ICON

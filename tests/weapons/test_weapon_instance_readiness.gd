@@ -49,10 +49,10 @@ func test_make_returns_chainsword_weapon_instance_for_chainsword() -> void:
 func test_base_weapon_instance_defaults_never_gate_anything() -> void:
 	var w := WeaponInstance.make(_plain_template())
 	assert_bool(w.is_attack_fireable(_attack("x", true, true))).is_true()
-	assert_bool(w.can_reload()).is_false()
-	w.reload()                                          # no-op, must not error
+	assert_bool(w.can_reload(null)).is_false()
+	w.reload(null)                                          # no-op, must not error
 	w.consume_readiness_for(_attack("x", true, true))   # no-op, must not error
-	assert_bool(w.can_reload()).is_false()              # still nothing to reload
+	assert_bool(w.can_reload(null)).is_false()              # still nothing to reload
 
 # --- WeaponInstance.make() dispatch (#82: every family maps to its own class) ---
 
@@ -85,7 +85,7 @@ func test_make_returns_null_for_an_unmapped_weapon_type() -> void:
 
 func test_starts_ready() -> void:
 	var w := WeaponInstance.make(_spring_template(true)) as SpringspearWeaponInstance
-	assert_bool(w.can_reload()).is_false()   # nothing to reload while already ready
+	assert_bool(w.can_reload(null)).is_false()   # nothing to reload while already ready
 
 func test_while_ready_every_attack_is_fireable() -> void:
 	var t := _spring_template(true)
@@ -97,13 +97,13 @@ func test_firing_spring_consumes_readiness() -> void:
 	var t := _spring_template(true)
 	var w := WeaponInstance.make(t) as SpringspearWeaponInstance
 	w.consume_readiness_for(t.extra_attacks[0])
-	assert_bool(w.can_reload()).is_true()
+	assert_bool(w.can_reload(null)).is_true()
 
 func test_firing_stab_never_consumes_readiness() -> void:
 	var t := _spring_template(true)
 	var w := WeaponInstance.make(t) as SpringspearWeaponInstance
 	w.consume_readiness_for(t.main_attack)
-	assert_bool(w.can_reload()).is_false()   # Stab doesn't consume — still ready
+	assert_bool(w.can_reload(null)).is_false()   # Stab doesn't consume — still ready
 
 # --- the balance knob: Stab.requires_readiness true (issue-as-written) vs false ---
 
@@ -125,8 +125,8 @@ func test_reload_restores_fireability() -> void:
 	var t := _spring_template(true)
 	var w := WeaponInstance.make(t) as SpringspearWeaponInstance
 	w.consume_readiness_for(t.extra_attacks[0])
-	w.reload()
-	assert_bool(w.can_reload()).is_false()
+	w.reload(null)
+	assert_bool(w.can_reload(null)).is_false()
 	assert_bool(w.is_attack_fireable(t.main_attack)).is_true()
 	assert_bool(w.is_attack_fireable(t.extra_attacks[0])).is_true()
 

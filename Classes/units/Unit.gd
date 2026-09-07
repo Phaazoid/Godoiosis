@@ -1232,7 +1232,11 @@ func overwatch_attacks() -> Array[AttackData]:
 # still LIST (disabled) inside the submenu once something else opens it. Runes never qualify (the
 # ability queries fail the cast).
 func has_weapon_actions() -> bool:
-	if can_rev_weapon() or can_reload_weapon() or can_burrow_weapon():
+	# has_reload_verb rather than can_reload_weapon (#97): a rearm that is REFUSED still lists,
+	# greyed with its reason, and a spitter with an empty tank and no matching vial has no other
+	# actionable row — so gating the slice on "can it fire right now" hides the one line that
+	# explains why. Rev and Burrow stay hidden-when-unavailable, a declared asymmetry.
+	if can_rev_weapon() or has_reload_verb() or can_burrow_weapon():
 		return true
 	for atk in get_weapon_secondary_attacks():
 		if is_attack_fireable(atk):
@@ -1353,15 +1357,28 @@ func get_default_attack() -> AttackData:
 # for Unit to handle. Families override the real behaviour (Chainsword revs, Carbine and
 # Springspear reload, Drill burrows).
 
+# The reload trio passes SELF since #97 — the Chemical Spitter's rearm takes a vial out of this
+# unit's inventory, so the weapon alone cannot answer whether it may happen. reload_block_reason is
+# the rule and can_reload_weapon is derived from it, so a greyed verb and a refused order agree.
+func reload_block_reason() -> String:
+	if equipped_weapon == null:
+		return "Nothing is equipped."
+	return equipped_weapon.reload_block_reason(self)
+
 func can_reload_weapon() -> bool:
-	return equipped_weapon != null and equipped_weapon.can_reload()
+	return equipped_weapon != null and equipped_weapon.can_reload(self)
 
 func reload_weapon() -> void:
 	if equipped_weapon != null:
-		equipped_weapon.reload()
+		equipped_weapon.reload(self)
 
 func reload_label() -> String:
 	return equipped_weapon.reload_label() if equipped_weapon != null else "Reload"
+
+# Does the equipped gear own a rearm verb at all? What OPENS the Weapon Action slice (#97), as
+# against can_reload_weapon, which decides whether the row inside it is live.
+func has_reload_verb() -> bool:
+	return equipped_weapon != null and equipped_weapon.has_reload_verb()
 
 func can_rev_weapon() -> bool:
 	return equipped_weapon != null and equipped_weapon.can_rev()

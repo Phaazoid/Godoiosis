@@ -126,7 +126,7 @@ A cast is **empowered** in element *E* when the caster is **on or adjacent to** 
 
 Element-tagged vials, plus rare **alkahest-pure** that matches anything. **Burned per empowered cast** — no separate *action* — and it grants **exactly what a source grants, never more**: portability *is* the premium ([#697](https://github.com/Phaazoid/Godoiosis/issues/697)). Supply is the authored, faucet-free economy ([progression.md](progression.md)); there is no crafting.
 
-- **Explicitly NOT per-shot ammo — re-scoped, not repealed.** *Casting* never requires consumption; the vial is an **opt-in** upgrade. The one declared exception is the **chemical spitter's injection** ([#97](https://github.com/Phaazoid/Godoiosis/issues/97)), where one vial loads a tank of supercharged shots and a dry tank returns to a weaker baseline rather than to nothing.
+- **Explicitly NOT per-shot ammo — re-scoped, not repealed.** *Casting* never requires consumption; the vial is an **opt-in** upgrade. The one declared exception is the **chemical spitter's injection** ([#97](https://github.com/Phaazoid/Godoiosis/issues/97)), where one vial loads a tank of supercharged shots and a dry tank returns to the weapon's ORDINARY attack rather than to nothing -- dev, 2026-09-06: the baseline is a regular attack, and materia supercharges it, exactly as it does a cast.
 - **Three jobs:** **supercharges casts** · **etches/customizes runes** · feeds the **mechanist** economy (spitter injection, weapon imbuing).
 
 **BUILT 2026-09-05 (#697), and the shape the dev chose is Use-then-cast rather than choose-at-cast:**

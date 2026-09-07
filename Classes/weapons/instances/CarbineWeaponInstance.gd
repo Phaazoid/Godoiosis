@@ -15,11 +15,16 @@ var shots_remaining := MAGAZINE_SIZE
 func is_attack_fireable(attack: WeaponAttackData) -> bool:
 	return shots_remaining > 0 or not attack.requires_readiness
 
-func can_reload() -> bool:
-	return shots_remaining < MAGAZINE_SIZE
+func reload_block_reason(_wielder: Unit) -> String:
+	if shots_remaining >= MAGAZINE_SIZE:
+		return "The magazine is full."
+	return ""
 
-func reload() -> void:
+func reload(_wielder: Unit) -> void:
 	shots_remaining = MAGAZINE_SIZE
+
+func has_reload_verb() -> bool:
+	return true
 
 func consume_readiness_for(attack: WeaponAttackData) -> void:
 	if attack.consumes_readiness:
