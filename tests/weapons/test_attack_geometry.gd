@@ -186,3 +186,18 @@ func test_a_shape_is_shared_between_attacks_rather_than_copied() -> void:
 	assert_array(_affected(melee, Vector2i.ZERO, U)).override_failure_message(
 		"editing a shared shape did not reach every attack holding it").contains_exactly([U])
 	assert_array(_affected(fired, Vector2i.ZERO, Vector2i(0, -3))).contains_exactly([Vector2i(0, -4)])
+
+
+func test_an_anchored_footprint_emits_in_board_order() -> void:
+	# Victim order is volley order, so what the sort does is a RULE and not an implementation
+	# detail. With the shape no longer turning (#818) the same near-to-far sort reads out in BOARD
+	# terms: the southern row first, then northward, west to east within a row. Deterministic, which
+	# is all law #1 asks -- but it is no longer *nearest the attacker first*, because an anchored
+	# footprint has no attacker in it to be near. Ordering a placed blast outward from where it
+	# lands is #805's question, and this case is here so that change is a decision rather than a
+	# surprise.
+	var column: Array[Vector2i] = [Vector2i(0, -1), Vector2i.ZERO, Vector2i(0, 1)]
+	var attack := P.stamped(_attack(), 3, column)
+	var t := Vector2i(0, 3)
+	assert_array(_affected(attack, Vector2i.ZERO, t)).contains_exactly(
+		[Vector2i(0, 4), Vector2i(0, 3), Vector2i(0, 2)])
