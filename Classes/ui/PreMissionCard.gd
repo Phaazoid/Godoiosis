@@ -38,6 +38,9 @@ signal gear_unhovered(card: PreMissionCard)
 # A job was chosen from this card's picker (#742). The SCREEN performs it, for the same reason it owns
 # every gear move: the card judges nothing and writes nothing.
 signal job_picked(target: Unit, job_id: String)
+# The mod chip on a weapon row was pressed (#732). The SCREEN opens the card, for the same reason it
+# performs every gear move: this card judges nothing and owns no state.
+signal fit_requested(weapon: WeaponInstance, owner_unit: Unit)
 
 # The inspect panel owns the ability tooltip wording and its builders are static for exactly this
 # reason -- one sentence, two surfaces. Preloaded because that file is a scene script with no
@@ -553,6 +556,11 @@ func _item_row(item: Item) -> Control:
 	name_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	name_label.add_theme_font_size_override("font_size", 10)
 	line.add_child(name_label)
+
+	var chip := ModFittingCard.chip_for(item)
+	if chip != null:
+		chip.pressed.connect(func() -> void: fit_requested.emit(item as WeaponInstance, unit))
+		line.add_child(chip)
 
 	if reason != "":
 		var warn := Label.new()
