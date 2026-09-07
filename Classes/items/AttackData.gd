@@ -159,6 +159,83 @@ func grid_caption(_field: String) -> String:
 func grid_up_label(_field: String) -> String:
 	return "^ forward" if is_directional() else "^ board north"
 
+# Which SECTION of the Attack Editor's form each field belongs in, and the order both the sections
+# and the rows inside them are drawn (#825). property_tips()'s exact shape and for its exact reason:
+# the declaration lives beside the @export it describes, so the layout and the field cannot drift
+# apart in different files, and a subclass MERGES its own fields into the sections this class
+# already declares rather than restating the whole layout.
+#
+# EVERY exported field must land in exactly ONE section -- tests/dev/test_attack_editor_layout.gd
+# refuses a field that is in none. That is what stops a new @export dropping silently out of the
+# form the way #803's stamp row did, and it is why the editor needs no skip list any more: a field
+# is drawn because it is declared here, not because nobody remembered to exclude it.
+#
+# GEOMETRY IS ONE SECTION. The range trio and the stamp used to sit at opposite ends of the page,
+# which is half of what made the form unreadable -- and since #818 they answer one question
+# together (where this lands, and whether it turns).
+static func property_sections() -> Array[Dictionary]:
+	var sections: Array[Dictionary] = [
+		{"title": "Identity", "fields": PackedStringArray(["display_name"])},
+		{"title": "Range and shape", "fields": PackedStringArray(["max_range", "min_range", "max_and_a_half", "attack_shape"])},
+		{"title": "Who it can hit", "fields": PackedStringArray(["targets", "hits_allies", "hits_self", "pierces_guard"])},
+		{"title": "Height", "fields": PackedStringArray(["vertical_rule", "up_tolerance", "down_tolerance", "arc_clearance"])},
+		{"title": "Payload", "fields": PackedStringArray(["heals", "deals_no_damage", "power", "damage_kind", "knockback"])},
+		{"title": "How it is used", "fields": PackedStringArray(["can_counter", "can_overwatch"])},
+	]
+	return sections
+
+
+# A subclass's own fields, appended to a section this class already declares. Matched by TITLE
+# rather than by index, so inserting a section above cannot silently move a subclass's rows into
+# the wrong one; an unknown title is a push_error rather than a silent drop.
+#
+# The copy-then-assign is not ceremony: a PackedStringArray is a VALUE type, so appending to what
+# the Dictionary hands back would append to a copy and change nothing (CLAUDE.md's sharp edge).
+static func in_section(sections: Array[Dictionary], title: String, fields: PackedStringArray) -> Array[Dictionary]:
+	for section in sections:
+		if section["title"] == title:
+			var merged: PackedStringArray = section["fields"]
+			merged.append_array(fields)
+			section["fields"] = merged
+			return sections
+	push_error("no section titled '%s' to merge %s into" % [title, fields])
+	return sections
+
+
+# Which fields do not apply to THIS attack as it stands right now (#825) -- the Attack Editor hides
+# their rows and brings them back the instant the governing field moves (dev, 2026-09-07: hidden
+# rather than greyed). An INSTANCE method, unlike the two statics above, because the answer is about
+# this attack's own values; asked with has_method, exactly like grid_fields().
+#
+# EVERY ENTRY IS DERIVED FROM WHAT THE RULE ACTUALLY READS, never from what looks irrelevant:
+#   is_directional()     -- min_range and max_and_a_half reach nothing, being read only through the
+#                           ring (GridUtils.cells_within_blended_range), and a facing aim has none.
+#   MELEE                -- Reach._vertical_rule_ok returns before either tolerance. arc_clearance
+#                           is deliberately NOT here: the lane trace reads it whatever the rule.
+#   deals_no_damage      -- both base_damage implementations return 0 before power or the blend.
+#                           knockback and elemental_damage_type STAY: a damageless shove is Gust,
+#                           and the element is applied separately from the damage number.
+#   delivered_kind()     -- the SAME rule the None caption reads, so the hidden picker and the
+#                           sentence standing in for it can never disagree about whether a kind is
+#                           delivered. deliver() is that rule's one home.
+# `scaling_blend` is named from here though only WeaponAttackData has it: the RULE is this class's
+# (deals_no_damage suppresses scaling, per its own comment), and a name matching no row is ignored.
+#
+# Hiding has NO side effect -- a field keeps whatever it holds and comes back unchanged, so an
+# authored tolerance under a MELEE rule survives being invisible.
+func hidden_fields() -> PackedStringArray:
+	var hidden: PackedStringArray = []
+	if is_directional():
+		hidden.append_array(["min_range", "max_and_a_half"])
+	if vertical_rule == VerticalRule.MELEE:
+		hidden.append_array(["up_tolerance", "down_tolerance"])
+	if deals_no_damage:
+		hidden.append_array(["power", "scaling_blend"])
+	if delivered_kind() == Kind.NONE:
+		hidden.append("damage_kind")
+	return hidden
+
+
 # What each field MEANS, for the dev tools' reflective editor (#473). Every field above carries a
 # comment already, but a comment reaches nobody editing in the running game -- the Attack Editor
 # draws these rows from get_property_list() and had no text on any of them, which is how a range
@@ -171,9 +248,10 @@ func grid_up_label(_field: String) -> String:
 # drift apart in different files.
 static func property_tips() -> Dictionary:
 	return {
+		"display_name": "What this attack is called wherever a player meets it -- the action menu, the queue row, a weapon's tooltip. Saving under a new name renames it.",
 		"power": "Base damage before scaling. A weapon attack scales this off its weapon's stat blend and fitted mods; a carving scales it off the wielder's aura.",
-		"min_range": "The CLOSEST cell this attack can be aimed at, in Manhattan steps. 1 = adjacent. 0 = the attacker's own cell as well (a self-heal). Above 1 leaves a dead zone it cannot hit at all, which is how a carbine cannot shoot what has closed on it.\nMUST NOT EXCEED Max Range: nothing refuses the pair, the attack simply reaches no cells and stops showing any range at all.",
-		"max_range": "The FURTHEST cell this attack can be aimed at, in Manhattan steps (no diagonals). RAISE THIS to make an attack longer-ranged.\n0 is special: the shape sits on the ATTACKER and the attack aims a FACING -- the player points a direction and the whole shape TURNS to fire that way. That is what a cleave or a line is.\nAt any other range the shape is PLACED on the aimed cell and never turns: it lands exactly as you drew it, so the grid's top is board north rather than a facing.",
+		"min_range": "The CLOSEST cell this attack can be aimed at, in Manhattan steps. Untick Custom minimum range and it is 1, i.e. adjacent, which is what nearly every attack wants.\n0 also allows the attacker's OWN cell (a self-heal). Above 1 leaves a dead zone it cannot hit at all, which is how a carbine cannot shoot what has closed on it.\nMUST NOT EXCEED Max range: nothing refuses the pair, the attack simply reaches no cells and stops showing any range at all.",
+		"max_range": "Placed at range OFF is max range 0, and it is a different kind of attack rather than a shorter one: the shape sits on the ATTACKER and the aim is a FACING -- the player points a direction and the whole shape TURNS to fire that way. That is what a cleave or a line is.\nON, this is the FURTHEST cell the attack can be aimed at, in Manhattan steps (no diagonals). The shape is PLACED on the aimed cell and never turns: it lands exactly as you drew it, so the grid's top is board north rather than a facing.",
 		"max_and_a_half": "Adds a half step to the outer ring, bevelling its diagonal corners -- a reach of 2 and a half rather than 2 or 3.",
 		"attack_shape": "The SHAPE this attack covers once aimed, picked from the shared library. Shapes are shared BY REFERENCE: editing one changes every attack that uses it. No shape at all = the aimed cell alone.",
 		"can_counter": "May this attack be used when countering? A weapon always counters with its MAIN attack whatever is picked, so this only matters on a main.",

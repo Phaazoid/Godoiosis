@@ -45,7 +45,7 @@ static func add_knob_row(rows: VBoxContainer, knob: Dictionary, value: Variant,
 
 
 # What a row put into `rows` -- the same span apply_tooltip walks, returned so a caller can keep it.
-static func _added_since(rows: VBoxContainer, first: int) -> Array[Node]:
+static func _added_since(rows: Node, first: int) -> Array[Node]:
 	var added: Array[Node] = []
 	for i in range(first, rows.get_child_count()):
 		added.append(rows.get_child(i))
@@ -107,6 +107,21 @@ static func add_label(container: Node, text: String) -> void:
 	var label := Label.new()
 	label.text = text
 	container.add_child(label)
+
+
+# The gold section heading every knob page draws -- a separator unless it is opening the page, then
+# the label. It lived as THREE byte-identical private copies (GameTool, MoodsTool, ObjectTool), each
+# with its own HEADING_COLOR, and #825 wanted a fourth for the Attack Editor's form. One question,
+# one answer: the copies are gone and the colour lives here with the only code that reads it.
+const HEADING_COLOR := Color(1, 0.83, 0.4, 1)   # the Look and Scenario tabs' heading gold
+
+static func add_heading(container: Node, text: String) -> void:
+	if container.get_child_count() > 0:
+		container.add_child(HSeparator.new())
+	var heading := Label.new()
+	heading.text = text
+	heading.add_theme_color_override("font_color", HEADING_COLOR)
+	container.add_child(heading)
 
 # Returns the SpinBox (add_slider/add_option/add_lineedit's convention), so a caller can narrow its
 # range or write a value back into the widget on a refresh.
@@ -480,11 +495,73 @@ static func build_resource_editor(container: Node, resource: Resource, rebuild: 
 	for prop in resource.get_property_list():
 		if prop.name in skip:
 			continue
-		var is_exported_var = (prop.usage & PROPERTY_USAGE_SCRIPT_VARIABLE) != 0 and (prop.usage & PROPERTY_USAGE_EDITOR) != 0
-		if not is_exported_var:
+		if not is_exported(prop):
 			continue
 		_add_property_control(container, resource, prop, rebuild)
-		
+
+
+# Does get_property_list() report this entry as an authored @export? The one spelling of that
+# filter -- build_resource_editor's loop, add_property_row's lookup and the coverage laws in
+# tests/dev all have to agree about which fields a form is answerable for.
+static func is_exported(prop: Dictionary) -> bool:
+	return (prop.usage & PROPERTY_USAGE_SCRIPT_VARIABLE) != 0 and (prop.usage & PROPERTY_USAGE_EDITOR) != 0
+
+
+# ONE field's row, drawn exactly as build_resource_editor draws it, for a form that chooses its own
+# order rather than taking the declaration order (#825's sectioned Attack Editor). It is the same
+# builder underneath -- factored OUT of that loop rather than written beside it, so the two can
+# never disagree about how a bool or an enum is drawn.
+#
+# Returns the nodes it appended, add_knob_row's convention, so a caller can show or hide the row
+# without knowing what shape it is. EMPTY means the resource has no such exported property; the
+# section law is what reports that, since drawing code cannot tell a typo from a field this mode
+# deliberately leaves to a bespoke control.
+static func add_property_row(container: Node, resource: Resource, prop_name: String, rebuild: Callable) -> Array[Node]:
+	for prop in resource.get_property_list():
+		if prop.name != prop_name or not is_exported(prop):
+			continue
+		var first := container.get_child_count()
+		_add_property_control(container, resource, prop, rebuild)
+		return _added_since(container, first)
+	return []
+
+
+# Hide the rows of every field the resource says does not apply right now, and KEEP them right --
+# re-asked on `changed`, the signal every reflective edit already emits through _write (#804).
+# `rows` maps a field name to the nodes its control occupies, filled in by whoever drew the form; a
+# field the resource names and the form never drew is simply absent, and ignored.
+#
+# VISIBILITY, NEVER A REBUILD. A form redrawn from a row's own signal frees the node that emitted it
+# (#741), so this follows add_cell_grid's caption rule: touch what is already built. Hiding a row
+# inside a VBoxContainer reflows the rest for free.
+#
+# The connection is dropped with the form -- a lambda has no object to auto-disconnect against, so
+# it rides the first registered row's tree_exiting, exactly as the grid's caption sync does.
+static func bind_hidden_fields(resource: Resource, rows: Dictionary) -> void:
+	if resource == null or not resource.has_method("hidden_fields"):
+		return
+	var anchor: Node = null
+	for field: String in rows:
+		var nodes: Array = rows[field]
+		if not nodes.is_empty():
+			anchor = nodes[0]
+			break
+	if anchor == null:
+		return
+	var apply := func() -> void:
+		var hidden: PackedStringArray = resource.call("hidden_fields")
+		for field: String in rows:
+			var shown := not hidden.has(field)
+			for node: Node in rows[field]:
+				var control := node as Control
+				if control != null:
+					control.visible = shown
+	apply.call()
+	resource.changed.connect(apply)
+	anchor.tree_exiting.connect(func() -> void:
+		if resource.changed.is_connected(apply):
+			resource.changed.disconnect(apply))
+
 # The text for one reflectively-drawn field, from the resource's own property_tips() -- which each
 # class overrides and merges into its parent's, so WeaponAttackData answers for AttackData's fields
 # without restating them. The text lives beside the @export it describes rather than in a table
@@ -536,18 +613,18 @@ static func _add_property_control(container: Node, resource: Resource, prop: Dic
 	match prop.type:
 		TYPE_INT:
 			if prop.hint == PROPERTY_HINT_ENUM:
-				add_enum_option(container, label, prop.hint_string, value, func(v): _write(resource, prop.name, v))
+				add_enum_option(container, label, prop.hint_string, value, func(v): write(resource, prop.name, v))
 			else:
-				add_spinbox(container, label, value, func(v): _write(resource, prop.name, int(v)))
+				add_spinbox(container, label, value, func(v): write(resource, prop.name, int(v)))
 		TYPE_FLOAT:
-			add_spinbox(container, label, value, func(v): _write(resource, prop.name, v))
+			add_spinbox(container, label, value, func(v): write(resource, prop.name, v))
 		TYPE_BOOL:
-			add_checkbox(container, label, value, func(v): _write(resource, prop.name, v))
+			add_checkbox(container, label, value, func(v): write(resource, prop.name, v))
 		TYPE_STRING:
 			if prop.hint == PROPERTY_HINT_ENUM:
-				add_option(container, label, prop.hint_string.split(","), value, func(s): _write(resource, prop.name, s))
+				add_option(container, label, prop.hint_string.split(","), value, func(s): write(resource, prop.name, s))
 			else:
-				add_lineedit(container, label, value, func(s): _write(resource, prop.name, s))
+				add_lineedit(container, label, value, func(s): write(resource, prop.name, s))
 		TYPE_ARRAY:
 			# A centred cell STAMP gets a clickable grid (#804); any other Array[Vector2i] keeps the
 			# coordinate row #803 shipped. The RESOURCE says which of its fields is which -- see
@@ -556,7 +633,7 @@ static func _add_property_control(container: Node, resource: Resource, prop: Dic
 				if _is_grid_field(resource, prop.name):
 					add_cell_grid(container, label, resource, prop.name)
 				else:
-					add_lineedit(container, label, cells_to_text(value), func(s): _write(resource, prop.name, cells_from_text(s)))
+					add_lineedit(container, label, cells_to_text(value), func(s): write(resource, prop.name, cells_from_text(s)))
 	_tip_rows_from(container, first, tip)
 
 
@@ -566,7 +643,12 @@ static func _add_property_control(container: Node, resource: Resource, prop: Dic
 # grid's anchor caption is the first listener, and it reads `max_range`, three rows above its own.
 # A rebuild driven off a row's signal was the alternative and is refused: it frees the SpinBox
 # mid-edit, which is #741's trap.
-static func _write(resource: Resource, prop_name: String, value: Variant) -> void:
+#
+# PUBLIC since #825, because the Attack Editor's composite controls (the range toggle, the
+# damage/heal/utility choice) write fields no reflective row draws and must land on the same
+# signal -- a bespoke control setting the property itself would be a second write door whose edits
+# nothing hears.
+static func write(resource: Resource, prop_name: String, value: Variant) -> void:
 	resource.set(prop_name, value)
 	resource.emit_changed()
 
@@ -722,7 +804,7 @@ static func add_cell_grid(container: Node, label_text: String, resource: Resourc
 	var line := add_lineedit(container, "Cells", cells_to_text(_cells_of(resource, prop_name)),
 		func(s: String) -> void:
 			var typed := cells_from_text(s)
-			_write(resource, prop_name, typed)
+			write(resource, prop_name, typed)
 			# GROW only. A stamp mid-edit is briefly smaller than what is being typed, and
 			# re-deriving would collapse the grid and re-expand it on the next keystroke.
 			state["span"] = maxi(int(state["span"]), _stamp_span(typed))
@@ -799,7 +881,7 @@ static func _cell_button(offset: Vector2i, filled: bool, resource: Resource, pro
 		# following whatever order the cells were clicked in.
 		next.sort_custom(func(a: Vector2i, b: Vector2i) -> bool:
 			return a.y < b.y if a.y != b.y else a.x < b.x)
-		_write(resource, prop_name, next)
+		write(resource, prop_name, next)
 		_style_cell(cell, on, offset == Vector2i.ZERO)
 		line.text = cells_to_text(next))
 	return cell

@@ -26,8 +26,6 @@ class_name MoodsTool
 # of the markup, to the Game tab: none of it was scene mood, and none of it had a Save. What is
 # left on this panel is mood entire, which is what let LookKnobs' exclusion list go away.
 
-const HEADING_COLOR := Color(1, 0.83, 0.4, 1)   # the Scenario tab's heading gold
-
 # Which SUB-TAB each group lands on (dev, 2026-08-14: ~60 rows in one scroll is too much for a
 # 900x360 window, so split to about a windowful each). A map rather than a key on every knob, so
 # adding a knob stays one line and adding a GROUP is one line here -- and a group with no tab is a
@@ -189,7 +187,7 @@ func _rebuild() -> void:
 		var rows := _rows_for_group(knob_group)
 		if knob_group != group:
 			group = knob_group
-			_add_heading(rows, group)
+			DevWidgets.add_heading(rows, group)
 		_build_row(rows, knob)
 	_tabs.current_tab = clampi(showing, 0, maxi(0, _tabs.get_tab_count() - 1))
 
@@ -212,15 +210,6 @@ func _build_row(rows: VBoxContainer, knob: Dictionary) -> void:
 			write(knob, value)
 			_touch(),
 		tip_for(knob))
-
-
-func _add_heading(rows: VBoxContainer, text: String) -> void:
-	if rows.get_child_count() > 0:
-		rows.add_child(HSeparator.new())
-	var heading := Label.new()
-	heading.text = text
-	heading.add_theme_color_override("font_color", HEADING_COLOR)
-	rows.add_child(heading)
 
 
 func _button(text: String, tooltip: String, on_pressed: Callable) -> Button:

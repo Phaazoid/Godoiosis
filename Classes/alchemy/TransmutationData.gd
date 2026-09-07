@@ -188,12 +188,26 @@ func _resolved_element(e: Elemental.Element) -> Elemental.Element:
 	return e
 
 
-# The carving's own two reflective rows (#473); sigils and flourishes get bespoke weight/slot UI in
-# the Attack Editor and are skipped there, so they need no text. AttackData's shared fields merge in.
+# Where a carving's own four fields sit in the Attack Editor's form (#825). The sigils get a
+# SECTION rather than a row inside Identity: they are the carving's whole elemental core, the
+# bespoke UI is four weight spinboxes plus two derived readouts, and what they resolve to is the
+# first thing worth seeing after the name. It sits directly under Identity for that reason.
+static func property_sections() -> Array[Dictionary]:
+	var sections := AttackData.property_sections()
+	AttackData.in_section(sections, "Identity", PackedStringArray(["popup", "icon"]))
+	sections.insert(1, {"title": "Sigils and flourishes", "fields": PackedStringArray(["sigils", "flourishes"])})
+	return sections
+
+
+# The carving's own four rows (#473). Sigils and flourishes get bespoke weight/slot UI in the
+# Attack Editor rather than a reflective row, and still owe text -- the editor tips the block it
+# draws, and #825 dropped the skip lists that used to excuse them. AttackData's shared fields merge in.
 static func property_tips() -> Dictionary:
 	var tips := AttackData.property_tips()
 	tips.merge({
 		"popup": "Floating text shown over the target when this carving lands. Blank = nothing.",
 		"icon": "The carving's icon in the rune and attack menus.",
+		"sigils": "The carving's elemental core, as a WEIGHT per element -- 2 Fire and 1 Earth is [Fire, Fire, Earth]. Weight scales the damage off that element's aura twice over and sets what the wielder must be able to channel. Sigil count IS the rune capacity this costs; distinct elements are its tier.",
+		"flourishes": "Shaping marks that RESHAPE what the sigils already do -- they never add an element. They cost no capacity and are limited by the slots the sigils grant, and a flourish's opposite cannot be carved beside it.",
 	})
 	return tips

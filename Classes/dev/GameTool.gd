@@ -210,7 +210,7 @@ func _rebuild() -> void:
 		var rows := _rows_for_group(knob_group)
 		if knob_group != group:
 			group = knob_group
-			_add_heading(rows, knob_group)
+			DevWidgets.add_heading(rows, knob_group)
 			_build_group_header(rows, knob_group)
 		_remember_filter(knob, DevWidgets.add_knob_row(rows, knob, LookKnobs.read(_host, knob),
 			func(value: Variant) -> void:
@@ -223,7 +223,7 @@ func _rebuild() -> void:
 		var rows := _rows_for_group(knob_group)
 		if knob_group != group:
 			group = knob_group
-			_add_heading(rows, knob_group)
+			DevWidgets.add_heading(rows, knob_group)
 			_build_group_header(rows, knob_group)
 		_build_class_row(rows, knob)
 	_apply_playback_filter()
@@ -473,15 +473,6 @@ func _refresh_palette_notice() -> void:
 			+ "tune the DEFAULT palette, so the board will not follow them until Aim colours is "
 			+ "back on Default. %s is authored in OverlayManager.AIM_PALETTES.") % [
 			str(labels[picked]), str(labels[picked])]
-
-
-func _add_heading(rows: VBoxContainer, text: String) -> void:
-	if rows.get_child_count() > 0:
-		rows.add_child(HSeparator.new())
-	var heading := Label.new()
-	heading.text = text
-	heading.add_theme_color_override("font_color", HEADING_COLOR)
-	rows.add_child(heading)
 
 
 func _button(text: String, tooltip: String, on_pressed: Callable) -> Button:
