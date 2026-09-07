@@ -254,7 +254,9 @@ func test_the_draw_lands_before_the_director_arms() -> void:
 		"the draw's own squads completed the lesson before the player could act").is_equal(step.text)
 
 
-# A restart re-runs the same deterministic walk, which is why the phase needs no buffer to preserve.
+# A restart with NOTHING COMMITTED re-runs the same deterministic walk. That is all the walk ever
+# guaranteed: #763's buffer replaces it once the player HAS committed, so the case stays exactly
+# as written -- it never commits -- and is now the pin on the draw the buffer falls back to.
 func test_a_restart_puts_the_same_characters_back_on_the_same_cells() -> void:
 	var roster := _a_roster()
 	if roster == "":

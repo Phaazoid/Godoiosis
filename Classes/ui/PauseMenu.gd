@@ -45,8 +45,18 @@ func _build(can_restart: bool, can_load: bool, game_node: Node, mid_pass: bool) 
 	_add_button(row, "Resume", func(): chosen.emit(Choice.RESUME))
 
 	# Hidden on a board with nothing to reload (the Sandbox), mirroring MissionEndBanner's retry.
+	#
+	# IT RENAMES ITSELF INSIDE THE PRE-MISSION PHASE (#763), because there it does something else:
+	# every other restart returns the player to the phase with what they last committed already
+	# standing, while this one is the door that DROPS that and draws the mission's own opening force.
+	# "Restart Mission" would be the same words for the opposite act, and the phase is where a player
+	# who has just been handed a force back most needs to be told how to put it down (dev, 2026-09-07:
+	# "we're kind of hiding this information a bit, maybe we should change the button name").
+	# `loadout` is the phase's own word for the whole of itself -- confirm_and_commit says so too.
 	if can_restart:
-		_refuse_while(_add_button(row, "Restart Mission", func(): chosen.emit(Choice.RESTART)),
+		var restart_text: String = "Reset Loadout" if game_node.mission_controller.is_deploying() \
+				else "Restart Mission"
+		_refuse_while(_add_button(row, restart_text, func(): chosen.emit(Choice.RESTART)),
 			mid_pass, "Not while the enemy is moving -- wait for the pass to finish.")
 
 	# Save rides Restart's gate (#144): missions only, for now -- a sandbox save would have no
