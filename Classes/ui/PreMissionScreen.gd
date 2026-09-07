@@ -500,8 +500,10 @@ func _on_job_picked(target: Unit, job_id: String) -> void:
 
 # The two callables every row and zone is wired with, click path and drag path alike. They are thin
 # on purpose: Loadout owns the rule, and a surface that judged for itself would be a second answer.
-func _judge_move(item: Item, from: Unit, to: Unit) -> String:
-	return _controller.loadout().move_block_reason(item, from, to)
+# Object-typed since #732 widened the zone's endpoint: on THIS surface every holder is a unit or the
+# stash, so the cast names that and Loadout keeps its Unit-typed rule.
+func _judge_move(item: Item, from: Object, to: Object) -> String:
+	return _controller.loadout().move_block_reason(item, from as Unit, to as Unit)
 
 
 # A REDRAW NEVER RUNS INSIDE THE CLICK THAT CAUSED IT. Every handler below is reached from a row's
@@ -513,8 +515,8 @@ func _redraw() -> void:
 	refresh.call_deferred()
 
 
-func _perform_move(item: Item, from: Unit, to: Unit) -> String:
-	var refusal := _controller.loadout().move(item, from, to)
+func _perform_move(item: Item, from: Object, to: Object) -> String:
+	var refusal := _controller.loadout().move(item, from as Unit, to as Unit)
 	_last_refusal = refusal
 	if refusal == "":
 		_selected_item = null
@@ -525,7 +527,8 @@ func _perform_move(item: Item, from: Unit, to: Unit) -> String:
 
 # Click to pick up, click again to put down -- the same gesture the drag makes, for a player who
 # would rather not drag one. Clicking the selection itself lets go of it.
-func _on_gear_clicked(item: Item, owner_unit: Unit) -> void:
+func _on_gear_clicked(item: Item, holder: Object) -> void:
+	var owner_unit := holder as Unit
 	if _selected_item != null:
 		if item == _selected_item and owner_unit == _selected_owner:
 			_clear_selection()

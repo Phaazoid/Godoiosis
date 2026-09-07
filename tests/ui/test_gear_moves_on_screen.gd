@@ -85,7 +85,7 @@ func _stash_rows() -> Array[GearRow]:
 	var rows: Array[GearRow] = []
 	for node: Node in _walk(_screen()):
 		var row := node as GearRow
-		if row != null and row.owner_unit == null and row.item != null:
+		if row != null and row.holder == null and row.item != null:
 			rows.append(row)
 	return rows
 
@@ -309,7 +309,7 @@ func test_the_drag_path_offers_judges_and_performs_the_same_move() -> void:
 	var slot: GearRow = null
 	for node: Node in _walk(card):
 		var candidate := node as GearRow
-		if candidate != null and candidate.owner_unit == card.unit:
+		if candidate != null and candidate.holder == card.unit:
 			slot = candidate
 	assert_object(slot).is_not_null()
 	assert_bool(slot._can_drop_data(Vector2.ZERO, payload)).override_failure_message(

@@ -193,9 +193,14 @@ func test_a_refused_fit_puts_the_models_own_reason_on_the_panel() -> void:
 		push_warning("no mod in the catalog fits space 0, so nothing here can be refused a fit")
 		return
 
-	# Fill space 0 to its capacity, so the next fit of the same mod is refused.
+	# Filled with DISTINCT copies, never `fitting` itself. #732 refuses a mod ALREADY FITTED to this
+	# weapon, so filling with the same object stops after one fit and leaves `expected` holding the
+	# duplicate refusal -- green, and pinning a rule this case is not named for. The copies are
+	# throwaways: a real fit shares the catalog's object, and all this needs is bulk that is not
+	# `fitting`. What the assertion below is actually about is that the panel echoes whatever the MODEL
+	# refuses with, not which refusal it happens to be.
 	while weapon.can_fit(0, fitting):
-		weapon.fit(0, fitting)
+		weapon.fit(0, fitting.duplicate())
 	var tool_ref := _show(weapon)
 	var expected := weapon.fit_block_reason(0, fitting)
 	assert_str(expected).is_not_empty()

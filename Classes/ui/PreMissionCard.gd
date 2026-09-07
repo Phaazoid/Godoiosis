@@ -521,8 +521,10 @@ func _item_row(item: Item) -> Control:
 	var row := GearRow.new()
 	row.custom_minimum_size.y = 20
 	row.wire(unit, judge_move, perform_move)
-	row.clicked.connect(func(gear: Item, owner_unit: Unit) -> void:
-		gear_clicked.emit(gear, owner_unit))
+	# The zone's holder is Object-typed since #732; on a card row it is always this unit, and the cast
+	# is what keeps that promise readable at the one place it is made.
+	row.clicked.connect(func(gear: Item, holder: Object) -> void:
+		gear_clicked.emit(gear, holder as Unit))
 	row.mouse_entered.connect(func() -> void: gear_hovered.emit(row.item, self))
 	row.mouse_exited.connect(func() -> void: gear_unhovered.emit(self))
 	if item == null:
