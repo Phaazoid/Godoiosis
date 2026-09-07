@@ -331,15 +331,19 @@ func _populate_weapon_editor(weapon: WeaponInstance) -> void:
 		DevWidgets.add_option(editor_container, "Limb Kind", WeaponData.LimbKind.keys(), WeaponData.LimbKind.keys()[weapon.limb_kind],
 			func(s): _on_limb_kind_picked(weapon, s))
 
+	# Both scanned ONCE here rather than per space: get_mods re-reads the directory on every call.
+	# The two are a different question each -- "is there any mod at all" and "which fit this family" --
+	# and the rows below say something different for each empty.
 	var mods := WeaponModCatalog.get_mods()
+	var offerable := WeaponModCatalog.offerable_for(template.weapon_type)
 	for i in range(weapon.space_count()):
-		_populate_mod_space(weapon, i, mods)
+		_populate_mod_space(weapon, i, mods, offerable)
 
 func _on_limb_kind_picked(weapon: WeaponInstance, kind_name: String) -> void:
 	weapon.limb_kind = WeaponData.LimbKind[kind_name]
 	populate()
 
-func _populate_mod_space(weapon: WeaponInstance, index: int, mods: Dictionary) -> void:
+func _populate_mod_space(weapon: WeaponInstance, index: int, mods: Dictionary, offerable: Dictionary) -> void:
 	var capacity: int = weapon.template.mod_spaces[index]
 	DevWidgets.add_label(editor_container, "Space %d: %d / %d used" % [index + 1, weapon.used_capacity(index), capacity])
 
@@ -367,16 +371,9 @@ func _populate_mod_space(weapon: WeaponInstance, index: int, mods: Dictionary) -
 		DevWidgets.add_label(editor_container, "(no mods in Resources/WeaponMods/)")
 		return
 
-	# The picker lists what this WEAPON could ever take, not what fits right now (#74). A family
-	# refusal is permanent, so showing those entries is offering a door that never opens; a full
-	# space is live state you fix by removing something, so those stay listed and are refused WITH
-	# THE REASON. That split is #166's policy call — grey (or here, refuse) only what you can
-	# explain, hide what would never be true.
-	var offerable := {}
-	for k in mods:
-		var mod: WeaponModData = mods[k]
-		if mod.fits_family(weapon.template.weapon_type):
-			offerable[k] = mod
+	# The picker lists what this WEAPON could ever take, not what fits right now (#74) -- the split is
+	# #166's policy call, and WeaponModCatalog.offerable_for owns it since #732 gave the pre-mission
+	# fitting card the same question of the same source.
 	if offerable.is_empty():
 		# The FAMILY, not the template's own name — a prototype called The Jaw takes Chainsword
 		# mods, so naming the template here would say the wrong thing. Deliberately not the

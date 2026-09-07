@@ -311,6 +311,7 @@ func _refresh_cards() -> void:
 			card.gear_hovered.connect(_on_gear_hovered)
 			card.gear_unhovered.connect(_on_gear_unhovered)
 			card.job_picked.connect(_on_job_picked)
+			card.fit_requested.connect(_on_fit_requested)
 			card.mouse_entered.connect(_on_card_hovered.bind(card))
 			card.mouse_exited.connect(_on_gear_unhovered.bind(card))
 			card.selected_item = _selected_item if _selected_owner == unit else null
@@ -348,11 +349,22 @@ func _refresh_stash() -> void:
 			tip += "
 Requires: %s" % armor.requirement_text()
 		row.tooltip_text = UiText.wrap(tip)
+
+		var line := HBoxContainer.new()
+		line.add_theme_constant_override("separation", 4)
+		row.add_child(line)
 		var label := Label.new()
 		label.text = item.display_name
 		label.clip_text = true
+		label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		label.add_theme_font_size_override("font_size", 11)
-		row.add_child(label)
+		line.add_child(label)
+		# A stash weapon opens the fitting card too (#732) -- the same chip the cards carry, and the
+		# card handles a wielder-less weapon by reading its proficiency as unreduced.
+		var chip := ModFittingCard.chip_for(item)
+		if chip != null:
+			chip.pressed.connect(_on_fit_requested.bind(item as WeaponInstance, null))
+			line.add_child(chip)
 		_stash_box.add_child(row)
 	_refresh_hint()
 
@@ -487,6 +499,14 @@ func _on_begin() -> void:
 	_controller.confirm_and_commit()
 
 
+# The fitting card (#732) stacks over this screen and claims the modal lock, which is what stops Tab
+# swapping the board in behind it. On the way out the screen redraws: a fitted mod moves WT, DEF, the
+# ability chips and the stat grid, and every one of those is read rather than stored.
+func _on_fit_requested(weapon: WeaponInstance, owner_unit: Unit) -> void:
+	var card := ModFittingCard.open(_controller.game, weapon, owner_unit)
+	card.closed.connect(_redraw)
+
+
 # The card offers the job; the screen performs it, the same division every gear move keeps. Deferred
 # like every other mutation here so that one place decides when the screen redraws -- and the redraw
 # is real work either way: the ability chips, the stat grid and the derived strip all follow a job.
@@ -500,8 +520,10 @@ func _on_job_picked(target: Unit, job_id: String) -> void:
 
 # The two callables every row and zone is wired with, click path and drag path alike. They are thin
 # on purpose: Loadout owns the rule, and a surface that judged for itself would be a second answer.
-func _judge_move(item: Item, from: Unit, to: Unit) -> String:
-	return _controller.loadout().move_block_reason(item, from, to)
+# Object-typed since #732 widened the zone's endpoint: on THIS surface every holder is a unit or the
+# stash, so the cast names that and Loadout keeps its Unit-typed rule.
+func _judge_move(item: Item, from: Object, to: Object) -> String:
+	return _controller.loadout().move_block_reason(item, from as Unit, to as Unit)
 
 
 # A REDRAW NEVER RUNS INSIDE THE CLICK THAT CAUSED IT. Every handler below is reached from a row's
@@ -513,8 +535,8 @@ func _redraw() -> void:
 	refresh.call_deferred()
 
 
-func _perform_move(item: Item, from: Unit, to: Unit) -> String:
-	var refusal := _controller.loadout().move(item, from, to)
+func _perform_move(item: Item, from: Object, to: Object) -> String:
+	var refusal := _controller.loadout().move(item, from as Unit, to as Unit)
 	_last_refusal = refusal
 	if refusal == "":
 		_selected_item = null
@@ -525,7 +547,8 @@ func _perform_move(item: Item, from: Unit, to: Unit) -> String:
 
 # Click to pick up, click again to put down -- the same gesture the drag makes, for a player who
 # would rather not drag one. Clicking the selection itself lets go of it.
-func _on_gear_clicked(item: Item, owner_unit: Unit) -> void:
+func _on_gear_clicked(item: Item, holder: Object) -> void:
+	var owner_unit := holder as Unit
 	if _selected_item != null:
 		if item == _selected_item and owner_unit == _selected_owner:
 			_clear_selection()

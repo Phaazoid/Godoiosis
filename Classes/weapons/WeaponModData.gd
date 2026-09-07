@@ -1,4 +1,4 @@
-extends Resource
+extends Item
 class_name WeaponModData
 
 # A physical component fitted into one of a weapon's spaces (docs/design/weapons.md
@@ -10,10 +10,22 @@ class_name WeaponModData
 # what a weapon can do, not just how hard it hits. Since #529/#530 a mod may also REPLACE the
 # weapon's main attack outright and EDIT what the attacks applies_to names do -- so "additive
 # only", which this header claimed until then, is no longer the whole model.
+#
+# EXTENDS ITEM SINCE #732, and the base is not a claim that a mod is CARRYABLE -- WeaponData extends
+# it too and is never carried either. What the base means is NAMED, ICONED, DESCRIBED, WEIGHABLE, and
+# a mod is all four; Item's own header says "anything a unit can hold", which was already false when
+# WeaponData arrived and is corrected there now. The concrete reason is the fitting card: GearRow and
+# GearDropZone are typed Item down their whole surface -- the field, carry(), the clicked signal and
+# both callables -- so a mod that was not one could not ride the drag widget #741 shipped, and the
+# card would have needed a second one. `display_name` and `weight` came off THIS class in the same
+# change; the base declares both under the same names, so no authored .tres changed meaning.
+#
+# A unit may not CARRY one (dev, 2026-09-06: "Maybe later down the line they are lootable on the
+# battlefield, but for now, eh") -- Unit.add_block_reason is where that refusal lives, so every
+# surface gets it from one place. #812 owns the two seeding doors that never ask it.
 
 
 @export var id: String = ""
-@export var display_name: String = ""
 @export var size: int = 1   # 1-3, capacity cost within whichever space it's fitted to
 
 enum AppliesTo { EVERY_ATTACK, MAIN_ATTACK }
@@ -27,7 +39,6 @@ enum AppliesTo { EVERY_ATTACK, MAIN_ATTACK }
 # authored .tres changes meaning by gaining it. WeaponInstance._mods_for is the only reader.
 @export var power_delta: int = 0
 @export var added_element: Elemental.Element = Elemental.Element.NONE
-@export var weight: int = 0
 
 enum Override { UNCHANGED, ON, OFF }
 
@@ -141,7 +152,10 @@ func save_block_reason() -> String:
 # Per-field text for the dev tools' reflective editor (#473's shape, first written for this
 # resource by #74 — the Item Editor's mod mode is the first thing to draw these fields at all).
 static func property_tips() -> Dictionary:
-	return {
+	var tips := Item.property_tips()
+	# OVERWRITE on purpose: two of these keys are Item's own, and the mod's wording is the sharper one
+	# for a field a fitting picker reads.
+	tips.merge({
 		"id": "Stable internal name, for content that has to refer to this mod by something other than its display name.",
 		"display_name": "What the fitting picker and the weapon's space list call this mod.",
 		"size": "Capacity this mod costs in whichever space it is fitted to. Each space has its own capacity, authored on the template -- a plain family gets 1 / 2 / 3, so a size-3 keystone only ever fits that family's big space.",
@@ -160,4 +174,87 @@ static func property_tips() -> Dictionary:
 		"granted_attacks": "Attacks this mod ADDS to the weapon's repertoire, alongside the family's stock list. To CHANGE the standard attack rather than add beside it, use Replaces Main. Pick from attacks authored in the Attack Editor.",
 		"granted_abilities": "Abilities the WIELDER has while this weapon contributes -- the equipped weapon, or an installed prosthetic. Granted live: unequip the weapon and the ability leaves with it.",
 		"stat_modifiers": "Stat changes to the WIELDER while this weapon contributes, not to the weapon. Negative is the classic tax. These never open a wear gate -- gates read the body, never gear.",
-	}
+	}, true)
+	return tips
+
+
+# THE one door for how a carried thing is copied, answered with NO COPY AT ALL. A mod is a SHARED
+# authored ref -- WeaponModCatalog's header says so, and WeaponInstance.copy_for_grant already keeps
+# its own fitted mods un-copied while copying the list around them. This is that same rule stated
+# from the mod's side, so the answer is true wherever the door is opened rather than only where
+# somebody remembered.
+#
+# WHAT A COPY WOULD COST: Item's default is duplicate(true), and a mod is mostly REFERENCES --
+# granted_attacks, granted_abilities, replaces_main. A deep copy forks all three into siblings, and
+# identity is what reads them: available_attacks dedupes by it, effective_main compares by it, and a
+# save writes an unshared attack INLINE instead of as an ExtResource.
+func copy_for_grant() -> Item:
+	return self
+
+
+# What this mod DOES, for a player rather than an author -- ArmorData.mechanical_text's shape, and
+# here rather than in the card for its reason: a second surface would word the same fields
+# differently, and the Item Editor is the next caller.
+#
+# IT DESCRIBES THE AUTHORED FIELDS, NEVER THE COMPOSED RESULT. scaling_change is a percentage-POINT
+# delta while Stats.blend_text normalises to shares of a total, so a blend printed here would answer
+# a question this mod cannot answer alone. The composed number belongs on the readout of the attack
+# that fires it, where the weapon and the wielder are both in hand.
+#
+# TWO GROUPS, because applies_to governs one and not the other: it selects which ATTACKS the effects
+# reach, while a grant is handed over whole and stat_modifiers describe the WIELDER. Saying "main
+# attack only" over the grants would be false (_mods_for's own comment says so).
+func effect_text() -> String:
+	var parts: Array[String] = []
+	var aimed := _attack_effect_parts()
+	if not aimed.is_empty():
+		var joined := ", ".join(aimed)
+		parts.append(joined if applies_to == AppliesTo.EVERY_ATTACK else "%s (main attack only)" % joined)
+	parts.append_array(_carried_effect_parts())
+	return ", ".join(parts) if not parts.is_empty() else "changes nothing"
+
+
+# The half applies_to selects -- everything WeaponInstance composes per attack.
+func _attack_effect_parts() -> Array[String]:
+	var parts: Array[String] = []
+	if power_delta != 0:
+		parts.append("%+d power" % power_delta)
+	if added_element != Elemental.Element.NONE:
+		parts.append("adds %s" % Elemental.display_name(added_element))
+	if overrides_kind:
+		parts.append("becomes %s" % AttackData.kind_name(kind))
+	if knockback_delta != 0:
+		parts.append("%+d knockback" % knockback_delta)
+	if hits_allies_override != Override.UNCHANGED:
+		parts.append("splashes allies" if hits_allies_override == Override.ON else "spares allies")
+	if can_overwatch_override != Override.UNCHANGED:
+		parts.append("watch only" if can_overwatch_override == Override.ON else "never a watch")
+	if not scaling_change.is_empty():
+		var shifts: Array[String] = []
+		for stat: Stats.Stat in scaling_change:
+			shifts.append("%s %+d pts" % [Stats.Stat.keys()[stat], scaling_change[stat]])
+		parts.append("re-mixes scaling: %s" % ", ".join(shifts))
+	return parts
+
+
+# The half it does not: what the weapon GAINS, and what the wielder gains while it contributes.
+func _carried_effect_parts() -> Array[String]:
+	var parts: Array[String] = []
+	if replaces_main != null:
+		parts.append("replaces the main with %s" % replaces_main.display_name)
+	var attacks: Array[String] = []
+	for attack in granted_attacks:
+		if attack != null:
+			attacks.append(attack.display_name)
+	if not attacks.is_empty():
+		parts.append("grants %s" % ", ".join(attacks))
+	var abilities: Array[String] = []
+	for ability in granted_abilities:
+		if ability != null and ability.id != Abilities.Id.NONE:
+			abilities.append(ability.display_name)
+	if not abilities.is_empty():
+		parts.append("grants %s" % ", ".join(abilities))
+	var wielder := Stats.modifier_text(stat_modifiers)
+	if wielder != "":
+		parts.append("wielder: %s" % wielder)
+	return parts

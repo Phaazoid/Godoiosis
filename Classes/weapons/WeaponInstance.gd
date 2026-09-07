@@ -75,6 +75,22 @@ func is_attack_fireable(_attack: WeaponAttackData) -> bool:
 func consume_readiness_for(_attack: WeaponAttackData) -> void:
 	pass
 
+# Supercharge seam (#97) — default: this family has no charge to spend, so its main is always its
+# main. The Chemical Spitter's tank overrides it. Sits beside readiness and is deliberately NOT it:
+# readiness gates what may fire, this only changes WHAT the same order fires.
+func is_supercharged() -> bool:
+	return tank_charges() > 0
+
+# How many supercharges are banked. The resolver seeds its per-pass thread from this; is_supercharged
+# is derived from it so a family declares ONE number rather than a number and a boolean.
+func tank_charges() -> int:
+	return 0
+
+# Spend one supercharge. Driven by the outcome's charge_spent stamp at execution, never from here,
+# so the preview and the spend read one fact.
+func spend_charge() -> void:
+	pass
+
 # The self-abilities themselves — can_reload/reload/reload_label, can_rev/rev/tick_rev, can_burrow —
 # are declared as inert virtuals on EquippableData (promoted there 2026-07-27), because Unit
 # delegates them straight to whatever is equipped and shouldn't have to cast first. Families
@@ -165,6 +181,18 @@ func fit_block_reason(index: int, mod: WeaponModData) -> String:
 	if not mod.fits_family(template.weapon_type):
 		return "Fits %s only — a scaling change is measured against that family's main attack." % \
 			WeaponData.WeaponType.keys()[mod.family].capitalize()
+	# ONE OF A KIND ON ONE WEAPON (#732, dev: "Let's refuse"). Nothing stopped a second copy while the
+	# only fitter was the Item Editor; the fitting card offers the whole catalog, so three Line Snipers
+	# was +15 power for nothing, bought with nothing.
+	#
+	# ASKED HERE -- after family, BEFORE the two clauses below -- because those would otherwise answer
+	# for it and say the wrong thing: dragging a fitted main-replacer into another space would be
+	# refused as "Lob Shot Mod already replaces this weapon's main", which is true, unhelpful, and about
+	# the mod itself. That drag is the second thing this clause covers -- a mod moving between spaces is
+	# one already fitted, and the sentence names the two-step that does it.
+	if space_holding(mod) != -1:
+		var held: String = mod.display_name if mod.display_name != "" else "That mod"
+		return "%s is already fitted to this weapon -- take it off first." % held
 	if mod.replaces_main != null:
 		var already := _main_replacer()
 		if already != null:
@@ -182,6 +210,43 @@ func fit_block_reason(index: int, mod: WeaponModData) -> String:
 
 func can_fit(index: int, mod: WeaponModData) -> bool:
 	return fit_block_reason(index, mod) == ""
+
+# Which space holds this mod, or -1. Fitted mods are SHARED authored refs, so two "copies" of one mod
+# are one object and nothing could tell two holdings apart -- first hit is the only answer there is,
+# and fit_block_reason refusing a second is what makes it the only one there can be.
+func space_holding(mod: WeaponModData) -> int:
+	for i in range(space_count()):
+		if space(i).has(mod):
+			return i
+	return -1
+
+# The mirror of fit (#732): take a mod OFF, wherever it sits. false = this weapon is not holding it.
+# The Item Editor removes through the live array BY INDEX because it has one in hand; a card holding
+# the mod itself does not, which is why this door exists rather than that one being widened.
+func unfit(mod: WeaponModData) -> bool:
+	var index := space_holding(mod)
+	if index == -1:
+		return false
+	space(index).erase(mod)
+	return true
+
+# The lowest space whose CAPACITY admits this mod, ignoring what is in it -- and therefore the
+# proficiency a wielder needs before it can do anything, since proficiency N activates spaces 1..N.
+# -1 = no space on this weapon is big enough to take it at all.
+#
+# INTRINSIC ON PURPOSE (#732). Asking can_fit instead would read "needs Carbine 2" for a size-1 mod
+# whenever space 1 happened to be full, and read 1 again when it emptied -- a fact about the weapon's
+# current fill rather than about the mod, and the fill is already on the space's own header. Family is
+# a separate refusal and deliberately not asked: this answers how BIG the mod is, not whether it belongs.
+#
+# NOT an auto-place seam, and that omission is exactly why: placing something has to know the fill.
+func lowest_space_for(mod: WeaponModData) -> int:
+	if template == null or mod == null:
+		return -1
+	for i in range(space_count()):
+		if template.mod_spaces[i] >= mod.size:
+			return i
+	return -1
 
 # The fitted mod replacing this weapon's main, if any. Scans EVERY space rather than the active
 # ones: fitting has no wielder, so there is no proficiency to ask about, and a mod parked in a
@@ -214,6 +279,13 @@ func fit(index: int, mod: WeaponModData) -> bool:
 func active_space_count(wielder: Unit) -> int:
 	if template == null:
 		return 0
+	# NOBODY'S proficiency applies to a weapon nobody holds (#732): one sitting in the stash reads
+	# UNREDUCED, so the fitting card shows a BUILD rather than a weapon whose every mod is inert. Zero
+	# was the other reading and it teaches the wrong thing -- fitting a stash weapon would appear to do
+	# nothing at all. Every shipped caller passes a real Unit; that card is the first surface that can
+	# ask about an unheld one.
+	if wielder == null:
+		return space_count()
 	var proficiency := wielder.get_weapon_proficiency(template.weapon_type)
 	if proficiency == UnitInstance.UNREDUCED:
 		return space_count()
@@ -231,11 +303,14 @@ func active_modules(wielder: Unit) -> Array[WeaponModData]:
 # GRANTS deliberately do not come through here — available_attacks reads active_modules straight,
 # because "which attacks does this mod change" and "which attacks does it add" are different
 # questions. A MAIN_ATTACK mod still hands over whatever it grants; it just doesn't buff it.
+#
+# Asked of is_main_form rather than of effective_main directly (#97): the supercharge makes what
+# effective_main answers depend on the TANK, and a stamp frozen under the other form would silently
+# lose every MAIN_ATTACK mod's power, element, kind and knockback. Both forms are the main.
 func _mods_for(wielder: Unit, attack: WeaponAttackData) -> Array[WeaponModData]:
 	var result: Array[WeaponModData] = []
-	var main := effective_main(wielder)
 	for mod in active_modules(wielder):
-		if mod.applies_to == WeaponModData.AppliesTo.EVERY_ATTACK or attack == main:
+		if mod.applies_to == WeaponModData.AppliesTo.EVERY_ATTACK or is_main_form(wielder, attack):
 			result.append(mod)
 	return result
 
@@ -263,12 +338,34 @@ func repertoire(wielder: Unit) -> Array[AttackData]:
 # through the normal door can only carry one -- this is the answer for a hand-edited .tres, and
 # it is first rather than last so fitting into a LATER space cannot silently move the main.
 func effective_main(wielder: Unit) -> WeaponAttackData:
+	var main := base_main(wielder)
+	# The supercharge substitution (#97), applied AFTER the mod replacement so a mod-replaced main
+	# keeps its own empowered form rather than losing one. THE single point the whole feature enters
+	# the pipeline: the menu, Reach, the resolver, the queue row and the AI all read this, so none of
+	# them learns what a tank is.
+	if main != null and main.empowered_form != null and is_supercharged():
+		return main.empowered_form
+	return main
+
+# The main BEFORE the supercharge, which is the answer to "what does this weapon fire" in the
+# weapon's own terms -- what a mod replaced, or the template's. Split out because the tank asks it
+# (an empowered form is what a vial BUYS and so cannot be what qualifies one) and because
+# is_main_form needs both sides.
+func base_main(wielder: Unit) -> WeaponAttackData:
 	if template == null:
 		return null
 	for mod in active_modules(wielder):
 		if mod.replaces_main != null:
 			return mod.replaces_main
 	return template.main_attack
+
+# Is this attack THE main, under either form? One question with two right answers, which is why it
+# is asked here rather than by comparing against whichever form happens to be live.
+func is_main_form(wielder: Unit, attack: AttackData) -> bool:
+	var main := base_main(wielder)
+	if main == null or attack == null:
+		return false
+	return attack == main or attack == main.empowered_form
 
 func default_attack(wielder: Unit) -> AttackData:
 	return effective_main(wielder)
@@ -285,9 +382,10 @@ func secondary_attacks(wielder: Unit) -> Array[AttackData]:
 	var result: Array[AttackData] = []
 	if template == null:
 		return result
-	var main := effective_main(wielder)
+	# is_main_form, not `!= effective_main`: while a tank is hot the main IS the empowered form, and
+	# comparing against it alone would offer the BASE form here as though it were a second attack.
 	for a in selectable_attacks(wielder):
-		if a != main:
+		if not is_main_form(wielder, a):
 			result.append(a)
 	return result
 

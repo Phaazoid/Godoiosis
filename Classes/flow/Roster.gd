@@ -35,6 +35,9 @@ class_name Roster
 # Resources/Weapons/WeaponVariants/, Resources/Armor/ and the rune variants. Granted to a unit as a
 # copy_for_grant() copy at deploy time, never shared -- the rule starting_inventory already states.
 #
-# Loose MODS are not here and cannot be: WeaponModData extends Resource, not Item, so it has no
-# icon, no description, and structurally cannot sit in an inventory. #732 carries both halves.
+# Loose MODS do not belong here, and since #732 that is a RULING rather than a limitation -- the class
+# became an Item in that ticket and could sit in this array, but the dev's call was that it should not
+# (2026-09-06: "If an item can't be carried, I don't think they should go in the stash. Stash is for
+# inventory editing purposes"). The fitting card offers the whole authored catalog instead, and #812
+# is where a mission gets to say which mods -- and which stash items -- it actually offers.
 @export var stash: Array[Item] = []

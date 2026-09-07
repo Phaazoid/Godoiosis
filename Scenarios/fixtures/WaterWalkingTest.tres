@@ -42,7 +42,7 @@ inventory = Array[ExtResource("90_equipdata")]([SubResource("Resource_80mtm")])
 equipped_index = 0
 squad_id = 0
 is_leader = true
-jobs = Array[String](["Water Wallker"])
+jobs = Array[String](["Water Walker"])
 
 [resource]
 script = ExtResource("1_80mtm")

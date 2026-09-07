@@ -61,15 +61,41 @@ func _plate() -> ArmorData:
 func test_a_family_with_no_signature_mechanic_reports_nothing() -> void:
 	# The base pair is empty on purpose, so ScenarioUnitEntry never special-cases a family and a
 	# pass-through weapon costs a save nothing at all.
-	var spitter := _family_weapon(WeaponData.WeaponType.CHEMICAL_SPITTER)
-	assert_bool(spitter.capture_battle_state().is_empty()).is_true()
+	#
+	# RE-POINTED at the Prosthetic by #97: the Chemical Spitter was this example until its tank
+	# landed, and it is the LAST pure pass-through -- a family gaining state is exactly what should
+	# move this case rather than break it.
+	var passthrough := _family_weapon(WeaponData.WeaponType.PROSTHETIC)
+	assert_bool(passthrough.capture_battle_state().is_empty()).is_true()
 
 	var a: Unit = H.spawn_unit(self, Team.Faction.PLAYER, Vector2i.ZERO, {}, false)
-	a.add_item(spitter)
+	a.add_item(passthrough)
 	var entry := ScenarioUnitEntry.new()
 	entry.capture_unit_state(a)
 
 	assert_bool(entry.weapon_battle_states.is_empty()).is_true()
+
+
+func test_a_spitter_tank_round_trips():
+	# The tank is battle-scoped state on the instance, so it rides the #87 snapshot exactly as a
+	# magazine does -- and clamps on the way back in, so a save written before TANK_SIZE was tuned
+	# downward cannot hand back a deeper tank than the family allows.
+	var a: Unit = H.spawn_unit(self, Team.Faction.PLAYER, Vector2i.ZERO, {}, false)
+	var spitter := _family_weapon(WeaponData.WeaponType.CHEMICAL_SPITTER) as ChemicalSpitterWeaponInstance
+	a.add_item(spitter)
+	spitter.charges = 2
+
+	var entry := ScenarioUnitEntry.new()
+	entry.capture_unit_state(a)
+	var b: Unit = H.spawn_unit(self, Team.Faction.PLAYER, Vector2i.ZERO, {}, false)
+	entry.apply_unit_state(b)
+
+	var restored := b.inventory[0] as ChemicalSpitterWeaponInstance
+	assert_object(restored).is_not_null()
+	assert_int(restored.charges).is_equal(2)
+
+	restored.apply_battle_state({"charges": 99})
+	assert_int(restored.charges).is_equal(ChemicalSpitterWeaponInstance.TANK_SIZE)
 
 
 func test_springspear_readiness_round_trips() -> void:

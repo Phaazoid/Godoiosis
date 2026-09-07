@@ -40,7 +40,27 @@ static func check(attack: AttackData) -> Array[Dictionary]:
 	_check_affects_anything(attack, found)
 	_check_blend_totals(attack, found)
 	_check_kind_is_authored(attack, found)
+	_check_empowered_form_is_flat(attack, found)
 	return found
+
+
+# The supercharge substitution reads ONE level (#97): WeaponInstance.effective_main swaps the main
+# for its empowered_form and never asks that form for one of its own. A chain therefore authors a
+# shape the game will not fire -- silently, since the second link simply never appears.
+#
+# BLOCKS: unlike a bad blend, nothing about this degrades gracefully. The author believes they have
+# built two tiers and has built one. A carving has no empowered form and is skipped.
+static func _check_empowered_form_is_flat(attack: AttackData, found: Array[Dictionary]) -> void:
+	var weapon_attack := attack as WeaponAttackData
+	if weapon_attack == null or weapon_attack.empowered_form == null:
+		return
+	var name := attack.display_name if attack.display_name != "" else "This attack"
+	if weapon_attack.empowered_form == weapon_attack:
+		_add(found, Severity.BLOCKS, "%s is its own empowered form, which would fire forever." % name)
+		return
+	if weapon_attack.empowered_form.empowered_form != null:
+		_add(found, Severity.BLOCKS,
+			"%s's empowered form carries an empowered form of its own, and only one level is ever read." % name)
 
 
 # The weights are read as a WEIGHTED AVERAGE, so any total works arithmetically and only a total of

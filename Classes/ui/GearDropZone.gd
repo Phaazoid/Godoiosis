@@ -9,10 +9,16 @@ extends PanelContainer
 # act. A drag that decided for itself would be a second answer to "may this move" -- the shape #744
 # spent a ticket collapsing one layer down, and the reason all four directions are one function.
 #
-# `owner_unit` null means THE STASH, at both ends, which is what makes stash->unit, unit->stash and
+# `holder` null means THE STASH, at both ends, which is what makes stash->unit, unit->stash and
 # unit->unit one call rather than three near-copies.
+#
+# THE HOLDER IS AN OBJECT, NOT A UNIT, SINCE #732. The field always meant "which END of a move is
+# this"; it simply could not say "fitted in this weapon" until the mod-fitting card needed to. Object
+# rather than Variant deliberately -- every possible value is one, so `as Unit` degrades to null
+# instead of throwing, which is the exact trap payload_of documents one function down. Each surface
+# names its own types in the callables it wires, and two surfaces never share a zone.
 
-signal clicked(item: Item, owner_unit: Unit)
+signal clicked(item: Item, holder: Object)
 
 const PAYLOAD_ITEM := "gear_item"
 const PAYLOAD_FROM := "gear_from"
@@ -22,14 +28,14 @@ const PAYLOAD_FROM := "gear_from"
 # verdicts, no gap between them and no way to be both.
 const CLICK_SLOP := 10.0
 
-var owner_unit: Unit = null
+var holder: Object = null
 var _press_at := Vector2.INF
 var judge: Callable = Callable()     # (item, from, to) -> String, "" = allowed
 var perform: Callable = Callable()   # (item, from, to) -> String, "" = done
 
 
-func wire(unit: Unit, judge_move: Callable, perform_move: Callable) -> void:
-	owner_unit = unit
+func wire(where: Object, judge_move: Callable, perform_move: Callable) -> void:
+	holder = where
 	judge = judge_move
 	perform = perform_move
 	mouse_filter = Control.MOUSE_FILTER_STOP   # IGNORE would take this out of the drag's reach
@@ -58,7 +64,7 @@ func _gui_input(event: InputEvent) -> void:
 	var travelled := _press_at.distance_to(click.position)
 	_press_at = Vector2.INF
 	if travelled <= CLICK_SLOP:
-		clicked.emit(_dragged_item(), owner_unit)
+		clicked.emit(_dragged_item(), holder)
 
 
 # What this zone offers when picked up. A bare zone is a destination only; GearRow overrides it.
@@ -81,11 +87,11 @@ func _can_drop_data(_at: Vector2, data: Variant) -> bool:
 	var carried := payload_of(data)
 	if carried.is_empty() or not judge.is_valid():
 		return false
-	return judge.call(carried[PAYLOAD_ITEM], carried[PAYLOAD_FROM], owner_unit) == ""
+	return judge.call(carried[PAYLOAD_ITEM], carried[PAYLOAD_FROM], holder) == ""
 
 
 func _drop_data(_at: Vector2, data: Variant) -> void:
 	var carried := payload_of(data)
 	if carried.is_empty() or not perform.is_valid():
 		return
-	perform.call(carried[PAYLOAD_ITEM], carried[PAYLOAD_FROM], owner_unit)
+	perform.call(carried[PAYLOAD_ITEM], carried[PAYLOAD_FROM], holder)

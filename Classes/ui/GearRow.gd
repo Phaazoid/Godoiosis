@@ -28,7 +28,7 @@ func _get_drag_data(at: Vector2) -> Variant:
 	if item == null:
 		return null
 	set_drag_preview(build_drag_preview(at))
-	return {PAYLOAD_ITEM: item, PAYLOAD_FROM: owner_unit}
+	return {PAYLOAD_ITEM: item, PAYLOAD_FROM: holder}
 
 
 # What the cursor carries. SPLIT OUT because set_drag_preview refuses outside a live drag, which no

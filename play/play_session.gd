@@ -349,14 +349,17 @@ func rally(handle: String) -> Dictionary:
 
 # Reload: self-targeted weapon rearm (a main action, #73 as Spring Load, generalized #84) — the
 # same ReloadAction the menu queues, driving the generic Unit.can_reload_weapon()/reload_weapon()
-# seam. One command for every family: a Springspear's spring, a Carbine's magazine.
+# seam. One command for every family: a Springspear's spring, a Carbine's magazine, a Spitter's
+# tank injection -- which is why the refusal is READ rather than restated here (#97): only the
+# family knows whether it is full or simply has no vial to draw on.
 func reload(handle: String) -> Dictionary:
 	var unit := unit_by_handle(handle)
 	var gate := _controllable(unit, handle)
 	if not gate.ok:
 		return gate
-	if not unit.can_reload_weapon():
-		return {"ok": false, "error": "%s can't reload (weapon already loaded, or nothing to reload)" % handle}
+	var refusal := unit.reload_block_reason()
+	if refusal != "":
+		return {"ok": false, "error": "%s can't reload: %s" % [handle, refusal]}
 	var action := ReloadAction.new()
 	action.init(unit)
 	if not squad_manager.queue_action(unit.squad, action):
@@ -617,6 +620,12 @@ func _apply_attack(atk: AttackAction, events: Array[String]) -> void:
 	# still been taken. Lead volley member only.
 	if atk.is_watch_shot and not atk.is_secondary_hit and actor != null and is_instance_valid(actor):
 		actor.spend_watch()
+	# Post-fire economy, ABOVE the early-outs because that is where the twin puts it: execute()
+	# gates only the UNIT consequence on a target, so a cell attack with no victim still spends what
+	# firing costs. Returning first (as this did until #97) meant a headless cell shot rearmed itself
+	# for free -- a real divergence the Carbine already had and nothing had asked about.
+	if actor != null and is_instance_valid(actor):
+		_spend_firing_costs(atk, actor)
 	if actor == null or target == null:
 		return
 	if not is_instance_valid(actor) or not is_instance_valid(target):
@@ -650,23 +659,34 @@ func _apply_attack(atk: AttackAction, events: Array[String]) -> void:
 	if r.removed and is_instance_valid(target):
 		events.append("%s falls into the void" % handle_for(target))
 		target.die()
-	# Post-fire economy (#73/#84): mirror AttackAction.execute()'s readiness/charge hook — the
-	# headless executor bypasses that method, so without this the play path diverges from the game
-	# (a fired Spring stays sprung; a Blowback keeps its charge). Lead volley member only. Counters
-	# DO reach here — they stamp main (CounterAttackAction.create_counter_volley), so a family whose
-	# main spends (a Carbine's magazine) is charged for reactive fire too, while Stab/Smash mains
-	# with consumes_readiness = false are no-ops exactly as before.
-	if not atk.is_secondary_hit and atk.fired_attack is WeaponAttackData:
+
+# Post-fire economy (#73/#84/#697/#97): mirrors AttackAction.execute()'s readiness/charge/vial/tank
+# hooks — the headless executor bypasses that method entirely, so without this the play path
+# diverges from the game (a fired Spring stays sprung; a Blowback keeps its charge; a cast draws on
+# an attunement and never burns it; a supercharged spray never empties its tank). Lead volley member
+# only. Counters DO reach here — they stamp main (CounterAttackAction.create_counter_volley), so a
+# family whose main spends is charged for reactive fire too, while a Stab/Smash main with
+# consumes_readiness = false is the no-op it always was.
+#
+# Every one of these is a SPEND the resolver already decided: it records a burn only when the
+# attunement changed the damage, and a charge only when the pass still had one to give. There is
+# nothing to judge here.
+func _spend_firing_costs(atk: AttackAction, actor: Unit) -> void:
+	if atk.is_secondary_hit:
+		return
+	var r := atk.resolved
+	if atk.fired_attack is WeaponAttackData:
 		var weapon := actor.get_equipped_weapon() as WeaponInstance
 		if weapon != null:
 			weapon.consume_readiness_for(atk.fired_attack as WeaponAttackData)
-	# The vial burn (#697) belongs to that same post-fire economy and mirrors it for the same
-	# reason: this executor bypasses AttackAction.execute entirely, so without this line a headless
-	# cast draws on a charge and never spends it -- the play path handing back a stronger alchemist
-	# than the game does. The resolver already decided WHETHER the charge paid (it records one only
-	# when the attunement changed the damage), so there is nothing to judge here.
-	if not atk.is_secondary_hit and r.burned_vial != null:
+	if r == null:
+		return
+	if r.burned_vial != null:
 		actor.attunement = null
+	if r.charge_spent:
+		var tank := actor.get_equipped_weapon() as WeaponInstance
+		if tank != null:
+			tank.spend_charge()
 
 # ---- mission metadata & outcome (#96, #612) ----
 

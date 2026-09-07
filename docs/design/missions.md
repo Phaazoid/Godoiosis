@@ -2,7 +2,7 @@
 
 **Status: ALL FOUR SLICES BUILT 2026-07-28 ([#96](https://github.com/Phaazoid/Godoiosis/issues/96)).** Filed 2026-07-27, when the project acquired a win condition for the first time. Before this, Iosis had ten interlocking systems and no way to finish a battle — which meant a design question could be answered *"is this coherent?"* but never *"does this improve play?"*
 
-**Canon checked through #798 (2026-09-06).**
+**Canon checked through #812 (2026-09-06).**
 
 ## What a mission is
 
@@ -188,6 +188,28 @@ holding a node dangles at the exact moment the feature starts working (#107's sh
 **The stash shows what a piece DEMANDS, never whether it fits** (dev, 2026-09-05). `requirement_text`
 is the wielder-free question and the only one a list of loose gear can answer; the wielder-relative
 sentence stays on the card, where there is a unit to validate against.
+
+### Fitting mods, and the card that does it ([#732](https://github.com/Phaazoid/Godoiosis/issues/732), 2026-09-06)
+
+A weapon row in a unit card or in the stash carries a **chip** reading `1/3` — **occupied spaces over spaces**, the dev's own framing (*"I like 1/3 mod spaces"*), and deliberately not a count of mods, which can print `4/3` since one capacity-3 space holds three size-1 mods. Pressing it opens `ModFittingCard`: the weapon's spaces down the left with what is in them, the mods that fit its family down the right, and one line of hint carrying the last refusal in the model's own words. Dragging and clicking both work, through the same pair of callables, because `GearDropZone` judges nothing and the rule is `WeaponInstance.fit_block_reason` either way.
+
+**The source is the WHOLE AUTHORED CATALOG** (dev, 2026-09-06: *"Perhaps we start this simple with the whole authored catalog, and file a followup issue for controlling what items/mods are in a scenario"*). So fitting is free and unlimited today; [#812](https://github.com/Phaazoid/Godoiosis/issues/812) is where a mission gets to say what it offers, for mods and for stash items together. The filter is `WeaponModCatalog.offerable_for`, shared with the Item Editor's own picker rather than copied beside it — same source, same question.
+
+**Loose mods do NOT go in the stash** (dev: *"If an item can't be carried, I don't think they should go in the stash. Stash is for inventory editing purposes"*), and a unit is refused one outright — *"Maybe later down the line they are lootable on the battlefield, but for now, eh"*. That refusal lives on `Unit.add_block_reason`, the one gate a unit takes anything through, so the click path, the drag path and the row tooltip cannot word it differently.
+
+**`WeaponModData` became an `Item` anyway, and the base is not a claim that a mod is carryable** — `WeaponData` extends it too and is a shared template nobody holds. What it buys is that a mod can ride the `Item`-typed drag widget #741 shipped instead of the card growing a second one. `Item`'s header had claimed *"anything a unit can hold"*, which `WeaponData` already made false. **The one door that answer changes is copying**: a mod answers `copy_for_grant()` with *itself*, because it is a shared authored ref (`WeaponModCatalog`'s model, and what `WeaponInstance.copy_for_grant` already does from the other side) and `duplicate(true)` would fork `granted_attacks`/`granted_abilities`/`replaces_main` into siblings — identity is what reads all three, and a save writes an unshared attack **inline** rather than as an `ExtResource`.
+
+**One weapon takes one of any given mod** (dev: *"Let's refuse"*). Nothing stopped stacking while the Item Editor was the only fitter; an unlimited catalog made three Line Snipers +15 power for nothing. The clause is asked **after family and before the replacer and kind clauses**, and that order is the difference between a useful sentence and a confusing one: a fitted main-replacer dragged to another space would otherwise be told something already replaces the main — the something being itself. It also covers that drag, which is why the sentence names the two-step.
+
+**What a mod NEEDS is derived, and it is intrinsic.** A mod authors no proficiency requirement; proficiency N activates spaces 1..N, so what a mod needs is the lowest space whose **capacity** admits its size — `WeaponInstance.lowest_space_for`, which ignores fill on purpose. Asking `can_fit` instead would read *"needs Carbine 2"* for a size-1 mod the moment space 1 filled and read 1 again when it emptied: a fact about the weapon's fill wearing a fact about the mod. Fill is already on the space's own header. **Nothing in shipped content authors a reduced proficiency**, so the carrier line reads *"every space"* for the whole cast until one does — which the card says out loud rather than leaving a line that looks broken.
+
+**A weapon nobody holds reads UNREDUCED.** The card opens on stash gear, so `active_space_count(null)` had to answer something; zero was the other reading and it would print every space of a stash weapon as inactive, teaching that fitting one does nothing.
+
+**The card claims the modal lock, and that is the point.** `game.gd` gates Tab and the commit key on `ModalLock.any_open`, so neither can swap the board out from under an open card. `ConfirmCard` already stacked over this screen the same way.
+
+**The shape plate** ([#732](https://github.com/Phaazoid/Godoiosis/issues/732) + the dev's ask: *"some way to see the weapon's attack range and pattern, visualized"*) draws one attack's geometry: the cells it may be **aimed** at, the cells it **covers** at a representative aim, and the attacker at the centre, up forward — the Attack Editor's own convention (#804), so the two read as one idea. It derives nothing: both sets come off `Reach`, whose anchored branch never touches the board and whose footprint query returns the untruncated placement for a null one, so the bevel, the `min_range` dead zone and the null-shape fallback stay in one place. **The inks are `OverlayManager`'s live aim colours**, which follow the aim palette #422 lets the player pick — *"the cells you can aim at"* is one meaning and must not have a second colour. It is **not** `DevWidgets.add_cell_grid`: that one builds toggle buttons wired to write the resource and clamps its span to leave a ring you can click into, both authoring concerns.
+
+**The plate is a fixed box and the cell size gives**, with the span capped at what still clears a legibility floor. Past that the drawn aim is pulled in to the plate's edge — otherwise a long shot's footprint lands off-grid and the one ink saying what it **hits** vanishes exactly when the range is most worth showing — and the caption reads *"shown to N"*. **A ring cut off silently would be a lie about where the attack stops.**
 
 ## Objectives: declared explicitly, located by zones
 
