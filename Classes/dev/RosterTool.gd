@@ -66,7 +66,11 @@ func _refresh_buttons() -> void:
 	var target := DevWidgets.selected_name(load_dropdown)
 	DevWidgets.refresh_update_button(update_button, target, NOUN, _update_block_reason(target))
 	DevWidgets.refresh_delete_button(delete_button, target, NOUN)
-	DevWidgets.mark_unsaved(update_button, update_button.text, _dirty)
+	# A LITERAL, never the button's own text: mark_unsaved DECORATES its base, and
+	# refresh_update_button above writes only the tooltip and the disabled flag -- so feeding the
+	# live caption back in re-decorates what it already decorated, and the marker grows by one star
+	# per refresh. Every other caller of it passes a literal for this reason.
+	DevWidgets.mark_unsaved(update_button, "Update", _dirty)
 
 
 # "" = allowed. Update overwrites only the roster actually LOADED (#166's shape, the Character

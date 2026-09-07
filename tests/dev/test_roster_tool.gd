@@ -300,3 +300,24 @@ func test_the_pool_filters_the_offer_and_an_empty_pool_means_the_catalogue() -> 
 	assert_int(WeaponModCatalog.offerable_for(family, [] as Array[WeaponModData]).size()) \
 		.override_failure_message("an empty pool stopped meaning the whole catalogue"
 		).is_equal(everything.size())
+
+# THE MARKER IS A STATE, NOT AN EVENT (found in play, 2026-09-07: "every time I change something,
+# the 'Update' line gets another asterisk next to it").
+#
+# mark_unsaved DECORATES the base text it is handed, and refresh_update_button writes only the
+# tooltip and the disabled flag -- so a caller passing the button's own live caption re-decorates
+# what it already decorated, once per edit, forever. The bug needs TWO edits to exist at all, which
+# is why a case that dirties the page once could not see it.
+func test_the_unsaved_marker_never_doubles() -> void:
+	var character := _a_character()
+	if character == null:
+		return
+	tool_page._on_new_pressed()
+	await await_idle_frame()
+
+	for _i in 4:
+		tool_page._mark_dirty()
+
+	var update: Button = _overlay.get_node("%UpdateRosterButton")
+	assert_int(update.text.count("*")).override_failure_message(
+		"the marker grew one star per edit: %s" % update.text).is_equal(1)
