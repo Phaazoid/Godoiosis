@@ -14,8 +14,6 @@ class_name ObjectTool
 # the game subtree free of an upward path to Battle3D, and the reason a flat Main.tscn launch
 # reports "no 3D host" instead of failing.
 
-const HEADING_COLOR := Color(1, 0.83, 0.4, 1)   # the Look and Scenario tabs' heading gold
-
 var _host: Node3D
 var _rows: VBoxContainer
 var _status: Label
@@ -71,7 +69,7 @@ func _rebuild() -> void:
 # per TYPE, so you tune one thing and look at it, and a wall of collapsed headers would cost more
 # scrolling than it saves. Icon + authored name, the same identity the tile brush's palette shows.
 func _build_object_section() -> void:
-	_add_heading("Objects")
+	DevWidgets.add_heading(_rows, "Objects")
 	var tiles := _tile_set()
 	_objects = ObjectKnobs.object_tiles(tiles)
 	if _objects.is_empty():
@@ -287,15 +285,6 @@ func _clear_dirty() -> void:
 func _refresh_save_mark() -> void:
 	if is_instance_valid(_save_button):
 		DevWidgets.mark_unsaved(_save_button, "Save object fields", _dirty)
-
-
-func _add_heading(text: String) -> void:
-	if _rows.get_child_count() > 0:
-		_rows.add_child(HSeparator.new())
-	var heading := Label.new()
-	heading.text = text
-	heading.add_theme_color_override("font_color", HEADING_COLOR)
-	_rows.add_child(heading)
 
 func _button(text: String, tooltip: String, on_pressed: Callable) -> Button:
 	var button := Button.new()

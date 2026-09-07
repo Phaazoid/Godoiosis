@@ -17,9 +17,21 @@ class_name AttackEditorTool
 # lists FAMILIES (not saved attacks), selecting one loads that family's main_attack LIVE (never
 # duplicated, since edits must stay shared/in-place), there's no "new" (a main is always tied to
 # an existing family, never created from scratch), and Save overwrites the attack's OWN
-# resource_path instead of a chosen pool filename. The RANGE trio draws reflectively in every mode;
-# the SHAPE gets the bespoke row below, because a shared library file needs picking, naming and
-# deleting that no reflective control can express (#808).
+# resource_path instead of a chosen pool filename.
+#
+# THE FORM IS DRAWN IN SECTIONS THE RESOURCE DECLARES (#825) -- AttackData.property_sections walks
+# the fields, this file draws each one, and a field with no bespoke drawer falls through to
+# DevWidgets' reflective row. So a new @export lands in its declared section with no code here at
+# all, and there is no skip list to forget to update: a field is drawn because it is DECLARED, not
+# because nobody excluded it. Which rows are HIDDEN right now is the resource's answer too
+# (hidden_fields), applied live off `changed` rather than by rebuilding -- see DevWidgets.
+#
+# Five fields get a bespoke drawer instead, each because a reflective control cannot express what
+# is being authored: the RANGE trio (one toggle over max_range 0, which is a different kind of
+# attack rather than a shorter one), the SHAPE (a shared library file needs picking, naming and
+# deleting -- #808), the EFFECT pair (two bools over one three-way question), the damage KIND (NONE
+# is answered by rule and must never be offered) and the empowered form (a picker, never a nested
+# editor). The blend, sigils and flourishes were already bespoke for their own reasons.
 #
 # FAMILY also carries the family's EXTRA_ATTACKS (#473), which is what closed the loop the Weapon
 # Attack mode had been authoring into: WeaponAttackCatalog's library had exactly ONE reader in the
@@ -33,12 +45,12 @@ class_name AttackEditorTool
 # ext_resource, so saving the family does not save the attack.
 enum Mode { TRANSMUTATION, WEAPON_ATTACK, FAMILY }
 
-# What the reflective editor must NOT draw, per mode. Declared here because the form and the
-# coverage law in tests/dev/test_property_tips.gd have to agree about which fields are skipped --
-# a field skipped in one and not the other is a field that either loses its tooltip or fails a law
-# it was never drawn by.
-const POOL_SKIP := ["display_name", "scaling_blend", "damage_kind", "attack_shape", "empowered_form"]   # all five have bespoke UI
-const CARVING_SKIP := ["display_name", "sigils", "flourishes", "damage_kind", "attack_shape"]   # the latter four get bespoke UI
+# The three-way EFFECT choice, which is what `heals` and `deals_no_damage` are between them: two
+# bools over one question, kept as two fields because `heals` has eight production readers, but
+# authored as one control so the both-true state is unrepresentable rather than merely refused.
+const EFFECT_DAMAGE := "Damage"
+const EFFECT_HEAL := "Heal"
+const EFFECT_NONE := "No damage"
 
 # The shape picker's two non-file rows, in the order they are added -- (none) FIRST, for the reason
 # DevWidgets._add_resource_swapper spells out: add_item silently selects the row it is handed, so
@@ -317,40 +329,233 @@ func populate():
 		return
 	if current == null:
 		return
-	var edited := current
-	DevWidgets.add_lineedit(editor_container, "Display name", edited.display_name, func(s: String): edited.display_name = s)
-	match _mode:
-		Mode.TRANSMUTATION:
-			var carving := current as TransmutationData
-			_populate_sigils(carving)
-			_populate_flourishes(carving)
-			DevWidgets.build_resource_editor(editor_container, current, populate, CARVING_SKIP)
-			_populate_shape()
-			_populate_kind(current)
-		Mode.WEAPON_ATTACK:
-			DevWidgets.build_resource_editor(editor_container, current, populate, POOL_SKIP)
-			_populate_shape()
-			_populate_kind(current)
-			_populate_empowered_form(current as WeaponAttackData)
-			_populate_blend()
-			_populate_carriers()
+	_draw_sections()
 
-# The damage-kind row (#424), bespoke rather than reflective for one reason: NONE is on the roster so
-# delivered_kind() can answer it, and must never be OFFERED -- a heal or a no-damage attack reads as
-# None by rule, so the row says so and draws no picker. The reflective row would list all eight.
-func _populate_kind(attack: AttackData) -> void:
+
+# The form, section by section, in the order the RESOURCE declares (#825).
+#
+# A field with a bespoke drawer is handed to it, and the drawer says which fields it CONSUMED -- the
+# range block owns three -- so the walker skips them wherever they appear later in the list. Every
+# other field draws through DevWidgets' reflective row, which is what makes a new @export a
+# one-line declaration on the resource rather than an edit here.
+#
+# `rows` collects field -> the nodes drawing it, for the one bind_hidden_fields call at the end.
+# A drawer registers its own rows only where hiding is meaningful; a block nothing can hide (the
+# sigils, the shape) simply does not, and an unregistered field is ignored by the binder.
+func _draw_sections() -> void:
+	var rows := {}
+	var drawn := {}
+	for section: Dictionary in current.call("property_sections"):
+		var title: String = section["title"]
+		DevWidgets.add_heading(editor_container, title)
+		for field: String in section["fields"]:
+			if drawn.has(field):
+				continue
+			for claimed: String in _draw_field(field, rows):
+				drawn[claimed] = true
+		_section_tail(title)
+	DevWidgets.bind_hidden_fields(current, rows)
+
+
+# One field, and the names it consumed. The match is the whole list of fields this panel authors
+# by hand; anything else is reflective, which is the default rather than the exception.
+func _draw_field(field: String, rows: Dictionary) -> PackedStringArray:
+	match field:
+		"max_range":
+			return _populate_range()
+		"attack_shape":
+			_populate_shape()
+			return PackedStringArray(["attack_shape"])
+		"heals":
+			return _populate_effect()
+		"damage_kind":
+			_populate_kind(rows)
+			return PackedStringArray(["damage_kind"])
+		"scaling_blend":
+			_populate_blend(rows)
+			return PackedStringArray(["scaling_blend"])
+		"empowered_form":
+			_populate_empowered_form(current as WeaponAttackData, rows)
+			return PackedStringArray(["empowered_form"])
+		"sigils":
+			_populate_sigils(current as TransmutationData)
+			return PackedStringArray(["sigils"])
+		"flourishes":
+			_populate_flourishes(current as TransmutationData)
+			return PackedStringArray(["flourishes"])
+	var added := DevWidgets.add_property_row(editor_container, current, field, populate)
+	if not added.is_empty():
+		rows[field] = added
+	return PackedStringArray([field])
+
+
+# A line this panel adds under a section that is not a field of the attack at all. Carriers answer
+# "can anything actually swing this", which is an identity question about the loaded file rather
+# than a property, so it belongs under Identity and not in a section of its own.
+func _section_tail(title: String) -> void:
+	if title == "Identity" and _mode == Mode.WEAPON_ATTACK:
+		_populate_carriers()
+
+
+# The RANGE fork as ONE toggle (#825; dev, 2026-09-07: "there should be a toggle here between max
+# range being 0, which means its a melee hit, and if it is greater than 0, the min/max options
+# appear... except when the max range is 0, it should reflect more clearly what is going on").
+#
+# THE TOGGLE STORES NOTHING. It renders `max_range > 0`, because the anchor is DERIVED from the
+# range and is never a flag (#802 ruling 1) -- a stored "is placed" bool would be the second answer
+# that ruling exists to refuse. Off writes 0; on writes whatever the Max spinbox is showing, and the
+# range a self-anchored attack had before is deliberately not remembered (one keystroke, in a dev
+# tool). The label avoids the word MELEE on purpose: VerticalRule.MELEE is a different axis
+# entirely, and a range-1 spear thrust is a placed attack under the melee height rule.
+#
+# THIS BLOCK OWNS ITS OWN ROWS' VISIBILITY and registers nothing with bind_hidden_fields. The Min
+# spinbox shows only when the attack is placed AND the custom-minimum box is ticked, and that
+# conjunction is not something hidden_fields can express -- registering min_range in both would let
+# the binder win on the next `changed` and silently drop the tick.
+func _populate_range() -> PackedStringArray:
+	var attack := current
+	var max_tip := DevWidgets.property_tip(attack, "max_range")
+	var min_tip := DevWidgets.property_tip(attack, "min_range")
+
+	var placed := _check("Placed at range", attack.max_range > 0, max_tip)
+
+	var facing_note := Label.new()
+	facing_note.text = "Fires from the attacker: the aim is a FACING, and the whole shape turns to it."
+	facing_note.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	editor_container.add_child(facing_note)
+
+	# maxi(1, ...) rather than the stored value: at range 0 this row is hidden, and what it shows is
+	# what ticking the toggle would write. Setting min_value on a SpinBox already holding 0 would
+	# CLAMP it and emit value_changed, i.e. silently make a facing attack ranged just by opening it.
+	var max_at := editor_container.get_child_count()
+	var max_spin := DevWidgets.add_spinbox(editor_container, "Max range", maxi(1, attack.max_range),
+		func(v: float) -> void: DevWidgets.write(attack, "max_range", int(v)))
+	max_spin.min_value = 1
+	var max_row := editor_container.get_child(max_at)
+	DevWidgets._tip_rows_from(editor_container, max_at, max_tip)
+
+	# Ticked when the stored minimum is not the ordinary 1 -- which covers both authored shapes, a
+	# self-targetable heal at 0 and a carbine's dead zone at 2+. Derived at BUILD time only: once
+	# the box is on screen its tick is the dev's, so re-deriving it on `changed` would untick it the
+	# instant it was ticked (min_range is still 1 until they type a new one).
+	var custom := _check("Custom minimum range", attack.min_range != 1, min_tip)
+
+	var min_at := editor_container.get_child_count()
+	var min_spin := DevWidgets.add_spinbox(editor_container, "Min range", attack.min_range,
+		func(v: float) -> void: DevWidgets.write(attack, "min_range", int(v)))
+	min_spin.min_value = 0
+	var min_row := editor_container.get_child(min_at)
+	DevWidgets._tip_rows_from(editor_container, min_at, min_tip)
+
+	var half_at := editor_container.get_child_count()
+	DevWidgets.add_checkbox(editor_container, "Max and a half", attack.max_and_a_half,
+		func(on: bool) -> void: DevWidgets.write(attack, "max_and_a_half", on),
+		DevWidgets.property_tip(attack, "max_and_a_half"))
+	var half_row := editor_container.get_child(half_at)
+
+	var sync := func() -> void:
+		var is_placed: bool = attack.max_range > 0
+		placed.set_pressed_no_signal(is_placed)
+		facing_note.visible = not is_placed
+		max_row.visible = is_placed
+		custom.visible = is_placed
+		min_row.visible = is_placed and custom.button_pressed
+		half_row.visible = is_placed
+		if is_placed:
+			max_spin.set_value_no_signal(attack.max_range)
+
+	placed.toggled.connect(func(on: bool) -> void:
+		DevWidgets.write(attack, "max_range", int(max_spin.value) if on else 0))
+	# Ticking writes nothing -- the minimum is already whatever it is -- so this calls sync itself;
+	# UNticking writes 1 and reaches sync through `changed` like every other edit.
+	custom.toggled.connect(func(on: bool) -> void:
+		if on:
+			sync.call()
+		else:
+			DevWidgets.write(attack, "min_range", 1))
+
+	# The rows follow the range live, off the write hook -- add_cell_grid's caption idiom, and the
+	# connection is dropped with the block for the same reason (a lambda has no object to
+	# auto-disconnect against).
+	attack.changed.connect(sync)
+	placed.tree_exiting.connect(func() -> void:
+		if attack.changed.is_connected(sync):
+			attack.changed.disconnect(sync))
+	sync.call()
+	return PackedStringArray(["max_range", "min_range", "max_and_a_half"])
+
+
+# A CheckBox this panel keeps a handle on, for a toggle whose state is DERIVED rather than stored.
+# DevWidgets.add_checkbox returns void because a plain bool row needs no handle; these two do.
+func _check(text: String, pressed: bool, tip: String) -> CheckBox:
+	var box := CheckBox.new()
+	box.text = text
+	box.button_pressed = pressed
+	editor_container.add_child(box)
+	DevWidgets.apply_tooltip(box, tip)
+	return box
+
+
+# EITHER damage OR a heal OR neither, as one control (#825, dev ruling 2026-09-07). The two bools
+# stay exactly as they are -- `heals` has eight production readers and this changes nothing about
+# what is stored -- but authoring them separately let both be ticked, which is a state no rule has
+# an answer for. Both are written before ONE emit_changed rather than through two write() calls:
+# the pair is a single decision, and writing them one at a time makes the impossible state briefly
+# real for every listener in between.
+func _populate_effect() -> PackedStringArray:
+	var attack := current
 	var first := editor_container.get_child_count()
-	if attack.delivered_kind() == AttackData.Kind.NONE:
-		DevWidgets.add_label(editor_container, "Damage kind: None (a heal or no-damage attack delivers no kind)")
-	else:
-		var names: Array[String] = []
-		for key: String in AttackData.Kind.keys():
-			var value: int = AttackData.Kind[key]
-			if value != AttackData.Kind.NONE:
-				names.append("%s:%d" % [key.capitalize(), value])
-		DevWidgets.add_enum_option(editor_container, "Damage kind", ",".join(names), attack.damage_kind,
-			func(v: int): attack.damage_kind = v as AttackData.Kind)
+	var picked := EFFECT_DAMAGE
+	if attack.heals:
+		picked = EFFECT_HEAL
+	elif attack.deals_no_damage:
+		picked = EFFECT_NONE
+	DevWidgets.add_option(editor_container, "Effect", [EFFECT_DAMAGE, EFFECT_HEAL, EFFECT_NONE], picked,
+		func(choice: String) -> void:
+			attack.heals = choice == EFFECT_HEAL
+			attack.deals_no_damage = choice == EFFECT_NONE
+			attack.emit_changed())
+	DevWidgets._tip_rows_from(editor_container, first, DevWidgets.wrap_tooltip(
+		"What the power number MEANS. Damage: it is dealt as damage of the kind below.\n"
+		+ "Heal: it is restored as HP instead, capped at the target's maximum.\n"
+		+ "No damage: a pure-utility attack -- scaling is suppressed entirely, so neither aura nor a "
+		+ "weapon's stat blend can sneak damage into a damageless effect. A shove or an element still lands."))
+	return PackedStringArray(["heals", "deals_no_damage"])
+
+
+# The damage-kind row (#424), bespoke rather than reflective for one reason: NONE is on the roster
+# so delivered_kind() can answer it, and must never be OFFERED -- a heal or a no-damage attack reads
+# as None by rule. The reflective row would list all eight.
+#
+# BOTH the picker and the sentence standing in for it are built (#825), and the picker is registered
+# so the binder hides it; the sentence is its exact inverse, off the same `changed` signal and the
+# same rule (delivered_kind), so the two can never both be showing or both be gone. Before this the
+# fork was made once at build time and a heal picked afterwards left the old picker on screen.
+func _populate_kind(rows: Dictionary) -> void:
+	var attack := current
+	var note := Label.new()
+	note.text = "Damage kind: None -- a heal or a no-damage attack delivers no kind."
+	note.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	editor_container.add_child(note)
+
+	var first := editor_container.get_child_count()
+	var names: Array[String] = []
+	for key: String in AttackData.Kind.keys():
+		var value: int = AttackData.Kind[key]
+		if value != AttackData.Kind.NONE:
+			names.append("%s:%d" % [key.capitalize(), value])
+	DevWidgets.add_enum_option(editor_container, "Damage kind", ",".join(names), attack.damage_kind,
+		func(v: int) -> void: DevWidgets.write(attack, "damage_kind", v as AttackData.Kind))
+	rows["damage_kind"] = DevWidgets._added_since(editor_container, first)
 	DevWidgets._tip_rows_from(editor_container, first, DevWidgets.property_tip(attack, "damage_kind"))
+
+	var sync := func() -> void:
+		note.visible = attack.delivered_kind() == AttackData.Kind.NONE
+	attack.changed.connect(sync)
+	note.tree_exiting.connect(func() -> void:
+		if attack.changed.is_connected(sync):
+			attack.changed.disconnect(sync))
+	sync.call()
 
 # The family form: its main (edited live, in place) AND its extras. Extras render whether or not
 # there is a main -- the old early return on a null `current` made a main-less family's extras
@@ -363,14 +568,10 @@ func _populate_family() -> void:
 	if current == null:
 		DevWidgets.add_label(editor_container, "%s has no main attack yet — author one in Weapon Attack mode." % family_label)
 	else:
-		var edited := current
-		DevWidgets.add_lineedit(editor_container, "Display name", edited.display_name, func(s: String): edited.display_name = s)
+		# A mode banner rather than a row, so it reads before the first heading rather than buried
+		# between two fields of the Identity section.
 		DevWidgets.add_label(editor_container, "Editing the MAIN attack for %s — changes every weapon of this family." % family_label)
-		DevWidgets.build_resource_editor(editor_container, current, populate, POOL_SKIP)
-		_populate_shape()
-		_populate_kind(current)
-		_populate_empowered_form(current as WeaponAttackData)
-		_populate_blend()
+		_draw_sections()
 	_populate_extras(family_label)
 
 
@@ -409,6 +610,7 @@ func _populate_shape() -> void:
 	picker.item_selected.connect(func(idx: int) -> void: _on_shape_picked(keys[idx], library))
 	row.add_child(picker)
 	editor_container.add_child(row)
+	DevWidgets.apply_tooltip(row, DevWidgets.property_tip(current, "attack_shape"))
 
 	if _shape_copy == null:
 		DevWidgets.add_label(editor_container, "No shape: this attack covers the cell it is aimed at.")
@@ -595,7 +797,7 @@ func _save_named_shape() -> bool:
 # the reachability law, and unshareable between attacks. And the nested editor it then draws writes
 # into the live charged object while Update saves only the file we loaded, so the dev's range edits
 # would vanish at relaunch with no symptom at all.
-func _populate_empowered_form(attack: WeaponAttackData) -> void:
+func _populate_empowered_form(attack: WeaponAttackData, rows: Dictionary) -> void:
 	if attack == null:
 		return
 	var first := editor_container.get_child_count()
@@ -610,6 +812,7 @@ func _populate_empowered_form(attack: WeaponAttackData) -> void:
 			attack.empowered_form = choices[s]
 			populate()
 	)
+	rows["empowered_form"] = DevWidgets._added_since(editor_container, first)
 	DevWidgets._tip_rows_from(editor_container, first, DevWidgets.property_tip(attack, "empowered_form"))
 
 
@@ -627,13 +830,17 @@ func _attack_choices(none_key: String) -> Dictionary:
 # the wielder's aura and has no blend to edit -- the cast is what says so rather than a mode check.
 # This is the family-scaling surface the ticket asked for: a family's blend IS its main attack's,
 # so editing it in FAMILY mode is editing the family, with no separate template field to keep.
-func _populate_blend() -> void:
+func _populate_blend(rows: Dictionary) -> void:
 	var weapon_attack := current as WeaponAttackData
 	if weapon_attack == null:
 		return
+	var first := editor_container.get_child_count()
 	DevWidgets.add_label(editor_container, "Damage scaling — the four always total %d%%:" % Stats.BLEND_TOTAL)
 	DevWidgets.add_blend_sliders(editor_container, weapon_attack.scaling_blend, func(): pass,
 		DevWidgets.property_tip(weapon_attack, "scaling_blend"))
+	# Registered so the whole block goes with `power` on a no-damage attack: scaling is suppressed
+	# there, so four sliders that cannot move the number are worse than no sliders at all.
+	rows["scaling_blend"] = DevWidgets._added_since(editor_container, first)
 
 # The family's extra_attacks, in the rune editor's inscribe-list idiom. Entries are DIRECT REFS,
 # never copies: Springspear.tres and Kinetic_Mace.tres already store theirs as ext_resource, so a
@@ -644,7 +851,8 @@ func _populate_blend() -> void:
 # panel can make the mark stale.
 func _populate_extras(family_label: String) -> void:
 	var extras := current_template.extra_attacks
-	DevWidgets.add_label(editor_container, "Extra attacks for %s (%d) — every weapon of this family gets them:" % [family_label, extras.size()])
+	DevWidgets.add_heading(editor_container, "Extra attacks")
+	DevWidgets.add_label(editor_container, "Every weapon of %s gets these (%d):" % [family_label, extras.size()])
 	for i in range(extras.size()):
 		var extra := extras[i]
 		var idx := i
@@ -716,6 +924,7 @@ func _populate_carriers() -> void:
 # Sigils as per-element weights ("2 Fire, 1 Earth"). Weight changes append/remove
 # occurrences instead of rebuilding, so first-inscribed tie-break order survives edits.
 func _populate_sigils(carving: TransmutationData):
+	var first := editor_container.get_child_count()
 	DevWidgets.add_label(editor_container, "Sigils (weight per element):")
 	for e in Elemental.SIGIL_ELEMENTS:
 		var element: Elemental.Element = e
@@ -724,6 +933,7 @@ func _populate_sigils(carving: TransmutationData):
 		DevWidgets.add_spinbox(editor_container, Elemental.display_name(element), carving.sigils.count(element), on_weight)
 	DevWidgets.add_label(editor_container, "Cost %d | Tier %d | Flourish slots %d" % [carving.cost(), carving.tier(), carving.flourish_slots()])
 	DevWidgets.add_label(editor_container, "Resolves to: %s" % _tags_label(carving))
+	DevWidgets._tip_rows_from(editor_container, first, DevWidgets.property_tip(carving, "sigils"))
 
 func _set_sigil_weight(carving: TransmutationData, element: Elemental.Element, weight: int):
 	var target := maxi(0, weight)
@@ -738,7 +948,9 @@ func _set_sigil_weight(carving: TransmutationData, element: Elemental.Element, w
 	populate()
 
 func _populate_flourishes(carving: TransmutationData):
+	var first := editor_container.get_child_count()
 	DevWidgets.add_label(editor_container, "Flourishes (%d / %d slots):" % [carving.flourishes.size(), carving.flourish_slots()])
+	DevWidgets._tip_rows_from(editor_container, first, DevWidgets.property_tip(carving, "flourishes"))
 	for i in range(carving.flourishes.size()):
 		var idx := i
 		var row := HBoxContainer.new()

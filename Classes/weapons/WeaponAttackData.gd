@@ -51,6 +51,19 @@ extends AttackData
 @export var empowered_form: WeaponAttackData = null
 
 
+# Where this subclass's six fields sit in the Attack Editor's form (#825) -- merged into the
+# sections the base already declares, never a layout of its own. The split is by QUESTION rather
+# than by which class declares the field: the element and the blend are both part of what this
+# attack DELIVERS, while the three readiness flags and the charged form are all about when it may
+# be fired at all.
+static func property_sections() -> Array[Dictionary]:
+	var sections := AttackData.property_sections()
+	AttackData.in_section(sections, "Payload", PackedStringArray(["elemental_damage_type", "scaling_blend"]))
+	AttackData.in_section(sections, "How it is used",
+		PackedStringArray(["requires_readiness", "consumes_readiness", "builds_readiness", "empowered_form"]))
+	return sections
+
+
 # The five fields this subclass adds (#473); the shared ones are AttackData's answer, merged in
 # rather than restated. Forgetting the merge loses every base tip silently, which is what
 # tests/dev/test_property_tips.gd's coverage law is for.
