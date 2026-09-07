@@ -373,6 +373,41 @@ func test_every_space_and_every_row_is_mouse_reachable() -> void:
 	card.free()
 
 
+# The chip is a Button inside a 20px row, and a Button's minimum height comes from its font and its
+# stylebox -- so it is the one thing that could push a slot out of the card. The card CLIPS, which is
+# what makes that failure silent, so what this asks is whether the last of the six slots is still
+# inside the rect that clips it.
+#
+# NOT "is the card taller than CARD_HEIGHT": measured 2026-09-06, cards already stretch past it on
+# main, because that is a MINIMUM and the roster region expands. An assertion on it would have blamed
+# the chip for something it did not do -- which is how the first draft of this case failed.
+func test_the_chip_does_not_push_a_slot_out_of_the_card() -> void:
+	if not await _enter_phase():
+		return
+	var screen := _screen()
+	assert_object(screen).is_not_null()
+	await await_idle_frame()
+	var seen := 0
+	for node: Node in _walk(screen):
+		var card := node as PreMissionCard
+		if card == null:
+			continue
+		var rows: Array[GearRow] = []
+		for inner: Node in _walk(card):
+			var row := inner as GearRow
+			if row != null:
+				rows.append(row)
+		if rows.is_empty():
+			continue
+		seen += 1
+		assert_int(rows.size()).override_failure_message(
+			"the card stopped drawing one slot per inventory place").is_equal(Unit.MAX_INVENTORY_SIZE)
+		var last := rows[rows.size() - 1]
+		var why := "the last gear slot is clipped out of its card -- something in the row is taller than the row"
+		assert_float(last.global_position.y + last.size.y).override_failure_message(why) 				.is_less_equal(card.global_position.y + card.size.y)
+	assert_int(seen).is_greater(0)
+
+
 # --- the plate ------------------------------------------------------------------------------------
 
 func _attack(min_range: int, max_range: int) -> WeaponAttackData:
