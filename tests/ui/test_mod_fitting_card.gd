@@ -330,6 +330,19 @@ func test_every_space_and_every_row_is_mouse_reachable() -> void:
 			"a space out of the mouse's reach can never be clicked into").is_equal(Control.MOUSE_FILTER_STOP)
 	for row in _library_rows(card):
 		assert_int(row.mouse_filter).is_equal(Control.MOUSE_FILTER_STOP)
+
+	# ...and nothing INSIDE a space may eat the press on its way to the zone. A Container defaults to
+	# MOUSE_FILTER_STOP, so a plain VBox laid over the block silently takes every click that did not
+	# land on a row -- which is the whole of "click a space to put it there", since an empty space has
+	# no row to click. The rows themselves are the exception: they are meant to stop.
+	for zone in _space_zones(card):
+		for node: Node in _walk(zone):
+			var control := node as Control
+			if control == null or control is GearRow:
+				continue
+			var why := "%s inside a space eats the click before the zone sees it" % control.get_class()
+			assert_int(control.mouse_filter).override_failure_message(why) \
+					.is_not_equal(Control.MOUSE_FILTER_STOP)
 	card.free()
 
 
