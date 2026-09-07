@@ -599,9 +599,11 @@ func _refresh_hint() -> void:
 		_selected_item.display_name, holder]
 
 
-# Esc lets go of what is in hand -- and ONLY then. Answering it unconditionally would evict the
-# tenant that key already has: under this screen the board is locked, so game._input routes Esc to
-# the bug report card, which is the stranger's one complaint door (#131).
+# Esc lets go of what is in hand -- and ONLY then. The RULE is unchanged since #740; what it
+# protects is not. It used to yield the key to the bug report card, which is where game._input sent
+# Esc under any locked board; since #723 that branch is gone and the key falls through to the pause
+# menu instead. So this is now the ordinary ModalCard stack -- the innermost thing on screen answers
+# first, and the next press reaches the menu -- rather than a deference to another door.
 func _on_cancel() -> bool:
 	if _selected_item == null:
 		return false

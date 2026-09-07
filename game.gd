@@ -267,12 +267,21 @@ func _input(event: InputEvent) -> void:
 	# receives no input at all, so this handler is already silent while one is up. Kept because it
 	# states the intent at the gate rather than relying on a consequence of the pause.
 	if event.is_action_pressed("ui_cancel") and not ModalLock.any_open(get_tree()):
-		if _board_locked_for_player():
-			# A locked board is an AI turn, a finished mission, or the menu -- exactly the moments
-			# a stranger most wants to complain, and the ones the pause menu cannot serve. Esc
-			# still reaches the report card there; it just cannot reach Resume or Restart.
-			open_report_card(BugReporter.Kind.BUG)
-		else:
+		# ONE RULE (#723, dev 2026-09-07): Esc opens the pause menu whenever a board exists, and at
+		# the title screen it does nothing. It used to fork on _board_locked_for_player() and open a
+		# BUG-defaulted report card on the far side, which covered FOUR situations rather than the
+		# one that comment described -- the title screen, the pre-mission screen, a finished board
+		# being inspected, and an AI turn. Only the last of those was ever "a moment the pause menu
+		# cannot serve", and it is served now: playback parks on a card (see Pacing.beat) and the
+		# rows that cannot be honoured mid-pass grey themselves (see PauseMenu).
+		#
+		# The report card keeps three doors -- the pause menu's own row, the title screen's Send
+		# Feedback button, and F3 -- so nothing lost a way in; Esc stopped being one of them.
+		#
+		# THE PREDICATE IS NOT NARROWED. menu_is_up() and _board_locked_for_player() are right about
+		# every one of their nine other readers; this single reader was the wrong one. Asking
+		# MissionController which SCREEN is up is a different question, not a second answer.
+		if not mission_controller.mission_select_is_up():
 			_open_pause_menu()
 
 	# The phase's one exit (#739). It lives HERE rather than in _unhandled_input beside the board
@@ -330,12 +339,16 @@ func _unhandled_input(event: InputEvent) -> void:
 # Resume so an in-progress aim survives the pause.
 func _open_pause_menu() -> void:
 	var prior: GameState = game_state
+	# READ BEFORE THE WRITE BELOW (#723): playback_owns_board() asks about game_state, so once MENU
+	# lands here an AI turn no longer looks like one and the card would grey nothing. The card is
+	# TOLD rather than left to ask a store its own opener has just moved.
+	var mid_pass: bool = playback_owns_board()
 	game_state = GameState.MENU
 	# Grabbed here, before the card draws: a report opened FROM the pause menu wants a picture of
 	# the board, not of the pause menu. Locking first means the extra frame is not interactive.
 	var frame: Image = await bug_reporter.capture_frame()
 	var choice: PauseMenu.Choice = await PauseMenu.show_menu(self, mission_controller.can_restart(),
-		ScenarioManager.any_save_exists())
+		ScenarioManager.any_save_exists(), mid_pass)
 	match choice:
 		PauseMenu.Choice.RESTART:
 			game_state = GameState.IDLE
@@ -343,7 +356,7 @@ func _open_pause_menu() -> void:
 		PauseMenu.Choice.SAVE_GAME:
 			var _saved: int = await SaveLoadScreen.show_screen(self, SaveLoadScreen.Mode.SAVE)
 			# Same restore-before-reopen rule as GLOSSARY/REPORT below.
-			game_state = prior
+			_restore_state(prior)
 			_open_pause_menu()
 		PauseMenu.Choice.LOAD_GAME:
 			# confirm_load: unlike the title screen, loading here discards live progress.
@@ -354,7 +367,7 @@ func _open_pause_menu() -> void:
 				game_state = GameState.IDLE
 				mission_controller.resume_from_slot(slot)
 			else:
-				game_state = prior
+				_restore_state(prior)
 				_open_pause_menu()
 		PauseMenu.Choice.TITLE:
 			mission_controller.abandon_mission()
@@ -364,7 +377,7 @@ func _open_pause_menu() -> void:
 			await GlossaryScreen.show_screen(self)
 			# Same restore-before-reopen rule as REPORT below: reopening with MENU stashed as
 			# `prior` would leave the board locked for good on Resume.
-			game_state = prior
+			_restore_state(prior)
 			_open_pause_menu()
 		PauseMenu.Choice.SETTINGS:
 			await SettingsScreen.show_screen(self)
@@ -373,7 +386,7 @@ func _open_pause_menu() -> void:
 			refresh_squad_rings()
 			# GLOSSARY's shape exactly, restore included -- a settings page is another read-only
 			# detour that must hand the player back to the menu they opened it from.
-			game_state = prior
+			_restore_state(prior)
 			_open_pause_menu()
 		PauseMenu.Choice.REPORT:
 			# The state named is the one from BEFORE the pause, not MENU: a report should say what
@@ -381,10 +394,26 @@ func _open_pause_menu() -> void:
 			await bug_reporter.open_card(GameState.keys()[prior], BugReporter.Kind.BUG, frame)
 			# Restore before reopening, or the second card captures MENU as its prior and Resume
 			# leaves the board locked for good.
-			game_state = prior
+			_restore_state(prior)
 			_open_pause_menu()   # back to the menu they came from, not straight into the board
 		_:
-			game_state = prior
+			_restore_state(prior)
+
+# Hand the board back to what it was doing before the card -- UNLESS something else has written the
+# state since (#723).
+#
+# The blind write was safe only while Esc could not reach a running board. It can now: during an AI
+# turn the pass parks on the card rather than ending, but it does not have to park -- a pass on its
+# last beat, or an end_turn that lands between beats, finishes underneath the menu and writes its
+# own state. Restoring a stale AI_TURN over that is the "leaves the board locked for good" failure
+# the GLOSSARY and REPORT arms already carry warnings about, arriving by a different road.
+#
+# MENU is the tell because _open_pause_menu wrote it on the way in and nothing else does while a
+# card is up. Still MENU means the restore is ours to make; anything else means someone with a
+# fresher answer got there first, and the reopen path below will read THAT as its own prior.
+func _restore_state(prior: GameState) -> void:
+	if game_state == GameState.MENU:
+		game_state = prior
 
 # game.gd owns the GameState enum, so it is the one place that can name the current state for a
 # report. Every surface that is not the pause menu comes through here (#131).

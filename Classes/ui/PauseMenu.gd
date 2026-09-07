@@ -14,26 +14,40 @@ func _init() -> void:
 
 # Takes the Game node rather than a parent: ModalLock needs it (it is what gets frozen), and
 # deriving the parent from it removes any chance of a modal being built outside ui_layer.
-static func show_menu(game_node: Node, can_restart: bool, can_load: bool) -> Choice:
+#
+# mid_pass is PASSED rather than asked here, and that is not a style choice: _open_pause_menu writes
+# game_state = MENU on its way in, and playback_owns_board() reads game_state -- so by the time this
+# card builds, an AI turn has already stopped looking like one. The opener reads it before the write
+# (#723). Same one answer, read at the only moment it is still true.
+static func show_menu(game_node: Node, can_restart: bool, can_load: bool, mid_pass: bool) -> Choice:
 	var menu := PauseMenu.new()
 	game_node.ui_layer.add_child(menu)
-	menu._build(can_restart, can_load, game_node)
+	menu._build(can_restart, can_load, game_node, mid_pass)
 	var choice: Choice = await menu.chosen
 	menu.queue_free()
 	return choice
 
-func _build(can_restart: bool, can_load: bool, game_node: Node) -> void:
+func _build(can_restart: bool, can_load: bool, game_node: Node, mid_pass: bool) -> void:
 	var content := _build_chrome(game_node)
 	_build_title(content, "PAUSED")
 
 	# The one card whose choices stack vertically: the rows read as a list, not a button bar.
 	var row := _build_button_row(content, true, content_separation)
 
+	# WHAT A RUNNING PASS CANNOT SERVE (#723). Esc reaches this card during an AI turn now, and
+	# playback PARKS on it (Pacing.beat) rather than ending -- so the pass is still mid-flight
+	# behind the card, holding references into the board. Every row below that tears the board down
+	# would free the very Unit nodes the parked coroutine resumes into, which is #107's shape.
+	#
+	# The park and this gate cover each other's gap and neither is redundant: parking alone still
+	# leaves a coroutine to resume into a freed board, and greying alone leaves the battle playing
+	# on behind a card that calls itself PAUSED.
 	_add_button(row, "Resume", func(): chosen.emit(Choice.RESUME))
 
 	# Hidden on a board with nothing to reload (the Sandbox), mirroring MissionEndBanner's retry.
 	if can_restart:
-		_add_button(row, "Restart Mission", func(): chosen.emit(Choice.RESTART))
+		_refuse_while(_add_button(row, "Restart Mission", func(): chosen.emit(Choice.RESTART)),
+			mid_pass, "Not while the enemy is moving -- wait for the pass to finish.")
 
 	# Save rides Restart's gate (#144): missions only, for now -- a sandbox save would have no
 	# origin mission for Restart to return to. Campaign-scope saving is its own future issue.
@@ -50,6 +64,8 @@ func _build(can_restart: bool, can_load: bool, game_node: Node) -> void:
 			save_button.tooltip_text = UiText.wrap(
 				"Not while you are deploying -- a save would keep only the units already placed. "
 				+ "Begin the mission first.")
+		_refuse_while(save_button, mid_pass,
+			"Not while the enemy is moving -- the pass would be saved half-played.")
 
 	# Greyed rather than hidden when there is nothing to load: the row teaches that saving exists,
 	# and a menu can only grey what it can explain (#166).
@@ -57,10 +73,13 @@ func _build(can_restart: bool, can_load: bool, game_node: Node) -> void:
 	if not can_load:
 		load_button.disabled = true
 		load_button.tooltip_text = UiText.wrap("No saved games yet")
+	_refuse_while(load_button, mid_pass,
+		"Not while the enemy is moving -- wait for the pass to finish.")
 
 	# Always offered, unlike Restart: a Sandbox board has no file to reload but the way out of it
 	# is the same. Before this the only route back to the title was finishing a mission.
-	_add_button(row, "Return to Title", func(): chosen.emit(Choice.TITLE))
+	_refuse_while(_add_button(row, "Return to Title", func(): chosen.emit(Choice.TITLE)),
+		mid_pass, "Not while the enemy is moving -- wait for the pass to finish.")
 
 	# The reference page (#135) — reachable mid-battle, because mid-battle is when a stranger
 	# first meets a term they don't know.
@@ -75,6 +94,16 @@ func _build(can_restart: bool, can_load: bool, game_node: Node) -> void:
 	_add_button(row, "Report a Bug / Feedback", func(): chosen.emit(Choice.REPORT))
 
 	_add_button(row, "Quit Game", func(): chosen.emit(Choice.QUIT), Color(0.85, 0.6, 0.6))
+
+
+# Grey a row with the reason it cannot be served, on the Load row's rule that a menu can only grey
+# what it can explain (#166). A row already refused keeps the reason it has: the specific one is
+# always the more useful, and it is the one the player can do something about.
+func _refuse_while(button: Button, refused: bool, reason: String) -> void:
+	if not refused or button.disabled:
+		return
+	button.disabled = true
+	button.tooltip_text = UiText.wrap(reason)
 
 
 # Esc RESUMES -- the key that opened the card closes it, which is the one binding a player tries
