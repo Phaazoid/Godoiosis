@@ -323,6 +323,26 @@ func test_fitting_a_main_replacer_moves_the_readout_onto_the_new_main() -> void:
 	card.free()
 
 
+# A weapon nobody holds has nobody's proficiency to be reduced by, and the card is the only surface
+# that can ask about one -- it opens on stash gear. Zero was the other reading of active_space_count
+# for a null wielder, and it would print every space of a stash weapon as inactive, teaching that
+# fitting one does nothing at all.
+func test_a_weapon_with_no_carrier_marks_no_space_inactive() -> void:
+	if not await _enter_phase():
+		return
+	var weapon := _weapon()
+	if weapon == null:
+		return
+	var card := await _open(weapon)
+	assert_str(card._proficiency.text).is_not_empty()
+	for node: Node in _walk(card):
+		var label := node as Label
+		if label != null:
+			assert_str(label.text).override_failure_message(
+				"a weapon nobody holds had a space marked inactive").is_not_equal("inactive")
+	card.free()
+
+
 # The closest honest proxy for a wire no headless suite can drive: every place the player has to
 # reach is reachable at all. IGNORE on a zone is how "click a space to put it there" dies silently.
 func test_every_space_and_every_row_is_mouse_reachable() -> void:
