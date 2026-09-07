@@ -6,7 +6,7 @@ grill-style. Every ruling below is his; the rationale is recorded because almost
 re-derivable from the code. Numbers (tolerances, drop damage, the 2D offset) are deliberately absent —
 they are feel values and get knobs, not guesses (`CLAUDE.md` → the tuning rule).
 
-**Canon checked through #808 (2026-09-06).**
+**Canon checked through #816 (2026-09-07).**
 
 The one-line version: **a cell has a height, height changes only via ramps, ramps are chokepoints
 rather than tolls, and what height buys you is REACH — not damage, not to-hit.**
@@ -1044,8 +1044,9 @@ per-stack idiom. `OverlayManager.show_attack_reach(union, blocked)` is the one d
 > `DevController` then combines it with the game state, once per key: `brush_armed()` and its new
 > sibling `spawn_armed()`. **Both halves are load-bearing** — Spawn is the overlay's BOOT page, so
 > the page test alone made SPACE try to spawn during ordinary play. Both SPACE handlers (game.gd's
-> flat arm and battle3d's) and the 3D help line read the one predicate, which is what stops the
-> readout promising a key the gate refuses.
+> flat arm and battle3d's) read the one predicate. The 3D help line read it too, until #816 deleted
+> that line -- its job was to stop the readout promising a key the gate refuses, and the readout is
+> gone rather than the gate.
 >
 > The zoom-in floor came down with it (`CameraRig3D.min_distance` 6.0 → 1.0, and its Game-tab knob
 > now reaches 0.25): *"it really makes it hard to zoom in and see what I'm trying to brush paint."*

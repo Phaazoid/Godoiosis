@@ -43,22 +43,21 @@ func test_the_overlay_carries_the_checkout_the_one_reader_named() -> void:
 	assert_bool(label.visible).is_true()
 
 
-func test_the_readout_is_a_label_of_its_own_and_not_a_field_of_the_help_line() -> void:
-	# Structural, and load-bearing twice over: the help line is rewritten wholesale in demo_mode
-	# and rebuilt on every binding change, so a checkout carried inside it would vanish in the
-	# first case and have to be re-appended in the second.
-	var help: Label = _scene.get_node("UI/Help")
+# The readout is its OWN label, and #816 is what that bought. It was a field-of-the-help-line
+# argument until then -- that line was rebuilt from live bindings and rewritten wholesale in
+# demo_mode, so a checkout carried inside it would have vanished in the first case and needed
+# re-appending in the second. The line is deleted now and this survived it untouched, which is the
+# stronger form of the same claim: it answers to nothing but its own writer.
+func test_the_readout_is_a_label_of_its_own() -> void:
 	var checkout: Label = _scene.get_node("UI/Checkout")
-
-	assert_object(checkout).is_not_same(help)
-	assert_str(help.text).not_contains(Checkout.describe())
-	assert_str(help.text).contains("Battle3D")   # the help line is still built, not displaced
+	assert_object(checkout).is_not_null()
+	assert_bool(_scene.has_node("UI/Help")).override_failure_message(
+		"the top-bar help line came back -- #816 deleted it, its bindings live in Controls").is_false()
 
 
 func test_a_demo_mode_launch_still_says_which_build_it_is() -> void:
-	# demo_mode replaces the help text and hides the 2D game entirely; the checkout is orthogonal
-	# to both, and a watch-only build is exactly where "which build is this?" is hardest to answer
-	# by any other means.
+	# demo_mode hides the 2D game entirely; the checkout is orthogonal to that, and a watch-only
+	# build is exactly where "which build is this?" is hardest to answer by any other means.
 	get_tree().root.remove_child(_scene)
 	_scene.free()
 

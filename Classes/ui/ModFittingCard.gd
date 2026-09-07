@@ -52,6 +52,14 @@ var _offer_zone: GearDropZone
 var _hint: Label
 
 
+# OPAQUE, and it has to say so: the base's frame draws in the default theme panel, which is 0.6 alpha
+# (#816). This card stacks over the pre-mission screen, so a translucent frame shows that screen's
+# rows through its own -- and the ink here is the same panel every region of that screen wears, which
+# is what makes the card read as part of the same system rather than a window onto it.
+func _init() -> void:
+	panel_style = QueueStyle.panel_box()
+
+
 static func open(game_node: Node, weapon: WeaponInstance, wielder: Unit) -> ModFittingCard:
 	var card := ModFittingCard.new()
 	card._weapon = weapon

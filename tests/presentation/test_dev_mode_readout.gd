@@ -65,15 +65,14 @@ func test_the_badge_follows_the_toggle_and_not_the_board_state() -> void:
 	assert_bool(badge.visible).is_true()
 
 
-func test_the_badge_is_a_label_of_its_own_and_not_a_field_of_the_help_line() -> void:
-	# Structural, and load-bearing for the same reason the checkout readout's twin case is: the
-	# help line is rewritten wholesale in demo_mode and rebuilt on every binding change, so a
-	# dev-mode word carried inside it is one edit away from vanishing again.
-	var help: Label = _scene.get_node("UI/Help")
+# The badge is its OWN label, and #816 is what that bought. It was a field-of-the-help-line argument
+# until then; that line is deleted and the badge survived it untouched, which is the stronger form of
+# the same claim -- it answers to dev_mode_changed and to nothing else.
+func test_the_badge_is_a_label_of_its_own() -> void:
 	var badge: Label = _scene.get_node("UI/DevMode")
-	assert_object(badge).is_not_same(help)
+	assert_bool(_scene.has_node("UI/Help")).override_failure_message(
+		"the top-bar help line came back -- #816 deleted it, its bindings live in Controls").is_false()
 
 	_game.set_dev_mode(true)
 
-	assert_bool(help.visible).is_true()   # the help line is untouched by the badge's arrival
 	assert_bool(badge.visible).is_true()

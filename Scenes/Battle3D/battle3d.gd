@@ -54,14 +54,14 @@ enum View {
 # because "difficult to read" is a contrast complaint and the answer is taste -- but only the
 # ALPHA is one: the colour is black because the text is light, and the padding is not a value
 # anyone will argue about. Its setter re-applies immediately, or it is a slider that moves
-# nothing until the help line happens to be rebuilt (#264's born-dead knob).
+# nothing until the plate happens to be rebuilt (#264's born-dead knob).
 #
 # PLAIN `@export`, never `@export_range`: KnobSource.DECLARATION_LINE matches `^@export<space>var`,
 # so an annotated form has no declaration line to write back and Save would silently find nothing.
 # The row's own min/max/step is what builds the panel's slider anyway.
-@export var help_plate_alpha := 0.45: set = _set_help_plate_alpha
+@export var readout_plate_alpha := 0.45: set = _set_readout_plate_alpha
 # Breathing room around the widest line, in pixels. Constant: see above.
-const HELP_PLATE_PAD := Vector2(7.0, 5.0)
+const READOUT_PLATE_PAD := Vector2(7.0, 5.0)
 
 @onready var _main: Node = $Main
 @onready var _board_mirror: BoardMirror = $BoardMirror
@@ -73,14 +73,6 @@ const HELP_PLATE_PAD := Vector2(7.0, 5.0)
 # while it is armed and gives this back when it disarms, so orbit_button stays a real
 # inspector knob instead of a constant this file re-asserts every frame.
 @onready var _orbit_button_default: MouseButton = _rig.orbit_button
-# What the help label was last built for. The label is only worth rebuilding on a change.
-var _help_brush_armed := false
-var _help_dev_mode := false
-var _help_wheel_is_level := false
-# Which PAGE is up is a help-line input too since 2026-08-23 (SPACE spawn vs SPACE centre). It joins
-# the key rather than being read only at render: a diff key blind to one of its own render's inputs
-# is the #308 shape, and the line would sit stale until something else happened to move.
-var _help_can_spawn := false
 # Where the cursor was at the last poll. Seeded from the REAL position so the first frame
 # cannot fire a move that never happened and yank the pointer off its starting cell.
 @onready var _last_polled_mouse: Vector2 = get_viewport().get_mouse_position()
@@ -92,7 +84,6 @@ var _help_can_spawn := false
 # TRANSFORM rather than the rig's position, because yaw and zoom move the pick too and both lerp
 # for frames after the input that started them.
 @onready var _last_polled_camera: Transform3D = _camera.global_transform
-@onready var _help: Label = $UI/Help
 @onready var _checkout: Label = $UI/Checkout
 @onready var _dev_badge: Label = $UI/DevMode
 # ONE plate behind all three, not one each (#498). They are read together and sit in one corner,
@@ -113,7 +104,7 @@ var _floor_row := 0
 # would walk every column of the board each time the mouse moves.
 var _board_rect := Rect2i()
 var _pointer_cell: Vector3i = BoardSpace.NO_CELL
-# The staging this poll last drew (#521) -- its own last-drawn key, the _help_* fields' shape.
+# The staging this poll last drew (#521) -- its own last-drawn key.
 var _staged_version := 0
 var _staged_drawn: Array[Vector2i] = []
 # One GridMap per tile currently in the air (#521 slice B), and the white-out that covers the swap.
@@ -178,21 +169,18 @@ func _ready() -> void:
 	# subtree keeps no path to this scene, and a flat Main.tscn launch simply never gets a host.
 	if dev_overlay is DevOverlay:
 		(dev_overlay as DevOverlay).attach_3d_host(self)
-	_set_help_plate_alpha(help_plate_alpha)
+	_set_readout_plate_alpha(readout_plate_alpha)
 	_show_checkout()
 	game.dev_mode_changed.connect(_show_dev_badge)
 	_show_dev_badge(game.dev_mode_enabled)
 	if demo_mode:
 		_game_container.visible = false
-		_help.text = "Battle3D mirror (demo mode, read-only)  |  Q/E orbit  |  wheel zoom  |  WASD pan  |  R reset"
-		_fit_help_plate()
 	else:
 		# _apply_hosting also assigns input ownership: the 3D pick becomes the pointer
 		# source HoverPresenter reads (so hover reaches every cell, not just the ones
 		# the hidden camera shows) and the 2D game stops deriving its own board clicks.
 		_apply_hosting()
 		get_viewport().size_changed.connect(_position_pip)
-		_update_help()
 	_board_mirror.board = $Board
 	_board_mirror.staged_board = $StagedBoard
 	_unit_mirror.units_root = game.units_root
@@ -1161,59 +1149,27 @@ func _sync_brush_ghost() -> void:
 
 # The brush erases on RIGHT, so orbit steps aside to MIDDLE while it is armed — 2D and 3D keep
 # identical bindings (dev ruling), and 2D's brush already owns RMB. The BINDING is declarative
-# every frame: the rig's setter early-outs on an unchanged write and releases a live drag on a
-# real one, which is exactly why that setter exists. The LABEL is rebuilt only on the edge,
-# because it allocates a string and nothing else on this path does per frame.
+# every frame, and no edge-detection is needed for it: the rig's setter early-outs on an unchanged
+# write and releases a live drag on a real one, which is exactly why that setter exists. The four
+# last-drawn fields that used to sit here belonged to the top-bar help line, which #816 deleted --
+# they existed to keep a 140-character string off the per-frame path, and with no string to build
+# there is nothing left to debounce.
 func _sync_brush_bindings() -> void:
 	if demo_mode:
-		return   # no 2D game to ask, and the demo label is not this function's to overwrite
+		return   # no 2D game to ask
 	var armed: bool = game.dev_controller.brush_armed()
-	var dev: bool = game.game_state == game.GameState.DEV_MODE
 	# The elevation brush paints at the WHEEL's level (#260), so the camera gives the wheel up for
 	# as long as that mode is live — scoped to it, because the other three paint modes never read
 	# the wheel and would be losing zoom for nothing. Ctrl+wheel is where zoom goes meanwhile.
 	var wheel_is_level: bool = game.dev_controller.elevation_brush_live()
 	_rig.orbit_button = MOUSE_BUTTON_MIDDLE if armed else _orbit_button_default
 	_rig.wheel_zoom_enabled = not wheel_is_level
-	# The help line names the wheel and SPACE, so every MODE they depend on joins the edge — a
-	# one-shot label goes stale the moment its input starts varying, which is the trap this label
-	# already fell into once over the orbit button.
-	var can_spawn: bool = game.dev_controller.spawn_armed()
-	if armed == _help_brush_armed and dev == _help_dev_mode \
-			and wheel_is_level == _help_wheel_is_level and can_spawn == _help_can_spawn:
-		return
-	_help_brush_armed = armed
-	_help_dev_mode = dev
-	_help_wheel_is_level = wheel_is_level
-	_help_can_spawn = can_spawn
-	_update_help()
-
-
-# Every binding this label names can now CHANGE at runtime, so it is rebuilt from the live
-# state instead of snapshotted at _ready. The orbit button was already a knob the label had
-# to read — it once still said MMB after the binding was flipped — and #231 gives right-click
-# and SPACE second meanings while the brush is armed and while dev mode is up. A one-shot
-# string would tell exactly that lie again, one release later.
-func _update_help() -> void:
-	var orbit := "RMB" if _rig.orbit_button == MOUSE_BUTTON_RIGHT else "MMB"
-	# Right-click carries two verbs since #228 and the label names both in the order they fire:
-	# it leaves an open aim first, and only from a board at rest does it undo the last order.
-	var right := "RMB erase" if game.dev_controller.brush_armed() else "RMB cancel/undo"
-	# The SAME predicate the gate reads (_handle_space), never a second answer -- this line said
-	# "spawn" for every dev page while only the Spawn one could, which is the bug it was describing.
-	var space := "SPACE spawn" if game.dev_controller.spawn_armed() else "SPACE centre"
-	var wheel := "wheel level  |  Ctrl+wheel zoom" if game.dev_controller.elevation_brush_live() else "wheel zoom"
-	# The drag turns AND tilts since #586, so the line says both -- a readout that names a gesture has
-	# to name what the gesture actually does, or it goes stale against the control it describes.
-	_help.text = "Battle3D  |  LMB act  |  %s  |  %s-drag orbit/tilt  |  Q/E realign  |  %s  |  WASD pan  |  %s  |  R reset  |  F4 flat 2D  |  Shift+F4 corner" % [right, orbit, wheel, space]
-	_fit_help_plate()
 
 
 # WHICH CHECKOUT is on screen (#295) — several agents move the dev's working tree, so the build he
-# is playing is a fact worth reading rather than remembering. A LABEL OF ITS OWN, not a field of
-# the help line: that line is rebuilt from live bindings and rewritten wholesale in demo_mode,
-# while this is fixed for the process, and a suffix on a 140-character string is exactly the kind
-# of absence nobody notices. Set once — describe() names the checkout this build was LOADED from,
+# is playing is a fact worth reading rather than remembering. It was a LABEL OF ITS OWN rather than a
+# field of the top-bar help line, and #816 deleting that line is what a separate label bought: this
+# survived it untouched. Set once — describe() names the checkout this build was LOADED from,
 # and re-reading per frame would answer about the tree instead, which is a different question.
 #
 # This UI CanvasLayer sits above the 2D game's container in all three hosting views, so the
@@ -1222,35 +1178,34 @@ func _show_checkout() -> void:
 	var stamp := Checkout.describe()
 	_checkout.visible = stamp != ""
 	_checkout.text = stamp
-	_fit_help_plate()
+	_fit_readout_plate()
 
 
 # IS DEV MODE ON — the badge is PRESENT or it is not, so there is no off-state to misread. Reads
 # the INTENT off game.dev_mode_changed, never game_state == DEV_MODE: that one is derived and
 # drops out the moment any other mode is entered, so a badge on it would blink off mid-click.
 #
-# A third label in the same stack for _show_checkout's reason: this CanvasLayer draws above the 2D
-# game's container in every hosting view, so one node covers HD_2D and FLAT_2D alike (#292) --
-# and a word appended to the help line is invisible in a 140-character string, which is the
-# problem this is fixing rather than a shape to copy.
+# A label of its own for _show_checkout's reason, and it outlived the help line the same way: this
+# CanvasLayer draws above the 2D game's container in every hosting view, so one node covers HD_2D
+# and FLAT_2D alike (#292).
 func _show_dev_badge(active: bool) -> void:
 	_dev_badge.visible = active
-	_fit_help_plate()
+	_fit_readout_plate()
 
 
-# The plate is fitted to the TEXT, not to the labels (#498). Each label is authored 900px wide so a
-# rebuilt help line never reflows, which means their rects say nothing about where the words end --
-# a plate sized to them would be a bar across most of the screen. So the width comes from the font
-# measuring each live string, and the height from the authored rows, which is what keeps their
-# spacing. Hidden when nothing is showing, since an empty plate is a smudge in the corner.
+# The plate is fitted to the TEXT, not to the labels (#498). Each label is authored 900px wide, which
+# means their rects say nothing about where the words end -- a plate sized to them would be a bar
+# across most of the screen. So the width comes from the font measuring each live string, and the
+# height from the authored rows, which is what keeps their spacing. Hidden when nothing is showing,
+# since an empty plate is a smudge in the corner.
 #
-# Called from all three writers rather than polled: every one of them can change what is on screen
-# (the help line rebuilds as the brush arms, the checkout hides outside a dev build, the badge
-# toggles with dev mode), and a plate sized on a stale set is the artifact this is fixing.
-func _fit_help_plate() -> void:
+# Called from both writers rather than polled: either can change what is on screen (the checkout
+# hides outside a dev build, the badge toggles with dev mode), and a plate sized on a stale set is
+# the artifact this is fixing.
+func _fit_readout_plate() -> void:
 	var bounds := Rect2()
 	var found := false
-	for label: Label in [_help, _checkout, _dev_badge]:
+	for label: Label in [_checkout, _dev_badge]:
 		if not label.visible or label.text.is_empty():
 			continue
 		var font := label.get_theme_font(&"font")
@@ -1262,15 +1217,15 @@ func _fit_help_plate() -> void:
 	_plate.visible = found
 	if not found:
 		return
-	_plate.position = bounds.position - HELP_PLATE_PAD
-	_plate.size = bounds.size + HELP_PLATE_PAD * 2.0
+	_plate.position = bounds.position - READOUT_PLATE_PAD
+	_plate.size = bounds.size + READOUT_PLATE_PAD * 2.0
 
 
 # Writes THROUGH to the stylebox rather than storing and hoping: a knob whose value is only read
 # where the plate is built moves nothing until the next rebuild. Guarded because an @export setter
 # runs at instantiation, before @onready assigns the node -- _ready re-applies it for that case.
-func _set_help_plate_alpha(value: float) -> void:
-	help_plate_alpha = value
+func _set_readout_plate_alpha(value: float) -> void:
+	readout_plate_alpha = value
 	if _plate == null:
 		return
 	var box := _plate.get_theme_stylebox(&"panel") as StyleBoxFlat
