@@ -140,7 +140,10 @@ func _region(title: String, width: int = 0) -> Array:
 	var name_label := Label.new()
 	name_label.text = title
 	name_label.add_theme_font_size_override("font_size", 11)
-	name_label.add_theme_color_override("font_color", QueueStyle.ink(QueueStyle.Role.HEADER_TEXT))
+	# FRAME_TEXT: a region's ground is panel_box(), the dark frame in BOTH palettes -- so this header
+	# is the one muted text on this screen that must NOT invert. HEADER_TEXT is paper ink and read as
+	# brown-on-brown here (#814); the count beside it already had the frame's answer, TITLE_TEXT.
+	name_label.add_theme_color_override("font_color", QueueStyle.ink(QueueStyle.Role.FRAME_TEXT))
 	name_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	header.add_child(name_label)
 	var count := Label.new()
@@ -209,7 +212,7 @@ func _build_stash() -> Control:
 	_stash_hint = Label.new()
 	_stash_hint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	_stash_hint.add_theme_font_size_override("font_size", 10)
-	_stash_hint.add_theme_color_override("font_color", QueueStyle.ink(QueueStyle.Role.HEADER_TEXT))
+	_stash_hint.add_theme_color_override("font_color", QueueStyle.ink(QueueStyle.Role.FRAME_TEXT))
 	parts[1].add_child(_stash_hint)
 	return panel
 
@@ -358,6 +361,7 @@ Requires: %s" % armor.requirement_text()
 		label.clip_text = true
 		label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		label.add_theme_font_size_override("font_size", 11)
+		label.add_theme_color_override("font_color", QueueStyle.ink(QueueStyle.Role.BODY_TEXT))
 		line.add_child(label)
 		# A stash weapon opens the fitting card too (#732) -- the same chip the cards carry, and the
 		# card handles a wielder-less weapon by reading its proficiency as unreduced.
@@ -579,14 +583,14 @@ func _refresh_hint() -> void:
 	if _hover_note != "":
 		_stash_hint.text = _hover_note
 		_stash_hint.add_theme_color_override("font_color",
-			QueueStyle.ink(QueueStyle.Role.ROW_REFUSED_BORDER))
+			QueueStyle.ink(QueueStyle.Role.FRAME_REFUSED_TEXT))
 		return
 	if _last_refusal != "":
 		_stash_hint.text = _last_refusal
 		_stash_hint.add_theme_color_override("font_color",
-			QueueStyle.ink(QueueStyle.Role.ROW_REFUSED_BORDER))
+			QueueStyle.ink(QueueStyle.Role.FRAME_REFUSED_TEXT))
 		return
-	_stash_hint.add_theme_color_override("font_color", QueueStyle.ink(QueueStyle.Role.HEADER_TEXT))
+	_stash_hint.add_theme_color_override("font_color", QueueStyle.ink(QueueStyle.Role.FRAME_TEXT))
 	if _selected_item == null:
 		_stash_hint.text = "Click a piece of gear, then click where it should go. Or drag it."
 		return
