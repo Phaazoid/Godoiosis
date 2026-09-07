@@ -6,8 +6,8 @@
 
 [resource]
 script = ExtResource("2_8kqck")
-id = "Water Wallker"
-display_name = "Water Wallker"
+id = "Water Walker"
+display_name = "Water Walker"
 stat_nudges = Dictionary[int, int]({
 4: 3
 })
