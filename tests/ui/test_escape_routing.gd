@@ -281,6 +281,56 @@ func test_a_pass_parks_on_the_pause_menu_and_resumes_when_it_closes() -> void:
 		"the beat never resumed after the card closed -- the park does not let go").is_true()
 
 
+# --- the restore, which the park makes racy for the first time --------------------------------
+
+# A pass that FINISHES under the card writes its own state, and putting the stashed one back over
+# that is the "leaves the board locked for good" failure the GLOSSARY and REPORT arms already carry
+# warnings about -- arriving by a new road, because until #723 Esc could not reach a running board.
+#
+# The finish is simulated by writing the state while the card is up: driving a real pass to its end
+# behind a modal is not something a headless run can stage (Pacing collapses every beat to zero),
+# and what is under test is the RESTORE, not the pass. The close is real.
+func test_a_state_written_while_the_card_is_up_survives_the_close() -> void:
+	mc._close_mission_select()
+	game.game_state = game.GameState.AI_TURN
+	await await_idle_frame()
+
+	await _press_escape()
+	var menu: Node = _modal_of(PauseMenu)
+	assert_object(menu).is_not_null()
+	assert_int(game.game_state).override_failure_message(
+		"the card did not lock the board, so there is no stashed state to clobber"
+	).is_equal(game.GameState.MENU)
+
+	# The pass ends underneath the card and hands the board back.
+	game.game_state = game.GameState.IDLE
+	menu.chosen.emit(PauseMenu.Choice.RESUME)
+	await _frames(4)
+
+	assert_int(game.game_state).override_failure_message(
+		"Resume put the stale AI_TURN back over the state the finished pass wrote -- the board is "
+		+ "locked with nothing running to unlock it").is_equal(game.GameState.IDLE)
+
+
+# ...and the ordinary case the guard must not have broken: with nobody else writing, Resume still
+# hands the board back exactly as it did.
+func test_resume_still_restores_the_state_escape_interrupted() -> void:
+	mc._close_mission_select()
+	game.game_state = game.GameState.MISSION_OVER
+	await await_idle_frame()
+
+	await _press_escape()
+	var menu: Node = _modal_of(PauseMenu)
+	assert_object(menu).is_not_null()
+
+	menu.chosen.emit(PauseMenu.Choice.RESUME)
+	await _frames(4)
+
+	assert_int(game.game_state).override_failure_message(
+		"Resume did not put the pre-pause state back -- the guard swallowed the ordinary restore"
+	).is_equal(game.GameState.MISSION_OVER)
+
+
 # --- the predicate the fix must NOT have narrowed ---------------------------------------------
 
 func test_the_board_lock_still_covers_every_situation_it_did() -> void:
