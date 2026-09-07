@@ -449,3 +449,36 @@ func test_a_clipped_plate_says_how_far_it_actually_drew() -> void:
 	assert_str(caption.text).not_contains("shown to")
 	plate.show_attack(_attack(1, 40))
 	assert_str(caption.text).contains("shown to %d" % ((ShapePlate.max_span() - 1) / 2))
+
+# THE WIRE (#812): the SCREEN is what hands a card the mission's mod pool, and both ends being right
+# proves nothing about the line between them -- `Loadout` carrying the pool and `offerable_for`
+# filtering by it are each pinned elsewhere, and #103 is what happens when nobody tests the join.
+#
+# It narrows the LIVE loadout rather than authoring a roster: the pool a roster resolves is already
+# covered in tests/dev/test_roster_tool.gd, and mutating a shipped .tres from a suite would pin
+# authored content besides.
+func test_the_screen_hands_the_card_the_missions_mod_pool() -> void:
+	if not await _enter_phase():
+		return
+	var weapon := _weapon()
+	if weapon == null:
+		push_warning("no weapon with mod spaces is reachable in this phase")
+		return
+	var everything := WeaponModCatalog.offerable_for(weapon.template.weapon_type)
+	if everything.size() < 2:
+		push_warning("fewer than two authored mods fit this family, so a narrowing cannot be seen")
+		return
+
+	var one: Array[WeaponModData] = [everything[everything.keys()[0]]]
+	mc.loadout().available_mods = one
+	_screen()._on_fit_requested(weapon, null)   # the screen's own door, not ModFittingCard.open
+	await await_idle_frame()
+
+	var card: ModFittingCard = null
+	for child in game.ui_layer.get_children():
+		if child is ModFittingCard:
+			card = child
+	assert_object(card).override_failure_message("the screen opened no card").is_not_null()
+	assert_int(_library_rows(card).size()).override_failure_message(
+		"the card offered the whole catalogue -- the mission's pool never reached it"
+		).is_equal(1)

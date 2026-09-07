@@ -29,7 +29,7 @@ static func check(roster: Roster) -> Array[Dictionary]:
 	for i in roster.entries.size():
 		var entry: ScenarioUnitEntry = roster.entries[i]
 		if entry == null:
-			_add(found, Severity.DEGRADES, "Entry %d is empty and will be skipped." % (i + 1))
+			_add(found, Severity.DEGRADES, "Entry %d is empty and will be skipped." % (i + 1), i)
 			continue
 		_check_one_job(entry, i, found)
 		_check_hollow_snapshot(entry, i, found)
@@ -58,7 +58,7 @@ static func _check_one_job(entry: ScenarioUnitEntry, index: int, found: Array[Di
 		return
 	_add(found, Severity.DEGRADES,
 		"%s holds %d jobs (%s) -- a roster unit carries one, and the pre-mission picker shows one."
-			% [_label(entry, index), jobs.size(), ", ".join(jobs)])
+			% [_label(entry, index), jobs.size(), ", ".join(jobs)], index)
 
 
 # The inspector's default for state_saved is TRUE, which makes this the easiest mistake in the
@@ -83,7 +83,7 @@ static func _check_hollow_snapshot(entry: ScenarioUnitEntry, index: int, found: 
 	_add(found, Severity.DEGRADES,
 		("%s is a snapshot that captured nothing, so it deploys with NO kit and NO jobs -- the "
 		+ "character's own starting kit is replaced by the empty snapshot. Did you mean a "
-		+ "reference entry (untick state_saved)?") % _label(entry, index))
+		+ "reference entry (untick state_saved)?") % _label(entry, index), index)
 
 
 # Battle-scoped fields (#87) mean nothing in a roster: a roster unit is on no board, has taken no
@@ -118,7 +118,7 @@ static func _check_battle_state(entry: ScenarioUnitEntry, index: int, found: Arr
 		return
 	_add(found, Severity.DEGRADES,
 		("%s carries battle state a roster unit cannot have (%s) -- it would be replayed onto the "
-		+ "unit the moment it deploys.") % [_label(entry, index), ", ".join(set_fields)])
+		+ "unit the moment it deploys.") % [_label(entry, index), ", ".join(set_fields)], index)
 
 
 # Names the character when it can, since that is what the author is looking for in the inspector.
@@ -128,5 +128,9 @@ static func _label(entry: ScenarioUnitEntry, index: int) -> String:
 	return "Entry %d" % (index + 1)
 
 
-static func _add(found: Array[Dictionary], severity: Severity, text: String) -> void:
-	found.append({"severity": severity, "text": text})
+# `entry` is which roster entry the finding is ABOUT, or -1 for one about the file as a whole.
+# Additive since #812 and read only by the roster editor, which draws a mark beside the row: the CI
+# sweep and every other caller take severity and text and are unaffected. The index rather than the
+# entry itself, because a caller holding the roster can resolve one and a serialized finding cannot.
+static func _add(found: Array[Dictionary], severity: Severity, text: String, entry := -1) -> void:
+	found.append({"severity": severity, "text": text, "entry": entry})

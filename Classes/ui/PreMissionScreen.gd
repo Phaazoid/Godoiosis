@@ -507,7 +507,12 @@ func _on_begin() -> void:
 # swapping the board in behind it. On the way out the screen redraws: a fitted mod moves WT, DEF, the
 # ability chips and the stat grid, and every one of those is read rather than stored.
 func _on_fit_requested(weapon: WeaponInstance, owner_unit: Unit) -> void:
-	var card := ModFittingCard.open(_controller.game, weapon, owner_unit)
+	# The mission's own mod pool (#812), off the Loadout rather than the Roster: deploy_roster drops
+	# the resolved resource once it has built the phase's gear, so this is the only thing still
+	# holding the answer by the time a card opens. Empty = every authored mod, which is every board
+	# that names no roster.
+	var card := ModFittingCard.open(_controller.game, weapon, owner_unit,
+			_controller.loadout().available_mods)
 	card.closed.connect(_redraw)
 
 

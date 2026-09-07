@@ -23,16 +23,34 @@ extends RefCounted
 
 var stash: Array[Item] = []
 
+# WHICH MODS THIS MISSION OFFERS (#812) -- the fitting card's library, before the family filter.
+#
+# It lives here because this is the one phase object that OUTLIVES THE DRAW: deploy_roster resolves
+# the Roster, builds this, and drops the resource, so a card opened minutes later has nothing else to
+# ask. The stash is here for exactly that reason and the mods arrived at the same door.
+#
+# SHARED REFS, not copies, and that is the opposite of the stash one line up -- deliberately. A stash
+# item is OWNED by whoever holds it and moves between owners, so the phase needs its own; a mod is a
+# shared authored definition that a weapon POINTS AT, and WeaponModData.copy_for_grant() answers with
+# itself precisely so fitting cannot fork one (#732).
+var available_mods: Array[WeaponModData] = []
+
 
 # Copies, never the authored array -- see the header. A null entry is authoring noise and is dropped
 # rather than carried as a hole, since the stash is a list the player reads, not a slot grid.
+#
+# Both lists come off the ROSTER'S accessors rather than its fields, so "or everything" is resolved
+# once, where it is declared, instead of by every reader asking about a flag (#812).
 static func from_roster(roster: Roster) -> Loadout:
 	var made := Loadout.new()
 	if roster == null:
 		return made
-	for item: Item in roster.stash:
+	for item: Item in roster.offered_stash():
 		if item != null:
 			made.stash.append(item.copy_for_grant())
+	for mod: WeaponModData in roster.offered_mods():
+		if mod != null:
+			made.available_mods.append(mod)
 	return made
 
 

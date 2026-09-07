@@ -485,7 +485,12 @@ func deploy_roster(staged: PreMissionSnapshot = null) -> int:
 	if roster == null:
 		return 0
 
-	var unit_of_entry: Dictionary = _draw_reserve(roster)
+	# RESOLVED ONCE and passed to both walks (#812). offered_entries() SYNTHESIZES entries when the
+	# roster says "every character", so two calls would hand back two sets of objects -- and
+	# _stand_authored keys unit_of_entry BY THE ENTRY, so every lookup would miss and nobody would
+	# stand. A resolved list is a value; asking twice is asking a different question.
+	var entries: Array[ScenarioUnitEntry] = roster.offered_entries()
+	var unit_of_entry: Dictionary = _draw_reserve(roster, entries)
 
 	var deployed := 0
 	if staged != null and staged.fits(_roster_units):
@@ -499,7 +504,7 @@ func deploy_roster(staged: PreMissionSnapshot = null) -> int:
 			# whole roster sitting in reserve and the defeat floor waiting.
 			push_warning("Pre-mission: no staged cell is open any more -- drawing the mission's own")
 	if deployed == 0:
-		deployed = _stand_authored(roster, unit_of_entry)
+		deployed = _stand_authored(entries, unit_of_entry)
 
 	if deployed > 0:
 		# apply_scenario's own last two calls, repeated because the board has mutated AGAIN since it
@@ -519,11 +524,11 @@ func deploy_roster(staged: PreMissionSnapshot = null) -> int:
 #
 # Returns the entry -> reserve Unit pairing the authored walk needs; the staged one indexes
 # _roster_units directly, since its rows are the draw order rather than the roster's.
-func _draw_reserve(roster: Roster) -> Dictionary:
+func _draw_reserve(roster: Roster, entries: Array[ScenarioUnitEntry]) -> Dictionary:
 	var unit_of_entry: Dictionary = {}   # ScenarioUnitEntry -> its reserve Unit
 	_roster_units.clear()
 	_loadout = Loadout.from_roster(roster)
-	for entry: ScenarioUnitEntry in roster.entries:
+	for entry: ScenarioUnitEntry in entries:
 		# The same skip PreMission.deployment_plan makes, so the two loops agree about who exists.
 		if entry == null or entry.unit_data == null:
 			continue
@@ -543,9 +548,9 @@ func _draw_reserve(roster: Roster) -> Dictionary:
 
 # The mission's OWN opening position: PreMission's pure walk, stood up on cells this host has
 # already judged. What every first arrival takes.
-func _stand_authored(roster: Roster, unit_of_entry: Dictionary) -> int:
+func _stand_authored(entries: Array[ScenarioUnitEntry], unit_of_entry: Dictionary) -> int:
 	var deployed := 0
-	for row: Dictionary in PreMission.deployment_plan(roster.entries, open_deployment_cells(),
+	for row: Dictionary in PreMission.deployment_plan(entries, open_deployment_cells(),
 			game.scenario_manager.current_deployment_cap):
 		var entry: ScenarioUnitEntry = row[PreMission.ENTRY]
 		var unit: Unit = unit_of_entry.get(entry)
