@@ -24,10 +24,10 @@ func test_aoe_counter_splashes_friendlies_in_the_blast() -> void:
 	var counterer := H.spawn_solo(self, _sm, ENEMY, Vector2i(1, 0))
 	var ally := H.spawn_solo(self, _sm, ENEMY, Vector2i(-1, 0), {}, false)   # weaponless: a victim, never a counterer
 	_sm.join_squad(ally, counterer.squad)
-	# The aimed cell plus the one beyond it, along the aim -- a two-cell blast, so the test exercises
-	# the volley and not the geometry. A stamp turns with the aim, which on this axis-aligned board is
-	# exactly what the retired hand-rolled pattern spelled as a fixed world direction.
-	var blast: Array[Vector2i] = [Vector2i.ZERO, Vector2i(0, -1)]
+	# The aimed cell plus the one beside it -- a two-cell blast, so the test exercises the volley and
+	# not the geometry. An ANCHORED stamp does not turn (#818), so an offset here IS a board offset,
+	# which is the retired hand-rolled pattern's own spelling given back to it.
+	var blast: Array[Vector2i] = [Vector2i.ZERO, Vector2i.LEFT]
 	P.stamped((counterer.get_equipped_weapon() as WeaponInstance).template.main_attack, 3, blast)
 	(counterer.get_equipped_weapon() as WeaponInstance).template.main_attack.hits_allies = true
 
@@ -53,10 +53,10 @@ func test_aoe_counter_without_friendly_fire_spares_allies() -> void:
 	var counterer := H.spawn_solo(self, _sm, ENEMY, Vector2i(1, 0))
 	var ally := H.spawn_solo(self, _sm, ENEMY, Vector2i(-1, 0), {}, false)
 	_sm.join_squad(ally, counterer.squad)
-	# The aimed cell plus the one beyond it, along the aim -- a two-cell blast, so the test exercises
-	# the volley and not the geometry. A stamp turns with the aim, which on this axis-aligned board is
-	# exactly what the retired hand-rolled pattern spelled as a fixed world direction.
-	var blast: Array[Vector2i] = [Vector2i.ZERO, Vector2i(0, -1)]
+	# The aimed cell plus the one beside it -- a two-cell blast, so the test exercises the volley and
+	# not the geometry. An ANCHORED stamp does not turn (#818), so an offset here IS a board offset,
+	# which is the retired hand-rolled pattern's own spelling given back to it.
+	var blast: Array[Vector2i] = [Vector2i.ZERO, Vector2i.LEFT]
 	P.stamped((counterer.get_equipped_weapon() as WeaponInstance).template.main_attack, 3, blast)
 	(counterer.get_equipped_weapon() as WeaponInstance).template.main_attack.hits_allies = false
 

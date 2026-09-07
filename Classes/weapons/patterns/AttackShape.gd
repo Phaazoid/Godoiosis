@@ -15,12 +15,20 @@ class_name AttackShape
 # Authored in grid space where UP is forward (dev, 2026-09-06: "the top half of the grid
 # intuitively represents forward"), on the Attack Editor's clickable grid (#804). Offsets are
 # relative to the ANCHOR, and what the anchor IS -- the attacker, or the aimed cell -- is a RANGE
-# question, so AttackData answers it (is_directional, grid_caption) and this class never asks.
+# question, so AttackData answers it (is_directional, grid_caption, grid_up_label) and this class
+# never asks. WHETHER the stamp turns is that same question: a self-anchored attack rotates it to
+# the facing, an anchored one places it as drawn with grid-up reading as board north (#818).
 #
 # EMISSION ORDER IS A RULE (dev, 2026-09-06): cells come NEAR TO FAR along the facing, then left to
 # right across it. Victim order is volley order, so this reproduces the retired classes' sequences
 # cell for cell; and Reach._truncate (#756) needs a predecessor emitted before its successor, which
 # the sort guarantees for any stamp.
+#
+# For an ANCHORED shape "the facing" is grid-up, so that same sort reads out in BOARD terms: the
+# southern row first, then northward, west to east within a row. Still one rule and still fully
+# deterministic (law #1), but it is no longer *nearest the attacker first* -- an anchored footprint
+# has no attacker in it to be near. Ordering a placed blast outward from where it LANDS is a spread
+# question and belongs to #805, not to a sort that cannot see the origin.
 #
 # A stamp is a SET -- a duplicated offset counts once. The centre is a legal member (dev,
 # 2026-09-06): at range 0 it is the attacker's own cell in the footprint, and whether they are then
@@ -42,6 +50,9 @@ const FORWARD := Vector2i.UP
 # forward as -y and right as +x; world space uses the facing and its right-hand perpendicular --
 # the `side` the retired wide pattern used -- so a stamp is ROTATED, never mirrored, and a row
 # authored left to right stays left to right from the shooter's point of view.
+#
+# `dir` is FORWARD for every anchored placement since #818, which is a rotation by zero: the maths
+# is unchanged and the shape simply lands as drawn.
 func place(anchor: Vector2i, dir: Vector2i) -> Array[Vector2i]:
 	var side := Vector2i(-dir.y, dir.x)
 	var keyed: Dictionary[Vector2i, Vector2i] = {}   # (forward, across) -> world cell; a set, so a duplicate folds
@@ -63,7 +74,7 @@ func place(anchor: Vector2i, dir: Vector2i) -> Array[Vector2i]:
 static func property_tips() -> Dictionary:
 	return {
 		"display_name": "What this shape is called in the Attack Editor's shape picker. Name it after the SHAPE, not the attack that first used it -- other attacks will pick it up.",
-		"stamp": "The cells the attack COVERS once aimed, as offsets from where it lands. Click them on the grid: the centre is where the attack lands and the top of the grid is FORWARD, so the cell above the centre is one ahead. The whole shape turns to face the aim. An empty stamp covers nothing.",
+		"stamp": "The cells the attack COVERS once aimed, as offsets from where it lands. Click them on the grid: the centre is where the attack lands, and the cell above it is one step toward the top of the grid.\nWhat the top MEANS depends on the attack's range. Max range 0 = the attacker's FACING, and the whole shape turns to wherever they point. Any other range = board NORTH, and the shape lands exactly as drawn however you aim it.\nAn empty stamp covers nothing.",
 	}
 
 

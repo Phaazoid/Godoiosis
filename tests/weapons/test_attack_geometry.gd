@@ -89,21 +89,42 @@ func test_the_union_over_facings_is_what_the_overlay_draws() -> void:
 	assert_array(cells).contains_exactly_in_any_order([U, U * 2, D, D * 2, L, L * 2, R, R * 2])
 
 
-func test_an_anchored_stamp_lands_on_the_aimed_cell_turned_away_from_the_attacker() -> void:
+func test_an_anchored_stamp_lands_on_the_aimed_cell_UNTURNED() -> void:
+	# #818, and the whole of it: a placed shape never turns. What the grid draws is what the board
+	# gets, wherever the attacker is standing -- the direction model is for self-anchored attacks,
+	# where the aim IS a direction.
 	var o := Vector2i.ZERO
-	# A cross at range 2: symmetric, so the turn is invisible and the shape simply sits on the aim.
+	# A cross at range 2: symmetric, so it could not tell turned from unturned either way.
 	var plus: Array[Vector2i] = [Vector2i.ZERO, U, D, L, R]
 	var cross := P.stamped(_attack(), 2, plus)
 	var t := Vector2i(2, 0)
 	assert_array(_affected(cross, o, t)).contains_exactly_in_any_order([t, t + U, t + D, t + L, t + R])
-	# The hook at range 3 aimed straight down shows the turn: forward is AWAY from the attacker.
+
+	# The asymmetric hook is what can. Aimed straight DOWN it lands grid-up regardless: two cells
+	# NORTH of the aim and the hook's tip east of the far one. Turned, it would run further south
+	# and hook west -- which is exactly what this attack used to do.
 	var hook := _hook(3)
 	var down := Vector2i(0, 3)
-	assert_array(_affected(hook, o, down)).contains_exactly([Vector2i(0, 4), Vector2i(0, 5), Vector2i(-1, 5)])
+	assert_array(_affected(hook, o, down)).override_failure_message(
+		"an anchored shape turned to face the aim -- #818 says it lands as drawn"
+	).contains_exactly([Vector2i(0, 2), Vector2i(0, 1), Vector2i(1, 1)])
+
+	# LEFT and RIGHT land the same footprint on the same cell, which is the property in one line:
+	# where the attacker stands cannot change the shape any more.
+	assert_array(_affected(hook, Vector2i(3, 3), down)).contains_exactly(_affected(hook, Vector2i(-3, 3), down))
+
 	# The aim itself is the RING, not the stamp: the aimed cell is selectable, the cell beyond is not.
 	var ring := _selectable(hook, o, down)
 	assert_bool(ring.has(down)).is_true()
 	assert_bool(ring.has(Vector2i(0, 4))).is_false()
+
+
+func test_a_self_anchored_stamp_still_turns() -> void:
+	# The other half of the same rule, stated where the flip above cannot hide it: the direction
+	# model survives untouched wherever the aim genuinely IS a direction.
+	var hook := _hook()
+	var o := Vector2i(5, 5)
+	assert_array(_affected(hook, o, o + R)).contains_exactly([Vector2i(6, 5), Vector2i(7, 5), Vector2i(7, 6)])
 
 
 func test_emission_runs_near_to_far_then_left_to_right() -> void:
@@ -135,7 +156,9 @@ func test_a_duplicated_offset_counts_once() -> void:
 
 
 func test_an_aim_at_the_attackers_own_cell_places_the_stamp_unturned() -> void:
-	# min_range 0 is authored content (a self-heal). No cardinal, so grid-up stays forward.
+	# min_range 0 is authored content (a self-heal). It used to need a clause of its own -- no
+	# cardinal to turn to -- and since #818 it is just the anchored rule applied at range zero. Kept
+	# because the self-aim is a real authored state worth pinning, not because it is special.
 	var o := Vector2i(4, 4)
 	var cells: Array[Vector2i] = [Vector2i.ZERO, U]
 	var attack := P.stamped(_attack(), 2, cells, 0)
