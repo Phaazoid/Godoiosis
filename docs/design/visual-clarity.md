@@ -2728,16 +2728,57 @@ whoever reorders it should know: `ModalCard._build_button_row` offers **one** `B
 separation, so grouping into blocks is real work; and `tests/ui/test_pause_menu.gd` fires `chosen`
 directly by design, so it asserts **nothing** about row order in either direction.
 
-**3. `menu_is_up()` covers two states, and one reader's justification only holds for one of them
-([#723](https://github.com/Phaazoid/Godoiosis/issues/723)).** Esc at the title screen opens a **bug report
-card**, defaulted to `Kind.BUG`. The chain is legitimate at every step — `open_mission_select` sets `MENU`;
-`MissionSelectScreen` deliberately does not claim `ModalLock` (load-bearing, pinned); so `game._input`
-still runs and takes the locked-board branch. What went stale is the comment above it: *"an AI turn, a
-finished mission, or the menu — exactly the moments a stranger most wants to complain."* True of the first
-two. The title screen is the third, and a stranger who has just booted the game has not seen anything to
-complain about — which the same file says out loud six lines away, where the title screen's own Feedback
-button defaults to `Kind.FEEDBACK` *"because nobody reaches this screen mid-defect"*. **The predicate is
-right and only this reader is wrong**; narrow the branch, not `menu_is_up()`.
+**3. Esc opens the pause menu everywhere, except the title screen
+([#723](https://github.com/Phaazoid/Godoiosis/issues/723), BUILT 2026-09-07).** Esc used to fork on
+`_board_locked_for_player()` and open a **bug report card**, defaulted to `Kind.BUG`, on the far side. The
+chain was legitimate at every step — `open_mission_select` sets `MENU`; neither `MissionSelectScreen` nor
+`PreMissionScreen` claims `ModalLock` (both load-bearing, both pinned); so `game._input` kept running and
+took the locked-board branch. What went stale is the comment above it: *"an AI turn, a finished mission,
+or the menu — exactly the moments a stranger most wants to complain."* That predicate covers **four**
+situations, not the three it names, and the justification held for one of them.
+
+The dev found it twice (*"it happens not only in the start menu now, but also in the pre mission modal"*)
+and ruled **truly everywhere**, with one carve-out: at the title screen Esc does nothing, because that
+screen already **is** the menu — its Load, Glossary, Settings, Feedback and Quit rows are on display
+behind any card that would open over them. `MissionController.mission_select_is_up()` is the carve-out's
+predicate, and it asks which SCREEN is up, which is a different question from whether the board is the
+player's to click. **`menu_is_up()` and `_board_locked_for_player()` are NOT narrowed** — they are right
+about their nine other readers, and only this one was wrong.
+
+**Three things that ticket paid for, none of which the filing predicted.**
+
+**(a) A freeze has never stopped a coroutine.** `ModalLock` disables the *Game node*, deliberately (see
+its own header), while every wait in `Pacing` is a `SceneTreeTimer` owned by the *tree* with
+`process_always` — so an AI pass would have played on behind a card calling itself PAUSED. `Pacing.beat`
+parks while a modal is up, and it sits **above** the headless escape rather than below it: everything past
+that line is invisible to a headless suite, so a park written below it could not be tested and a mutant
+deleting it would pass. The pause menu additionally greys Restart / Save / Load / Return to Title
+mid-pass with reasons (#166), because those free the Unit nodes the parked coroutine resumes into (#107).
+Neither half is redundant — parking alone still resumes into a freed board, greying alone leaves the
+battle playing.
+
+**(b) A card that gates on state its own opener just wrote is asking the wrong moment.**
+`_open_pause_menu` sets `game_state = MENU` on the way in, and `playback_owns_board()` reads `game_state`
+— so by the time the card built, an AI turn no longer looked like one and the gate above greyed nothing.
+`mid_pass` is read before the write and PASSED. Found by the test, not by review.
+
+**(c) The restore became racy the moment Esc could reach a running board.** A pass that finishes under
+the card writes its own state, and putting the stashed one back over it is the *"leaves the board locked
+for good"* failure the GLOSSARY and REPORT arms already carry warnings about, arriving by a new road.
+`game._restore_state` guards all six sites on `game_state == MENU` — still MENU means the restore is ours
+to make.
+
+**The title screen's own feedback door was below the bottom edge, and that is #418's bug one screen
+over.** The dev asked for *"a dedicated feedback option on the title screen"*; one had existed since #131.
+`ModalCard`'s unframed path returns a bare `CenterContainer`, which centres its child at the child's
+**minimum** size and lets it overflow both edges with no scrollbar — measured at **778px against a 720px
+design space** with no save on disk, 832 with one, so *Send Feedback* and *Quit Game* sat off the bottom.
+**Not window-size dependent**, which is what made it worth fixing rather than shrugging at: `GameSurface`
+lays the UI out in a fixed design space that is exactly 1280×720 for **any** 16:9 window, so a maximised
+1440p monitor has the same 720px to spend as the editor does. The frame step is overridden to a full-rect
+`MarginContainer` and the mission list expands into whatever the fixed rows leave — the list is the right
+part to give, being the only region that can scroll, and a row added later (#724's reorder) now costs list
+height instead of falling off. Pinned as a property against the viewport's own height, never a pixel count.
 
 ## The queue panel's chrome ([#685](https://github.com/Phaazoid/Godoiosis/issues/685), BUILT 2026-09-03)
 

@@ -512,7 +512,26 @@ static func coda_linger(type: BaseAction.ActionType) -> float:
 	return -1.0
 
 
+# THE PAUSE POINT, as well as the pacing one (#723). Esc now opens the pause menu during an AI
+# turn, and a menu that lets the battle play on behind it is not a pause -- so playback yields here,
+# at the beat it was going to take anyway, and picks up where it left off when the card closes.
+#
+# ModalLock is NOT enough on its own, and this is the measured reason: it disables the GAME NODE
+# rather than pausing the tree (deliberately -- see ModalLock's header), while every wait below is a
+# SceneTreeTimer owned by the tree, created with process_always. Those keep firing under a card. The
+# freeze stops _process loops; it has never stopped a coroutine, and the AI pass is one.
+#
+# ABOVE the headless escape, which is a correctness requirement rather than tidiness: everything
+# past that line is INVISIBLE to a headless suite, so a park written below it could not be tested
+# and a mutant deleting it would pass (#506's shape). This is the seam's one testable surface.
+#
+# Only beat() and not hitstop(): a hitstop is a fraction of a second and rides ignore_time_scale,
+# so it lands whether or not a card is up. A camera pan in flight is likewise left alone -- it is
+# bounded, and the next beat is never far behind it.
 static func beat(host: Node, seconds: float) -> void:
+	var tree: SceneTree = host.get_tree()
+	while tree != null and ModalLock.any_open(tree):
+		await tree.process_frame
 	if seconds <= 0.0 or DisplayServer.get_name() == "headless":
 		return
 	await host.get_tree().create_timer(seconds).timeout

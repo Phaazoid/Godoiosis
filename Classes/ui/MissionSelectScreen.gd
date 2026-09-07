@@ -18,6 +18,17 @@ class_name MissionSelectScreen
 # margin, the content column sits straight in the centre) and it does NOT claim ModalLock -- it is
 # not a modal, and a Game left DISABLED behind it would never run the mission picked next
 # (pinned by test_return_to_title_lands_on_the_menu_with_the_game_thawed).
+#
+# IT OVERRIDES THE FRAME STEP so the column FILLS the height instead of shrink-wrapping (#723).
+# The base's unframed path returns a bare CenterContainer, which centres its child at the child's
+# MINIMUM size -- so a column taller than the viewport overflows BOTH edges with no scrollbar, and
+# the rows added last are the ones that fall off. Measured at 778px against a 720px design space
+# with no save on disk, 832 with one: "Send Feedback" and "Quit Game" were below the bottom edge,
+# which is why the title screen read as having no feedback door at all. #418's bug, one screen over.
+#
+# This is NOT window-size dependent, and that is why it needed fixing rather than shrugging at:
+# GameSurface lays the UI out in a fixed DESIGN space (#659) that is exactly 1280x720 for ANY 16:9
+# window, so a maximised 1440p monitor has the same 720px to spend as the dev's editor does.
 
 signal mission_chosen(path: String)
 signal load_game_chosen
@@ -68,14 +79,35 @@ func _build_branding() -> void:
 	add_child(version)
 	version.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_RIGHT, Control.PRESET_MODE_MINSIZE, 12)
 
+# Full-rect instead of the base's CenterContainer, so the column has the whole viewport to lay out
+# in and the list below can absorb whatever the fixed rows leave. See the header for what the
+# shrink-wrapped version did. Horizontal centring moves to the column itself, in _build.
+func _build_frame() -> Container:
+	var frame := MarginContainer.new()
+	frame.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	frame.add_theme_constant_override("margin_top", margin_v)
+	frame.add_theme_constant_override("margin_bottom", margin_v)
+	frame.mouse_filter = Control.MOUSE_FILTER_IGNORE   # never eat a click meant for a button
+	add_child(frame)
+	return frame
+
 func _build(mission_paths: Array[String], other_paths: Array[String]) -> void:
 	var column := _build_chrome()
+	# The centring the CenterContainer used to do, on the axis that still wants it. Vertically the
+	# column now FILLS, which is the whole point of the frame override.
+	column.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 	_build_title(column, "SELECT MISSION")
 
 	# The list scrolls: scenarios + fixtures accumulate, and an unbounded column would run off
 	# the viewport with no way to reach the bottom entries.
+	#
+	# ITS HEIGHT IS WHAT THE FIXED ROWS LEAVE, never a number of its own (#723). A fixed 420 here
+	# is what pushed the column past the bottom edge, and any row added below -- #724's reorder,
+	# a new page -- would have pushed it further with nothing to notice. Expanding instead means
+	# the list is the part that gives, which is right: it is the only region that can scroll.
 	var scroll := ScrollContainer.new()
-	scroll.custom_minimum_size = Vector2(BUTTON_WIDTH + 16, 420)
+	scroll.custom_minimum_size = Vector2(BUTTON_WIDTH + 16, 0)
+	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
 	column.add_child(scroll)
 

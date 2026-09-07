@@ -91,7 +91,7 @@ func _assert_chrome(card: ModalCard, expected_z: int) -> void:
 func test_pause_menu_fills_the_viewport_locks_and_outranks_the_hover_panel() -> void:
 	var menu := PauseMenu.new()
 	game.ui_layer.add_child(menu)
-	menu._build(true, true, game)
+	menu._build(true, true, game, false)
 	await _frames(4)
 
 	_assert_chrome(menu, UiLayers.MODAL_CARD)

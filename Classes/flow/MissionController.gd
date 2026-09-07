@@ -197,6 +197,19 @@ func _close_mission_select() -> void:
 		_select_screen.queue_free()
 	_select_screen = null
 
+# Is the title screen the surface on screen? Esc's ONE exception (#723). Everywhere else it opens
+# the pause menu; here it does nothing, because this screen already IS that menu -- Load, Glossary,
+# Settings, Feedback and Quit are rows on it, so a pause card over it would be a second copy of a
+# list the player is looking at.
+#
+# EXISTENCE, not visibility, unlike deployment_menu_is_up() next door: that screen is hidden and
+# kept so the player can look at the board behind it, and this one is freed when it closes.
+#
+# A separate question from menu_is_up(), not a second answer to it: that one asks whether the board
+# is the player's to click, which is true of this screen and three other situations besides.
+func mission_select_is_up() -> bool:
+	return is_instance_valid(_select_screen)
+
 # The one path-taking mission entry, public since #220 — the Mission Select signal
 # and the Battle3D driver both start missions through this door.
 func begin_mission(path: String, armed := true) -> void:
