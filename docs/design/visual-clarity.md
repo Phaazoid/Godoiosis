@@ -7,7 +7,7 @@ its child [#49 Action Queue UX](https://github.com/Phaazoid/Godoiosis/issues/49)
 This is a *guidelines* doc, not a spec — it captures the principles we're holding the work to,
 plus the running order of the queue-UX checklist. Update it as items land.
 
-**Canon checked through #814 (2026-09-07).**
+**Canon checked through #816 (2026-09-07).**
 
 ## Principles
 
@@ -2663,7 +2663,7 @@ parent to `dialogic.get_parent()`), outside the SubViewport entirely — so the 
 physical pixels on a big screen while everything around it scales. Filed rather than fixed here:
 re-homing it into `ui_layer` drags in the #370 synthesized-click behaviour, the
 `DialogFixtures.end_all_dialog` teardown, and whether a dialog inside ModalLock's frozen subtree
-freezes itself. `Battle3D`'s own root readouts — the help line, checkout stamp and dev badge — do
+freezes itself. `Battle3D`'s own root readouts — the checkout stamp and dev badge, the help line having gone in #816 — do
 not scale either, and stay that way on purpose: the whiteout transition shares their CanvasLayer and
 must cover the real window.
 

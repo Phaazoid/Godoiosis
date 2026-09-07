@@ -62,6 +62,12 @@ var margin_v: int = 32
 var content_separation: int = 16
 var content_alignment: BoxContainer.AlignmentMode = BoxContainer.ALIGNMENT_CENTER
 var framed: bool = true                             # false = no panel/margin (full-screen takeover)
+# The frame's own fill. Null takes Godot's DEFAULT theme panel, which is dark at 0.6 ALPHA -- so a
+# framed card is see-through unless it says otherwise, and whatever is behind it reads through the
+# words (#816, dev: "the panel itself is see-through, which is odd and distracting"). It is worst on a
+# card stacked over another surface, since the backdrop's dim is then the only thing separating them.
+# A FIELD rather than a _build_frame override, because that is what this class says styling is.
+var panel_style: StyleBox = null
 var title_font_size: int = 32
 var title_color: Color = Color.WHITE
 var button_size: Vector2 = Vector2(160, 44)
@@ -110,6 +116,8 @@ func _build_frame() -> Container:
 		return center
 
 	var panel := PanelContainer.new()
+	if panel_style != null:
+		panel.add_theme_stylebox_override("panel", panel_style)
 	center.add_child(panel)
 
 	var margin := MarginContainer.new()
