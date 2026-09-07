@@ -2,7 +2,7 @@
 
 **Status: ALL FOUR SLICES BUILT 2026-07-28 ([#96](https://github.com/Phaazoid/Godoiosis/issues/96)).** Filed 2026-07-27, when the project acquired a win condition for the first time. Before this, Iosis had ten interlocking systems and no way to finish a battle — which meant a design question could be answered *"is this coherent?"* but never *"does this improve play?"*
 
-**Canon checked through #823 (2026-09-07).**
+**Canon checked through #828 (2026-09-07).**
 
 ## What a mission is
 
@@ -193,7 +193,7 @@ sentence stays on the card, where there is a unit to validate against.
 
 A weapon row in a unit card or in the stash carries a **chip** reading `1/3` — **occupied spaces over spaces**, the dev's own framing (*"I like 1/3 mod spaces"*), and deliberately not a count of mods, which can print `4/3` since one capacity-3 space holds three size-1 mods. Pressing it opens `ModFittingCard`: the weapon's spaces down the left with what is in them, the mods that fit its family down the right, and one line of hint carrying the last refusal in the model's own words. Dragging and clicking both work, through the same pair of callables, because `GearDropZone` judges nothing and the rule is `WeaponInstance.fit_block_reason` either way.
 
-**The source is the WHOLE AUTHORED CATALOG** (dev, 2026-09-06: *"Perhaps we start this simple with the whole authored catalog, and file a followup issue for controlling what items/mods are in a scenario"*). So fitting is free and unlimited today; [#812](https://github.com/Phaazoid/Godoiosis/issues/812) is where a mission gets to say what it offers, for mods and for stash items together. The filter is `WeaponModCatalog.offerable_for`, shared with the Item Editor's own picker rather than copied beside it — same source, same question.
+**The source WAS the whole authored catalog** (dev, 2026-09-06: *"Perhaps we start this simple with the whole authored catalog, and file a followup issue for controlling what items/mods are in a scenario"*) and is the MISSION'S POOL since [#812](https://github.com/Phaazoid/Godoiosis/issues/812) — see *The roster editor* below. The filter is `WeaponModCatalog.offerable_for`, shared with the Item Editor's own picker rather than copied beside it — same source, same question — and it takes the pool as a parameter, because family is a fact about the weapon and availability a fact about the mission.
 
 **Loose mods do NOT go in the stash** (dev: *"If an item can't be carried, I don't think they should go in the stash. Stash is for inventory editing purposes"*), and a unit is refused one outright — *"Maybe later down the line they are lootable on the battlefield, but for now, eh"*. That refusal lives on `Unit.add_block_reason`, the one gate a unit takes anything through, so the click path, the drag path and the row tooltip cannot word it differently.
 
@@ -230,6 +230,30 @@ A weapon row in a unit card or in the stash carries a **chip** reading `1/3` —
 **The stash is copied out as well as in.** The unit side gets that free, but without it the buffer would hand the player the very objects it is holding — and a mod fitted to a stash weapon afterwards would come back inside the buffer on the next replay. Narrow, and reachable: an in-phase restart drops the buffer and a commit re-takes it, so the door in between is re-entering the same mission from the title.
 
 **Declared out:** a squad built ACROSS a roster unit and an authored player unit comes back with the roster half solo — the residual `capture_scenario` already owns for authored saves, and unreachable in shipped content, Level_1's authored cast being entirely ENEMY.
+
+### The roster editor ([#812](https://github.com/Phaazoid/Godoiosis/issues/812), 2026-09-07)
+
+`Roster` was already the whole answer to *what does this mission offer* — `entries` and `stash`, addressed by filename, bound to a scenario by `ScenarioData.roster`. What #735 shipped without was any way to edit one: *"rosters are hand-authored in the inspector until #731's deferred dev tab"*. This is that tab, at **Project ▸ Rosters**, and it is `RosterLint`'s first caller outside CI.
+
+The dev re-scoped the ticket onto it: *"what I actually need is a way to edit what from the total pool of resources, both units and items, is available in any given scenario for choosing."*
+
+**THREE COLUMNS, AND EACH ONE IS THE WHOLE CATALOGUE.** He asked to see what is available and what is already chosen at the same time; listing everything with the chosen floated above a rule answers that for nothing, and deletes the picker and the Add button on the way — ticking an unchosen row IS the add. Each column scrolls on its own, so the page never does.
+
+**Entries are DIRECT REFS, never copies** — the Attack Editor's `_populate_extras` rule, load-bearing twice here: a copy serializes INLINE as a `sub_resource` instead of an `ext_resource` (the #177 trap, which `Company.tres` shows the right form of), and it would break `WeaponModData.copy_for_grant()`'s answer-with-itself, which is what keeps a mod's granted attacks identity-stable. `test_a_saved_roster_references_its_picks_instead_of_embedding_them` reads the saved TEXT, because that is the only place the distinction exists.
+
+**The tool only ever authors a REFERENCE entry** (dev: *"if I want different versions of the same character, I will author them specifically for different missions"*). A roster already holding a snapshot loads, lists it, and wears its lint mark; nothing here makes one.
+
+**THE STASH COUNTS, THE OTHER TWO TICK.** A stash is a multiset — two Fire Vials is a real stash — and a tick cannot say it, so loading such a roster and pressing Update would silently drop one. That asymmetry is the column being honest about its own model rather than an inconsistency.
+
+**EMPTY MEANS NONE, and a stored flag means everything.** Three states per list rather than two, so *this mission offers no mods yet* stops being the same bytes as one nobody thought about — the `ai_factions` ambiguity, which needed a lint precisely because a chosen empty and a forgotten empty were indistinguishable. A **stored flag** rather than a bulk tick, so content authored later is included by a roster that says *every mod*; ticking it keeps the explicit picks underneath, so turning it on to test and off again gives the curated list back.
+
+**`Roster.offered_entries()` / `offered_stash()` / `offered_mods()` are where that resolves**, one accessor per list, so no reader ever asks about a flag. **`offered_entries()` SYNTHESIZES entries under its flag, and that made resolution-once a correctness rule**: `deploy_roster` runs two walks and the second keys `unit_of_entry` by the entry, so asking the accessor once per walk hands them two different sets of objects and nobody stands up. A mutant proved no existing case could see it — the flag is off in every authored roster, and with it off the accessor returns the same array twice.
+
+**The mod pool rides `Loadout`**, the one phase object that outlives the draw: `deploy_roster` resolves the `Roster` and drops it, so by the time a card opens nothing else is holding the answer. Mods ride it as shared refs, the stash as copies — a stash item is owned by whoever holds it and moves between owners; a mod is a shared definition a weapon points at.
+
+**`ItemCatalog` is the union of the four item folders**, promoted out of `UnitEditorTool._item_catalog()` — the codebase's only answer to *every authored item*, and now with a second caller. **`ResourceCatalog.by_file`** joined `by_name` beside it: a roster stores its picks as paths, and `by_name` COLLAPSES two resources sharing a display name, which is exactly what authoring a mission-specific variant of a character produces.
+
+**Not in scope:** whether fitting CONSUMES a mod, and where an unfitted one goes — [#828](https://github.com/Phaazoid/Godoiosis/issues/828), a scarcity design pass. An availability list says a mod exists here, never how many there are.
 
 ## Objectives: declared explicitly, located by zones
 
