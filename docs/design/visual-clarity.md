@@ -7,7 +7,7 @@ its child [#49 Action Queue UX](https://github.com/Phaazoid/Godoiosis/issues/49)
 This is a *guidelines* doc, not a spec — it captures the principles we're holding the work to,
 plus the running order of the queue-UX checklist. Update it as items land.
 
-**Canon checked through #816 (2026-09-07).**
+**Canon checked through #820 (2026-09-07).**
 
 ## Principles
 
@@ -2667,6 +2667,10 @@ freezes itself. `Battle3D`'s own root readouts — the checkout stamp and dev ba
 not scale either, and stay that way on purpose: the whiteout transition shares their CanvasLayer and
 must cover the real window.
 
+**A FRAMED CARD IS SOLID, and that is the default rather than a per-card choice ([#820](https://github.com/Phaazoid/Godoiosis/issues/820), 2026-09-07).** `ModalCard._build_frame` built a bare `PanelContainer`, so every framed surface drew in Godot's theme panel — dark at **0.6 alpha** — and whatever sat behind it read through the words. Nobody chose that; it was the default nobody overrode, which is why the fix is the default and not a `panel_style` on each card (dev: *"These translucent menus just don't look good"*). `panel_style` survives for a card that wants something else and is null everywhere.
+
+**Before making a palette-aware value a default, ask what it is under the OTHER palette.** `QueueStyle.panel_box()` reads `PANEL_BG`, which is dark under slate and — this is the part worth knowing — *also* dark under parchment, where it is the frame the paper lies on. So a card whose text is the engine's near-white stays legible in both, and #814's FRAME roles keep naming the right ground. Had parchment made it cream, this change would have reintroduced #814's own bug across seven surfaces at once; `tests/ui/test_pre_mission_contrast.gd` is what proves it did not, because it composites the ground down the ancestor chain rather than trusting a stylebox to be opaque.
+
 ## The shell's menus, and what the cinematic owns (captured 2026-09-03 — three tickets, three findings)
 
 From the scratchpad sweep. All three became issues; what is recorded here is the half that outlives
@@ -3101,7 +3105,7 @@ compare, which is exactly why the suite was green while the screen was unreadabl
 `tests/ui/test_pre_mission_contrast.gd` builds the real screens under both palettes and asks each
 control what it will actually draw with — `get_theme_color`, i.e. override → theme → engine default
 — against a ground **composited down the ancestor chain**, since a stylebox may be translucent
-(ModalCard's frame is the engine's panel at alpha 0.6). One case, every finding, named by node path:
+(ModalCard's frame was the engine's panel at alpha 0.6, and is `panel_box()` at 0.97 since #820 made a solid frame the default -- still translucent, so the compositing is still load-bearing, and this suite is what proved the swap kept every pair legible under both palettes). One case, every finding, named by node path:
 a failing case truncates the rest of its suite file, and a sweep whose first finding hides the other
 six is a sweep you run seven times.
 

@@ -62,11 +62,16 @@ var margin_v: int = 32
 var content_separation: int = 16
 var content_alignment: BoxContainer.AlignmentMode = BoxContainer.ALIGNMENT_CENTER
 var framed: bool = true                             # false = no panel/margin (full-screen takeover)
-# The frame's own fill. Null takes Godot's DEFAULT theme panel, which is dark at 0.6 ALPHA -- so a
-# framed card is see-through unless it says otherwise, and whatever is behind it reads through the
-# words (#816, dev: "the panel itself is see-through, which is odd and distracting"). It is worst on a
-# card stacked over another surface, since the backdrop's dim is then the only thing separating them.
-# A FIELD rather than a _build_frame override, because that is what this class says styling is.
+# The frame's own fill. NULL MEANS QueueStyle.panel_box(), not the engine's -- Godot's default theme
+# panel is dark at 0.6 ALPHA, so every framed card was see-through and whatever sat behind it read
+# through the words (dev, 2026-09-07: "These translucent menus just don't look good"). The default is
+# where the fix belongs rather than card by card, since the translucency was never anyone's choice.
+#
+# SAFE IN BOTH PALETTES, which is the thing to check before making a palette-aware value a default:
+# PANEL_BG is dark under slate AND under parchment, where it is "the dark frame the paper lies on".
+# So a card whose text is the engine's own white is still legible, and #814's FRAME roles still name
+# the right ground for anything that asks. Resolved in _build_frame rather than as an initialiser,
+# because the palette is a player setting and a card outlives the frame it was built with.
 var panel_style: StyleBox = null
 var title_font_size: int = 32
 var title_color: Color = Color.WHITE
@@ -116,8 +121,8 @@ func _build_frame() -> Container:
 		return center
 
 	var panel := PanelContainer.new()
-	if panel_style != null:
-		panel.add_theme_stylebox_override("panel", panel_style)
+	panel.add_theme_stylebox_override("panel",
+		panel_style if panel_style != null else QueueStyle.panel_box())
 	center.add_child(panel)
 
 	var margin := MarginContainer.new()
