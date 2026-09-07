@@ -1,0 +1,11 @@
+[gd_resource type="Resource" script_class="WeaponModData" format=3 uid="uid://cat6kmw11fhs4"]
+
+[ext_resource type="Script" uid="uid://7w7ajveltxx5" path="res://Classes/jobs/AbilityData.gd" id="1_cm3pv"]
+[ext_resource type="Script" uid="uid://ddqeee7njjjq2" path="res://Classes/weapons/WeaponAttackData.gd" id="2_xpvbs"]
+[ext_resource type="Resource" uid="uid://bnj74l6qfxrfy" path="res://Resources/WeaponAttacks/Range Aoe Test.tres" id="3_4tay4"]
+[ext_resource type="Script" uid="uid://df2c8ssuh18ff" path="res://Classes/weapons/WeaponModData.gd" id="4_2wm30"]
+
+[resource]
+script = ExtResource("4_2wm30")
+display_name = "range aoe test"
+granted_attacks = Array[ExtResource("2_xpvbs")]([ExtResource("3_4tay4")])

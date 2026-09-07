@@ -1,0 +1,8 @@
+[gd_resource type="Resource" script_class="AttackShape" format=3 uid="uid://cqee1a02mrs6v"]
+
+[ext_resource type="Script" uid="uid://cjmftk6nqeklw" path="res://Classes/weapons/patterns/AttackShape.gd" id="1_15qvh"]
+
+[resource]
+script = ExtResource("1_15qvh")
+display_name = "Test"
+stamp = Array[Vector2i]([Vector2i(2, -3), Vector2i(-3, -2), Vector2i(-2, -2), Vector2i(2, -2), Vector2i(-1, -1), Vector2i(1, -1), Vector2i(2, -1), Vector2i(0, 0)])
