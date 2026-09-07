@@ -38,7 +38,16 @@ const ROW_SEPARATION := 14
 const MIN_BODY_HEIGHT := 120.0
 const HEADING_FONT_SIZE := 18
 const KEY_COLUMN_WIDTH := 150.0
-const CONDITION_COLOR := Color(1, 1, 1, 0.6)
+# A CONTEXT heading has to out-rank a binding row at a glance, and font size alone did not do it: 18
+# against the engine's 16 reads as one more row, which is what "On the board" looked like (dev,
+# 2026-09-07). Weight comes from the SIZE STEP plus the warm title ink plus a rule under it -- three
+# channels, because one of them was already being tried.
+const CONTEXT_FONT_SIZE := 24
+# ...and a WHEN heading is subordinate to that but still a heading, so it takes the muted ink rather
+# than a modulate. CONDITION_COLOR was Color(1, 1, 1, 0.6) applied as modulate, which is why these
+# were "almost invisible" -- a wash over white rather than a colour anyone chose.
+const WHEN_FONT_SIZE := 15
+const WHEN_INDENT := 10
 
 # The card's two panes (#691). An enum rather than a bool because a third pane is a plausible
 # future (Audio, Video) and a bool would have to become one anyway.
@@ -146,17 +155,45 @@ func _build(game_node: Node) -> void:
 # player's page by being added to the enum.
 func _build_controls(parent: Container) -> void:
 	for context: Controls.Context in Controls.PLAYER_CONTEXTS:
-		var heading := Label.new()
-		heading.text = Controls.context_name(context)
-		heading.add_theme_font_size_override("font_size", HEADING_FONT_SIZE)
-		parent.add_child(heading)
+		_add_context_heading(parent, Controls.context_name(context))
+		# The `when` is a SECTION, not a per-row caption: the store orders equal conditions together,
+		# so three deploying rows carried the same sentence three times and none of them read as the
+		# heading it was. Printed on the CHANGE, which is what makes it one.
+		var showing := ""
 		for entry: Dictionary in Controls.in_context(context):
+			var when: String = entry["when"]
+			if when != showing:
+				showing = when
+				if when != "":
+					_add_when_heading(parent, when)
 			_add_binding_row(parent, entry)
 
 
-# Key on the left at a fixed width, meaning on the right, wrapping. The condition rides ABOVE the
-# description rather than beside the key, because "the newest order is one unit's own move" is a
-# sentence and a key name is two words.
+# The card's frame is panel_box(), dark under either palette, so these take the FRAME grounds' roles
+# (#814's rule: ask which ground the label lands on).
+func _add_context_heading(parent: Container, text: String) -> void:
+	var heading := Label.new()
+	heading.text = text
+	heading.add_theme_font_size_override("font_size", CONTEXT_FONT_SIZE)
+	heading.add_theme_color_override("font_color", QueueStyle.ink(QueueStyle.Role.TITLE_TEXT))
+	parent.add_child(heading)
+	parent.add_child(HSeparator.new())
+
+
+func _add_when_heading(parent: Container, text: String) -> void:
+	var heading := Label.new()
+	heading.text = text
+	heading.add_theme_font_size_override("font_size", WHEN_FONT_SIZE)
+	heading.add_theme_color_override("font_color", QueueStyle.ink(QueueStyle.Role.TITLE_TEXT))
+	var indent := MarginContainer.new()
+	indent.add_theme_constant_override("margin_left", WHEN_INDENT)
+	indent.add_child(heading)
+	parent.add_child(indent)
+
+
+# Key on the left at a fixed width, meaning on the right. The condition used to ride above the
+# description here, once per row; it is a section heading above its whole run now, which is both what
+# it always was and the reason the descriptions could shrink to a phrase.
 func _add_binding_row(parent: Container, entry: Dictionary) -> void:
 	var row := HBoxContainer.new()
 	row.add_theme_constant_override("separation", SEGMENT_GAP)
@@ -168,14 +205,6 @@ func _add_binding_row(parent: Container, entry: Dictionary) -> void:
 
 	var text := VBoxContainer.new()
 	text.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	var when: String = entry["when"]
-	if when != "":
-		var condition := Label.new()
-		condition.text = when
-		condition.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-		condition.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		condition.modulate = CONDITION_COLOR
-		text.add_child(condition)
 	var does := Label.new()
 	does.text = entry["does"]
 	does.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART

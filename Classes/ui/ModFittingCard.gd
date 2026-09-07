@@ -21,9 +21,10 @@ extends ModalCard
 # every row in them, so a selection holding a node would dangle on the first fit that worked.
 #
 # THIS CARD HAS BOTH OF QueueStyle'S GROUNDS, which is why its text roles look inconsistent and are
-# not (#814): ModalCard's frame is the ENGINE theme's panel, dark under either palette, so everything
-# directly on it takes the FRAME roles -- while the zones inside are section_box()/row_box(), i.e.
-# paper under parchment, and take HEADER_TEXT and BODY_TEXT. Ask which ground a label lands on.
+# not (#814): ModalCard's frame is panel_box(), dark under either palette -- parchment's PANEL_BG is
+# the dark frame its paper lies on -- so everything directly on it takes the FRAME roles, while the
+# zones inside are section_box()/row_box(), i.e. paper under parchment, and take HEADER_TEXT and
+# BODY_TEXT. Ask which ground a label lands on.
 
 signal closed
 
@@ -50,14 +51,6 @@ var _spaces_box: VBoxContainer
 var _offer_box: VBoxContainer
 var _offer_zone: GearDropZone
 var _hint: Label
-
-
-# OPAQUE, and it has to say so: the base's frame draws in the default theme panel, which is 0.6 alpha
-# (#816). This card stacks over the pre-mission screen, so a translucent frame shows that screen's
-# rows through its own -- and the ink here is the same panel every region of that screen wears, which
-# is what makes the card read as part of the same system rather than a window onto it.
-func _init() -> void:
-	panel_style = QueueStyle.panel_box()
 
 
 static func open(game_node: Node, weapon: WeaponInstance, wielder: Unit) -> ModFittingCard:
