@@ -339,6 +339,12 @@ func _populate_weapon_editor(weapon: WeaponInstance) -> void:
 	for i in range(weapon.space_count()):
 		_populate_mod_space(weapon, i, mods, offerable)
 
+	# AFTER the spaces, because a stranded mod's space is not among them -- the loop above is bounded
+	# by the TEMPLATE, so a mod left past the last space by a Remove has no row of its own and this is
+	# the only place it is named (#837). Same shape as _populate_prototype_editor's finding block.
+	for finding in WeaponInstanceLint.check(weapon):
+		DevWidgets.add_label(editor_container, "%s: %s" % [WeaponInstanceLint.severity_word(finding), finding["text"]])
+
 func _on_limb_kind_picked(weapon: WeaponInstance, kind_name: String) -> void:
 	weapon.limb_kind = WeaponData.LimbKind[kind_name]
 	populate()
@@ -629,6 +635,9 @@ func _refuse_unusable(item: Resource) -> bool:
 	var mod := item as WeaponModData
 	if mod != null:
 		return _refuse_with(mod.save_block_reason())
+	var weapon := item as WeaponInstance
+	if weapon != null:
+		return _refuse_instance(weapon)
 	return false
 
 # A template nobody could carry. Only BLOCKS stops the save, on AttackEditorTool's reasoning: a
@@ -638,6 +647,21 @@ func _refuse_template(template: WeaponData) -> bool:
 	var findings := WeaponTemplateLint.check(template)
 	for finding in findings:
 		if finding["severity"] == WeaponTemplateLint.Severity.BLOCKS:
+			return _refuse_with(finding["text"])
+	if not findings.is_empty():
+		status_label.text = findings[0]["text"]   # said, not refused
+	return false
+
+# A carried weapon wearing a fitting the model would refuse today (#837). Every finding is DEGRADES,
+# so this can only ever SAY -- which is the point: the file is already on disk in that state, it got
+# there through a template edit rather than through this panel, and refusing the save would leave the
+# one tool that can repair it unable to write. It is a third arm on the door above rather than a
+# render-only note because "may this be saved" is one question for all three kinds this tab authors,
+# and answering it for two of them is the asymmetry that grows a second gate.
+func _refuse_instance(weapon: WeaponInstance) -> bool:
+	var findings := WeaponInstanceLint.check(weapon)
+	for finding in findings:
+		if finding["severity"] == WeaponInstanceLint.Severity.BLOCKS:
 			return _refuse_with(finding["text"])
 	if not findings.is_empty():
 		status_label.text = findings[0]["text"]   # said, not refused

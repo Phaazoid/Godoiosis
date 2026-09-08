@@ -143,6 +143,32 @@ func test_saved_weapons_are_family_instances() -> void:
 	assert_array(problems).is_empty()
 
 
+func test_no_embedded_weapon_wears_an_illegal_fitting() -> void:
+	# #837: every fitting rule is measured against the TEMPLATE, which is a shared resource the
+	# Prototype editor edits live -- so removing a mod space, narrowing a capacity or retyping a
+	# family leaves already-fitted mods in a state the model would refuse today, silently, on every
+	# weapon built on that template. Embedded weapons are where that hides longest: they are the bulk
+	# of the population and nothing lists them, so nobody opens them to look.
+	#
+	# WeaponInstanceLint is the rule and the Check board button asks it of the live board; this asks
+	# it of every file, which is the scope that stays HERE (the #150 precedent recorded below).
+	var problems: Array[String] = []
+	var scenarios := _loaded_scenarios()
+	for path in scenarios:
+		var scenario: ScenarioData = scenarios[path]
+		for i in scenario.unit_entries.size():
+			var entry: ScenarioUnitEntry = scenario.unit_entries[i]
+			if entry == null:
+				continue
+			for item: Item in entry.inventory:
+				var weapon := item as WeaponInstance
+				if weapon == null:
+					continue
+				for finding: Dictionary in WeaponInstanceLint.check(weapon):
+					problems.append("%s: %s" % [_entry_label(path, i, entry), finding["text"]])
+	assert_array(problems).is_empty()
+
+
 func test_saved_indices_are_in_bounds() -> void:
 	# #83: equipped_index and every limb_prosthetic_items value index into the saved
 	# inventory — a hand-edited or truncated save must fail here, not as a load-time miss.
