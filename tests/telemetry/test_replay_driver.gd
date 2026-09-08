@@ -28,7 +28,7 @@ func before_test() -> void:
 	TelemetryStore.reset_for_test()
 	TelemetryStore.root = SCRATCH_ROOT
 	TelemetryStore.persistence_enabled = true
-	_wipe()
+	_wipe(SCRATCH_ROOT)
 	_main = (load(MAIN_SCENE) as PackedScene).instantiate()
 	_main.name = "Main"
 	add_child(_main)
@@ -56,7 +56,7 @@ func after_test() -> void:
 		driver.free()
 	remove_child(_main)
 	_main.free()
-	_wipe()
+	_wipe(SCRATCH_ROOT)
 	TelemetryStore.reset_for_test()
 
 
@@ -239,15 +239,14 @@ func _build_move(unit: Unit, dest: Vector2i) -> MoveAction:
 	return move
 
 
-func _wipe() -> void:
-	var dir := DirAccess.open(SCRATCH_ROOT)
-	if dir == null:
+# RECURSIVE, and that is not tidiness: a run is a folder inside `pending/` inside the root, so a
+# one-level sweep leaves `pending/` non-empty, its remove() fails SILENTLY, and every case inherits
+# the last one's runs. Same shape as test_telemetry_store.gd and test_mission_log.gd.
+static func _wipe(dir: String) -> void:
+	if not DirAccess.dir_exists_absolute(dir):
 		return
-	for sub: String in dir.get_directories():
-		var inner := DirAccess.open(SCRATCH_ROOT + sub)
-		if inner != null:
-			for file: String in inner.get_files():
-				inner.remove(file)
-		dir.remove(sub)
-	for file: String in dir.get_files():
-		dir.remove(file)
+	for sub in DirAccess.get_directories_at(dir):
+		_wipe(dir + sub + "/")
+	for file in DirAccess.get_files_at(dir):
+		DirAccess.remove_absolute(dir + file)
+	DirAccess.remove_absolute(dir)
