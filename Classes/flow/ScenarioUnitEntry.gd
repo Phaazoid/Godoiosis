@@ -206,7 +206,13 @@ func apply_unit_state(unit: Unit) -> void:
 	for i in inventory.size():
 		if inventory[i] == null:
 			continue
-		if not unit.add_item(inventory[i].copy_for_grant()):
+		# A TEMPLATE in a saved inventory grants an INSTANCE, and null for an unmapped family
+		# (#835). Refused here because add_item takes a null into a free slot and answers TRUE.
+		var granted := inventory[i].copy_for_grant()
+		if granted == null:
+			push_warning("Scenario load: could not grant '%s' — unmapped weapon family?" % inventory[i].display_name)
+			continue
+		if not unit.add_item(granted):
 			push_warning("Scenario load: inventory full — dropped '%s'" % inventory[i].display_name)
 	# add_item auto-equips the first equippable; the save's explicit choice wins either way.
 	# Direct assign, never the gated door (#157) — a save is authoritative, same as the armor

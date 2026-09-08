@@ -7,7 +7,7 @@
 [ext_resource type="Texture2D" uid="uid://bg707w6kaqv1a" path="res://Art/Units/Portraits/hair_mcgee_blond.png" id="5_tddgv"]
 [ext_resource type="Script" uid="uid://cvvknuw621ar2" path="res://Classes/units/UnitData.gd" id="6_l7hev"]
 [ext_resource type="Script" uid="uid://jytv7xrjv6l1" path="res://Classes/items/Item.gd" id="7_tgyxx"]
-[ext_resource type="Resource" uid="uid://bljhljq8hmcs1" path="res://Resources/Weapons/WeaponVariants/Carbine.tres" id="8_fq6i1"]
+[ext_resource type="Resource" path="res://Resources/Weapons/MainVarieties/Carbine.tres" id="8_fq6i1"]
 
 [resource]
 script = ExtResource("6_l7hev")

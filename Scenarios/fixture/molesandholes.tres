@@ -15,7 +15,7 @@
 [ext_resource type="Texture2D" uid="uid://lin61ix60e11" path="res://Art/Units/MapSprites/Brigand_Moving.png" id="13_ljvvr"]
 [ext_resource type="Texture2D" uid="uid://bg13ksnfa1txj" path="res://Art/Units/Portraits/hair_mcgee_evil.png" id="14_tviya"]
 [ext_resource type="Script" uid="uid://cvvknuw621ar2" path="res://Classes/units/UnitData.gd" id="15_gnsc6"]
-[ext_resource type="Resource" path="res://Resources/Weapons/WeaponVariants/Drill.tres" id="16_g6pwf"]
+[ext_resource type="Resource" path="res://Resources/Weapons/MainVarieties/Drill.tres" id="16_g6pwf"]
 [ext_resource type="Script" uid="uid://bu1j3q4jhqcpf" path="res://Classes/weapons/instances/DrillWeaponInstance.gd" id="17_22von"]
 [ext_resource type="Resource" uid="uid://bv7tui68o7xfr" path="res://Resources/Weapons/MainVarieties/Drill.tres" id="18_gvau7"]
 [ext_resource type="Script" uid="uid://bgbidu2bbf33l" path="res://Classes/alchemy/TransmutationData.gd" id="19_j3sob"]

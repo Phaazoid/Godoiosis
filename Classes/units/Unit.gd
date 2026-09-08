@@ -184,6 +184,12 @@ func _seed_starting_kit(source: UnitData) -> void:
 		if authored == null:
 			continue
 		var granted := authored.copy_for_grant()
+		# A TEMPLATE authored into the kit answers with an INSTANCE, and with null for an unmapped
+		# family (#835). add_item takes a null into the first free slot and answers TRUE, so the
+		# refusal has to be here rather than left to the door below.
+		if granted == null:
+			push_warning("%s: starting item could not be granted -- unmapped weapon family?" % get_unit_name())
+			continue
 		var weapon := granted as WeaponInstance
 		if weapon != null and weapon.get_script() == WeaponInstance and weapon.template != null \
 				and weapon.template.weapon_type != WeaponData.WeaponType.NONE:
