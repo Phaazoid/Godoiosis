@@ -220,6 +220,11 @@ func open_mission_select() -> void:
 	# Defaults to FEEDBACK, not BUG: nobody reaches this screen mid-defect (#131 item 6).
 	_select_screen.feedback_chosen.connect(func(): game.open_report_card(BugReporter.Kind.FEEDBACK))
 	_select_screen.quit_chosen.connect(func(): game.get_tree().quit())
+	# The first-launch notice (#53 slice 3), stacked over the screen we just built. Here rather
+	# than in game._ready because this is the ONE door to the title screen, so the card is
+	# guaranteed something to sit on; it costs nothing on the later returns through here, since
+	# should_show() is false forever after the first dismissal.
+	TelemetryNotice.show_if_needed(game)
 
 func _close_mission_select() -> void:
 	if is_instance_valid(_select_screen):
