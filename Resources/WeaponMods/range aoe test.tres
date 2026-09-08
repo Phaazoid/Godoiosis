@@ -7,5 +7,5 @@
 
 [resource]
 script = ExtResource("4_2wm30")
-display_name = "range aoe test"
 granted_attacks = Array[ExtResource("2_xpvbs")]([ExtResource("3_4tay4")])
+display_name = "range aoe test"
