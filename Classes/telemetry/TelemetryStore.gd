@@ -20,6 +20,11 @@ const CONFIG_SECTION := "telemetry"
 const INSTALL_ID_KEY := "install_id"
 const NOTICE_SEEN_KEY := "notice_seen"
 
+# THE TWO FILES A RUN FOLDER HOLDS, named here because this is the file that knows a path -- they
+# were spelled once here and once on ReplayRun until the sweep needed a third (#53 slice 4b).
+const EVENTS_FILE := "events.jsonl"
+const BOARD_FILE := "board.tres"
+
 # Redirectable, so a suite can point the whole store at a scratch folder.
 static var root := "user://telemetry/"
 static var persistence_enabled := true
@@ -111,7 +116,46 @@ static func open_run_file(run_id: String) -> FileAccess:
 	if not persistence_enabled:
 		return null
 	DirAccess.make_dir_recursive_absolute(run_dir(run_id))
-	return FileAccess.open(run_dir(run_id) + "events.jsonl", FileAccess.WRITE)
+	return FileAccess.open(events_path(run_id), FileAccess.WRITE)
+
+
+static func events_path(run_id: String) -> String:
+	return run_dir(run_id) + EVENTS_FILE
+
+
+# REPLACE A RUN'S EVENT FILE (#53 slice 4b), for the launch sweep -- the only thing that ever needs
+# to change a run after the fact. Here because this file owns the path; WHAT goes in the lines is
+# MissionLog's business.
+#
+# NEVER AN APPEND, for two reasons and either would do. WRITE truncates (see open_run_file), so a
+# careless reopen destroys the run it meant to finish; and ReplayRun.load_run stops at the first
+# line that will not parse, so an ending appended after a partial last line is unreachable by the
+# very tool that reads runs. Writing the surviving lines plus the new ones and renaming over the
+# original clears both, and comes out clean on a run that was killed mid-line.
+#
+# The rename is Windows' -- it removes the destination first, so the swap is not atomic. What that
+# costs is bounded and stated: a crash inside that window leaves the complete file at
+# `events.jsonl.tmp` next to the run, so nothing is lost, but recovering it is a hand job.
+static func rewrite_run_events(run_id: String, lines: PackedStringArray) -> bool:
+	if not persistence_enabled:
+		return false
+	var tmp := events_path(run_id) + ".tmp"
+	var file := FileAccess.open(tmp, FileAccess.WRITE)
+	if file == null:
+		push_error("Telemetry: could not open %s (error %s)" % [tmp, FileAccess.get_open_error()])
+		return false
+	for text: String in lines:
+		file.store_line(text)
+	file.close()
+	var dir := DirAccess.open(run_dir(run_id))
+	if dir == null:
+		push_error("Telemetry: no run folder for %s" % run_id)
+		return false
+	var err := dir.rename(tmp.get_file(), EVENTS_FILE)
+	if err != OK:
+		push_error("Telemetry: could not replace %s (error %s)" % [EVENTS_FILE, err])
+		return false
+	return true
 
 
 # THE REPLAY SEED (#53 slice 2): the board exactly as the battle started, beside its events.
@@ -130,11 +174,11 @@ static func save_board(run_id: String, scenario: ScenarioData) -> bool:
 	if not persistence_enabled or scenario == null:
 		return false
 	DirAccess.make_dir_recursive_absolute(run_dir(run_id))
-	var path := run_dir(run_id) + "board.tres"
+	var path := run_dir(run_id) + BOARD_FILE
 	scenario.take_over_path(path)
 	var err := ResourceSaver.save(scenario, path)
 	if err != OK:
-		push_error("Telemetry: could not write board.tres (error %s)" % err)
+		push_error("Telemetry: could not write %s (error %s)" % [BOARD_FILE, err])
 		return false
 	return true
 

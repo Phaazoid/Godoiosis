@@ -144,6 +144,10 @@ static func of(events: Array[Dictionary]) -> Dictionary:
 		"sandbox": bool(start.get("sandbox", false)),
 		"dev_mode": bool(start.get("dev_mode", false)),
 		"resumed": bool(start.get("resumed", false)),
+		# WE INFERRED THIS ENDING RATHER THAN WATCHING IT (#53 slice 4b) -- a run the launch sweep
+		# finished because the process that opened it died. Here for `sandbox`'s reason above: the
+		# outcome of a swept run is a deduction, and the row that gets queried has to say so.
+		"swept": bool(end.get("swept", false)),
 		"outcome": end.get("outcome", "INTERRUPTED"),
 		"failed_by": end.get("failed_by", "NONE"),
 		"rounds": last_round,
