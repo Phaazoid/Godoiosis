@@ -7,8 +7,8 @@
 [ext_resource type="Texture2D" uid="uid://dvmd0ncpyryv7" path="res://Art/Units/Portraits/hair_mcgee_red.png" id="5_f2ado"]
 [ext_resource type="Script" uid="uid://cvvknuw621ar2" path="res://Classes/units/UnitData.gd" id="6_qce3k"]
 [ext_resource type="Script" uid="uid://jytv7xrjv6l1" path="res://Classes/items/Item.gd" id="7_filfp"]
-[ext_resource type="Resource" uid="uid://b2vvwpnoemd0l" path="res://Resources/Weapons/WeaponVariants/Kinetic Mace.tres" id="8_cnods"]
-[ext_resource type="Resource" path="res://Resources/Weapons/WeaponVariants/TorvArm.tres" id="9_lqayx"]
+[ext_resource type="Resource" path="res://Resources/Weapons/MainVarieties/Kinetic_Mace.tres" id="8_cnods"]
+[ext_resource type="Resource" path="res://Resources/Weapons/MainVarieties/Prosthetic.tres" id="9_lqayx"]
 [ext_resource type="Resource" path="res://Resources/Weapons/WeaponVariants/TorvLeg.tres" id="10_ok1nu"]
 
 [resource]

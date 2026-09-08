@@ -13,15 +13,24 @@ class_name ItemCatalog
 # NOT equippables only, and that is #697's ruling carried forward: a vial is CARRIED and never
 # slotted, and leaving the kind out made the authored ones unreachable from any editor.
 #
-# WEAPONS ARE THE SAVED VARIANTS, never the family templates -- WeaponCatalog.get_editable's own
-# rule. A bare family template is shared identity rather than a real carryable weapon, so it belongs
-# in no list of things a unit or a stash can hold.
+# WEAPON TEMPLATES ARE IN, since #835, and that is the ONE thing to understand before adding a
+# source here. This answers what a mission may OFFER, which is a question about FILES: a roster
+# stores its picks as ext_resource paths, and the plain form of a weapon has no file of its own --
+# its template's IS its identity. What the phase HOLDS is a different question one door along, and
+# `Roster.offered_stash` answers it, because a template becomes a real WeaponInstance the moment it
+# is granted (WeaponData.copy_for_grant).
+#
+# So #80's rule is intact rather than bent: a bare template still reaches no unit and no stash. It
+# is nameable here and instantiated on the way out, which is what lets the seven prototypes and the
+# Prosthetic base be put in a mission's gear at all.
 
 
-# The four folders, declared once. A fifth carryable kind is one line here and reaches both
+# The folders, declared once. A fifth carryable kind is one line here and reaches all three
 # projections and every caller -- which is the whole reason this is a class rather than a helper
 # copied into whoever needs it next.
 const SOURCES: Array[String] = [
+	WeaponCatalog.MAIN_VARIETIES_DIR,
+	WeaponCatalog.PROTOTYPE_DIR,
 	WeaponCatalog.SAVED_DIR,
 	ArmorCatalog.VARIANT_DIR,
 	RuneCatalog.VARIANT_DIR,

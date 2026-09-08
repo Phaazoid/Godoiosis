@@ -46,8 +46,16 @@ static func from_roster(roster: Roster) -> Loadout:
 	if roster == null:
 		return made
 	for item: Item in roster.offered_stash():
-		if item != null:
-			made.stash.append(item.copy_for_grant())
+		if item == null:
+			continue
+		# A TEMPLATE answers copy_for_grant with an instance, and with null for an unmapped family
+		# (#835) -- a door this one never had to consider before. Guarded rather than trusted,
+		# because Unit.add_item takes a null into the first free slot and answers TRUE.
+		var granted := item.copy_for_grant()
+		if granted == null:
+			push_warning("stash item '%s' could not be granted -- unmapped weapon family?" % item.display_name)
+			continue
+		made.stash.append(granted)
 	for mod: WeaponModData in roster.offered_mods():
 		if mod != null:
 			made.available_mods.append(mod)

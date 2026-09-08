@@ -113,11 +113,12 @@ static func get_spawnable() -> Dictionary:
 	all["None"] = null
 	return all
 
-# The one grant path: turn any catalog entry into something a unit can own.
+# The one grant path: turn any catalog entry into something a unit can own -- and since #835 it is
+# one line, because a WeaponData answers copy_for_grant() with an instance itself. The branch that
+# used to call make() here was the same rule spelled twice, and the copy door is the spelling that
+# reaches the three AUTHORING doors as well as this picker one.
 static func instantiate_entry(entry) -> EquippableData:
-	if entry is WeaponData:
-		return WeaponInstance.make(entry)
-	if entry is EquippableData:
+	if entry is Item:
 		# Cast: the copy door is typed Item since #697; this path only ever reaches equippables.
 		return entry.copy_for_grant() as EquippableData
 	return null

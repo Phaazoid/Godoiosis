@@ -90,3 +90,18 @@ func attacks() -> Array[WeaponAttackData]:
 		result.append(main_attack)
 	result.append_array(extra_attacks)
 	return result
+
+
+# A template RECEIVED as a carried thing is an INSTANCE (#835). Item.copy_for_grant is "the one
+# door for how a unit receives its OWN copy", and for a shared family template the honest answer to
+# that question was never a copy of the template -- a unit cannot hold one. The default deep copy
+# would hand over a forked template, which is exactly the fault #80 closed by taking templates out
+# of the pickers; this closes it at the door instead, so a template may be AUTHORED into any of the
+# three Item-typed kit doors (UnitData.starting_inventory, Roster.stash, ScenarioUnitEntry.inventory)
+# and arrive as the plain weapon it names.
+#
+# NULL for an unmapped weapon_type, which make() already answers that way and push_errors about.
+# The doors that grant treat a null as authoring noise and say so; WeaponTemplateLint BLOCKS the
+# state at the save door, so shipped content cannot reach it.
+func copy_for_grant() -> Item:
+	return WeaponInstance.make(self)
