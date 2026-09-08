@@ -8,23 +8,20 @@ class_name TelemetryNotice
 # IT IS A NOTIFICATION, NOT CONSENT, and that is a deliberate scope rather than an oversight (dev,
 # 2026-09-08): "Let's not even give them the option to turn it off. The entire point of this build
 # is playtest data... If they don't want to give me data, they can't play the early version of my
-# game." So there is no PlayerSettings row, no toggle and no recording gate -- the card SAYS there
-# is no off switch, so nobody goes hunting Settings for one. That ruling is scoped to the early
-# hand-delivered builds; putting the setting back before any wider release is its own issue.
+# game." So there is no PlayerSettings row, no toggle and no recording gate. The copy is HIS and
+# deliberately brief -- it tells the player what is happening and that it is anonymous, and does not
+# argue the case. That ruling is scoped to the early hand-delivered builds; putting the setting back
+# before any wider release is #841.
 #
 # ESC DOES NOT DISMISS IT. _on_cancel returns false, which per ModalCard's contract makes this card
 # SWALLOW the key -- the deliberate choice for a surface where cancelling is meaningless, alongside
 # MissionEndBanner and MissionSelectScreen. The button is the only door, which is the point of a
 # notice somebody is meant to read.
 
-const TITLE := "This build sends playtest data"
-const BODY := """This is an early playtest build, and finding out how it actually plays is the whole point of it.
+const TITLE := "This is an early playtest build."
+const BODY := """This build sends playtest data.    
 
-While you play, the game records how each mission goes -- the orders you gave, what happened, and how it ended -- and sends that after the mission finishes.
-
-It is anonymous: a random id for this install, and nothing else. No name, no account, nothing about your machine or your files.
-
-There is no way to turn this off in this build. If you would rather not share it, this is not the build for you."""
+It is anonymous: a random id for this install, and nothing else. No name, no account, nothing about your machine or your files. """
 const ACKNOWLEDGE := "Got it"
 
 # How wide the paragraph runs before wrapping, in the 1280x720 design space (#659).
