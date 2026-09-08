@@ -292,9 +292,8 @@ func _refresh():
 			var item = unit.inventory[i]
 			icon.texture = item.icon
 
-			var display_name = item.display_name
+			var display_name = item.shown_name()
 			if item is WeaponInstance:
-				display_name = item.shown_name()
 				if icon.texture == null and item.template != null:
 					icon.texture = item.template.icon
 

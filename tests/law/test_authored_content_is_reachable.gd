@@ -6,6 +6,11 @@
 # What this law asks is the question the suite could not: can the dev GET one. It is deliberately
 # about the ITEM CATALOGS rather than about vials -- the next content kind added without a catalog
 # fails here rather than being noticed in play.
+#
+# WEAPONS joined it in #835, and they are the same fault wearing a second shape: their catalog
+# existed and was scanned, but only the SAVED-variants folder ever fed a picker, so seven authored
+# prototypes and a family base could not be granted to anyone while every test stayed green. A kind
+# can be unreachable for want of a catalog, OR for want of a bridge from the layer it is authored in.
 extends GdUnitTestSuite
 
 const VIAL_DIR := "res://Resources/Vials/"
@@ -59,3 +64,20 @@ func test_a_vial_survives_a_grant_copy() -> void:
 		assert_object(granted).override_failure_message(
 				"copying '%s' for a grant did not hand back a VialData" % name).is_not_null()
 		assert_array(granted.granted_elements()).is_not_empty()
+
+
+# The weapon half. A template is authored in MainVarieties/ or Prototypes/ and is not itself
+# carryable, so the picker offers the DERIVED generic built on it (#835). Sweeps whatever is on
+# disk and passes vacuously on an empty scan -- the claim is reachability, not which weapons exist.
+func test_the_editors_item_picker_offers_every_weapon_template() -> void:
+	var tool_node: UnitEditorTool = auto_free(UnitEditorTool.new())
+	var offered: Array = tool_node._item_catalog().keys()
+
+	for dir: String in [WeaponCatalog.MAIN_VARIETIES_DIR, WeaponCatalog.PROTOTYPE_DIR]:
+		var templates := ResourceCatalog.by_file(dir, WeaponData)
+		for file: String in templates:
+			var template: WeaponData = templates[file]
+			var name: String = template.display_name if template.display_name != "" else file
+			assert_bool(offered.has(name)).override_failure_message(
+					"the dev editors cannot offer '%s' -- it is authored and nobody can hold one"
+					% name).is_true()
