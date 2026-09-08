@@ -199,11 +199,28 @@ func _fire(beat: DialogBeat) -> void:
 		_pending.append(beat.timeline)
 	else:
 		_dialog_active = true
-		Dialogic.start(beat.timeline)
+		_start(beat.timeline)
 
 
 func _on_timeline_ended() -> void:
 	_dialog_active = false
 	if not _pending.is_empty():
 		_dialog_active = true
-		Dialogic.start(_pending.pop_front())
+		_start(_pending.pop_front())
+
+
+# WHERE the dialog MOUNTS -- handed over per timeline, because Dialogic FREES the layout on every
+# end_timeline (end_behaviour 0) and rebuilds it on the next start, so there is no one-time place to
+# declare it. Its own default is the TREE ROOT (create_layout falls back to dialogic.get_parent()),
+# which is outside GameView and so outside #659's design space: the dialog was the one player-facing
+# surface still drawing at design-resolution pixels while every panel around it scaled (#687).
+#
+# game.get_viewport(), never a path -- in the shipped tree that IS GameView, and in a suite whose
+# board sits under the root it IS the root, so no existing dialog fixture changes. A sibling of Game
+# rather than a child of it, which is what keeps ModalLock (it disables the Game node) and the
+# stacking exactly as they were: the layout is a CanvasLayer at 1, over UILayer's 0.
+func _start(timeline: DialogicTimeline) -> void:
+	if not Dialogic.Styles.has_active_layout_node():
+		var host: Viewport = game.get_viewport()
+		Dialogic.Styles.load_style("", host)
+	Dialogic.start(timeline)
