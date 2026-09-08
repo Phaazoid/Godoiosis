@@ -123,6 +123,27 @@ func test_binding_does_not_depend_on_the_order_units_sit_in() -> void:
 			).is_same(before[recorded_id])
 
 
+# THE STAND-DOWN IS AFTER THE SEED, and that ordering is the whole of it: apply_scenario REPLACES
+# the AI set from the board it loads (#150), so a stand-down written first is overwritten by the
+# very next line. Every faction's orders are in the log, so the driver plays them; letting the AI
+# plan fresh ones would be asking a different question entirely.
+#
+# The board is armed by hand rather than by recording a real AI turn: what is under test is what
+# seed() does with a board that enables AI, and an actual enemy turn would only add frames.
+func test_the_ai_stands_down_even_though_the_seeded_board_enables_it() -> void:
+	var run_id := await _record_a_mission()
+	var run := ReplayRun.load_run(run_id)
+	var enemy_ai: Array[Team.Faction] = [Team.Faction.ENEMY]
+	run.board.ai_factions = enemy_ai
+	# Non-vacuity: without this the case passes on a board that never enabled anything.
+	assert_bool(run.board.ai_factions.has(Team.Faction.ENEMY)).is_true()
+
+	assert_bool(driver.seed(run)).is_true()
+	assert_bool(game.ai_controller.is_ai_faction(Team.Faction.ENEMY)).override_failure_message(
+		"the AI is still enabled after seeding -- it would plan its own orders over the recorded ones"
+		).is_false()
+
+
 # A harness that cannot report a difference would certify anything.
 func test_a_corrupted_outcome_is_reported_as_a_divergence() -> void:
 	var run_id := await _record_a_mission()
