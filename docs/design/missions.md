@@ -2,7 +2,7 @@
 
 **Status: ALL FOUR SLICES BUILT 2026-07-28 ([#96](https://github.com/Phaazoid/Godoiosis/issues/96)).** Filed 2026-07-27, when the project acquired a win condition for the first time. Before this, Iosis had ten interlocking systems and no way to finish a battle — which meant a design question could be answered *"is this coherent?"* but never *"does this improve play?"*
 
-**Canon checked through #828 (2026-09-07).**
+**Canon checked through #841 (2026-09-08).**
 
 ## What a mission is
 
@@ -251,7 +251,7 @@ The dev re-scoped the ticket onto it: *"what I actually need is a way to edit wh
 
 **The mod pool rides `Loadout`**, the one phase object that outlives the draw: `deploy_roster` resolves the `Roster` and drops it, so by the time a card opens nothing else is holding the answer. Mods ride it as shared refs, the stash as copies — a stash item is owned by whoever holds it and moves between owners; a mod is a shared definition a weapon points at.
 
-**`ItemCatalog` is the union of the four item folders**, promoted out of `UnitEditorTool._item_catalog()` — the codebase's only answer to *every authored item*, and now with a second caller. **`ResourceCatalog.by_file`** joined `by_name` beside it: a roster stores its picks as paths, and `by_name` COLLAPSES two resources sharing a display name, which is exactly what authoring a mission-specific variant of a character produces.
+**`ItemCatalog` is the union of the item folders** -- four at #812, SIX since #835 added the two weapon TEMPLATE folders --, promoted out of `UnitEditorTool._item_catalog()` — the codebase's only answer to *every authored item*, and now with a second caller. **`ResourceCatalog.by_file`** joined `by_name` beside it: a roster stores its picks as paths, and `by_name` COLLAPSES two resources sharing a display name, which is exactly what authoring a mission-specific variant of a character produces.
 
 **Not in scope:** whether fitting CONSUMES a mod, and where an unfitted one goes — [#828](https://github.com/Phaazoid/Godoiosis/issues/828), a scarcity design pass. An availability list says a mod exists here, never how many there are.
 

@@ -39,7 +39,7 @@
 [ext_resource type="Texture2D" uid="uid://b7ghetjud0n2p" path="res://Art/Units/MapSprites/Recruit.png" id="38_5o3n1"]
 [ext_resource type="Texture2D" uid="uid://bwd4se3jxnvtg" path="res://Art/Units/MapSprites/Recruit_Moving.png" id="39_rwqt4"]
 [ext_resource type="Texture2D" uid="uid://dio6wu07l06cy" path="res://Art/Units/Portraits/hair_mcgee_sky.png" id="40_qufww"]
-[ext_resource type="Resource" path="res://Resources/Weapons/WeaponVariants/vroom.tres" id="41_gqkqi"]
+[ext_resource type="Resource" path="res://Resources/Weapons/MainVarieties/ChainSword.tres" id="41_gqkqi"]
 [ext_resource type="Texture2D" uid="uid://bg655ethyluqq" path="res://Art/Units/MapSprites/Fighter_Downed.png" id="42_j056q"]
 [ext_resource type="Resource" uid="uid://ceqrjbp6yyh2" path="res://Resources/Abilities/IronWill.tres" id="43_h5w62"]
 [ext_resource type="Texture2D" uid="uid://bd7syo8j146ue" path="res://Art/Units/MapSprites/Fighter.png" id="44_jibd0"]
