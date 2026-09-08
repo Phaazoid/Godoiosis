@@ -130,6 +130,7 @@ var hover_presenter: HoverPresenter
 var mission_controller: MissionController
 var order_executor: OrderExecutor
 var bug_reporter: BugReporter
+var mission_log: MissionLog   # the playtest recorder (#53); writes down what the others decide
 
 # ==============================================================================
 #  Lifecycle
@@ -215,6 +216,10 @@ func _build_collaborators() -> void:
 	bug_reporter = BugReporter.new()
 	bug_reporter.game = self
 	add_child(bug_reporter)
+
+	mission_log = MissionLog.new()
+	mission_log.game = self
+	add_child(mission_log)   # after @onready: _ready here connects turn_manager / squad_manager
 
 func _wire_signals() -> void:
 	turn_manager.turn_started.connect(_on_turn_started)
