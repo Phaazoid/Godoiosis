@@ -27,25 +27,25 @@ var board: ScenarioData = null
 var problems: Array[String] = []
 
 
-# Newest first -- a dev opening this wants the run they just played, and the id starts with a
-# sortable stamp. Directories, not files: ResourceDir answers a different question (files by
-# extension, res:// packing) and would be the wrong tool wearing a familiar name.
+# EVERY run this machine can replay, newest first -- BOTH folders since #53 slice 5, because
+# whether a run has been sent has nothing to do with whether it can be replayed. The listing
+# mechanism is TelemetryStore's (it owns the paths); the MERGE is this question's own answer.
 static func list_runs() -> PackedStringArray:
-	var dir := TelemetryStore.pending_dir()
-	if not DirAccess.dir_exists_absolute(dir):
-		return PackedStringArray()
-	var ids := DirAccess.get_directories_at(dir)
+	var ids := TelemetryStore.pending_runs()
+	ids.append_array(TelemetryStore.sent_runs())
 	ids.sort()
 	ids.reverse()
 	return ids
 
 
-static func load_run(run_id: String) -> ReplayRun:
+# THE EVENTS ALONE, with no board (#53 slice 5). The uploader asks "is this run sealed?" and then
+# ships board.tres as BYTES -- so load_run's `load()` of it into a ScenarioData, and into the
+# resource cache, is work it would only throw away. A seam SPLIT rather than a second parse loop:
+# load_run is this plus the board, so the truncation rule below still governs both callers.
+static func load_events(run_id: String) -> ReplayRun:
 	var run := ReplayRun.new()
 	run.run_id = run_id
-	var dir := TelemetryStore.run_dir(run_id)
-
-	var events_path := dir + EVENTS_FILE
+	var events_path := TelemetryStore.run_dir(run_id) + EVENTS_FILE
 	if not FileAccess.file_exists(events_path):
 		run.problems.append("no %s in this folder" % EVENTS_FILE)
 	else:
@@ -67,15 +67,18 @@ static func load_run(run_id: String) -> ReplayRun:
 				break
 		if file != null:
 			file.close()
+	return run
 
-	var board_path := dir + BOARD_FILE
+
+static func load_run(run_id: String) -> ReplayRun:
+	var run := load_events(run_id)
+	var board_path := TelemetryStore.run_dir(run_id) + BOARD_FILE
 	if not FileAccess.file_exists(board_path):
 		run.problems.append("no %s -- nothing to seed the board from" % BOARD_FILE)
 	else:
 		run.board = load(board_path) as ScenarioData
 		if run.board == null:
 			run.problems.append("%s did not load as a ScenarioData" % BOARD_FILE)
-
 	return run
 
 
@@ -114,4 +117,7 @@ func headline() -> Dictionary:
 		"sandbox": bool(start.get("sandbox", false)),
 		"dev_mode": bool(start.get("dev_mode", false)),
 		"dev_touched": bool(end.get("dev_touched", false)),
+		# Read off WHERE THE FOLDER IS, never off a stored flag (#53 slice 5) -- the move is the
+		# state, so this cannot go stale the way a marker could.
+		"sent": TelemetryStore.is_sent(run_id),
 	}

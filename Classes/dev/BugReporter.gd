@@ -153,7 +153,7 @@ func report(state_name: String, kind: Kind, note: String, frame: Image) -> Dicti
 		dev_frame.save_png(dir + "devtools.png")
 
 	print("Report written to %s" % ProjectSettings.globalize_path(dir))
-	var sent: bool = await _uploader.submit(dir, build_summary(stamp, state_name, kind, note))
+	var sent: bool = await _uploader.send_report(dir, build_summary(stamp, state_name, kind, note))
 	return {"dir": dir, "sent": sent}
 
 # The viewport texture is only valid after a draw, so this always costs a frame. Callers grab it

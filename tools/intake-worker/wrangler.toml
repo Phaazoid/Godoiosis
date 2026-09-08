@@ -1,0 +1,17 @@
+name = "iosis-reports"
+main = "src/index.js"
+compatibility_date = "2026-08-05"
+
+# The NAME does not change even though the folder did (#53 slice 5). It is what the deployed
+# Worker's URL is built from, and that URL is a const in the shipped game -- renaming it here would
+# move the endpoint out from under every build already in someone's hands.
+
+# DISCORD_WEBHOOK is a SECRET, not a var -- set it with `wrangler secret put`, never in this file.
+# This file is committed; secrets are not.
+
+# The run intake (#53 slice 5). database_id is filled in by `wrangler d1 create iosis-telemetry`,
+# and it is an identifier rather than a credential -- reaching the database still needs an account.
+[[d1_databases]]
+binding = "DB"
+database_name = "iosis-telemetry"
+database_id = "REPLACE_ME"

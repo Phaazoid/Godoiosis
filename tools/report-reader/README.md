@@ -1,6 +1,6 @@
 # Bug report reader (#131 follow-up)
 
-A read-only companion to `tools/report-worker/`: pulls the reports that worker relays into Discord
+A read-only companion to `tools/intake-worker/`: pulls the reports that worker relays into Discord
 back out again, so reading the channel by hand isn't the only way to see what testers filed. Built
 at the point the #131 README flagged — "revisit when reading the channel by hand stops being
 practical."
