@@ -133,6 +133,17 @@ func check() -> void:
 
 # Mission START: the blank slate restore_progress() writes a mid-battle snapshot back over (#87).
 func reset() -> void:
+	# FIRST, and before anything below is cleared (#53): this is the universal teardown, so it is
+	# the one place that catches every door out of a mission that does NOT go through a named exit
+	# -- F2, a board swap, Load Game, Mission Select. reload_current has exactly two callers and
+	# only restart_mission seals, so without this an F2 leaves the run OPEN and it goes on appending
+	# events describing a board that no longer exists.
+	#
+	# It composes with the named seals rather than fighting them: seal() early-returns when closed,
+	# so restart_mission's RESTARTED still wins and this call is then a no-op. And it must run BEFORE
+	# _rounds_elapsed is zeroed -- clear_board frees the units AFTER this, so the sealed record still
+	# reads the final board.
+	game.mission_log.seal(MissionLog.Ending.INTERRUPTED)
 	outcome = MissionRules.Outcome.ONGOING
 	_contested = false
 	_ending = false

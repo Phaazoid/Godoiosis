@@ -373,6 +373,33 @@ func test_beginning_again_seals_the_open_run_as_interrupted() -> void:
 	assert_str(str(end.get("outcome"))).is_equal("INTERRUPTED")
 
 
+# THE F2 CASE. reload_current has two callers and only restart_mission seals, so a board torn down
+# any OTHER way used to leave the run open, appending events about a board that no longer exists.
+# Driven through clear_board -- the universal teardown F2, a board swap, Load Game and Mission
+# Select all reach -- rather than through the dev key, so it covers all four doors at once.
+func test_tearing_the_board_down_seals_the_open_run() -> void:
+	var hero := _spawn(Team.Faction.PLAYER, Vector2i(0, 0))
+	mc._begin_turn()
+	var run := mission_log.run_id()
+	assert_bool(mission_log.is_open()).is_true()
+	var during := _lines_of(run).size()
+
+	game.scenario_manager.clear_board()
+
+	assert_bool(mission_log.is_open()).override_failure_message(
+		"a torn-down board must seal its run -- an open one goes on recording a dead board").is_false()
+	var lines := _lines_of(run)
+	var end: Dictionary = lines[lines.size() - 2]
+	assert_str(str(end.get("event"))).is_equal("mission_end")
+	assert_str(str(end.get("outcome"))).is_equal("INTERRUPTED")
+	# Sealed BEFORE the board was emptied, so the record still names who was standing.
+	assert_int((end.get("units", []) as Array).size()).override_failure_message(
+		"the seal must run before clear_board frees the units, or it records an empty board"
+		).is_equal(1)
+	assert_int(lines.size()).is_greater(during)
+	assert_object(hero).is_not_null()   # the fixture's own unit, not yet freed at seal time
+
+
 func test_abandon_seals_as_abandoned() -> void:
 	_spawn(Team.Faction.PLAYER, Vector2i(0, 0))
 	mc._begin_turn()
