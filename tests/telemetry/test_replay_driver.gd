@@ -95,6 +95,34 @@ func test_the_run_is_bound_by_starting_cell_not_by_recorded_id() -> void:
 	assert_array(driver.unbindable).is_empty()
 
 
+# THE CASE ABOVE IS NOT ENOUGH, and a mutant is what said so: binding by roster INDEX instead of by
+# cell passes it, because the recorded roster and the seeded board are both walks of units_root at
+# the same moment and so agree on order. The two answers are only distinguishable when that order
+# breaks -- which is exactly the situation cell-binding exists to survive, and index-binding does
+# not. So break it on purpose.
+func test_binding_does_not_depend_on_the_order_units_sit_in() -> void:
+	var run_id := await _record_a_mission()
+	var run := ReplayRun.load_run(run_id)
+	assert_bool(driver.seed(run)).is_true()
+	var before: Dictionary = driver._by_recorded_id.duplicate()
+	assert_int(before.size()).override_failure_message("fixture: nothing was bound").is_greater(1)
+
+	# Same units, same cells, different child order. A bind that reads an index now answers
+	# differently; one that reads the recorded cell cannot.
+	var kids: Array[Node] = game.units_root.get_children()
+	game.units_root.move_child(kids[0], kids.size() - 1)
+	driver._by_recorded_id.clear()
+	driver.unbindable.clear()
+	driver._bind_units()
+
+	assert_array(driver.unbindable).is_empty()
+	assert_int(driver._by_recorded_id.size()).is_equal(before.size())
+	for recorded_id in before:
+		assert_object(driver._by_recorded_id.get(recorded_id)).override_failure_message(
+			"reordering the board moved a binding -- it is reading position, not the recorded cell"
+			).is_same(before[recorded_id])
+
+
 # A harness that cannot report a difference would certify anything.
 func test_a_corrupted_outcome_is_reported_as_a_divergence() -> void:
 	var run_id := await _record_a_mission()
