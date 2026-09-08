@@ -31,6 +31,7 @@ class_name DevOverlay
 @onready var game_tool: GameTool = get_node("%Game")
 @onready var tool_tree: Tree = get_node("%ToolTree")
 @onready var dev_info: DevInfoTool = get_node("%Info")
+@onready var replay_tool: ReplayTool = get_node("%Replay")
 @onready var roster_tool: RosterTool = get_node("%Rosters")
 @onready var dev_mode_toggle: CheckButton = %DevModeToggle
 @onready var dev_mode_banner: PanelContainer = %DevModeBanner
@@ -70,6 +71,8 @@ const LEAVES: Array[Dictionary] = [
 		"tip": "The game's own constants — board markup and its colours, the unit readout, camera handling, world construction, elemental effects. Save to source writes each value into the declaration that authors it."},
 	{"scope": "Session", "label": "Experiments", "page": "%Experiments",
 		"tip": "Dev feature flags for this machine — persisted to user://, read by nothing a player ships with."},
+	{"scope": "Session", "label": "Replay", "page": "%Replay",
+		"tip": "Put a recorded playtest run back on the board and step it -- and say whether the rules still produce what the run recorded."},
 	{"scope": "Session", "label": "Info", "page": "%Info",
 		"tip": "Where this build writes and what it is — report folder, log, checkout, version — plus every dev key and what it does."},
 ]
@@ -119,6 +122,7 @@ func _ready() -> void:
 	unit_editor.init(game, scenario_header)
 	tile_brush.init(game)
 	dev_info.init(game)
+	replay_tool.init(game)
 	# A file op changes the board under every scenario-scoped page; the header says so once and
 	# the window routes it, so the header never reaches into a panel.
 	scenario_header.file_changed.connect(_on_scenario_file_changed)
@@ -273,6 +277,8 @@ func _on_tab_changed(_tab: int):
 		dialog_tool.refresh_on_show()
 	if showing(dev_info):
 		dev_info.refresh_on_show()
+	if showing(replay_tool):
+		replay_tool.refresh_on_show()
 	if not showing(tile_brush):
 		tile_brush.deactivate()
 	_update_zone_visibility()
