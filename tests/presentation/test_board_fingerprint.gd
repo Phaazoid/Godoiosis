@@ -153,13 +153,6 @@ func test_the_reset_recipe_returns_a_mutated_board_to_its_baseline() -> void:
 	# The RECIPE, not apply_scenario alone -- this is what a shared fixture would run per case, and
 	# the two extra steps are both there for a measured reason.
 	#
-	# WARM-UP. WeaponInstance.spaces is lazily grown (`while spaces.size() <= index`) rather than
-	# sized from the template, so a freshly made instance holds [] and a loaded one holds [[],[],[]].
-	# Both mean "no mods fitted", but it makes capture -> apply -> capture not a fixed point on the
-	# FIRST cycle only. Applying once before taking the baseline lands on the fixed point; the
-	# underlying churn (an @export whose written form depends on whether anything touched it) is a
-	# save-path issue in its own right and is filed separately, not papered over here.
-	#
 	# DIALOG. load_mission arms the #182 lesson; apply_scenario is the BOARD door and does not
 	# re-arm it, so case 1 would run with a timeline live and every later case without. Ending it is
 	# part of the reset rather than something the fingerprint should be taught to ignore.
@@ -185,6 +178,14 @@ func test_the_reset_recipe_returns_a_mutated_board_to_its_baseline() -> void:
 		+ "would leak between cases:\n  %s") % "\n  ".join(diff)).is_empty()
 
 
+# NOTE (#624, 2026-09-08). A case asserting that capture -> apply -> capture is a fixed point on the
+# FIRST cycle was written here and DELETED: it passes against a mutant restoring the bug, so it
+# claims coverage it does not have. The reason is worth keeping, because it is a property of this
+# seam rather than of that ticket -- load_mission's own apply_scenario READS every weapon it places,
+# so by the time any fingerprint can be taken the representation has already settled, whatever the
+# read does to it. A board-level witness cannot see a growing read; the cases with teeth are in
+# tests/weapons/test_weapon_instance_fitting.gd (the model) and tests/dev/test_weapon_template_lint
+# .gd (the bytes the writer emits), both falsified against exactly that mutant.
 func _reset_to(pristine: ScenarioData) -> void:
 	_game.scenario_manager.apply_scenario(pristine)
 	await DialogFixtures.end_all_dialog(self)

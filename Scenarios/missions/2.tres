@@ -84,7 +84,6 @@ squad_id = 0
 [sub_resource type="Resource" id="Resource_qdmue"]
 script = ExtResource("8_35mrr")
 template = ExtResource("10_3dhy4")
-spaces = Array[Array]([Array[ExtResource("9_qdmue")]([]), Array[ExtResource("9_qdmue")]([]), Array[ExtResource("9_qdmue")]([])])
 display_name = "Drill"
 
 [sub_resource type="Resource" id="Resource_3dhy4"]
@@ -138,7 +137,6 @@ limb_states = Dictionary[int, int]({
 [sub_resource type="Resource" id="Resource_n4ew8"]
 script = ExtResource("8_35mrr")
 template = ExtResource("10_3dhy4")
-spaces = Array[Array]([Array[ExtResource("9_qdmue")]([]), Array[ExtResource("9_qdmue")]([]), Array[ExtResource("9_qdmue")]([])])
 display_name = "Drill"
 
 [sub_resource type="Resource" id="Resource_6vxg7"]
@@ -206,7 +204,6 @@ squad_id = 1
 [sub_resource type="Resource" id="Resource_cv4cp"]
 script = ExtResource("8_35mrr")
 template = ExtResource("10_3dhy4")
-spaces = Array[Array]([Array[ExtResource("9_qdmue")]([]), Array[ExtResource("9_qdmue")]([]), Array[ExtResource("9_qdmue")]([])])
 display_name = "Drill"
 
 [sub_resource type="Resource" id="Resource_qsyhc"]
@@ -361,7 +358,6 @@ limb_states = Dictionary[int, int]({
 [sub_resource type="Resource" id="Resource_vx34y"]
 script = ExtResource("28_si1vl")
 template = ExtResource("29_vx34y")
-spaces = Array[Array]([Array[ExtResource("9_qdmue")]([]), Array[ExtResource("9_qdmue")]([]), Array[ExtResource("9_qdmue")]([])])
 display_name = "Gun"
 
 [sub_resource type="Resource" id="Resource_qa4qg"]
@@ -417,7 +413,6 @@ weapon_battle_states = Dictionary[int, Dictionary]({
 [sub_resource type="Resource" id="Resource_ybcgu"]
 script = ExtResource("35_v3otg")
 template = ExtResource("36_8eos2")
-spaces = Array[Array]([Array[ExtResource("9_qdmue")]([]), Array[ExtResource("9_qdmue")]([]), Array[ExtResource("9_qdmue")]([])])
 display_name = "Chainsword"
 
 [sub_resource type="Resource" id="Resource_vk1dv"]
@@ -470,7 +465,6 @@ weapon_battle_states = Dictionary[int, Dictionary]({
 [sub_resource type="Resource" id="Resource_v3otg"]
 script = ExtResource("8_35mrr")
 template = ExtResource("10_3dhy4")
-spaces = Array[Array]([Array[ExtResource("9_qdmue")]([]), Array[ExtResource("9_qdmue")]([]), Array[ExtResource("9_qdmue")]([])])
 display_name = "Drill"
 
 [sub_resource type="Resource" id="Resource_8eos2"]
@@ -522,20 +516,17 @@ limb_states = Dictionary[int, int]({
 [sub_resource type="Resource" id="Resource_5o3n1"]
 script = ExtResource("47_3kvu3")
 template = ExtResource("48_40nhu")
-spaces = Array[Array]([Array[ExtResource("9_qdmue")]([]), Array[ExtResource("9_qdmue")]([]), Array[ExtResource("9_qdmue")]([])])
 display_name = "Smasher"
 
 [sub_resource type="Resource" id="Resource_rwqt4"]
 script = ExtResource("49_twn6l")
 template = ExtResource("50_xrpfk")
-spaces = Array[Array]([Array[ExtResource("9_qdmue")]([]), Array[ExtResource("9_qdmue")]([]), Array[ExtResource("9_qdmue")]([])])
 display_name = "TorvArm"
 
 [sub_resource type="Resource" id="Resource_qufww"]
 script = ExtResource("49_twn6l")
 template = ExtResource("50_xrpfk")
 limb_kind = 1
-spaces = Array[Array]([Array[ExtResource("9_qdmue")]([]), Array[ExtResource("9_qdmue")]([]), Array[ExtResource("9_qdmue")]([])])
 display_name = "TorvLeg"
 
 [sub_resource type="Resource" id="Resource_gqkqi"]

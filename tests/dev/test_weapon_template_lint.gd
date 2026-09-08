@@ -190,6 +190,38 @@ func test_a_fitted_mod_survives_a_save_and_load() -> void:
 	assert_int(loaded.space(0).size()).is_equal(1)
 
 
+# The other half of that pair, and the half #624 left INFERRED rather than measured: a weapon
+# nobody has fitted anything to must write NOTHING, because `[]` is the property's own default and
+# the writer omits a defaulted key. `spaces` grew on every READ until then -- weighing the weapon
+# or drawing its fitting card was enough -- so a mod-less variant saved three empty spaces and the
+# guard above read that as three mods lost, which is what reddened main on 2026-09-08.
+#
+# THE READS ARE THE TEETH. A weapon that is saved and never touched has nothing to grow it, so
+# without them a regression restoring growth-on-read passes here untouched. They go through the
+# model doors rather than a surface because space() is the one door every surface reads through --
+# pinning it covers the fitting card's chip, the Item Editor's panel and get_effective_weight at
+# once. Each answer is asserted rather than discarded, so the case also states what an unfitted
+# weapon reads as.
+func test_a_weapon_nobody_has_fitted_writes_no_spaces_key() -> void:
+	var weapon := WeaponInstance.make(_template())
+	var mod := WeaponModData.new()
+	mod.size = 1
+
+	assert_int(weapon.get_effective_weight()).is_equal(0)
+	assert_array(weapon.active_modules(null)).is_empty()
+	assert_object(weapon.effective_main(null)).is_same(weapon.template.main_attack)
+	assert_int(weapon.lowest_space_for(mod)).is_equal(0)
+	assert_int(weapon.space_holding(mod)).is_equal(-1)
+	for i in range(weapon.space_count()):
+		assert_int(weapon.used_capacity(i)).is_equal(0)
+		assert_int(weapon.space(i).size()).is_equal(0)
+	assert_int(weapon.spaces.size()).override_failure_message(
+		"a read grew the array to %d entries" % weapon.spaces.size()).is_equal(0)
+
+	assert_int(ResourceSaver.save(weapon, FIXTURE_PATH)).is_equal(OK)
+	assert_str(FileAccess.get_file_as_string(FIXTURE_PATH)).not_contains("\nspaces = ")
+
+
 # The other half of the fireball rule. .tres omits properties at their default, so a template that
 # never wrote mod_spaces silently inherits whatever the default becomes -- which is exactly how a
 # prototype forced to one space would have quietly gained two. The claim is that every template

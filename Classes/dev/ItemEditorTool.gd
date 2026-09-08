@@ -347,12 +347,14 @@ func _populate_mod_space(weapon: WeaponInstance, index: int, mods: Dictionary, o
 	var capacity: int = weapon.template.mod_spaces[index]
 	DevWidgets.add_label(editor_container, "Space %d: %d / %d used" % [index + 1, weapon.used_capacity(index), capacity])
 
-	# space() hands back the LIVE array, which is what Remove below mutates through. It is untyped
-	# (Godot has no nested typed arrays), so the element needs its type named.
+	# space() is a read and only ever a read (#624). Remove goes through unfit(), which is the door
+	# #732 already gave a caller holding the mod itself -- erasing out of this array directly is a
+	# second answer to taking a mod off, and it skips the trim that keeps an emptied weapon's saved
+	# form identical to one that was never fitted. The array is untyped (Godot has no nested typed
+	# arrays), so the element needs its type named.
 	var fitted := weapon.space(index)
 	for i in range(fitted.size()):
 		var mod: WeaponModData = fitted[i]
-		var idx := i
 		var row := HBoxContainer.new()
 		var label := Label.new()
 		label.text = "%s (size %d)" % [mod.display_name if mod.display_name != "" else mod.id, mod.size]
@@ -361,7 +363,7 @@ func _populate_mod_space(weapon: WeaponInstance, index: int, mods: Dictionary, o
 		var remove := Button.new()
 		remove.text = "Remove"
 		remove.pressed.connect(func():
-			fitted.remove_at(idx)
+			weapon.unfit(mod)
 			populate()
 		)
 		row.add_child(remove)

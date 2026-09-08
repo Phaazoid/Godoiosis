@@ -329,6 +329,71 @@ func test_unfit_takes_a_mod_off_whichever_space_holds_it() -> void:
 	assert_int(w.used_capacity(2)).is_equal(0)
 	assert_bool(w.unfit(mod)).is_false()   # nothing to take off is false, never a silent success
 
+# --- What the array STORES (#624) ---
+
+# The invariant `spaces` carries: one entry past the last space holding something, and nothing at
+# all when nothing is fitted. The length is never a claim about how many spaces the weapon HAS --
+# that is space_count(), off the template -- so a five-space weapon with one mod in space 3 stores
+# three entries and reads its other two through the empty-space answer.
+func test_a_weapon_stores_only_as_far_as_its_deepest_fitted_space() -> void:
+	var w := WeaponInstance.make(_template(0, {}, 0, [1, 1, 1, 1, 1]))
+	assert_int(w.spaces.size()).is_equal(0)
+
+	var third := _mod(1)
+	assert_bool(w.fit(2, third)).is_true()
+	assert_int(w.spaces.size()).is_equal(3)
+	assert_int(w.space_count()).is_equal(5)          # the template still says five
+	assert_int(w.space(4).size()).is_equal(0)        # and the unstored ones read as empty
+
+	var fifth := _mod(1)
+	assert_bool(w.fit(4, fifth)).is_true()
+	assert_int(w.spaces.size()).is_equal(5)
+	assert_bool(w.unfit(fifth)).is_true()
+	assert_int(w.spaces.size()).is_equal(3)          # back to the deepest that still holds one
+	assert_int(w.space_holding(third)).is_equal(2)   # ...without disturbing the one that does
+
+# Fitting and then taking it off leaves a weapon indistinguishable from one nobody ever touched --
+# which is the whole of #624 at the model level, since that form is what the writer serializes.
+# The fit is asserted as a CLAIM rather than left as setup: an unfit that silently did nothing
+# would leave the array empty too, and read exactly like a successful one (#486's lesson).
+func test_taking_the_last_mod_off_returns_the_weapon_to_its_unfitted_form() -> void:
+	var w := WeaponInstance.make(_template(0, {}, 0, [1, 2, 3]))
+	var mod := _mod(2)
+	assert_bool(w.fit(1, mod)).is_true()
+	assert_int(w.used_capacity(1)).is_equal(2)       # the fit LANDED -- the case's teeth
+	assert_int(w.spaces.size()).is_equal(2)
+
+	assert_bool(w.unfit(mod)).is_true()
+	assert_array(w.spaces).override_failure_message(
+		"an emptied weapon kept %d entries" % w.spaces.size()).is_empty()
+
+# A READ IS A READ. Every one of these grew the array before #624, so weighing a weapon or drawing
+# its fitting card changed what it would save -- and a mod-less variant then wrote three empty
+# spaces that #486's migration guard read as three mods lost.
+func test_no_read_grows_the_array() -> void:
+	var w := WeaponInstance.make(_template(0, {}, 0, [1, 2, 3]))
+	var mod := _mod(1)
+	assert_int(w.get_effective_weight()).is_equal(0)
+	assert_array(w.active_modules(null)).is_empty()
+	assert_int(w.space_holding(mod)).is_equal(-1)
+	assert_bool(w.can_fit(2, mod)).is_true()
+	for i in range(w.space_count()):
+		assert_int(w.used_capacity(i)).is_equal(0)
+		assert_int(w.space(i).size()).is_equal(0)
+	assert_array(w.spaces).override_failure_message(
+		"a read grew the array to %d entries" % w.spaces.size()).is_empty()
+
+# The throwaway a read gets for an unstored space must not be one SHARED object -- a const Array is
+# read-only and that flag travels with an assignment (#486), and one shared instance would let two
+# weapons see each other's mods.
+func test_two_reads_of_an_unstored_space_are_not_the_same_array() -> void:
+	var w := WeaponInstance.make(_template(0, {}, 0, [1, 2, 3]))
+	var first := w.space(0)
+	assert_bool(first.is_read_only()).is_false()
+	first.append(_mod(1))                            # writing to a throwaway reaches nothing
+	assert_int(w.space(0).size()).is_equal(0)
+	assert_int(w.used_capacity(0)).is_equal(0)
+
 # A mod authors no proficiency requirement: what it NEEDS is decided by its size against this
 # weapon's capacities, since proficiency N activates spaces 1..N.
 func test_what_a_mod_needs_is_the_lowest_space_big_enough_to_hold_it() -> void:

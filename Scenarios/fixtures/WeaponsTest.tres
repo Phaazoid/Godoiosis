@@ -43,7 +43,6 @@
 [sub_resource type="Resource" id="Resource_cl8yi"]
 script = ExtResource("4_nn2sb")
 template = ExtResource("6_e7coi")
-spaces = Array[Array]([Array[ExtResource("5_dv1lo")]([]), Array[ExtResource("5_dv1lo")]([]), Array[ExtResource("5_dv1lo")]([])])
 display_name = "Springy"
 
 [sub_resource type="Resource" id="Resource_ykmmo"]
@@ -99,7 +98,6 @@ weapon_battle_states = Dictionary[int, Dictionary]({
 [sub_resource type="Resource" id="Resource_o386q"]
 script = ExtResource("12_vltmb")
 template = ExtResource("13_r84dj")
-spaces = Array[Array]([Array[ExtResource("5_dv1lo")]([]), Array[ExtResource("5_dv1lo")]([]), Array[ExtResource("5_dv1lo")]([])])
 display_name = "Smasher"
 
 [sub_resource type="Resource" id="Resource_os73n"]
@@ -156,7 +154,6 @@ weapon_battle_states = Dictionary[int, Dictionary]({
 [sub_resource type="Resource" id="Resource_g8ks8"]
 script = ExtResource("12_vltmb")
 template = ExtResource("13_r84dj")
-spaces = Array[Array]([Array[ExtResource("5_dv1lo")]([]), Array[ExtResource("5_dv1lo")]([]), Array[ExtResource("5_dv1lo")]([])])
 display_name = "Smasher"
 
 [sub_resource type="Resource" id="Resource_eturi"]
@@ -212,7 +209,6 @@ weapon_battle_states = Dictionary[int, Dictionary]({
 [sub_resource type="Resource" id="Resource_0qra6"]
 script = ExtResource("4_nn2sb")
 template = ExtResource("6_e7coi")
-spaces = Array[Array]([Array[ExtResource("5_dv1lo")]([]), Array[ExtResource("5_dv1lo")]([]), Array[ExtResource("5_dv1lo")]([])])
 display_name = "Springy"
 
 [sub_resource type="Resource" id="Resource_yhng1"]
@@ -269,7 +265,6 @@ weapon_battle_states = Dictionary[int, Dictionary]({
 [sub_resource type="Resource" id="Resource_enc8v"]
 script = ExtResource("4_nn2sb")
 template = ExtResource("6_e7coi")
-spaces = Array[Array]([Array[ExtResource("5_dv1lo")]([]), Array[ExtResource("5_dv1lo")]([]), Array[ExtResource("5_dv1lo")]([])])
 display_name = "Springy"
 
 [sub_resource type="Resource" id="Resource_32q60"]
@@ -326,7 +321,6 @@ weapon_battle_states = Dictionary[int, Dictionary]({
 [sub_resource type="Resource" id="Resource_e7ndh"]
 script = ExtResource("20_os73n")
 template = ExtResource("21_ds0m5")
-spaces = Array[Array]([Array[ExtResource("5_dv1lo")]([]), Array[ExtResource("5_dv1lo")]([]), Array[ExtResource("5_dv1lo")]([])])
 display_name = "Chainsword"
 
 [sub_resource type="Resource" id="Resource_766s7"]
@@ -382,7 +376,6 @@ weapon_battle_states = Dictionary[int, Dictionary]({
 [sub_resource type="Resource" id="Resource_7qklc"]
 script = ExtResource("25_e7coi")
 template = ExtResource("26_ty032")
-spaces = Array[Array]([Array[ExtResource("5_dv1lo")]([]), Array[ExtResource("5_dv1lo")]([]), Array[ExtResource("5_dv1lo")]([])])
 display_name = "Drill"
 
 [sub_resource type="Resource" id="Resource_odq6y"]
@@ -433,7 +426,6 @@ limb_states = Dictionary[int, int]({
 [sub_resource type="Resource" id="Resource_gl26j"]
 script = ExtResource("25_e7coi")
 template = ExtResource("26_ty032")
-spaces = Array[Array]([Array[ExtResource("5_dv1lo")]([]), Array[ExtResource("5_dv1lo")]([]), Array[ExtResource("5_dv1lo")]([])])
 display_name = "Drill"
 
 [sub_resource type="Resource" id="Resource_njqnc"]
@@ -485,7 +477,7 @@ limb_states = Dictionary[int, int]({
 [sub_resource type="Resource" id="Resource_wtwd2"]
 script = ExtResource("30_vi37y")
 template = ExtResource("31_vltmb")
-spaces = Array[Array]([Array[ExtResource("5_dv1lo")]([ExtResource("35_os73n")]), Array[ExtResource("5_dv1lo")]([]), Array[ExtResource("5_dv1lo")]([])])
+spaces = Array[Array]([Array[ExtResource("5_dv1lo")]([ExtResource("35_os73n")])])
 display_name = "Super Scoper"
 
 [sub_resource type="Resource" id="Resource_8r6kq"]
@@ -541,7 +533,6 @@ weapon_battle_states = Dictionary[int, Dictionary]({
 [sub_resource type="Resource" id="Resource_rs6iw"]
 script = ExtResource("12_vltmb")
 template = ExtResource("13_r84dj")
-spaces = Array[Array]([Array[ExtResource("5_dv1lo")]([]), Array[ExtResource("5_dv1lo")]([]), Array[ExtResource("5_dv1lo")]([])])
 display_name = "Smasher"
 
 [sub_resource type="Resource" id="Resource_2aysn"]

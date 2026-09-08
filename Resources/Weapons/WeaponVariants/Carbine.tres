@@ -7,5 +7,4 @@
 [resource]
 script = ExtResource("1_oibrp")
 template = ExtResource("3_71psw")
-spaces = Array[Array]([Array[ExtResource("2_7jygn")]([]), Array[ExtResource("2_7jygn")]([]), Array[ExtResource("2_7jygn")]([])])
 display_name = "Carbine"

@@ -64,10 +64,11 @@ func open(suite: GdUnitTestSuite, prepare := Callable()) -> void:
 	if fresh_mode():
 		return   # nothing is shared; reset() builds a scene of its own per case
 	await _build(suite)
-	# WARM-UP, then baseline. capture -> apply -> capture is not a fixed point on the FIRST cycle
-	# (WeaponInstance.spaces is lazily grown rather than sized from its template, #624), so the
-	# baseline is taken after one reset rather than before it. Without this every case would report
-	# a leak that is really a representation change, and the check would be worthless on day one.
+	# The baseline is taken AFTER one reset, so it is the state every case actually starts from --
+	# apply_scenario is what arms the #182 dialog reset and re-frames the camera, and a baseline
+	# taken before it would report those as a leak on case one. (It also used to be load-bearing
+	# for #624, where reading a weapon grew its spaces array and capture -> apply -> capture was
+	# not a fixed point on the first cycle; that is fixed at the source and no longer a reason.)
 	_pristine = game.scenario_manager.capture_scenario("__shared_pristine")
 	await _apply(suite)
 	_pristine_shot = scene.capture_camera_start()
