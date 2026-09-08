@@ -60,6 +60,11 @@ func send_pending() -> int:
 		# A seal during a send: remember it rather than interleaving two walks over one folder.
 		_again = true
 		return 0
+	# NEITHER OF THESE IS THE SAFETY PROPERTY, and a mutant proved it: deleting the is_configured
+	# call changes nothing observable, because Uploader.submit refuses a headless run itself and no
+	# POST is attempted either way. What they buy is not doing the WORK -- walking pending/ and
+	# reading every run off disk to build payloads nothing will send. The gate that matters lives
+	# one class up, and `test_a_headless_run_never_uploads` asserts on THAT.
 	if not is_configured() or not TelemetryStore.persistence_enabled:
 		return 0
 
