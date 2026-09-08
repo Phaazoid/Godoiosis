@@ -46,6 +46,7 @@ static func check(game) -> Array[Dictionary]:
 	_check_ai_factions(game, board, found)
 	_check_placement(game, board, found)
 	_check_cohesion(game, found)
+	_check_fittings(board, found)
 	_check_look_preset(game, found)
 	_check_roster(game, found)
 	_check_deployment(game, found)
@@ -184,6 +185,28 @@ static func _check_cohesion(game, found: Array[Dictionary]) -> void:
 		_add(found, Severity.DEGRADES,
 			("%s cannot reach %s over terrain it can cross -- it is ejected into a solo squad the "
 				+ "first time that squad acts.") % [member.get_unit_name(), leader.get_unit_name()])
+
+
+# A carried weapon wearing a fitting the model would refuse today (#837) -- a mod stranded past a
+# space the template no longer has, one over a capacity that was narrowed under it, one whose family
+# stopped matching. WeaponInstanceLint is the rule; this only scopes it to the board in your hands,
+# which is the surface that matters because 113 of the repo's 127 WeaponInstances are scenario-
+# embedded and reach CI but no panel.
+#
+# Walks the WHOLE inventory rather than Unit._mod_sources(), which covers the equipped weapon plus
+# installed prosthetics and would silently skip a stashed one -- a weapon nobody is holding is exactly
+# where a stranded mod survives longest.
+static func _check_fittings(board: BoardContext, found: Array[Dictionary]) -> void:
+	for unit: Unit in board.units:
+		if not is_instance_valid(unit):
+			continue
+		for item: Item in unit.inventory:
+			var weapon := item as WeaponInstance
+			if weapon == null:
+				continue
+			for finding: Dictionary in WeaponInstanceLint.check(weapon):
+				_add(found, Severity.DEGRADES, "%s's %s: %s" % [
+					unit.get_unit_name(), weapon.shown_name(), finding["text"]])
 
 
 # A named look preset that no longer resolves. The board still plays, so DEGRADES -- it just opens
