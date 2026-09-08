@@ -21,9 +21,17 @@ class_name MissionLog
 # previous turn left it, and a clock-expiry death lands in the next one.
 #
 # APPENDED AND FLUSHED PER LINE, so an unsealed file on disk is a complete log up to the moment the
-# process died. That IS the quit record: Alt-F4, a crash, an F2 swap all leave one, and begin()
-# seals any still-open run as INTERRUPTED before starting the next. The three named exits seal
-# explicitly only so the outcome carries its right name -- a restart is a metric of its own.
+# process died, and begin() seals any still-open run as INTERRUPTED before starting the next. The
+# named exits seal explicitly only so the outcome carries its right name -- a restart is a metric
+# of its own.
+#
+# THE RAGEQUIT IS A DATA POINT (#53 slice 4b, dev: *"If the user Alt F4s, I want that run too"*).
+# What the flushed file LACKS is mission_end and summary, and the summary is the row that gets
+# indexed -- so a killed run would upload as a fragment with no outcome, duration or metrics.
+# Three doors close that: the pause menu's Quit seals QUIT, _notification seals QUIT on the window
+# close request, and sweep_unsealed() finishes at the next launch whatever neither could reach
+# (a hard kill, a crash, power loss) as CRASHED. begin()'s seal cannot do this job and never
+# could: _open is an INSTANCE var, so it can only ever see runs this process opened.
 #
 # Enum values are written as NAMES, never ints; names survive reordering across builds. Every line
 # carries seq, t_ms since mission start, and the round it happened in. A unit is named by its
@@ -34,7 +42,10 @@ class_name MissionLog
 # how the suite drives it. Events with no open run are DROPPED: after STAY at the end banner the
 # board unlocks for inspection and the queue signals keep firing.
 
-enum Ending { VICTORY, DEFEAT, ABANDONED, RESTARTED, INTERRUPTED }
+# QUIT and CRASHED are two members rather than one because the difference is the data the ask was
+# FOR: both end a run early and only one of them is a bug. Appended, and written as NAMES, so runs
+# already on disk and ReplayDriver's seal are untouched by their arrival.
+enum Ending { VICTORY, DEFEAT, ABANDONED, RESTARTED, INTERRUPTED, QUIT, CRASHED }
 
 var game   # the Game coordinator; set by game._ready()
 
@@ -75,6 +86,24 @@ func _ready() -> void:
 	game.squad_manager.squad_member_joined.connect(_on_squad_joined)
 	# The gear ACT, forwarded up from inventory_panel's one funnel.
 	game.unit_info_panel.loadout_acted.connect(_on_loadout_acted)
+
+
+# ALT-F4, AND THE ONLY HOOK THAT SEES IT (#53 slice 4b). The project's first _notification handler.
+#
+# It reaches here: Window::_propagate_window_notification descends into every child EXCEPT a child
+# Window, and the game sits under a SubViewport -- which is not one. The same rule is why closing
+# DevOverlay, which IS a Window, propagates only inside itself and cannot seal the run out from
+# under a mission still being played, so no dev-window guard is needed.
+#
+# auto_accept_quit stays at its default. The notification is propagated SYNCHRONOUSLY, and quit()
+# only sets a flag read at the end of the loop iteration, so this seals, returns, and the engine
+# shuts down by itself. There is no path where a failed seal leaves a window that will not close.
+#
+# If this is ever wrong, the run is not lost -- sweep_unsealed picks it up at the next launch and
+# labels it CRASHED. The sweep is the mechanism; this handler is the refinement that names it.
+func _notification(what: int) -> void:
+	if what == NOTIFICATION_WM_CLOSE_REQUEST:
+		seal(Ending.QUIT)
 
 
 func is_open() -> bool:
@@ -147,6 +176,89 @@ func seal(ending: Ending, failed_by: MissionRules.LoseCondition = MissionRules.L
 	if _file != null:
 		_file.close()
 		_file = null
+
+
+# ==============================================================================
+#  The launch sweep -- runs nobody closed
+# ==============================================================================
+
+# FINISH WHAT NO SEAL REACHED (#53 slice 4b). Called once from game._ready(), ahead of anything else
+# telemetry-shaped, so it can never meet a run this process opened.
+#
+# HERE rather than on TelemetryStore, which the plan named: the sweep needs ReplayRun to read a run
+# and MissionSummary to project it, and both of those already depend on TelemetryStore -- putting it
+# there would invert the stack and make two dependency cycles. TelemetryStore keeps what it owns:
+# the path and the rewrite. This file keeps what IT owns -- the line format, the Ending vocabulary,
+# and what a finished record looks like. The sweep is seal() for a process that is no longer around.
+#
+# The persistence_enabled early-return is load-bearing rather than hygiene: 89 suites boot this
+# scene, and headless they must not go walking a real user:// folder.
+#
+# Returns how many runs were finished, for the suite and for a dev asking what a launch just did.
+static func sweep_unsealed() -> int:
+	if not TelemetryStore.persistence_enabled:
+		return 0
+	var swept := 0
+	for run_id: String in ReplayRun.list_runs():
+		if _finish_abandoned_run(run_id):
+			swept += 1
+	return swept
+
+
+# One run, or false if there is nothing to do. A run with a mission_end was sealed by somebody --
+# leave it alone; that is also what makes a second sweep a no-op rather than a rewrite.
+static func _finish_abandoned_run(run_id: String) -> bool:
+	var run := ReplayRun.load_run(run_id)
+	if run.events.is_empty():
+		return false
+	for e: Dictionary in run.events:
+		if e.get("event") == "mission_end":
+			return false
+
+	# The clock stopped when the process did, so the last line we can read IS the end: seq
+	# continues from it and t_ms freezes at it. Inventing a later timestamp would be inventing
+	# playtime nobody played.
+	var last: Dictionary = run.events.back()
+	var seq := int(last.get("seq", run.events.size() - 1)) + 1
+	var t_ms := int(last.get("t_ms", 0))
+	var round_no := int(last.get("round", 1))
+	var end := line(seq, t_ms, round_no, "mission_end", {
+		"outcome": Ending.keys()[Ending.CRASHED],
+		"failed_by": MissionRules.LoseCondition.keys()[MissionRules.LoseCondition.NONE],
+		"seconds": t_ms / 1000.0,
+		# NULL, not false: the flag lived in memory and died with the process. "We do not know"
+		# and "no dev tool was used" are different answers and a replay of this run must not read
+		# the second one off the first.
+		"dev_touched": null,
+		# The last vitals anybody wrote down. MissionSummary already falls back to exactly this
+		# when there is no mission_end; carrying the same rows HERE means every other reader gets
+		# the answer off the ending like it does for a sealed run, with no fallback of its own.
+		"units": _last_known_vitals(run.events),
+		# WE INFERRED THIS ENDING, we did not watch it. Stated rather than papered over -- and
+		# carried into the summary below, because that row is where the querying happens.
+		"swept": true,
+	})
+	var events: Array[Dictionary] = run.events.duplicate()
+	events.append(end)
+	var summary := line(seq + 1, t_ms, round_no, "summary", {"summary": MissionSummary.of(events)})
+
+	# THE SURVIVING LINES VERBATIM, never re-stringified: JSON has one number type, so a parse and
+	# a re-encode would turn every int in the file into a float. raw_lines is what load_run kept
+	# for exactly this, and it already stops where a truncated last line does.
+	var lines := run.raw_lines.duplicate()
+	lines.append(JSON.stringify(end))
+	lines.append(JSON.stringify(summary))
+	return TelemetryStore.rewrite_run_events(run_id, lines)
+
+
+static func _last_known_vitals(events: Array[Dictionary]) -> Array:
+	for i in range(events.size() - 1, -1, -1):
+		if events[i].get("event") == "turn_start":
+			var units: Variant = events[i].get("units", [])
+			if units is Array:
+				return units as Array
+			return []
+	return []
 
 
 # ==============================================================================
@@ -293,20 +405,25 @@ func _on_unit_died(unit: Unit) -> void:
 #  The line
 # ==============================================================================
 
+# THE ENVELOPE, SPELLED ONCE. Static and parameterised because the launch sweep writes lines too
+# and cannot call _record -- that one reads the clock and a live MissionController, neither of
+# which a swept run still has. A second hand-built spelling of these four keys would be a duplicate
+# seam that fails the day one of them is renamed.
+static func line(seq: int, t_ms: int, round_no: int, kind: String, fields: Dictionary) -> Dictionary:
+	var row := {"seq": seq, "t_ms": t_ms, "round": round_no, "event": kind}
+	row.merge(fields)
+	return row
+
+
 func _record(kind: String, fields: Dictionary) -> void:
 	if not _open:
 		return
-	var line := {
-		"seq": _seq,
-		"t_ms": Time.get_ticks_msec() - _started_ms,
-		"round": game.mission_controller.rounds_elapsed() + 1,
-		"event": kind,
-	}
+	var row := line(_seq, Time.get_ticks_msec() - _started_ms,
+		game.mission_controller.rounds_elapsed() + 1, kind, fields)
 	_seq += 1
-	line.merge(fields)
-	_events.append(line)
+	_events.append(row)
 	if _file != null:
-		_file.store_line(JSON.stringify(line))
+		_file.store_line(JSON.stringify(row))
 		_file.flush()
 
 

@@ -10,11 +10,17 @@ class_name ReplayRun
 # from a process that was killed still has its events, and a run recorded with persistence off has
 # no folder at all -- so `problems` carries what is missing instead of refusing to load.
 
-const EVENTS_FILE := "events.jsonl"
-const BOARD_FILE := "board.tres"
+# The two file names live on TelemetryStore, which owns every path in the store.
+const EVENTS_FILE := TelemetryStore.EVENTS_FILE
+const BOARD_FILE := TelemetryStore.BOARD_FILE
 
 var run_id := ""
 var events: Array[Dictionary] = []
+# The same lines as TEXT, exactly as they were written. The launch sweep (MissionLog.sweep_unsealed)
+# rewrites a run it finishes, and re-encoding `events` would not give it back what it read: JSON has
+# one number type, so every int in the file would come back a float. Kept beside the parse rather
+# than read a second time, so the truncation rule below governs both halves at once.
+var raw_lines := PackedStringArray()
 var board: ScenarioData = null
 # Why this run cannot be replayed, in the player's-eye order: the tool shows these instead of a
 # Load button that does nothing.
@@ -53,6 +59,7 @@ static func load_run(run_id: String) -> ReplayRun:
 			var parsed: Variant = JSON.parse_string(raw)
 			if parsed is Dictionary:
 				run.events.append(parsed)
+				run.raw_lines.append(raw)
 			else:
 				# A run being APPENDED to when the process died can end mid-line. Report it and keep
 				# the lines before it: a partial run still replays up to where it stops.

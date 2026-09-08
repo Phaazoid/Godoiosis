@@ -137,6 +137,10 @@ var mission_log: MissionLog   # the playtest recorder (#53); writes down what th
 # ==============================================================================
 
 func _ready() -> void:
+	# THE RUNS NOBODY CLOSED (#53 slice 4b). A process killed mid-mission left a folder with no
+	# ending, and a launch is the only moment anything can finish one. FIRST, and ahead of
+	# _build_collaborators: this must never meet a run this process is about to open.
+	MissionLog.sweep_unsealed()
 	_build_collaborators()
 
 	# SubViewports default to LINEAR filtering and per-node texture_filter only patches part of
@@ -377,6 +381,11 @@ func _open_pause_menu() -> void:
 		PauseMenu.Choice.TITLE:
 			mission_controller.abandon_mission()
 		PauseMenu.Choice.QUIT:
+			# A DELIBERATE EXIT IS ITS OWN OUTCOME (#53 slice 4b), and this door needs its own seal:
+			# quit() ends the loop without a window close, so MissionLog's close-request handler --
+			# which catches Alt-F4 -- never fires here. Sealing twice would be harmless anyway; seal
+			# returns immediately on a run that is already closed.
+			mission_log.seal(MissionLog.Ending.QUIT)
 			get_tree().quit()
 		PauseMenu.Choice.GLOSSARY:
 			await GlossaryScreen.show_screen(self)
