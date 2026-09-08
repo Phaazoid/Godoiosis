@@ -59,11 +59,54 @@ static func get_templates() -> Dictionary:
 		templates[p] = prototypes[p]
 	return templates
 
-# Everything grantable to a unit — only authored, saved instances (mirrors RuneCatalog.
-# get_editable): a bare family template is shared identity, not a real carryable weapon.
-# Craft an instance from a template via the Item Editor first, then it shows up here.
+# A plain, unfitted instance of EVERY template -- families and prototypes alike -- derived rather
+# than authored (#835). The dev wants one of each weapon always pickable; the old bridge was a
+# hand-saved mod-less variant per template, which is content carrying no authored decision. It
+# drifted (the file froze a copy of the template's display_name, so a family rename stopped
+# reaching its own generic) and it collided (a generic is named after its family, which is the
+# most collidable name there is -- see #833).
+#
+# Keyed by FILE, and built off by_file, because a generic's identity IS its template file (#812's
+# rule): by_name would silently drop one the day two templates shared a display name.
+#
+# UNCONDITIONAL -- never "unless a plain variant already exists". That condition would stop
+# deriving the moment such a variant was authored, which is a rule that changes its mind about
+# content. Which of the two a NAMED list shows is get_editable's business, one door down.
+#
+# A null is dropped rather than carried: make() answers an unmapped weapon_type with null, and
+# this list does not get to lean on WeaponTemplateLint blocking that at the save door.
+static func generics() -> Dictionary:
+	var found := {}
+	for dir: String in [MAIN_VARIETIES_DIR, PROTOTYPE_DIR]:
+		var templates := ResourceCatalog.by_file(dir, WeaponData)
+		for file: String in templates:
+			var template: WeaponData = templates[file]
+			var made := WeaponInstance.make(template)
+			if made != null:
+				found[file] = made
+	return found
+
+# Everything grantable to a unit, by display name. Since #835 that is the authored instances PLUS
+# a derived generic for every template, which is #80's rule kept rather than repealed: what a
+# picker offers is a real WeaponInstance, never the shared template. Only who CREATES the instance
+# changed -- the catalog derives it instead of the dev saving a file (dev, 2026-09-08).
+#
+# AUTHORED WINS a name clash. A saved variant is the specific thing and a generic is the fallback,
+# so an authored "Carbine" keeps the row and its derived twin simply does not list. That is what
+# lets the hand-made generics be deleted as a separate step without the list changing under him.
 static func get_editable() -> Dictionary:
-	return get_saved()
+	var all := get_saved()
+	var derived := generics()
+	for file: String in derived:
+		var generic: WeaponInstance = derived[file]
+		# ResourceCatalog._key_for's own fallback, said again here because a DERIVED entry has no
+		# display_name of its own: the template's name where it authored one, the file where not.
+		var key: String = generic.shown_name()
+		if key == "":
+			key = file
+		if not all.has(key):
+			all[key] = generic
+	return all
 
 static func get_spawnable() -> Dictionary:
 	var all := get_editable()

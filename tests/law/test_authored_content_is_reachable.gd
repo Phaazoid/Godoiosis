@@ -6,6 +6,11 @@
 # What this law asks is the question the suite could not: can the dev GET one. It is deliberately
 # about the ITEM CATALOGS rather than about vials -- the next content kind added without a catalog
 # fails here rather than being noticed in play.
+#
+# WEAPONS joined it in #835, and they are the same fault wearing a second shape: their catalog
+# existed and was scanned, but only the SAVED-variants folder ever fed a picker, so seven authored
+# prototypes and a family base could not be granted to anyone while every test stayed green. A kind
+# can be unreachable for want of a catalog, OR for want of a bridge from the layer it is authored in.
 extends GdUnitTestSuite
 
 const VIAL_DIR := "res://Resources/Vials/"
@@ -59,3 +64,56 @@ func test_a_vial_survives_a_grant_copy() -> void:
 		assert_object(granted).override_failure_message(
 				"copying '%s' for a grant did not hand back a VialData" % name).is_not_null()
 		assert_array(granted.granted_elements()).is_not_empty()
+
+
+# The weapon half. A template is authored in MainVarieties/ or Prototypes/ and is not itself
+# carryable, so the picker offers the DERIVED generic built on it (#835). Sweeps whatever is on
+# disk and passes vacuously on an empty scan -- the claim is reachability, not which weapons exist.
+func test_the_editors_item_picker_offers_every_weapon_template() -> void:
+	var tool_node: UnitEditorTool = auto_free(UnitEditorTool.new())
+	var offered: Array = tool_node._item_catalog().keys()
+
+	for dir: String in [WeaponCatalog.MAIN_VARIETIES_DIR, WeaponCatalog.PROTOTYPE_DIR]:
+		var templates := ResourceCatalog.by_file(dir, WeaponData)
+		for file: String in templates:
+			var template: WeaponData = templates[file]
+			var name: String = template.display_name if template.display_name != "" else file
+			assert_bool(offered.has(name)).override_failure_message(
+					"the dev editors cannot offer '%s' -- it is authored and nobody can hold one"
+					% name).is_true()
+
+
+# THE LAST HOP, and the one every case above is blind to: a name in the catalog still has to become
+# a ROW. #804 is the precedent and the warning -- a reflective editor row compared against the wrong
+# thing, matched nothing, and left the attack stamp unauthorable for a whole ticket while its data
+# layer tested clean. "Offered" is not "drawn", and only one of those is what the dev can click.
+#
+# Sweeps whatever the catalog offers, so it covers vials, armour, runes, weapons and the DERIVED
+# generics (#835) in one claim, and passes vacuously on an empty catalog.
+func test_every_offered_item_draws_a_row_in_the_inventory_picker() -> void:
+	var tool_node: UnitEditorTool = auto_free(UnitEditorTool.new())
+	tool_node._inventory.resize(Unit.MAX_INVENTORY_SIZE)
+	var box: VBoxContainer = auto_free(VBoxContainer.new())
+	tool_node._add_inventory_section(box)
+
+	var picker := _first_option_button(box)
+	assert_object(picker).override_failure_message(
+			"the inventory section built no dropdown at all").is_not_null()
+
+	var listed: Array[String] = []
+	for i in range(picker.item_count):
+		listed.append(picker.get_item_text(i))
+
+	for name: String in tool_node._item_catalog():
+		assert_bool(listed.has(name)).override_failure_message(
+				"'%s' is offered by the catalog and no row draws it" % name).is_true()
+
+
+func _first_option_button(node: Node) -> OptionButton:
+	for child in node.get_children():
+		if child is OptionButton:
+			return child
+		var found := _first_option_button(child)
+		if found != null:
+			return found
+	return null

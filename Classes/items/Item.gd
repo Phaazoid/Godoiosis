@@ -34,6 +34,14 @@ static func property_tips() -> Dictionary:
 	}
 
 
+# THE one door for reading a NAME -- describe()'s sibling, and there for its reason (#745): the
+# field is storage, so a kind that inherits its wording from somewhere else says so once, here.
+# WeaponInstance reads through to its template, which is what lets a DERIVED generic (#835) carry
+# no name of its own and still list as "Chemical Spitter" rather than as its filename.
+func shown_name() -> String:
+	return display_name
+
+
 # THE one door for reading flavour, so a kind that inherits its wording from somewhere else can say
 # so in one place (#745). Everything that renders a description asks this, never the field: the field
 # is storage, and for a WeaponInstance the stored value is usually empty on purpose.
