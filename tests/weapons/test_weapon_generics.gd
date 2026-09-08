@@ -19,6 +19,15 @@ func _templates() -> Dictionary:
 	return found
 
 
+# Ad hoc, for the one case below that must not depend on what happens to be authored (rule 4).
+func _fixture_template() -> WeaponData:
+	var t := WeaponData.new()
+	t.weapon_type = WeaponData.WeaponType.CHAINSWORD
+	t.main_attack = WeaponAttackData.new()
+	t.mod_spaces = [1, 2, 3] as Array[int]
+	return t
+
+
 # The derivation itself, keyed by FILE because a generic's identity IS its template file (#812).
 # SHARES the template rather than copying it: a copy severs the live sync the whole model rests on,
 # so retuning a family would stop reaching the generic it is the generic OF.
@@ -74,12 +83,21 @@ func test_granting_a_generic_hands_back_an_independent_instance() -> void:
 		assert_object(granted.template).override_failure_message(
 				"granting '%s' deep-copied the shared template" % file).is_same(generic.template)
 
-		if granted.space_count() > 0:
-			# Straight at the live array on purpose: this asks about SHARING, and fit() would first
-			# apply the family and capacity rules, which are a different question.
-			granted.space(0).append(WeaponModData.new())
-			assert_int(generic.space(0).size()).override_failure_message(
-					"fitting the grant of '%s' reached the catalog's own copy" % file).is_equal(0)
+
+# What the sweep above cannot prove without leaning on a shipped template happening to accept a mod:
+# fitting to the GRANT must not reach the object the catalog is still holding. Built ad hoc for that
+# reason (tests/README.md rule 4), and fitted through fit() -- since #624 space() answers with a
+# throwaway on a weapon holding nothing, so appending to it fits nothing and proves nothing.
+func test_fitting_a_granted_instance_never_reaches_the_one_it_came_from() -> void:
+	var source := WeaponInstance.make(_fixture_template())
+	var granted := WeaponCatalog.instantiate_entry(source) as WeaponInstance
+	assert_object(granted).is_not_same(source)
+	assert_object(granted.template).is_same(source.template)
+
+	assert_bool(granted.fit(0, WeaponModData.new())).is_true()
+	assert_int(granted.space(0).size()).is_equal(1)
+	assert_int(source.space(0).size()).override_failure_message(
+			"fitting the grant reached the instance it was copied from").is_equal(0)
 
 
 # The picker's view. Derived and still unreachable is the gap #835 exists to close, so the named
