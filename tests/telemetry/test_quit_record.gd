@@ -147,6 +147,29 @@ func test_a_second_sweep_changes_nothing() -> void:
 		).override_failure_message("the second sweep rewrote the file").is_equal(once)
 
 
+# THE SURVIVING LINES COME BACK VERBATIM, AND A MUTANT IS WHAT SAID SO. Dropping them entirely --
+# writing a file holding nothing but the synthesized ending and summary -- passed every other case
+# in this suite, because the summary is projected from the PARSED events before anything is
+# written, so a run whose whole log had been destroyed still carried a correct-looking ending.
+#
+# A PREFIX compare rather than a line count, because it also pins the other half: JSON has one
+# number type, so a parse and a re-encode would turn every `"seq": 0` in the file into `"seq": 0.0`.
+func test_the_sweep_hands_back_the_lines_it_read_untouched() -> void:
+	var run_id := await _record_a_mission()
+	_die()
+	var before := FileAccess.get_file_as_string(TelemetryStore.events_path(run_id))
+	assert_int(before.length()).override_failure_message("fixture: nothing was recorded").is_greater(0)
+
+	assert_int(MissionLog.sweep_unsealed()).is_equal(1)
+
+	var after := FileAccess.get_file_as_string(TelemetryStore.events_path(run_id))
+	assert_bool(after.begins_with(before)).override_failure_message(
+		"the sweep rewrote or dropped the run it was finishing -- it may only ADD to what it read"
+		).is_true()
+	assert_int(after.length()).override_failure_message(
+		"the sweep added nothing").is_greater(before.length())
+
+
 func test_a_sealed_run_is_never_touched() -> void:
 	var run_id := await _record_a_mission()
 	mission_log.seal(MissionLog.Ending.VICTORY)
