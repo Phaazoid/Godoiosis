@@ -121,23 +121,53 @@ func test_no_shipped_template_is_uncarryable() -> void:
 # ==============================================================================
 
 # space_1/2/3 became one `spaces` array, and a renamed .tres key is dropped SILENTLY on load --
-# the file keeps its text, the mods just stop arriving. So: a variant whose FILE writes a spaces
-# line must load with mods actually in it. Reading the file's own text rather than pinning a mod
-# count is what keeps this blind to what the dev authors (the content razor).
+# the file keeps its text, the mods just stop arriving. So: a variant whose FILE names a fitted mod
+# must load with that mod in it. Reading the file's own text rather than pinning a mod count is what
+# keeps this blind to what the dev authors (the content razor).
+#
+# WHAT THE FILE NAMES, not that it writes a `spaces` line. Three EMPTY spaces is not the property's
+# default `[]`, so a plain mod-less variant writes the line too -- and keying on it made every such
+# weapon a failure the moment one was authored. That is rule 9 exactly, in the shape #597 named and
+# #601 only half-fixed: it dropped the guard DEMANDING a fitted variant exist and left a predicate
+# that still assumed one. A file naming no mod has nothing to lose and passes vacuously.
 func test_a_saved_variants_fitted_mods_survive_the_load() -> void:
-	var empty: Array[String] = []
+	var lost: Array[String] = []
 	var saved := WeaponCatalog.get_saved()
 	for name in saved:
 		var weapon: WeaponInstance = saved[name]
-		var text := FileAccess.get_file_as_string(weapon.resource_path)
-		if not text.contains("\nspaces = "):
+		if not _file_fits_a_mod(FileAccess.get_file_as_string(weapon.resource_path)):
 			continue
 		var total := 0
-		for i in range(weapon.space_count()):
-			total += weapon.space(i).size()
+		for fitted: Array in weapon.spaces:
+			total += fitted.size()
 		if total == 0:
-			empty.append(name)
-	assert_array(empty).is_empty()
+			lost.append(name)
+	assert_array(lost).is_empty()
+
+
+# Whether a variant's own text says a mod is FITTED. A fitted mod is an ext_resource under the mod
+# directory whose id the `spaces` line references. An empty space names an ExtResource too -- the
+# WeaponModData script, standing in as its inner array's TYPE -- which is the whole reason the
+# presence of the line cannot answer this.
+#
+# Counting through `spaces` rather than `space(i)` above is the same care one level down: space() is
+# bounded by the TEMPLATE's mod_spaces, so a template authored narrower than an instance's file
+# would hide the very mods this asks about.
+func _file_fits_a_mod(text: String) -> bool:
+	var spaces_line := ""
+	for line in text.split("\n"):
+		if line.begins_with("spaces = "):
+			spaces_line = line
+			break
+	if spaces_line == "":
+		return false
+	for line in text.split("\n"):
+		if not line.begins_with("[ext_resource ") or not line.contains('path="%s' % WeaponModCatalog.MOD_DIR):
+			continue
+		var id := line.get_slice(' id="', 1).get_slice('"', 0)
+		if id != "" and spaces_line.contains('ExtResource("%s")' % id):
+			return true
+	return false
 
 # The mechanism the sweep above cannot reach on its own. space_1/2/3 became one `spaces` array,
 # and a renamed .tres key is dropped SILENTLY on load -- the file keeps its text, the mods just
