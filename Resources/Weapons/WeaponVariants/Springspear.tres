@@ -1,0 +1,11 @@
+[gd_resource type="Resource" script_class="SpringspearWeaponInstance" format=3 uid="uid://iwu6iu6xd0s4"]
+
+[ext_resource type="Script" uid="uid://dro6dvoog6jyi" path="res://Classes/weapons/instances/SpringspearWeaponInstance.gd" id="1_i8ps3"]
+[ext_resource type="Script" uid="uid://df2c8ssuh18ff" path="res://Classes/weapons/WeaponModData.gd" id="2_2tkv4"]
+[ext_resource type="Resource" uid="uid://fx3dcqyslgbe" path="res://Resources/Weapons/MainVarieties/Springspear.tres" id="3_s6yp7"]
+
+[resource]
+script = ExtResource("1_i8ps3")
+template = ExtResource("3_s6yp7")
+spaces = Array[Array]([Array[ExtResource("2_2tkv4")]([]), Array[ExtResource("2_2tkv4")]([]), Array[ExtResource("2_2tkv4")]([])])
+display_name = "Springspear"
