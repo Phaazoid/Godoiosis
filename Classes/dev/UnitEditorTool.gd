@@ -446,9 +446,7 @@ func _add_inventory_section(into: VBoxContainer):
 		if current_item != null and not matched:
 			# Held item has no catalog match (e.g. a scenario-authored one-off weapon, #80) --
 			# say so instead of leaving the picker stuck on a misleading "(empty)".
-			var held_name: String = current_item.display_name
-			if current_item is WeaponInstance:
-				held_name = current_item.shown_name()
+			var held_name: String = current_item.shown_name()
 			var held_label := Label.new()
 			held_label.text = "holds: %s" % held_name
 			row.add_child(held_label)
@@ -482,13 +480,44 @@ func _toggle_armor(index: int, pressed: bool):
 	_touch()
 	populate_unit_editor(editing_unit)
 
+# Does this catalog entry name the thing the unit is already holding? Drives which row the slot's
+# picker opens on, and the "holds: X" label when nothing matches (#80).
+#
+# TWO INSTANCES MATCH WHEN THEY ARE INDISTINGUISHABLE -- same template, same mods, same spaces --
+# never when their names agree. Since #835 the catalog offers DERIVED generics, whose display_name
+# is empty on purpose (Item.shown_name reads it through), so the name compare asked "" == "" and
+# then refused itself on the non-empty guard: a held generic read as "(empty)" with the holds:
+# label beside it, which is the very symptom that label was typed for.
+#
+# The MODS half is not optional. A fitted Gun and a plain Carbine share a template, so matching on
+# the template alone would open the picker on one while the unit held the other. It is also
+# stricter than the name compare it replaces, which let two variants sharing a display_name match
+# each other -- the latent half of #833's vroom collision.
 func _entry_matches(entry, item) -> bool:
-	# A template entry matches an instance built on it; saved instances / runes match by name.
 	if entry is WeaponData and item is WeaponInstance:
 		return item.template == entry
+	if entry is WeaponInstance and item is WeaponInstance:
+		return _same_weapon(entry, item)
 	if item is Item and entry is Item:
 		return entry.display_name == item.display_name and item.display_name != ""
 	return false
+
+
+# `spaces` grows lazily through WeaponInstance.space(), so a weapon the panel has already drawn
+# carries [[], [], []] where a freshly derived one still carries [] -- which is why this asks what
+# is FITTED at each index rather than comparing the outer array's shape.
+static func _same_weapon(a: WeaponInstance, b: WeaponInstance) -> bool:
+	if a.template != b.template:
+		return false
+	for i in maxi(a.spaces.size(), b.spaces.size()):
+		var fitted_a: Array = a.spaces[i] if i < a.spaces.size() else []
+		var fitted_b: Array = b.spaces[i] if i < b.spaces.size() else []
+		if fitted_a.size() != fitted_b.size():
+			return false
+		for k in fitted_a.size():
+			if fitted_a[k] != fitted_b[k]:
+				return false
+	return true
 
 func _on_slot_picked(index: int, opt_index: int):
 	if opt_index == 0:
@@ -620,7 +649,7 @@ func _add_limb_item_picker(into: VBoxContainer, slot: UnitInstance.LimbSlot):
 	var picker := OptionButton.new()
 	picker.add_item("(placeholder -- no item)")
 	for idx in candidates:
-		picker.add_item("Slot %d: %s" % [idx + 1, (_inventory[idx] as WeaponInstance).shown_name()])
+		picker.add_item("Slot %d: %s" % [idx + 1, _inventory[idx].shown_name()])
 	var current: int = _limb_prosthetics.get(slot, -1)
 	picker.select(candidates.find(current) + 1)   # -1 (placeholder) or not-found both land on 0
 	picker.item_selected.connect(func(opt_index): _on_limb_item_picked(slot, opt_index, candidates))
