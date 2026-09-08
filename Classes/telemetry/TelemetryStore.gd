@@ -18,6 +18,7 @@ class_name TelemetryStore
 
 const CONFIG_SECTION := "telemetry"
 const INSTALL_ID_KEY := "install_id"
+const NOTICE_SEEN_KEY := "notice_seen"
 
 # Redirectable, so a suite can point the whole store at a scratch folder.
 static var root := "user://telemetry/"
@@ -60,6 +61,30 @@ static func install_id() -> String:
 	return _install_id
 
 
+# HAS THIS PLAYER BEEN TOLD? (#53 slice 3) -- the one bit behind the first-launch notice.
+#
+# Read FRESH every time, with no cached static beside _install_id's. That one caches because it
+# MINTS a value and must hand back the same one all session; this only ever reads one, so a cache
+# would buy nothing and cost a staleness trap the moment a suite writes the key behind it.
+#
+# False while persistence is off, which is the honest answer rather than a guard: nothing was
+# written, so nothing was seen. TelemetryNotice.should_show refuses in that case for its own
+# reason -- a notice we cannot remember showing would reappear every launch.
+static func notice_seen() -> bool:
+	if not persistence_enabled:
+		return false
+	var cfg := ConfigFile.new()
+	if cfg.load(config_path()) != OK:
+		return false
+	return bool(cfg.get_value(CONFIG_SECTION, NOTICE_SEEN_KEY, false))
+
+
+# One-way and idempotent: nothing ever un-sees the notice.
+static func mark_notice_seen() -> void:
+	_write_key(NOTICE_SEEN_KEY, true)
+
+
+
 # 16 hex characters off the CSPRNG. Not randi(): #53's standing rule is that randomness never
 # enters combat unseeded, and an id drawn from the rules' own generator would blur that line.
 static func new_id() -> String:
@@ -100,7 +125,8 @@ static func save_board(run_id: String, scenario: ScenarioData) -> bool:
 	return true
 
 
-# Read-modify-write, so a later key (the notice flag, #53 slice 2) shares the file.
+# Read-modify-write, so the notice flag (#53 slice 3) shares the file with the install id rather
+# than clobbering it -- ConfigFile.save writes the WHOLE file, so a blind write would drop the other key.
 static func _write_key(key: String, value: Variant) -> void:
 	if not persistence_enabled:
 		return
