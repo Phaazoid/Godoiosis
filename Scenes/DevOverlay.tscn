@@ -18,6 +18,7 @@
 [ext_resource type="Script" path="res://Classes/dev/ExperimentsTool.gd" id="12_exps"]
 [ext_resource type="Script" path="res://Classes/dev/DevInfoTool.gd" id="13_info"]
 [ext_resource type="Script" path="res://Classes/dev/RosterTool.gd" id="14_rostr"]
+[ext_resource type="Script" path="res://Classes/dev/ReplayTool.gd" id="15_rplay"]
 
 [sub_resource type="StyleBoxFlat" id="StyleBoxFlat_1dnd3"]
 bg_color = Color(0.4416867, 0.22230786, 0.4029888, 1)
@@ -116,6 +117,12 @@ unique_name_in_owner = true
 visible = false
 layout_mode = 2
 script = ExtResource("13_info")
+
+[node name="Replay" type="VBoxContainer" parent="Panel/MarginContainer/VBoxContainer/Body/DevTabs" unique_id=990000841]
+unique_name_in_owner = true
+visible = false
+layout_mode = 2
+script = ExtResource("15_rplay")
 
 [node name="Unit Authoring" type="MarginContainer" parent="Panel/MarginContainer/VBoxContainer/Body/DevTabs" unique_id=990000044]
 unique_name_in_owner = true

@@ -42,6 +42,11 @@ var game   # the Game coordinator; set by game._ready()
 static var session_id := ""
 
 var _events: Array[Dictionary] = []
+# The last order this stream recorded, by INSTANCE ID rather than by reference: a freed object
+# compares == null as TRUE and a typed read of one dies outright, so an int is the only form of
+# this that cannot dangle.
+var _last_order_id := 0
+
 var _file: FileAccess = null
 var _run_id := ""
 var _seq := 0
@@ -98,16 +103,22 @@ func events() -> Array[Dictionary]:
 # mission and every per-level query has to exclude it explicitly.
 #
 # A resume is flagged the same way -- it arrives mid-battle with no draw.
-func begin() -> void:
+# `record_to_disk` false records the run IN MEMORY only -- no file, no board snapshot. That is the
+# REPLAY driver's mode (#53 slice 4): a replay must be measured by this same recorder, so that its
+# events and the recorded run's are like-for-like, while writing nothing that would look like a new
+# playtest run. _record already appends to _events regardless of whether a file is open, which is
+# what makes the mode cost one parameter rather than a second recorder.
+func begin(record_to_disk := true) -> void:
 	if _open:
 		seal(Ending.INTERRUPTED)
 	_events.clear()
 	_seq = 0
+	_last_order_id = 0
 	_dev_touched = false
 	_started_ms = Time.get_ticks_msec()
 	_run_id = _stamp() + "_" + TelemetryStore.new_id().substr(0, 8)
 	_open = true
-	_file = TelemetryStore.open_run_file(_run_id)
+	_file = TelemetryStore.open_run_file(_run_id) if record_to_disk else null
 	# The REPLAY SEED, beside the events: the roster line below is the queryable denominator, this
 	# is the machine-exact state. A declared duplication -- two questions, two answers.
 	#
@@ -115,7 +126,7 @@ func begin() -> void:
 	# one is CORRECTNESS (a headless run writes nothing), this one is COST -- capture_scenario walks
 	# the whole board, and without it every mission start in the suite builds a snapshot that is
 	# then discarded. Pacing.beat's headless escape, one layer up.
-	if TelemetryStore.persistence_enabled:
+	if record_to_disk and TelemetryStore.persistence_enabled:
 		TelemetryStore.save_board(_run_id, game.scenario_manager.capture_scenario("telemetry-" + _run_id))
 	_record("mission_start", _mission_start_fields())
 	_record("turn_start", _turn_fields(game.turn_manager.active_faction()))
@@ -224,6 +235,14 @@ func _on_order_queued(squad: Squad, action: BaseAction) -> void:
 	# included and flagged `hold`. This stream is what a PERSON authored.
 	if action.batch_id == 0:
 		return
+	# ...AND THE SAME ORDER IS NOT TWO ORDERS. queue_group_move RE-EMITS this signal for the batch's
+	# LAST member ("so listeners do their squad-level repaint exactly once") -- the same object that
+	# already arrived through Squad.action_queued. That re-emit is deliberate and the repainting
+	# listeners need it, so the dedupe belongs HERE, in the one listener that COUNTS rather than
+	# redraws: without it the churn metric scores every group move as N+1 orders.
+	if action.get_instance_id() == _last_order_id:
+		return
+	_last_order_id = action.get_instance_id()
 	_record("order_queued", {
 		"squad": _squad_ref(squad),
 		"faction": _faction_name(action.actor),

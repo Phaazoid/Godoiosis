@@ -79,9 +79,23 @@ static func notice_seen() -> bool:
 	return bool(cfg.get_value(CONFIG_SECTION, NOTICE_SEEN_KEY, false))
 
 
-# One-way and idempotent: nothing ever un-sees the notice.
+# One-way and idempotent in PLAY: nothing a player does un-sees the notice. reset_notice below is
+# the dev door out, and it is deliberately not the same function wearing a bool.
 static func mark_notice_seen() -> void:
 	_write_key(NOTICE_SEEN_KEY, true)
+
+
+# DEV ONLY (#53 slice 4): put the first-launch notice back so it can be re-checked without going and
+# deleting a file by hand. Erases the key rather than writing false, so the cfg returns to exactly
+# the state a fresh install has -- and leaves install_id alone, which deleting the file would not.
+static func reset_notice() -> void:
+	if not persistence_enabled:
+		return
+	var cfg := ConfigFile.new()
+	if cfg.load(config_path()) != OK:
+		return
+	cfg.erase_section_key(CONFIG_SECTION, NOTICE_SEEN_KEY)
+	cfg.save(config_path())
 
 
 

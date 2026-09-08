@@ -68,6 +68,30 @@ static func _wipe(dir: String) -> void:
 	DirAccess.remove_absolute(dir)
 
 
+# ONE GESTURE IS N ORDERS, NOT N+1. queue_group_move re-emits squad_action_queued for the batch's
+# LAST member so listeners repaint once -- the same object that already came through
+# Squad.action_queued -- so a listener that COUNTS rather than redraws sees that member twice. The
+# churn metric scored every group move one order too high until this case.
+func test_a_group_move_records_one_order_per_member() -> void:
+	var leader := _spawn(Team.Faction.PLAYER, Vector2i(0, 0))
+	var mate := _spawn(Team.Faction.PLAYER, Vector2i(1, 0))
+	game.squad_manager.join_squad(mate, leader.squad)
+	mc._begin_turn()
+	var board: BoardContext = game._board()
+	assert_bool(game.squad_manager.queue_group_move(leader.squad, Vector2i(2, 1), board)).override_failure_message(
+		"fixture: the formation never queued").is_true()
+
+	var queued := _of("order_queued")
+	assert_int(queued.size()).override_failure_message(
+		"a two-member formation is two orders; the re-emit for the last member is not a third"
+		).is_equal(2)
+	var movers: Array[int] = []
+	for e: Dictionary in queued:
+		movers.append(int(((e.get("order") as Dictionary).get("unit") as Dictionary).get("id", 0)))
+	assert_bool(movers.has(leader.get_instance_id())).is_true()
+	assert_bool(movers.has(mate.get_instance_id())).is_true()
+
+
 func _spawn(faction: Team.Faction, cell: Vector2i) -> Unit:
 	var unit: Unit = game.spawn_unit(H.make_unit_data({Stats.Stat.LDR: 10}, faction), cell)
 	assert_object(unit).is_not_null()
