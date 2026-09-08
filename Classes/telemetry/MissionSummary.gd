@@ -139,6 +139,10 @@ static func of(events: Array[Dictionary]) -> Dictionary:
 	return {
 		"scenario": start.get("scenario", ""),
 		"build": start.get("build", ""),
+		# Carried into the summary, not just the events: this is the row that gets indexed, so the
+		# separation has to be available where the querying happens.
+		"sandbox": bool(start.get("sandbox", false)),
+		"dev_mode": bool(start.get("dev_mode", false)),
 		"resumed": bool(start.get("resumed", false)),
 		"outcome": end.get("outcome", "INTERRUPTED"),
 		"failed_by": end.get("failed_by", "NONE"),

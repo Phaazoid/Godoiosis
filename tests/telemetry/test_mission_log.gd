@@ -135,12 +135,40 @@ func test_begin_writes_mission_start_and_the_first_turn_start() -> void:
 	assert_int(int(events[1].get("round", 0))).is_equal(1)
 
 
-func test_the_sandbox_does_not_record() -> void:
+# FLAGGED, not dropped (dev, 2026-09-08). A sandbox run is still data; what it must never do is
+# look like a mission, so the flag is its own field rather than an empty `scenario` read as one.
+func test_the_sandbox_records_itself_as_a_sandbox() -> void:
 	game.scenario_manager.last_loaded_path = ""
 	_spawn(Team.Faction.PLAYER, Vector2i(0, 0))
 	mc._begin_turn()
-	assert_bool(mission_log.is_open()).is_false()
-	assert_int(mission_log.events().size()).is_equal(0)
+
+	assert_bool(mission_log.is_open()).override_failure_message(
+		"a sandbox run is flagged, never ignored -- ignoring it is what this replaced").is_true()
+	var start := _of("mission_start")[0]
+	assert_bool(bool(start.get("sandbox"))).is_true()
+	assert_str(str(start.get("scenario"))).is_equal("")
+
+
+func test_a_real_mission_is_not_flagged_as_a_sandbox() -> void:
+	_spawn(Team.Faction.PLAYER, Vector2i(0, 0))
+	mc._begin_turn()   # before_test aimed last_loaded_path at a mission
+	assert_bool(bool(_of("mission_start")[0].get("sandbox"))).override_failure_message(
+		"a flag that is always true separates nothing").is_false()
+
+
+func test_the_summary_carries_the_separation_flags() -> void:
+	game.scenario_manager.last_loaded_path = ""
+	_spawn(Team.Faction.PLAYER, Vector2i(0, 0))
+	mc._begin_turn()
+	var run := mission_log.run_id()
+	mission_log.seal(MissionLog.Ending.ABANDONED)
+
+	var lines := _lines_of(run)
+	var summary: Dictionary = (lines.back() as Dictionary).get("summary", {})
+	assert_bool(bool(summary.get("sandbox"))).override_failure_message(
+		"the summary is the INDEXED row -- the flag has to reach where the querying happens"
+		).is_true()
+	assert_bool(summary.has("dev_mode")).is_true()
 
 
 func test_a_resume_is_flagged_with_its_starting_round() -> void:

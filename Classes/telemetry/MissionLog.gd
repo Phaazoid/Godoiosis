@@ -89,13 +89,18 @@ func events() -> Array[Dictionary]:
 #  Begin / seal
 # ==============================================================================
 
-# The sandbox does not record: no scenario, no objective, and the dev's TestBoard pokes would
-# become balance rows. A resume IS recorded and flagged -- it arrives mid-battle with no draw.
+# EVERY arrival records, and what would once have been EXCLUDED is FLAGGED instead (dev,
+# 2026-09-08: *"instead of ignoring dev mode play, I think it should get a special flag, so that we
+# know to separate it in the data"*). So a sandbox board is recorded with `sandbox: true` rather
+# than dropped -- nothing is lost, and a query separates it with a WHERE clause.
+#
+# The cost is stated rather than hidden: a sandbox run has NO scenario, so it cannot be grouped by
+# mission and every per-level query has to exclude it explicitly.
+#
+# A resume is flagged the same way -- it arrives mid-battle with no draw.
 func begin() -> void:
 	if _open:
 		seal(Ending.INTERRUPTED)
-	if game.scenario_manager.last_loaded_path == "":
-		return
 	_events.clear()
 	_seq = 0
 	_dev_touched = false
@@ -105,7 +110,13 @@ func begin() -> void:
 	_file = TelemetryStore.open_run_file(_run_id)
 	# The REPLAY SEED, beside the events: the roster line below is the queryable denominator, this
 	# is the machine-exact state. A declared duplication -- two questions, two answers.
-	TelemetryStore.save_board(_run_id, game.scenario_manager.capture_scenario("telemetry-" + _run_id))
+	#
+	# GATED HERE AS WELL AS INSIDE save_board, and the two guards answer different questions: that
+	# one is CORRECTNESS (a headless run writes nothing), this one is COST -- capture_scenario walks
+	# the whole board, and without it every mission start in the suite builds a snapshot that is
+	# then discarded. Pacing.beat's headless escape, one layer up.
+	if TelemetryStore.persistence_enabled:
+		TelemetryStore.save_board(_run_id, game.scenario_manager.capture_scenario("telemetry-" + _run_id))
 	_record("mission_start", _mission_start_fields())
 	_record("turn_start", _turn_fields(game.turn_manager.active_faction()))
 
@@ -315,6 +326,9 @@ func _mission_start_fields() -> Dictionary:
 		"started_at": Time.get_datetime_string_from_system(true),
 		"scenario": path,
 		"scenario_name": path.get_file().get_basename(),
+		# NO mission behind this board -- the sandbox, or a dev-tools load. Its own field rather
+		# than an empty `scenario` read as one, so the separation is explicit at the query.
+		"sandbox": path == "",
 		"roster_name": sm.current_roster,
 		"deployment_cap": sm.current_deployment_cap,
 		"objectives": _names(MissionRules.Objective, mc.objectives),
