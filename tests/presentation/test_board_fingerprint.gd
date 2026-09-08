@@ -178,27 +178,14 @@ func test_the_reset_recipe_returns_a_mutated_board_to_its_baseline() -> void:
 		+ "would leak between cases:\n  %s") % "\n  ".join(diff)).is_empty()
 
 
-# CAPTURE -> APPLY -> CAPTURE IS A FIXED POINT ON THE FIRST CYCLE (#624), and it was not until the
-# read stopped writing: applying a scenario READS every weapon it places, and reading grew
-# WeaponInstance.spaces, so the second capture described the same board differently -- [] becoming
-# [[], [], []], both of which mean "no mods fitted". Two fixtures paid a warm-up cycle for it, and
-# the churn reached committed content as 74 `spaces` lines across 15 files, 67 holding nothing.
-#
-# THE BOARD HALF ALONE, deliberately. differences() reads each half out of the dict it is handed, so
-# passing only that key isolates this claim from the camera and dialog state a first cycle also
-# settles -- a different property, and the one the case above owns.
-func test_capturing_a_freshly_loaded_board_survives_its_own_apply() -> void:
-	var before := {"board": _take()["board"]}
-	var pristine: ScenarioData = _game.scenario_manager.capture_scenario("__cycle")
-	await _reset_to(pristine)
-	var after := {"board": _take()["board"]}
-
-	var diff := BoardFingerprint.differences(before, after)
-	assert_array(diff).override_failure_message(
-		("one capture -> apply -> capture cycle changed how the board describes itself, with nothing "
-		+ "touching it:\n  %s") % "\n  ".join(diff)).is_empty()
-
-
+# NOTE (#624, 2026-09-08). A case asserting that capture -> apply -> capture is a fixed point on the
+# FIRST cycle was written here and DELETED: it passes against a mutant restoring the bug, so it
+# claims coverage it does not have. The reason is worth keeping, because it is a property of this
+# seam rather than of that ticket -- load_mission's own apply_scenario READS every weapon it places,
+# so by the time any fingerprint can be taken the representation has already settled, whatever the
+# read does to it. A board-level witness cannot see a growing read; the cases with teeth are in
+# tests/weapons/test_weapon_instance_fitting.gd (the model) and tests/dev/test_weapon_template_lint
+# .gd (the bytes the writer emits), both falsified against exactly that mutant.
 func _reset_to(pristine: ScenarioData) -> void:
 	_game.scenario_manager.apply_scenario(pristine)
 	await DialogFixtures.end_all_dialog(self)
