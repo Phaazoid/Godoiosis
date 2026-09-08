@@ -503,9 +503,10 @@ func _entry_matches(entry, item) -> bool:
 	return false
 
 
-# `spaces` grows lazily through WeaponInstance.space(), so a weapon the panel has already drawn
-# carries [[], [], []] where a freshly derived one still carries [] -- which is why this asks what
-# is FITTED at each index rather than comparing the outer array's shape.
+# Asks what is FITTED at each index rather than comparing the outer array's SHAPE. #624 gave
+# "nothing fitted" one spelling ([], and a read no longer grows it), but an instance saved before it
+# carries [[], [], []] -- the state that ticket's own copy_for_grant normalization exists for -- so
+# shape-immunity is what keeps a weapon out of an old save from reading as "(empty)".
 static func _same_weapon(a: WeaponInstance, b: WeaponInstance) -> bool:
 	if a.template != b.template:
 		return false

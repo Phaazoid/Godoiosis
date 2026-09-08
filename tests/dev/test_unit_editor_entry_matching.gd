@@ -23,10 +23,11 @@ func _template(family: WeaponData.WeaponType = WeaponData.WeaponType.CHAINSWORD)
 	return t
 
 
-# Straight at the live array rather than through fit(): these cases ask what MATCHING does, and
-# fit() would first apply the family and capacity rules, which are a different question.
+# Through fit(), which is the one door that GROWS spaces since #624 -- appending to space() reaches a
+# throwaway on a weapon holding nothing, so a mod put on that way is silently not fitted and every
+# case below would compare two empty weapons and pass for the wrong reason.
 func _with_mod(weapon: WeaponInstance, index: int) -> WeaponInstance:
-	weapon.space(index).append(WeaponModData.new())
+	assert_bool(weapon.fit(index, WeaponModData.new())).is_true()
 	return weapon
 
 
@@ -50,17 +51,24 @@ func test_a_fitted_instance_does_not_match_the_plain_entry() -> void:
 			).is_false()
 
 
-# THE shape a shape-comparison would fail. `spaces` grows lazily through space(), so a weapon any
-# panel has already drawn carries [[], [], []] where a freshly derived one still carries [].
-func test_a_lazily_grown_held_weapon_still_matches_an_ungrown_entry() -> void:
+# THE shape a shape-comparison would fail. #624 gave "nothing fitted" ONE spelling -- `[]`, with a
+# read no longer growing the array -- but an instance saved BEFORE it carries [[], [], []], which is
+# exactly the state that ticket's own copy_for_grant normalization exists for. Matching has to be
+# immune to the shape either way, or a weapon out of an old save reads as "(empty)" in its own slot.
+func test_a_weapon_in_the_pre_624_spaces_form_still_matches_its_entry() -> void:
 	var template := _template()
 	var entry := WeaponInstance.make(template)
 	var held := WeaponInstance.make(template)
-	for i in held.space_count():
-		held.space(i)   # what drawing the fitting card does
+
+	var old_form: Array[Array] = []
+	for i in template.mod_spaces.size():
+		var empty: Array[WeaponModData] = []
+		old_form.append(empty)
+	held.spaces = old_form   # what a .tres written before #624 holds
+
 	assert_int(held.spaces.size()).is_greater(entry.spaces.size())
 	assert_bool(_tool()._entry_matches(entry, held)).override_failure_message(
-			"growing a weapon's spaces stopped it matching the entry it came from"
+			"a weapon in the pre-#624 spaces form stopped matching the entry it came from"
 			).is_true()
 
 
