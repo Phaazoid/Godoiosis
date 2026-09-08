@@ -81,7 +81,6 @@ is_leader = true
 [sub_resource type="Resource" id="Resource_me5hs"]
 script = ExtResource("11_a5n8y")
 template = ExtResource("13_locj7")
-spaces = Array[Array]([Array[ExtResource("12_tlmki")]([]), Array[ExtResource("12_tlmki")]([]), Array[ExtResource("12_tlmki")]([])])
 display_name = "Gun"
 
 [sub_resource type="Resource" id="Resource_r60ps"]
@@ -382,7 +381,6 @@ limb_states = Dictionary[int, int]({
 [sub_resource type="Resource" id="Resource_06aty"]
 script = ExtResource("11_a5n8y")
 template = ExtResource("13_locj7")
-spaces = Array[Array]([Array[ExtResource("12_tlmki")]([]), Array[ExtResource("12_tlmki")]([]), Array[ExtResource("12_tlmki")]([])])
 display_name = "Gun"
 
 [sub_resource type="Resource" id="Resource_don1s"]
@@ -510,7 +508,6 @@ limb_states = Dictionary[int, int]({
 [sub_resource type="Resource" id="Resource_yeblu"]
 script = ExtResource("11_a5n8y")
 template = ExtResource("13_locj7")
-spaces = Array[Array]([Array[ExtResource("12_tlmki")]([]), Array[ExtResource("12_tlmki")]([]), Array[ExtResource("12_tlmki")]([])])
 display_name = "BOWW"
 
 [sub_resource type="Resource" id="Resource_t5pnr"]

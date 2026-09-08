@@ -7,5 +7,4 @@
 [resource]
 script = ExtResource("1_5qyv2")
 template = ExtResource("3_olnyi")
-spaces = Array[Array]([Array[ExtResource("2_t0531")]([]), Array[ExtResource("2_t0531")]([]), Array[ExtResource("2_t0531")]([])])
 display_name = "Chainsword"

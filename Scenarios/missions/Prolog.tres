@@ -154,7 +154,6 @@ limb_states = Dictionary[int, int]({
 [sub_resource type="Resource" id="Resource_o0q4p"]
 script = ExtResource("4_sox22")
 template = ExtResource("6_cgh5e")
-spaces = Array[Array]([Array[ExtResource("5_xnjrr")]([]), Array[ExtResource("5_xnjrr")]([]), Array[ExtResource("5_xnjrr")]([])])
 display_name = "Chainsword"
 
 [sub_resource type="Resource" id="Resource_1vcu4"]
@@ -212,7 +211,6 @@ weapon_battle_states = Dictionary[int, Dictionary]({
 [sub_resource type="Resource" id="Resource_ud3l2"]
 script = ExtResource("4_sox22")
 template = ExtResource("6_cgh5e")
-spaces = Array[Array]([Array[ExtResource("5_xnjrr")]([]), Array[ExtResource("5_xnjrr")]([]), Array[ExtResource("5_xnjrr")]([])])
 display_name = "Chainsword"
 
 [sub_resource type="Resource" id="Resource_0ic5q"]
@@ -270,7 +268,6 @@ weapon_battle_states = Dictionary[int, Dictionary]({
 [sub_resource type="Resource" id="Resource_d20vx"]
 script = ExtResource("4_sox22")
 template = ExtResource("6_cgh5e")
-spaces = Array[Array]([Array[ExtResource("5_xnjrr")]([]), Array[ExtResource("5_xnjrr")]([]), Array[ExtResource("5_xnjrr")]([])])
 display_name = "Chainsword"
 
 [sub_resource type="Resource" id="Resource_rv7wm"]
@@ -328,7 +325,6 @@ weapon_battle_states = Dictionary[int, Dictionary]({
 [sub_resource type="Resource" id="Resource_ym04e"]
 script = ExtResource("4_sox22")
 template = ExtResource("6_cgh5e")
-spaces = Array[Array]([Array[ExtResource("5_xnjrr")]([]), Array[ExtResource("5_xnjrr")]([]), Array[ExtResource("5_xnjrr")]([])])
 display_name = "Chainsword"
 
 [sub_resource type="Resource" id="Resource_wfyk0"]
@@ -386,7 +382,6 @@ weapon_battle_states = Dictionary[int, Dictionary]({
 [sub_resource type="Resource" id="Resource_ronww"]
 script = ExtResource("4_sox22")
 template = ExtResource("6_cgh5e")
-spaces = Array[Array]([Array[ExtResource("5_xnjrr")]([]), Array[ExtResource("5_xnjrr")]([]), Array[ExtResource("5_xnjrr")]([])])
 display_name = "Chainsword"
 
 [sub_resource type="Resource" id="Resource_lu7lj"]
@@ -444,7 +439,6 @@ weapon_battle_states = Dictionary[int, Dictionary]({
 [sub_resource type="Resource" id="Resource_1rwbe"]
 script = ExtResource("4_sox22")
 template = ExtResource("6_cgh5e")
-spaces = Array[Array]([Array[ExtResource("5_xnjrr")]([]), Array[ExtResource("5_xnjrr")]([]), Array[ExtResource("5_xnjrr")]([])])
 display_name = "Chainsword"
 
 [sub_resource type="Resource" id="Resource_vxmuu"]

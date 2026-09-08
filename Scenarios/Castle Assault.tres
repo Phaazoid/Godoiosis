@@ -131,7 +131,7 @@ limb_states = Dictionary[int, int]({
 [sub_resource type="Resource" id="Resource_md83g"]
 script = ExtResource("16_facq7")
 template = ExtResource("17_gscw2")
-spaces = Array[Array]([Array[ExtResource("7_owa6k")]([ExtResource("21_4ji6m")]), Array[ExtResource("7_owa6k")]([]), Array[ExtResource("7_owa6k")]([])])
+spaces = Array[Array]([Array[ExtResource("7_owa6k")]([ExtResource("21_4ji6m")])])
 display_name = "Lob Gun 2"
 
 [sub_resource type="Resource" id="Resource_e57e2"]
@@ -187,7 +187,7 @@ weapon_battle_states = Dictionary[int, Dictionary]({
 [sub_resource type="Resource" id="Resource_3su2r"]
 script = ExtResource("16_facq7")
 template = ExtResource("17_gscw2")
-spaces = Array[Array]([Array[ExtResource("7_owa6k")]([ExtResource("21_4ji6m")]), Array[ExtResource("7_owa6k")]([]), Array[ExtResource("7_owa6k")]([])])
+spaces = Array[Array]([Array[ExtResource("7_owa6k")]([ExtResource("21_4ji6m")])])
 display_name = "Lob Gun 2"
 
 [sub_resource type="Resource" id="Resource_7as0p"]
@@ -243,7 +243,7 @@ weapon_battle_states = Dictionary[int, Dictionary]({
 [sub_resource type="Resource" id="Resource_n1xpj"]
 script = ExtResource("16_facq7")
 template = ExtResource("17_gscw2")
-spaces = Array[Array]([Array[ExtResource("7_owa6k")]([ExtResource("21_4ji6m")]), Array[ExtResource("7_owa6k")]([]), Array[ExtResource("7_owa6k")]([])])
+spaces = Array[Array]([Array[ExtResource("7_owa6k")]([ExtResource("21_4ji6m")])])
 display_name = "Lob Gun 2"
 
 [sub_resource type="Resource" id="Resource_osbp3"]
@@ -299,7 +299,6 @@ weapon_battle_states = Dictionary[int, Dictionary]({
 [sub_resource type="Resource" id="Resource_64uc1"]
 script = ExtResource("wi_chainsword")
 template = ExtResource("20_jydfm")
-spaces = Array[Array]([Array[ExtResource("7_owa6k")]([]), Array[ExtResource("7_owa6k")]([]), Array[ExtResource("7_owa6k")]([])])
 
 [sub_resource type="Resource" id="Resource_hl70j"]
 script = ExtResource("8_1v4i7")
@@ -498,7 +497,6 @@ limb_states = Dictionary[int, int]({
 [sub_resource type="Resource" id="Resource_pxvdd"]
 script = ExtResource("wi_springspear")
 template = ExtResource("32_8ihxj")
-spaces = Array[Array]([Array[ExtResource("7_owa6k")]([]), Array[ExtResource("7_owa6k")]([]), Array[ExtResource("7_owa6k")]([])])
 display_name = "Springy"
 
 [sub_resource type="Resource" id="Resource_kty5u"]
@@ -553,7 +551,6 @@ weapon_battle_states = Dictionary[int, Dictionary]({
 [sub_resource type="Resource" id="Resource_jfiwm"]
 script = ExtResource("wi_springspear")
 template = ExtResource("32_8ihxj")
-spaces = Array[Array]([Array[ExtResource("7_owa6k")]([]), Array[ExtResource("7_owa6k")]([]), Array[ExtResource("7_owa6k")]([])])
 display_name = "Springy"
 
 [sub_resource type="Resource" id="Resource_nxmtm"]
@@ -610,7 +607,6 @@ weapon_battle_states = Dictionary[int, Dictionary]({
 [sub_resource type="Resource" id="Resource_g0pgd"]
 script = ExtResource("wi_springspear")
 template = ExtResource("32_8ihxj")
-spaces = Array[Array]([Array[ExtResource("7_owa6k")]([]), Array[ExtResource("7_owa6k")]([]), Array[ExtResource("7_owa6k")]([])])
 display_name = "Springy"
 
 [sub_resource type="Resource" id="Resource_5nxcx"]
@@ -665,7 +661,6 @@ weapon_battle_states = Dictionary[int, Dictionary]({
 [sub_resource type="Resource" id="Resource_wh38c"]
 script = ExtResource("wi_springspear")
 template = ExtResource("32_8ihxj")
-spaces = Array[Array]([Array[ExtResource("7_owa6k")]([]), Array[ExtResource("7_owa6k")]([]), Array[ExtResource("7_owa6k")]([])])
 display_name = "Springy"
 
 [sub_resource type="Resource" id="Resource_obq4n"]
@@ -722,7 +717,6 @@ weapon_battle_states = Dictionary[int, Dictionary]({
 [sub_resource type="Resource" id="Resource_li2yd"]
 script = ExtResource("wi_springspear")
 template = ExtResource("32_8ihxj")
-spaces = Array[Array]([Array[ExtResource("7_owa6k")]([]), Array[ExtResource("7_owa6k")]([]), Array[ExtResource("7_owa6k")]([])])
 display_name = "Springy"
 
 [sub_resource type="Resource" id="Resource_0v1ws"]
@@ -777,7 +771,6 @@ weapon_battle_states = Dictionary[int, Dictionary]({
 [sub_resource type="Resource" id="Resource_yt1ub"]
 script = ExtResource("wi_springspear")
 template = ExtResource("32_8ihxj")
-spaces = Array[Array]([Array[ExtResource("7_owa6k")]([]), Array[ExtResource("7_owa6k")]([]), Array[ExtResource("7_owa6k")]([])])
 display_name = "Springy"
 
 [sub_resource type="Resource" id="Resource_ptm32"]

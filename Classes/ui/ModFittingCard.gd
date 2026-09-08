@@ -591,9 +591,6 @@ func _on_cancel() -> bool:
 # stops at the first MOUSE_FILTER_STOP under the cursor. The cost is that moving onto it fires the
 # row's mouse_exited and clears the #745 hover preview while the pointer sits on the chip -- cosmetic,
 # and cheaper than a label the row would have to special-case.
-#
-# It reads through space(), which GROWS the lazily-sized array (#624). Deliberate: that is the one
-# door, and a second non-growing reader is exactly what that ticket should not be paid for here.
 static func chip_for(item: Item) -> Button:
 	var weapon := item as WeaponInstance
 	if weapon == null or weapon.space_count() == 0:

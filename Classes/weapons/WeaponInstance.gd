@@ -13,11 +13,16 @@ extends EquippableData
 # 2026-07-19) — two instances built on the same shared template need independent
 # arm/leg identity, so the template can't be the source of truth for it.
 @export var spaces: Array[Array] = []
-# One inner array of fitted mods per mod space, sized by the TEMPLATE's mod_spaces. Was three
-# named fields (space_1/2/3) until #486, which capped every weapon at three spaces no matter
-# what a template authored. The OUTER array is untyped because Godot has no nested typed arrays;
-# each inner one is built as Array[WeaponModData] by space(), which is the only door that grows
-# this — and it hands back the LIVE array, since the fitting UI removes through it.
+# One inner array of fitted mods per mod space, holding ONLY the spaces that are occupied: size()
+# is one past the last space with a mod in it, so [] means nothing is fitted -- which is this
+# property's own default, and therefore a key the writer omits entirely (#624). It says what this
+# weapon HOLDS and never how many spaces it has; that is space_count(), off the template, and a
+# length mirroring it would be a per-instance copy of a fact the template owns -- stale the moment
+# a family gains a space. Was three named fields (space_1/2/3) until #486, which capped every
+# weapon at three spaces no matter what a template authored. The OUTER array is untyped because
+# Godot has no nested typed arrays; each inner one is built as Array[WeaponModData] by fit(),
+# which is the ONE door that grows this -- a READ never does, or a weapon's saved form would
+# record who has looked at it rather than what is on it.
 
 # Fallback wording for a readiness refusal, used only when the family has no status_text of its
 # own. Lives here rather than in the menu (#166): the menu renders reasons, it doesn't know them.
@@ -130,23 +135,42 @@ func copy_for_grant() -> Item:
 		var copied: Array[WeaponModData] = []
 		copied.assign(fitted)
 		w.spaces.append(copied)
+	w._trim_spaces()   # an instance loaded in the pre-#624 form becomes canonical on its first copy
 	return w
 func shown_name() -> String:
 	if display_name != "":
 		return display_name
 	return template.display_name if template != null else ""
 
-# The LIVE array for a space, grown on demand. Growing here rather than at construction is what
-# lets a template gain a space without every instance built on it needing a migration -- and an
-# instance saved before this field existed simply arrives empty. A space the template does not
-# have answers with a throwaway, never by growing.
+# What a space HOLDS -- the LIVE array where one is stored, a throwaway where it is not. Asking is
+# a read and stays one (#624): it used to grow the array to reach the index, so merely weighing a
+# weapon or drawing its fitting panel changed what the weapon SAVED, and a mod-less variant wrote
+# three empty spaces that #486's migration guard then read as three mods lost.
+#
+# The throwaway is only ever an EMPTY space, which is why write-through survives intact: the one
+# caller that mutates what this returns (the Item Editor's Remove) exists only where something is
+# fitted, and there the live array is what comes back. Storing nothing for an unreached space is
+# also still what lets a template gain one without migrating every instance built on it.
 func space(index: int) -> Array:
-	if template == null or index < 0 or index >= space_count():
-		return []
-	while spaces.size() <= index:
-		var fresh: Array[WeaponModData] = []
-		spaces.append(fresh)
+	if template == null or index < 0 or index >= space_count() or index >= spaces.size():
+		return _empty_space()
 	return spaces[index]
+
+# A fresh one per call, never a shared const: a const Array is read-only and that flag travels
+# with the assignment (#486), and two weapons handed one object would fit into each other.
+static func _empty_space() -> Array[WeaponModData]:
+	var fresh: Array[WeaponModData] = []
+	return fresh
+
+# Drop trailing empty spaces, so "nothing fitted" has ONE spelling however the weapon got there.
+# Without it, fitting a mod into space 3 and taking it off again leaves a weapon that serializes
+# differently from an identical one that was never touched.
+func _trim_spaces() -> void:
+	while not spaces.is_empty():
+		var last: Array = spaces[spaces.size() - 1]
+		if not last.is_empty():
+			return
+		spaces.pop_back()
 
 func space_count() -> int:
 	return template.mod_spaces.size() if template != null else 0
@@ -227,7 +251,9 @@ func unfit(mod: WeaponModData) -> bool:
 	var index := space_holding(mod)
 	if index == -1:
 		return false
-	space(index).erase(mod)
+	var fitted: Array = spaces[index]
+	fitted.erase(mod)
+	_trim_spaces()
 	return true
 
 # The lowest space whose CAPACITY admits this mod, ignoring what is in it -- and therefore the
@@ -267,10 +293,15 @@ func _kind_overrider() -> WeaponModData:
 				return mod
 	return null
 
+# THE one door that grows `spaces`, and it grows exactly as far as the mod being fitted (#624).
+# can_fit has already bounded the index against the template, so the reach is a real space.
 func fit(index: int, mod: WeaponModData) -> bool:
 	if not can_fit(index, mod):
 		return false
-	space(index).append(mod)
+	while spaces.size() <= index:
+		spaces.append(_empty_space())
+	var fitted: Array = spaces[index]
+	fitted.append(mod)
 	return true
 
 # Proficiency N activates spaces 1..N — reduced capability, never locked out (weapons.md).

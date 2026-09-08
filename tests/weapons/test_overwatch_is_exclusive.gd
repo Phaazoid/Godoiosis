@@ -105,7 +105,7 @@ func test_a_granting_mod_moves_the_attack_out_of_the_fire_view() -> void:
 	var mod := WeaponModData.new()
 	mod.display_name = "Line Sniper"
 	mod.granted_attacks = [granted]
-	weapon.space(0).append(mod)
+	assert_bool(weapon.fit(0, mod)).override_failure_message("the fixture never fitted the mod").is_true()
 	unit.equipped_weapon = weapon
 
 	assert_array(unit.get_selectable_attacks()).override_failure_message(
@@ -129,7 +129,7 @@ func test_a_revoking_mod_hands_the_attack_back_to_the_fire_view() -> void:
 	var mod := WeaponModData.new()
 	mod.display_name = "Safety Governor"
 	mod.can_overwatch_override = WeaponModData.Override.OFF
-	weapon.space(0).append(mod)
+	assert_bool(weapon.fit(0, mod)).override_failure_message("the fixture never fitted the mod").is_true()
 
 	assert_array(unit.overwatch_attacks()).is_empty()
 	assert_array(unit.get_selectable_attacks()).override_failure_message(

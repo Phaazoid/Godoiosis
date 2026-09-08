@@ -8,5 +8,5 @@
 [resource]
 script = ExtResource("1_4n163")
 template = ExtResource("3_ym0bg")
-spaces = Array[Array]([Array[ExtResource("2_ym0bg")]([ExtResource("3_2xt2p")]), Array[ExtResource("2_ym0bg")]([]), Array[ExtResource("2_ym0bg")]([])])
+spaces = Array[Array]([Array[ExtResource("2_ym0bg")]([ExtResource("3_2xt2p")])])
 display_name = "Gun"

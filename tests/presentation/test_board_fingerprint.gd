@@ -153,13 +153,6 @@ func test_the_reset_recipe_returns_a_mutated_board_to_its_baseline() -> void:
 	# The RECIPE, not apply_scenario alone -- this is what a shared fixture would run per case, and
 	# the two extra steps are both there for a measured reason.
 	#
-	# WARM-UP. WeaponInstance.spaces is lazily grown (`while spaces.size() <= index`) rather than
-	# sized from the template, so a freshly made instance holds [] and a loaded one holds [[],[],[]].
-	# Both mean "no mods fitted", but it makes capture -> apply -> capture not a fixed point on the
-	# FIRST cycle only. Applying once before taking the baseline lands on the fixed point; the
-	# underlying churn (an @export whose written form depends on whether anything touched it) is a
-	# save-path issue in its own right and is filed separately, not papered over here.
-	#
 	# DIALOG. load_mission arms the #182 lesson; apply_scenario is the BOARD door and does not
 	# re-arm it, so case 1 would run with a timeline live and every later case without. Ending it is
 	# part of the reset rather than something the fingerprint should be taught to ignore.
@@ -183,6 +176,27 @@ func test_the_reset_recipe_returns_a_mutated_board_to_its_baseline() -> void:
 	assert_array(diff).override_failure_message(
 		("the reset recipe did NOT restore the baseline. Each line is something a shared fixture "
 		+ "would leak between cases:\n  %s") % "\n  ".join(diff)).is_empty()
+
+
+# CAPTURE -> APPLY -> CAPTURE IS A FIXED POINT ON THE FIRST CYCLE (#624), and it was not until the
+# read stopped writing: applying a scenario READS every weapon it places, and reading grew
+# WeaponInstance.spaces, so the second capture described the same board differently -- [] becoming
+# [[], [], []], both of which mean "no mods fitted". Two fixtures paid a warm-up cycle for it, and
+# the churn reached committed content as 74 `spaces` lines across 15 files, 67 holding nothing.
+#
+# THE BOARD HALF ALONE, deliberately. differences() reads each half out of the dict it is handed, so
+# passing only that key isolates this claim from the camera and dialog state a first cycle also
+# settles -- a different property, and the one the case above owns.
+func test_capturing_a_freshly_loaded_board_survives_its_own_apply() -> void:
+	var before := {"board": _take()["board"]}
+	var pristine: ScenarioData = _game.scenario_manager.capture_scenario("__cycle")
+	await _reset_to(pristine)
+	var after := {"board": _take()["board"]}
+
+	var diff := BoardFingerprint.differences(before, after)
+	assert_array(diff).override_failure_message(
+		("one capture -> apply -> capture cycle changed how the board describes itself, with nothing "
+		+ "touching it:\n  %s") % "\n  ".join(diff)).is_empty()
 
 
 func _reset_to(pristine: ScenarioData) -> void:

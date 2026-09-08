@@ -38,7 +38,6 @@ distance = 8.946381
 [sub_resource type="Resource" id="Resource_ja6gf"]
 script = ExtResource("4_xb5bl")
 template = ExtResource("6_4md37")
-spaces = Array[Array]([Array[ExtResource("5_nrpr3")]([]), Array[ExtResource("5_nrpr3")]([]), Array[ExtResource("5_nrpr3")]([])])
 display_name = "Chainsword"
 
 [sub_resource type="Resource" id="Resource_bunvq"]
@@ -98,7 +97,6 @@ weapon_battle_states = Dictionary[int, Dictionary]({
 [sub_resource type="Resource" id="Resource_sfygs"]
 script = ExtResource("4_xb5bl")
 template = ExtResource("6_4md37")
-spaces = Array[Array]([Array[ExtResource("5_nrpr3")]([]), Array[ExtResource("5_nrpr3")]([]), Array[ExtResource("5_nrpr3")]([])])
 display_name = "Chainsword"
 
 [sub_resource type="Resource" id="Resource_up16c"]
@@ -155,7 +153,6 @@ weapon_battle_states = Dictionary[int, Dictionary]({
 [sub_resource type="Resource" id="Resource_8w4fh"]
 script = ExtResource("4_xb5bl")
 template = ExtResource("6_4md37")
-spaces = Array[Array]([Array[ExtResource("5_nrpr3")]([]), Array[ExtResource("5_nrpr3")]([]), Array[ExtResource("5_nrpr3")]([])])
 display_name = "Chainsword"
 
 [sub_resource type="Resource" id="Resource_1tkim"]
@@ -212,7 +209,6 @@ weapon_battle_states = Dictionary[int, Dictionary]({
 [sub_resource type="Resource" id="Resource_gbsh8"]
 script = ExtResource("19_h1cgr")
 template = ExtResource("20_7gc35")
-spaces = Array[Array]([Array[ExtResource("5_nrpr3")]([]), Array[ExtResource("5_nrpr3")]([]), Array[ExtResource("5_nrpr3")]([])])
 display_name = "Smasher"
 
 [sub_resource type="Resource" id="Resource_svwhi"]
@@ -272,7 +268,6 @@ weapon_battle_states = Dictionary[int, Dictionary]({
 [sub_resource type="Resource" id="Resource_h3plt"]
 script = ExtResource("4_xb5bl")
 template = ExtResource("6_4md37")
-spaces = Array[Array]([Array[ExtResource("5_nrpr3")]([]), Array[ExtResource("5_nrpr3")]([]), Array[ExtResource("5_nrpr3")]([])])
 display_name = "Chainsword"
 
 [sub_resource type="Resource" id="Resource_6id6f"]
@@ -329,7 +324,6 @@ weapon_battle_states = Dictionary[int, Dictionary]({
 [sub_resource type="Resource" id="Resource_o7ahr"]
 script = ExtResource("4_xb5bl")
 template = ExtResource("6_4md37")
-spaces = Array[Array]([Array[ExtResource("5_nrpr3")]([]), Array[ExtResource("5_nrpr3")]([]), Array[ExtResource("5_nrpr3")]([])])
 display_name = "Chainsword"
 
 [sub_resource type="Resource" id="Resource_ga0bu"]
@@ -386,7 +380,6 @@ weapon_battle_states = Dictionary[int, Dictionary]({
 [sub_resource type="Resource" id="Resource_c2j5n"]
 script = ExtResource("14_45ts8")
 template = ExtResource("15_y8oh2")
-spaces = Array[Array]([Array[ExtResource("5_nrpr3")]([]), Array[ExtResource("5_nrpr3")]([]), Array[ExtResource("5_nrpr3")]([])])
 display_name = "Gun"
 
 [sub_resource type="Resource" id="Resource_5a8c1"]
@@ -446,7 +439,6 @@ weapon_battle_states = Dictionary[int, Dictionary]({
 [sub_resource type="Resource" id="Resource_id3v2"]
 script = ExtResource("14_45ts8")
 template = ExtResource("15_y8oh2")
-spaces = Array[Array]([Array[ExtResource("5_nrpr3")]([]), Array[ExtResource("5_nrpr3")]([]), Array[ExtResource("5_nrpr3")]([])])
 display_name = "Gun"
 
 [sub_resource type="Resource" id="Resource_p1dkl"]
@@ -506,7 +498,6 @@ weapon_battle_states = Dictionary[int, Dictionary]({
 [sub_resource type="Resource" id="Resource_os0fr"]
 script = ExtResource("14_45ts8")
 template = ExtResource("15_y8oh2")
-spaces = Array[Array]([Array[ExtResource("5_nrpr3")]([]), Array[ExtResource("5_nrpr3")]([]), Array[ExtResource("5_nrpr3")]([])])
 display_name = "Gun"
 
 [sub_resource type="Resource" id="Resource_1r2vb"]
@@ -563,7 +554,6 @@ weapon_battle_states = Dictionary[int, Dictionary]({
 [sub_resource type="Resource" id="Resource_whq8x"]
 script = ExtResource("14_45ts8")
 template = ExtResource("15_y8oh2")
-spaces = Array[Array]([Array[ExtResource("5_nrpr3")]([]), Array[ExtResource("5_nrpr3")]([]), Array[ExtResource("5_nrpr3")]([])])
 display_name = "Gun"
 
 [sub_resource type="Resource" id="Resource_f10k0"]

@@ -8,5 +8,5 @@
 [resource]
 script = ExtResource("1_un2vx")
 template = ExtResource("4_nx3jn")
-spaces = Array[Array]([Array[ExtResource("2_4te43")]([ExtResource("3_hjk44")]), Array[ExtResource("2_4te43")]([]), Array[ExtResource("2_4te43")]([])])
+spaces = Array[Array]([Array[ExtResource("2_4te43")]([ExtResource("3_hjk44")])])
 display_name = "Super Scoper"

@@ -7,5 +7,4 @@
 [resource]
 script = ExtResource("1_7t38a")
 template = ExtResource("3_gfyoa")
-spaces = Array[Array]([Array[ExtResource("2_6ap3l")]([]), Array[ExtResource("2_6ap3l")]([]), Array[ExtResource("2_6ap3l")]([])])
 display_name = "Kinetic Mace"

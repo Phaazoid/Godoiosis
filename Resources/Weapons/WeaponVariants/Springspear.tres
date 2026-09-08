@@ -7,5 +7,4 @@
 [resource]
 script = ExtResource("1_i8ps3")
 template = ExtResource("3_s6yp7")
-spaces = Array[Array]([Array[ExtResource("2_2tkv4")]([]), Array[ExtResource("2_2tkv4")]([]), Array[ExtResource("2_2tkv4")]([])])
 display_name = "Springspear"
