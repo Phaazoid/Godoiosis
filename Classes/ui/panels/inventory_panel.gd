@@ -6,6 +6,11 @@ extends PanelContainer
 
 @onready var slots_container = $MarginContainer/InventorySlots
 signal loadout_changed
+# WHAT THE PLAYER DID, beside the staleness announcement above (#53 slice 2). Deliberately a
+# SECOND signal rather than a payload on that one: `loadout_changed` means *derived readouts are
+# stale* and every listener is a staleness handler that would have to accept arguments it ignores.
+# Two questions, two answers -- and both leave from the ONE funnel below, so no door is missed.
+signal loadout_acted(unit: Unit, verb: String, index: int)
 
 var unit: Unit = null
 var can_act := false
@@ -184,42 +189,44 @@ func _close_action_popup():
 # Every loadout mutation funnels through here: close the popup, redraw the slots, and announce
 # that DERIVED readouts are stale -- DEF from armor, MOV from gear weight. The panel that owns
 # the stats section listens; this one deliberately doesn't know how to reach it.
-func _apply_change():
+func _apply_change(verb := "", index := -1):
 	_close_action_popup()
 	_refresh()
 	loadout_changed.emit()
+	if verb != "":
+		loadout_acted.emit(unit, verb, index)
 
 func _do_use(index: int):
 	if unit != null:
 		unit.use_vial(index)   # the refusal was asked above and wears it on the button
 	selected_index = -1
-	_apply_change()
+	_apply_change("use", index)
 
 func _do_equip(index: int):
 	if unit != null:
 		unit.equip_weapon_from_inventory(index)
-	_apply_change()
+	_apply_change("equip", index)
 
 func _do_unequip(index: int):
 	if unit != null:
 		unit.unequip_weapon()
-	_apply_change()
+	_apply_change("unequip", index)
 
 func _do_wear(index: int):
 	if unit != null:
 		unit.wear_armor(index)
-	_apply_change()
+	_apply_change("wear", index)
 
 func _do_remove_armor():
 	if unit != null:
 		unit.remove_armor()
-	_apply_change()
+	_apply_change("remove_armor")
 
 func _do_toss(index: int):
 	if unit != null:
 		unit.remove_item(index)
 	selected_index = -1
-	_apply_change()
+	_apply_change("toss", index)
 
 func _do_cancel():
 	selected_index = -1

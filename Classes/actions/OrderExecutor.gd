@@ -71,6 +71,7 @@ func execute_orders(unit):
 	# game.* call reads as Variant and `:=` cannot infer from it.
 	var plan: ResolvedPlan = game.squad_manager.resolve_plan(squad, game._board())
 	executing_plan = plan
+	game.mission_log.record_pass(squad, plan)   # the one resolved pass, written down once (#53)
 	var move_actions := []
 	var side_channel: Dictionary[BaseAction.ActionType, Array] = {}
 
@@ -767,6 +768,7 @@ func apply_burning_tile_damage(faction: Team.Faction) -> void:
 	if hits.is_empty():
 		_process_downed_pending()
 		return
+	game.mission_log.record_turn_effects(faction, hits)   # the one damage channel no pass holds (#53)
 
 	var camera_was_locked: bool = game.camera_controller.playback_locked
 	game.camera_controller.set_playback_locked(true)

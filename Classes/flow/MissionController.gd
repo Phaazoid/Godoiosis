@@ -133,6 +133,17 @@ func check() -> void:
 
 # Mission START: the blank slate restore_progress() writes a mid-battle snapshot back over (#87).
 func reset() -> void:
+	# FIRST, and before anything below is cleared (#53): this is the universal teardown, so it is
+	# the one place that catches every door out of a mission that does NOT go through a named exit
+	# -- F2, a board swap, Load Game, Mission Select. reload_current has exactly two callers and
+	# only restart_mission seals, so without this an F2 leaves the run OPEN and it goes on appending
+	# events describing a board that no longer exists.
+	#
+	# It composes with the named seals rather than fighting them: seal() early-returns when closed,
+	# so restart_mission's RESTARTED still wins and this call is then a no-op. And it must run BEFORE
+	# _rounds_elapsed is zeroed -- clear_board frees the units AFTER this, so the sealed record still
+	# reads the final board.
+	game.mission_log.seal(MissionLog.Ending.INTERRUPTED)
 	outcome = MissionRules.Outcome.ONGOING
 	_contested = false
 	_ending = false
@@ -700,6 +711,7 @@ func _begin_turn() -> void:
 	# arrival painted the zones on the way in (apply_scenario -> restore_progress) while this was
 	# still false.
 	_battle_begun = true
+	game.mission_log.begin()   # the run starts here, whichever door brought us (#53)
 	game.overlay_manager.redraw_zones(game.zone_manager, hidden_zone_names())
 	var faction: Team.Faction = game.turn_manager.active_faction()
 	game.turn_banner.show_label("%s Turn" % Team.faction_name(faction))
@@ -719,6 +731,7 @@ func restart_mission() -> void:
 	if _deploying:
 		_staged = null
 	var staged: PreMissionSnapshot = _staged_for(game.scenario_manager.last_loaded_path)
+	game.mission_log.seal(MissionLog.Ending.RESTARTED)   # a retry is its own metric (#53)
 	game.scenario_manager.reload_current()
 	# ...and returns to the PHASE, so a retry is a chance to place differently (#739) -- with what
 	# was placed LAST attempt already standing there (#763), rather than five minutes of loadout to
@@ -749,6 +762,7 @@ func resume_from_slot(slot: int) -> void:
 # abandoned board is left standing on purpose: MissionSelectScreen's background is opaque, and the
 # next mission routes through load_scenario -> clear_board() like every other entry does.
 func abandon_mission() -> void:
+	game.mission_log.seal(MissionLog.Ending.ABANDONED)
 	# Abandon never reaches clear_board -- the board is deliberately left standing behind Mission
 	# Select's opaque backdrop -- so the phase's own screen has to be closed here or it outlives the
 	# mission it belongs to, holding units the NEXT load frees (#740, Fable).
@@ -783,6 +797,7 @@ func capture(zone_name: String) -> void:
 	if game.zone_manager.kind_of(zone_name) != ZoneManager.Kind.CAPTURE:
 		return
 	_captured_zones.append(zone_name)
+	game.mission_log.record_capture(zone_name)
 	game.overlay_manager.redraw_zones(game.zone_manager, hidden_zone_names())
 	game.refresh_mission_status()
 
@@ -941,6 +956,9 @@ func _condition_fired(condition: MissionRules.LoseCondition) -> bool:
 
 func _end_mission() -> void:
 	_ending = true
+	# Sealed BEFORE the banner: a player who quits at it still has the record (#53).
+	var ending: MissionLog.Ending = MissionLog.Ending.VICTORY if outcome == MissionRules.Outcome.VICTORY else MissionLog.Ending.DEFEAT
+	game.mission_log.seal(ending, _failed_by)
 	game.clear_selection()                            # rests game_state ...
 	game.refresh_action_queue(null)
 	game.unit_info_panel.clear()

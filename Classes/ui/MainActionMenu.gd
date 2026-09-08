@@ -589,8 +589,12 @@ func _dispatch(action_id: int, unit: Unit) -> void:
 		JOINSQUAD:
 			game.join_squad_mode(unit)
 		DISBAND_SQUAD:
+			# Recorded HERE rather than in SquadManager (#53): leave_squad has automatic callers
+			# there, and an ejection is a consequence a replay re-derives, not a decision.
+			game.mission_log.record_squad_verb("disband", unit)
 			game.squad_manager.disband_squad(unit.squad)
 		LEAVESQUAD:
+			game.mission_log.record_squad_verb("leave", unit)
 			game.squad_manager.leave_squad(unit)
 		INSPECT:
 			game.unit_info_panel.set_unit(unit, game.can_control(unit), game._board())
