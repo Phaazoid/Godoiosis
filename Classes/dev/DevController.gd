@@ -270,6 +270,7 @@ func resolve_pending(cell: Vector2i) -> void:
 	# already holds; null in a demo build, where there is no scenario header to tell.
 	if game.dev_overlay != null:
 		game.dev_overlay.scenario_header.mark_modified()
+	game.mission_log.note_dev_intervention()   # #53: a spawn is a board move a replay cannot know about
 
 # Independent deep copy of `source` at `cell`. UnitData is duplicated so the copy owns its
 # identity; runtime state (stats, HP) lives on the instance, copied post-spawn; inventory items
@@ -360,6 +361,10 @@ func _begin_stroke() -> void:
 	if _stroke_open:
 		return   # the other button was already down: one gesture, already open
 	_stroke_open = true
+	# A dev tool is about to move a board a run may be recording (#53): flag it, so a replay of that
+	# run is known-untrustworthy instead of silently diverging. One stroke covers all four paint
+	# modes plus Resize Map and Clear Tile States, which is why it is the honest hook.
+	game.mission_log.note_dev_intervention()
 	history.begin(game.scenario_manager.capture_board())
 
 func _end_stroke() -> void:

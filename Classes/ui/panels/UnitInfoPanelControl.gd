@@ -17,6 +17,7 @@ class_name UnitInfoPanelControl
 # The player changed what this unit carries or holds. Forwarded rather than handled here: the
 # panel knows nothing about the queue, and the plan's numbers are the game's to re-resolve (#697).
 signal loadout_changed
+signal loadout_acted(unit: Unit, verb: String, index: int)   # #53: what the player DID, not that it is stale
 
 var current_unit: Unit
 var current_board: BoardContext   # kept so a live refresh can recompute terrain-dependent DEF
@@ -33,6 +34,7 @@ func _ready() -> void:
 	$UnitInfoPanel/Margin/VBox/HeaderRow/CloseButton.pressed.connect(clear)
 	inventory_panel.loadout_changed.connect(_refresh_derived_rows)
 	inventory_panel.loadout_changed.connect(loadout_changed.emit)
+	inventory_panel.loadout_acted.connect(loadout_acted.emit)   # #53: forwarded on the line above's idiom
 
 func set_unit(unit: Unit, can_act := false, board: BoardContext = null):
 	if current_unit == unit:

@@ -47,6 +47,7 @@ var _run_id := ""
 var _seq := 0
 var _started_ms := 0
 var _open := false
+var _dev_touched := false   # a dev tool moved this board; see note_dev_intervention
 
 
 func _ready() -> void:
@@ -58,6 +59,17 @@ func _ready() -> void:
 	# Every spawn makes a solo squad (tools/replay_battle.gd's trick), so the unit hooks attach here
 	# without a second walk over the board -- reinforcements included.
 	game.squad_manager.squad_created.connect(_on_squad_created)
+	# THE PLAYER'S SQUAD DECISION (#53 slice 2). Squad Up and Join BOTH commit through
+	# SquadManager.join_squad, and this signal is clean MID-RUN precisely because its other callers
+	# -- the #763 staged rejoin and ScenarioManager's load rebuild -- both run BEFORE begin() opens
+	# a run, so _record drops them for free.
+	#
+	# `squad_created` is NOT the twin of this and must never be used as one: create_squad has six
+	# callers (spawn, deploy, leave, disband-per-member, the squad-up verb, the headless builder),
+	# so it means "a solo squad now exists" and would log a leave as a squad-up.
+	game.squad_manager.squad_member_joined.connect(_on_squad_joined)
+	# The gear ACT, forwarded up from inventory_panel's one funnel.
+	game.unit_info_panel.loadout_acted.connect(_on_loadout_acted)
 
 
 func is_open() -> bool:
@@ -86,10 +98,14 @@ func begin() -> void:
 		return
 	_events.clear()
 	_seq = 0
+	_dev_touched = false
 	_started_ms = Time.get_ticks_msec()
 	_run_id = _stamp() + "_" + TelemetryStore.new_id().substr(0, 8)
 	_open = true
 	_file = TelemetryStore.open_run_file(_run_id)
+	# The REPLAY SEED, beside the events: the roster line below is the queryable denominator, this
+	# is the machine-exact state. A declared duplication -- two questions, two answers.
+	TelemetryStore.save_board(_run_id, game.scenario_manager.capture_scenario("telemetry-" + _run_id))
 	_record("mission_start", _mission_start_fields())
 	_record("turn_start", _turn_fields(game.turn_manager.active_faction()))
 
@@ -101,6 +117,7 @@ func seal(ending: Ending, failed_by: MissionRules.LoseCondition = MissionRules.L
 		"outcome": Ending.keys()[ending],
 		"failed_by": MissionRules.LoseCondition.keys()[failed_by],
 		"seconds": (Time.get_ticks_msec() - _started_ms) / 1000.0,
+		"dev_touched": _dev_touched,   # true = do not trust a replay of this run
 		"units": _board_vitals(),
 	})
 	_record("summary", {"summary": MissionSummary.of(_events)})
@@ -163,6 +180,21 @@ func record_capture(zone_name: String) -> void:
 	_record("zone_captured", {"zone": zone_name})
 
 
+# LEAVE and DISBAND, called from the menu arms that own those verbs (#53 slice 2). Deliberately NOT
+# hooked inside SquadManager: leave_squad has four automatic callers there (the contact sweep, the
+# leader reassign, the downed handling), and an ejection is a CONSEQUENCE a replay re-derives, not
+# a decision it has to be told. Join needs no entry here -- it rides squad_member_joined.
+func record_squad_verb(verb: String, unit: Unit) -> void:
+	_record("squad_verb", {"verb": verb, "unit": _ref(unit), "squad": _squad_ref(unit.squad)})
+
+
+# A DEV TOOL TOUCHED THIS BOARD, so a replay of this run must not be trusted (#53 slice 2). A FLAG
+# rather than an event stream, deliberately: the goal is only that a replay can never diverge
+# SILENTLY, and per-intervention recording is a declared deferral. Sticky for the rest of the run.
+func note_dev_intervention() -> void:
+	_dev_touched = true
+
+
 # ==============================================================================
 #  The signal side
 # ==============================================================================
@@ -197,6 +229,16 @@ func _on_order_cancelled(squad: Squad, unit: Unit, actiontype: BaseAction.Action
 		"type": BaseAction.ActionType.keys()[actiontype],
 		"during_pass": game.order_executor.executing_plan != null,
 	})
+
+
+func _on_squad_joined(squad: Squad, unit: Unit) -> void:
+	_record("squad_verb", {"verb": "join", "unit": _ref(unit), "squad": _squad_ref(squad)})
+
+
+func _on_loadout_acted(unit: Unit, verb: String, index: int) -> void:
+	# The ACT, never the resulting state: a replay applies it through the same door the player used
+	# (equip_weapon_from_inventory and friends), where a state blob would be a side-channel write.
+	_record("gear", {"unit": _ref(unit), "verb": verb, "index": index})
 
 
 func _on_squad_created(squad: Squad) -> void:
@@ -380,7 +422,12 @@ func _order(action: BaseAction) -> Dictionary:
 			row["at"] = _cell(atk.target_cell)
 			row["attack"] = _attack_name(atk.fired_attack)
 		BaseAction.ActionType.RESCUE:
-			row["target"] = _ref((action as RescueAction).target)
+			# The HAUL is a cell the PLAYER picked (#116), so it is a decision, not a derivation --
+			# without it a replay puts the body somewhere nobody chose. NO_CELL means "no haul", and
+			# it serializes as null rather than as a cell that looks real.
+			var rescue := action as RescueAction
+			row["target"] = _ref(rescue.target)
+			row["haul_to"] = _cell(rescue.haul_to) if rescue.haul_to != GridUtils.NO_CELL else null
 		BaseAction.ActionType.GUARD:
 			row["target"] = _ref((action as GuardAction).target)
 		BaseAction.ActionType.INTIMIDATE:

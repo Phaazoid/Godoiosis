@@ -83,7 +83,7 @@ func _of(kind: String) -> Array[Dictionary]:
 
 
 func _lines_of(run_id: String) -> Array[Dictionary]:
-	var path := TelemetryStore.pending_dir() + run_id + ".jsonl"
+	var path := TelemetryStore.run_dir(run_id) + "events.jsonl"
 	var out: Array[Dictionary] = []
 	if not FileAccess.file_exists(path):
 		return out
@@ -437,6 +437,122 @@ func test_the_file_holds_one_line_per_event_while_the_run_is_still_open() -> voi
 	assert_int(_lines_of(mission_log.run_id()).size()).override_failure_message(
 		"every line is flushed as it is written, or a crash loses the tail").is_equal(
 		mission_log.events().size())
+
+
+# ==============================================================================
+#  Replay-grade capture (slice 2)
+# ==============================================================================
+
+# THE REPLAY SEED. The JSON roster is names and effective stats and cannot rebuild a unit; this is
+# the machine-exact state, through the same #87 snapshot a save slot round-trips.
+func test_the_run_folder_holds_a_board_snapshot_that_reloads() -> void:
+	var hero := _spawn(Team.Faction.PLAYER, Vector2i(0, 0))
+	_spawn(Team.Faction.ENEMY, Vector2i(5, 0))
+	mc._begin_turn()
+
+	var path := TelemetryStore.run_dir(mission_log.run_id()) + "board.tres"
+	assert_bool(FileAccess.file_exists(path)).override_failure_message(
+		"a run with no board snapshot can never be replayed, and that cannot be backfilled").is_true()
+	# Read back through a FRESH load, never the object just saved -- a plain load() would hand back
+	# the very resource take_over_path just claimed and assert nothing.
+	var back: ScenarioData = ResourceLoader.load(path, "", ResourceLoader.CACHE_MODE_IGNORE)
+	assert_object(back).is_not_null()
+	assert_int(back.unit_entries.size()).override_failure_message(
+		"the snapshot must carry the board's units, or it is not a starting state").is_equal(2)
+	assert_object(hero).is_not_null()
+
+
+func test_a_rescue_records_the_bank_the_player_picked() -> void:
+	var hero := _spawn(Team.Faction.PLAYER, Vector2i(0, 0))
+	var body := _spawn(Team.Faction.PLAYER, Vector2i(1, 0))
+	mc._begin_turn()
+	body.force_down()
+	var rescue := RescueAction.new()
+	rescue.init(hero, body, Vector2i(0, 1))
+	assert_bool(game.squad_manager.queue_action(hero.squad, rescue)).override_failure_message(
+		"fixture: the rescue never queued").is_true()
+
+	# Read at QUEUE time, not after a pass: `_order` is what both records go through, and the haul
+	# is a fact of the ORDER rather than of its execution. (A rescue plan here does not survive
+	# execute_orders' validity guard, which is a fixture matter and not what this case is about.)
+	var queued := _of("order_queued")
+	assert_int(queued.size()).override_failure_message("fixture: the rescue was not recorded").is_equal(1)
+	var order: Dictionary = queued[0].get("order", {})
+	assert_str(str(order.get("type"))).is_equal("RESCUE")
+	assert_that(order.get("haul_to")).override_failure_message(
+		"the haul cell is the PLAYER's pick -- without it a replay drops the body elsewhere"
+		).is_equal([0, 1])
+
+
+# Squad Up and Join both commit through join_squad; leave and disband are their own verbs. All four
+# must name their OWN cause -- the bug this case exists for is logging a leave as a squad-up.
+func test_the_squad_verbs_each_record_their_own_cause() -> void:
+	var leader := _spawn(Team.Faction.PLAYER, Vector2i(0, 0))
+	var other := _spawn(Team.Faction.PLAYER, Vector2i(1, 0))
+	mc._begin_turn()
+
+	game.squad_manager.join_squad(other, leader.squad)
+	game.mission_log.record_squad_verb("leave", other)
+	game.squad_manager.leave_squad(other)
+
+	var verbs: Array[String] = []
+	for e: Dictionary in _of("squad_verb"):
+		verbs.append(str(e.get("verb")))
+	assert_array(verbs).override_failure_message(
+		"a join and a leave must be distinguishable -- squad_created cannot tell them apart"
+		).contains_exactly(["join", "leave"])
+
+
+# The ejection sweeps call leave_squad too, and those are consequences a replay re-derives.
+func test_an_automatic_ejection_is_not_recorded_as_a_player_verb() -> void:
+	var leader := _spawn(Team.Faction.PLAYER, Vector2i(0, 0))
+	var other := _spawn(Team.Faction.PLAYER, Vector2i(1, 0))
+	mc._begin_turn()
+	game.squad_manager.join_squad(other, leader.squad)
+	var before := _of("squad_verb").size()
+
+	game.squad_manager.leave_squad(other)   # the sweep's own door, no menu involved
+
+	assert_int(_of("squad_verb").size()).override_failure_message(
+		"an automatic ejection is a CONSEQUENCE, not a decision -- recording it would be a phantom"
+		).is_equal(before)
+
+
+func test_a_gear_change_records_the_act_and_not_the_state() -> void:
+	var hero := _spawn(Team.Faction.PLAYER, Vector2i(0, 0))
+	mc._begin_turn()
+	game.unit_info_panel.loadout_acted.emit(hero, "equip", 2)
+
+	var gear := _of("gear")
+	assert_int(gear.size()).override_failure_message(
+		"the gear seam is a WIRE -- inventory_panel emits, the panel forwards, the log listens"
+		).is_equal(1)
+	assert_str(str(gear[0].get("verb"))).is_equal("equip")
+	assert_int(int(gear[0].get("index"))).override_failure_message(
+		"the INDEX is what makes it replayable through the real door").is_equal(2)
+
+
+func test_a_dev_intervention_marks_the_run_untrustworthy() -> void:
+	_spawn(Team.Faction.PLAYER, Vector2i(0, 0))
+	mc._begin_turn()
+	var run := mission_log.run_id()
+	game.mission_log.note_dev_intervention()
+	mission_log.seal(MissionLog.Ending.ABANDONED)
+
+	var lines := _lines_of(run)
+	var end: Dictionary = lines[lines.size() - 2]
+	assert_bool(bool(end.get("dev_touched"))).override_failure_message(
+		"a dev-touched board must say so, or a replay diverges silently").is_true()
+
+
+func test_an_untouched_run_is_not_flagged() -> void:
+	_spawn(Team.Faction.PLAYER, Vector2i(0, 0))
+	mc._begin_turn()
+	var run := mission_log.run_id()
+	mission_log.seal(MissionLog.Ending.ABANDONED)
+	var lines := _lines_of(run)
+	assert_bool(bool(lines[lines.size() - 2].get("dev_touched"))).override_failure_message(
+		"a flag that is always true says nothing").is_false()
 
 
 func test_with_persistence_off_nothing_is_written() -> void:

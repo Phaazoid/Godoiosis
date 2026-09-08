@@ -59,4 +59,4 @@ func test_a_run_file_opens_under_pending_and_is_null_without_persistence() -> vo
 	assert_object(file).is_not_null()
 	file.store_line("{}")
 	file.close()
-	assert_bool(FileAccess.file_exists(TelemetryStore.pending_dir() + "run.jsonl")).is_true()
+	assert_bool(FileAccess.file_exists(TelemetryStore.run_dir("run") + "events.jsonl")).is_true()

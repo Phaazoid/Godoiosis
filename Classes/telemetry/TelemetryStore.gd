@@ -34,6 +34,13 @@ static func pending_dir() -> String:
 	return root + "pending/"
 
 
+# A run is a FOLDER, not a lone file (#53 slice 2) -- `user://reports/<stamp>/`'s exact shape, and
+# for its reason: a run now carries a board snapshot beside its events, and the uploader already
+# ships a folder through one ATTACHMENTS table.
+static func run_dir(run_id: String) -> String:
+	return pending_dir() + run_id + "/"
+
+
 static func config_path() -> String:
 	return root + "telemetry.cfg"
 
@@ -64,8 +71,33 @@ static func new_id() -> String:
 static func open_run_file(run_id: String) -> FileAccess:
 	if not persistence_enabled:
 		return null
-	DirAccess.make_dir_recursive_absolute(pending_dir())
-	return FileAccess.open(pending_dir() + run_id + ".jsonl", FileAccess.WRITE)
+	DirAccess.make_dir_recursive_absolute(run_dir(run_id))
+	return FileAccess.open(run_dir(run_id) + "events.jsonl", FileAccess.WRITE)
+
+
+# THE REPLAY SEED (#53 slice 2): the board exactly as the battle started, beside its events.
+#
+# The name-based roster in `mission_start` cannot answer this and is not meant to -- a
+# scenario-embedded weapon's template is inline and scenario-local, two attacks may share a
+# display_name, and effective stats are a composed chain that cannot be inverted. A ScenarioData
+# snapshot IS the state, through the #87 machinery a save slot already round-trips.
+#
+# BugReporter.report()'s three steps verbatim, and `take_over_path` is not optional: whoever writes
+# a path claims it (#99), or every later load of that path serves the stale cache entry.
+#
+# DECLARED GAP: capture_scenario walks units_root, so the RESERVE is not in here. Harmless for
+# replay (a reserve unit cannot act); what was OFFERED lives in the JSON roster.
+static func save_board(run_id: String, scenario: ScenarioData) -> bool:
+	if not persistence_enabled or scenario == null:
+		return false
+	DirAccess.make_dir_recursive_absolute(run_dir(run_id))
+	var path := run_dir(run_id) + "board.tres"
+	scenario.take_over_path(path)
+	var err := ResourceSaver.save(scenario, path)
+	if err != OK:
+		push_error("Telemetry: could not write board.tres (error %s)" % err)
+		return false
+	return true
 
 
 # Read-modify-write, so a later key (the notice flag, #53 slice 2) shares the file.
