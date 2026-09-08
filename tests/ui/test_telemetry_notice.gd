@@ -14,6 +14,11 @@ extends GdUnitTestSuite
 const MAIN_SCENE := "res://Scenes/Main.tscn"
 const SCRATCH_ROOT := "user://__telemetry_notice_test/"
 
+# Captured when this script LOADS -- referencing TelemetryNotice forces its _static_init to run
+# first, so this is the value a real process boots with, before any case below can move it. A
+# static rather than a member: it must not depend on gdUnit4 instantiating the suite per case.
+static var _enabled_at_load := TelemetryNotice.enabled
+
 var _main: Node
 var game: Node2D
 
@@ -61,6 +66,18 @@ func test_a_headless_process_is_never_due_the_notice() -> void:
 	# Fresh install in every other respect: the seam alone is what refuses.
 	assert_bool(TelemetryStore.notice_seen()).is_false()
 	assert_bool(TelemetryNotice.should_show()).is_false()
+
+
+# The clause that protects the other 89 booting suites, asserted rather than restated. Case 3 above
+# sets `enabled` by hand and so cannot see a _static_init that stopped clearing it; this reads the
+# value the process actually booted with.
+func test_a_headless_run_boots_with_the_notice_suppressed() -> void:
+	if DisplayServer.get_name() != "headless":
+		# An editor-panel run is not headless, so the clause under test does not apply here.
+		# run_tests.ps1 and CI are both headless, which is where this is the gate.
+		return
+	assert_bool(_enabled_at_load).is_false()
+
 
 
 # A notice we could not record having shown would reappear on every launch, which is worse for the
