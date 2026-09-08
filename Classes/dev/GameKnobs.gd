@@ -935,6 +935,16 @@ const CLASS_KNOBS: Array[Dictionary] = [
 	{"group": "Action ring", "label": "Dead zone", "static": "DEAD_ZONE_RADIUS",
 		"script": ACTION_MENU_SCRIPT, "min": 10.0, "max": 200.0, "step": 1.0,
 		"tip": "Radius around the centre that selects NOTHING -- the only place a click cancels, since every other point on the screen belongs to some slice. Keep it inside the centre gap."},
+	# The name under the sprite (#560) and the lift that makes room for it. Two knobs because both are
+	# taste: the dev asked to bump the sprite "slightly", which is not a number anyone can derive. The
+	# name's WIDTH is not here on purpose -- it is the disc's own chord at the baseline, so it follows
+	# Dead zone rather than being a third value to keep in sync.
+	{"group": "Action ring", "label": "Sprite lift", "static": "CENTRE_SPRITE_LIFT",
+		"script": ACTION_MENU_SCRIPT, "min": 0.0, "max": 60.0, "step": 1.0,
+		"tip": "How far the unit's sprite rises off centre to make room for its name. Every unit's art sits on the bottom of its own texture, so one lift moves every unit's feet together."},
+	{"group": "Action ring", "label": "Name baseline", "static": "CENTRE_NAME_BASELINE",
+		"script": ACTION_MENU_SCRIPT, "min": 0.0, "max": 80.0, "step": 1.0,
+		"tip": "How far below centre the unit's name sits. Lower is roomier under the sprite but NARROWER, since the disc is round -- push it far enough down and long names start shrinking to fit."},
 	{"group": "Action ring", "label": "Wedge fill", "static": "PAINT_FRACTION",
 		"script": ACTION_MENU_SCRIPT, "min": 0.15, "max": 1.0, "step": 0.01,
 		"tip": "How much of its own slice a wedge actually paints, on the first ring. Below 1.0 leaves air between wedges. Purely a look: the slice you are pointing at does not change, only how much of it is drawn."},
@@ -1247,6 +1257,8 @@ static func read_static(name: String) -> Variant:
 		"RING_THICKNESS": return ActionMenuController.RING_THICKNESS
 		"RING_GAP": return ActionMenuController.RING_GAP
 		"DEAD_ZONE_RADIUS": return ActionMenuController.DEAD_ZONE_RADIUS
+		"CENTRE_SPRITE_LIFT": return ActionMenuController.CENTRE_SPRITE_LIFT
+		"CENTRE_NAME_BASELINE": return ActionMenuController.CENTRE_NAME_BASELINE
 		"PAINT_FRACTION": return ActionMenuController.PAINT_FRACTION
 		"PAINT_FRACTION_FALLOFF": return ActionMenuController.PAINT_FRACTION_FALLOFF
 		"GHOST_ALPHA": return ActionMenuController.GHOST_ALPHA
@@ -1598,6 +1610,12 @@ static func write_static(host: Node3D, name: String, value: Variant) -> void:
 			return
 		"DEAD_ZONE_RADIUS":
 			ActionMenuController.DEAD_ZONE_RADIUS = value
+			return
+		"CENTRE_SPRITE_LIFT":
+			ActionMenuController.CENTRE_SPRITE_LIFT = value
+			return
+		"CENTRE_NAME_BASELINE":
+			ActionMenuController.CENTRE_NAME_BASELINE = value
 			return
 		"PAINT_FRACTION":
 			ActionMenuController.PAINT_FRACTION = value

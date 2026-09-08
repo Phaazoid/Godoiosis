@@ -40,6 +40,7 @@ const SPRITE_FIT := 1.4        # sprite box as a multiple of DEAD_ZONE_RADIUS (<
 const ARC_SAMPLES_PER_SLICE := 12
 const MIN_LABEL_FONT_SIZE := 8   # a shrunk label stops here; below it the name is not a readout
 const READOUT_PADDING := 8.0     # breathing room between the readout's text and its panel edge
+const CENTRE_NAME_MARGIN := 4.0  # air the centre name keeps between itself and the disc's rim
 
 # Look values, tuned live through GameKnobs.CLASS_KNOBS. Statics rather than exports because the
 # menu is transient -- there is no standing node for a knob to address, and nothing to re-apply
@@ -71,6 +72,11 @@ static var SLICE_DISABLED_COLOR := Color(0.08, 0.09, 0.12, 0.5)
 static var CENTRE_COLOR := Color(0.05, 0.06, 0.09, 0.94)
 static var CENTRE_RIM_COLOR := Color(0.55, 0.62, 0.75, 0.85)
 static var CENTRE_RIM_WIDTH := 2.0
+# The unit's name in the centre (#560), and the lift that makes room for it. Both are feel values,
+# so both are knobs -- "slightly" was the dev's word for the lift and it is not a number anyone can
+# derive. What IS derived is the width the name gets: see centre_name_font_size.
+static var CENTRE_SPRITE_LIFT := 18.0
+static var CENTRE_NAME_BASELINE := 44.0
 # The readout below the ring. Both text colours are fully opaque on purpose: the hierarchy between
 # a name and its explanation is BRIGHTNESS, because alpha over a live board is what made the first
 # version hard to read at all.
@@ -190,6 +196,28 @@ static func slice_polygon(centre: Vector2, r0: float, r1: float, index: int, cou
 		var t := float(i) / float(ARC_SAMPLES_PER_SLICE)
 		points.append(point_at(centre, r0, mid + half - (half * 2.0) * t))
 	return points
+
+# How wide the centre name may be, in a disc. It is the disc's own CHORD at the text's LOWEST pixel
+# -- a name is bounded by a circle, not by a box, and the deeper it sits the less room it has. The
+# width is DERIVED from DEAD_ZONE_RADIUS rather than stored beside it, so moving the dead-zone knob
+# moves the name's ceiling with it instead of leaving a second number to go stale.
+static func centre_name_width_budget(baseline: float, descent: float) -> float:
+	var reach := absf(baseline) + descent
+	if reach >= DEAD_ZONE_RADIUS:
+		return 0.0
+	return maxf(0.0, 2.0 * (sqrt(DEAD_ZONE_RADIUS * DEAD_ZONE_RADIUS - reach * reach) - CENTRE_NAME_MARGIN))
+
+# THE SHRINK, same rule and same floor a slice label uses: a name that overruns is worse than a name
+# that is small. Nothing shipped reaches it -- the budget is ~83px and the longest unit name is ~64
+# -- so this exists for the roster #731 will bring, not for today.
+static func centre_name_font_size(font: Font, base_size: int, text: String) -> int:
+	if font == null or text == "" or base_size <= 0:
+		return base_size
+	var budget := centre_name_width_budget(CENTRE_NAME_BASELINE, font.get_descent(base_size))
+	var width := font.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1.0, base_size).x
+	if width <= budget or width <= 0.0:
+		return base_size
+	return maxi(MIN_LABEL_FONT_SIZE, int(floor(float(base_size) * budget / width)))
 
 
 func _ring_radii(level: int) -> Vector2:
@@ -437,8 +465,13 @@ func _draw_slice_label(node: Dictionary, radii: Vector2, index: int, count: int,
 		HORIZONTAL_ALIGNMENT_LEFT, -1.0, size, color)
 	_root.draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 
-# The centre is the unit's map sprite and nothing else -- the whole point of the wide gap. Same
+# The centre is the unit's map sprite and its NAME (#560) -- the whole point of the wide gap. Same
 # accessor the action queue's actor icon reads, so the two surfaces can never show different art.
+#
+# The name carries NO plate, and that is a dev call rather than an omission: the disc is already
+# CENTRE_COLOR at 0.94 alpha, so the ticket's "non transparent background like the menus" is the
+# thing the text already sits on. A READOUT_* panel here would be a second opaque background drawn
+# on top of an opaque one.
 func _draw_centre() -> void:
 	# The disc first, and it is drawn whether or not there is a sprite: it is the dead zone made
 	# visible, so its absence would be a lie about where clicking does nothing.
@@ -447,6 +480,17 @@ func _draw_centre() -> void:
 		_root.draw_arc(_centre, DEAD_ZONE_RADIUS, 0.0, TAU, 64, CENTRE_RIM_COLOR, CENTRE_RIM_WIDTH, true)
 	if local_unit == null or not is_instance_valid(local_unit):
 		return
+	# The name sits OUTSIDE the sprite's early-outs: a unit with no map sprite still has a name, and
+	# "who is this" is not the texture's question to answer.
+	_draw_centre_name()
+	_draw_centre_sprite()
+
+# The sprite RISES by CENTRE_SPRITE_LIFT to clear the name. ONE constant serves every unit because
+# every base map sprite ends its ink on the bottom row of its texture -- so a single lift puts every
+# unit's feet on one line, and what differs between them is only how far UP the art reaches. That is
+# also why SPRITE_FIT cannot simply grow into the disc's empty crown: the crown is headroom for the
+# tallest art (Dragon draws 26 of its 32 rows where most units draw 16), not slack.
+func _draw_centre_sprite() -> void:
 	var tex := local_unit.get_map_sprite_texture()
 	if tex == null:
 		return
@@ -455,7 +499,21 @@ func _draw_centre() -> void:
 		return
 	var scale := (DEAD_ZONE_RADIUS * SPRITE_FIT) / maxf(native.x, native.y)
 	var size := native * scale
-	_root.draw_texture_rect(tex, Rect2(_centre - size * 0.5, size), false)
+	var origin := _centre - size * 0.5 - Vector2(0.0, CENTRE_SPRITE_LIFT)
+	_root.draw_texture_rect(tex, Rect2(origin, size), false)
+
+# Whose menu this is, drawn ALWAYS -- not gated on the hover the readout waits for (dev call): the
+# name answers a question that does not depend on where the pointer is. Same accessor
+# UnitInfoPanelControl and the squad panel read, so a unit has one spelling across every surface.
+func _draw_centre_name() -> void:
+	var text := local_unit.get_unit_name()
+	if text == "":
+		return
+	var font := _root.get_theme_default_font()
+	if font == null:
+		return
+	var size := centre_name_font_size(font, _root.get_theme_default_font_size(), text)
+	_draw_centred_line(font, size, text, _centre.y + CENTRE_NAME_BASELINE, READOUT_TITLE_COLOR)
 
 # The readout sits BELOW the whole stack, not in the centre: the pointer is routinely nowhere near
 # the ring, so this is the only feedback that exists, and it needs room the sprite is using.
