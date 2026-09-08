@@ -710,13 +710,15 @@ func _on_load_game_chosen() -> void:
 # A board arriving from the menu has nobody's turn actually STARTED -- load_scenario only
 # restores whose turn it was. Without this a mission saved on an AI faction's turn would sit
 # there doing nothing, because turn_started only ever fires from TurnManager.end_turn.
-func _begin_turn() -> void:
+func _begin_turn(record_to_disk := true) -> void:
 	# The deployment window closes here (#736), and the zones that showed it stop being drawn. Set
 	# BEFORE the redraw for the obvious reason, and the redraw is needed at all because every
 	# arrival painted the zones on the way in (apply_scenario -> restore_progress) while this was
 	# still false.
 	_battle_begun = true
-	game.mission_log.begin()   # the run starts here, whichever door brought us (#53)
+	# Defaulted, so all five arrival doors are unchanged. The replay driver is the one caller that
+	# passes false: it takes this same door so the board is armed identically, and records in memory.
+	game.mission_log.begin(record_to_disk)   # the run starts here, whichever door brought us (#53)
 	game.overlay_manager.redraw_zones(game.zone_manager, hidden_zone_names())
 	var faction: Team.Faction = game.turn_manager.active_faction()
 	game.turn_banner.show_label("%s Turn" % Team.faction_name(faction))

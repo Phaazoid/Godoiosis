@@ -1036,6 +1036,18 @@ func queue_group_move(squad: Squad, leader_destination: Vector2i, board: BoardCo
 
 	# One player action, so one fan-out. Note `batching` also covers the hold-position moves that
 	# setup_hold_move_actions queues when the squad first activates — those fire the same signal.
+	return queue_batch(squad, moves)
+
+# ONE GESTURE, ONE DECISION -- the committing half of a formation, split out of queue_group_move
+# (#53 slice 4) so the replay driver re-issues a recorded batch through the SAME door the menu
+# does. It is not a convenience: queue_action's plan-context gate is skipped while `batching`, so
+# a caller that re-queued a batch's moves one at a time would be refused exactly the orders a
+# group move exists to allow -- and a caller that bracketed `batching` itself would be a
+# hand-copied twin of everything below it (the id, the rollback, the redraw, the re-emit).
+#
+# Takes the moves already SOLVED. Whoever calls it decides where they came from: GroupMoveSolver
+# for a live formation, the recorded queue for a replay.
+func queue_batch(squad: Squad, moves: Array[MoveAction]) -> bool:
 	# The id is allocated BEFORE the window opens: queue_action only advances the counter when it
 	# is NOT batching, so every member of this formation stamps the one id (#228 pops it whole).
 	_next_batch_id += 1
