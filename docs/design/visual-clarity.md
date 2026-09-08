@@ -7,7 +7,7 @@ its child [#49 Action Queue UX](https://github.com/Phaazoid/Godoiosis/issues/49)
 This is a *guidelines* doc, not a spec — it captures the principles we're holding the work to,
 plus the running order of the queue-UX checklist. Update it as items land.
 
-**Canon checked through #820 (2026-09-07).**
+**Canon checked through #831 (2026-09-08).**
 
 ## Principles
 
@@ -1127,10 +1127,39 @@ ships no gamepad bindings (there are none in `project.godot` at all); what it sh
 that keeps them from being a rewrite.
 
 **The look is knobs, not guesses** (#253's rule): centre gap, ring thickness, gap, dead zone, wedge
-fill and its per-level falloff, preview opacity, and three slice colours, all on the Game tab.
+fill and its per-level falloff, preview opacity, three slice colours, and — since #560 — the
+sprite's lift and the name's baseline, all on the Game tab.
 They are `CLASS_KNOBS` statics rather than `KNOBS` rows because **the menu is transient** — there is
 no standing node for a knob to name and nothing to re-apply a change to, which is
 `MovementComponent.SHOVE_SLIDE_SPEED`'s shape exactly.
+
+### The centre names its unit (#560, 2026-09-08)
+
+The dev's ask was *"under a unit's sprite, I think I want their name there as well. It'd mean
+bumping up the unit sprite slightly."* Two things about the result are not re-derivable from the
+code, and both came out of measuring the art rather than reading the ticket.
+
+**There is no plate, and the disc is the reason** (dev call). The ticket asked for *"a non
+transparent background like the menus, so its readable"*, and `CENTRE_COLOR` at 0.94 alpha already
+is one — a `READOUT_*` panel here would be a second opaque background drawn on top of an opaque
+one. So the name reuses `READOUT_TITLE_COLOR` and `_draw_centred_line` and mints no look values of
+its own. It is drawn **always**, never gated on the hover the readout waits for: a name answers a
+question that does not depend on where the pointer is.
+
+**ONE lift serves every unit because every base map sprite ends its ink on the bottom row of its
+texture.** Measured over all 18 (2026-09-08): the feet are on row 31 in every one, so a single
+constant puts every unit's feet on one line and only the height above that line differs — 16 texels
+for the Priest, 26 for the Dragon, with Pegasus, General and Wyvern between. **That is also why
+`SPRITE_FIT` cannot grow into the disc's empty crown, which looks like waste and is not:** the crown
+is the dragon's headroom. Raising it past about 1.5 puts that art through the rim, and the ceiling
+is set by the tallest sprite in the game rather than by the one you happen to be looking at.
+
+The name's WIDTH is deliberately not a third knob — it is the disc's own chord at the text's lowest
+pixel (`centre_name_width_budget`), so it follows `DEAD_ZONE_RADIUS` instead of being a number that
+goes stale when that knob moves, and a wider name has less room precisely because the disc is round.
+Overrun shrinks the font to `MIN_LABEL_FONT_SIZE`, the same floor and the same rule a slice label
+uses. Nothing shipped reaches it: the budget is ~83px and *Rebecca*, the longest name in
+`Resources/units/`, is ~64.
 
 ### Round 2: what the first play-through changed (dev, same day)
 

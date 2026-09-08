@@ -20,6 +20,21 @@ func _outside_radius() -> float:
 	return AMC.DEAD_ZONE_RADIUS + 50.0
 
 
+# The name cases below drive the LOOK knobs to controlled values -- never the shipped ones, which
+# are tuned and must stay free to move. Restored here rather than at the end of each case because a
+# failed assertion truncates the rest of its case and would otherwise leak a knob into the next one.
+var _dead_zone := 0.0
+var _name_baseline := 0.0
+
+func before_test() -> void:
+	_dead_zone = AMC.DEAD_ZONE_RADIUS
+	_name_baseline = AMC.CENTRE_NAME_BASELINE
+
+func after_test() -> void:
+	AMC.DEAD_ZONE_RADIUS = _dead_zone
+	AMC.CENTRE_NAME_BASELINE = _name_baseline
+
+
 # ==============================================================================
 #  The sweep: every angle belongs to exactly one slice
 # ==============================================================================
@@ -179,3 +194,73 @@ func test_a_lone_wedge_paints_where_the_parent_pointed() -> void:
 	assert_float(wrapf(AMC.slice_mid_deg(0, 1, start), 0.0, 360.0)) \
 		.override_failure_message("the lone child did not sit on its parent's own direction") \
 		.is_equal_approx(135.0, 0.001)
+
+
+# ==============================================================================
+#  The centre name (#560): a round disc, not a box, decides what fits
+# ==============================================================================
+
+# The claim: the name's width budget is the disc's own CHORD where the text's lowest pixel sits.
+# The mutants this is written against are the two ways to get that wrong -- using the diameter
+# everywhere (a box, not a circle) and storing a width beside DEAD_ZONE_RADIUS instead of deriving
+# one from it.
+func test_the_name_budget_is_the_chord_at_its_own_depth() -> void:
+	# Across the centre line the chord IS the diameter, less the rim margin on each side.
+	assert_float(AMC.centre_name_width_budget(0.0, 0.0)) \
+		.override_failure_message("the budget on the centre line was not the full diameter") \
+		.is_equal_approx(2.0 * (AMC.DEAD_ZONE_RADIUS - AMC.CENTRE_NAME_MARGIN), 0.001)
+
+	# Every step further down is strictly narrower -- that is the whole difference from a box.
+	var previous := AMC.centre_name_width_budget(0.0, 0.0)
+	for depth in range(1, int(AMC.DEAD_ZONE_RADIUS)):
+		var budget := AMC.centre_name_width_budget(float(depth), 0.0)
+		assert_float(budget) \
+			.override_failure_message("%d px down the disc was not narrower than %d px down"
+				% [depth, depth - 1]) \
+			.is_less(previous)
+		previous = budget
+
+	# Below the rim there is no disc left to write on, and the answer is zero rather than a NaN.
+	assert_float(AMC.centre_name_width_budget(AMC.DEAD_ZONE_RADIUS + 1.0, 0.0)).is_equal(0.0)
+
+	# The descent counts: it is the text's LOWEST pixel that has to clear the rim, not its baseline.
+	assert_float(AMC.centre_name_width_budget(20.0, 6.0)) \
+		.override_failure_message("the descender did not narrow the budget") \
+		.is_less(AMC.centre_name_width_budget(20.0, 0.0))
+
+
+func test_the_name_budget_follows_the_dead_zone_knob() -> void:
+	var narrow := AMC.centre_name_width_budget(10.0, 0.0)
+	AMC.DEAD_ZONE_RADIUS = _dead_zone * 2.0
+	assert_float(AMC.centre_name_width_budget(10.0, 0.0)) \
+		.override_failure_message("widening the dead zone did not widen what a name may be -- the budget is a stored copy, not a derivation") \
+		.is_greater(narrow)
+
+
+func test_a_name_that_fits_keeps_its_size_and_a_long_one_shrinks_to_the_slice_floor() -> void:
+	var font: Font = ThemeDB.fallback_font
+	AMC.CENTRE_NAME_BASELINE = 0.0    # the widest the disc ever is, so "fits" is unambiguous
+	assert_int(AMC.centre_name_font_size(font, 16, "Ross")) \
+		.override_failure_message("a short name was shrunk even across the disc's widest line") \
+		.is_equal(16)
+
+	var long := "Wilhelmina Bartholomew the Third"
+	assert_int(AMC.centre_name_font_size(font, 16, long)) \
+		.override_failure_message("a name wider than the whole disc was not shrunk").is_less(16)
+
+	# However absurd the name, it stops where a slice label stops: below that it is not a readout.
+	assert_int(AMC.centre_name_font_size(font, 16, long.repeat(20))) \
+		.override_failure_message("the shrink ran past MIN_LABEL_FONT_SIZE") \
+		.is_greater_equal(AMC.MIN_LABEL_FONT_SIZE)
+
+
+# Why the baseline is a knob and not a constant: moving it does not just move the name, it changes
+# how much name there is room for. Anyone retuning it should be able to see that in one place.
+func test_pushing_the_name_down_the_disc_narrows_what_fits() -> void:
+	var font: Font = ThemeDB.fallback_font
+	AMC.CENTRE_NAME_BASELINE = 0.0
+	var high := AMC.centre_name_font_size(font, 16, "Wilhelmina")
+	AMC.CENTRE_NAME_BASELINE = AMC.DEAD_ZONE_RADIUS * 0.85
+	assert_int(AMC.centre_name_font_size(font, 16, "Wilhelmina")) \
+		.override_failure_message("the same name fitted equally well at the rim as on the centre line") \
+		.is_less(high)
