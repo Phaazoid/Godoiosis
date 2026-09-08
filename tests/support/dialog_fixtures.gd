@@ -2,6 +2,10 @@
 # Missions can TALK now: begin_mission arms the scenario's beats, a MISSION_START intro spawns
 # Dialogic's layout ON THE TREE ROOT -- outside any suite fixture, so it survives scene removal,
 # eats synthesized clicks, and bleeds into the next case as orphans unless ended explicitly.
+#
+# #687 DID NOT MOVE IT FOR TESTS, and that is worth knowing before anyone deletes this dance: the
+# layout's parent is now ScenarioDirector's game.get_viewport(), which is GameView in the shipped
+# tree -- but a suite's board sits under the ROOT viewport, so here it still lands where it did.
 class_name DialogFixtures
 
 

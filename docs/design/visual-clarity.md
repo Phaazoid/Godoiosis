@@ -7,7 +7,7 @@ its child [#49 Action Queue UX](https://github.com/Phaazoid/Godoiosis/issues/49)
 This is a *guidelines* doc, not a spec — it captures the principles we're holding the work to,
 plus the running order of the queue-UX checklist. Update it as items land.
 
-**Canon checked through #831 (2026-09-08).**
+**Canon checked through #837 (2026-09-08).**
 
 ## Principles
 
@@ -2687,12 +2687,40 @@ Four things this changed that are easy to get wrong later:
   NEAREST, so the 16×16 action icons draw at ~3.7× on the dev's own window — cleanly nearest, but
   unevenly doubled. Left alone deliberately; it is a look call, not a bug.
 
-**What does NOT scale.** Dialogic's layout mounts on the **tree root** (`create_layout` defaults its
-parent to `dialogic.get_parent()`), outside the SubViewport entirely — so the dialog box is still
-physical pixels on a big screen while everything around it scales. Filed rather than fixed here:
-re-homing it into `ui_layer` drags in the #370 synthesized-click behaviour, the
-`DialogFixtures.end_all_dialog` teardown, and whether a dialog inside ModalLock's frozen subtree
-freezes itself. `Battle3D`'s own root readouts — the checkout stamp and dev badge, the help line having gone in #816 — do
+**The dialog box joined the design space ([#687](https://github.com/Phaazoid/Godoiosis/issues/687),
+2026-09-08).** Dialogic's layout used to mount on the **tree root** (`create_layout` defaults its
+parent to `dialogic.get_parent()`), outside the SubViewport entirely — so the dialog box drew at
+design-resolution pixels on a big screen while everything around it scaled, which on the Demo
+milestone was the first UI a stranger sees. `ScenarioDirector._start` now hands
+`game.get_viewport()` to `Dialogic.Styles.load_style` before every timeline, and both
+`Dialogic.start` call sites route through it.
+
+- **Per timeline, not once at boot.** `end_timeline` REMOVES and frees the layout under
+  `dialogic/layout/end_behaviour` 0 (this project's value), and the next `start` rebuilds it — so
+  there is no one-time place to register a parent, and a pre-created one would leave a full-rect,
+  click-eating CanvasLayer in the tree between beats.
+- **`game.get_viewport()`, never a path.** In the shipped tree that is `GameView`; in a suite whose
+  board sits under the root it IS the root, so no dialog fixture changed. It also obeys the standing
+  no-absolute-`/root/…`-paths rule that the dev overlay already paid for once.
+- **A sibling of `Game`, not a child, and that is what made this small.** The ticket expected to
+  re-home into `ui_layer` and pay for it three times over — the #370 synthesized-click behaviour,
+  the `DialogFixtures.end_all_dialog` teardown, and a dialog freezing itself inside ModalLock's
+  frozen subtree. None of that applies one level up: `ModalLock` disables the **`Game` node**, and
+  the layout is a `CanvasLayer` at 1 over `UILayer`'s 0 — exactly the relationship it had to
+  `GameContainer` at the root. Dev ruling 2026-09-08, asked before the plan: *preserve today's
+  semantics*, the dialog still draws over everything and is still not frozen by a card.
+- **The ticket's own alternative was wrong, and the reason generalizes.** It proposed scaling the
+  layout's `CanvasLayer` transform in place. A Control whose parent is a `CanvasLayer` anchors
+  against `get_viewport().get_visible_rect()` — the canvas transform is not in it — so the layer's
+  full-rect children would still lay out at the physical window size and then draw at 1.83×, with
+  the textbox off the bottom edge. The design space IS `size_2d_override`, which is a **Viewport**
+  property: the only way to reuse the seam is to be inside a viewport that has one.
+- **Declared residual:** in `battle3d.gd`'s CORNER view (the dev-only PiP) the dialog now shrinks
+  into the corner with the rest of the 2D game. Accepted, not special-cased — that is what CORNER
+  already does to every other panel. `demo_mode` hides the container outright, and a watch-only boot
+  never arms the director (#375), so no dialog can fire there.
+
+**What still does NOT scale.** `Battle3D`'s own root readouts — the checkout stamp and dev badge, the help line having gone in #816 — do
 not scale either, and stay that way on purpose: the whiteout transition shares their CanvasLayer and
 must cover the real window.
 
