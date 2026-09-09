@@ -234,3 +234,33 @@ func test_every_prototype_writes_its_mod_spaces_rather_than_inheriting_the_defau
 		if not FileAccess.get_file_as_string(template.resource_path).contains("\nmod_spaces = "):
 			silent.append(name)
 	assert_array(silent).is_empty()
+
+
+# THE SECOND DOOR onto the same #590 rule, and the one that was open (#810 follow-up): effective_main
+# substitutes the EMPOWERED FORM while a weapon is supercharged, so an empowered form is a main too.
+# Ticking can_overwatch on Chemical_Spitter_Charged.tres passed every lint and left a supercharged
+# Spitter with zero selectable attacks -- disarmed exactly while its tank was full, which reads as a
+# tank bug. Verified by probe before the fix.
+func test_a_watch_only_empowered_form_blocks() -> void:
+	var t := _template()
+	t.main_attack.display_name = "Spray"
+	var charged := WeaponAttackData.new()
+	charged.display_name = "Pressurised Spray"
+	charged.can_overwatch = true
+	t.main_attack.empowered_form = charged
+
+	var findings := WeaponTemplateLint.check(t)
+
+	assert_array(findings).is_not_empty()
+	assert_int(findings[0]["severity"]).is_equal(WeaponTemplateLint.Severity.BLOCKS)
+	assert_str(_texts(findings)).contains("Pressurised Spray")
+
+
+# The negative half: an ordinary empowered form is the whole point of the feature and must not trip.
+func test_an_ordinary_empowered_form_is_fine() -> void:
+	var t := _template()
+	var charged := WeaponAttackData.new()
+	charged.display_name = "Pressurised Spray"
+	t.main_attack.empowered_form = charged
+
+	assert_array(WeaponTemplateLint.check(t)).is_empty()

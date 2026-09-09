@@ -85,10 +85,30 @@ func is_intact() -> bool:
 # still exist) because ScenarioUnitEntry asks exactly that and must still SEE a spent or cancelled
 # watch in order to save the flag.
 #
+# CAN THE WEAPON STILL PAY? #810's original question, and it belongs HERE rather than in the
+# resolver's trigger filter: a filter that refuses the shot leaves the watch un-fired and un-drawn-
+# down, so the board would keep promising a shot that will never come (Law #2). One clause here
+# reaches the trigger, the collection, the markup and both readouts at once, and needs no execution
+# stamp -- fireability is a LIVE DERIVED FACT re-read at every resolve and every redraw, never a
+# state transition somebody has to record.
+#
+# THIS SETTLES #810'S ORIGINAL FORK as REFUSE (dev, 2026-09-09), over "fire anyway" and "fire
+# downgraded": a footprint promising a shot the weapon cannot pay for is a lie either way. The
+# consequence is a DOUBLE PENALTY -- a watch that goes dry neither fires nor gives the reaction back
+# -- which is the one-round rule (Unit.is_standing_watch, deliberately reading past this) applied to
+# a third ending, consistent with the other two.
+#
+# THE INVARIANT THIS REPLACES: parts 1 and 2 closed the dry-watch hole by ARGUING that nothing can
+# change a weapon's fireability while a watch stands -- true today (readiness moves only on firing
+# or a Reload-class main, and a watcher can do neither), but enforced nowhere. A family that gates
+# firing on anything TIMER-DECAYED or externally changed would have re-opened it silently.
+# `tick_weapon_rev` is the standing precedent for such a decay. This asks instead of arguing.
+#
 # Says nothing about the ANCHOR, deliberately: that predicate takes a positional fact the caller
 # owns, and the resolver feeds it a threaded cell while a redraw feeds the live one.
 func is_armed() -> bool:
-	return is_intact() and not spent and not cancelled
+	return is_intact() and not spent and not cancelled \
+		and watcher.is_attack_fireable(attack)
 
 
 # THE anchor predicate, and it takes the positional fact rather than reading it (GuardWard.in_range's

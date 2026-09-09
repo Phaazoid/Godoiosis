@@ -177,3 +177,58 @@ func test_no_saved_variant_wears_an_illegal_fitting() -> void:
 		for finding: Dictionary in WeaponInstanceLint.check(weapon):
 			problems.append("%s: %s" % [name, finding["text"]])
 	assert_array(problems).is_empty()
+
+
+# ==============================================================================
+#  The fitted main (#810 follow-up)
+# ==============================================================================
+#
+# THE THIRD DOOR onto effective_main, and the one no test touched: a mod's `replaces_main`. Nothing
+# in tests/ referenced that field before these cases, so the mod door stood open the whole time the
+# template door was guarded -- and a template lint structurally cannot see a mod.
+
+func _watch_attack(name: String) -> WeaponAttackData:
+	var a := WeaponAttackData.new()
+	a.display_name = name
+	a.can_overwatch = true
+	return a
+
+
+func test_a_mod_replacing_the_main_with_a_watch_attack_reports() -> void:
+	var w := WeaponInstance.make(_template())
+	var m := _mod(1, "Sniper Kit")
+	m.replaces_main = _watch_attack("Line Watch")
+	assert_bool(w.fit(0, m)).is_true()
+
+	var texts := _texts(w)   # also asserts every finding is DEGRADES, per this file's rule
+
+	assert_int(texts.size()).is_equal(1)
+	assert_str(texts[0]).contains("Line Watch")
+
+
+# And through the empowered form of the replacement -- both doors compose, so both are checked.
+func test_a_mod_whose_replacement_empowers_into_a_watch_reports() -> void:
+	var w := WeaponInstance.make(_template())
+	var m := _mod(1, "Sniper Kit")
+	var replacement := WeaponAttackData.new()
+	replacement.display_name = "Long Shot"
+	replacement.empowered_form = _watch_attack("Overcharged Watch")
+	m.replaces_main = replacement
+	assert_bool(w.fit(0, m)).is_true()
+
+	var texts := _texts(w)
+
+	assert_int(texts.size()).is_equal(1)
+	assert_str(texts[0]).contains("Overcharged Watch")
+
+
+# The negative: an ordinary main replacement is what the field is FOR and must stay silent.
+func test_an_ordinary_main_replacement_reports_nothing() -> void:
+	var w := WeaponInstance.make(_template())
+	var m := _mod(1, "Heavy Head")
+	var replacement := WeaponAttackData.new()
+	replacement.display_name = "Cleave"
+	m.replaces_main = replacement
+	assert_bool(w.fit(0, m)).is_true()
+
+	assert_array(_texts(w)).is_empty()

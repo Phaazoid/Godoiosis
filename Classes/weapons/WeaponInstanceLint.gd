@@ -51,7 +51,33 @@ static func check(weapon: WeaponInstance) -> Array[Dictionary]:
 			if reason != "":
 				_add(found, Severity.DEGRADES, "%s is fitted to space %d but would be refused there now: %s"
 						% [_name_of(mod), index + 1, reason])
+	_check_fitted_main_is_fireable(weapon, found)
 	return found
+
+
+# DEGRADES, deliberately: the weapon is already on disk in this state and the Item Editor is what
+# repairs it -- a BLOCKS refuses that save (_refuse_instance), which is the trap this whole file
+# stays DEGRADES to avoid. Quieter than the template's BLOCKS on the same rule, and correctly so:
+# a template fault is fixed in another tab, a fitting fault is fixed right here.
+#
+# The OTHER two doors onto effective_main, and the pair WeaponTemplateLint structurally
+# cannot see -- a fitted mod's `replaces_main`, and that replacement's own empowered form. Same
+# #590 rule as the template's authored main: a watch attack is never fired, so a weapon whose
+# effective main is one has nothing to attack with. Nothing referenced `replaces_main` in tests
+# before this, so the mod door was open the whole time the template door was guarded.
+#
+# base_main() rather than effective_main(): the replacement is what a mod actually installs, and
+# asking the supercharged form separately is what lets the message name WHICH of the two is wrong.
+# Passed a null wielder deliberately -- active_space_count reads UNREDUCED for an unheld weapon
+# (#732), so the lint sees every fitted mod rather than only a particular carrier's active spaces.
+static func _check_fitted_main_is_fireable(weapon: WeaponInstance, found: Array[Dictionary]) -> void:
+	var base := weapon.base_main(null)
+	if base == null or base == weapon.template.main_attack:
+		return   # the template's own main is WeaponTemplateLint's finding, not a second copy of it
+	if base.can_overwatch:
+		_add(found, Severity.DEGRADES, "A fitted mod replaces the main attack with \"%s\", which is a watch attack -- an overwatch attack is never fired, so this weapon has nothing to attack with." % base.display_name)
+	if base.empowered_form != null and base.empowered_form.can_overwatch:
+		_add(found, Severity.DEGRADES, "A fitted mod replaces the main attack with \"%s\", which empowers into the watch attack \"%s\" -- so this weapon has nothing to attack with while it is supercharged." % [base.display_name, base.empowered_form.display_name])
 
 
 # Would this mod be allowed onto this space TODAY? Asked on a PROBE -- a copy of the weapon with this
