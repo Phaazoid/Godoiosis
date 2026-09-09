@@ -29,13 +29,27 @@ static var _visiting: Dictionary = {}
 
 
 # The normal path costs one load and nothing else: a file that parses is returned untouched.
+#
+# THE EXISTENCE QUESTION IS ResourceLoader'S, NOT FileAccess'S. An exported pack stores
+# `Foo.tres.remap` and NO `Foo.tres`, so `FileAccess.file_exists` answers FALSE for every packed
+# resource -- and this function returned null before ever trying to load one. That is #141's family
+# one layer down (`ResourceDir` fixed the DirAccess half; this is the FileAccess half), and because
+# `ResourceCatalog` and `ScenarioManager.load_scenario` both come through here, an exported build
+# had EMPTY CATALOGS AND UNLOADABLE MISSIONS from #608 (2026-08-27) until this line changed.
+# `ResourceLoader.exists` resolves the remap; `ResourceLoader.load` then returns the resource.
 static func load_tolerant(path: String) -> Resource:
-	if not FileAccess.file_exists(path):
+	if not ResourceLoader.exists(path):
 		return null
 	var res: Resource = ResourceLoader.load(path)
 	if res != null:
 		_repairs.erase(path)   # a clean load supersedes any earlier repair of the same path
 		return res
+
+	# EVERYTHING BELOW REPAIRS BY READING THE FILE AS TEXT, which only a source tree can do: a pack
+	# holds no `.tres` to parse and nothing a rewrite could land on. A packed resource that will not
+	# load is broken content, not damaged content, so fail honestly rather than half-repair.
+	if not FileAccess.file_exists(path):
+		return null
 
 	# #596's actual shape was a CHAIN -- Level_1 -> Noemie -> a weapon that was gone. The middle
 	# file exists, so this file's own references all look fine while it still refuses to load.
