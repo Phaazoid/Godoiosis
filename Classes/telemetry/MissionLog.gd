@@ -47,6 +47,10 @@ class_name MissionLog
 # already on disk and ReplayDriver's seal are untouched by their arrival.
 enum Ending { VICTORY, DEFEAT, ABANDONED, RESTARTED, INTERRUPTED, QUIT, CRASHED }
 
+## A run has been sealed and its file closed (#53 slice 5). Carries the run id; the listener is
+## TelemetryUploader. NOT emitted for an in-memory replay or a QUIT -- see seal().
+signal run_sealed(run_id: String)
+
 var game   # the Game coordinator; set by game._ready()
 
 # One id per process, so the runs of one sitting can be grouped offline.
@@ -173,9 +177,26 @@ func seal(ending: Ending, failed_by: MissionRules.LoseCondition = MissionRules.L
 	})
 	_record("summary", {"summary": MissionSummary.of(_events)})
 	_open = false
+	# CAPTURED BEFORE THE CLOSE, announced after it: the listener reads this file off disk, so it
+	# must not still be open when it does.
+	var on_disk := _file != null
 	if _file != null:
 		_file.close()
 		_file = null
+
+	# THE RUN IS COMPLETE AND ON DISK (#53 slice 5). A SIGNAL rather than a call into transport,
+	# because this file's whole contract is that it owns no rule and knows no path -- it announces,
+	# and TelemetryUploader listens. Gated twice, and both gates are seal() CALLERS counted rather
+	# than guessed:
+	#
+	#   * `on_disk` -- ReplayDriver re-records a replay through this same recorder with
+	#     record_to_disk false, so an ungated emit would make a dev replay session a network
+	#     trigger. A run with no file has nothing to announce.
+	#   * NOT ON QUIT -- game.gd's pause-menu arm seals QUIT and calls get_tree().quit() on the
+	#     next line, and the close-request handler is the same shape. A request started there is at
+	#     best wasted and at worst holds shutdown until its timeout; the next launch sends it.
+	if on_disk and ending != Ending.QUIT:
+		run_sealed.emit(_run_id)
 
 
 # ==============================================================================

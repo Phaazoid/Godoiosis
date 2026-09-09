@@ -131,6 +131,7 @@ var mission_controller: MissionController
 var order_executor: OrderExecutor
 var bug_reporter: BugReporter
 var mission_log: MissionLog   # the playtest recorder (#53); writes down what the others decide
+var telemetry_uploader: TelemetryUploader   # ships a sealed run to the intake (#53 slice 5)
 
 # ==============================================================================
 #  Lifecycle
@@ -142,6 +143,11 @@ func _ready() -> void:
 	# _build_collaborators: this must never meet a run this process is about to open.
 	MissionLog.sweep_unsealed()
 	_build_collaborators()
+	# ...AND THEN SEND THEM (#53 slice 5), in that order and for that reason: the sweep is what
+	# turns a killed run into a complete record, so sending first would ship the fragment. This is
+	# also the RETRY -- an offline session or a 500 resolves itself at the next launch, which is why
+	# there is no retry ledger anywhere.
+	telemetry_uploader.send_pending()
 
 	# SubViewports default to LINEAR filtering and per-node texture_filter only patches part of
 	# the tree — set the viewport default instead (CLAUDE.md "Sharp edges"). Do not undo.
@@ -224,6 +230,10 @@ func _build_collaborators() -> void:
 	mission_log = MissionLog.new()
 	mission_log.game = self
 	add_child(mission_log)   # after @onready: _ready here connects turn_manager / squad_manager
+
+	telemetry_uploader = TelemetryUploader.new()
+	telemetry_uploader.game = self
+	add_child(telemetry_uploader)   # AFTER mission_log: its _ready connects to run_sealed
 
 func _wire_signals() -> void:
 	turn_manager.turn_started.connect(_on_turn_started)

@@ -36,15 +36,65 @@ static func _static_init() -> void:
 		persistence_enabled = false
 
 
+# TWO FOLDERS, AND THE NAMES ARE THE STATE (#53 slice 5). `pending/` means exactly *still owed to
+# the server*, which is what makes the retry queue self-describing -- no marker file, no flag, and
+# nothing that can disagree with where the folder actually is. A sent run is KEPT rather than
+# deleted (dev, 2026-09-08) so the dev Replay tab can still open it.
 static func pending_dir() -> String:
 	return root + "pending/"
+
+
+static func sent_dir() -> String:
+	return root + "sent/"
 
 
 # A run is a FOLDER, not a lone file (#53 slice 2) -- `user://reports/<stamp>/`'s exact shape, and
 # for its reason: a run now carries a board snapshot beside its events, and the uploader already
 # ships a folder through one ATTACHMENTS table.
+#
+# It RESOLVES rather than composing (#53 slice 5): sent if the folder is there, else pending. One
+# function for two homes, and every existing WRITER is unchanged by that -- a new run's id is in
+# neither folder, so it falls through to pending, which is where a new run belongs.
 static func run_dir(run_id: String) -> String:
+	if is_sent(run_id):
+		return sent_dir() + run_id + "/"
 	return pending_dir() + run_id + "/"
+
+
+static func is_sent(run_id: String) -> bool:
+	return DirAccess.dir_exists_absolute(sent_dir() + run_id + "/")
+
+
+# Newest first -- the id starts with a sortable stamp. One listing mechanism; the THREE questions
+# built on it (what can I replay / what is owed / what has gone) are its callers' business.
+static func runs_in(dir: String) -> PackedStringArray:
+	if not DirAccess.dir_exists_absolute(dir):
+		return PackedStringArray()
+	var ids := DirAccess.get_directories_at(dir)
+	ids.sort()
+	ids.reverse()
+	return ids
+
+
+static func pending_runs() -> PackedStringArray:
+	return runs_in(pending_dir())
+
+
+static func sent_runs() -> PackedStringArray:
+	return runs_in(sent_dir())
+
+
+# THE RUN HAS LANDED (#53 slice 5) -- move it, do not copy it, so the two folders can never both
+# claim one run. Called only after the far end answered 2xx.
+static func mark_sent(run_id: String) -> bool:
+	if not persistence_enabled or is_sent(run_id):
+		return false
+	DirAccess.make_dir_recursive_absolute(sent_dir())
+	var err := DirAccess.rename_absolute(pending_dir() + run_id, sent_dir() + run_id)
+	if err != OK:
+		push_error("Telemetry: could not move run %s to sent/ (error %s)" % [run_id, err])
+		return false
+	return true
 
 
 static func config_path() -> String:

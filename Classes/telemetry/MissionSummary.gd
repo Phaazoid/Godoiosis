@@ -137,6 +137,13 @@ static func of(events: Array[Dictionary]) -> Dictionary:
 	var seconds: float = float(end.get("seconds", last_ms / 1000.0))
 
 	return {
+		# WHO AND WHICH (#53 slice 5). All three are already in `mission_start`; promoting them is
+		# the same extension `sandbox`/`dev_mode`/`swept` each got, for the same reason -- the
+		# summary row is what gets indexed, and a row with no id and no sender is not a row. It is
+		# also what lets the intake read this one line and never open the event log at all.
+		"run_id": start.get("run_id", ""),
+		"install_id": start.get("install_id", ""),
+		"session_id": start.get("session_id", ""),
 		"scenario": start.get("scenario", ""),
 		"build": start.get("build", ""),
 		# Carried into the summary, not just the events: this is the row that gets indexed, so the
