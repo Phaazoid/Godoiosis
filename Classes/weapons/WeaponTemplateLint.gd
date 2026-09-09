@@ -53,9 +53,22 @@ static func _check_has_a_main(template: WeaponData, found: Array[Dictionary]) ->
 # counters have nothing, and every fire surface skips it while the menu still draws the family.
 # The fix is content, and it is the one the Carbine takes -- keep the main fireable and give the
 # family a separate watch-only attack in extra_attacks.
+#
+# THE RULE IS ABOUT EVERYTHING effective_main CAN RETURN, not about the authored field. It has
+# three sources -- this template's main, a fitted mod's `replaces_main` (WeaponInstanceLint owns
+# that one, since a template cannot see a mod), and the EMPOWERED FORM of either, which is what
+# effective_main substitutes while the weapon is supercharged (#97). Checking only the authored
+# main was a real hole: ticking can_overwatch on `Chemical_Spitter_Charged.tres` passed every lint
+# and left a supercharged Spitter with zero selectable attacks, disarmed exactly while its tank was
+# full. Silent, and it reads as a tank bug.
 static func _check_main_is_fireable(template: WeaponData, found: Array[Dictionary]) -> void:
-	if template.main_attack != null and template.main_attack.can_overwatch:
-		_add(found, Severity.BLOCKS, "Main attack \"%s\" is a watch attack -- an overwatch attack is never fired, so this weapon has nothing to attack with. Move it to extra_attacks and give the family a fireable main." % template.main_attack.display_name)
+	var main := template.main_attack
+	if main == null:
+		return
+	if main.can_overwatch:
+		_add(found, Severity.BLOCKS, "Main attack \"%s\" is a watch attack -- an overwatch attack is never fired, so this weapon has nothing to attack with. Move it to extra_attacks and give the family a fireable main." % main.display_name)
+	if main.empowered_form != null and main.empowered_form.can_overwatch:
+		_add(found, Severity.BLOCKS, "Main attack \"%s\" empowers into \"%s\", which is a watch attack -- so this weapon has nothing to attack with while it is supercharged. An empowered form is a main too." % [main.display_name, main.empowered_form.display_name])
 
 
 # DEGRADES: the weapon works, that space does not. can_fit compares against the capacity, so a
