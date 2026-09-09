@@ -315,6 +315,54 @@ there is no judgement call to get wrong. A `CRASHED` run is never refused howeve
 
 ---
 
+
+---
+
+## Pulling a run back down, so you can replay somebody else's game
+
+Everything a replay needs is already in D1: `events` is the whole log and `board` is the seed. What
+was missing was a way to get them onto this machine, because `ReplayRun` reads local disk only.
+
+```bash
+tools/intake-worker/pull-runs.ps1 -List
+```
+
+```bash
+tools/intake-worker/pull-runs.ps1
+```
+
+`-List` shows what the intake holds and marks what is already here. With no arguments it pulls
+**every run that is not already on disk**; `-RunId <id>` takes exactly one, and `-Force` overwrites.
+Runs land in `user://telemetry/sent/<run_id>/` and appear in **Session > Replay** with no relaunch.
+
+**There is deliberately no read route on the Worker.** `Uploader.ENDPOINT` is a `const` in the
+shipped game, so that URL is effectively public — harmless while the endpoint only *accepts*
+uploads, and not harmless at all the moment it hands runs back. A read route would need auth of its
+own, and a secret compiled into a dev build is not a secret. `wrangler` is already authenticated as
+the account owner, so the query is the whole mechanism: no route, no new surface, nothing to leak.
+
+**Runs land in `sent/`, never `pending/`** — `TelemetryUploader` walks `pending_runs()`, so a run
+dropped there would be shipped straight back up to the intake it just came from. There is also no
+state file: what is already on disk *is* the state, the same rule the rest of the system runs on.
+
+**Three things the script has to get right, all measured rather than reasoned:**
+
+- **No BOM.** In PowerShell 5.1 both `Set-Content -Encoding utf8` and `Out-File -Encoding utf8` write
+  `EF BB BF`. `ReplayRun.load_events` runs `JSON.parse_string` on line 1, and a BOM is not
+  whitespace — the run would report itself truncated at line 1 and come back empty.
+- **UTF-8 console before `wrangler` is called.** PowerShell decodes a native command's stdout using
+  `[Console]::OutputEncoding`, and that happens *before* the JSON is parsed, so it cannot be repaired
+  afterwards. Measured on this machine: under the default OEM codepage a UTF-8 `é` arrives as
+  box-drawing characters; under 1252 as `Ã©`; only 65001 survives.
+- **A blob whose last line is not the `summary` is refused, not written.** `sweep_unsealed()` runs at
+  every launch across *both* folders and finishes any run with no `mission_end` as `CRASHED`. So a
+  truncated download would not fail loudly — it would be quietly completed into a plausible player
+  crash you would then go and investigate.
+
+**Two things to know before you read what comes back.** A replay re-runs their orders through *your
+current* rules, so a run from an older build will diverge on your changes rather than on their play.
+And a run whose `board` is NULL still lists and still reports its metrics — the client skips a
+`board.tres` that failed to write — but cannot be replayed, because the seed is what a replay needs.
 ## Limits and what to do when they bite
 
 - **Requests:** 100,000/day free. A demo will not approach this.
