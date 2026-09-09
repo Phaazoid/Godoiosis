@@ -67,7 +67,7 @@ func _build() -> void:
 	var copy := Button.new()
 	copy.text = COPY
 	copy.tooltip_text = "Copy the telemetry folder's path. Never opens Explorer -- a second OS window stealing focus is how every dev key ends up going nowhere."
-	copy.pressed.connect(func(): _copy(ProjectSettings.globalize_path(TelemetryStore.pending_dir()), copy))
+	copy.pressed.connect(func(): _copy(ProjectSettings.globalize_path(TelemetryStore.root), copy))
 	pick_row.add_child(copy)
 
 	_status = Label.new()
