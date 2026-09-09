@@ -77,8 +77,19 @@ jobs:
       - name: Ensure Godot is executable
         run: chmod +x godot-bin/godot
 
+      # TWICE, and the second pass is not superstition. ONE pass leaves ResourceUID's registry
+      # half-populated: the `.uid` sidecars beside Dialogic's `.dtl` timelines are committed and
+      # correct, yet `ResourceUID.has_id` answers FALSE for them until a second import runs. That
+      # made tests/law/test_resource_uid_references.gd red on CI and green on every dev machine,
+      # where a worktree is imported twice by convention -- an environment difference wearing a
+      # content bug's clothes, which cost a full diagnosis on 2026-09-09 before the single `--import`
+      # here was the thing that differed. Reproduced both ways: one pass, 4 failures; two, none,
+      # with no file changed. Cheap insurance -- the second pass has nothing left to do and exits
+      # in seconds.
       - name: Import project
-        run: godot-bin/godot --headless --path . --import
+        run: |
+          godot-bin/godot --headless --path . --import
+          godot-bin/godot --headless --path . --import
 
       # THE IMPORT MUST NOT REWRITE COMMITTED PROJECT SETTINGS (#447). It used to: Dialogic
       # mutated the Dictionary ProjectSettings handed it BY REFERENCE, pruning dch_directory
