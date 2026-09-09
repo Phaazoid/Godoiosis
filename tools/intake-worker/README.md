@@ -55,11 +55,18 @@ wrangler d1 create iosis-telemetry
 `[[d1_databases]]` block. The id is an identifier, not a credential — reaching the database still
 needs an account — which is why it is safe to commit.
 
-**3 · Create the table.**
+**3 · Create the table, then apply every migration beside it, in name order.**
 
 ```bash
 wrangler d1 execute iosis-telemetry --remote --file=schema.sql
+wrangler d1 execute iosis-telemetry --remote --file=alter-2026-09-09-trivial.sql
 ```
+
+**Two files rather than one, deliberately.** `schema.sql` is the table as it was first created;
+every column added since is spelled once in an `alter-*.sql` beside it, and never repeated into
+`schema.sql` — a column with two spellings has two live callers (the database that does not exist
+yet, and the one that does) and nothing would notice them drifting apart. See *Adding a column*
+below.
 
 **`--remote` is the one trap in this whole page.** Without it wrangler writes to a **local** SQLite
 file that the deployed Worker never sees, everything looks fine, and your first real upload comes
@@ -76,17 +83,23 @@ shared blast radius is the cost of one Worker rather than two, chosen deliberate
 
 ---
 
-## Adding a column to a database that already exists
+## Adding a column
 
-`schema.sql` is `CREATE TABLE IF NOT EXISTS`, so once the table is there it is a **no-op** — a
-column added to that file never reaches the live database. A migration file beside it is how one
-does, and there is one so far:
+**A new column goes in a NEW `alter-*.sql` and is never back-written into `schema.sql`.** That file
+is `CREATE TABLE IF NOT EXISTS`, so once the table exists it is a no-op and a column added there
+would never reach the live database — while still *looking* like the table's definition. Spelling
+one column in two files is a second answer to what that column is, with two live callers and no way
+to notice them drifting; so `schema.sql` is frozen as the table as first created, and the migrations
+beside it are the rest. What the table actually holds is a question for the table: the D1 console's
+**Tables** tab, or `select * from runs limit 0`.
+
+There is one migration so far:
 
 ```bash
 wrangler d1 execute iosis-telemetry --remote --file=alter-2026-09-09-trivial.sql
 ```
 
-That one adds `passes`, `orders_queued` and `trivial` ([#851](https://github.com/Phaazoid/Godoiosis/issues/851)).
+It adds `passes`, `orders_queued` and `trivial` ([#851](https://github.com/Phaazoid/Godoiosis/issues/851)).
 
 **Three things about it that are true of every migration here, because every column in this schema
 is `GENERATED ... VIRTUAL`:**
@@ -109,9 +122,9 @@ already apply this?* — nothing is damaged either way.
 wrangler d1 execute iosis-telemetry --remote --command "alter table runs drop column trivial"
 ```
 
-…then re-add it with new numbers (copy the `ADD COLUMN trivial` statement out of the migration
-file). This works only because `trivial` is deliberately **not indexed** — SQLite refuses
-`DROP COLUMN` on a column an index names.
+…then re-add it with new numbers by editing the `ADD COLUMN trivial` statement in the migration file
+and running just that. This works only because `trivial` is deliberately **not indexed** — SQLite
+refuses `DROP COLUMN` on a column an index names.
 
 ---
 
