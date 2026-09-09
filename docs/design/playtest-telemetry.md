@@ -1,0 +1,125 @@
+# Playtest telemetry — the record a played mission leaves
+
+**Status: THE ARC IS COMPLETE ([#53](https://github.com/Phaazoid/Godoiosis/issues/53), closed 2026-09-09).** Five slices, all merged: the recorder + replay-grade capture (#831), the notice (#840), the replay viewer (#843), the quit record (#845), and transport + storage (#848, with #849 and #850 behind it). Filed 2026-07-14, parked, and unparked by the dev 2026-09-07 with *"now that we've started to close the loop of a player playing a mission, we can start on it."* The polish it deliberately left is [#856](https://github.com/Phaazoid/Godoiosis/issues/856).
+
+**Canon checked through #856 (2026-09-09).**
+
+**Not to be confused with [`playtest-experiments.md`](../playtest-experiments.md)**, whose name is one word away and whose subject is different: that one is how to drive an AI agent through the headless bridge and get a measurement you can believe. This one is the record a HUMAN's played mission leaves behind. Neither reads the other's data.
+
+**The ask, verbatim in shape (dev, 2026-09-07):** collect the data while a mission is played, send it on finish, and put it somewhere dashboards can eventually read.
+
+## The one property everything here protects
+
+**A new question must be a query, not a new build and a new cohort of players.**
+
+That single sentence decides nearly every argument below. It is why the client computes no counters, why the raw event log is stored verbatim next to the summary derived from it, why an indexed column is `GENERATED` from the blob rather than written beside it, and why a run the dev would rather not look at is *flagged* instead of dropped. Every one of those is the same trade: pay a little storage now so that a question nobody has thought of yet is still answerable from runs already collected.
+
+The counter-design — per-metric counters in the client — fails that test completely. Asking a new question means shipping a build and waiting for new players to play it.
+
+### The departure from #53's own comments, and why an issue's stated architecture is stale-able
+
+The ticket's 2026-08-10 comment specified **tier 1 = a replay log**: record the command stream, replay it offline through the Play API, *"no per-metric counters in the client, ever."* That is not what was built. A replay harness is its own build, and replaying an old log through newer rules drifts silently — the log ages into a lie without anything announcing it.
+
+An **event log** keeps the property that actually matters (every metric derived offline) without version-pinned replay, and the client still computes nothing: `MissionSummary.of(events)` is one pure function over the record. The dev confirmed the intent survived — *"replay is still a feature I want... we're just expanding on that, right?"* — and replay-**sufficiency** then became part of the arc's definition of done, ahead of the notice, because **a run recorded badly cannot be re-recorded.**
+
+## What a run IS
+
+A **folder**, `user://telemetry/<state>/<run_id>/`, holding two files — `BugReporter`'s shape one domain over:
+
+| file | what it is |
+|---|---|
+| `events.jsonl` | the authority. One JSON object per line, flushed per line, sealed at the end. |
+| `board.tres` | the starting state, through `ScenarioManager.capture_scenario` |
+
+The summary is **not** a third file: it is the last line of the log, and it is a pure projection of the lines above it. Nothing can be true of the summary that the events do not already say.
+
+**The folder's PARENT is the state.** `pending/` means *still owed to the server*; `sent/` means *delivered, kept on disk so the Replay tab can still open it*. A move, never a marker — so nothing can disagree with where a run is, and `TelemetryStore.run_dir()` resolves between them. A brand-new id is in neither and falls through to `pending/`, which is what let every existing writer stay unchanged when `sent/` was added.
+
+**An unsealed file IS the quit record.** Alt-F4, a crash, F2, a board swap — all of them leave one, and it is finished at the next launch rather than by a hook per door. One rule instead of five.
+
+## The dev's rulings
+
+| when | ruling |
+|---|---|
+| 2026-09-07 | **Payload = event log + derived summary** — not counters, not a replay harness. |
+| 2026-09-07 | **Storage = D1 now, R2 later.** D1 is free with no payment method on file; R2 needs a card even at its free tier. |
+| 2026-09-07 | **[#200](https://github.com/Phaazoid/Godoiosis/issues/200) is SUBSUMED**, closed into #53 when slice 1 merged. Its metric table survives as `MissionSummary`'s projection, which is what makes the two structurally unable to disagree. |
+| 2026-09-08 | **FLAG, NEVER EXCLUDE.** *"Instead of ignoring dev mode play, I think it should get a special flag, so that we know to separate it in the data."* |
+| 2026-09-08 | **No opt-out in early builds**, repealing half his own consent ruling of the day before: *"The entire point of this build is playtest data... If they don't want to give me data, they can't play the early version of my game."* Notice-only, one button, fired on first LAUNCH. |
+| 2026-09-08 | **Replay-grade capture is part of the definition of done**, and goes before the notice — it cannot be backfilled. |
+| 2026-09-08 | **The replay VIEWER goes before transport** — *"Both to verify the replay capture system works, and to use on the data I'll be getting."* |
+| 2026-09-08 | **A replay re-runs recorded orders through the LIVE rules and diffs**, rather than redrawing recorded outcomes. |
+| 2026-09-08 | **Ragequits count.** *"If the user Alt F4s, I want that run too."* |
+| 2026-09-08 | **One Worker with a `/telemetry` route**, not a second Worker. One URL, one secret store, one place for abuse controls. |
+| 2026-09-08 | **A sent run MOVES to `sent/` and stays on disk**, so `pending/` means exactly *still owed*. |
+| 2026-09-08 | **Query recipes, not a dashboard** — the arc ends when runs are in D1 and the README carries copy-paste queries. |
+| 2026-09-09 | **A run may be refused at the client only when it is structurally EMPTY.** Anything merely thin is sent and stamped. Refines FLAG-NEVER-EXCLUDE rather than repealing it; the fork lives at [#851](https://github.com/Phaazoid/Godoiosis/issues/851). |
+
+### Why FLAG-NEVER-EXCLUDE is a law and not a preference
+
+**An exclusion destroys the evidence that the exclusion was right; a flag is a `WHERE` clause you can drop later.** A dropped run cannot be counted, audited or reinstated, and the threshold that dropped it has to have been correct the first time — with nothing recording how often it fired. So the dev's own sandbox play is recorded too, stamped `sandbox` (an empty `last_loaded_path`) beside `dev_mode`, and **both ride the SUMMARY as well as the events**: the summary row is what gets indexed, so a separation flag has to exist where the querying happens or it is not a separation at all.
+
+## What is recorded, and what is deliberately not
+
+Recorded: the mission's start (roster, scenario, build, install and session ids), every turn's pre-tick vitals, every resolution pass with its committed queue and its per-hit outcomes, the four decision channels a replay needs (a rescue's chosen `haul_to`, the squad verbs, mid-battle gear changes, a `dev_touched` flag), the lifecycle events, and the ending.
+
+**Not recorded, on purpose:**
+
+- **Per-metric counters.** See the one property, above.
+- **A hold-position filler as an order.** `batch_id == 0` is the project's own answer to *"did a person author this"* — stamped only by `queue_action`, the Law #3 chokepoint. Without the filter every churn figure gains a phantom order per squadmate per plan. Nothing is lost: the `pass` record still writes the whole queue with fillers flagged `hold`.
+- **A queued attack's target.** `AttackAction.declare()` passes `null`; victims are the resolver's answer at pass time. Recording it would write `id: 0` forever, and **a field that can never be non-null is a field that lies.** An aim's identity is its CELL.
+- **An ejection, or any other consequence a replay re-derives.** Only decisions are recorded.
+- **A scenario fingerprint.** The board snapshot subsumes it.
+
+## The laws this arc paid for
+
+Each of these cost something to learn, and each travels beyond telemetry.
+
+- **AN ID WRITTEN DOWN FOR A LATER PROCESS TO READ MUST BE A STABLE VALUE; A RUNTIME HANDLE NEVER IS.** `MissionLog._ref` wrote `get_instance_id()`, so every unit reference in every recorded run was unreadable by anything outside the process that wrote it — found by the replay viewer, exactly as slice 2's PR had predicted a harness would find something. Cured with no format change and retroactively: `mission_start.roster` carries each unit's starting CELL, and `spawn_unit` refuses an occupied one, so a seeded board is exactly one unit per cell and the binding is unambiguous. **The fix is usually a fact the record already carries.** The same trap bit again inside `ReplayDriver` (#850) from the other end — see `CLAUDE.md`'s freed-reference edge (#149).
+- **A SIGNAL THAT FIRES FROM ONE DOOR CAN MISS THE FIRST MEMBER OF ITS OWN SERIES.** `TurnManager.turn_started` fires only from `end_turn`, never from `start_faction_turn`, so a recorder riding it loses every mission's turn-1 baseline — the snapshot every margin and damage-taken figure subtracts from. When subscribing in order to record a SERIES, ask whether its first occurrence is emitted at all.
+- **THE RECORDED `turn_start` VITALS ARE PRE-TICK**, and that is a fact about the codebase rather than about this ticket: `MissionLog` is built in `_build_collaborators`, so its handler connects before `game._on_turn_started` and fires ahead of the downed clocks, `enforce_contact` and the mission check. Anything comparing a recorded row against a live board read *after* a hand-over is comparing pre-tick to post-tick and cries wolf on nearly every run. **The cure is to measure with the SAME recorder at the SAME signal position**, so the two sides are like-for-like by construction.
+- **WHEN A PROJECTION IS COMPUTED UPSTREAM OF THE WRITE, NO ASSERTION ON THE PROJECTION CAN SEE THE WRITE.** A mutant that dropped every surviving line from the quit-record rewrite passed nine cases, because the summary is projected from the parsed events before anything is written. Compare the file itself, as a prefix.
+- **A RE-ENCODE TURNS EVERY INT IN THE FILE INTO A FLOAT.** JSON has one number type, so a run read back through `JSON.parse_string` is all floats while the live side holds ints — `9` against `9.0` on every field. Keep the raw text beside the parse (`ReplayRun.raw_lines`) and hand back what you read; compare numerically, never as strings.
+- **`FileAccess.WRITE` TRUNCATES, AND `load_run` STOPS AT THE FIRST UNPARSABLE LINE.** Either reason alone is fatal to appending an ending onto a partial one: it would be unreachable by the very tool that reads runs. The sweep rewrites.
+- **A STATED HOME IN AN APPROVED PLAN IS A DECISION, NOT A MEASUREMENT.** The launch sweep was planned onto `TelemetryStore` and had to move: it needs `ReplayRun` and `MissionSummary`, both of which already depend on the store, so the plan's home was two dependency cycles. Split at the seam that already existed — the store owns the PATH, `MissionLog` owns the CONTENT.
+- **REACHING FOR AN EXISTING SIGNAL BECAUSE IT EXISTS IS NOT LAW #4.** `squad_created` has six callers and does not mean *"the player formed a squad"*; riding it would log a leave as a squad-up and a disband as N of them. The signal has to answer the question being asked.
+- **AN AUDIT FOR ONE PROPERTY IS A GOOD WAY TO FIND A DIFFERENT BUG.** The slice-2 self-review turned up a live slice-1 defect: `reload_current()` has two callers and only one sealed, so **F2 left the run open and it went on appending events about a board that had been replaced.** Cured at `MissionController.reset()`, the universal teardown, which covers all four doors and composes with the named seals because `seal()` early-returns when closed.
+
+## Transport and storage
+
+The client half is `Classes/net/` and is documented in `CLAUDE.md`; what belongs here is why the shape is what it is.
+
+- **ONE MECHANISM, TWO TRIGGERS:** `send_pending()` runs at launch (after the sweep) and again on `MissionLog.run_sealed`. **The launch call IS the retry**, which is why no retry ledger exists anywhere in the system. Its cost is the declared limit at [#852](https://github.com/Phaazoid/Godoiosis/issues/852): a run the server permanently refuses is retried forever.
+- **The seal's emit is gated twice**, and both gates are `seal()` callers counted rather than guessed — not while the run has no file (the replay driver re-records in memory, and an ungated emit would make a dev replay session a network trigger), and not on QUIT (`get_tree().quit()` is the next line, so the request is at best wasted and at worst holds shutdown open for its timeout). The next launch's sweep sends that run anyway.
+- **The schema is ONE blob with GENERATED VIRTUAL columns over it**, so an index cannot disagree with the record (Law #4). Anything not promoted is still reachable through `json_extract` and needs no migration to ask about; a column added later by `ALTER TABLE` must be VIRTUAL.
+- **MEASURED, NOT ESTIMATED.** A run is 30–70 KB (events 6–10 KB at one round plus ~3 KB per turn; the board 31–60 KB). The binding ceiling is **D1's 2 MB per ROW** — summary, events and board share one — not the Worker's 100 MB body. No compression: ten times the headroom against a limit nothing is near, for a second thing that can be wrong. The free plan's **10 ms CPU is a plan gate, not a config knob**, which is why the Worker parses only the small summary field and stores the rest verbatim.
+- **An unmatched path is a 404, never a fall-through.** Cloudflare normalizes doubled slashes and nothing else, so `/telemetry/` is a real string a client can send — under a default-to-report branch it would have been relayed to Discord as a bug report, silently, with no row written.
+
+## The replay harness
+
+`Session > Replay` in the dev tools. `ReplayRun` reads a run folder; `ReplayDriver` seeds the recorded board, re-issues every recorded decision **through the real doors**, and diffs the result against what was recorded.
+
+It **owns no rule** — every order goes through `SquadManager.queue_action` or a `game.*` door, so the live rules answer and the driver only asks. That is what makes it a verification tool rather than a second implementation of the game: it can only ever report that today's rules disagree with what was recorded, never quietly reproduce them.
+
+Three properties are load-bearing:
+
+- **The measurement is `MissionLog`'s, not the board's.** The replay re-records in memory through the same recorder at the same signal position, so the two sides are pre-tick against pre-tick by construction, and `pass.hits` gives a per-HIT checksum rather than a per-turn one.
+- **The AI stands down AFTER the seed, never before** — `apply_scenario` replaces the AI set from the board it loads (#150), so a stand-down written first is overwritten by the very next line. Every faction's orders are in the log; letting the AI plan fresh ones asks a different question entirely, which is `tools/replay_battle.gd`'s.
+- **Only OUTCOMES are compared.** `order_queued`, `gear` and `squad_verb` are the driver's own input, so diffing them asks only whether it echoed what it was handed — rows that cannot fail, padding a report until nobody reads it.
+
+**A harness that cannot report a difference is worse than none**, because it would certify anything. The suite therefore corrupts a run on purpose and requires a named divergence back.
+
+## What the record cannot tell you
+
+Stated rather than discovered later:
+
+- **The snapshot has no RESERVE.** `capture_scenario` walks `units_root`, so a run's board carries the deployed force and not the undeployed roster behind it.
+- **A swept run's ending was INFERRED at a later launch, not watched** — that is what the `swept` flag is for, and it is why a swept CRASHED run is evidence rather than noise.
+- **A pre-#843 run's unit ids are unreadable.** They were instance handles. The roster's starting cells are what make older runs bindable at all.
+- **A run recorded before slice 5 has no `run_id`** and the intake will refuse it forever ([#852](https://github.com/Phaazoid/Godoiosis/issues/852)).
+
+## Open gates
+
+- **[#841](https://github.com/Phaazoid/Godoiosis/issues/841) — restore a data-sharing setting before any build goes wider than hand-delivered.** The no-opt-out ruling is scoped to *"the early version of my game"*, handed out in person with the terms said out loud first. It stopped being theoretical the day slice 5 merged: until then the notice described data sitting on the player's own disk, and now it describes data leaving their machine.
+- **[#856](https://github.com/Phaazoid/Godoiosis/issues/856)** — the polish umbrella, including the P0 that keeps the dev's own test runs out of the numbers ([#851](https://github.com/Phaazoid/Godoiosis/issues/851)).
+- **[#209](https://github.com/Phaazoid/Godoiosis/issues/209)** — Theater mode, the player-facing descendant of the replay viewer. Deliberately separate: this one is a diff tool for a developer, that one is a camera for a player.
