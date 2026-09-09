@@ -9,9 +9,14 @@ compatibility_date = "2026-08-05"
 # DISCORD_WEBHOOK is a SECRET, not a var -- set it with `wrangler secret put`, never in this file.
 # This file is committed; secrets are not.
 
-# The run intake (#53 slice 5). database_id is filled in by `wrangler d1 create iosis-telemetry`,
-# and it is an identifier rather than a credential -- reaching the database still needs an account.
+# The run intake (#53 slice 5), created 2026-09-09. `database_id` is what `wrangler d1 create`
+# printed, and it is an IDENTIFIER rather than a credential -- reaching the database still needs an
+# authenticated account -- which is why Cloudflare's own docs commit it and this file may too.
+#
+# `binding` MUST stay "DB": it is the name the Worker reads (`env.DB` in src/index.js). `wrangler
+# d1 create` suggests a block binding it as `iosis_telemetry` instead -- pasting that verbatim
+# deploys cleanly and then answers every upload with "DB (D1) binding is not set".
 [[d1_databases]]
 binding = "DB"
 database_name = "iosis-telemetry"
-database_id = "REPLACE_ME"
+database_id = "4d8a45fc-b40e-43c3-9745-9fbc7ff71dae"

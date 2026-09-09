@@ -34,9 +34,13 @@ Thumbs.db
 /bug-reports/*
 !/bug-reports/.gdignore
 
-# Wrangler CLI local cache (#131 report-worker) - not build output, and wrangler-account.json
-# carries the Cloudflare account id + owner email, which a public repo should not publish.
-tools/report-worker/.wrangler/
+# Wrangler CLI local cache (#131) - not build output, and wrangler-account.json carries the
+# Cloudflare account id + owner email, which a public repo should not publish.
+#
+# PATH-COUPLED TO THE FOLDER NAME: #53 slice 5 renamed report-worker -> intake-worker and this line
+# was missed, so the cache came back untracked and one `git add -A` from being published. A rename
+# sweep has to grep the OLD name here as well as in the docs.
+tools/intake-worker/.wrangler/
 /git flow.txt
 
 # Content fixtures a test AUTHORS into the scanned content tree and removes again (#604). Ignored
