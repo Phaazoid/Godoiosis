@@ -789,6 +789,19 @@ func spend_watch() -> void:
 func lapse_watch() -> void:
 	watch = null
 
+# A STANDING WATCH IS YOUR REACTION, SPENT (#810, dev 2026-09-09): a unit that took Overwatch does
+# not counter and does not reactively heal. SquadManager's two reaction gates are the readers.
+#
+# THE BARE OBJECT, deliberately. Not is_intact() — arm_watch refuses a null attack and an empty
+# footprint, so for the owner asking about its OWN watch that clause cannot fail. Not spent, not
+# anchored — you took the action; a shot already fired or a watch shoved off its cell still cost it.
+#
+# THE RULE IS ONE ROUND, NOT ONE LIVE WATCH: the cost stands until lapse_watch nulls it at the
+# owner's turn start. Anything that DROPS a watch mid-round must mark it rather than lapse it, or
+# the penalty refunds itself in the next squad's pass.
+func is_standing_watch() -> bool:
+	return watch != null
+
 # The element-state doors own the paired-StatEffect lockstep (Elemental.paired_stat_mods): the
 # marker answers "is it chilled", the effect carries the stat change and the clock. The two
 # restore paths (ScenarioUnitEntry.apply_unit_state, restore_stat_effects) bypass these doors on
