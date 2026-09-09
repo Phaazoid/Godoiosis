@@ -30,7 +30,10 @@ func _main_of(unit: Unit) -> WeaponAttackData:
 # A watcher standing on `cell`, watching exactly `cells`. The footprint is passed in because these
 # cases are entirely about one watch's blast reaching another watcher.
 func _watcher_at(cell: Vector2i, cells: Array) -> Unit:
-	var unit := H.spawn_solo(self, _sm, ENEMY, cell, {Stats.Stat.STR: 4}, true, 6)
+	# MHP well clear of a watch shot: a watcher DOWNED by the blast stops firing for lifecycle
+	# reasons (_watch_triggered_by refuses a non-ACTIVE watcher), which would let this suite pass
+	# with the cancel deleted. Caught by a surviving mutant, not by reading.
+	var unit := H.spawn_solo(self, _sm, ENEMY, cell, {Stats.Stat.STR: 4, Stats.Stat.MHP: 200}, true, 6)
 	var footprint: Array[Vector2i] = []
 	footprint.assign(cells)
 	unit.arm_watch(cell, footprint[0], footprint, _main_of(unit))
