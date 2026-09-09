@@ -211,3 +211,33 @@ func test_the_controller_withholds_the_fixtures_section_from_a_shipped_build() -
 	await _reopen(true)
 	assert_array(_section_texts(mc._select_screen)).contains(["SCENARIOS & FIXTURES"])
 	assert_array(_row_labels(mc._select_screen)).contains(["Sandbox (Test Board)"])
+
+
+# THE WIRE ITSELF: _open_mission_select(false) must actually APPLY the filter. Every other case
+# here proves the filter works or that the screen hides a row -- delete the `if not dev` line and
+# all of them still pass, because the mission LIST is the one thing they never look at.
+#
+# Stated as a property, not as a copy of the implementation: no board the shipped screen lists may
+# be unticked. That survives the dev ticking boards later, which an expected-list assertion would
+# not.
+func test_a_shipped_build_lists_no_unticked_board() -> void:
+	var on_disk: Array[String] = game.scenario_manager.get_missions()
+	var unticked := 0
+	for path: String in on_disk:
+		var board := load(path) as ScenarioData
+		if board != null and not board.in_demo:
+			unticked += 1
+	assert_int(unticked).override_failure_message(
+		"Every mission on disk is ticked, so this case cannot tell a filter from no filter."
+	).is_greater(0)
+
+	await _reopen(false)
+	var listed := _row_labels(mc._select_screen)
+	for path: String in on_disk:
+		var board := load(path) as ScenarioData
+		if board == null or board.in_demo:
+			continue
+		var label := ScenarioManager.display_name(path).trim_prefix("missions/")
+		assert_array(listed).override_failure_message(
+			"'%s' is not in the demo but a shipped build listed it." % label
+		).not_contains([label])
