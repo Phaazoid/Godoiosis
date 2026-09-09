@@ -24,6 +24,12 @@ var aim_cell: Vector2i               # the cell it was aimed AT — the shot's t
 var footprint: Array[Vector2i] = []  # the watched cells, frozen
 var attack: AttackData = null        # what fires; stamped at declare, never re-picked
 var spent := false                   # absorbed its one trigger
+# Broken by a blow (#810, dev 2026-09-09): the watcher was hit, so the watch is off. A SECOND fact
+# beside `spent`, not a reuse of it -- "you took your shot" and "it was shot off you" are different
+# endings, and the shared grammar names three of them now (triggered / cancelled / lapsed). Both
+# stop the watch firing; neither gives the reaction back, which is Unit.is_standing_watch's business
+# and deliberately reads past both.
+var cancelled := false
 
 # Arm order, so "earlier-armed fires first" holds ACROSS passes and not merely inside one: two
 # watchers can arm on different factions' turns, and board-iteration order is not an arming order.
@@ -60,6 +66,7 @@ static func arm(watching_unit: Unit, origin: Vector2i, aim: Vector2i,
 func copy() -> Watch:
 	var w := make(watcher, anchor_cell, aim_cell, footprint, attack)
 	w.spent = spent
+	w.cancelled = cancelled
 	w.sequence = sequence
 	return w
 
@@ -70,6 +77,18 @@ func is_intact() -> bool:
 	return watcher != null and is_instance_valid(watcher) \
 		and not watcher.is_queued_for_deletion() \
 		and attack != null and not footprint.is_empty()
+
+# THE "could this watch still fire" predicate, and the one spelling of it (#810). It was written out
+# longhand at five surfaces before this -- the resolver's trigger filter, the pass's live-watch
+# collection, the board markup and both Play API readouts -- so adding a second ending would have
+# meant finding all five. is_intact() stays its own question (does the watcher and its geometry
+# still exist) because ScenarioUnitEntry asks exactly that and must still SEE a spent or cancelled
+# watch in order to save the flag.
+#
+# Says nothing about the ANCHOR, deliberately: that predicate takes a positional fact the caller
+# owns, and the resolver feeds it a threaded cell while a redraw feeds the live one.
+func is_armed() -> bool:
+	return is_intact() and not spent and not cancelled
 
 
 # THE anchor predicate, and it takes the positional fact rather than reading it (GuardWard.in_range's

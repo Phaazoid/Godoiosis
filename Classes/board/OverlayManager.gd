@@ -1057,13 +1057,20 @@ func restyle_guard_link() -> void:
 # 3D markers are two projections of it, never two derivations (the parallel-stacks rule). Called
 # from the same three moments the ward markers are: a pass settling, a faction's turn starting, and
 # a board load.
-func redraw_watch_marks(units: Array[Unit]) -> void:
+func redraw_watch_marks(units: Array[Unit], plan: ResolvedPlan = null) -> void:
 	watch_cells = []
 	for unit in units:
 		if not is_instance_valid(unit) or unit.watch == null:
 			continue
-		if unit.watch.spent or not unit.watch.is_intact():
-			continue   # a spent watch threatens nobody; drawing it would promise a shot that is gone
+		if not unit.watch.is_armed():
+			continue   # a spent or cancelled watch threatens nobody; drawing it would promise a shot that is gone
+		# THE PLAN'S VERDICT WINS OVER THE LIVE WATCH (#810). A queued blow that will break this
+		# watch has not landed yet, so the live flag still reads armed -- and drawing the footprint
+		# anyway would promise a shot the player's own plan has already cancelled (Law #2). `plan`
+		# is optional because two call sites legitimately have none: a board load and a turn start,
+		# where no plan is live and the live flags ARE the whole answer.
+		if plan != null and _plan_breaks_watch(unit, plan):
+			continue
 		# The ANCHOR rule, asked of the LIVE cell here because this draws settled state — the
 		# resolver asks the same predicate of a threaded one mid-pass. One rule, two positional
 		# sources, exactly as GuardWard.in_range is asked by three callers.
@@ -1073,6 +1080,15 @@ func redraw_watch_marks(units: Array[Unit]) -> void:
 			if not watch_cells.has(cell):
 				watch_cells.append(cell)
 	_rebuild_watch_sprites()
+
+# Does this pass end that unit's watch? Reads the pass's own COPY, which is where the resolver
+# records it -- never a second derivation of the rule (Law #4). A watch the pass FIRED counts too:
+# spent is an ending like cancelled, and a fired watch threatens nobody either.
+func _plan_breaks_watch(unit: Unit, plan: ResolvedPlan) -> bool:
+	for watch in plan.watches:
+		if watch.watcher == unit:
+			return not watch.is_armed()
+	return false
 
 # The 2D projection. Sprites rather than a tile layer because a TileMapLayer holds ONE tile per cell
 # and would evict whatever range fill is already there — the same rule that keeps target-pick marks

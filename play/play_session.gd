@@ -660,6 +660,13 @@ func _apply_attack(atk: AttackAction, events: Array[String]) -> void:
 		events.append("%s falls into the void" % handle_for(target))
 		target.die()
 
+	# The watch this blow broke (#810) — MIRRORS AttackAction.execute (the hand-copied twin). Here
+	# rather than in _spend_firing_costs beside the other post-fire hooks, deliberately: those are
+	# the ATTACKER's costs and are gated on is_secondary_hit, while this is the TARGET's watch and
+	# every volley member has its own. MARKS, never lapses — Unit.cancel_watch says why.
+	if r.cancels_watch and is_instance_valid(target):
+		target.cancel_watch()
+
 # Post-fire economy (#73/#84/#697/#97): mirrors AttackAction.execute()'s readiness/charge/vial/tank
 # hooks — the headless executor bypasses that method entirely, so without this the play path
 # diverges from the game (a fired Spring stays sprung; a Blowback keeps its charge; a cast draws on

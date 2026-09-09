@@ -76,6 +76,7 @@ class_name ScenarioUnitEntry
 @export var watch_cells: Array[Vector2i] = []
 @export var watch_attack_index := -1
 @export var watch_spent := false
+@export var watch_cancelled := false   # #810: broken by a blow -- a third ending beside spent
 
 # Snapshot the unit's persistent side of the seam. Inventory copies via copy_for_grant()
 # — never duplicate(true), which would fork a WeaponInstance off its shared template. An
@@ -164,6 +165,7 @@ func capture_unit_state(unit: Unit) -> void:
 	watch_cells = []
 	watch_attack_index = -1
 	watch_spent = false
+	watch_cancelled = false
 	if unit.watch != null and unit.watch.is_intact():
 		watch_attack_index = unit.overwatch_attacks().find(unit.watch.attack)
 		if watch_attack_index >= 0:
@@ -171,6 +173,7 @@ func capture_unit_state(unit: Unit) -> void:
 			watch_aim = unit.watch.aim_cell
 			watch_cells = unit.watch.footprint.duplicate()
 			watch_spent = unit.watch.spent
+			watch_cancelled = unit.watch.cancelled
 
 # Write the snapshot back onto a freshly spawned unit. Runs AFTER initialize() (which
 # rebuilds stats/limbs/aura and refills HP+Will), deliberately overriding that reset.
@@ -262,7 +265,7 @@ func apply_unit_state(unit: Unit) -> void:
 		var watchable := unit.overwatch_attacks()
 		if watch_attack_index >= 0 and watch_attack_index < watchable.size():
 			unit.arm_watch(watch_anchor, watch_aim, watch_cells.duplicate(),
-					watchable[watch_attack_index], watch_spent)
+					watchable[watch_attack_index], watch_spent, watch_cancelled)
 
 	if current_hp >= 0:
 		# Through the UNIT, not inst: armor was restored above, and until #106 this clamp read a
