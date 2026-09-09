@@ -13,6 +13,12 @@
 -- row. The Worker refuses them with a 400 as well -- two guards, because this one is silent.
 --
 -- A generated column added LATER via ALTER TABLE ... ADD COLUMN must be VIRTUAL. These already are.
+--
+-- THIS FILE IS FOR A DATABASE THAT DOES NOT EXIST YET. `CREATE TABLE IF NOT EXISTS` is a no-op
+-- against the live one, so a column added here reaches it only through a migration beside this
+-- file -- see alter-2026-09-09-trivial.sql and the README's *Adding a column* section. The three
+-- lines are duplicated between the two on purpose: this file is what the table IS, that one is how
+-- an existing table gets there.
 
 CREATE TABLE IF NOT EXISTS runs (
   run_id      TEXT PRIMARY KEY NOT NULL,
@@ -35,7 +41,30 @@ CREATE TABLE IF NOT EXISTS runs (
   -- right); `swept` means the ending was INFERRED at a later launch, not watched.
   sandbox     INTEGER GENERATED ALWAYS AS (json_extract(summary, '$.sandbox'))    VIRTUAL,
   dev_mode    INTEGER GENERATED ALWAYS AS (json_extract(summary, '$.dev_mode'))   VIRTUAL,
-  swept       INTEGER GENERATED ALWAYS AS (json_extract(summary, '$.swept'))      VIRTUAL
+  swept       INTEGER GENERATED ALWAYS AS (json_extract(summary, '$.swept'))      VIRTUAL,
+
+  -- WHAT THE PLAYER ACTUALLY DID (#851). Promoted for their own sake as well as for `trivial`
+  -- below: "how much did this person do before stopping" is the question the dev's own test runs
+  -- are separated by, and it wants the raw numbers available beside the flag.
+  passes        INTEGER GENERATED ALWAYS AS (json_extract(summary, '$.passes'))        VIRTUAL,
+  orders_queued INTEGER GENERATED ALWAYS AS (json_extract(summary, '$.orders_queued')) VIRTUAL,
+
+  -- BARELY A RUN (#851, dev 2026-09-09: "runs that were just 1 turn or had barely any actions").
+  -- Not a stamp the client writes -- and that is the whole point of it living here. A GENERATED
+  -- VIRTUAL column is computed at READ time, so re-cutting this threshold re-classifies every row
+  -- already in the table (one ALTER, no redeploy, no new build, no re-upload); a value stamped by
+  -- the game would freeze each row's answer at whatever build sent it and leave the table carrying
+  -- several thresholds at once. It is also derived rather than duplicated (Law #4): everything it
+  -- reads is in `summary` beside it, so the flag can never disagree with the numbers above.
+  --
+  -- Rounds start at 1, so `< 2` is exactly the dev's "just 1 turn". Calibrated on the six runs that
+  -- existed when this was written: real play was 22 passes / 28 orders, every test run 0 and 0.
+  --
+  -- DELIBERATELY NOT INDEXED -- SQLite refuses DROP COLUMN on an indexed column, and dropping it is
+  -- how the threshold gets re-cut.
+  trivial     INTEGER GENERATED ALWAYS AS (
+                coalesce(json_extract(summary, '$.rounds'), 0) < 2
+                OR coalesce(json_extract(summary, '$.orders_queued'), 0) < 2) VIRTUAL
 );
 
 CREATE INDEX IF NOT EXISTS runs_scenario ON runs(scenario);

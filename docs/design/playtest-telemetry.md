@@ -2,7 +2,7 @@
 
 **Status: THE ARC IS COMPLETE ([#53](https://github.com/Phaazoid/Godoiosis/issues/53), closed 2026-09-09).** Five slices, all merged: the recorder + replay-grade capture (#831), the notice (#840), the replay viewer (#843), the quit record (#845), and transport + storage (#848, with #849 and #850 behind it). Filed 2026-07-14, parked, and unparked by the dev 2026-09-07 with *"now that we've started to close the loop of a player playing a mission, we can start on it."* The polish it deliberately left is [#856](https://github.com/Phaazoid/Godoiosis/issues/856).
 
-**Canon checked through #856 (2026-09-09).**
+**Canon checked through #858 (2026-09-09).**
 
 **Not to be confused with [`playtest-experiments.md`](../playtest-experiments.md)**, whose name is one word away and whose subject is different: that one is how to drive an AI agent through the headless bridge and get a measurement you can believe. This one is the record a HUMAN's played mission leaves behind. Neither reads the other's data.
 
@@ -53,11 +53,21 @@ The summary is **not** a third file: it is the last line of the log, and it is a
 | 2026-09-08 | **One Worker with a `/telemetry` route**, not a second Worker. One URL, one secret store, one place for abuse controls. |
 | 2026-09-08 | **A sent run MOVES to `sent/` and stays on disk**, so `pending/` means exactly *still owed*. |
 | 2026-09-08 | **Query recipes, not a dashboard** — the arc ends when runs are in D1 and the README carries copy-paste queries. |
-| 2026-09-09 | **A run may be refused at the client only when it is structurally EMPTY.** Anything merely thin is sent and stamped. Refines FLAG-NEVER-EXCLUDE rather than repealing it; the fork lives at [#851](https://github.com/Phaazoid/Godoiosis/issues/851). |
+| 2026-09-09 | **A run may be refused at the client only when it is structurally EMPTY.** Anything merely thin is sent and stamped. Refines FLAG-NEVER-EXCLUDE rather than repealing it. Settled by [#851](https://github.com/Phaazoid/Godoiosis/issues/851) — see *Where the line between refusing and flagging fell* below. |
 
 ### Why FLAG-NEVER-EXCLUDE is a law and not a preference
 
 **An exclusion destroys the evidence that the exclusion was right; a flag is a `WHERE` clause you can drop later.** A dropped run cannot be counted, audited or reinstated, and the threshold that dropped it has to have been correct the first time — with nothing recording how often it fired. So the dev's own sandbox play is recorded too, stamped `sandbox` (an empty `last_loaded_path`) beside `dev_mode`, and **both ride the SUMMARY as well as the events**: the summary row is what gets indexed, so a separation flag has to exist where the querying happens or it is not a separation at all.
+
+### Where the line between refusing and flagging fell (#851, 2026-09-09)
+
+The law above has exactly one exception and it is drawn where **there is nothing to lose**, so that no judgement call is being made: the client refuses a run in which **no pass ever resolved and no order was ever queued**, and only when the ending was one somebody CHOSE — `ABANDONED`, `RESTARTED`, `QUIT`, `INTERRUPTED`. A `CRASHED` run is never refused however empty it is, because **the only ending whose emptiness might be the story is the one nobody chose**: *the game died before I could do anything* is the most valuable thing the intake can receive, and a refusal keyed on emptiness alone would eat exactly that. `VICTORY`/`DEFEAT` cannot legitimately be empty, so one that is gets through as evidence of a bug.
+
+**`INTERRUPTED` is on that list because it is the main door out, not an edge case** — it is sealed from `MissionController.reset()`, the universal teardown behind F2, a board swap, Load Game and Mission Select. That was measured rather than reasoned: of the six runs recorded on the dev's machine when #851 was built, five were empty, and the two that had already reached D1 were both empty `INTERRUPTED` runs. An earlier draft of the rule listed only the three obviously-deliberate endings and would have refused neither of them.
+
+**Everything merely THIN is sent and flagged `trivial`, and that flag is a SQL projection rather than a stamp the client writes.** It is a `GENERATED ... VIRTUAL` column over `rounds` and `orders_queued`, so it is evaluated when a query reads it — which means the threshold can be re-cut across every run ever collected, by one `ALTER`, with no new build and no re-upload. A value stamped by the game would freeze each row's answer at whatever build sent it, leave a table carrying several thresholds at once, and could never reach a run already uploaded. It is also derived rather than duplicated (Law #4): everything it reads sits in the same `summary` blob beside it.
+
+**The refused run stays in `pending/` and is retried forever**, exactly like a run that predates `run_id`. Giving it a way out is [#852](https://github.com/Phaazoid/Godoiosis/issues/852)'s job, deliberately not this one — #851 is about what reaches the table.
 
 ## What is recorded, and what is deliberately not
 
@@ -89,7 +99,7 @@ Each of these cost something to learn, and each travels beyond telemetry.
 
 The client half is `Classes/net/` and is documented in `CLAUDE.md`; what belongs here is why the shape is what it is.
 
-- **ONE MECHANISM, TWO TRIGGERS:** `send_pending()` runs at launch (after the sweep) and again on `MissionLog.run_sealed`. **The launch call IS the retry**, which is why no retry ledger exists anywhere in the system. Its cost is the declared limit at [#852](https://github.com/Phaazoid/Godoiosis/issues/852): a run the server permanently refuses is retried forever.
+- **ONE MECHANISM, TWO TRIGGERS:** `send_pending()` runs at launch (after the sweep) and again on `MissionLog.run_sealed`. **The launch call IS the retry**, which is why no retry ledger exists anywhere in the system. Its cost is the declared limit at [#852](https://github.com/Phaazoid/Godoiosis/issues/852): a run the server permanently refuses -- or that the CLIENT refuses, since #851 -- is retried forever.
 - **The seal's emit is gated twice**, and both gates are `seal()` callers counted rather than guessed — not while the run has no file (the replay driver re-records in memory, and an ungated emit would make a dev replay session a network trigger), and not on QUIT (`get_tree().quit()` is the next line, so the request is at best wasted and at worst holds shutdown open for its timeout). The next launch's sweep sends that run anyway.
 - **The schema is ONE blob with GENERATED VIRTUAL columns over it**, so an index cannot disagree with the record (Law #4). Anything not promoted is still reachable through `json_extract` and needs no migration to ask about; a column added later by `ALTER TABLE` must be VIRTUAL.
 - **MEASURED, NOT ESTIMATED.** A run is 30–70 KB (events 6–10 KB at one round plus ~3 KB per turn; the board 31–60 KB). The binding ceiling is **D1's 2 MB per ROW** — summary, events and board share one — not the Worker's 100 MB body. No compression: ten times the headroom against a limit nothing is near, for a second thing that can be wrong. The free plan's **10 ms CPU is a plan gate, not a config knob**, which is why the Worker parses only the small summary field and stores the rest verbatim.

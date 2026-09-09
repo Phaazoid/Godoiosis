@@ -22,6 +22,7 @@ var game: Node2D
 var mc: MissionController
 var mission_log: MissionLog
 var uploader: TelemetryUploader
+var _fixture_hero: Unit   # the player unit _record_an_empty_mission spawned, for a case that adds one order
 
 
 func before_test() -> void:
@@ -165,6 +166,78 @@ func test_a_run_over_the_payload_cap_is_not_sent() -> void:
 
 
 # ==============================================================================
+#  The empty run (#851)
+# ==============================================================================
+#
+# THE REFUSAL IS TWO CONDITIONS AND EVERY CASE HERE PINS ONE HALF OF IT: nothing happened, AND
+# somebody chose to end it. The CRASHED case is the one that matters most -- "zero passes" is also
+# exactly what a crash on turn one looks like, and refusing on emptiness alone would silently eat
+# the best data this intake will ever get.
+#
+# EVERY CASE ASSERTS ITS PRECONDITION FIRST, because build_payload answers {} for five different
+# reasons (unsealed, no run_id, empty, no files, over cap) and a case that only reads the {} cannot
+# tell which one it caught.
+
+func test_an_empty_run_that_was_deliberately_abandoned_is_not_sent() -> void:
+	var run_id := await _record_an_empty_mission()
+	mission_log.seal(MissionLog.Ending.ABANDONED)
+	_assert_recorded_but_empty(run_id)
+
+	assert_bool(uploader.build_payload(run_id).is_empty()).override_failure_message(
+		"a run in which nothing happened, abandoned on purpose, was shipped").is_true()
+
+
+# INTERRUPTED is the MAIN door out, not an edge case: MissionController.reset() is the universal
+# teardown behind F2, a board swap, Load Game and Mission Select. Driven through that door rather
+# than by sealing by hand, because the point of the case is that the ordinary way of leaving a
+# board is covered -- and it was measured: two of the three rows in the live intake when this was
+# written were empty INTERRUPTED runs.
+func test_an_empty_run_the_board_teardown_interrupted_is_not_sent() -> void:
+	var run_id := await _record_an_empty_mission()
+	mc.reset()
+	_assert_recorded_but_empty(run_id)
+	assert_str(str(_summary_of(run_id).get("outcome", ""))).override_failure_message(
+		"fixture: reset() no longer seals INTERRUPTED, so this case is testing nothing").is_equal(
+		"INTERRUPTED")
+
+	assert_bool(uploader.build_payload(run_id).is_empty()).override_failure_message(
+		"a board opened and backed out of was shipped").is_true()
+
+
+# THE CASE THE WHOLE RULE IS SHAPED AROUND. A CRASHED run is swept -- nobody chose it -- so its
+# emptiness IS the finding: the game died before the player could act. Refusing on "no passes"
+# alone would drop exactly this.
+func test_an_empty_run_that_crashed_is_still_sent() -> void:
+	var run_id := await _record_an_empty_mission()
+	mission_log.seal(MissionLog.Ending.CRASHED)
+	_assert_recorded_but_empty(run_id)
+
+	var payload := uploader.build_payload(run_id)
+	assert_bool(payload.is_empty()).override_failure_message(
+		"a crash before the player could act was refused -- that emptiness is the finding").is_false()
+	assert_array(_filenames(payload)).contains([TelemetryStore.EVENTS_FILE])
+
+
+# An order the player queued and took back is CONTENT: they expressed an intent, and a `pass` is
+# not the only place a decision shows up. So orders_queued is checked beside passes, and this run
+# has one order and no resolved pass.
+func test_a_run_with_a_queued_order_and_no_pass_is_not_empty() -> void:
+	var run_id := await _record_an_empty_mission()
+	assert_bool(game.squad_manager.queue_action(_fixture_hero.squad, _build_move(_fixture_hero, Vector2i(2, 0)))
+		).override_failure_message("fixture: the move never queued").is_true()
+	mission_log.seal(MissionLog.Ending.QUIT)
+
+	var summary := _summary_of(run_id)
+	assert_int(int(summary.get("passes", -1))).override_failure_message(
+		"fixture: a pass resolved, so this is not the queued-order-only case").is_equal(0)
+	assert_int(int(summary.get("orders_queued", 0))).override_failure_message(
+		"fixture: the order never reached the record").is_greater(0)
+
+	assert_bool(uploader.build_payload(run_id).is_empty()).override_failure_message(
+		"a run carrying a player's queued order was refused as empty").is_false()
+
+
+# ==============================================================================
 #  pending/ and sent/
 # ==============================================================================
 
@@ -245,6 +318,36 @@ func test_the_uploader_outlives_the_freeze_it_runs_behind() -> void:
 # ==============================================================================
 #  Fixture
 # ==============================================================================
+
+# A RUN IN WHICH NOTHING HAPPENED -- the board is armed and the recorder is open, and then the
+# fixture simply stops. Deliberately not _record_a_mission minus a line: what makes a run empty is
+# that no pass ever resolved and no order was ever given, so the helper that produces one must not
+# be able to drift into queueing something. `_fixture_hero` is kept so a case can add one order back.
+func _record_an_empty_mission() -> String:
+	_fixture_hero = _spawn(Team.Faction.PLAYER, Vector2i(0, 0))
+	_fixture_hero.equipped_weapon = H.make_weapon(4)
+	var foe := _spawn(Team.Faction.ENEMY, Vector2i(3, 0))
+	foe.unit_instance.stats[Stats.Stat.MHP] = 200
+	foe.set_current_hp(200)
+	mc._begin_turn()
+	await await_idle_frame()
+	return mission_log.run_id()
+
+
+# The precondition every #851 case shares, asserted rather than assumed: the run really is on disk,
+# really carries an id, and really has nothing in it. Without this a case reads {} and cannot tell
+# the refusal it is testing from the four other reasons build_payload answers {}.
+func _assert_recorded_but_empty(run_id: String) -> void:
+	assert_bool(FileAccess.file_exists(TelemetryStore.events_path(run_id))).override_failure_message(
+		"fixture: nothing was written to disk").is_true()
+	var summary := _summary_of(run_id)
+	assert_str(str(summary.get("run_id", ""))).override_failure_message(
+		"fixture: no run_id, so the payload would be refused for THAT reason instead").is_not_empty()
+	assert_int(int(summary.get("passes", -1))).override_failure_message(
+		"fixture: a pass resolved, so this run is not empty").is_equal(0)
+	assert_int(int(summary.get("orders_queued", -1))).override_failure_message(
+		"fixture: an order was queued, so this run is not empty").is_equal(0)
+
 
 func _record_a_mission() -> String:
 	var hero := _spawn(Team.Faction.PLAYER, Vector2i(0, 0))
