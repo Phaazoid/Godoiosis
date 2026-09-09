@@ -55,6 +55,10 @@ func _init() -> void:
 
 # Takes the Game node rather than a parent, for the reason PauseMenu.show_menu does -- one
 # construction convention across every ModalCard, even the one that does not lock.
+# `dev_tools` gates only what the SCREEN can gate: the Sandbox row, which is a hardcoded row with
+# no list behind it, and the empty-state wording. It deliberately does NOT filter `other_paths` --
+# WHICH boards belong in each list is MissionController's one answer (#860), and re-asking it here
+# would be a second place to change when that rule moves. This screen renders what it is handed.
 static func open(game_node: Node, mission_paths: Array[String], other_paths: Array[String],
 		dev_tools := true) -> MissionSelectScreen:
 	var screen := MissionSelectScreen.new()
