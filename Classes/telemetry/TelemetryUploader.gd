@@ -31,6 +31,17 @@ const ATTACHMENTS := {
 # envelope and the row's own columns are not free either.
 const MAX_PAYLOAD_BYTES := 1_800_000
 
+# THE FOUR ENDINGS SOMEBODY CHOSE (#851). An empty run carrying one of these is refused rather
+# than sent -- see _is_refusably_empty. Spelled as Ending MEMBERS and resolved to their recorded
+# names at the comparison, because MissionLog owns that vocabulary and a hand-typed copy of it here
+# would be a second seam that survives a rename in silence.
+const REFUSABLE_WHEN_EMPTY: Array[MissionLog.Ending] = [
+	MissionLog.Ending.ABANDONED,
+	MissionLog.Ending.RESTARTED,
+	MissionLog.Ending.QUIT,
+	MissionLog.Ending.INTERRUPTED,
+]
+
 var game   # the Game coordinator; set by game._build_collaborators()
 
 ## How many times send_pending has been ASKED to run, bumped before any refusal. It exists because
@@ -106,6 +117,14 @@ func build_payload(run_id: String) -> Dictionary:
 		push_warning("Telemetry: run %s predates the id field and will not be sent" % run_id)
 		return {}
 
+	# THE STRUCTURALLY EMPTY RUN (#851), and the dev's 2026-09-09 refinement of FLAG-NEVER-EXCLUDE:
+	# a run may be refused at the client only when there is nothing in it to lose. Anything merely
+	# THIN is sent and stamped `trivial` by the schema instead, where the threshold is a read-time
+	# expression that can be re-cut over rows already collected -- see tools/intake-worker/.
+	if _is_refusably_empty(summary):
+		print_verbose("Telemetry: run %s is empty and was not sent (#851)" % run_id)
+		return {}
+
 	var files: Array[Dictionary] = []
 	var total := summary_line.length()
 	for file_name: String in ATTACHMENTS:
@@ -134,6 +153,39 @@ func build_payload(run_id: String) -> Dictionary:
 	# a re-encode turns every int in the summary back into a float (#53 slice 4b's rule). The intake
 	# unwraps `.summary` from it.
 	return {"fields": {"summary": summary_line}, "files": files}
+
+
+# NOTHING HAPPENED, AND SOMEBODY CHOSE TO END IT (#851). Both halves are required.
+#
+# EMPTY is structural rather than a threshold: no turn ever resolved and no order was ever given.
+# An order the player queued and took back COUNTS as content -- they expressed an intent, and the
+# `pass` record is not the only place a decision shows up -- which is why orders_queued is here
+# beside passes.
+#
+# THE ONLY ENDING WHOSE EMPTINESS MIGHT BE THE STORY IS THE ONE NOBODY CHOSE. A CRASHED run with no
+# passes is the game dying before the player could act, which is the most valuable thing this
+# intake will ever receive; VICTORY or DEFEAT with none cannot happen and would be a bug worth
+# seeing arrive. The four in REFUSABLE_WHEN_EMPTY were all chosen -- by a person or by the program
+# -- so an empty one says only that a board was opened and left.
+#
+# INTERRUPTED is in that list because it is the MAIN door out, not an edge case: it is sealed from
+# MissionController.reset(), the universal teardown behind F2, a board swap, Load Game and Mission
+# Select. Measured on the dev's machine before this was built, five of six recorded runs were
+# empty and TWO had already reached D1 as INTERRUPTED.
+#
+# CONSEQUENCE, since the rule did not choose it: MissionSummary defaults `outcome` to INTERRUPTED
+# when a projection finds no mission_end. Every SEALED run has one -- seal() and the launch sweep
+# both write it before the summary -- so this only reaches a run whose file was damaged after the
+# fact, and refusing that is the right answer anyway.
+static func _is_refusably_empty(summary: Dictionary) -> bool:
+	if int(summary.get("passes", 0)) > 0 or int(summary.get("orders_queued", 0)) > 0:
+		return false
+	var outcome := str(summary.get("outcome", ""))
+	var names: Array = MissionLog.Ending.keys()
+	for ending: MissionLog.Ending in REFUSABLE_WHEN_EMPTY:
+		if str(names[ending]) == outcome:
+			return true
+	return false
 
 
 # The LAST summary line, by the same walk the sweep uses. Parallel arrays: load_events appends to

@@ -12,7 +12,15 @@
 -- as distinct, so runs recorded before the id field existed would each land as their own garbage
 -- row. The Worker refuses them with a 400 as well -- two guards, because this one is silent.
 --
--- A generated column added LATER via ALTER TABLE ... ADD COLUMN must be VIRTUAL. These already are.
+-- A generated column added LATER via ALTER TABLE ... ADD COLUMN must be VIRTUAL.
+--
+-- THIS FILE IS NOT THE WHOLE TABLE, AND THAT IS DELIBERATE. Columns added after the intake went
+-- live are spelled ONCE, in the `alter-*.sql` migration beside this file, and a fresh database
+-- runs this file and then those in name order -- see the README's *Adding a column*. Repeating a
+-- migration's columns here would be a second answer to what a column IS (Law #4), with two live
+-- callers: this file serves a database that does not exist yet, the migration serves the one that
+-- does, and nothing would notice them drifting apart. Ask the live table what it holds -- the D1
+-- console's Tables tab, or `select * from runs limit 0`.
 
 CREATE TABLE IF NOT EXISTS runs (
   run_id      TEXT PRIMARY KEY NOT NULL,

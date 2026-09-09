@@ -55,11 +55,18 @@ wrangler d1 create iosis-telemetry
 `[[d1_databases]]` block. The id is an identifier, not a credential — reaching the database still
 needs an account — which is why it is safe to commit.
 
-**3 · Create the table.**
+**3 · Create the table, then apply every migration beside it, in name order.**
 
 ```bash
 wrangler d1 execute iosis-telemetry --remote --file=schema.sql
+wrangler d1 execute iosis-telemetry --remote --file=alter-2026-09-09-trivial.sql
 ```
+
+**Two files rather than one, deliberately.** `schema.sql` is the table as it was first created;
+every column added since is spelled once in an `alter-*.sql` beside it, and never repeated into
+`schema.sql` — a column with two spellings has two live callers (the database that does not exist
+yet, and the one that does) and nothing would notice them drifting apart. See *Adding a column*
+below.
 
 **`--remote` is the one trap in this whole page.** Without it wrangler writes to a **local** SQLite
 file that the deployed Worker never sees, everything looks fine, and your first real upload comes
@@ -73,6 +80,51 @@ wrangler deploy
 
 Note this replaces the **whole** running Worker, so it redeploys the bug-report relay too. That
 shared blast radius is the cost of one Worker rather than two, chosen deliberately on 2026-09-08.
+
+---
+
+## Adding a column
+
+**A new column goes in a NEW `alter-*.sql` and is never back-written into `schema.sql`.** That file
+is `CREATE TABLE IF NOT EXISTS`, so once the table exists it is a no-op and a column added there
+would never reach the live database — while still *looking* like the table's definition. Spelling
+one column in two files is a second answer to what that column is, with two live callers and no way
+to notice them drifting; so `schema.sql` is frozen as the table as first created, and the migrations
+beside it are the rest. What the table actually holds is a question for the table: the D1 console's
+**Tables** tab, or `select * from runs limit 0`.
+
+There is one migration so far:
+
+```bash
+wrangler d1 execute iosis-telemetry --remote --file=alter-2026-09-09-trivial.sql
+```
+
+It adds `passes`, `orders_queued` and `trivial` ([#851](https://github.com/Phaazoid/Godoiosis/issues/851)).
+
+**Three things about it that are true of every migration here, because every column in this schema
+is `GENERATED ... VIRTUAL`:**
+
+- **It is instant and it rewrites nothing.** A virtual column stores no data; it is an expression
+  evaluated when you read it.
+- **It is retroactive.** Rows already in the table are classified the moment the statement returns —
+  which is the whole reason `trivial` is computed here rather than stamped by the game. A value the
+  client wrote would freeze each row's answer at whatever build sent it, and could never reach a
+  run that has already been uploaded.
+- **No `wrangler deploy`.** The Worker stores `summary` whole and never reads a promoted column, so
+  its code is unchanged. Skipping the deploy also means not redeploying the bug-report relay.
+
+Running a migration twice fails with `duplicate column name`, which is the honest answer to *did I
+already apply this?* — nothing is damaged either way.
+
+**Re-cutting the `trivial` threshold** is the same door, in two statements, and needs no build:
+
+```bash
+wrangler d1 execute iosis-telemetry --remote --command "alter table runs drop column trivial"
+```
+
+…then re-add it with new numbers by editing the `ADD COLUMN trivial` statement in the migration file
+and running just that. This works only because `trivial` is deliberately **not indexed** — SQLite
+refuses `DROP COLUMN` on a column an index names.
 
 ---
 
@@ -91,8 +143,14 @@ curl -X POST -F "payload_json={\"content\":\"worker smoke test\"}" -F "files[0]=
 show a row for `smoke-1`:
 
 ```bash
-curl -X POST -F 'summary={"event":"summary","summary":{"run_id":"smoke-1","scenario":"x","outcome":"VICTORY","rounds":3}}' -F "events.jsonl=@schema.sql" https://iosis-reports.<your-subdomain>.workers.dev/telemetry
+curl -X POST -F 'summary={"event":"summary","summary":{"run_id":"smoke-1","scenario":"x","outcome":"VICTORY","rounds":3,"passes":9,"orders_queued":9,"sandbox":false,"dev_mode":false,"swept":false}}' -F "events.jsonl=@schema.sql" https://iosis-reports.<your-subdomain>.workers.dev/telemetry
 ```
+
+**That summary carries the flag fields on purpose, and it did not always.** Every recipe below
+filters on `sandbox` / `dev_mode` / `trivial`, and those are `json_extract` over this blob — a field
+that is *absent* extracts as SQL `NULL`, and `NULL = 0` is NULL rather than true, so a row is
+dropped by a filter that looks like it should keep it. The older, shorter smoke summary posted
+fine, wrote its row, and was invisible to the very query this step tells you to check it with.
 
 Clean it up afterwards with
 `wrangler d1 execute iosis-telemetry --remote --command "delete from runs where run_id = 'smoke-1'"`.
@@ -106,6 +164,7 @@ Clean it up afterwards with
 | `DB (D1) binding is not set` | Step 2 was skipped — `database_id` is still `REPLACE_ME` |
 | `no such table: runs` | Step 3 was run **without `--remote`** |
 | `summary carries no run_id` | A run recorded before slice 5. Refused on purpose — see `schema.sql` |
+| `no such column: trivial` | The migration was never applied -- see *Adding a column* above |
 
 **Then the real check:** play a mission to the end. The run should appear in the first query below,
 `user://telemetry/sent/` should hold its folder, and `pending/` should be empty. Alt-F4 mid-mission
@@ -129,24 +188,33 @@ one to reach for when you do not yet know what you are asking.
 From `tools/intake-worker/`. `--remote` on every one of these, or you are querying an empty local
 copy.
 
+**The exclusion is baked into every recipe below**, because remembering it every time is what
+[#851](https://github.com/Phaazoid/Godoiosis/issues/851) exists to stop. It is always the same
+clause — `sandbox = 0 and dev_mode = 0 and trivial = 0` — and it is a `WHERE`, so dropping it is
+how you see everything again. The last recipe on this page shows you exactly what it removed.
+
 ```bash
 # the last twenty runs, real play only
-wrangler d1 execute iosis-telemetry --remote --command "select run_id, scenario, outcome, rounds, round(seconds) as secs, swept from runs where sandbox = 0 and dev_mode = 0 order by received_at desc limit 20"
+wrangler d1 execute iosis-telemetry --remote --command "select run_id, scenario, outcome, rounds, round(seconds) as secs, swept from runs where sandbox = 0 and dev_mode = 0 and trivial = 0 order by received_at desc limit 20"
 ```
 
 ```bash
 # how each mission is going: win rate and typical length
-wrangler d1 execute iosis-telemetry --remote --command "select scenario, count(*) n, sum(outcome = 'VICTORY') wins, round(avg(rounds), 1) avg_rounds from runs where sandbox = 0 group by scenario order by n desc"
+wrangler d1 execute iosis-telemetry --remote --command "select scenario, count(*) n, sum(outcome = 'VICTORY') wins, round(avg(rounds), 1) avg_rounds from runs where sandbox = 0 and dev_mode = 0 and trivial = 0 group by scenario order by n desc"
 ```
 
 ```bash
 # where people STOP -- QUIT or CRASHED mid-mission is the ragequit signal (#53 slice 4b)
-wrangler d1 execute iosis-telemetry --remote --command "select outcome, count(*) n, round(avg(rounds), 1) avg_rounds from runs where sandbox = 0 group by outcome order by n desc"
+wrangler d1 execute iosis-telemetry --remote --command "select outcome, count(*) n, sum(trivial = 0) played, sum(trivial = 1) barely, round(avg(rounds), 1) avg_rounds from runs where sandbox = 0 and dev_mode = 0 group by outcome order by n desc"
 ```
+
+**That third one takes `trivial` as a COLUMN rather than a filter, deliberately.** *Someone opened
+this mission and left inside one turn* is a finding here, not noise — it is the one question where
+the thin runs are the answer — so it splits them out instead of dropping them.
 
 ```bash
 # what players actually reach for -- straight out of the summary blob, no schema change needed
-wrangler d1 execute iosis-telemetry --remote --command "select key as attack, sum(value) uses from runs, json_each(runs.summary, '$.attacks_used') where sandbox = 0 group by key order by uses desc"
+wrangler d1 execute iosis-telemetry --remote --command "select key as attack, sum(value) uses from runs, json_each(runs.summary, '$.attacks_used') where sandbox = 0 and dev_mode = 0 and trivial = 0 group by key order by uses desc"
 ```
 
 ```bash
@@ -154,15 +222,40 @@ wrangler d1 execute iosis-telemetry --remote --command "select key as attack, su
 wrangler d1 execute iosis-telemetry --remote --command "select events from runs where run_id = 'PASTE_ID'" --json
 ```
 
-That fourth one is the point of storing the summary whole: **a new question is a query, not a build
+```bash
+# WHAT THE EXCLUSION IS DROPPING -- run this before trusting any number above
+wrangler d1 execute iosis-telemetry --remote --command "select sandbox, dev_mode, trivial, count(*) n from runs group by sandbox, dev_mode, trivial order by n desc"
+```
+
+**Run that last one first, and periodically.** A flag is only better than a deletion while somebody
+can still see what it caught: if the excluded pile is most of the table, or is growing faster than
+the kept pile, the threshold is wrong and that is a thing you can only learn because nothing was
+thrown away. Re-cutting it is one command — see *Adding a column* above.
+
+The attacks-used recipe is the point of storing the summary whole (named rather than numbered, since
+that count went stale the moment a recipe was added above it): **a new question is a query, not a build
 and a new cohort of players.** Anything `MissionSummary` computes is reachable through
 `json_extract(summary, '$.field')` or `json_each` with no schema change — and where the summary
 cannot answer, `events` is still there and is the authority.
 
-**Three flags every real query wants.** `sandbox = 1` is a dev sandbox board, `dev_mode = 1` is a
-run played with dev mode on, and `swept = 1` means the ending was *inferred* at a later launch
-rather than watched. They are flags rather than exclusions on purpose (your ruling, 2026-09-08): an
+**Four flags every real query wants.** `sandbox = 1` is a dev sandbox board, `dev_mode = 1` is a
+run played with dev mode on, `swept = 1` means the ending was *inferred* at a later launch rather
+than watched, and `trivial = 1` means the run was over inside one round or carried fewer than two
+player orders. They are flags rather than exclusions on purpose (your ruling, 2026-09-08): an
 exclusion destroys the evidence the exclusion was right, and a `WHERE` clause can always be dropped.
+
+**`trivial` is a projection, not a stamp**, and the difference is why the two rows already in this
+table from before it existed are classified correctly: it is a `GENERATED ... VIRTUAL` expression
+over `rounds` and `orders_queued`, evaluated when you read it. So the threshold can be re-cut over
+every run ever collected without a new build, and the raw `rounds` / `passes` / `orders_queued`
+columns are all there beside it if you would rather draw the line somewhere else in the query.
+
+**The client refuses one narrow case outright** ([#851](https://github.com/Phaazoid/Godoiosis/issues/851)),
+and it is the exception that keeps FLAG-NEVER-EXCLUDE honest rather than a hole in it: a run with
+**no** resolved pass and **no** queued order, ended by something somebody chose (`ABANDONED`,
+`RESTARTED`, `QUIT`, `INTERRUPTED`), is never uploaded. There is nothing in such a run to lose, so
+there is no judgement call to get wrong. A `CRASHED` run is never refused however empty it is —
+*the game died before I could do anything* is the most valuable thing this intake can receive.
 
 ---
 
