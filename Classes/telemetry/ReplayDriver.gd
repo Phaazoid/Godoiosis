@@ -31,6 +31,13 @@ var unbindable: Array[String] = []
 var notes: Array[String] = []
 
 var _by_recorded_id: Dictionary = {}   # int (recorded instance id) -> Unit
+# THE SAME BINDING AS AN INT PAIR, captured while everyone is alive. A unit that DIES during the
+# replay is freed, and slice 4's own law is that an id read later must be a stable VALUE rather than
+# a runtime handle -- which is what `MissionLog._ref` was fixed for, and what this map failed the
+# same way one file over. The diff runs after the pass, so by then the object map has holes and this
+# one does not; a mapping that vanished when a unit died would also report every row naming the
+# casualty as a divergence, which is the tool's one job broken quietly.
+var _live_id_of: Dictionary = {}       # int (recorded instance id) -> int (live instance id)
 var _cursor := 0
 var _seen_first_turn := false
 var _seeded := false
@@ -56,6 +63,7 @@ func seed(replay_run: ReplayRun) -> bool:
 	unbindable.clear()
 	notes.clear()
 	_by_recorded_id.clear()
+	_live_id_of.clear()
 	_cursor = 0
 	_seen_first_turn = false
 	_seeded = false
@@ -106,13 +114,20 @@ func _bind_units() -> void:
 			unbindable.append("%s (recorded at %s -- no unit there on the seeded board)" % [name_of, str(cell)])
 			continue
 		_by_recorded_id[recorded_id] = unit
+		_live_id_of[recorded_id] = unit.get_instance_id()
 
 
+# Null for a unit that has since DIED, rather than a freed handle its caller would blow up on. The
+# read goes through a Variant on purpose: a TYPED local has to resolve the ObjectID to type-check
+# it and dies with "Trying to assign invalid previously freed instance" BEFORE any guard below it
+# can answer -- CLAUDE.md's #149 sharp edge, and the reason this file crashed a real replay.
 func _unit_for(ref: Variant) -> Unit:
 	if ref is Dictionary:
 		var id := int((ref as Dictionary).get("id", 0))
 		if _by_recorded_id.has(id):
-			return _by_recorded_id[id] as Unit
+			var held: Variant = _by_recorded_id[id]
+			if is_instance_valid(held):
+				return held as Unit
 	return null
 
 
@@ -453,12 +468,12 @@ static func _renumber_batches(row: Dictionary) -> void:
 		(order as Dictionary)["batch"] = seen[raw]
 
 
+# INTS ONLY -- see _live_id_of. This used to read the unit out of the object map and ask
+# is_instance_valid, which cannot work: the typed assignment resolves the ObjectID first and throws
+# on a unit the replay has killed, so the diff crashed on any run with a casualty in it.
 func _mapped_id(recorded: int) -> int:
-
-	if _by_recorded_id.has(recorded):
-		var unit: Unit = _by_recorded_id[recorded]
-		if is_instance_valid(unit):
-			return unit.get_instance_id()
+	if _live_id_of.has(recorded):
+		return int(_live_id_of[recorded])
 	return recorded   # unbindable ids are already reported; leaving them alone keeps the row honest
 
 

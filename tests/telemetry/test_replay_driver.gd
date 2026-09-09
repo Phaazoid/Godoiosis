@@ -162,6 +162,35 @@ func test_a_corrupted_outcome_is_reported_as_a_divergence() -> void:
 		"a corrupted damage number must be reported").is_greater(0)
 
 
+# A UNIT THAT DIES DURING THE REPLAY -- and the diff still has to come back CLEAN, because the
+# casualty is the same casualty the run recorded.
+#
+# Every other case here hands the foe 200 HP, so the board being diffed was the board that was
+# bound, and `_mapped_id` was only ever asked about a unit still standing. Ask it about one that has
+# been freed and the typed read it used to do (`var unit: Unit = _by_recorded_id[recorded]`) dies on
+# the ASSIGNMENT -- resolving the ObjectID to type-check it -- before its own is_instance_valid
+# guard one line below can answer (CLAUDE.md #149). A real replay crashed exactly there.
+#
+# Merely making that read SAFE would not be enough, which is why this asserts clean rather than
+# merely alive: falling through to `return recorded` compares a recorded id against a live one, so
+# every row naming the casualty reports a FALSE divergence -- the tool's one job broken quietly.
+func test_a_replay_with_a_casualty_still_diffs_clean() -> void:
+	var run_id := await _record_a_mission(true)
+	var run := ReplayRun.load_run(run_id)
+	assert_bool(_records_a_death(run.events)).override_failure_message(
+		"fixture: nobody died, so this case cannot reach the freed-id read at all").is_true()
+
+	assert_bool(driver.seed(run)).is_true()
+	await driver.play()
+
+	assert_array(driver.unbindable).is_empty()
+	assert_bool(_records_a_death(mission_log.events())).override_failure_message(
+		"the replay killed nobody, so the diff never read an id off a freed unit").is_true()
+	assert_int(driver.divergences.size()).override_failure_message(
+		"a replay whose casualty is the run's own casualty must report nothing: %s"
+		% str(driver.divergences)).is_equal(0)
+
+
 func test_replaying_writes_no_new_run() -> void:
 	var run_id := await _record_a_mission()
 	var before := ReplayRun.list_runs().size()
@@ -199,12 +228,24 @@ func test_a_run_folder_is_listed_and_headlined() -> void:
 # A real mission, played: two units, a move, an attack, a resolved pass, a turn hand-over, sealed.
 # Driven through the same doors a player uses, because a run assembled by hand would be a run this
 # driver has never had to reproduce.
-func _record_a_mission() -> String:
+#
+# `lethal` is the same mission with one number moved: a foe on 1 HP and a swing far past the
+# overkill ceiling, so the enemy is FREED rather than downed. Every other case leaves it on 200,
+# which is why the diff had never once been asked about a unit that is gone.
+func _record_a_mission(lethal := false) -> String:
 	var hero := _spawn(Team.Faction.PLAYER, Vector2i(0, 0))
 	var foe := _spawn(Team.Faction.ENEMY, Vector2i(3, 0))
-	hero.equipped_weapon = H.make_weapon(4)
+	hero.equipped_weapon = H.make_weapon(60 if lethal else 4)
 	foe.unit_instance.stats[Stats.Stat.MHP] = 200
-	foe.set_current_hp(200)
+	foe.set_current_hp(1 if lethal else 200)
+	if lethal:
+		# A SECOND enemy, far away and never touched, because killing the ONLY one routs the board:
+		# the mission ends, MissionEndBanner claims the ModalLock, and a Game node frozen behind it can
+		# never finish the replay's first walk. A casualty is what this fixture is for; ending the
+		# mission is not.
+		var survivor := _spawn(Team.Faction.ENEMY, Vector2i(7, 3))
+		survivor.unit_instance.stats[Stats.Stat.MHP] = 200
+		survivor.set_current_hp(200)
 	mc._begin_turn()
 	var run_id: String = mission_log.run_id()
 
@@ -223,6 +264,13 @@ func _record_a_mission() -> String:
 	assert_bool(FileAccess.file_exists(TelemetryStore.run_dir(run_id) + ReplayRun.EVENTS_FILE)).override_failure_message(
 		"fixture: nothing was written to disk").is_true()
 	return run_id
+
+
+static func _records_a_death(events: Array[Dictionary]) -> bool:
+	for e: Dictionary in events:
+		if str(e.get("event", "")) == "unit_died":
+			return true
+	return false
 
 
 func _spawn(faction: Team.Faction, cell: Vector2i) -> Unit:
