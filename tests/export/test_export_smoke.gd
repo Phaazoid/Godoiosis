@@ -35,6 +35,15 @@ const SMOKE_SCENE := "res://Scenes/Smoke/smoke.tscn"
 const OUT_DIR := "res://.export/"
 const OUT_PACK := OUT_DIR + "smoke.pck"
 
+# WHERE THE PACKED RUN IS TOLD TO STAND, and it is load-bearing rather than tidiness. OS.execute
+# gives the child THIS process's working directory -- the project root -- and a Godot that finds a
+# project.godot beside it mounts THAT as res://, source tree and all, even with --main-pack given.
+# The pack is then window dressing: every packed-vs-source difference this suite exists to catch
+# reads as absent. Caught by falsification, not by review -- the #867 mutant PASSED until this
+# landed, because the child was reading the fixed source off disk. An empty directory has no
+# project to prefer, so the pack is the only res:// there is.
+const HOST_DIR := "user://.export_smoke_host/"
+
 # A hard frame backstop on the driven run. SAFE only because the driver must print its contract
 # line: a process that hangs and is then cut off prints neither OK nor FAIL, so the assertions
 # below fail rather than passing on a quiet exit.
@@ -57,6 +66,26 @@ func _run(args: PackedStringArray) -> Dictionary:
 	var out: Array = []
 	var code := OS.execute(OS.get_executable_path(), args, out, true)
 	return {"code": code, "out": "\n".join(out)}
+
+
+# An empty directory for a packed run to stand in -- see HOST_DIR. Made fresh and left empty:
+# anything with a project.godot in it defeats the whole suite.
+func _host_dir() -> String:
+	var dir := ProjectSettings.globalize_path(HOST_DIR)
+	DirAccess.make_dir_recursive_absolute(dir)
+	assert_bool(FileAccess.file_exists(HOST_DIR + "project.godot")).override_failure_message(
+		"%s contains a project.godot, so a packed run would mount IT instead of the pack."
+		% HOST_DIR).is_false()
+	return dir
+
+
+# Boot the exported pack, standing somewhere that is not this project.
+func _run_pack(extra: PackedStringArray) -> Dictionary:
+	var args := PackedStringArray([
+		"--headless", "--path", _host_dir(),
+		"--main-pack", ProjectSettings.globalize_path(OUT_PACK)])
+	args.append_array(extra)
+	return _run(args)
 
 
 # Every ERROR line the output carries, minus the allowlist.
@@ -95,9 +124,7 @@ func before_test() -> void:
 
 
 func test_the_packed_build_boots_its_own_main_scene_cleanly() -> void:
-	var pack := ProjectSettings.globalize_path(OUT_PACK)
-	var result := _run(PackedStringArray([
-		"--headless", "--main-pack", pack, "--quit-after", "400"]))
+	var result := _run_pack(PackedStringArray(["--quit-after", "400"]))
 	assert_array(_errors(result["out"] as String)).override_failure_message(
 		"The exported build logs errors on a plain boot. This is the shape that catches an "
 		+ "excluded runtime addon (PR #866).\n%s" % result["out"]).is_empty()
@@ -105,9 +132,7 @@ func test_the_packed_build_boots_its_own_main_scene_cleanly() -> void:
 
 
 func test_every_authored_mission_loads_inside_the_packed_build() -> void:
-	var pack := ProjectSettings.globalize_path(OUT_PACK)
-	var result := _run(PackedStringArray([
-		"--headless", "--main-pack", pack, SMOKE_SCENE, "--quit-after", QUIT_AFTER_FRAMES]))
+	var result := _run_pack(PackedStringArray([SMOKE_SCENE, "--quit-after", QUIT_AFTER_FRAMES]))
 	var text: String = result["out"]
 
 	# The contract line FIRST: without it a hang cut off by --quit-after would exit 0 and read as
