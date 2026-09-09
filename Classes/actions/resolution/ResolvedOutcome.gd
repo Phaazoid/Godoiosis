@@ -49,6 +49,10 @@ var burned_vial: VialData = null
 # and the queue row read THIS rather than re-asking the live tank -- which is what stops a counter
 # and a watch shot in one pass from each claiming the same charge.
 var charge_spent: bool = false
+# This hit broke the target's standing watch (#810). Stamped by the resolver on the FIRST hit that
+# actually flips an armed watch, the charge_spent shape -- a second blow on the same watcher in one
+# pass leaves it false, so nothing downstream double-reports an ending that happened once.
+var cancels_watch: bool = false
 var brace_bonus: int = 0
 # The kind this hit DELIVERED and the DEF subtracted from it (#424), stamped in the same breath as
 # the mitigation so the queue row can say "DEF 6 vs slash" or "plate does not cover fire" without a

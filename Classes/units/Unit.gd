@@ -770,17 +770,25 @@ func lapse_guard() -> void:
 # `spent` carries the same fact GuardAction.resolved_spent does: a watch its own pass's shove combo
 # already fired must arm used, and OverwatchAction.execute is the only caller that can know.
 func arm_watch(origin: Vector2i, aim_cell: Vector2i, watched_cells: Array[Vector2i],
-		attack: AttackData, spent := false) -> void:
+		attack: AttackData, spent := false, cancelled := false) -> void:
 	if attack == null or watched_cells.is_empty():
 		return
 	watch = Watch.arm(self, origin, aim_cell, watched_cells, attack)
 	watch.spent = spent
+	watch.cancelled = cancelled   # #810: a save taken after a blow broke the watch restores it broken
 
 # Fired its one shot. The watch object stays (spent) for the same reason a spent ward does: "you
 # already took your shot" and "you were never watching" are different facts, and both save.
 func spend_watch() -> void:
 	if watch != null:
 		watch.spent = true
+
+# Shot off you (#810). MARKS, never nulls -- and that is the whole reason this is its own door
+# rather than a lapse_watch() call: is_standing_watch() reads past both endings, so nulling here
+# would hand the reaction back for the rest of the round, in the very pass that broke the watch.
+func cancel_watch() -> void:
+	if watch != null:
+		watch.cancelled = true
 
 # The lifetime rule, from the owning faction's turn-start tick pass beside lapse_guard: a watch that
 # nobody walked into is gone before its owner acts again. What drops it EARLY is the anchor rule,

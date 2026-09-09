@@ -1116,6 +1116,10 @@ func refresh_action_queue(squad: Squad):
 	# the arrow pointing where the unit used to be. AFTER the resolve above, because a projection
 	# reads published knockback and that is what publishes it.
 	refresh_guard_markers()
+	# ...and the fifth moment a WATCH mark can move (#810): a queued blow that will break a standing
+	# watch must stop drawing its footprint now, not when it lands. Takes the plan the resolve above
+	# produced -- the cache read would be the same object, but passing it says which pass answered.
+	refresh_watch_markers(plan)
 	var can_execute: bool = (squad_manager.active_squad == squad
 		and not squad_manager.only_hold_actions(squad)
 		and not squad_manager.squad_has_invalid_actions(squad)
@@ -1600,8 +1604,8 @@ func refresh_guard_markers() -> void:
 # The standing watches' footprints (#413). Its own door beside the ward one rather than folded into
 # it: the two channels answer different questions and are cleared independently, and a single
 # "refresh standing reactions" would be one name for two redraws that happen to fire together today.
-func refresh_watch_markers() -> void:
-	overlay_manager.redraw_watch_marks(_all_units())
+func refresh_watch_markers(plan: ResolvedPlan = null) -> void:
+	overlay_manager.redraw_watch_marks(_all_units(), plan)
 
 # ==============================================================================
 #  Board queries

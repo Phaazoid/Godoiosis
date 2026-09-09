@@ -35,7 +35,7 @@ static func resolve_attacks(plan: ResolvedPlan, hypo: Dictionary, reactions: Arr
 static func resolve_attack_group(group: Array[AttackAction], plan: ResolvedPlan, hypo: Dictionary, reactions: Array[ElementalReaction], board: BoardContext, terrain_reactions: Array[TerrainReaction]) -> void:
 	_apply_guards(group, plan, hypo)
 	for atk in group:
-		_resolve_one(atk, reactions, hypo, board)
+		_resolve_one(atk, plan, reactions, hypo, board)
 		if board != null and not atk.is_secondary_hit:
 			for cell_effect in _resolve_cell_effects(atk, board, terrain_reactions):
 				plan.cell_effects.append(cell_effect)
@@ -58,7 +58,7 @@ static func resolve_counters(plan: ResolvedPlan, hypo: Dictionary, reactions: Ar
 			no_op.skipped = true
 			ctr.resolved = no_op                    # counter-er is down/dead this pass -> no counter
 			continue
-		_resolve_one(ctr, reactions, hypo, board)
+		_resolve_one(ctr, plan, reactions, hypo, board)
 		if board != null and not ctr.is_secondary_hit:
 			for cell_effect in _resolve_cell_effects(ctr, board, terrain_reactions):
 				plan.cell_effects.append(cell_effect)
@@ -275,7 +275,7 @@ static func _watch_triggered_by(entrant: Unit, plan: ResolvedPlan, hypo: Diction
 		return null
 	var cell := projected_position(entrant, hypo)
 	for watch in plan.watches:
-		if watch.spent or not watch.is_intact() or not watch.covers(cell):
+		if not watch.is_armed() or not watch.covers(cell):
 			continue
 		if not Team.is_enemy(watch.watcher.get_faction(), entrant.get_faction()):
 			continue
@@ -287,6 +287,25 @@ static func _watch_triggered_by(entrant: Unit, plan: ResolvedPlan, hypo: Diction
 			continue
 		return watch
 	return null
+
+
+
+# The watcher was hit, so the watch is off (#810). Marks the PASS'S COPY and stamps the outcome so
+# execution can mark the live one -- the charge_spent shape, one economy over.
+#
+# FIRST FLIP ONLY. A second blow on the same watcher in one pass finds the copy already cancelled
+# and stamps nothing, so no two rows report an ending that happened once. That is why the stamp
+# reads the flip rather than the state.
+static func _break_watch_on(target: Unit, plan: ResolvedPlan, outcome: ResolvedOutcome) -> void:
+	if target == null or plan == null:
+		return
+	for watch in plan.watches:
+		if watch.watcher != target or not watch.is_armed():
+			continue
+		watch.cancelled = true
+		if outcome != null:
+			outcome.cancels_watch = true
+		return
 
 
 # The shot itself, as an ordinary volley fired from the anchor cell. Victims are gathered over the
@@ -334,7 +353,7 @@ static func _positions_snapshot(board: BoardContext, hypo: Dictionary) -> Dictio
 	return snapshot
 
 
-static func _resolve_one(action: AttackAction, reactions: Array[ElementalReaction], hypo: Dictionary, board: BoardContext = null) -> void:
+static func _resolve_one(action: AttackAction, plan: ResolvedPlan, reactions: Array[ElementalReaction], hypo: Dictionary, board: BoardContext = null) -> void:
 	var outcome := ResolvedOutcome.new()
 	var attacker := action.actor
 	var target := action.target
@@ -365,6 +384,20 @@ static func _resolve_one(action: AttackAction, reactions: Array[ElementalReactio
 		action.resolved = outcome
 		return
 
+
+	# THE WATCH BREAKS ON CONTACT (#810, dev 2026-09-09). Deliberately BELOW the heal return above:
+	# a heal is the one landed hit that does not break a watch, and can_target is the WRONG gate for
+	# saying so -- a player-aimed heal keeps its enemy splash (C8), so an enemy watcher caught in one
+	# would have its watch healed off. Position is the rule; there is no hostility clause.
+	#
+	# No hostility clause the other way either: your own friendly-fire AoE breaks your own
+	# squadmate's watch. Overwatch's cost is what this ticket is FOR, and a rule that spares the
+	# player's own blast is a rule with an exception nobody can see coming.
+	#
+	# On the pass's COPY, so a watch broken by an earlier order cannot fire at a later crosser --
+	# Law #2, and the whole reason this lives in the resolve rather than in execute(). The live watch
+	# is marked by execution off the stamp below.
+	_break_watch_on(target, plan, outcome)
 	# --- elemental stage: collect EVERY reaction matching the PRE-HIT snapshot (E8) ---
 	outcome.hp_before = target_hypo.hp   # threaded pre-hit HP (R4), not the live board value
 	var incoming := _source_elements(action)

@@ -733,7 +733,7 @@ func _resolve_actions(squad: Squad, actions: Array[BaseAction], board: BoardCont
 	# join at their own slot in the walk below, which is what makes a shove combo sequence-able.
 	var live_watches: Array[Watch] = []
 	for unit in board.units:
-		if unit.watch != null and unit.watch.is_intact() and not unit.watch.spent:
+		if unit.watch != null and unit.watch.is_armed():
 			live_watches.append(unit.watch.copy())
 	live_watches.sort_custom(func(a: Watch, b: Watch) -> bool: return a.sequence < b.sequence)
 	plan.watches.append_array(live_watches)

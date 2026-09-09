@@ -143,6 +143,14 @@ func execute():
 			await target.movement.plummet()
 			if is_instance_valid(target):   # the await spans frames; the board can go in them
 				target.die()
+
+	# The watch broken by this blow (#810), the charge spend's shape: the resolver already decided
+	# WHETHER this hit ended a standing watch -- here there is only the marking. MARKS, never lapses
+	# (Unit.cancel_watch says why), and outside the is_secondary_hit gate the economies above use:
+	# a volley that reaches two watchers breaks both, because each of them was hit.
+	# MIRRORED in play_session._apply_attack (the hand-copied twin).
+	if resolved != null and resolved.cancels_watch and is_instance_valid(target):
+		target.cancel_watch()
 	# Readiness spend (#73): the ACT of firing consumes it, hit or whiff — lead volley member
 	# only (mirrors the is_secondary_hit gate PlanResolver uses for cell-effect deposits).
 	# Counters run through here too: they stamp main (#72), so a family whose MAIN spends — a
