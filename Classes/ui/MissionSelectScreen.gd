@@ -55,10 +55,15 @@ func _init() -> void:
 
 # Takes the Game node rather than a parent, for the reason PauseMenu.show_menu does -- one
 # construction convention across every ModalCard, even the one that does not lock.
-static func open(game_node: Node, mission_paths: Array[String], other_paths: Array[String]) -> MissionSelectScreen:
+# `dev_tools` gates only what the SCREEN can gate: the Sandbox row, which is a hardcoded row with
+# no list behind it, and the empty-state wording. It deliberately does NOT filter `other_paths` --
+# WHICH boards belong in each list is MissionController's one answer (#860), and re-asking it here
+# would be a second place to change when that rule moves. This screen renders what it is handed.
+static func open(game_node: Node, mission_paths: Array[String], other_paths: Array[String],
+		dev_tools := true) -> MissionSelectScreen:
 	var screen := MissionSelectScreen.new()
 	game_node.ui_layer.add_child(screen)
-	screen._build(mission_paths, other_paths)
+	screen._build(mission_paths, other_paths, dev_tools)
 	return screen
 
 # Branding sits between the backdrop and the content column -- which is exactly what the base's
@@ -91,7 +96,7 @@ func _build_frame() -> Container:
 	add_child(frame)
 	return frame
 
-func _build(mission_paths: Array[String], other_paths: Array[String]) -> void:
+func _build(mission_paths: Array[String], other_paths: Array[String], dev_tools := true) -> void:
 	var column := _build_chrome()
 	# The centring the CenterContainer used to do, on the axis that still wants it. Vertically the
 	# column now FILLS, which is the whole point of the frame override.
@@ -118,7 +123,12 @@ func _build(mission_paths: Array[String], other_paths: Array[String]) -> void:
 
 	if mission_paths.is_empty():
 		var hint := Label.new()
-		hint.text = "No missions yet — save a scenario named  missions/<name>"
+		# TWO empty states since #860, and the old text lies in the new one: a shipped build with
+		# nothing ticked has missions on disk, so telling the reader to go save one is wrong.
+		if dev_tools:
+			hint.text = "No missions yet — save a scenario named  missions/<name>"
+		else:
+			hint.text = "No missions available in this build."
 		hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		hint.modulate = Color(0.7, 0.7, 0.75)
 		list.add_child(hint)
@@ -143,8 +153,10 @@ func _build(mission_paths: Array[String], other_paths: Array[String]) -> void:
 		_add_button(column, "Load Game", func(): load_game_chosen.emit())
 
 	# Dev scaffolding, deliberately last: TestBoard is no longer the boot path, but it is still
-	# the fastest way onto a board with units on it.
-	_add_button(column, "Sandbox (Test Board)", func(): sandbox_chosen.emit(), Color(0.72, 0.72, 0.78))
+	# the fastest way onto a board with units on it. GATED since #860 -- it had shipped to every
+	# exported build, one row under the fixtures its own comment calls development content.
+	if dev_tools:
+		_add_button(column, "Sandbox (Test Board)", func(): sandbox_chosen.emit(), Color(0.72, 0.72, 0.78))
 
 	column.add_child(HSeparator.new())
 

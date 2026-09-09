@@ -203,15 +203,28 @@ func restore_progress(zones: Array[String], contested: bool, rounds := 0) -> voi
 
 # The front door: game._ready() opens it at boot, and every mission ending can return here.
 func open_mission_select() -> void:
+	_open_mission_select(DevTools.enabled())
+
+
+# The gate as a PARAMETER, so both builds are drivable in a suite (#860). DevTools.enabled() reads
+# OS.has_feature, which a headless run cannot make false -- left inline, the shipped build's whole
+# branch would be unreachable code no test could ever enter, on the one feature whose entire job is
+# to behave differently there.
+func _open_mission_select(dev: bool) -> void:
 	if is_instance_valid(_select_screen):
 		return
 	game.game_state = game.GameState.MENU
 	var missions: Array[String] = game.scenario_manager.get_missions()
+	if not dev:
+		missions = _missions_in_demo(missions)   # #860: a shipped build lists only what was ticked
 	var others: Array[String] = []
-	for path in game.scenario_manager.get_saved_scenarios():
-		if not missions.has(path):
-			others.append(path)   # root playtest saves + fixtures/ -- selectable during development
-	_select_screen = MissionSelectScreen.open(game, missions, others)
+	if dev:
+		# Root playtest saves + fixtures/ -- selectable during development, and DEV SCAFFOLDING by
+		# their own admission, so a shipped build must not list them (#860). Ungated until now.
+		for path in game.scenario_manager.get_saved_scenarios():
+			if not missions.has(path):
+				others.append(path)
+	_select_screen = MissionSelectScreen.open(game, missions, others, dev)
 	_select_screen.mission_chosen.connect(begin_mission)
 	_select_screen.load_game_chosen.connect(_on_load_game_chosen)
 	_select_screen.sandbox_chosen.connect(_on_sandbox_chosen)
@@ -225,6 +238,28 @@ func open_mission_select() -> void:
 	# guaranteed something to sit on; it costs nothing on the later returns through here, since
 	# should_show() is false forever after the first dismissal.
 	TelemetryNotice.show_if_needed(game)
+
+# Which of those boards a build WITHOUT dev tools may list (#860).
+#
+# The filter lives HERE and never inside ScenarioManager.get_missions(), which must keep meaning
+# EVERY mission on disk: tests/dev/test_board_lint.gd sweeps that list to lint every shipped
+# mission, and filtering at the source would silently stop linting exactly the boards nobody
+# ticked. A board kept out of the demo is still a board that must not be broken.
+#
+# A board that fails to load is EXCLUDED rather than raised: a dangling ext_resource is a hard
+# parse error, and today that costs you one unplayable row -- through this reader it would take
+# the whole title screen down with it. Loud in the log, absent from the list.
+func _missions_in_demo(paths: Array[String]) -> Array[String]:
+	var shipped: Array[String] = []
+	for path in paths:
+		var scenario := load(path) as ScenarioData
+		if scenario == null:
+			push_error("Mission select: '%s' failed to load; omitted from the mission list." % path)
+			continue
+		if scenario.in_demo:
+			shipped.append(path)
+	return shipped
+
 
 func _close_mission_select() -> void:
 	if is_instance_valid(_select_screen):

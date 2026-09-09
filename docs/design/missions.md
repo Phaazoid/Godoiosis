@@ -2,7 +2,7 @@
 
 **Status: ALL FOUR SLICES BUILT 2026-07-28 ([#96](https://github.com/Phaazoid/Godoiosis/issues/96)).** Filed 2026-07-27, when the project acquired a win condition for the first time. Before this, Iosis had ten interlocking systems and no way to finish a battle — which meant a design question could be answered *"is this coherent?"* but never *"does this improve play?"*
 
-**Canon checked through #841 (2026-09-08).**
+**Canon checked through #860 (2026-09-09).**
 
 ## What a mission is
 
@@ -442,11 +442,29 @@ The reset side is **real and exercised since [#737](https://github.com/Phaazoid/
 The game boots into `MissionSelectScreen`, not a board. `TestBoard` was retired as the boot path (dev, 2026-07-28) and is a labelled dev row on the menu; `game.spawn_sandbox()` is its one remaining call site, so retiring it entirely is still a one-line deletion.
 
 - **Missions** are scenarios under `Scenarios/missions/` — the folder convention `Scenarios/fixtures/` already set. `save_scenario` already creates directories, so saving a scenario named `missions/Camp` needs no new code.
-- **Scenarios & fixtures** (everything outside `missions/`) are listed below the missions and are selectable — during development these *are* the content.
+- **Scenarios & fixtures** (everything outside `missions/`) are listed below the missions and are selectable — during development these *are* the content. **And ONLY during development, as of [#860](https://github.com/Phaazoid/Godoiosis/issues/860)** — that sentence had described the shipped build too, because nothing gated the section; see *What a shipped build lists* below.
 - A board arriving from the menu has nobody's turn *started* (`load_scenario` only restores whose turn it *was*), so `MissionController._begin_turn` fires the banner and `start_faction_turn`. Without it a mission saved on an AI faction's turn would sit there doing nothing, because `turn_started` only ever fires from `TurnManager.end_turn`.
 - **A turn HANDOFF resets actions; a menu arrival trusts the file ([#144](https://github.com/Phaazoid/Godoiosis/issues/144)).** `reset_faction_actions` fires from `game._on_turn_started`, not from `start_faction_turn` — the menu paths call the latter, and a resumed save's restored `Squad.has_acted` must survive the arrival. It lived inside `start_faction_turn` until #144, which meant every menu-driven load silently handed acted squads their actions back; nobody saw it because only the dev-overlay Load (which skips `_begin_turn`) had ever loaded a mid-battle snapshot. Pinned both directions by `tests/flow/test_turn_handoff_reset.gd`.
 - **...AND THE HAND-OFF SHEDS WHAT NOBODY EXECUTED** (dev ruling, 2026-09-03, out of [#709](https://github.com/Phaazoid/Godoiosis/issues/709)). The same call now drops every OTHER faction's queued orders. An order queued and not run used to survive the whole enemy turn — and it could never happen, because the reset above discarded it unexecuted at that faction's own next turn — so while it stood, `PlanResolver` seeded that unit from `get_projected_destination()` and placed it at the queued destination, while `queue_action`'s whiff gate placed a foreign unit where it stands. **Two answers to where the player is, during the one turn something else is aiming at them.** Nothing is lost by shedding early; only the resolver, the gate and the AI could observe the difference, and they disagreed. It rides `reset_faction_actions` because that is the one step BOTH walks share — `game._on_turn_started` and both of `play_session`'s end-turn paths — where `TurnManager.end_turn` knows no squads and a new signal would be wired in one walk and not the other (#714's shape). Through `SquadManager.shed_orders`, never a raw `action_queue.clear()`: the raw clear emits nothing, which is why an un-executed move's path arrow and projected ghost outlived the order that drew them.
 
+### What a shipped build lists ([#860](https://github.com/Phaazoid/Godoiosis/issues/860), 2026-09-09)
+
+Until #860 the front door showed a stranger **everything on disk**: every fixture and root playtest save under `SCENARIOS & FIXTURES`, the `Sandbox (Test Board)` row, and every `.tres` under `missions/` including scratch boards. `Scenarios/` is not in the export preset's `exclude_filter` and #141 made the packed-name scan work correctly, so all of it really did ship. #132 closed the dev-surface lockout's *input and instantiation* half; the front door's **contents** were never part of it.
+
+Two questions answer this now, and keeping them apart is the point:
+
+- **"Is dev scaffolding reachable?"** — `DevTools.enabled()` (#132), the incumbent, unchanged. The fixtures section and the Sandbox row ride it, since both are dev scaffolding by their own comments. No second build-flavor predicate.
+- **"Which missions are in the demo?"** — `ScenarioData.in_demo`, authored per board on the Scenario tab, under the same four-writer contract as `roster` and `deployment_cap`.
+
+**Unticked is the default, by dev ruling (2026-09-09):** *a board ships because someone ticked it, never because nobody unticked it.* The opposite default fails silently — a scratch board reaches a stranger and nothing says so — where this one fails loudly with an empty mission list. That is why `MissionSelectScreen` carries a **second empty-state wording**: the original hint (*"save a scenario named missions/<name>"*) would lie in a shipped build, where the missions exist and are merely withheld.
+
+**The filter lives at the menu's call site, never inside `get_missions()`.** That function must keep meaning *every mission on disk*, because `tests/dev/test_board_lint.gd` sweeps it to lint every shipped mission — filtering at the source would silently stop linting exactly the boards nobody ticked, and a board kept out of the demo is still a board that must not be broken. `MissionController._missions_in_demo` is the filter, and a board that **fails to load is excluded rather than raised**: a dangling `ext_resource` is a hard parse error, and through a reader that loads every mission it would take the whole title screen down instead of costing one unplayable row.
+
+**`MissionController.open_mission_select()` delegates to `_open_mission_select(dev)`**, and the parameter exists for testability rather than for a second caller: `DevTools.enabled()` reads `OS.has_feature`, which a headless run cannot make false, so inline the shipped build's entire branch would be unreachable code on the one feature whose whole job is to behave differently there. `tests/flow/test_demo_mission_gate.gd` drives both builds through it (9 cases, six mutants).
+
+**`MissionSelectScreen`'s `dev_tools` flag gates only what the SCREEN can gate** — the Sandbox row, a hardcoded row with no list behind it, and the empty-state wording. It deliberately does **not** filter `other_paths`: which boards belong in each list is the controller's one answer, and re-asking it in the screen would be a second place to change when the rule moves.
+
+**What it does NOT do.** No ORDER — a per-board bool cannot express one, so the demo's difficulty ramp rides mission NAMES against the scan's alphabetical sort. No unlocks, no completion gating, no progress: those are [#501](https://github.com/Phaazoid/Godoiosis/issues/501) and [#186](https://github.com/Phaazoid/Godoiosis/issues/186). The `MissionSet` manifest this issue originally recommended was **overruled** in favour of the quick-and-dirty flag; a later release layer should replace `in_demo` rather than inherit its demo-specific name.
 
 ## Player save slots (#144)
 
