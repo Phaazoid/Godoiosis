@@ -62,6 +62,15 @@ wrangler d1 execute iosis-telemetry --remote --file=schema.sql
 wrangler d1 execute iosis-telemetry --remote --file=alter-2026-09-09-trivial.sql
 ```
 
+**`--file` DOES NOT WORK UNDER AN OAUTH LOGIN — measured 2026-09-09, and the error does not say so.**
+It fails with `Authentication error [code: 10000]` naming `/d1/database/<id>/import`, on an account
+whose token carries `d1 (write)` and whose owner is Super Administrator. `--file` and `--command` are
+different API endpoints: `--file` stages the file through D1's **import** endpoint, `--command` goes
+to the plain **query** endpoint, and only the second one works with the token `wrangler login`
+mints. So the real instruction is *paste the statements*, not *pipe the file* — see
+*Running SQL when `--file` is refused* below. The `--file` form is kept here because it is the right
+command the day a scoped API token is in `CLOUDFLARE_API_TOKEN`.
+
 **Two files rather than one, deliberately.** `schema.sql` is the table as it was first created;
 every column added since is spelled once in an `alter-*.sql` beside it, and never repeated into
 `schema.sql` — a column with two spellings has two live callers (the database that does not exist
@@ -93,13 +102,14 @@ to notice them drifting; so `schema.sql` is frozen as the table as first created
 beside it are the rest. What the table actually holds is a question for the table: the D1 console's
 **Tables** tab, or `select * from runs limit 0`.
 
-There is one migration so far:
+There is one migration so far — `alter-2026-09-09-trivial.sql`, which adds `passes`,
+`orders_queued` and `trivial` ([#851](https://github.com/Phaazoid/Godoiosis/issues/851)). Under an
+OAuth login it is applied by pasting its statements (see the section below); with a scoped API
+token it is one command:
 
 ```bash
 wrangler d1 execute iosis-telemetry --remote --file=alter-2026-09-09-trivial.sql
 ```
-
-It adds `passes`, `orders_queued` and `trivial` ([#851](https://github.com/Phaazoid/Godoiosis/issues/851)).
 
 **Three things about it that are true of every migration here, because every column in this schema
 is `GENERATED ... VIRTUAL`:**
@@ -125,6 +135,51 @@ wrangler d1 execute iosis-telemetry --remote --command "alter table runs drop co
 …then re-add it with new numbers by editing the `ADD COLUMN trivial` statement in the migration file
 and running just that. This works only because `trivial` is deliberately **not indexed** — SQLite
 refuses `DROP COLUMN` on a column an index names.
+
+---
+
+## Running SQL when `--file` is refused
+
+Under the token `wrangler login` mints, `--file` fails and `--command` works. Measured on this
+account 2026-09-09; the failure names the endpoint rather than the cause:
+
+```
+✘ [ERROR] A request to the Cloudflare API (/accounts/<id>/d1/database/<id>/import) failed.
+  Authentication error [code: 10000]
+```
+
+**It is not a missing D1 permission** — the token carried `d1 (write)` and the account owner is
+Super Administrator. `--file` stages the file through D1's **import** endpoint, `--command` goes to
+the plain **query** endpoint, and the OAuth token reaches only the second.
+
+**So paste the statements.** They are independent — `trivial` reads `summary` directly rather than
+the two columns above it — so order does not matter and any one can be rerun on its own.
+
+```bash
+wrangler d1 execute iosis-telemetry --remote --command "alter table runs add column passes integer generated always as (json_extract(summary, '$.passes')) virtual"
+```
+
+```bash
+wrangler d1 execute iosis-telemetry --remote --command "alter table runs add column orders_queued integer generated always as (json_extract(summary, '$.orders_queued')) virtual"
+```
+
+```bash
+wrangler d1 execute iosis-telemetry --remote --command "alter table runs add column trivial integer generated always as (coalesce(json_extract(summary, '$.rounds'), 0) < 2 or coalesce(json_extract(summary, '$.orders_queued'), 0) < 2) virtual"
+```
+
+Windows PowerShell needs no escaping here: `$` followed by `.` is not a variable, so `'$.rounds'`
+survives a double-quoted string intact (checked, rather than assumed).
+
+**The migration FILE is still the one home for those statements** even though it is not what gets
+executed — it is where they are authored, reviewed and re-cut. The cost of pasting rather than
+piping is that nothing enforces that what ran matches what the file says, so **ask the table what
+it holds after a migration** rather than trusting the file: `select * from runs limit 0`, or the D1
+console's **Tables** tab.
+
+**The other way out**, if piping files is worth having: put a scoped API token in
+`CLOUDFLARE_API_TOKEN` instead of logging in interactively. That is a Cloudflare dashboard job
+(My Profile → API Tokens) and it needs **Account · D1 · Edit**; `--file` then works as written
+everywhere on this page. Nothing here requires it.
 
 ---
 
@@ -165,6 +220,7 @@ Clean it up afterwards with
 | `no such table: runs` | Step 3 was run **without `--remote`** |
 | `summary carries no run_id` | A run recorded before slice 5. Refused on purpose — see `schema.sql` |
 | `no such column: trivial` | The migration was never applied -- see *Adding a column* above |
+| `Authentication error [code: 10000]` on `/d1/.../import` | `--file` under an OAuth login -- see *Running SQL when `--file` is refused* |
 
 **Then the real check:** play a mission to the end. The run should appear in the first query below,
 `user://telemetry/sent/` should hold its folder, and `pending/` should be empty. Alt-F4 mid-mission

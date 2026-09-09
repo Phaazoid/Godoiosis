@@ -2,7 +2,16 @@
 --
 --   wrangler d1 execute iosis-telemetry --remote --file=alter-2026-09-09-trivial.sql
 --
--- THIS FILE IS THE ONE HOME FOR THESE THREE COLUMNS. schema.sql deliberately does not repeat them:
+-- ...EXCEPT THAT --file IS REFUSED UNDER AN OAUTH LOGIN (measured 2026-09-09): it stages the file
+-- through D1's import endpoint, which the token `wrangler login` mints cannot reach, and the error
+-- says "Authentication error [code: 10000]" rather than anything about files. Paste the three
+-- statements with --command instead -- they are independent, so order does not matter and any one
+-- can be rerun alone. See the README's *Running SQL when --file is refused*.
+--
+-- THIS FILE IS THE ONE HOME FOR THESE THREE COLUMNS -- still true when it is not what gets
+-- executed, since it is where they are authored, reviewed and re-cut. What pasting costs is that
+-- nothing then proves the database agrees with the file, so ask the TABLE after a migration rather
+-- than trusting this: `select * from runs limit 0`. schema.sql deliberately does not repeat them:
 -- it serves a database that does not exist yet, this serves the one that does, and two spellings of
 -- one column would drift silently (Law #4). A FRESH database runs schema.sql and then every
 -- alter-*.sql in name order; the live one runs only what it has not had.
