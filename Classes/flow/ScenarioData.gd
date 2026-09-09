@@ -94,6 +94,22 @@ class_name ScenarioData
 # that declares nothing actively turns the last board's flags OFF.
 @export var ai_factions: Array[Team.Faction] = []
 
+# Does this board appear in a SHIPPED build's mission list (#860)? False = dev-only.
+#
+# FALSE IS THE DEFAULT AND THAT IS THE DESIGN (dev, 2026-09-09): a board ships because someone
+# ticked it, never because nobody unticked it. The opposite default fails SILENTLY -- a scratch
+# board reaches a stranger and nothing says so -- where this one fails loudly, with an empty
+# mission list, which is why MissionSelectScreen has a second empty-state wording for it.
+#
+# Read ONLY when DevTools.enabled() is false. The editor and any devtools build list every board
+# exactly as before, so this field cannot change what the dev sees while authoring.
+#
+# Deliberately named for the DEMO rather than for a general release axis. It is the quick-and-dirty
+# form the dev picked over a MissionSet manifest (#860), and a per-board bool cannot express the
+# list's ORDER -- the demo's difficulty ramp rides mission NAMES, since the list is the scan's
+# alphabetical sort. A later release layer should replace this field, not inherit its name.
+@export var in_demo := false
+
 # --- Mission-scoped battle state (#87), the board-wide half of a mid-battle snapshot. ---
 @export var dialog_beats: Array[DialogBeat] = []      # authored dialog moments (#182); ScenarioDirector fires them
 @export var tutorial_steps: Array[TutorialStep] = []  # the sequential lesson (#182); same director runs it

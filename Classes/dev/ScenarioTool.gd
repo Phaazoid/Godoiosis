@@ -25,6 +25,7 @@ var _round_limit_spin: SpinBox
 var _look_row: HBoxContainer
 var _roster_row: HBoxContainer
 var _camera_row: HBoxContainer
+var _in_demo_box: CheckBox
 var _report_box: VBoxContainer
 
 const NO_LOOK_LABEL := "(none - default)"
@@ -51,6 +52,7 @@ func init(p_scenario_manager: ScenarioManager, p_game, header: ScenarioHeader) -
 	refresh_look_row()
 	refresh_roster_row()   # between the two: each row pins itself to index 0, so this is the order
 	refresh_camera_row()   # last, so it lands above the look row and stays there on every rebuild
+	_build_in_demo_box()   # ...and this above THAT: whether the board is content at all (#860)
 	# A LOAD is the one thing that makes a report describe a board that is no longer on screen, and
 	# board_loaded is the only signal that means exactly that -- the header's file_changed also
 	# fires on Update and Save As, which would wipe the report at the very moment you'd just run it.
@@ -234,6 +236,35 @@ func refresh_on_show() -> void:
 	refresh_look_row()   # a board load changes which preset this board wears
 	refresh_roster_row()   # ...and who it offers (#735)
 	refresh_camera_row()   # ...and where it opens (#234)
+	_refresh_in_demo_box()   # ...and whether a shipped build lists it (#860)
+
+
+# Does this board ship (#860)? A dev-only declaration: only a build WITHOUT dev tools reads it, so
+# ticking it changes nothing about what this page or the boot screen shows the dev.
+#
+# Built once and refreshed in place -- the objective boxes' shape, not the look/roster rows'
+# rebuild-and-repin, because there is nothing here to re-enumerate.
+func _build_in_demo_box() -> void:
+	_in_demo_box = CheckBox.new()
+	_in_demo_box.text = "In demo build"
+	_in_demo_box.button_pressed = scenario_manager.current_in_demo
+	_in_demo_box.toggled.connect(_on_in_demo_toggled)
+	DevWidgets.apply_tooltip(_in_demo_box, DevWidgets.wrap_tooltip(
+		"Whether an exported build WITHOUT dev tools lists this board on the mission screen. " +
+		"Off by default: a board ships because you ticked it. The editor always lists everything, " +
+		"so this cannot hide a board from you."))
+	add_child(_in_demo_box)
+	move_child(_in_demo_box, 0)
+
+
+func _refresh_in_demo_box() -> void:
+	if _in_demo_box != null:
+		_in_demo_box.set_pressed_no_signal(scenario_manager.current_in_demo)
+
+
+func _on_in_demo_toggled(pressed: bool) -> void:
+	scenario_manager.current_in_demo = pressed
+	_mark()
 
 
 # One checkbox per objective, driven off the enum so a new objective kind needs no edit here.

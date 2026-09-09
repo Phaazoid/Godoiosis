@@ -81,6 +81,12 @@ var current_roster := ""
 # mission's ENDING, which a deployment cap has nothing to do with.
 var current_deployment_cap := 0
 
+# Does the CURRENT board appear in a shipped build's mission list (#860)? Same store and same four
+# writers as the roster above -- apply_scenario sets it from the loaded board, clear_board zeroes
+# it, the dev Scenario tab writes it when you tick the box, capture_scenario reads it back out.
+# MissionController.open_mission_select is the one reader, and only in a non-devtools build.
+var current_in_demo := false
+
 # The #182 lesson content, same seam: authored scenario content that is not board state. THE store
 # — ScenarioDirector reads these LIVE (never copies), capture_scenario writes them back out, and
 # clear_board empties them so a sandbox spawn cannot inherit the last mission's lesson.
@@ -191,6 +197,7 @@ func capture_scenario(scenario_name: String, authored := false) -> ScenarioData:
 	scenario.look_preset = current_look_preset               # #253 part 2: the look it wears
 	scenario.roster = current_roster                         # #735: who it offers, if anyone
 	scenario.deployment_cap = current_deployment_cap         # #736: and how many of them
+	scenario.in_demo = current_in_demo                       # #860: and whether it ships
 	scenario.camera_start = current_camera_start             # #234: where it opens, if authored
 	scenario.dialog_beats = current_dialog_beats.duplicate()       # #182/#397: Update must not wipe
 	scenario.tutorial_steps = current_tutorial_steps.duplicate()   # the lesson it cannot see on the board
@@ -283,6 +290,7 @@ func apply_scenario(scenario: ScenarioData) -> void:
 	current_camera_start = scenario.camera_start   # #234, same signal, same reason: read from board_loaded
 	current_roster = scenario.roster              # #735; the mission-start doors draw from it (#737)
 	current_deployment_cap = scenario.deployment_cap   # #736: its other half, and BoardLint reads it today
+	current_in_demo = scenario.in_demo            # #860: whether a shipped build lists it
 
 	var leaders_by_squad_id := {}
 	var members_by_squad_id := {}
@@ -409,6 +417,9 @@ func clear_board():
 	# And the cap with it (#736) -- a sandbox board offers nobody, so it can hardly cap them at six,
 	# and the same Save As would write the stale number into a fixture beside the stale name.
 	current_deployment_cap = 0
+	# And whether it ships (#860) -- the sharpest Save As consequence of the three: inheriting a
+	# TRUE here would bake a scratch fixture into the demo's mission list without anyone ticking it.
+	current_in_demo = false
 	# And the lesson (#182/#397): content follows its board out.
 	current_dialog_beats = []
 	current_tutorial_steps = []
