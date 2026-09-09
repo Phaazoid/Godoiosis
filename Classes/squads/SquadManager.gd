@@ -512,6 +512,11 @@ func can_counter(countering_unit: Unit, target_unit: Unit, board: BoardContext, 
 		return false
 	if not countering_unit.attack_source_can_counter():
 		return false
+	# A STANDING WATCH IS YOUR REACTION (#810): the Overwatch was this unit's action, so it does not
+	# also answer a blow. Read live and not threaded — a unit arming a watch is always in the ACTIVE
+	# squad and a counter-er always in a DEFENDING one, so no unit can do both in one pass.
+	if countering_unit.is_standing_watch():
+		return false
 
 	var counter_cell := countering_unit.get_projected_destination()
 	var aimed_from: Vector2i = target_cell if target_cell != null else target_unit.get_projected_destination()
@@ -577,6 +582,11 @@ func can_reaction_heal(healer: Unit, candidate: Unit, board: BoardContext, hypo:
 	if not is_instance_valid(healer) or not is_instance_valid(candidate):
 		return false
 	if not healer.attack_source_can_counter():
+		return false
+	# The same rule at the other reaction gate (#810). Justified here rather than inherited: the two
+	# paths share attack_source_can_counter but not this predicate, and a watching medic topping an
+	# ally up is the same free lunch a watching counter-er would be.
+	if healer.is_standing_watch():
 		return false
 	var source := healer.get_counter_attack()
 	if source == null or not source.heals:
