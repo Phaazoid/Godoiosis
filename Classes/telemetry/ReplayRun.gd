@@ -9,6 +9,12 @@ class_name ReplayRun
 # `board.tres` (the ScenarioData the battle started from). Either may be absent -- an unsealed run
 # from a process that was killed still has its events, and a run recorded with persistence off has
 # no folder at all -- so `problems` carries what is missing instead of refusing to load.
+#
+# TWO LISTS, TWO QUESTIONS (#871). `problems` is why a run CANNOT be replayed. `degraded` is why
+# replaying it proves less than it looks like: a board naming content this build has moved is a hard
+# parse error for the whole file, so the board comes through ContentRepair like every other board in
+# the project -- and what the repair COST is reported rather than swallowed, because a harness that
+# certifies a run it seeded from the wrong board is worse than one that refuses to open it.
 
 # The two file names live on TelemetryStore, which owns every path in the store.
 const EVENTS_FILE := TelemetryStore.EVENTS_FILE
@@ -25,6 +31,11 @@ var board: ScenarioData = null
 # Why this run cannot be replayed, in the player's-eye order: the tool shows these instead of a
 # Load button that does nothing.
 var problems: Array[String] = []
+# THE BOARD LOADED, BUT IT IS NOT THE BOARD THAT WAS RECORDED (#871) -- the references this build
+# could not resolve, which ContentRepair took out to get the file to parse at all. A SECOND
+# QUESTION, not a second kind of problem: a degraded board replays, so this is never a reason to
+# refuse it, it is the reason every difference the replay reports afterwards is suspect.
+var degraded: Array[String] = []
 
 
 # EVERY run this machine can replay, newest first -- BOTH folders since #53 slice 5, because
@@ -70,15 +81,43 @@ static func load_events(run_id: String) -> ReplayRun:
 	return run
 
 
+# THE EVENTS PLUS THE BOARD, TOLERANTLY (#871). A board naming content that has since moved is a
+# hard PARSE error for the whole file, and a run recorded on somebody else's build is exactly where
+# that happens -- so this goes through ContentRepair like every other board load in the project.
 static func load_run(run_id: String) -> ReplayRun:
 	var run := load_events(run_id)
 	var board_path := TelemetryStore.run_dir(run_id) + BOARD_FILE
 	if not FileAccess.file_exists(board_path):
 		run.problems.append("no %s -- nothing to seed the board from" % BOARD_FILE)
-	else:
-		run.board = load(board_path) as ScenarioData
-		if run.board == null:
+		return run
+
+	# ASKED OF THE FILE'S TEXT, NEVER OF ContentRepair'S REGISTRY. load_tolerant erases its own repair
+	# record the moment a later load comes back clean -- and the SECOND look at one run is a clean
+	# load, because the repaired board took over that path in the resource cache. Reading the text
+	# answers the same both times, and answers for a REFUSED load too, which the registry never holds.
+	var cannot_load := ContentRepair.missing_references(board_path)
+	run.board = ContentRepair.load_tolerant(board_path) as ScenarioData
+	# A run's board is a frozen snapshot of a mission somebody else played, so it is not content
+	# anyone can go and fix. Left in the registry it would sit in every later BoardLint report telling
+	# the dev to restore a file for a board that is not authored content.
+	ContentRepair.forget(board_path)
+
+	if run.board == null:
+		if cannot_load.is_empty():
+			# Broken for some reason we have NOT diagnosed. Nothing to name, and the flat line is still
+			# more than silence.
 			run.problems.append("%s did not load as a ScenarioData" % BOARD_FILE)
+		else:
+			run.problems.append("%s could not be loaded -- it references %s, which this build cannot load"
+				% [BOARD_FILE, ", ".join(cannot_load)])
+	elif not cannot_load.is_empty():
+		# WORDED FOR BOTH WAYS THIS HAPPENS. Usually ContentRepair stripped the reference and the
+		# property with it -- but an ext_resource NOTHING USES does not fail the file at all, so the
+		# board can come back whole with the reference still named in it. "References X and cannot
+		# load it" is true in both; "loaded without X" would be a guess in the second.
+		run.degraded.append("%s references %s, which this build cannot load -- so a difference the"
+			% [BOARD_FILE, ", ".join(cannot_load)]
+			+ " replay reports may be the board rather than the build")
 	return run
 
 

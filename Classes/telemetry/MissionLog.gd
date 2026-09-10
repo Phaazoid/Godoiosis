@@ -229,7 +229,10 @@ static func sweep_unsealed() -> int:
 # One run, or false if there is nothing to do. A run with a mission_end was sealed by somebody --
 # leave it alone; that is also what makes a second sweep a no-op rather than a rewrite.
 static func _finish_abandoned_run(run_id: String) -> bool:
-	var run := ReplayRun.load_run(run_id)
+	# load_events, not load_run: this reads only the LINES. Pulling the board in would load, and
+	# since #871 text-scan and repair, every recorded board on the machine at every launch -- for a
+	# result nothing below ever looks at.
+	var run := ReplayRun.load_events(run_id)
 	if run.events.is_empty():
 		return false
 	for e: Dictionary in run.events:
@@ -264,7 +267,7 @@ static func _finish_abandoned_run(run_id: String) -> bool:
 	var summary := line(seq + 1, t_ms, round_no, "summary", {"summary": MissionSummary.of(events)})
 
 	# THE SURVIVING LINES VERBATIM, never re-stringified: JSON has one number type, so a parse and
-	# a re-encode would turn every int in the file into a float. raw_lines is what load_run kept
+	# a re-encode would turn every int in the file into a float. raw_lines is what load_events kept
 	# for exactly this, and it already stops where a truncated last line does.
 	var lines := run.raw_lines.duplicate()
 	lines.append(JSON.stringify(end))

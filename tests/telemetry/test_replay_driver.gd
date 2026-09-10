@@ -16,6 +16,7 @@ const H := preload("res://tests/support/squad_fixtures.gd")
 const GRASS_SOURCE := 0
 const GRASS_ATLAS := Vector2i(5, 0)
 const SCRATCH_ROOT := "user://__replay_test/"
+const GONE_POSE := "res://Scenarios/__test_no_such_pose.tres"
 
 var _main: Node
 var game: Node2D
@@ -213,6 +214,23 @@ func test_a_run_with_no_board_refuses_to_seed_and_says_why() -> void:
 	assert_int(driver.notes.size()).is_greater(0)
 
 
+# THE WIRE, ON THE PATH THAT SUCCEEDS (#871). A degraded board SEEDS, so the warning cannot ride the
+# refusal branch above it -- and a report reading "Clean -- the replay matched the run." over a board
+# that lost a reference is the silence this ticket removed, arriving one click later.
+func test_a_degraded_board_still_seeds_and_the_report_carries_the_warning() -> void:
+	var run_id := await _record_a_mission()
+	_break_a_reference_in_the_board(run_id)
+	var run := ReplayRun.load_run(run_id)
+	assert_array(run.degraded).override_failure_message(
+		"fixture: the board came back undegraded, so this case cannot see the wire").is_not_empty()
+	assert_bool(driver.seed(run)).override_failure_message(
+		"a degraded board must still seed: %s" % str(driver.notes)).is_true()
+	var r := driver.report()
+	assert_bool(bool(r.get("seeded", false))).is_true()
+	assert_array(r.get("degraded", [])).override_failure_message(
+		"the report said nothing about the degraded board, so every line in it now reads as the build's"
+		).is_not_empty()
+
 func test_a_run_folder_is_listed_and_headlined() -> void:
 	var run_id := await _record_a_mission()
 	assert_array(Array(ReplayRun.list_runs())).contains([run_id])
@@ -286,6 +304,31 @@ func _build_move(unit: Unit, dest: Vector2i) -> MoveAction:
 	move.init(unit, path, GridUtils.get_terrain_icon_at_cell(game.grid, dest))
 	return move
 
+
+# THE RECORDED BOARD with one reference pointed at a file that is not there -- a moved .tres, which
+# is what a run from another build looks like.
+#
+# EDITED IN PLACE, not in a copy: TelemetryStore writes the board with ResourceSaver.save and no
+# FLAG_CHANGE_PATH, so the captured resource never claimed this path and is not in the resource cache
+# under it. The next load therefore reads these bytes off disk.
+func _break_a_reference_in_the_board(run_id: String) -> void:
+	var path := TelemetryStore.run_dir(run_id) + ReplayRun.BOARD_FILE
+	var kept: Array[String] = []
+	var added := false
+	for line: String in FileAccess.get_file_as_string(path).split("\n"):
+		if line.begins_with("camera_start = "):
+			continue   # whatever the recorded board held there, this fixture is taking it over
+		kept.append(line)
+		if line.begins_with("[ext_resource") and not added:
+			kept.append('[ext_resource type="Resource" path="%s" id="99_gone"]' % GONE_POSE)
+			added = true
+	assert_bool(added).override_failure_message(
+		"the recorded board has no ext_resource line to hang the dangling one beside").is_true()
+	# [resource] is the LAST section in a .tres, so a property appended at EOF lands inside it.
+	kept.append('camera_start = ExtResource("99_gone")')
+	var f := FileAccess.open(path, FileAccess.WRITE)
+	f.store_string("\n".join(kept) + "\n")
+	f.close()
 
 # RECURSIVE, and that is not tidiness: a run is a folder inside `pending/` inside the root, so a
 # one-level sweep leaves `pending/` non-empty, its remove() fails SILENTLY, and every case inherits

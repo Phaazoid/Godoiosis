@@ -121,8 +121,12 @@ func _on_pick(index: int) -> void:
 	_status.text = "%s -- %s, %d rounds%s" % [
 		str(head.get("scenario")), str(head.get("outcome")), int(head.get("rounds", 0)),
 		("  [%s]" % ", ".join(flags)) if not flags.is_empty() else ""]
-	if not _run.problems.is_empty():
-		_status.text += "\n" + "\n".join(_run.problems)
+	# Both lists: `problems` is why it cannot replay, `degraded` is why replaying it proves less than
+	# it looks like (#871). Neither is worth hiding behind the other.
+	var said: Array[String] = _run.problems.duplicate()
+	said.append_array(_run.degraded)
+	if not said.is_empty():
+		_status.text += "\n" + "\n".join(said)
 	_report.text = ""
 	_set_running(false)
 
@@ -162,19 +166,21 @@ func _set_running(on: bool) -> void:
 func _render() -> void:
 	var r := _driver.report()
 	var out: Array[String] = []
+	var divs: Array = r.get("divergences", [])
 	if not bool(r.get("seeded", false)):
 		out.append("[b]Not loaded.[/b]")
+	elif bool(r.get("finished", false)):
+		out.append("[b]Clean -- the replay matched the run.[/b]" if divs.is_empty()
+			else "[b]%d divergences.[/b]" % divs.size())
 	else:
-		var at := int(r.get("at", 0))
-		var of := int(r.get("of", 0))
-		var divs: Array = r.get("divergences", [])
-		if bool(r.get("finished", false)):
-			out.append("[b]Clean -- the replay matched the run.[/b]" if divs.is_empty()
-				else "[b]%d divergences.[/b]" % divs.size())
-		else:
-			out.append("At event %d of %d." % [at, of])
-		for line in divs:
-			out.append("  - " + str(line))
+		out.append("At event %d of %d." % [int(r.get("at", 0)), int(r.get("of", 0))])
+	# DIRECTLY UNDER THE VERDICT, AND BOLD (#871). A degraded board makes the verdict itself unsafe --
+	# "Clean" over a board that lost a weapon is the same silence this ticket removed, arriving one
+	# click later -- so it cannot sit below the divergences as a footnote the way `notes` does.
+	for line in (r.get("degraded", []) as Array):
+		out.append("[b]Degraded board:[/b] " + str(line))
+	for line in divs:
+		out.append("  - " + str(line))
 	for line in (r.get("unbindable", []) as Array):
 		out.append("[b]Could not bind:[/b] " + str(line))
 	for line in (r.get("notes", []) as Array):

@@ -65,6 +65,34 @@ static func load_tolerant(path: String) -> Resource:
 	return _repair(path)
 
 
+# WHY A LOAD FAILED, WITHOUT LOADING ANYTHING (#871). Every ext_resource in this file that will not
+# resolve, whatever its type -- the diagnosis on its own, so a caller can NAME what is gone rather
+# than report only that something was.
+#
+# Deliberately NOT _dangling(): that one answers the narrower "what can be STRIPPED", and returns
+# nothing at all when the missing reference is a Script, because stripping a script would change
+# what the resource IS. The script case is exactly the one a caller needs named.
+#
+# ResourceLoader.exists, never FileAccess.file_exists: an exported pack stores Foo.tres.remap and no
+# Foo.tres, so the FileAccess question answers "missing" for every packed resource (#867), and
+# Classes/dev/ is not in export_presets.cfg's exclude list -- the Replay tab ships. It is also the
+# question a caller actually has: an unimported .png and a .dtl with no format loader are both ON
+# DISK and still will not load, which is why this reports what CANNOT LOAD rather than what is gone.
+#
+# NOT NECESSARILY WHAT BROKE THE FILE, measured: an ext_resource nothing USES is tolerated -- Godot
+# prints the load error and carries on. So a caller reporting these must say the file REFERENCES
+# them, never that it lost them.
+static func missing_references(path: String) -> Array[String]:
+	var out: Array[String] = []
+	for line: String in FileAccess.get_file_as_string(path).split("
+"):
+		if not line.begins_with("[ext_resource"):
+			continue
+		var target := DevWidgets._quoted_attr(line, "path")
+		if target != "" and not ResourceLoader.exists(target):
+			out.append(target)
+	return out
+
 # Repairs every referenced file that EXISTS but will not load. True if any of them came back.
 static func _repair_children(path: String, kept: Array[Resource]) -> bool:
 	if _visiting.has(path):
