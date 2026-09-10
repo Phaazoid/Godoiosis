@@ -196,12 +196,18 @@ func _hover_attack_targeting(cell: Vector2i) -> void:
 		# facing before truncation). Point: the hovered cell itself must be in range AND within
 		# vertical tolerance (#258). One predicate, the same one the click commits through.
 		if Reach.can_aim_at(attacker, origin, cell, aiming, board):
-			preview_cells = Reach.get_affected_cells_from(attacker, origin, cell, aiming, board)
+			# The wash shows the CURRENT as well as the blast (Law #2 -- a shock that will arc has to
+			# say so before the click). Read against LIVE wetness, since that is what is true at the
+			# moment the player is aiming; a queued-but-unexecuted WATER order is threaded into the
+			# pass instead, and the queue row it produces is where that reading is honest.
+			var blast := Reach.get_affected_cells_from(attacker, origin, cell, aiming, board)
+			var reach := Conduction.sweep(attacker, aiming, blast, board)
+			preview_cells = reach.cells
 			# A null pick is bare fists -- unit-only by definition, so it has no hits_map/hits_units
 			# to ask and answers as UNIT.
 			pulse_tiles = aiming != null and aiming.hits_map()
 			if aiming == null or aiming.hits_units():
-				victims = RulesService.gather_attack_victims(attacker, preview_cells, board, aiming)
+				victims = reach.victims
 
 	if not trace_shown:
 		game.overlay_manager.clear_sight_trace()

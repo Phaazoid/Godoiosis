@@ -44,6 +44,26 @@ static func drowns_in(cell: Vector2i, unit: Unit, board: BoardContext) -> bool:
 	return board.terrain_kind_at(cell) == Terrain.Kind.WATER \
 		and not can_traverse(cell, unit, board)
 
+# Does OCCUPYING this cell SOAK this unit? drowns_in's sibling, and a different question: that one
+# asks whether the water is over your head, this one only whether you are in it. Shallow and deep
+# both wet, because depth is walkability and being wet does not care -- so a wade and a drowning
+# deposit the same state and #116's two water tiles need no third answer.
+#
+# Two exemptions, each honouring a rule that already exists:
+#   Waterwalk -- the holder "stands on the surface instead" (Glossary's WATER_TILE entry). Asked of
+#                the ABILITY, not through can_traverse, which answers this for deep water and not
+#                for shallow -- shallow is walkable to everyone.
+#   FROZEN    -- ice is dry ground (dev, 2026-09-10). Read LIVE and never through a projection:
+#                cell effects apply after the whole attack phase (OrderExecutor), so a lake THIS
+#                pass froze is still water when this pass's shove lands in it. drowns_in reads live
+#                for the same reason.
+static func wets_in(cell: Vector2i, unit: Unit, board: BoardContext) -> bool:
+	if board.terrain_kind_at(cell) != Terrain.Kind.WATER:
+		return false
+	if board.has_tile_state(cell, Terrain.TileState.FROZEN):
+		return false
+	return not unit.has_live_ability(Abilities.Id.WATERWALK)
+
 # May this unit step FROM one cell TO an orthogonally adjacent one (#257)? The EDGE question, and
 # the reason elevation needs one at all: can_traverse above answers "may this unit be on that cell",
 # which cannot express "only via a ramp, and only along the ramp's slope".

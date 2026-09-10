@@ -108,6 +108,15 @@ var iron_will_held: bool = false
 
 var hp_before: int = 0   # target's HP going into this hit; recorded by the resolver, not derived
 
+# Does this outcome carry an HP READING at all? True for everything that evaluates a subject's health
+# -- an attack, a heal, a tile's end-of-turn burn -- INCLUDING when the number does not move, since a
+# fully mitigated hit reading 20->20 is the queue saying it did nothing.
+#
+# False only for an order that changed a STATE and never touched HP (#884: a walk through water
+# soaks the mover). Defaults TRUE because every outcome that existed before that one did read HP, so
+# the new kind opts out rather than every old kind opting in.
+var reads_hp: bool = true
+
 # Target height minus attacker height at resolve time (#258) — the wire a future height-damage rule
 # attaches to; no behaviour reads it in v1 beyond the queue row's uphill/downhill token. FROZEN like
 # fired_attack: stamped from origin_cell + the threaded hypo position, never re-derived later, since
