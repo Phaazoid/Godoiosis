@@ -526,11 +526,17 @@ static func _is_number(v: Variant) -> bool:
 
 # Everything the tool prints, in the order a person reads it.
 func report() -> Dictionary:
+	# READ OFF THE RUN, never copied into a field here (#871): a copy taken at seed is a second
+	# answer to "was this board degraded" that nothing would notice going stale.
+	var degraded: Array[String] = []
+	if run != null:
+		degraded = run.degraded.duplicate()
 	return {
 		"seeded": _seeded,
 		"finished": is_finished(),
 		"at": _cursor,
 		"of": run.events.size() if run != null else 0,
+		"degraded": degraded,
 		"divergences": divergences.duplicate(),
 		"unbindable": unbindable.duplicate(),
 		"notes": notes.duplicate(),
