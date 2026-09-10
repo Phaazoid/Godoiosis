@@ -16,7 +16,7 @@ var is_trailing := false
 # stops at the crossing cell, and so does one it throws.
 var resolved_stop_index := -1
 
-# What the WALK ITSELF did to the mover (#874 -- wading soaks you). Written every resolve beside
+# What the WALK ITSELF did to the mover (#884 -- wading soaks you). Written every resolve beside
 # resolved_stop_index and for the same reason: a walk re-planned out of the river must not keep last
 # pass's verdict. Null when the walk changes nothing, which is nearly always.
 #

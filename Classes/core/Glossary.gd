@@ -448,9 +448,13 @@ static func _build_entries() -> Dictionary:
 			+ "Water, Earth, Air and Aether are the five base sigils; the rest arise from "
 			+ "combinations."}
 	e[Term.WET] = {"category": Category.ELEMENTAL, "title": "Wet",
-		"short": "Soaked through. Some elements react hard with a wet target.",
-		"long": "The soaked condition, left by water. Harmless on its own — the danger is what "
-			+ "reacts with it. The interaction list below is the authored truth."}
+		"short": "Soaked through — and a conductor. Some elements react hard with a wet target.",
+		"long": "The soaked condition, left by a water attack or simply by being in water: wading "
+			+ "through the shallows or being thrown into a lake both soak you. Harmless on its own "
+			+ "— the danger is what reacts with it, and that a wet body CONDUCTS. Electricity that "
+			+ "touches water or a soaked unit travels through every water tile and every wet unit "
+			+ "beside it, catching everyone it reaches, your own squad included. Frozen water "
+			+ "neither soaks nor conducts. The interaction list below is the authored truth."}
 	e[Term.CHILLED] = {"category": Category.ELEMENTAL, "title": "Chilled",
 		"short": "Cold-slowed: %+d DEX until it thaws after the unit's next turn."
 			% Elemental.CHILL_STAT_MODS[Stats.Stat.DEX],
@@ -481,12 +485,14 @@ static func _build_entries() -> Dictionary:
 			+ "rescued before it drowns. A rescuer beside the water drags the body out onto dry "
 			+ "ground next to them, so a body nobody can reach is a body nobody can save. A unit "
 			+ "with Waterwalk stands on the surface instead, and frozen water is solid ground for "
-			+ "everyone — permanently, unless burned away."}
+			+ "everyone — permanently, unless burned away. A body in the water is WET like anyone "
+			+ "else, so a shock into the lake reaches it."}
 	e[Term.SHALLOW_WATER] = {"category": Category.TERRAIN, "title": "Shallow water",
-		"short": "Wadeable, but slow going. Being shoved in costs position and nothing else.",
-		"long": "Shallow water is waded at the same cost as mud. It is ordinary ground "
-			+ "for every rule that matters — a shove lands in it harmlessly, and it is deep water, "
-			+ "not this, that drowns."}
+		"short": "Wadeable, but slow going — and you come out WET.",
+		"long": "Shallow water is waded at the same cost as mud, and anyone who crosses it or is "
+			+ "shoved into it comes out WET. It is deep water, not this, that drowns — so the cost "
+			+ "of being shoved in here is position and a soaking. Waterwalk keeps you dry, and so "
+			+ "does crossing it once it is frozen."}
 	e[Term.BURNING] = {"category": Category.TERRAIN, "title": "Burning",
 		"short": "On fire: %d damage to whoever stands here at end of turn. Burns out after %d turns."
 			% [Terrain.BURNING_TILE_DAMAGE, TerrainStateManager.STATE_DURATIONS[Terrain.TileState.BURNING]],

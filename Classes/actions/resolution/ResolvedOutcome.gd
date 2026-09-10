@@ -112,7 +112,7 @@ var hp_before: int = 0   # target's HP going into this hit; recorded by the reso
 # -- an attack, a heal, a tile's end-of-turn burn -- INCLUDING when the number does not move, since a
 # fully mitigated hit reading 20->20 is the queue saying it did nothing.
 #
-# False only for an order that changed a STATE and never touched HP (#874: a walk through water
+# False only for an order that changed a STATE and never touched HP (#884: a walk through water
 # soaks the mover). Defaults TRUE because every outcome that existed before that one did read HP, so
 # the new kind opts out rather than every old kind opting in.
 var reads_hp: bool = true

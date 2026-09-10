@@ -139,9 +139,17 @@ its shallow half is quicker and **shows its lakebed through it** — a warm bed 
 with caustics travelling over a bed that stays still. That last part is not decoration: seeing the
 bottom is what separates shallow water from ICE, which is what the first pass at it read as.
 
-- **WET is still inert** — `Elemental.State.WET` is an enum member with a Glossary term and an icon,
-  and **no reaction resource references it**. "Shallow water sets WET" therefore means *authoring the
-  first WET mechanic*, not reusing a hook, and it stays outside #116 deliberately.
+- ~~**WET is still inert**~~ — **WRONG WHEN WRITTEN, and CLOSED by [#884](https://github.com/Phaazoid/Godoiosis/issues/884) (2026-09-10).** This bullet said `Elemental.State.WET` had *"no reaction resource
+  references it"* and concluded that a water source meant *authoring the first WET mechanic, not
+  reusing a hook*. Both `water_sets_wet.tres` and `shock_wet_electrocute.tres` shipped with #28 on
+  2026-06-19, two months before the sentence was written — the hook was never missing. What was
+  genuinely missing was a terrain SOURCE, which is a much smaller thing, and #884 built it:
+  **`RulesService.wets_in` — WATER kind, not FROZEN, no Waterwalk** — asked at the two places a unit
+  comes to occupy a water cell, `PlanResolver.resolve_move`'s per-cell walk and a shove's LANDING.
+  **Shallow and deep soak identically**, because depth is walkability and being wet does not read it,
+  so a drowning body comes up wet. Kept as a correction rather than deleted: the mistake was
+  *asserting a code fact from memory in a doc*, and the record of that is worth more than the tidy
+  version. Standing rule it leaves behind: **grep before writing "nothing references X" into canon.**
 - **Weight ties in** — *"maybe the weight they carry affects whether they can swim"* — the same
   conversation's other half, now [#120](https://github.com/Phaazoid/Godoiosis/issues/120)
   ([stats.md](stats.md) → *Weight*).

@@ -1,4 +1,4 @@
-# The SHOCK arc (#874): a shock that lands on water -- or on a soaked body -- travels through every
+# The SHOCK arc (#884): a shock that lands on water -- or on a soaked body -- travels through every
 # conductor it touches, and everything standing in the current is caught.
 #
 # Water is AUTHORED per cell rather than painted, the test_ice.gd idiom: which atlas coordinate is

@@ -1,4 +1,4 @@
-# Water SOURCES the WET state (#874): wading through it on your own feet, or being thrown into it.
+# Water SOURCES the WET state (#884): wading through it on your own feet, or being thrown into it.
 # Both halves land in the resolver, so the queue shows the soaking before Execute and a SHOCK hit
 # later in the SAME pass sees it -- which is the ordering case at the bottom of this file and the one
 # a naive build gets wrong.
@@ -122,7 +122,7 @@ func test_re_planning_out_of_the_river_drops_the_soaking() -> void:
 	_resolve_walk(move, board, ResolvedPlan.new())
 	assert_object(move.resolved).is_null()
 
-# A walk hits nobody, so its row must not print an HP arrow (#874). The flag is what the queue row
+# A walk hits nobody, so its row must not print an HP arrow (#884). The flag is what the queue row
 # reads; every outcome that evaluates a subject's health keeps the default.
 func test_a_walks_outcome_carries_no_hp_reading() -> void:
 	var mover := _walker(Vector2i(0, 0))

@@ -105,8 +105,8 @@ Deterministic only. `S` setup · `P` payload/control · `i` instant · `e` EoT �
 
 | State | Role | Does (deterministic) |
 |---|---|---|
-| ★ WET | S,i | +SHOCK / −FIRE damage; is CONDUCTIVE; ⚗ −1 move |
-| ★ CONDUCTIVE | S,i | SHOCK reactions arc to adjacent CONDUCTIVE/FERROUS (chain backbone) |
+| ★ WET | S,i | **[BUILT — sources 2026-09-10, #884]** +SHOCK / −FIRE damage, and it CONDUCTS. Sourced by a WATER hit *and* by water itself: wading through it or being thrown into it (`RulesService.wets_in`; shallow and deep alike). ⚗ −1 move unbuilt |
+| ~~★ CONDUCTIVE~~ | — | **FOLDED INTO WET, NOT BUILT ([#884](https://github.com/Phaazoid/Godoiosis/issues/884), 2026-09-10).** The conductor set is *a water tile (unless FROZEN) or a WET unit*, so a second state with its own source to author would be a duplicate seam for a fact WET already carries (Law #4). It comes back only if something must conduct while dry — FERROUS armour is the candidate, and it would join `Conduction.conducts` as a clause rather than as a state |
 | ★ OILED | S,e | FIRE → big bonus + BURNING; ⚗ knockback travels +1 |
 | ★ BURNING | P,e🔗 | loses fixed HP each activation; spreads to flammable; doused by WATER/ICE |
 | ★ CHILLED | P,i | **[BUILT 2026-08-12]** shipped as **−1 DEX for the victim's next activation** (a paired `StatEffect` is the clock; ice on a WET target doubles it — see the ICE table). The −move-and-2nd-cold-hit→FROZEN escalation stays on the bench: unit-side FROZEN isn't built |
@@ -157,8 +157,8 @@ Grouped by incoming element. Reactions **stack** (E8): one hit can fire several.
 ### SHOCK
 | × state | reaction | effect |
 |---|---|---|
-| ◆★ WET | Electrocuted | ++dmg, remove WET *(first-build slice)* |
-| ★ CONDUCTIVE | Chain Lightning | +dmg, arc to all adjacent CONDUCTIVE/FERROUS 🔗 |
+| ◆★ WET | Electrocuted | **[BUILT 2026-06-19]** ++dmg, remove WET (`shock_wet_electrocute.tres`) |
+| ★ *(water or a wet body)* | Chain Lightning | **[BUILT 2026-09-10, #884]** the current FLOODS from whatever conductor the shot touched, orthogonally, `Conduction.SHOCK_ARC_RANGE` cells, through water (unless FROZEN) and through WET units, which RELAY. Everything standing in it is caught and resolves as an ordinary volley member — so each wet victim electrocutes on its own row. **It does not check tags**: allies and a shooter standing in the water are caught. Not a per-attack field: the reach is a game constant, since arcing through water is a property of electricity. FERROUS is the unbuilt half |
 | FERROUS / **conductive armor** | Overload | ++dmg, **STAGGERED** (can't counter — the gated counter-denial) |
 | ⚗ OILED | Spark | small dmg, apply BURNING (sparks light it) |
 | MAGNETIZED | Arc Magnet | +dmg, pull 1 tile |
@@ -226,7 +226,7 @@ Concise riffs on the ✅ items; they lean on states/reactions above.
 
 ## Stacked & chain combos (combomaxing — endorsed)
 
-- **★ The signature squad combo:** Alchemist WATER (WET + CONDUCTIVE) → Mechanist SHOCK = Electrocuted *and* Chain Lightning across every soaked enemy. Prototype as the hero interaction.
+- **★ The signature squad combo — BUILT 2026-09-10 ([#884](https://github.com/Phaazoid/Godoiosis/issues/884)):** Alchemist WATER (WET) → Mechanist SHOCK = Electrocuted *and* the current arcing across every soaked enemy, resolved in ONE pass so the queue shows it before Execute. The terrain now opens it too — walking a squad through a river soaks them just as well as a carving does, which makes the hero interaction something a level can set up rather than something only a two-alchemist party can.
 - **Freeze → Shatter:** ICE→CHILLED, ICE→FROZEN, EARTH/SOUND→Shatter. Three telegraphed beats, execute-tier payoff.
 - **Soak → Oil → Spark:** flood WET tiles, spread OILED on the water, a *tiny* SHOCK ignites the whole conductive slick. Two alchemists + one cheap trigger = area denial.
 - **Stagger → Alpha:** SOUND staggers (no counter) → the squad unloads safely. Counter-denial as combo enabler.
@@ -333,8 +333,8 @@ VRIL's concept is a keeper; the name has to go. Working pick **Telesma**; altern
 ## Shortlist to prototype first
 
 Connects to [elemental-system.md](elemental-system.md) §First build target:
-1. **WET → SHOCK → Electrocuted** (the spine validator).
-2. **CONDUCTIVE chain** (stacking + AoE arc → the signature squad combo).
+1. ~~**WET → SHOCK → Electrocuted**~~ (the spine validator) — **BUILT 2026-06-19 (#28).**
+2. ~~**CONDUCTIVE chain**~~ (stacking + AoE arc → the signature squad combo) — **BUILT 2026-09-10 ([#884](https://github.com/Phaazoid/Godoiosis/issues/884))**, and *without* a CONDUCTIVE state: the conductor is water or a wet body, which is the same chain with one fewer thing to author. Both spine validators are now real, so the next unbuilt one on this list is (3).
 3. **OILED → FIRE → Conflagration** (non-consume + state-applies-state).
 4. **CHILLED → FROZEN → Shatter** (multi-beat control + the EARTH line).
 5. **GROUNDED nullifier** (counterplay reads through the resolver/preview).

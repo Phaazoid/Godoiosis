@@ -214,7 +214,7 @@ static func resolve_move(action: MoveAction, plan: ResolvedPlan, hypo: Dictionar
 	# fired, and the shot's landing cell when one shoved them.
 	for i in range(1, walk.size()):
 		_hypo_for(mover, hypo).position = walk[i]
-		# Wading soaks you (#874), and it happens BEFORE the step's watch shots fire: you are in the
+		# Wading soaks you (#884), and it happens BEFORE the step's watch shots fire: you are in the
 		# river by the time anything can shoot you standing in it, so a shock shot that catches a
 		# crosser mid-ford electrocutes them. The walk is already this pass's clock, which is what
 		# makes ONE cell-by-cell loop answer both.
@@ -530,7 +530,7 @@ static func _resolve_one(action: AttackAction, plan: ResolvedPlan, reactions: Ar
 		outcome.damage += outcome.drown_damage
 		outcome.popups.append(DROWNING_POPUP)
 
-	# A shove that ENDS in water soaks its victim (#874). Appended AFTER the remove-wins fold above
+	# A shove that ENDS in water soaks its victim (#884). Appended AFTER the remove-wins fold above
 	# rather than composed into it, because these are sequential facts and not competing ones: a FIRE
 	# hit dries you, and then the lake you were thrown into soaks you again. Only the LANDING asks --
 	# the flight is airborne and passes over water the way it passes over a void.

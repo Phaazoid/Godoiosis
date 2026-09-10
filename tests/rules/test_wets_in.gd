@@ -1,4 +1,4 @@
-# RulesService.wets_in (#874) -- does OCCUPYING this cell soak this unit? drowns_in's sibling, and
+# RulesService.wets_in (#884) -- does OCCUPYING this cell soak this unit? drowns_in's sibling, and
 # the four answers it has to get right off one comparison: shallow soaks, deep soaks, ice does not,
 # and a Waterwalker crossing either stays dry.
 #

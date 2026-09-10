@@ -70,7 +70,7 @@ func setup(action_ref: BaseAction):
 	# Any order carrying an outcome shows the readout, not attacks alone (#419) -- a tile's
 	# end-of-turn damage reads as a hit like any other.
 	if outcome != null:
-		# The number is shown by an outcome that READ HP, not by every outcome (#874). An order that
+		# The number is shown by an outcome that READ HP, not by every outcome (#884). An order that
 		# only changed a state -- a walk that soaked its mover -- has no hit to report, and printing
 		# its subject's HP unchanged either side of an arrow would invent one.
 		if outcome.reads_hp:
