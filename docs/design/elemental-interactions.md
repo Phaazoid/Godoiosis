@@ -8,7 +8,7 @@
 
 **Tags:** ★ strong candidate · ⚗ experimental · ⚗⚗ far-future / gate-hard · ◆ from the wiki (de-randomized) · 🔗 wants the tile-state or EoT layer first.
 
-**Canon checked through #199 (2026-08-12).** *Thermal batch shipped 2026-08-12 (dev picks in chat): FIRE×WET QuickDry, ICE→CHILLED (−1 DEX, paired StatEffect clock), ICE×WET Deep Chill, FIRE×CHILLED Temperature Shock, the Blow Dry utility carving, WATER douses BURNING/BLAZE tiles, FIRE ignites GRASS, and `Terrain.Kind.DIRT` as the non-flammable ground. Rows below tagged **[BUILT]** where the shipped form differs, the note says how.*
+**Canon checked through #199 (2026-08-12).** *Thermal batch shipped 2026-08-12 (dev picks in chat): FIRE×WET QuickDry, ICE→CHILLED (−1 DEX, paired StatEffect clock), ICE×WET Deep Chill, FIRE×CHILLED Temperature Shock, the Blow Dry utility carving, WATER douses fire tiles (BURNING/BLAZE then; #890 retired BLAZE, and one douse now covers a fire on any ground), FIRE ignites GRASS, and `Terrain.Kind.DIRT` as the non-flammable ground. Rows below tagged **[BUILT]** where the shipped form differs, the note says how.*
 
 ---
 
