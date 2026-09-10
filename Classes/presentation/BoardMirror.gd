@@ -1942,8 +1942,13 @@ func _make_shaft_floor(cell: Vector2i, floor_row: int) -> MeshInstance3D:
 func _rim_pieces(cell: Vector2i, key: Array) -> Array[MeshInstance3D]:
 	var pieces: Array[MeshInstance3D] = []
 	var source: int = key[3]
+	# An ERASED cell has no tile and no art, so it keeps the bare pit -- the dev call of 2026-09-10,
+	# and what finally makes a dug hole look different from an authored one (#874 opened on their
+	# looking identical). THIS LINE IS THE RULE; the item lookup below would also refuse, because a
+	# source of -1 names no item -- so a mutant deleting this survives the suite. Kept as the rule
+	# rather than left to that accident, and not relied on the other way round.
 	if source < 0:
-		return pieces   # an erased cell has no tile and no art: it keeps the bare pit
+		return pieces
 	var coords: Vector2i = key[4]
 	var merged: bool = key[5]
 	var rimmed: Dictionary[Vector2i, Vector2i] = {}

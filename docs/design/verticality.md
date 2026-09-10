@@ -759,10 +759,54 @@ renders as **no column at all** in 3D: the pit is the absence of the block.
 > unconditionally and pinning it is an assertion that cannot fail, which a mutant proved.
 >
 > Depth and colour are Game-tab knobs (`lip_shaft_depth` / `lip_shaft_color`) with a re-cut sweep,
-> the key each lip was built from riding its own node. **Still open:** the authored RIM — the ring
-> cut out of the two `hole` sprites, drawn on the hole's own footprint. Today the pit's visible edge
-> is where the neighbouring ground stops.
-
+> the key each lip was built from riding its own node.
+>
+> **A PAINTED hole wears its own art as a RIM, slice 2 (2026-09-10).** The ring is cut out of the
+> tile's sprite — flood the centre outward over everything darker than the tile's own median
+> luminance, drop the lightest minority (baked directional light, and the camera orbits freely),
+> refill any pinhole the flood did not reach — and laid flat around the mouth of the pit, on the
+> hole's own footprint. The dev picked that cut off a rendered mockup against two rivals that each
+> named a colour, and both failed: "keep the commonest colour" picks `grass_hole`'s own dark PIT
+> over any single green, and keeping one green leaves a lacy ring the pit shows straight through.
+>
+> **An ERASED cell gets none** (dev call, 2026-09-10): it has no tile and no art. That is what
+> finally makes a dug hole look different from an authored one, which is where
+> [#874](https://github.com/Phaazoid/Godoiosis/issues/874) opened.
+>
+> **NOTHING VERTICAL IS ADDED**, though the ask was *"the inner walls of the tile drop from that new
+> outline"*. A horizontal shelf and the wall behind it project **contiguously at every pitch**: a
+> sight ray grazing the rim's inner edge lands on the neighbour's side face exactly where the rim
+> stops hiding it. The wall already appears to drop from the outline, and a real one there would put
+> a surface in the plane the neighbour's own block draws in — #885 rebuilt.
+>
+> **EVERY PIECE SEATS AT THE HEIGHT OF THE GROUND IT MEETS**, read from `Terrain.edge_of_corners`'
+> two corner heights and interpolated along the edge, so a ramped neighbour's tilt is followed.
+> Measured, not assumed: Terraces has 28 painted VOID cells and **10 of its 14 ground-facing hole
+> edges have the ground 1–3 levels above the hole**, while no shipped board has ever raised a hole at
+> all — so a frame seated at the hole's own height is a shelf partway down the pit wall. A CORNER
+> answers to two neighbours and takes the LOWER: where they disagree there is a cliff, and the frame
+> steps where the cliff is rather than hanging in the air over the lower ground.
+>
+> **The frame is EIGHT pieces** — four mid-edge strips and four corners — composed at runtime rather
+> than baked one frame per mask, because a baked frame could carry only one height for all four
+> sides. Their footprints tile the cell without overlapping (a strip stops where its corners begin),
+> so the mitre is a fact about the artifact and not a runtime rule that can be got wrong. The band a
+> strip covers is measured as *how far in the deepest opaque pixel sits*, never as the longest run
+> from the edge: the `hole` tile has columns opaque all the way across, so a run-length reading
+> returns 16 and pins every band at its clamp.
+>
+> **Merging is authored PER PLACEMENT.** A merged hole drops the corners that would carry its ring
+> across an edge it shares with another hole, so two mouths read as one. The flag rides the cell's
+> own ALTERNATIVE tile (`void_merge` custom data, found by scanning rather than by a literal id), so
+> `tile_map_data` already saves it, snapshots it and undoes it — no new store, no new serialisation,
+> and every `GridUtils` reader sees it through `get_cell_tile_data`. A cell's flag governs its OWN
+> rim only, so a half-merged chasm is legible rather than contradictory. **`create_alternative_tile`
+> hands back a BLANK TileData, not a copy** — measured: left blank the alternative carries no
+> `terrain_type`, so a hole painted with it stops being a hole and stands a column.
+>
+> The 2D view keeps the UNCUT sprite — a declared
+> [#292](https://github.com/Phaazoid/Godoiosis/issues/292) gap, since the flat board is a top-down
+> authoring view where the sprite's painted depth reads correctly.
 **The fall is a BEAT of the slide, and it happens where the pointer hangs
 ([#472](https://github.com/Phaazoid/Godoiosis/issues/472), 2026-08-22).** A segment whose entry
 edge breaks is travelled in two halves with the drop between them — fly sideways, turn ninety
