@@ -172,7 +172,23 @@ static func scale_of(setting: PlayerSettings.Setting) -> float:
 # board rather than at it. Both are feel values -- tune them, do not reason about them.
 @export var min_pitch_degrees := -80.0
 @export var max_pitch_degrees := -20.0
-@export var pan_margin_cells := 4.0          # how far past the board panning may stray
+# HOW FAR PAST THE BOARD PANNING MAY STRAY, IN SCREENS -- never in cells, and that unit IS the fix
+# (dev, 2026-09-09: "the pan limit should be nowhere near that close to the board... the panning
+# boundaries should never block the camera near or around the stage, at any close zoom").
+#
+# It was `pan_margin_cells := 4.0`, a wall five cells out once fit_margin_cells was added under it,
+# and he hit it in play at a close zoom. A cell count is generous when you are zoomed out and
+# useless when you are zoomed in, because what a player needs is headroom measured in SCREENFULS.
+# Raising the number would only have moved where it is wrong.
+#
+# ONE SCREEN AT THE ZOOM CEILING. Measured there rather than at the live distance for two reasons,
+# and the second is a hazard rather than a preference: the ceiling is the WIDEST screen a player can
+# ever have, so a stray of one screen there is at least one screen at every closer zoom and more
+# screens the further in you go -- which is exactly his "at any close zoom"; and the limit clamps the
+# aim every frame, so a stray that tracked the LIVE zoom would shrink as you zoomed in and YANK the
+# aim out from under you.
+@export var pan_stray_screens := 1.0
+
 @export var fit_margin_cells := 1.0          # breathing room around a framed board
 @export var zoom_out_slack := 1.0            # 1.0 = may not zoom out past the whole board
 
@@ -826,8 +842,33 @@ func rebound(bounds: AABB) -> bool:
 	# volume would clamp the player out of ever seeing the rest of the board.
 	max_distance = ceiling * zoom_out_slack
 	set_zoom(_target_distance)   # re-clamp: a shrunken board can leave you outside the new ceiling
-	pan_limit = Rect2(limit_box.position.x, limit_box.position.z, limit_box.size.x, limit_box.size.z).grow(pan_margin_cells)
+	pan_limit = Rect2(limit_box.position.x, limit_box.position.z,
+		limit_box.size.x, limit_box.size.z).grow(pan_stray(max_distance))
 	return true
+
+
+# How far past the board's edge the aim may stray, in WORLD units, for a camera whose zoom-out
+# ceiling is `ceiling`. Public because the law over every shipped mission asks it directly.
+#
+# The floor is a NO-REGRESSION clause, not a feel value: it is what the game did before this changed
+# (fit_margin_cells 1 + the old pan_margin_cells 4), so a board small enough that one screenful is
+# under five cells cannot come out TIGHTER than it already was.
+const MIN_PAN_STRAY_CELLS := 5.0
+
+func pan_stray(ceiling: float) -> float:
+	return maxf(pan_stray_screens * screen_span(ceiling), MIN_PAN_STRAY_CELLS)
+
+
+# The full world width one screenful covers at `distance`. Read off the live projection, so aspect
+# and fov are honoured rather than assumed; the WIDER of the two axes, since a stray that only
+# cleared the narrow one would still wall you on the other.
+func screen_span(distance: float) -> float:
+	var proj := _camera.get_camera_projection()
+	var tan_h := 1.0 / proj.x.x if proj.x.x > 0.0 else 0.0
+	var tan_v := 1.0 / proj.y.y if proj.y.y > 0.0 else 0.0
+	if not is_finite(tan_h) or not is_finite(tan_v):
+		return 0.0
+	return 2.0 * distance * maxf(tan_h, tan_v)
 
 
 # Where the rig sits to look at `box`: its centre, lifted to the top of the box so the
