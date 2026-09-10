@@ -186,8 +186,8 @@ const KNOBS: Array[Dictionary] = [
 		"tip": "The FLATTEST the player's drag may take the camera, in degrees below the horizon. Nearer zero looks along the board rather than at it, so the far side stacks up and hides itself. This is a limit on the hand, not on the board: where a mission STARTS is Board pitch on the Moods tab, and R returns there."},
 	{"group": "Camera handling", "node": "CameraRig", "prop": "min_pitch_degrees", "label": "Tilt limit: steep", "min": -90.0, "max": -40.0, "step": 1.0,
 		"tip": "The STEEPEST the player's drag may take the camera. Steep is what lets you see into a one-cell hole -- it needs about -70 to read the floor of one two units deep. Past that the unit sprites are being looked at from overhead, which is the one angle billboard art is not drawn for, so this is where the HD-2D conceit gives out rather than where the maths does."},
-	{"group": "Camera handling", "node": "CameraRig", "prop": "pan_margin_cells", "label": "Pan margin (cells)", "min": 0.0, "max": 12.0, "step": 0.5,
-		"tip": "How far past the board's edge you may pan before being stopped. Some slack keeps a corner unit from being pinned against the screen edge."},
+	{"group": "Camera handling", "node": "CameraRig", "prop": "pan_stray_screens", "label": "Pan stray (screens)", "min": 0.25, "max": 4.0, "step": 0.25,
+		"tip": "How far past the board edge you may pan, measured in SCREENFULS at full zoom-out -- never in cells. 1.0 puts the wall a whole screen clear of the board at the widest view, and further out in screen terms the closer you zoom, so it is never felt near the stage. Turn it up if a deep inspection zoom still feels penned in."},
 	{"group": "Camera handling", "node": "CameraRig", "prop": "zoom_out_slack", "label": "Zoom-out slack", "min": 0.5, "max": 3.0, "step": 0.05,
 		"tip": "How far past the whole board you may zoom out. 1.0 means the board exactly fills the view at full zoom-out; above 1 lets you pull back and see it sitting in the world."},
 
