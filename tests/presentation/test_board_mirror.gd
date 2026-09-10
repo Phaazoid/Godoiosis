@@ -2691,3 +2691,172 @@ func test_tuning_the_flames_light_range_reaches_a_fire_already_burning() -> void
 	assert_float(light.omni_range).override_failure_message(
 			"a burning cell kept its old light range -- the sweep never re-stood it"
 	).is_equal_approx(moved, 0.001)
+
+
+# --- Hole lips (#876) ---------------------------------------------------------------------------
+#
+# A hole is still the absence of a column; what these pin is the DRESSING hung round it. Headless
+# cannot see a mesh, so every case here asks arithmetic (how many walls, at what heights, facing
+# which way) or a WIRE (did the neighbour's edit reach this hole).
+
+# A cell with ground on all four sides, so "every edge meets ground" is not vacuously true.
+func _an_inland_cell() -> Vector2i:
+	for cell: Vector2i in _game.grid.get_used_cells():
+		var ringed := true
+		for dir in GridUtils.CARDINAL_DIRECTIONS:
+			if not GridUtils.has_ground(_game.grid, cell + dir):
+				ringed = false
+				break
+		if ringed:
+			return cell
+	return GridUtils.NO_CELL
+
+
+func _mirror() -> BoardMirror:
+	return _scene.get_node("BoardMirror") as BoardMirror
+
+
+func _walls_at(cell: Vector2i) -> int:
+	var lip := _mirror().lip_at(cell)
+	return 0 if lip == null else lip.get_child_count()
+
+
+func test_a_hole_grows_one_wall_per_edge_that_meets_ground() -> void:
+	_scene.load_mission(PROLOG)
+	await _settle()
+	_game.game_state = _game.GameState.DEV_MODE
+	var cell := _an_inland_cell()
+	assert_bool(cell != GridUtils.NO_CELL).override_failure_message(
+			"no cell on this board has ground on all four sides; the case is vacuous").is_true()
+	assert_int(_walls_at(cell)).override_failure_message(
+			"ground already wears a lip").is_equal(0)
+	_game.grid.erase(cell)
+	await _settle()
+	assert_int(_walls_at(cell)).override_failure_message(
+			"an erased cell ringed by ground should hang a wall on all four edges").is_equal(4)
+
+
+func test_two_holes_side_by_side_draw_nothing_between_them() -> void:
+	_scene.load_mission(PROLOG)
+	await _settle()
+	_game.game_state = _game.GameState.DEV_MODE
+	var cell := _an_inland_cell()
+	var beside: Vector2i = cell + Vector2i.RIGHT
+	if not GridUtils.has_ground(_game.grid, beside + Vector2i.RIGHT):
+		return   # the pair would touch the board edge; nothing to prove here
+	_game.grid.erase(cell)
+	_game.grid.erase(beside)
+	await _settle()
+	# Three walls each, not four: the shared edge is where the two holes meet, and a chasm has to
+	# read as ONE pit rather than as adjacent postholes (dev ruling 6).
+	assert_int(_walls_at(cell)).override_failure_message(
+			"a lip was drawn between two holes").is_equal(3)
+	assert_int(_walls_at(beside)).is_equal(3)
+
+
+# THE WIRE. A lip is built from facts about the cells AROUND it, and the cell whose ground changed is
+# the one the dirty set names -- so without the dilation in sync_cells the hole next door keeps a
+# wall hanging off ground that is no longer there. Both ends were correct in the first draft and
+# nothing connected them, which is #103's shape.
+func test_erasing_beside_a_hole_re_cuts_that_holes_lip() -> void:
+	_scene.load_mission(PROLOG)
+	await _settle()
+	_game.game_state = _game.GameState.DEV_MODE
+	var cell := _an_inland_cell()
+	var beside: Vector2i = cell + Vector2i.RIGHT
+	if not GridUtils.has_ground(_game.grid, beside + Vector2i.RIGHT):
+		return
+	_game.grid.erase(cell)
+	await _settle()
+	assert_int(_walls_at(cell)).is_equal(4)
+	# Erase the NEIGHBOUR. Nothing about `cell` is announced, and its own wall count must still fall.
+	_game.grid.erase(beside)
+	await _settle()
+	assert_int(_walls_at(cell)).override_failure_message(
+			"the hole kept a wall facing ground that was erased next to it -- the dilation "
+			+ "in sync_cells never reached it").is_equal(3)
+
+
+# Every wall faces INTO the pit. With CULL_BACK on since #559 a mis-wound quad does not look wrong,
+# it VANISHES -- so this is the one thing about the geometry a headless suite can and must check.
+# Asked per wall against that wall's own centroid, never against a table of directions, so it cannot
+# pass by agreeing with the same mistake twice.
+func test_every_hole_wall_faces_into_the_pit() -> void:
+	_scene.load_mission(PROLOG)
+	await _settle()
+	_game.game_state = _game.GameState.DEV_MODE
+	var cell := _an_inland_cell()
+	_game.grid.erase(cell)
+	await _settle()
+	var lip := _mirror().lip_at(cell)
+	assert_object(lip).is_not_null()
+	var centre := BoardSpace.standing_point(BoardSpace.of_cell(cell, 0))
+	var checked := 0
+	for child in lip.get_children():
+		var mesh_node := child as MeshInstance3D
+		assert_object(mesh_node).is_not_null()
+		var arrays: Array = mesh_node.mesh.surface_get_arrays(0)
+		var verts: PackedVector3Array = arrays[Mesh.ARRAY_VERTEX]
+		var middle := Vector3.ZERO
+		for v in verts:
+			middle += v
+		middle /= float(verts.size())
+		var toward_centre := Vector3(centre.x - middle.x, 0.0, centre.z - middle.z).normalized()
+		# ASK THE ENGINE which way the triangles wind, never the authored normal array. Culling
+		# reads WINDING; the normal attribute is a separate channel this material does not even
+		# use (it is unshaded). Reading normals[0] pins a value the builder writes unconditionally,
+		# so it cannot fail -- which is exactly what a mutant proved before this line existed.
+		var st := SurfaceTool.new()
+		st.begin(Mesh.PRIMITIVE_TRIANGLES)
+		for v in verts:
+			st.add_vertex(v)
+		st.generate_normals()
+		var wound: Array = st.commit().surface_get_arrays(0)
+		var geometric: PackedVector3Array = wound[Mesh.ARRAY_NORMAL]
+		assert_float(geometric[0].dot(toward_centre)).override_failure_message(
+				"a hole wall winds away from the pit; with backface culling on it draws "
+				+ "nothing at all").is_greater(0.5)
+		checked += 1
+	assert_int(checked).override_failure_message("no walls were examined").is_equal(4)
+
+
+# The FULL path, which is structurally blind to an erased hole without its own walk: sync() iterates
+# grid.get_used_cells(), and a cell whose ground was erased has no tile to be listed by. A board swap
+# or a lowered floor takes that path, so a chasm dug with the brush would come back undressed.
+func test_a_full_rebuild_still_dresses_an_erased_hole() -> void:
+	_scene.load_mission(PROLOG)
+	await _settle()
+	_game.game_state = _game.GameState.DEV_MODE
+	var cell := _an_inland_cell()
+	_game.grid.erase(cell)
+	await _settle()
+	assert_int(_walls_at(cell)).is_equal(4)
+	# Drop everything and take the WHOLE-board path, the one a board swap runs.
+	_scene.rebuild_props()
+	await _settle()
+	assert_int(_walls_at(cell)).override_failure_message(
+			"a full rebuild left the erased hole bare -- sync() never visited a cell with no "
+			+ "tile, which is the walk it needs of its own").is_equal(4)
+
+
+# The PAINTED half of the same ruling, and the one a mutant caught missing: two `hole` TILES side by
+# side. An erased cell has no ground, so a lip rule asking only has_ground already skips it -- an
+# authored VOID tile HAS ground, and only is_void_at knows it is a hole. Without that half the two
+# grow a wall between them, which is the egg carton in its original form.
+func test_two_painted_hole_tiles_side_by_side_draw_nothing_between_them() -> void:
+	_scene.load_mission(PROLOG)
+	await _settle()
+	_game.game_state = _game.GameState.DEV_MODE
+	var hole := _a_tile_of_kind(Terrain.Kind.VOID)
+	assert_bool(hole.source >= 0).override_failure_message(
+			"the tileset authors no VOID tile; the case is vacuous").is_true()
+	var cell := _an_inland_cell()
+	var beside: Vector2i = cell + Vector2i.RIGHT
+	if not GridUtils.has_ground(_game.grid, beside + Vector2i.RIGHT):
+		return
+	_game.grid.paint(cell, hole.source, hole.coords)
+	_game.grid.paint(beside, hole.source, hole.coords)
+	await _settle()
+	assert_int(_walls_at(cell)).override_failure_message(
+			"a lip was drawn between two painted holes").is_equal(3)
+	assert_int(_walls_at(beside)).is_equal(3)

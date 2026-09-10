@@ -210,6 +210,12 @@ const KNOBS: Array[Dictionary] = [
 	# global here is the DEFAULT a tile that says nothing falls back to.
 	{"group": "World", "node": "BoardMirror", "prop": "block_height_scale", "label": "Prop block height", "min": 0.2, "max": 2.5, "step": 0.01,
 		"tip": "How tall a solid prop -- crate, chest, rock, pot -- stands relative to its own sprite. 1.0 is the height measured off the art; because the art is drawn in 3/4 it includes some of the object's own lid, so the honest measurement usually reads a little tall."},
+	# A hole's walls (#876). Depth is world units, not levels -- a chasm is not measured in the steps
+	# you could have walked down it. Both re-cut every standing lip through BoardMirror's own sweep.
+	{"group": "World", "node": "BoardMirror", "prop": "lip_shaft_depth", "label": "Hole wall depth", "min": 0.5, "max": 12.0, "step": 0.1,
+		"tip": "How far the walls of a hole fall before the shaft is pure black. It is a LOOK, not a distance anything falls -- what a shove into a hole actually drops is Void fall depth, under Motion. Deep enough to read as bottomless at the zoom you play at is the whole target."},
+	{"group": "World", "node": "BoardMirror", "prop": "lip_shaft_color", "label": "Hole wall colour",
+		"tip": "The colour a hole's wall starts at where it meets the ground, fading to black at the bottom. Reads best a little darker and a little cooler than the ground it hangs off, so the eye takes it for shadow rather than for a different material."},
 	{"group": "World", "node": "BoardMirror", "prop": "tuft_scale", "label": "Grass tuft scale", "min": 0.0, "max": 2.0, "step": 0.01,
 		"tip": "How tall the plants on a grass tile stand -- the flowers and weeds that pop up off a tile which is also still painted flat. 1.0 draws each one at the size the art draws it. Only the height changes: where they sit in the cell comes off the art."},
 	# The lamp defaults (#255's light, #380's rows -- these four had NO surface anywhere before
