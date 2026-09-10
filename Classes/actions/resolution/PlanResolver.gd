@@ -705,12 +705,18 @@ static func _knockback_landing(action: AttackAction, target: Unit, target_hypo: 
 	var path: Array[Vector2i] = [start]
 	for _i in range(distance):
 		var next: Vector2i = pos + dir
-		if board.elevation_at(next) > flight_height:
-			break   # you cannot be pushed uphill -- high ground braces you (#259)
-		if board.terrain_kind_at(next) == Terrain.Kind.VOID:
+		# THE HOLE IS ASKED FIRST, ahead of the uphill brace (#875). A `hole` tile is FLAT, so
+		# GridUtils.is_ground_shape lets the brush slope it and give it a height -- and a hole
+		# painted ABOVE the flight level used to read as high ground and brace the shove, i.e.
+		# ground you can fall through stopping you dead. Nothing stands on a hole at any
+		# elevation, so how high it sits is not a fact about whether it catches you. Reachable
+		# today: verticality.tres and Terraces.tres both carry painted VOID on a multi-level board.
+		if board.is_void_at(next):
 			pos = next
 			path.append(pos)
 			continue   # airborne: a hole cannot catch you mid-flight
+		if board.elevation_at(next) > flight_height:
+			break   # you cannot be pushed uphill -- high ground braces you (#259)
 		if board.unit_at_cell(next) != null:
 			break   # a body in the way halts the flight short of it, water or not
 		# WATER CATCHES rather than braces (#116) — the whole of the water half. The flight enters
@@ -739,7 +745,7 @@ static func _knockback_landing(action: AttackAction, target: Unit, target_hypo: 
 	landing.path = path
 	landing.cell = pos
 	landing.landing_index = path.size() - 1   # flight ends here; _tumble appends beyond it
-	if board.terrain_kind_at(pos) == Terrain.Kind.VOID:
+	if board.is_void_at(pos):
 		landing.removed = true   # halted over (or blown exactly onto) the hole -- gone
 		return landing
 
@@ -787,7 +793,7 @@ static func _tumble(landing: _Landing, target: Unit, board: BoardContext, shove_
 		var rise := board.ramp_rise_at(cell)
 		var down := shove_dir if rise == Terrain.RampRise.NONE else -Terrain.rise_direction(rise)
 		var next: Vector2i = cell + down
-		if board.unit_at_cell(next) != null or board.terrain_kind_at(next) == Terrain.Kind.VOID:
+		if board.unit_at_cell(next) != null or board.is_void_at(next):
 			break
 		# A slope that bottoms out in a lake puts the body IN the lake (#116) — the flight's own
 		# rule, applied to the slide, so the two cannot disagree about where a shoreline is.

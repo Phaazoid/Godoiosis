@@ -70,6 +70,30 @@ func projected_unit_at_cell(cell: Vector2i) -> Unit:
 func terrain_kind_at(cell: Vector2i) -> Terrain.Kind:
 	return GridUtils.get_terrain_kind_at_cell(grid, cell)
 
+# Is this cell a HOLE (#875)? THE spelling of that question -- it lived hand-written as
+# `terrain_kind_at(cell) == Kind.VOID` at three sites in PlanResolver, and all three were wrong the
+# same way: NO GROUND IS A HOLE TOO.
+#
+# Ground erased from inside the board renders exactly like a painted VOID tile (BoardMirror clears
+# the column for both, and BoardPicker returns NO_COLUMN for both), and it used to BRACE a shove
+# like a wall -- a chasm's face on a wall's rule. `get_used_rect()` is the boundary because it is
+# already what movement_cost and compute_move_range mean by "on the map": erasing a rim cell
+# shrinks the board, erasing an interior one digs a hole. Measured before it shipped
+# (tools/audit_groundless.gd): 66 such cells across the shipped scenarios, every one interior,
+# none on the demo slate.
+#
+# Deliberately NOT folded into terrain_kind_at. Its other readers -- Materia.sources_at,
+# PlanResolver._resolve_cell_effect_at, HoverPresenter -- ask what the AUTHOR WROTE, and a derived
+# VOID would leak into terrain reactions and alchemy sources. That is the same split as
+# GridUtils.walkable_of (a tile fact) against is_walkable (a cell answer that also knows state):
+# two questions, not two answers to one.
+func is_void_at(cell: Vector2i) -> bool:
+	if terrain_kind_at(cell) == Terrain.Kind.VOID:
+		return true
+	# has_ground calls a null grid grounded, so a board with no TileMapLayer answers "not a hole"
+	# here -- the same permissive default every other accessor on this class keeps.
+	return not GridUtils.has_ground(grid, cell) and grid.get_used_rect().has_point(cell)
+
 # The rules' single read-point for a cell's terrain DEF (#84): a Burrow-dug COVER tile shelters
 # whoever stands on it. Sibling of terrain_kind_at, same rationale — the resolver's mitigation
 # stage and the inspect panel's DEF readout both come through here, so they can't drift.

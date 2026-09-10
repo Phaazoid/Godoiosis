@@ -115,6 +115,57 @@ func test_a_shove_ending_on_the_hole_removes() -> void:
 	assert_that(outcome.lethality).is_equal(ResolvedOutcome.Lethality.KILLED)
 
 
+# --- No ground inside the board is a hole too (#875) -------------------------------------------
+#
+# The three above paint the authored `hole` tile. These ERASE the ground instead, which renders
+# identically (BoardMirror clears the column for both) and used to BRACE the flight like a wall --
+# a chasm's face wearing a wall's rule. The pair below is what a mutant has to break: make
+# BoardContext.is_void_at answer only the authored kind and both go red.
+
+func test_erased_ground_inside_the_board_is_flown_over_like_a_painted_hole() -> void:
+	var s := _setup(BoardHeights.new(), 2, Vector2i(1, 0), Vector2i(2, 0))
+	(s.grid as TileMapLayer).erase_cell(Vector2i(3, 0))
+	var outcome := _resolve(s)
+	assert_bool(outcome.removed).is_false()
+	assert_bool(outcome.knockback_to == Vector2i(4, 0)).is_true()
+	var expected: Array[Vector2i] = [Vector2i(2, 0), Vector2i(3, 0), Vector2i(4, 0)]
+	assert_that(_path_of(outcome)).is_equal(expected)
+
+
+func test_a_shove_ending_on_erased_ground_removes() -> void:
+	var s := _setup(BoardHeights.new(), 1, Vector2i(1, 0), Vector2i(2, 0))
+	(s.grid as TileMapLayer).erase_cell(Vector2i(3, 0))
+	var outcome := _resolve(s)
+	assert_bool(outcome.removed).is_true()
+	assert_that(outcome.lethality).is_equal(ResolvedOutcome.Lethality.KILLED)
+
+
+# The other side of the same rule, and the one that keeps it from being "anywhere with no tile".
+# PAST the board's rect there is no hole -- the map simply stops, and the flight braces on it as it
+# always has. Erasing a rim cell shrinks the rect; erasing an interior one digs a chasm.
+func test_no_ground_past_the_boards_edge_still_braces() -> void:
+	var edge: int = H.PAINTED_EXTENT   # typed local: a const read through a preload erases to Variant
+	var s := _setup(BoardHeights.new(), 2, Vector2i(edge - 1, 0), Vector2i(edge, 0))
+	var outcome := _resolve(s)
+	assert_bool(outcome.knockback_applied).is_false()
+	assert_bool(outcome.removed).is_false()
+
+
+# The hole is asked BEFORE the uphill brace (#875). A `hole` tile is FLAT, so the brush may raise
+# it -- and a hole above the flight level used to read as high ground and stop the shove dead:
+# ground you can fall through bracing you. Reachable in shipped content, where verticality.tres and
+# Terraces.tres both carry painted VOID on a multi-level board.
+func test_a_hole_raised_above_the_flight_is_flown_over_not_braced() -> void:
+	var heights := BoardHeights.new()
+	heights.set_cell(Vector2i(3, 0), 2)
+	var s := _setup(heights, 2, Vector2i(1, 0), Vector2i(2, 0))
+	(s.grid as TileMapLayer).set_cell(Vector2i(3, 0), 0, HOLE_TILE)
+	var outcome := _resolve(s)
+	assert_bool(outcome.knockback_applied).is_true()
+	assert_bool(outcome.knockback_to == Vector2i(4, 0)).is_true()
+	assert_bool(outcome.removed).is_false()
+
+
 # --- Drops: fall damage at the landing, DEF-blind, rung-moving -------------------------------
 
 func test_a_drop_at_the_landing_deals_scaled_fall_damage() -> void:

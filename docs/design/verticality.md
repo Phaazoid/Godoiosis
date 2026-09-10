@@ -6,7 +6,7 @@ grill-style. Every ruling below is his; the rationale is recorded because almost
 re-derivable from the code. Numbers (tolerances, drop damage, the 2D offset) are deliberately absent —
 they are feel values and get knobs, not guesses (`CLAUDE.md` → the tuning rule).
 
-**Canon checked through #816 (2026-09-07).**
+**Canon checked through #877 (2026-09-09).**
 
 The one-line version: **a cell has a height, height changes only via ramps, ramps are chokepoints
 rather than tolls, and what height buys you is REACH — not damage, not to-hit.**
@@ -838,12 +838,39 @@ hand-mirrored twins — call `Unit.die()` on it. A removed target publishes no p
 and draws no landing ghost: its sprite stands where it is, the trail alone says where it goes, and
 nothing on a chasm cell is pickable. `Terrain.Kind.VOID` (append-only) is the authored vocabulary;
 the two `hole` tiles carry it, and the headless no-tile sentinel renamed to `"offmap"` to free the
-word. Counter shoves are previewed too since this slice (`_preview_plan_effects` walks
+word.
+
+> **A HOLE IS ALSO WHAT NOBODY PAINTED ([#875](https://github.com/Phaazoid/Godoiosis/issues/875),
+> 2026-09-09).** Ground ERASED from inside the board renders exactly like a painted VOID tile —
+> `BoardMirror.reconcile_cell` clears the column for both and `BoardPicker` returns `NO_COLUMN` for
+> both — and it used to BRACE a shove like a wall: a chasm's face wearing a wall's rule.
+> **`BoardContext.is_void_at(cell)` is now the one spelling of "is this a hole"**: the authored kind,
+> or no ground inside `grid.get_used_rect()`. `PlanResolver` had spelled it by hand at three sites
+> and all three were wrong the same way. `get_used_rect()` is the boundary because it is already what
+> `movement_cost` and `compute_move_range` mean by *on the map* — **erasing a rim cell shrinks the
+> board, erasing an interior one digs a hole** — and `"offmap"` now means only *past that rect*.
+> `terrain_kind_at` is deliberately NOT widened: its other readers (`Materia.sources_at`,
+> `_resolve_cell_effect_at`, the hover card) ask what the AUTHOR wrote, and a derived VOID would leak
+> into terrain reactions and alchemy sources. Same split as `GridUtils.walkable_of` against
+> `is_walkable` — two questions, not two answers to one.
+>
+> Measured before it shipped, by `tools/audit_groundless.gd`: **66 groundless cells inside
+> `used_rect` across the shipped scenarios, every one of them interior**, so no board has an outline
+> the change would silently make lethal. 64 are the same 8-cell ring dug round an island in the eight
+> 64x40 sandbox boards; the other 2 are in `verticality.tres`. **Every mission on the demo slate is
+> solid** — `Prolog`, `Level_1`, `2` and `Terraces` have none, and `Terraces` already authors its
+> 28-cell chasm with painted VOID tiles. Counter shoves are previewed too since this slice (`_preview_plan_effects` walks
 `plan.counters` — a gap, closed).
 
 ### Shoves — the original rulings (all intact under the airborne model)
 
 - **You cannot be pushed uphill.** A shove that would climb stops dead. High ground braces you.
+  **Except over a hole ([#875](https://github.com/Phaazoid/Godoiosis/issues/875), 2026-09-09) — the
+  hole is asked FIRST.** A `hole` tile is `FLAT`, so `GridUtils.is_ground_shape` lets the brush slope
+  it and give it a height, and a hole painted above the flight level used to read as high ground and
+  brace the shove: ground you can fall through stopping you dead. Nothing stands on a hole at any
+  elevation, so how high it sits is not a fact about whether it catches you. Reachable in shipped
+  content — `verticality.tres` and `Terraces.tres` both carry painted VOID on a multi-level board.
 - **Only vertical drops give fall damage.** Slopes never do.
 - **A shove onto a descending ramp becomes a TUMBLE.**
 
