@@ -389,32 +389,39 @@ func test_the_crawl_wears_the_elements_own_colour() -> void:
 
 # --- The white-out's two drivers ------------------------------------------------------
 
-# THE ONE CASE THAT NEEDS THE REAL SCENE, and it needs it because the failure it guards is a WIRE:
-# the white-out was built for the tear-out with exactly one writer, so its idle branch pushed a
-# flat 0 -- which with a second driver is one caller silently clearing the channel out from under
-# the other. Both drivers are held as levels and the louder wins.
-func test_the_white_out_takes_the_louder_of_its_two_drivers() -> void:
+# THE ONE CASE THAT NEEDS THE REAL SCENE, and it needs it because the failure it guards is a WIRE.
+#
+# The white-out was built for the tear-out and had exactly ONE writer, reached only from inside the
+# transition's own driver -- which returns early the moment no tear-out is flying, i.e. on every
+# frame a shock is ever struck on. So the second driver needed a push of its own on the ordinary
+# frame path, and that push is invisible from either end: the level is computed correctly, the
+# channel applies correctly, and nothing joins them (#103's shape).
+#
+# Driven through `_process` rather than through the composition itself, and the difference is not
+# academic -- a case calling `_push_whiteout()` directly PASSES with the frame-path push deleted,
+# which is what a mutant established rather than reasoning.
+func test_a_shock_flash_reaches_the_screen_on_an_ordinary_frame() -> void:
 	var scene: Node3D = auto_free(SCENE.instantiate() as Node3D)
 	get_tree().root.add_child(scene)
 	await await_idle_frame()
 	var arc: ArcLightning = scene._arc
 	assert_object(arc).override_failure_message(
 		"the scene built no arc effect, so this case is about nothing").is_not_null()
+	ArcLightning.flash = true
+	ArcLightning.flash_life = 1.0
 
 	arc._flash_at = 0.0
 	arc._elapsed = 0.0
-	ArcLightning.flash = true
-	ArcLightning.flash_life = 1.0
-	scene._push_whiteout()
+	scene._process(0.0)
 	var lit: bool = scene._whiteout != null and scene._whiteout.visible
 
 	arc._flash_at = -1.0
-	scene._push_whiteout()
+	scene._process(0.0)
 	var dark: bool = scene._whiteout != null and scene._whiteout.visible
 
 	get_tree().root.remove_child(scene)
 	assert_bool(lit).override_failure_message(
-		"the shock's flash never reached the screen -- the tear-out's own idle push is the only " \
-		+ "thing that ever writes this channel").is_true()
+		"a shock's flash never reached the screen -- outside a tear-out nothing writes this " \
+		+ "channel at all").is_true()
 	assert_bool(dark).override_failure_message(
 		"the flash never cleared").is_false()
