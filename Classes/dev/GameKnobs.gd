@@ -393,6 +393,7 @@ const QUEUE_STYLE_SCRIPT := "res://Classes/ui/queue/QueueStyle.gd"
 const BOARD_SPACE_SCRIPT := "res://Classes/presentation/BoardSpace.gd"
 const SIGHT_TRACE_SCRIPT := "res://Classes/board/SightTrace2D.gd"
 const STAGING_DUST_SCRIPT := "res://Classes/presentation/StagingDust.gd"
+const ARC_LIGHTNING_SCRIPT := "res://Classes/presentation/ArcLightning.gd"
 
 const CLASS_KNOBS: Array[Dictionary] = [
 	# --- Player settings the dev authors the DEFAULT for (#394) ---
@@ -549,6 +550,72 @@ const CLASS_KNOBS: Array[Dictionary] = [
 		"tip": "Aether's colour. The rarest of the sigils, so it can afford to be the most distinctive -- nothing else on screen should be near it."},
 	{"group": "Element colours", "label": "Corrosion", "static": "ELEMENT_CORROSION", "script": ELEMENT_PALETTE_SCRIPT,
 		"tip": "Corrosion's colour -- the Chemical Spitter's element (#97). Not a sigil and not aura-bearing, so it never appears on a carving; where you WILL see it is a Spray's rail and a Vitriol vial. Its near-neighbours are Earth and Air, which is the pair to tune it against."},
+
+	# --- THE SHOCK ARC (#887) -------------------------------------------------------------------
+	#
+	# What a shock LOOKS like when it lands: a bolt out of the sky onto the aim, and the current
+	# arcing over every conductor the flood reached. Its own group on the Elemental tab because it
+	# is an EVENT rather than a standing state -- fire above is what a burning tile looks like while
+	# it burns, this is half a second of an attack.
+	#
+	# EVERY ROW IS LIVE THE INSTANT IT MOVES, with no re-apply hook of its own: the effect rebuilds
+	# both of its meshes from these values on every frame a bolt is in the air, so there is no built
+	# geometry to go stale. The other half of that is that a slider moved while nothing is flashing
+	# shows nothing, which is the same deal PICK_FLASH_ALPHA gets.
+	#
+	# The one value NOT here is the corona's HUE -- it reads Shock's row above, because the colour of
+	# the element is one decision (#422) and this effect is not entitled to a second opinion.
+	{"group": "Shock", "label": "Sky strike", "static": "sky_strike", "script": ARC_LIGHTNING_SCRIPT,
+		"tip": "Whether the bolt comes down out of the sky onto the aimed cell at all. It is drawn down the attack.s OWN trajectory, so a rune authored to clear any height falls almost vertically and one authored flat draws a horizontal rod instead -- there is nothing to tune about the angle because the content already decided it."},
+	{"group": "Shock", "label": "Strike height", "static": "strike_height", "script": ARC_LIGHTNING_SCRIPT,
+		"min": 0.0, "max": 40.0, "step": 0.5,
+		"tip": "How much of that trajectory is drawn, in cells above the tile it lands on. Zap.s authored clearance puts the apex some fifty cells up, so this is really 'how tall is the strike' -- past about twelve it leaves the top of any framing the camera holds."},
+	{"group": "Shock", "label": "Strike lifetime", "static": "strike_life", "script": ARC_LIGHTNING_SCRIPT,
+		"min": 0.05, "max": 2.0, "step": 0.05,
+		"tip": "How long the sky bolt lasts. Judge it against the volley.s own beat rather than on its own: a strike shorter than the camera.s push-in is over before anyone has looked at it."},
+	{"group": "Shock", "label": "Arc over the water", "static": "arcs", "script": ARC_LIGHTNING_SCRIPT,
+		"tip": "Whether the current itself is drawn -- a bolt over every conducting cell the flood reached, occupied or not. This is the half that shows which tiles are LIVE, so switching it off leaves the rule invisible again even though it still fires."},
+	{"group": "Shock", "label": "Bolt lift", "static": "bolt_lift", "script": ARC_LIGHTNING_SCRIPT,
+		"min": 0.0, "max": 2.0, "step": 0.01,
+		"tip": "How far above the surface the arcing bolts hang, in cells. At 0 they lie on the water and read as markup; the whole point of the effect is that the current is ABOVE the water, so this wants to be clearly off the surface without floating free of it."},
+	{"group": "Shock", "label": "Bolt lifetime", "static": "bolt_life", "script": ARC_LIGHTNING_SCRIPT,
+		"min": 0.05, "max": 2.0, "step": 0.05,
+		"tip": "How long one hop of the current lasts. Each hop lights on its own schedule, so a long life plus a long step delay leaves the whole network standing at once, and a short life plus a long delay draws a travelling pulse."},
+	{"group": "Shock", "label": "Strike-to-current gap", "static": "strike_delay", "script": ARC_LIGHTNING_SCRIPT,
+		"min": 0.0, "max": 1.0, "step": 0.01,
+		"tip": "How long the current waits after the sky bolt before it starts travelling. Small values read as one event; larger ones read as a strike and then a consequence."},
+	{"group": "Shock", "label": "Step delay", "static": "arc_step_delay", "script": ARC_LIGHTNING_SCRIPT,
+		"min": 0.0, "max": 0.5, "step": 0.01,
+		"tip": "How long each ring of the flood waits behind the one before it. THIS IS THE DIAL THAT MAKES THE CURRENT TRAVEL -- at 0 the whole network lights at once and reads as a shape rather than a spread. The rule.s own reach is three cells, so the far edge is three of these behind the blast."},
+	{"group": "Shock", "label": "Bolt segments", "static": "bolt_segments", "script": ARC_LIGHTNING_SCRIPT,
+		"min": 1.0, "max": 24.0, "step": 1.0,
+		"tip": "How many straight pieces one bolt is made of. At 1 it is a clean line with no kink at all; high counts turn the kinks into noise the eye reads as a blur rather than as lightning. Costs two vertices each."},
+	{"group": "Shock", "label": "Bolt jag", "static": "bolt_jag", "script": ARC_LIGHTNING_SCRIPT,
+		"min": 0.0, "max": 0.6, "step": 0.01,
+		"tip": "How far the kinks throw the bolt off its straight line, as a fraction of that bolt.s own length -- so a one-cell hop and a tall strike bend the same amount relative to themselves. At 0 every bolt is a rod."},
+	{"group": "Shock", "label": "Flicker rate", "static": "flicker_rate", "script": ARC_LIGHTNING_SCRIPT,
+		"min": 0.0, "max": 60.0, "step": 1.0,
+		"tip": "How many times a second a bolt re-rolls its kinks. This is the only channel that strobes, so it is the one the photosensitivity setting freezes -- with that setting on the bolt still draws, holds and fades, it simply holds ONE shape."},
+	{"group": "Shock", "label": "Afterimage", "static": "afterimage", "script": ARC_LIGHTNING_SCRIPT,
+		"min": 0.0, "max": 1.0, "step": 0.05,
+		"tip": "How much of the flash the tail hangs on to. At 0 the bolt is a hard pop that is gone a third of the way through its life; at 1 it fades evenly over the whole life, which is what keeps the network readable long enough to see who got caught."},
+	{"group": "Shock", "label": "Core colour", "static": "core_color", "script": ARC_LIGHTNING_SCRIPT,
+		"tip": "The hot line down the middle of every bolt. Near-white on purpose: the violet is the corona.s job, and a core tinted toward the element loses the hot look that reads as electricity. Its ALPHA is the whole effect.s master strength."},
+	{"group": "Shock", "label": "Bolt width", "static": "bolt_width", "script": ARC_LIGHTNING_SCRIPT,
+		"min": 0.01, "max": 0.5, "step": 0.005,
+		"tip": "How wide the core is, in cells. A cell is 1.0 and the tile art is 32 pixels to a cell, so 0.03 is about one art pixel -- this is the dial that decides whether a bolt reads as a thread or as a beam."},
+	{"group": "Shock", "label": "Corona width scale", "static": "corona_scale", "script": ARC_LIGHTNING_SCRIPT,
+		"min": 1.0, "max": 10.0, "step": 0.1,
+		"tip": "How much wider the violet corona is than the core it wraps. Below about 2 the two read as one thick bolt; high values make a haze the core sits inside."},
+	{"group": "Shock", "label": "Core brightness", "static": "core_intensity", "script": ARC_LIGHTNING_SCRIPT,
+		"min": 0.5, "max": 12.0, "step": 0.1,
+		"tip": "How far past white the core is pushed. The diorama.s glow threshold is 1.2, so anything above that BLOOMS -- which is where the HD look comes from, not from more geometry. Below 1.2 the bolt is flat colour."},
+	{"group": "Shock", "label": "Corona brightness", "static": "corona_intensity", "script": ARC_LIGHTNING_SCRIPT,
+		"min": 0.5, "max": 12.0, "step": 0.1,
+		"tip": "The same push for the violet wrap. Keep it under the core.s or the corona blooms out the very thing it is supposed to be framing."},
+	{"group": "Shock", "label": "Edge softness", "static": "bolt_softness", "script": ARC_LIGHTNING_SCRIPT,
+		"min": 0.2, "max": 6.0, "step": 0.1,
+		"tip": "How the bolt fades across its own width. 1 is a straight fade to the rim; higher concentrates a bright thread down the middle and lets the rest fall away. The rim always reaches zero, so a bolt never has a visible edge to read as geometry."},
 
 	# --- THE ACTION QUEUE.S OWN COLOURS (#685 round 4) -----------------------------------------
 	#
@@ -1075,6 +1142,9 @@ const GROUP_TABS: Dictionary[String, String] = {
 	"Cover": "Elemental",
 	# ...and what an element looks like in 2D UI (#685), beside what it looks like on the board.
 	"Element colours": "Elemental",
+	# ...and what a shock looks like when it LANDS (#887). Beside fire rather than in it: fire is
+	# what a burning tile looks like while it stands, this is half a second of an attack.
+	"Shock": "Elemental",
 	# The queue.s own invented colour, beside the element chips it has to read against (#685).
 	"Action queue": "Elemental",
 	# Playback is SIX groups on one tab (dev, 2026-08-27) -- thirty flat rows was unreadable, and a
@@ -1175,6 +1245,26 @@ static func read_static(name: String) -> Variant:
 		"grain_color": return StagingDust.grain_color
 		"grain_gravity": return StagingDust.grain_gravity
 		"grain_damping": return StagingDust.grain_damping
+		# The shock arc (#887). Read straight off the effect's statics, which is also what it draws
+		# from every frame -- there is no built copy for these to fall out of step with.
+		"sky_strike": return ArcLightning.sky_strike
+		"strike_height": return ArcLightning.strike_height
+		"strike_life": return ArcLightning.strike_life
+		"arcs": return ArcLightning.arcs
+		"bolt_lift": return ArcLightning.bolt_lift
+		"bolt_life": return ArcLightning.bolt_life
+		"strike_delay": return ArcLightning.strike_delay
+		"arc_step_delay": return ArcLightning.arc_step_delay
+		"bolt_segments": return ArcLightning.bolt_segments
+		"bolt_jag": return ArcLightning.bolt_jag
+		"flicker_rate": return ArcLightning.flicker_rate
+		"afterimage": return ArcLightning.afterimage
+		"core_color": return ArcLightning.core_color
+		"bolt_width": return ArcLightning.bolt_width
+		"corona_scale": return ArcLightning.corona_scale
+		"core_intensity": return ArcLightning.core_intensity
+		"corona_intensity": return ArcLightning.corona_intensity
+		"bolt_softness": return ArcLightning.bolt_softness
 		"PLAYBACK_PAN": return Pacing.PLAYBACK_PAN
 		"TEAR_OUT_BRACE": return Pacing.TEAR_OUT_BRACE
 		"TEAR_OUT_EMPTY_SKY": return Pacing.TEAR_OUT_EMPTY_SKY
@@ -1360,6 +1450,64 @@ static func write_static(host: Node3D, name: String, value: Variant) -> void:
 		"grain_damping":
 			StagingDust.grain_damping = value
 			_reapply_staging_dust(host)
+			return
+		# The shock arc (#887). Every one takes SHOVE_SLIDE_SPEED's early return, and for a stronger
+		# version of its reason: the effect rebuilds both of its meshes from these values on every
+		# frame a bolt is alive, so there is nothing built for a knob to be stale against. The two
+		# ints are cast at the door the way grains_per_tile is -- a slider hands out floats.
+		"sky_strike":
+			ArcLightning.sky_strike = value
+			return
+		"strike_height":
+			ArcLightning.strike_height = value
+			return
+		"strike_life":
+			ArcLightning.strike_life = value
+			return
+		"arcs":
+			ArcLightning.arcs = value
+			return
+		"bolt_lift":
+			ArcLightning.bolt_lift = value
+			return
+		"bolt_life":
+			ArcLightning.bolt_life = value
+			return
+		"strike_delay":
+			ArcLightning.strike_delay = value
+			return
+		"arc_step_delay":
+			ArcLightning.arc_step_delay = value
+			return
+		"bolt_segments":
+			ArcLightning.bolt_segments = int(value)
+			return
+		"bolt_jag":
+			ArcLightning.bolt_jag = value
+			return
+		"flicker_rate":
+			ArcLightning.flicker_rate = value
+			return
+		"afterimage":
+			ArcLightning.afterimage = value
+			return
+		"core_color":
+			ArcLightning.core_color = value
+			return
+		"bolt_width":
+			ArcLightning.bolt_width = value
+			return
+		"corona_scale":
+			ArcLightning.corona_scale = value
+			return
+		"core_intensity":
+			ArcLightning.core_intensity = value
+			return
+		"corona_intensity":
+			ArcLightning.corona_intensity = value
+			return
+		"bolt_softness":
+			ArcLightning.bolt_softness = value
 			return
 		"PLAYBACK_PAN":
 			Pacing.PLAYBACK_PAN = value

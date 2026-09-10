@@ -18,6 +18,14 @@ var target_cell: Vector2i
 # shares ONE aim cell, so reading target_cell alone left a line's far victims and the ground under
 # the beam on the board while the camera sat on the diorama.
 var footprint: Array[Vector2i] = []
+# The path the CURRENT took through that footprint (#887) -- one hop per conducting cell the arc
+# reached, in the order the flood reached them. Empty on every attack that carries no SHOCK.
+#
+# STAMPED BESIDE THE FOOTPRINT, at the same three sites and for the same reason: the conductor set
+# depends on the PASS's own wetness (a soak queued three orders earlier), which lives in the
+# resolver's hypo and is gone by the time anything plays back. Re-deriving it at execution would
+# read the live board and quietly disagree with the volley it is drawing (R3).
+var arc_links: Array[Conduction.Link] = []
 var target_texture: Texture2D
 var target_name := "Target"
 var is_secondary_hit := false
@@ -53,6 +61,22 @@ var triggered_during: BaseAction = null
 var triggered_at_step := -1
 
 var preview_sprites: Array[Node2D] = []
+
+# THE MOMENT THE BLOW LANDS (#887) -- the first per-attack event this game has ever published.
+#
+# Everything a presentation layer knew about a hit until now came from watching the CONSEQUENCE:
+# UnitMirror polls HP and reports that a number fell, which is enough for a shake and blind to
+# everything else -- what fired, which element, where it was aimed, whom else it caught. An effect
+# that draws the attack itself needs the attack, and a cell-targeted shot into empty water has no
+# HP anywhere to poll.
+#
+# EMITTED FROM THE PAYLOAD MOMENT, after the lunge rather than at the top of execute(): the bolt has
+# to arrive when the blow does, and a lunge is a wind-up. Lead volley member only -- one blast is
+# one moment however many it hits, the same gate the readiness, vial and watch spends below use.
+#
+# OrderExecutor is the only subscriber (it re-publishes as volley_struck); nothing here knows what
+# is drawn, and an unlistened emit is free.
+signal impact(attack: AttackAction)
 
 const ATTACK_ICON := preload("res://Art/Icons/ActionIcons/FightActionIcon.png")
 const DOWN_ICON := preload("res://Art/Icons/StateIcons/Down.png")
@@ -109,6 +133,14 @@ func execute():
 	if blocked_for != null and not is_secondary_hit and is_instance_valid(blocked_for):
 		var block_dir = GridUtils.cardinal_direction_between(target.get_projected_destination(), blocked_for.get_projected_destination())
 		await target.visuals.play_attack_lunge(block_dir)
+
+	# The blow lands HERE (#887), whatever it lands on. Above the target block rather than inside it,
+	# because a CELL attack (target null, #47) is the case that makes the difference: an attack that
+	# touches the MAP may legally be aimed at open ground -- every shock rune is one -- so a shock
+	# into an empty river hits nobody, lights the whole river, and would publish nothing at all from
+	# inside a clause guarded on having a victim.
+	if not is_secondary_hit:
+		impact.emit(self)
 
 	# Pure playback of the resolved outcome (R3) — no recomputation. A cell attack (target
 	# null) has no unit consequence; it still plays out and (later, #50) deposits terrain effects.
@@ -272,13 +304,17 @@ static func declare(attacker: Unit, origin: Vector2i, aim_cell: Vector2i) -> Att
 	action.fired_attack = attacker.get_fired_attack()
 	return action
 
-static func create_volley(attacker: Unit, origin: Vector2i, aim_cell: Vector2i, victims: Array[Unit], fired_attack: AttackData, footprint: Array[Vector2i]) -> Array[AttackAction]:
+static func create_volley(attacker: Unit, origin: Vector2i, aim_cell: Vector2i, victims: Array[Unit], fired_attack: AttackData, footprint: Array[Vector2i], arc_links: Array[Conduction.Link] = []) -> Array[AttackAction]:
 	var volley_actions: Array[AttackAction] = []
 
 	for victim in victims:
 		var attack := AttackAction.create(attacker, origin, victim, aim_cell)
 		attack.fired_attack = fired_attack
 		attack.footprint = footprint
+		# The current's own tree rides with the ground it crossed -- every member, exactly as the
+		# footprint does. Only the lead publishes an impact, so only the lead's copy is ever drawn;
+		# stamping all of them keeps one rule about what a volley member carries instead of two.
+		attack.arc_links = arc_links
 		attack.is_secondary_hit = not volley_actions.is_empty()
 		volley_actions.append(attack)
 

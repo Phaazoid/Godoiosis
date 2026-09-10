@@ -50,7 +50,13 @@ const UNIT_RENDER_PRIORITY := 32
 # relationship #236 argued over is untouched. Found in play (#245): the flame set no priority at
 # all, so it sat at 0 while Layer.TERRAIN sorts at 2, and painting a frost icon onto a burning
 # tile drew straight over the flame. The fire read as erased; the store was perfectly correct.
-const FLAME_RENDER_PRIORITY := 16
+#
+# NAMED FOR THE BAND rather than for fire since #887, which is its third tenant -- the slam dust
+# (#656) was the second, and the previous name's own comment asked for this rename when a third
+# arrived. Everything standing in the world that is not markup and not a body sorts here: fire, the
+# tear-out's dust, and an arc's bolts. The two laws below it still speak of fire because fire is
+# what a layer drawing over this band would visibly erase.
+const EFFECT_RENDER_PRIORITY := 16
 # The band above the units: HUD hung in the volume over a unit's head (#229's health readout), which
 # must never be sorted behind the sprite it describes. It lives HERE with the other two because the
 # relationship between the bands is the thing worth pinning, and a table is the only place a
@@ -135,7 +141,7 @@ const LAYERS: Dictionary[Layer, Dictionary] = {
 	# The ONE layer that hangs in the AIR rather than lying on the floor, so it sorts above
 	# every floor layer. It sat at 0 while nothing could overlap it; #325 then put a ring
 	# decal (3) directly under every crown, which drew straight over it. 15 is the top of
-	# the lawful band -- a law pins every layer under FLAME_RENDER_PRIORITY. A BILLBOARD
+	# the lawful band -- a law pins every layer under EFFECT_RENDER_PRIORITY. A BILLBOARD
 	# ignores _lift_of and rides billboard_lift, so this moves PRIORITY only, not geometry.
 	Layer.ICONS: {"color": Color.WHITE, "sort": 15, "kind": Kind.BILLBOARD},
 }
@@ -322,24 +328,39 @@ func set_line(layer: Layer, points: PackedVector3Array, color: Color) -> void:
 	var node := pool[0] as MeshInstance3D
 	var mesh := node.mesh as ImmediateMesh
 	mesh.clear_surfaces()
+	node.visible = add_beam_strip(mesh, points)
+	(node.material_override as ShaderMaterial).set_shader_parameter("beam_color", color)
+
+
+# ONE RIBBON, APPENDED to a mesh as its own surface -- the recipe sight_beam.gdshader is fed, and
+# since #887 the one spelling of it. Returns whether anything was built; fewer than two points is
+# nothing to draw rather than an error, which is what a blocked-at-source trace produces.
+#
+# STATIC AND APPENDING, both for the second caller: ArcLightning holds a whole storm of these on ONE
+# mesh (a surface per bolt) and rebuilds it every frame, so it owns the clear and cannot be handed a
+# node. `tint` rides in the VERTEX COLOUR rather than the material, which is precisely what lets one
+# material draw twenty bolts at twenty different ages -- see the shader's own note. The overlay
+# layer passes white and is unchanged by it.
+static func add_beam_strip(mesh: ImmediateMesh, points: PackedVector3Array,
+		tint := Color.WHITE) -> bool:
 	if points.size() < 2:
-		node.visible = false
-		return
-	node.visible = true
-	var tangents := _beam_tangents(points)
+		return false
+	var tangents := beam_tangents(points)
 	var last := float(points.size() - 1)
 	mesh.surface_begin(Mesh.PRIMITIVE_TRIANGLE_STRIP)
 	for i in points.size():
 		# UV.x is the position along the beam, UV.y the side flag the shader remaps to -1/+1.
 		var along := float(i) / last
+		mesh.surface_set_color(tint)
 		mesh.surface_set_normal(tangents[i])
 		mesh.surface_set_uv(Vector2(along, 0.0))
 		mesh.surface_add_vertex(points[i])
+		mesh.surface_set_color(tint)
 		mesh.surface_set_normal(tangents[i])
 		mesh.surface_set_uv(Vector2(along, 1.0))
 		mesh.surface_add_vertex(points[i])
 	mesh.surface_end()
-	(node.material_override as ShaderMaterial).set_shader_parameter("beam_color", color)
+	return true
 
 
 # The direction the ribbon is "along" at each point. Interior points AVERAGE their two segments
@@ -347,7 +368,10 @@ func set_line(layer: Layer, points: PackedVector3Array, color: Color) -> void:
 # segments splits the strip open at each joint. Endpoints have one segment and use it. A
 # zero-length segment (coincident samples, which a shot blocked at t=0 can produce) contributes
 # nothing instead of poisoning the average with a NaN.
-func _beam_tangents(points: PackedVector3Array) -> PackedVector3Array:
+#
+# Static since #887 -- it reads no instance state and never did, and the arc builds its bolts
+# outside this node entirely.
+static func beam_tangents(points: PackedVector3Array) -> PackedVector3Array:
 	var tangents := PackedVector3Array()
 	var count := points.size()
 	for i in count:

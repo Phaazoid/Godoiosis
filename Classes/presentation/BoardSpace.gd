@@ -92,6 +92,20 @@ static func world_y_of_height(height: float) -> float:
 	return (height + float(Terrain.UNITS_PER_LEVEL)) * ROW_HEIGHT
 
 
+# Where a point of a Reach TRACE sits in the world (#258; hoisted here by #887, which needed the
+# second drawing of it). A trace is in the rule layer's own space -- cell coordinates on x and z,
+# and a rule HEIGHT on y, counting units above the level-0 floor plane -- and that is neither the
+# world's space nor the board's. One multiply per axis.
+#
+# HERE RATHER THAN AT EITHER DRAWING, because it is a convention and not a step: the hovered aim's
+# sight beam and a shock's sky strike are two pictures of one trajectory, and a second spelling
+# would let them disagree about where a shot passes. Carries NO staging offset -- a trace is a fact
+# about the board, and whether the ground it crosses has been lifted into a diorama is the caller's
+# question (see battle3d, which asks it).
+static func trace_point(p: Vector3) -> Vector3:
+	return Vector3(p.x * CELL_SIZE, surface_y(top_row_of(0)) + p.y * ROW_HEIGHT, p.z * CELL_SIZE)
+
+
 # Where a grid VERTEX sits in the world (#427 slice 4): the point four cells share, at a rule height.
 # cell_center's twin for a POINT rather than a volume, and the difference IS the half-cell offset --
 # a vertex takes none, because it is the cell's CORNER. That is the one thing easy to get wrong here

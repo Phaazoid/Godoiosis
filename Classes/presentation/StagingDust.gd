@@ -197,6 +197,6 @@ func _grain_mesh() -> QuadMesh:
 	mat.texture_filter = BaseMaterial3D.TEXTURE_FILTER_NEAREST
 	# A standing effect, above every markup layer and below the units -- fire's band, claimed by
 	# fire only because it got here first. The constant is worth renaming when a third arrives.
-	mat.render_priority = BoardOverlays.FLAME_RENDER_PRIORITY
+	mat.render_priority = BoardOverlays.EFFECT_RENDER_PRIORITY
 	mesh.material = mat
 	return mesh

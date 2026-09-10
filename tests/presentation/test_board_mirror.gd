@@ -144,8 +144,8 @@ func test_the_flame_actually_carries_the_flame_priority() -> void:
 	assert_object(flame).override_failure_message("the fire marker has no mesh child").is_not_null()
 	var material := (flame.mesh as QuadMesh).material as StandardMaterial3D
 	assert_int(material.render_priority).override_failure_message(
-			"the flame does not apply FLAME_RENDER_PRIORITY — the constant is inert and overlay markup draws over fire again"
-	).is_equal(BoardOverlays.FLAME_RENDER_PRIORITY)
+			"the flame does not apply EFFECT_RENDER_PRIORITY — the constant is inert and overlay markup draws over fire again"
+	).is_equal(BoardOverlays.EFFECT_RENDER_PRIORITY)
 
 
 func test_a_unit_going_down_on_fire_does_not_take_the_flame_with_it() -> void:

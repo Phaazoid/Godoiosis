@@ -60,7 +60,8 @@ Small resources, edited in the reflection-based dev editor (same grain as `Weapo
 | `damage_mult` / `damage_bonus` | the deterministic damage change (replaces all "% chance" language); composed per E8 |
 | `add_states` | states applied on react |
 | `remove_states` | states cleared on react (omit to *not* consume) |
-| `vfx_tag` / `popup` | feedback hook ("Electrocuted!") — the DRAMATIC word, read by the glossary's composed interaction line and the bug report |
+| `popup` | feedback hook ("Electrocuted!") — the DRAMATIC word, read by the glossary's composed interaction line and the bug report |
+| ~~`vfx_tag`~~ | **declared and read by NOTHING** (grepped #887, 2026-09-10). It was proposed as this table's hook for "what does this reaction LOOK like", and the row above used to claim both fields were read, which was true of `popup` alone. What actually draws an elemental event is the attack that carried it, not the reaction it fired: `ArcLightning` reads the volley's own element and route (#887). Kept as a field because a reaction-specific look is still plausible; the correction stands as the record that a hook nobody consumes is not a seam. |
 | `short_name` | the BADGE word ("Shock"), for a surface with no room for the dramatic one — the action queue's chip is ~40px (#685). Blank means the popup already fits, so only a long reaction needs one. A **declared** second representation per Law #4: two questions (what does this SHOUT vs what fits a badge), `badge_name()` is the one accessor, and every compact surface reads it rather than re-deriving a truncation. |
 
 Resolution against a target: collect *every* reaction with a trigger matching the snapshot's `(element ∈ attack.elements) × (state ∈ target.states)`, fire them all, compose per E8.

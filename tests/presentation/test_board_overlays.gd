@@ -640,11 +640,11 @@ func test_no_overlay_layer_can_sort_over_the_flame() -> void:
 	for layer: BoardOverlays.Layer in BoardOverlays.LAYERS:
 		var sort: int = BoardOverlays.LAYERS[layer]["sort"]
 		assert_int(sort).override_failure_message(
-				"layer %d sorts at %d, at or above FLAME_RENDER_PRIORITY — it would draw over fire" \
-				% [layer, sort]).is_less(BoardOverlays.FLAME_RENDER_PRIORITY)
+				"layer %d sorts at %d, at or above EFFECT_RENDER_PRIORITY — it would draw over fire" \
+				% [layer, sort]).is_less(BoardOverlays.EFFECT_RENDER_PRIORITY)
 	# ...and the flame still sits BELOW units, so the flame-vs-sprite trade #236 argued over
 	# (and the dev reverted) is untouched by giving the flame a band of its own.
-	assert_int(BoardOverlays.FLAME_RENDER_PRIORITY).override_failure_message(
+	assert_int(BoardOverlays.EFFECT_RENDER_PRIORITY).override_failure_message(
 			"the flame now sorts at or above units, which re-opens #236's swallowed-body trade") \
 			.is_less(BoardOverlays.UNIT_RENDER_PRIORITY)
 

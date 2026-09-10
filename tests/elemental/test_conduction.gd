@@ -181,3 +181,100 @@ func test_the_current_reads_this_passs_wetness_and_not_the_boards() -> void:
 	var attack := shooter.get_fired_attack()
 	assert_bool(Conduction.arc_cells(shooter, attack, pond, board).has(Vector2i(2, 0))).is_false()
 	assert_bool(Conduction.arc_cells(shooter, attack, pond, board, plan.hypo).has(Vector2i(2, 0))).is_true()
+
+
+# --- The current's own tree (#887) -------------------------------------------------------------
+#
+# The flood always knew which live cell it reached each new one FROM and threw it away; the effect
+# that draws the current needed exactly that. These pin the tree's SHAPE, which is what a renderer
+# lighting the hops in order is showing.
+
+# The hop that ends on this cell, or null. One per reached cell by construction -- a BFS cannot
+# arrive anywhere twice -- and this asserting that would be circular, so the shape case below
+# counts them instead.
+func _hop_to(links: Array[Conduction.Link], cell: Vector2i) -> Conduction.Link:
+	for link in links:
+		if link.to == cell:
+			return link
+	return null
+
+
+func test_every_cell_the_current_reaches_gets_a_hop_of_its_own() -> void:
+	var shooter := _shooter(Elemental.Element.SHOCK)
+	var units: Array[Unit] = [shooter]
+	var board := _board(units, _row(Conduction.SHOCK_ARC_RANGE + 2))
+	var struck: Array[Vector2i] = [Vector2i(0, 0)]
+
+	var current := Conduction.flood(shooter, shooter.get_fired_attack(), struck, board)
+	# One seed (the struck cell) and a hop for everything past it, each exactly once: the tree spans
+	# the whole answer, which is what stops a drawn arc from having dark tiles in the middle of it.
+	assert_int(current.links.size()).is_equal(current.cells.size() - 1)
+	for cell in current.cells:
+		if cell == Vector2i(0, 0):
+			continue
+		assert_object(_hop_to(current.links, cell)).override_failure_message(
+			"the current reaches %s and no hop arrives there -- a live tile nothing draws" % cell
+		).is_not_null()
+
+
+# THE DEV'S RULING (2026-09-10): "the only thing that's missing is arcing above water tiles it
+# effects as well". The current is drawn over the cells it TRAVELS THROUGH, not merely between the
+# bodies it catches -- so an empty stretch of river the shock reached still gets its hop, and the
+# player can see which tiles are live.
+func test_the_current_arcs_over_water_nobody_is_standing_in() -> void:
+	var shooter := _shooter(Elemental.Element.SHOCK)
+	var swimmer: Unit = H.spawn_unit(self, ENEMY, Vector2i(1, 0))
+	var units: Array[Unit] = [shooter, swimmer]
+	var board := _board(units, _row(4))
+	var struck: Array[Vector2i] = [Vector2i(0, 0)]
+
+	var current := Conduction.flood(shooter, shooter.get_fired_attack(), struck, board)
+	var empty := Vector2i(3, 0)
+	assert_bool(current.cells.has(empty)).is_true()
+	assert_object(_hop_to(current.links, empty)).override_failure_message(
+		"the far end of the river is live and nothing arcs over it").is_not_null()
+
+
+func test_a_hop_carries_its_distance_from_the_blast() -> void:
+	var shooter := _shooter(Elemental.Element.SHOCK)
+	var units: Array[Unit] = [shooter]
+	var board := _board(units, _row(4))
+	var struck: Array[Vector2i] = [Vector2i(0, 0)]
+
+	var current := Conduction.flood(shooter, shooter.get_fired_attack(), struck, board)
+	# The step is what staggers the drawing, so a wrong one is a current that travels backwards.
+	for distance in range(1, 4):
+		var hop := _hop_to(current.links, Vector2i(distance, 0))
+		assert_int(hop.step).override_failure_message(
+			"the hop onto %d cells out is stamped step %d" % [distance, hop.step]).is_equal(distance)
+		assert_vector(hop.from).is_equal(Vector2i(distance - 1, 0))
+
+
+func test_a_current_that_never_started_has_no_hops() -> void:
+	var shooter := _shooter(Elemental.Element.FIRE)
+	var units: Array[Unit] = [shooter]
+	var board := _board(units, _row(4))
+	var struck: Array[Vector2i] = [Vector2i(0, 0)]
+
+	assert_array(Conduction.flood(shooter, shooter.get_fired_attack(), struck, board).links).is_empty()
+
+
+# The sweep is a PROJECTION of one flood, never a second one -- the same law that makes its cells and
+# its victims agree. Asserted through the tree because that is the part a second walk would silently
+# rebuild.
+func test_the_sweep_hands_back_the_tree_the_flood_built() -> void:
+	var shooter := _shooter(Elemental.Element.SHOCK)
+	var swimmer: Unit = H.spawn_unit(self, ENEMY, Vector2i(2, 0))
+	var units: Array[Unit] = [shooter, swimmer]
+	var board := _board(units, _row(4))
+	var struck: Array[Vector2i] = [Vector2i(0, 0)]
+	var attack := shooter.get_fired_attack()
+
+	var reach := Conduction.sweep(shooter, attack, struck, board)
+	var current := Conduction.flood(shooter, attack, struck, board)
+	assert_int(reach.links.size()).is_equal(current.links.size())
+	for link in current.links:
+		var mirrored := _hop_to(reach.links, link.to)
+		assert_object(mirrored).is_not_null()
+		assert_vector(mirrored.from).is_equal(link.from)
+		assert_int(mirrored.step).is_equal(link.step)

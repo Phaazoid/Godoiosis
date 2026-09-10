@@ -1152,7 +1152,7 @@ func _make_flame(cell: Vector2i, index: int) -> MeshInstance3D:
 	# Layer.TERRAIN sorts at 2, so a frost icon painted onto a burning tile drew over the flame
 	# and the fire read as ERASED (#245, found in play). Transparent materials draw in priority
 	# order and this one does not write depth, so the sort IS the whole answer here.
-	material.render_priority = BoardOverlays.FLAME_RENDER_PRIORITY
+	material.render_priority = BoardOverlays.EFFECT_RENDER_PRIORITY
 	quad.material = material
 	flame.mesh = quad
 	flame.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF

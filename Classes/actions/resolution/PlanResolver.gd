@@ -348,9 +348,9 @@ static func _derive_watch_shot(watch: Watch, entrant: Unit, board: BoardContext,
 	# A watch shot conducts like any other attack. Its footprint is the watch's own STORED one, so the
 	# widened copy is what the shot carries and the armed watch is left alone -- re-arming it over the
 	# current would let the arc grow the watched cells with every trigger.
-	var arc := Conduction.arc_cells(watch.watcher, watch.attack, watch.footprint, board, hypo)
-	victims.append_array(Conduction.caught(arc, board, hypo, victims))
-	var covered := Conduction.widened(watch.footprint, arc)
+	var current := Conduction.flood(watch.watcher, watch.attack, watch.footprint, board, hypo)
+	victims.append_array(Conduction.caught(current.cells, board, hypo, victims))
+	var covered := Conduction.widened(watch.footprint, current.cells)
 	var group: Array[AttackAction] = []
 	if victims.is_empty():
 		# #47's rule: a shot with nobody left in the footprint still resolves as a cell attack. Only
@@ -358,9 +358,10 @@ static func _derive_watch_shot(watch: Watch, entrant: Unit, board: BoardContext,
 		var cell_shot := AttackAction.create(watch.watcher, watch.anchor_cell, null, watch.aim_cell)
 		cell_shot.fired_attack = watch.attack
 		cell_shot.footprint = covered
+		cell_shot.arc_links = current.links
 		group.append(cell_shot)
 	else:
-		group = AttackAction.create_volley(watch.watcher, watch.anchor_cell, watch.aim_cell, victims, watch.attack, covered)
+		group = AttackAction.create_volley(watch.watcher, watch.anchor_cell, watch.aim_cell, victims, watch.attack, covered, current.links)
 	for shot in group:
 		shot.is_watch_shot = true
 		shot.triggered_by = entrant
