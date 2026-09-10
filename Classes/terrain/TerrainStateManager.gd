@@ -116,7 +116,18 @@ func clear() -> void:
 func to_state_dict() -> Dictionary:
 	return _states.duplicate(true)
 
-func load_state_dict(data: Dictionary) -> void:
+# The live clocks, so a mid-battle save puts a fire back where it had got to (#890). A SECOND dict
+# beside the states rather than a richer one: the state dict is authored by hand in a mission .tres
+# and read by the brush, and re-shaping it to carry a countdown would rewrite content to record
+# something no author sets.
+#
+# A cell whose fire has no clock (ground that is not fuel) contributes nothing here, which is what
+# lets load_state_dict tell "this save knew of no clock" from "this save recorded a permanent fire"
+# without a sentinel -- see there.
+func to_turns_dict() -> Dictionary:
+	return _state_turns.duplicate(true)
+
+func load_state_dict(data: Dictionary, turns: Dictionary = {}) -> void:
 	_states.clear()
 	_state_turns.clear()
 	for cell in data:
@@ -131,7 +142,7 @@ func load_state_dict(data: Dictionary) -> void:
 		if not states.is_empty():
 			_states[cell] = states
 			for s in states:
-				_start_timer(cell, s)
+				_restore_timer(cell, s, turns)
 
 func cells_with(state: Terrain.TileState) -> Array[Vector2i]:
 	var result: Array[Vector2i] = []
@@ -159,12 +170,74 @@ func turns_remaining(cell: Vector2i, state: Terrain.TileState) -> int:
 		return _state_turns[cell][state]
 	return -1
 
+# The turn tick (#890): fire SPREADS, clocks run down, and burnt-out fuel SCORCHES. One function,
+# because the three are one moment and their ORDER is the rule.
+#
+#   1. Read what fire takes BEFORE anything moves, so a fire on its last turn still passes the
+#      flame on -- otherwise a front strands itself one cell short of the fuel it was reaching for.
+#   2. Run the clocks down. Where fire leaves ground that WAS fuel, leave SCORCHED behind.
+#   3. Only THEN light what step 1 chose, each cell taking ITS OWN ground's clock -- deposited
+#      after the tick so a fire never loses a turn on the round it catches.
+#
+# Called once per ROUND (TurnManager.round_completed -> game._on_round_completed), which is after
+# every faction's end-of-turn burn. That is what keeps Law #2: no spread can land between the
+# queue's forecast of a tile hit and the pass that pays it.
 func tick_states() -> void:
+	var taken := _cells_fire_takes()
 	for cell in _state_turns.keys():
 		for state in _state_turns[cell].keys():
 			_state_turns[cell][state] -= 1
 			if _state_turns[cell][state] <= 0:
-				_remove_state(cell, state)
+				_burn_out(cell, state)
+	for cell in taken:
+		_deposit(cell, Terrain.TileState.BURNING)
+
+
+# Which cells fire takes this round. Cardinal neighbours only -- tall grass reaching all eight is
+# #891's, and belongs to the GROUND rather than to the fire.
+#
+# GridUtils.CARDINAL_DIRECTIONS rather than RulesService.NEIGHBOURS: the same four vectors, but the
+# rules service is a layer this store does not otherwise reach into.
+func _cells_fire_takes() -> Array[Vector2i]:
+	var taken: Array[Vector2i] = []
+	for source in burning_cells():
+		for dir in GridUtils.CARDINAL_DIRECTIONS:
+			var cell: Vector2i = source + dir
+			if not taken.has(cell) and _catches_fire(cell):
+				taken.append(cell)
+	return taken
+
+
+# Would fire take this cell? Its ground must be fuel AND must admit fire in the state it is
+# currently holding -- which is what refuses SCORCHED, and refuses it identically to a direct hit,
+# since both ask the same authored clause.
+#
+# A cell ALREADY ALIGHT is never taken, and that exclusion is load-bearing rather than an
+# optimisation: two burning neighbours would otherwise restoke each other every round through
+# apply()'s timer reset, and no field would ever go out however much of it had already burnt.
+func _catches_fire(cell: Vector2i) -> bool:
+	if Terrain.is_burning(states_at(cell)) or not _has_ground(cell):
+		return false
+	var fuel := _fuel_at(cell)
+	return fuel != null and fuel.admits(states_at(cell))
+
+
+# A state whose clock has run out. Fire that was consuming FUEL leaves the spent ground behind it;
+# fire on ground that was never fuel has consumed nothing, so there is nothing to leave -- and it
+# never reaches here anyway, having no clock to run out.
+func _burn_out(cell: Vector2i, state: Terrain.TileState) -> void:
+	_remove_state(cell, state)
+	if state == Terrain.TileState.BURNING and _fuel_at(cell) != null:
+		_deposit(cell, Terrain.TileState.SCORCHED)
+
+
+# Through apply(), never straight into the dictionaries: it is the ONE deposit seam, so a state this
+# store lays down itself is grounded, timed and pruned by exactly the rules a fireball's would be.
+func _deposit(cell: Vector2i, state: Terrain.TileState) -> void:
+	var effect := ResolvedCellEffect.new()
+	effect.cell = cell
+	effect.states_added.assign([state])
+	apply(effect)
 
 # Give a freshly deposited state its clock, IF its ground gives it one. The single place that
 # question is asked, so every deposit path -- the resolver, the dev brush, a load -- reads the same
@@ -177,6 +250,23 @@ func _start_timer(cell: Vector2i, state: Terrain.TileState) -> void:
 	if not _state_turns.has(cell):
 		_state_turns[cell] = {}
 	_state_turns[cell][state] = fuel.add_state_turns[state]
+
+
+# A loaded state's clock: the SAVED remainder where the save recorded one, and otherwise whatever
+# this cell's ground would give a fresh deposit.
+#
+# NO SENTINEL is needed to tell the two apart, and that falls out of the model rather than being
+# arranged: a save written before #890's clocks recorded nothing at all, so every fire in it lands
+# on the fresh-clock branch, which is exactly the old behaviour; and a fire that was permanent when
+# saved has no entry either, but its ground gives no clock, so the fresh branch answers permanent
+# too. The only thing an entry can mean is a countdown mid-flight.
+func _restore_timer(cell: Vector2i, state: Terrain.TileState, turns: Dictionary) -> void:
+	if not turns.has(cell) or not (turns[cell] as Dictionary).has(state):
+		_start_timer(cell, state)
+		return
+	if not _state_turns.has(cell):
+		_state_turns[cell] = {}
+	_state_turns[cell][state] = turns[cell][state]
 
 
 func _fuel_at(cell: Vector2i) -> TerrainReaction:

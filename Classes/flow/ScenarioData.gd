@@ -10,6 +10,11 @@ class_name ScenarioData
 @export var unit_entries: Array[ScenarioUnitEntry] = []
 @export var tile_data: PackedByteArray
 @export var terrain_states: Dictionary = {}   # Vector2i -> Array[Terrain.TileState] deposited at runtime
+# Vector2i -> { Terrain.TileState: turns_left } (#890). AUTHORED CONTENT NEVER SETS THIS -- a board
+# says which cells are alight, and how long each one has left is a battle fact a mid-battle save
+# records. Absent is the normal shape for a mission file, and loads as "give each state its ground's
+# own clock", which is what every board did before the field existed.
+@export var terrain_state_turns: Dictionary = {}
 @export var corner_heights: Dictionary = {}   # Vector2i -> Vector4i(NW,NE,SE,SW) in half-level units
 											  # (#427). SPARSE: an absent cell is flat at 0, so a flat
 											  # board saves as {}. BoardHeights owns that default and is

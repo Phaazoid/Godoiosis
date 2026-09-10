@@ -20,7 +20,7 @@ enum TileState {
 			 # Resources/TerrainReactions/Melt.tres), same mechanism as COVER.
 	COVER,   # #84: Burrow-dug entrenchment. Permanent (no authored clock -> never ticks out);
 			 # removed only by a destructive hit (states_removed), never by a timer.
-	BLAZE    # RETIRED by #890 (2026-09-10). It was authored set-dressing fire -- BURNING's
+	BLAZE,   # RETIRED by #890 (2026-09-10). It was authored set-dressing fire -- BURNING's
 			 # permanent sibling -- back when a fire's clock belonged to the STATE. Now the clock
 			 # belongs to the GROUND, so "a fire that never goes out" is just BURNING on ground
 			 # that is not fuel, and this member has nothing left to mean. Nothing writes it and
@@ -28,6 +28,11 @@ enum TileState {
 			 # (APPEND-ONLY, and a hole is worse than a tombstone) -- deleting 4 would make any
 			 # stray one in an old saved board read as whatever lands here next. RETIRED_STATES
 			 # below is what keeps it out of the authoring surfaces.
+	SCORCHED # #890: ground whose fuel is spent. Permanent (no authored clock), harmless to stand
+			 # on, and NOT FUEL -- the ignition reactions forbid it, so fire can never re-cross
+			 # ground it has already taken. That is what makes a spreading fire a FRONT that
+			 # settles rather than a field that oscillates for ever, and it is why the burnt lane
+			 # behind the fire is the safe one.
 }
 
 # States no authoring surface may offer and no rule may act on -- the tombstones above. A retired

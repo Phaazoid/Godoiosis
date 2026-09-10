@@ -37,7 +37,7 @@ enum Term {
 	# Elemental
 	ELEMENTS, WET, CHILLED, REACTIONS,
 	# Terrain
-	TERRAIN_KINDS, WATER_TILE, SHALLOW_WATER, BURNING, FROZEN, COVER,
+	TERRAIN_KINDS, WATER_TILE, SHALLOW_WATER, BURNING, SCORCHED, FROZEN, COVER,
 	# Will & lifecycle
 	DOWNED, CRISIS, MAIM, PROSTHETIC,
 }
@@ -97,7 +97,7 @@ static func term_for_stat(stat: Stats.Stat) -> Term:
 
 static func term_for_tile_state(state: Terrain.TileState) -> Term:
 	const MAP: Dictionary[Terrain.TileState, Term] = {
-		Terrain.TileState.BURNING: Term.BURNING,
+		Terrain.TileState.BURNING: Term.BURNING, Terrain.TileState.SCORCHED: Term.SCORCHED,
 		Terrain.TileState.FROZEN: Term.FROZEN, Terrain.TileState.COVER: Term.COVER,
 	}
 	# Deliberately a bare lookup and not a get() with a fallback: test_glossary_coverage walks
@@ -507,7 +507,12 @@ static func _build_entries() -> Dictionary:
 			% Terrain.BURNING_TILE_DAMAGE
 			+ "turn. Fire burns for as long as the ground under it has fuel — grass goes out on "
 			+ "its own, and a fire on bare stone is consuming nothing, so it burns until something "
-			+ "puts it out."}
+			+ "puts it out. Fire spreads to whatever it can burn beside it, one tile a round."}
+	e[Term.SCORCHED] = {"category": Category.TERRAIN, "title": "Scorched",
+		"short": "Burnt out. Safe to stand on, and it will not catch again.",
+		"long": "This ground has already burned. Nothing here is left to burn, so fire cannot take "
+			+ "it a second time from any direction — which makes the ground a fire has crossed the "
+			+ "safest place on a burning field, and the only firebreak that makes itself."}
 	e[Term.FROZEN] = {"category": Category.TERRAIN, "title": "Frozen",
 		"short": "Frozen solid. Frozen water can be walked on, and nothing melts it but fire.",
 		"long": "Ice. Frozen water is walkable ground for any unit — permanently, unless burned away."}
