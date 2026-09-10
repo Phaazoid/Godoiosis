@@ -135,7 +135,7 @@ static func load_scenario(board: Dictionary, path: String) -> Array[Unit]:
 static func apply_scenario(board: Dictionary, scenario: ScenarioData) -> Array[Unit]:
 	board.grid.restore(scenario.tile_data)   # the bulk door (#391); a Play board has no mirror to hear it, but the law has no exceptions
 	if board.get("terrain_states") != null:
-		board.terrain_states.load_state_dict(scenario.terrain_states)   # mirrors ScenarioManager
+		board.terrain_states.load_state_dict(scenario.terrain_states, scenario.terrain_state_turns)   # mirrors ScenarioManager
 	if board.get("board_heights") != null:
 		board.board_heights.load_corner_dict(scenario.corner_heights)   # mirrors ScenarioManager
 

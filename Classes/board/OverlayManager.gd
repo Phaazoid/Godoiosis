@@ -45,6 +45,9 @@ const TERRAIN_STATE_ICONS: Dictionary = {
 	Terrain.TileState.BURNING: preload("res://Art/Icons/TerrainIcons/Fire.png"),
 	Terrain.TileState.FROZEN: preload("res://Art/Icons/TerrainIcons/Ice.png"),
 	Terrain.TileState.COVER: preload("res://Art/Icons/TerrainIcons/Cover.png"),
+	# SCORCHED is FLAT art on purpose (#890) -- it is not in OverlayMirror.STANDING_STATES, so the
+	# diorama mirrors this icon onto the cell for free, the way FROZEN's frost does. Placeholder.
+	Terrain.TileState.SCORCHED: preload("res://Art/Icons/TerrainIcons/Scorched.png"),
 	# No BLAZE row since #890 retired it: permanence moved to the ground, so there is only one fire.
 }
 

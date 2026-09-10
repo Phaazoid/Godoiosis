@@ -13,6 +13,12 @@ class_name TerrainReaction
 @export var required_kind: Terrain.Kind = Terrain.Kind.NONE
 @export var required_tile_state: Terrain.TileState = Terrain.TileState.NONE
 
+# A state that REFUSES this reaction (#890) -- required_tile_state's negative, and NONE means
+# nothing refuses it. The ignition reactions name SCORCHED, so ground whose fuel is spent cannot
+# catch again, from a neighbour or from a fireball: one clause, both paths, no second rule about
+# what spreading may take. It is also where a firebreak would be spelled if ice ever became one.
+@export var forbidden_tile_state: Terrain.TileState = Terrain.TileState.NONE
+
 @export var add_tile_states: Array[Terrain.TileState] = []
 @export var remove_tile_states: Array[Terrain.TileState] = []   # omit to NOT consume
 
@@ -33,4 +39,15 @@ class_name TerrainReaction
 func applies_to_tile(kind: Terrain.Kind, held_states: Array[Terrain.TileState]) -> bool:
 	if required_kind != Terrain.Kind.NONE and required_kind != kind:
 		return false
+	if not admits(held_states):
+		return false
 	return required_tile_state == Terrain.TileState.NONE or held_states.has(required_tile_state)
+
+
+# The state REFUSAL alone, split out because the spread step asks it separately: the KIND half is
+# already settled there (the store holds this cell's fuel reaction, found by kind), so asking the
+# whole predicate again would mean handing it a kind it just looked up. One clause, one home --
+# applies_to_tile composes it rather than restating it.
+func admits(held_states: Array[Terrain.TileState]) -> bool:
+	return forbidden_tile_state == Terrain.TileState.NONE \
+			or not held_states.has(forbidden_tile_state)

@@ -160,6 +160,7 @@ func capture_board() -> BoardSnapshot:
 	var snapshot := BoardSnapshot.new()
 	snapshot.tile_data = grid.tile_map_data
 	snapshot.terrain_states = game.terrain_states.to_state_dict()
+	snapshot.terrain_state_turns = game.terrain_states.to_turns_dict()
 	snapshot.corner_heights = game.board_heights.to_corner_dict()
 	snapshot.zones = game.zone_manager.to_dict()
 	return snapshot
@@ -173,7 +174,7 @@ func capture_board() -> BoardSnapshot:
 #     nothing else follows it.
 func restore_board(snapshot: BoardSnapshot) -> void:
 	grid.restore(snapshot.tile_data)
-	game.terrain_states.load_state_dict(snapshot.terrain_states)
+	game.terrain_states.load_state_dict(snapshot.terrain_states, snapshot.terrain_state_turns)
 	game.board_heights.load_corner_dict(snapshot.corner_heights)
 	# Authored state must be VISIBLE at turn one -- nothing else redraws until the first round tick (#174).
 	overlay_manager.redraw_terrain_live(game.terrain_states)

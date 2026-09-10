@@ -24,6 +24,10 @@ static func fuel(turns := FUEL_TURNS) -> TerrainReaction:
 	reaction.add_tile_states = added
 	var clocks: Dictionary[Terrain.TileState, int] = {Terrain.TileState.BURNING: turns}
 	reaction.add_state_turns = clocks
+	# Spent ground is not fuel (#890) -- the shipped ignition reactions author exactly this, and a
+	# fixture without it is not a model of flammable ground: fire re-crosses what it already burnt
+	# and the field never settles. Found by test_fire_clock going red rather than by review.
+	reaction.forbidden_tile_state = Terrain.TileState.SCORCHED
 	return reaction
 
 
@@ -33,6 +37,16 @@ static func store_on_fuel(turns := FUEL_TURNS) -> TerrainStateManager:
 	var store := TerrainStateManager.new()
 	var reaction := fuel(turns)
 	store.fuel_source = func(_cell: Vector2i) -> TerrainReaction: return reaction
+	return store
+
+
+# A BOUNDED field of fuel. store_on_fuel's ground goes on for ever, which is fine for a case about
+# one cell's clock and useless for one about a fire SETTLING -- an infinite field cannot settle, and
+# a case that expects it to is asserting something no rule promises. The board edge is the real
+# terminator alongside SCORCHED, so a case about the end of a fire needs an edge to reach.
+static func store_on_fuel_within(bounds: Rect2i, turns := FUEL_TURNS) -> TerrainStateManager:
+	var store := store_on_fuel(turns)
+	store.ground_source = func(cell: Vector2i) -> bool: return bounds.has_point(cell)
 	return store
 
 
