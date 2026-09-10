@@ -106,7 +106,12 @@ func _squad_id(squad: Squad) -> int:
 func terrain_at(cell: Vector2i) -> Dictionary:
 	var data := grid.get_cell_tile_data(cell)
 	if data == null:
-		return {"exists": false, "walkable": false, "cost": 0, "type": "offmap"}
+		# A HOLE AND THE EDGE OF THE WORLD ARE DIFFERENT ANSWERS (#875). No ground INSIDE the
+		# board's own rect is a chasm a shove flies over and a landing dies in; no ground outside
+		# it is simply off the map. Asked through the board so the view cannot disagree with the
+		# rules about where a hole is -- the same reason `walkable` below comes from is_walkable.
+		var absent := "void" if _board().is_void_at(cell) else "offmap"
+		return {"exists": false, "walkable": false, "cost": 0, "type": absent}
 	var cost := 0
 	if data.has_custom_data("move_cost"):
 		cost = int(data.get_custom_data("move_cost"))

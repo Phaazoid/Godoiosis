@@ -304,3 +304,45 @@ func test_scenario_objectives_and_zones_surface_in_overview() -> void:
 	assert_str(text).contains("C = capture zone")
 	assert_str(text).contains("E = extract zone")
 
+
+
+# --- A hole and the edge of the world are different answers (#875) -----------------------------
+
+const HOLE_TILE := Vector2i(18, 2)   # the authored VOID tile ("hole") in TestTiles
+
+
+# The terrain glyph the RENDERED board shows for `cell`, read back out of render_overview rather
+# than off the private helper -- test_board_view_rune.gd's rule, so the assert covers the wire.
+# The header's first column names the left edge, so this cannot drift if the bounds move.
+func _glyph_at(cell: Vector2i) -> String:
+	var header := ""
+	var row := ""
+	for line in BoardView.render_overview(_session).split("\n"):
+		if header == "" and line.begins_with("      "):
+			header = line
+		elif line.begins_with("y=%3d " % cell.y):
+			row = line
+	if header == "" or row == "":
+		return ""
+	var first_x := int(header.substr(6, 3))
+	return row.substr(6 + (cell.x - first_x) * 3 + 1, 1)
+
+
+func test_erased_ground_inside_the_board_reads_as_a_hole_not_as_off_the_map() -> void:
+	_board.grid.erase_cell(Vector2i(3, 3))
+	assert_str(_session.terrain_at(Vector2i(3, 3)).type).is_equal("void")
+	# ...and past the painted rect the map simply stops, which is the other half of the rule.
+	assert_str(_session.terrain_at(Vector2i(40, 40)).type).is_equal("offmap")
+
+
+# A hole is UNWALKABLE, so the glyph renderer's `#` branch used to swallow every VOID cell and draw
+# a chasm as MASONRY -- which left TERRAIN_GLYPH's own "void" entry unreachable from the day it was
+# written. Both spellings of a hole render as open space now; `#` keeps meaning "unwalkable tile
+# with no glyph of its own".
+func test_a_hole_renders_as_open_space_rather_than_as_a_wall() -> void:
+	_board.grid.set_cell(Vector2i(3, 3), 0, HOLE_TILE)
+	_board.grid.erase_cell(Vector2i(4, 3))
+	assert_str(_glyph_at(Vector2i(3, 3))).is_equal(" ")
+	assert_str(_glyph_at(Vector2i(4, 3))).is_equal(" ")
+	# The control: ordinary grass still renders as itself, so this is not "everything went blank".
+	assert_str(_glyph_at(Vector2i(5, 3))).is_equal(".")

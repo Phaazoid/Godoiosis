@@ -4,7 +4,7 @@ extends RefCounted
 # token-light, no layer ever occluded. Reads PlaySession directly (the structured
 # dicts stay internal; this is the channel a player reads).
 
-const TERRAIN_GLYPH := {"grass": ".", "mud": "~", "rock": "#", "offmap": " ", "void": " "}   # offmap = NO tile (the #259 rename); "void" = the authored VOID kind -- both render as empty space
+const TERRAIN_GLYPH := {"grass": ".", "mud": "~", "rock": "#", "offmap": " ", "void": " "}   # offmap = past the board's rect; "void" = a hole, painted or erased (#875) -- both render as empty space
 
 # ---- public renders ----
 
@@ -148,11 +148,19 @@ static func _cell_str(session, cell: Vector2i, overlay: Dictionary) -> String:
 
 static func _terrain_glyph(session, cell: Vector2i) -> String:
 	var t: Dictionary = session.terrain_at(cell)
-	if not t.exists:
-		return " "
+	# THE TABLE WINS, and it is consulted BEFORE walkability (#875). Both kinds of nothing live in
+	# it -- "offmap" past the board's rect and "void" a hole inside it, which terrain_at now tells
+	# apart -- and both are unwalkable, so the `#` branch used to swallow them whole: a painted
+	# chasm drew as MASONRY, and TERRAIN_GLYPH's own "void" entry had been unreachable since the
+	# day it was written. That is this ticket's confusion in the view the Play API reads.
+	#
+	# `#` keeps the meaning it always had underneath: the fallback for an unwalkable tile with no
+	# glyph of its own -- a wall, a boulder, deep water.
+	if TERRAIN_GLYPH.has(t.type):
+		return TERRAIN_GLYPH[t.type]
 	if not t.walkable:
 		return "#"
-	return TERRAIN_GLYPH.get(t.type, "?")
+	return "?"
 
 static func _unit_at(session, cell: Vector2i) -> Unit:
 	for unit in session.live_units():
