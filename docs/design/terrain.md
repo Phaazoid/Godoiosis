@@ -67,8 +67,10 @@ either extreme.
 
 The answer dissolves the fork instead of picking a side — **two water tiles, ONE `Terrain.Kind`**:
 
-- **Shallow water** — walkable at **`move_cost` 3** (mud is 2). Being shoved in is *annoying*, not
-  lethal. It is the tile that declares the `walkable` flag; nothing else marks it.
+- **Shallow water** — walkable at **`move_cost` 2, the same as mud** (dev, 2026-09-10, when The
+  Ford was authored: at 3 a wade was a two-turn event, so the clock decided the crossing and the
+  player never did). Being shoved in is *annoying*, not lethal. It is the tile that declares the
+  `walkable` flag; nothing else marks it.
 - **Deep water** — the tile that does NOT declare it. A shove ends **in** it and the water takes
   whatever health the blow and the fall left, so the unit goes DOWN on the ordinary
   `Unit.DOWNED_TURNS` clock and `RescueAction` is the rescue. The slow cousin of the ledge kill,

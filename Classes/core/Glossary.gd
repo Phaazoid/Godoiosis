@@ -484,7 +484,7 @@ static func _build_entries() -> Dictionary:
 			+ "everyone — permanently, unless burned away."}
 	e[Term.SHALLOW_WATER] = {"category": Category.TERRAIN, "title": "Shallow water",
 		"short": "Wadeable, but slow going. Being shoved in costs position and nothing else.",
-		"long": "Shallow water is crossed on foot at a high movement cost. It is ordinary ground "
+		"long": "Shallow water is waded at the same cost as mud. It is ordinary ground "
 			+ "for every rule that matters — a shove lands in it harmlessly, and it is deep water, "
 			+ "not this, that drowns."}
 	e[Term.BURNING] = {"category": Category.TERRAIN, "title": "Burning",
