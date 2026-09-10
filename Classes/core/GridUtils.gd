@@ -117,6 +117,22 @@ static func get_terrain_kind_at_cell(grid: TileMapLayer, cell: Vector2i) -> Terr
 	return terrain_kind_of(grid.get_cell_tile_data(cell))
 
 
+# Is this cell a HOLE (#875)? The authored VOID kind, or NO GROUND inside the board's own rect --
+# erasing a rim cell shrinks the board, erasing an interior one digs a chasm, and get_used_rect() is
+# already what movement_cost and compute_move_range mean by "on the map".
+#
+# It lives HERE rather than only on BoardContext (#876) for the reason walkable_of does: the RENDER
+# asks the same question and is not holding a BoardContext. BoardMirror decides whether a cell gets
+# a lip; the rules decide whether a shove flies over it. One rule, two callers, no second answer.
+# BoardContext.is_void_at delegates and stays the spelling the rules layer reads.
+static func is_void_at(grid: TileMapLayer, cell: Vector2i) -> bool:
+	if grid == null:
+		return false   # no board, no holes -- has_ground's own permissive answer, one question along
+	if get_terrain_kind_at_cell(grid, cell) == Terrain.Kind.VOID:
+		return true
+	return not has_ground(grid, cell) and grid.get_used_rect().has_point(cell)
+
+
 # The kind a TileData carries. Split out of get_terrain_kind_at_cell (#250) so a caller
 # holding a tile rather than a placed cell -- the meshlib generator walks the TILESET, which
 # has no board -- reads the same rule instead of copying it. Same shape as the

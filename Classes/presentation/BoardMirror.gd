@@ -317,6 +317,14 @@ const FLAME_FRAMES := 8
 # under it was repainted (found in play, 2026-08-16).
 @export var block_height_scale := 1.0: set = _set_block_height_scale
 
+# How far a hole's walls fall before the shaft goes black, in world units, and what colour they
+# start from at the lip (#876). Both are baked into the wall MESH, so both carry a setter that
+# re-cuts every standing lip -- block_height_scale's lesson above, which shipped as a dead slider
+# once already. The key each lip was built from rides on its own node, so the sweep needs no board.
+@export var lip_shaft_depth := 3.0: set = _set_lip_shaft_depth
+@export var lip_shaft_color := Color(0.29, 0.24, 0.29): set = _set_lip_shaft_color
+var _lip_mat: StandardMaterial3D = null
+
 # How tall a TUFT's plants stand relative to their own art (#280) — 1.0 would draw a flower at the
 # size the tile draws it, which is a flower the height of a unit's shin; 0.25 is the dev's eye
 # against the units. Only the SIZE: where each plant sits in the cell comes off the art, not here.
@@ -383,6 +391,18 @@ var _cover_markers: Dictionary[Vector2i, Node3D] = {}
 const PROP_TILE_META := "prop_tile"
 const PROP_CORNERS_META := "prop_corners"
 var _props: Dictionary[Vector2i, Node3D] = {}
+
+# One node per HOLE, holding that hole's lips (#876) -- up to four, one per edge that meets ground.
+# A SEPARATE store from _props rather than a second kind inside it, for two measured reasons: sync()
+# frees every prop whose cell is not in get_used_cells(), and an erased hole HAS no tile, so a lip
+# living there would be freed on every full pass; and the three light sweeps walk _props expecting
+# lit props to re-derive. Same lifetime shape, same drop hooks, different question.
+#
+# The diff key is everything the lip's shape is DERIVED from, which is all next door: which edges
+# meet ground, both corner heights of each of those edges, and which item each borrows. #308's law
+# -- a key that copies only part of what the render reads goes stale in silence.
+const LIP_KEY_META := "lip_key"
+var _lips: Dictionary[Vector2i, Node3D] = {}
 
 # Marks a prop sprite as a TUFT, so the tuft_scale setter can find the standing ones. A mark on the
 # node rather than a second dictionary keyed by cell: _props already tracks prop LIFETIME, and a
@@ -521,6 +541,23 @@ func sync(grid: TileMapLayer, heights: BoardHeights) -> void:
 	for cell in grid.get_used_cells():
 		live[cell] = true
 		reconcile_cell(grid, cell, heights, floor_row)
+	# THE ERASED HOLES, which this walk is structurally blind to (#876): get_used_cells() lists cells
+	# that HAVE a tile, and a cell whose ground was erased has none -- so a chasm dug with the brush
+	# would never be reconciled here and never grow a lip. A painted VOID tile needs no help; it is
+	# in the walk above. The rect is only walked on the FULL path, which is already O(board) (it
+	# sweeps every GridMap cell below), and never per frame -- sync_cells has the announced set.
+	var lipped: Dictionary[Vector2i, bool] = {}
+	var rect := grid.get_used_rect()
+	for y in range(rect.position.y, rect.end.y):
+		for x in range(rect.position.x, rect.end.x):
+			var hole := Vector2i(x, y)
+			if live.has(hole):
+				continue   # has a tile: already reconciled, lip and all
+			reconcile_cell(grid, hole, heights, floor_row)
+			lipped[hole] = true
+	# A lip whose cell left the rect entirely (the board shrank under it) is named by nobody above,
+	# which is _free_props_except's own reason one store along.
+	_free_lips_except(live, lipped)
 	# A prop on a cell that lost its ground entirely: reconcile_cell's own else-branch covers a cell
 	# repainted from prop to flat, but this walk only visits cells that still HAVE ground.
 	_free_props_except(live)
@@ -551,6 +588,24 @@ func sync_cells(grid: TileMapLayer, cells: Array[Vector2i], heights: BoardHeight
 	sync_passes += 1
 	for cell in cells:
 		reconcile_cell(grid, cell, heights, floor_row)
+	# DILATE ONTO VOID NEIGHBOURS (#876). A lip is drawn from facts about the cells AROUND it -- which
+	# edges meet ground, how high each of those edges sits, and whose art each one borrows -- so
+	# repainting or erasing a cell changes the lip of the hole NEXT to it, and that hole is not in the
+	# announced set. One hop is enough: nothing about a lip reads two cells away.
+	#
+	# Deliberately NOT a wholesale rebuild the way _rebuild_water_mask below is. That is a texture and
+	# this is nodes: a full pass would free and recreate every lip on the board on every motion event
+	# of a brush drag.
+	var seen: Dictionary[Vector2i, bool] = {}
+	for cell in cells:
+		seen[cell] = true
+	for cell in cells:
+		for dir in GridUtils.CARDINAL_DIRECTIONS:
+			var near: Vector2i = cell + dir
+			if seen.has(near) or not GridUtils.is_void_at(grid, near):
+				continue
+			seen[near] = true
+			reconcile_cell(grid, near, heights, floor_row)
 	_rebuild_water_mask(grid)
 
 
@@ -561,14 +616,20 @@ func sync_cells(grid: TileMapLayer, cells: Array[Vector2i], heights: BoardHeight
 # terrain fact, and splitting it would be two answers to "what is on this cell".
 func reconcile_cell(grid: TileMapLayer, cell: Vector2i, heights: BoardHeights,
 		floor_row: int) -> void:
-	if not GridUtils.has_ground(grid, cell):
+	# A HOLE (#876) -- painted VOID, or ground erased from inside the board's rect. The column still
+	# clears: what #259 called "the hole IS the absence" is HALF right, and the half it got wrong is
+	# why an erased cell and a chasm were the same picture. The absence stays; a LIP is drawn round
+	# it wherever it meets ground, with the shaft hanging off that lip's own edge.
+	#
+	# Asked before the ground test, because a painted hole HAS ground and an erased one has none and
+	# both are the same answer here -- GridUtils.is_void_at is the one rule (#875).
+	if GridUtils.is_void_at(grid, cell):
 		_clear_column(cell, floor_row)
 		_free_prop_at(cell)
+		_reconcile_lip(grid, cell, heights)
 		return
-	# A VOID tile (#259) is the second declared skip beside NONE-means-fallback: the hole IS the
-	# absence of the column, so the painted cell clears exactly like unpainted ground and the
-	# neighbours' side faces become the pit walls.
-	if GridUtils.get_terrain_kind_at_cell(grid, cell) == Terrain.Kind.VOID:
+	_free_lip_at(cell)   # repainted from a hole back to ground
+	if not GridUtils.has_ground(grid, cell):
 		_clear_column(cell, floor_row)
 		_free_prop_at(cell)
 		return
@@ -1646,6 +1707,203 @@ func _free_prop_at(cell: Vector2i) -> void:
 		return
 	_props[cell].queue_free()
 	_props.erase(cell)
+
+
+# --- Hole lips (#876) ---------------------------------------------------------------------------
+#
+# A hole is still the ABSENCE of a column (#259's ruling stands); what changed is that the absence is
+# DRESSED. Every edge where a hole meets ground grows a wall hanging off that edge into the dark, so
+# a chasm reads as depth rather than as a gap in the board. Where two holes meet nothing is drawn --
+# that is the dev's ruling 6, and it is what makes a wide chasm one pit instead of adjacent potholes.
+
+# Which two grid VERTICES bound the hole's edge in each direction, as offsets from the cell, IN THE
+# SAME ORDER Terrain.edge_of_corners returns that edge's two heights. One table, so the vertex and
+# the height it carries cannot get out of step -- two tables is how a wall ends up twisted.
+const LIP_EDGE_VERTICES: Dictionary[Vector2i, Array] = {
+	Vector2i.UP: [Vector2i(0, 0), Vector2i(1, 0)],
+	Vector2i.DOWN: [Vector2i(0, 1), Vector2i(1, 1)],
+	Vector2i.LEFT: [Vector2i(0, 0), Vector2i(0, 1)],
+	Vector2i.RIGHT: [Vector2i(1, 0), Vector2i(1, 1)],
+}
+
+
+# The lip's whole SHAPE, as the value its diff key compares (#308's law): per ground-facing edge, the
+# direction, BOTH corner heights of the neighbour's facing edge, and the item that edge borrows. A
+# key naming only some of what the build reads goes stale in silence -- repaint the cell next door
+# and a lip left standing is exactly that bug.
+func lip_key(grid: TileMapLayer, cell: Vector2i, heights: BoardHeights) -> Array:
+	var key: Array = []
+	for dir in GridUtils.CARDINAL_DIRECTIONS:
+		var near: Vector2i = cell + dir
+		# Ground it can hang off: not another hole, and not off the board.
+		if GridUtils.is_void_at(grid, near) or not GridUtils.has_ground(grid, near):
+			continue
+		key.append([dir, lip_edge_heights(near, dir, heights), item_for_cell(grid, near)])
+	return key
+
+
+# The two corner heights of the NEIGHBOUR's edge facing this hole. Read off the neighbour rather
+# than the hole because the hole has no surface of its own to measure -- and read as the two corners
+# rather than through surface_height_at_edge, which answers the edge's MIDPOINT: a neighbour on a
+# ramp has a TILTED edge, and one number cannot say so, which would seat every lip beside a slope
+# flat across a slanted edge and open a seam at both ends.
+func lip_edge_heights(neighbour: Vector2i, dir: Vector2i, heights: BoardHeights) -> Vector2i:
+	var corners := Vector4i.ZERO if heights == null else heights.corners_at(neighbour)
+	return Terrain.edge_of_corners(corners, -dir)
+
+
+func _reconcile_lip(grid: TileMapLayer, cell: Vector2i, heights: BoardHeights) -> void:
+	var key := lip_key(grid, cell, heights)
+	var standing: Node3D = _lips.get(cell)
+	if standing != null:
+		if standing.get_meta(LIP_KEY_META) == key:
+			return
+		standing.queue_free()
+		_lips.erase(cell)
+	if key.is_empty():
+		return   # a hole with ground on no side: the middle of a chasm, nothing to hang a wall from
+	var root := Node3D.new()
+	add_child(root)
+	# The ONLY per-cell node in this file not placed by surface_point, and the reason is that it has
+	# no cell centre to be placed at: a lip's geometry spans a shared EDGE and is built in world
+	# vertices. It still takes the tear-out's offset from the same store surface_point reads (#521),
+	# so a hole inside a staged fight lifts with the ground around it.
+	root.position = BoardSpace.staged_offset(cell)
+	for edge: Array in key:
+		var wall := _make_lip_wall(cell, edge[0], edge[1])
+		if wall == null:
+			continue
+		wall.layers = BoardOverlays.WORLD_RENDER_LAYER
+		wall.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		root.add_child(wall)
+	root.set_meta(LIP_KEY_META, key)
+	_lips[cell] = root
+
+
+# One edge's wall: a quad from the neighbour's two corner heights down to a flat shaft floor.
+#
+# WINDING IS DERIVED, NOT TABLED. The wall is seen only from inside the pit, so its face has to point
+# at the hole's centre; with CULL_BACK on since #559 a mis-wound quad does not look wrong, it
+# disappears. Rather than hand-write four correct orders, the two candidates are compared against
+# the direction the face must look and the vertices swapped if the first one points outward.
+func _make_lip_wall(cell: Vector2i, dir: Vector2i, edge: Vector2i) -> MeshInstance3D:
+	var offsets: Array = LIP_EDGE_VERTICES[dir]
+	var a: Vector2i = cell + (offsets[0] as Vector2i)
+	var b: Vector2i = cell + (offsets[1] as Vector2i)
+	var top_a := BoardSpace.vertex_point(a, float(edge.x))
+	var top_b := BoardSpace.vertex_point(b, float(edge.y))
+	# A LEVEL floor under a tilted top, so a wall beside a ramp is a trapezoid rather than a
+	# parallelogram sliding out of the dark at one end.
+	var floor_y := minf(top_a.y, top_b.y) - lip_shaft_depth
+	var inward := Vector3(-float(dir.x), 0.0, -float(dir.y))
+	if (top_b - top_a).cross(Vector3(top_a.x, floor_y, top_a.z) - top_a).dot(inward) < 0.0:
+		var swap := top_a
+		top_a = top_b
+		top_b = swap
+	var bottom_a := Vector3(top_a.x, floor_y, top_a.z)
+	var bottom_b := Vector3(top_b.x, floor_y, top_b.z)
+
+	var verts := PackedVector3Array([top_a, top_b, bottom_b, top_a, bottom_b, bottom_a])
+	var normals := PackedVector3Array()
+	var colors := PackedColorArray()
+	var dark := Color(lip_shaft_color.r, lip_shaft_color.g, lip_shaft_color.b, 1.0)
+	# The fade is VERTEX COLOUR rather than a shader: two ramp stops is all "it goes dark down
+	# there" needs, and a shader here would be a fourth material for one gradient.
+	for tint in [dark, dark, Color.BLACK, dark, Color.BLACK, Color.BLACK]:
+		colors.append(tint)
+		normals.append(inward)
+
+	var arrays := []
+	arrays.resize(Mesh.ARRAY_MAX)
+	arrays[Mesh.ARRAY_VERTEX] = verts
+	arrays[Mesh.ARRAY_NORMAL] = normals
+	arrays[Mesh.ARRAY_COLOR] = colors
+	var mesh := ArrayMesh.new()
+	mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arrays)
+	mesh.surface_set_material(0, _lip_material())
+
+	var node := MeshInstance3D.new()
+	node.mesh = mesh
+	return node
+
+
+# One material for every wall on the board: they differ by vertex colour, not by material, which is
+# atlas_mat's own reasoning one surface along. UNSHADED on purpose -- a bottomless hole that catches
+# the sun on its near wall reads as a trench, and the fade is doing the work here rather than light.
+func _lip_material() -> StandardMaterial3D:
+	if _lip_mat == null:
+		_lip_mat = StandardMaterial3D.new()
+		_lip_mat.vertex_color_use_as_albedo = true
+		_lip_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+		_lip_mat.cull_mode = BaseMaterial3D.CULL_BACK
+	return _lip_mat
+
+
+# Re-cut every standing lip against the current knobs. The key a lip was built from is stamped on
+# its own node, so this needs neither the grid nor the heights -- which is what lets a tuning slider
+# reach the board mid-battle, where no sync is running to rebuild anything.
+func _recut_lips() -> void:
+	for cell: Vector2i in _lips.keys():
+		var root: Node3D = _lips[cell]
+		if not root.has_meta(LIP_KEY_META):
+			continue   # asked, not defaulted: get_meta's default arg is ignored and raises
+		var key: Array = root.get_meta(LIP_KEY_META)
+		for child in root.get_children():
+			child.queue_free()
+		for edge: Array in key:
+			var wall := _make_lip_wall(cell, edge[0], edge[1])
+			if wall == null:
+				continue
+			wall.layers = BoardOverlays.WORLD_RENDER_LAYER
+			wall.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+			root.add_child(wall)
+
+
+func _set_lip_shaft_depth(value: float) -> void:
+	lip_shaft_depth = value
+	_recut_lips()
+
+
+func _set_lip_shaft_color(value: Color) -> void:
+	lip_shaft_color = value
+	_recut_lips()
+
+
+func _free_lip_at(cell: Vector2i) -> void:
+	if not _lips.has(cell):
+		return
+	_lips[cell].queue_free()
+	_lips.erase(cell)
+
+
+# The lips whose cell nobody named this pass -- a hole the board shrank out from under. sync()'s own
+# _free_props_except reasoning, over the store that outlives a cell losing its tile.
+func _free_lips_except(live: Dictionary[Vector2i, bool], lipped: Dictionary[Vector2i, bool]) -> void:
+	for cell: Vector2i in _lips.keys():
+		if not live.has(cell) and not lipped.has(cell):
+			_free_lip_at(cell)
+
+
+# The #521 doors, drop_prop_at's twins. A tear-out moves where a cell RENDERS without touching
+# anything lip_key is made of, so the key would early-out and the wall would stay on the board its
+# hole just left; invalidating at the source is the only honest answer, exactly as it is for props.
+func drop_lip_at(cell: Vector2i) -> void:
+	_free_lip_at(cell)
+
+
+func drop_lips() -> void:
+	for cell: Vector2i in _lips.keys():
+		_lips[cell].queue_free()
+	_lips.clear()
+
+
+# How many holes currently wear a lip, and the node on one -- the test seam _props already has.
+func lip_count() -> int:
+	return _lips.size()
+
+
+func lip_at(cell: Vector2i) -> Node3D:
+	return _lips.get(cell)
 
 
 # The object standing on the cell that paints it, in whatever form its art asks for. The FORM is
