@@ -4,7 +4,7 @@
 
 > **Pacing principle (dev, 2026-07-04): showcase ≠ introduction.** Late levels may be the *showcase* for a system (Will, taming, weather…), but they must not be its *first appearance* — otherwise half the game passes without the toolbox. Introduce each mechanic early in an ordinary level, test it in a mixed level, then let the set piece be the graduation exam. (Teach → test → twist.)
 
-**Canon checked through #699 (2026-09-02).**
+**Canon checked through #699 (2026-09-02); content cross-reference added 2026-09-10.**
 
 ## The concepts (campaign order)
 
@@ -20,6 +20,11 @@
 | 8 | **The Five-Colored Work** | P4 — Council of Five, in the Library ("avec lazorz") | The boss already specced in [elemental-interactions.md](elemental-interactions.md): extreme-LDR councillor squad assembling the Magnum Opus ritual on a player unit, stage by visible stage. Library terrain: **Radiance** beam emplacements (Aether+Focus — the "lazorz") on telegraphed lines; scroll archives survive as codex hints if you fight carefully — the Council will burn their own Library to kill you. Kill-order is the puzzle. | Council boss spec · ritual clock (Law #2) · Radiance · discovery economy |
 | 9 | **Pax Facticius** | P4 — cyborg King Campeador (the mechanist Magnum Opus) | The King's perfected body is maximally FERROUS/CONDUCTIVE — and he knows it: the arena floor is **GROUNDED** plating (the designed shock counter). The fight is dismantling the arena — Deluge sections, Shatter the plates, **Lodestone/MAGNETO-Haul** him off safe flooring (he is the most metal thing alive). Caterpillar-tank multi-tile escort miniboss debuts the mech-boss tech. | Shock meta + its counterplay · attack-the-map as boss mechanic · multi-tile units |
 | 10 | **The Still Point** | P4 endgame — the Philosopher's Keep | Approach = the world's only **sourceless** null field — no terrain source, no vein, nothing to stand by (the authored per-map dial materia's model reserves for exactly this): alchemists on carried reserves, mechanists carry the team. Inner sanctum inverts: Stone-saturated, most alchemically alive place in existence. The Philosopher (or final acolyte) is the **exact-lethal** boss that forces Crisis Mode. If the joint-transmutation fork survives, the ending beat is a literal dual-cast (alchemy-kit open fork 7). | Materia scarcity dial · alchemist↔mechanist duality · Crisis Mode · dual-cast |
+
+> **#2's water loop has a small cousin on disk (2026-09-10).** `Scenarios/missions/TheFord.tres` is the demo's
+> flood/freeze/melt teaching map — a three-wide river, two authored crossings, and one marksman watching the
+> ford. It is NOT The Toll Road: no story beat, no melt-it-behind-you second wave, and flat. It exists so the
+> loop is TAUGHT before the set piece is the graduation exam, which is this doc's own pacing principle.
 
 ## Centipede tank boss — squad-splitting design (dev, 2026-07-04)
 
