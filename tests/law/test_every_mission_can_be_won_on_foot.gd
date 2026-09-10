@@ -58,7 +58,10 @@ func test_every_objective_zone_is_reachable_from_the_deployment_zone() -> void:
 			continue   # nowhere authored to deploy: #736 has nothing to say about this board yet
 		var reached := _flood(start)
 		if reached.is_empty():
-			continue   # _flood says why; the probe case below is what reports it
+			# NOT a skip: _flood only comes back empty when no cell of the authored deployment
+			# zone would take a unit, which is a broken board and not a board with nothing to say.
+			problems.append("%s: no cell of the deployment zone will take a unit" % path.get_file())
+			continue
 		for kind in [ZoneManager.Kind.CAPTURE, ZoneManager.Kind.EXTRACTION]:
 			for cell: Vector2i in game.zone_manager.cells_of_kind(kind):
 				if not reached.has(cell):
@@ -80,6 +83,7 @@ func test_every_enemy_can_be_walked_up_to_from_the_deployment_zone() -> void:
 			continue
 		var reached := _flood(start)
 		if reached.is_empty():
+			problems.append("%s: no cell of the deployment zone will take a unit" % path.get_file())
 			continue
 		for unit: Unit in _hostiles():
 			var cell: Vector2i = unit.movement.cell
