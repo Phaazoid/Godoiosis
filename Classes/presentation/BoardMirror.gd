@@ -42,14 +42,15 @@ class_name BoardMirror
 #              plants were cut out of that tile and must stand on the field they came from.
 # Same per-cell reconcile for all of them, and the lantern borrows the torch's light.
 #
-# Fire-state cells (BURNING / BLAZE) get SEVERAL animated flames + a real OmniLight —
+# Fire-state cells get SEVERAL animated flames + a real OmniLight —
 # the dev's "fire casts light" wish, and since #324 an effect rather than a torch sprite
 # borrowed for terrain: a sheet of pixel frames off gen_lookdev_assets.gd, scattered over
 # the cell so the CELL burns instead of a sprite standing in the middle of it, stepped and
 # flickered by this node's own _process. Which cells burn is TerrainStateManager.burning_cells
 # — the one enumeration form (Terrain.gd: "no reader may enumerate fire members itself").
-# BURNING and BLAZE still look the same (#174's one-texture ruling); making the permanent
-# one read fiercer is a design call, not a free win.
+# There is one fire since #890 retired BLAZE, so #174's one-texture ruling has nothing left to
+# reconcile: a fire that never goes out is now BURNING on ground that is not fuel, and it looks
+# like what it is. Making a long-lived fire read fiercer is a design call, not a free win.
 #
 # COVER cells (#326) stand up the same way, and that is why they live HERE rather than
 # on Layer.TERRAIN with the frost icon: a terrain STATE whose art draws OBJECTS takes

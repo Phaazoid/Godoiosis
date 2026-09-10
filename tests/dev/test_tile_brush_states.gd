@@ -1,8 +1,10 @@
 # The Tile Brush STATE paint mode (#174): _paint_state writes through TerrainStateManager.apply
-# -- the ONE deposit seam -- so a painted BURNING carries the real 3-turn clock while a painted
-# BLAZE never expires; right-click clears the whole cell. The round-trip case pins the two
-# load-path fixes this feature exposed: clear_board clears terrain state (and its icons), and
-# apply_scenario redraws it (authored fire visible at turn one, not at the first round tick).
+# -- the ONE deposit seam -- so a painted BURNING carries the clock of the GROUND UNDER IT (#890):
+# three turns on grass, none at all on stone. That replaced the BLAZE half of this suite, the brush
+# having had two fire buttons for what is now one state on two grounds; right-click still clears the
+# whole cell. The round-trip case pins the two load-path fixes this feature exposed: clear_board
+# clears terrain state (and its icons), and apply_scenario redraws it (authored fire visible at turn
+# one, not at the first round tick).
 #
 # The mouse->cell half (_paint reading get_global_mouse_position) can't be aimed headless; these
 # cases drive _paint_state/_erase_state directly beneath the dispatch match, and set the brush's
@@ -12,8 +14,8 @@ extends GdUnitTestSuite
 const MAIN_SCENE := "res://Scenes/Main.tscn"
 const GRASS_SOURCE := 0
 const GRASS_ATLAS := Vector2i(5, 0)
+const ROCK_ATLAS := Vector2i(18, 10)   # "rock": no ignition reaction keys on it, so it is not fuel
 const CELL := Vector2i(2, 0)
-const BURN_TICKS: int = TerrainStateManager.STATE_DURATIONS[Terrain.TileState.BURNING]
 
 var _main: Node
 var game: Node2D
@@ -42,6 +44,17 @@ func after_test() -> void:
 func _live_icon_count() -> int:
 	var count: int = game.overlay_manager.terrain_live_sprites.size()
 	return count
+
+# Grass's AUTHORED burn clock, read off the reaction that grants it. Never a literal and never a
+# constant in code: the duration is content now, and retuning it must not turn this suite red.
+func _burn_ticks() -> int:
+	var fuel: TerrainReaction = TerrainReactionCatalog.fuel_for_kind(
+			Terrain.Kind.GRASS, TerrainReactionCatalog.get_all())
+	assert_object(fuel) \
+		.override_failure_message("precondition: grass authors no ignition reaction, so nothing below proves anything") \
+		.is_not_null()
+	var turns: int = fuel.add_state_turns[Terrain.TileState.BURNING]
+	return turns
 
 # --- A state needs ground under it (#245) --------------------------------------------
 #
@@ -136,24 +149,41 @@ func test_a_groundless_cell_never_becomes_walkable_through_frozen() -> void:
 		.override_failure_message("freezing the void made it walkable").is_false()
 
 func test_painting_deposits_the_picked_state_and_draws_its_icon() -> void:
-	_brush._tile_state = Terrain.TileState.BLAZE
+	_brush._tile_state = Terrain.TileState.COVER
 	game.dev_controller._paint_state(CELL)
-	assert_bool(game.terrain_states.has_state(CELL, Terrain.TileState.BLAZE)).is_true()
+	assert_bool(game.terrain_states.has_state(CELL, Terrain.TileState.COVER)).is_true()
 	assert_int(_live_icon_count()).is_equal(1)
 
-func test_a_painted_burning_carries_the_real_clock() -> void:
+func test_a_retired_state_never_reaches_the_palette() -> void:
+	# BLAZE is still in the enum -- an append-only int cannot be deleted without moving whatever
+	# lands there next -- so what keeps it out of the brush is Terrain.RETIRED_STATES, and this is
+	# the case that reds if _build_state_options goes back to walking the raw enum.
+	assert_array(_brush._state_values) \
+		.override_failure_message("a tombstoned state is offered in the brush palette") \
+		.not_contains([Terrain.TileState.BLAZE])
+	assert_array(_brush._state_values) \
+		.override_failure_message("precondition: the palette is empty, so the assertion above proves nothing") \
+		.contains([Terrain.TileState.BURNING])
+
+func test_a_painted_burning_carries_the_grounds_clock() -> void:
 	_brush._tile_state = Terrain.TileState.BURNING
 	game.dev_controller._paint_state(CELL)
-	for _i in range(BURN_TICKS):
+	for _i in range(_burn_ticks()):
 		game.terrain_states.tick_states()
 	assert_bool(game.terrain_states.has_state(CELL, Terrain.TileState.BURNING)).is_false()
 
-func test_a_painted_blaze_never_expires() -> void:
-	_brush._tile_state = Terrain.TileState.BLAZE
+func test_a_painted_fire_on_ground_that_is_not_fuel_never_expires() -> void:
+	# What BLAZE used to be, said by the ground instead of by a second enum member: the dev paints
+	# ordinary fire onto flagstones and it burns until something puts it out.
+	game.grid.set_cell(CELL, GRASS_SOURCE, ROCK_ATLAS)
+	assert_bool(GridUtils.get_terrain_kind_at_cell(game.grid, CELL) == Terrain.Kind.GRASS) \
+		.override_failure_message("precondition: the repainted cell still reads as grass, so nothing below proves anything") \
+		.is_false()
+	_brush._tile_state = Terrain.TileState.BURNING
 	game.dev_controller._paint_state(CELL)
-	for _i in range(BURN_TICKS * 2):
+	for _i in range(_burn_ticks() * 2):
 		game.terrain_states.tick_states()
-	assert_bool(game.terrain_states.has_state(CELL, Terrain.TileState.BLAZE)).is_true()
+	assert_bool(game.terrain_states.has_state(CELL, Terrain.TileState.BURNING)).is_true()
 
 func test_repainting_does_not_rewind_a_burning_clock() -> void:
 	# The has_state guard: a drag repaints the same cell every motion event, and that must not
@@ -162,12 +192,12 @@ func test_repainting_does_not_rewind_a_burning_clock() -> void:
 	game.dev_controller._paint_state(CELL)
 	game.terrain_states.tick_states()
 	game.dev_controller._paint_state(CELL)
-	for _i in range(BURN_TICKS - 1):
+	for _i in range(_burn_ticks() - 1):
 		game.terrain_states.tick_states()
 	assert_bool(game.terrain_states.has_state(CELL, Terrain.TileState.BURNING)).is_false()
 
 func test_erase_clears_every_state_on_the_cell() -> void:
-	_brush._tile_state = Terrain.TileState.BLAZE
+	_brush._tile_state = Terrain.TileState.BURNING
 	game.dev_controller._paint_state(CELL)
 	_brush._tile_state = Terrain.TileState.COVER
 	game.dev_controller._paint_state(CELL)
@@ -178,7 +208,7 @@ func test_erase_clears_every_state_on_the_cell() -> void:
 func test_clear_all_asks_first_then_wipes_the_board() -> void:
 	# The board-wide wipe (2026-08-11): confirmed via the same dialog Delete rides, then the
 	# clear_board pair (store clear + full redraw). In-memory only.
-	_brush._tile_state = Terrain.TileState.BLAZE
+	_brush._tile_state = Terrain.TileState.COVER
 	game.dev_controller._paint_state(CELL)
 	game.dev_controller._paint_state(Vector2i(4, 0))
 
@@ -189,7 +219,7 @@ func test_clear_all_asks_first_then_wipes_the_board() -> void:
 		if child is ConfirmationDialog:
 			dialog = child as ConfirmationDialog
 	assert_object(dialog).is_not_null()
-	assert_bool(game.terrain_states.has_state(CELL, Terrain.TileState.BLAZE)).is_true()   # not yet
+	assert_bool(game.terrain_states.has_state(CELL, Terrain.TileState.COVER)).is_true()   # not yet
 
 	dialog.confirmed.emit()
 	dialog.hide()
@@ -202,14 +232,14 @@ func test_clear_all_asks_first_then_wipes_the_board() -> void:
 func test_the_authoring_loop_round_trips_with_icons() -> void:
 	# paint -> capture -> clear_board (store AND icons empty: the clear fix) -> apply_scenario
 	# (state back AND icons drawn: the redraw fix). In memory only -- no Scenarios/ writes.
-	_brush._tile_state = Terrain.TileState.BLAZE
+	_brush._tile_state = Terrain.TileState.COVER
 	game.dev_controller._paint_state(CELL)
 	var captured: ScenarioData = game.scenario_manager.capture_scenario("brush-roundtrip", false)
 
 	game.scenario_manager.clear_board()
-	assert_bool(game.terrain_states.has_state(CELL, Terrain.TileState.BLAZE)).is_false()
+	assert_bool(game.terrain_states.has_state(CELL, Terrain.TileState.COVER)).is_false()
 	assert_int(_live_icon_count()).is_equal(0)
 
 	game.scenario_manager.apply_scenario(captured)
-	assert_bool(game.terrain_states.has_state(CELL, Terrain.TileState.BLAZE)).is_true()
+	assert_bool(game.terrain_states.has_state(CELL, Terrain.TileState.COVER)).is_true()
 	assert_int(_live_icon_count()).is_equal(1)

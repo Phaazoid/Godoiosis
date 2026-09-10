@@ -14,20 +14,32 @@ const COVER_DEF := 2   # flat DEF a Cover tile grants its occupant (#84 Burrow) 
 enum TileState {
 	NONE,
 	BURNING,
-	FROZEN,  # Permanent (no STATE_DURATIONS entry -> never ticks out) since 2026-08-12 playtest
-			 # feedback -- ice held a 3-turn clock like BURNING until the dev found an auto-thaw
-			 # unwelcome. Removed only by states_removed (the authored FIRE Melt reaction,
+	FROZEN,  # Permanent (no authored clock -> never ticks out) since 2026-08-12 playtest feedback
+			 # -- ice held a 3-turn clock like BURNING until the dev found an auto-thaw unwelcome.
+			 # Removed only by states_removed (the authored FIRE Melt reaction,
 			 # Resources/TerrainReactions/Melt.tres), same mechanism as COVER.
-	COVER,   # #84: Burrow-dug entrenchment. Permanent (no STATE_DURATIONS entry -> never ticks out);
+	COVER,   # #84: Burrow-dug entrenchment. Permanent (no authored clock -> never ticks out);
 			 # removed only by a destructive hit (states_removed), never by a timer.
-	BLAZE    # #174: authored set-dressing fire -- BURNING's permanent sibling (COVER's no-timer
-			 # mechanism). Same end-of-turn damage; deposited only by the dev brush so far.
+	BLAZE    # RETIRED by #890 (2026-09-10). It was authored set-dressing fire -- BURNING's
+			 # permanent sibling -- back when a fire's clock belonged to the STATE. Now the clock
+			 # belongs to the GROUND, so "a fire that never goes out" is just BURNING on ground
+			 # that is not fuel, and this member has nothing left to mean. Nothing writes it and
+			 # nothing reads it; the member itself STAYS because the enum serializes as a plain int
+			 # (APPEND-ONLY, and a hole is worse than a tombstone) -- deleting 4 would make any
+			 # stray one in an old saved board read as whatever lands here next. RETIRED_STATES
+			 # below is what keeps it out of the authoring surfaces.
 }
+
+# States no authoring surface may offer and no rule may act on -- the tombstones above. A retired
+# member cannot simply be deleted from an append-only enum, so this is how the brush palette and
+# the Glossary find out it is gone without either of them keeping its own list.
+const RETIRED_STATES: Array[TileState] = [TileState.BLAZE]
 
 # "Is this tile on fire?" has ONE spelling (#174): FIRE_STATES is which states count, is_burning
 # the predicate over a cell's states, TerrainStateManager.burning_cells the enumeration form.
-# No reader may enumerate fire members itself.
-const FIRE_STATES: Array[TileState] = [TileState.BURNING, TileState.BLAZE]
+# No reader may enumerate fire members itself. One member since #890 retired BLAZE -- the spelling
+# survives its own plural because #894's fire wall is a second one waiting to happen.
+const FIRE_STATES: Array[TileState] = [TileState.BURNING]
 
 # WHICH fire state a cell holds, or NONE — the named form, for readouts that must say Burning or
 # Blaze rather than just "on fire" (#419). is_burning is derived from it, so there is one loop.

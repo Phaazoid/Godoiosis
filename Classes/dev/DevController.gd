@@ -691,7 +691,9 @@ func _erase_zone(cell: Vector2i) -> void:
 	game.dev_overlay.tile_brush.update_zone_highlight()
 
 # Dynamic tile-state painting (#174). Writes through TerrainStateManager.apply -- the ONE deposit
-# seam -- so a painted BURNING starts its real 3-turn clock; permanent fire is what BLAZE is for.
+# seam -- so a painted BURNING gets the clock of the GROUND it lands on (#890): three turns on
+# grass, and none at all on stone, which is how the authored braziers on Prolog's flagstones burn
+# forever without a second fire state to spell it.
 func _paint_state(cell: Vector2i) -> void:
 	var state: Terrain.TileState = game.dev_overlay.tile_brush.selected_tile_state()
 	if game.terrain_states.has_state(cell, state):

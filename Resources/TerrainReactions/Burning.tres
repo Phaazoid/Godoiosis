@@ -7,5 +7,8 @@ script = ExtResource("1_dfo0j")
 incoming_element = 1
 required_kind = 4
 add_tile_states = Array[int]([1])
+add_state_turns = Dictionary[int, int]({
+1: 3
+})
 popup = "Ignites!"
 metadata/_custom_type_script = "uid://dxskrhe0srgid"

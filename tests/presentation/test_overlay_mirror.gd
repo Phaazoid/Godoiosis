@@ -214,7 +214,7 @@ func test_raising_the_ground_under_a_flame_re_seats_it() -> void:
 
 	var effect := ResolvedCellEffect.new()
 	effect.cell = cell
-	effect.states_added.assign([Terrain.TileState.BLAZE])
+	effect.states_added.assign([Terrain.TileState.BURNING])
 	game.terrain_states.apply(effect)
 	await _settle()
 
@@ -1026,8 +1026,8 @@ func test_terrain_icons_mirror_with_the_standing_state_exception() -> void:
 	_om().redraw_terrain_live(game.terrain_states)
 	await _settle()
 	# FROZEN mirrors as a flat icon; a state whose art draws OBJECTS does NOT — BoardMirror
-	# stands its 3D form on the cell instead (the flame + light IS fire, #174: one Fire texture
-	# covers BURNING and BLAZE; the mud bumps ARE cover, #326).
+	# stands its 3D form on the cell instead (the flame + light IS fire; the mud bumps ARE cover,
+	# #326).
 	var fire: Texture2D = OverlayManager.TERRAIN_STATE_ICONS[Terrain.TileState.BURNING]
 	var ice: Texture2D = OverlayManager.TERRAIN_STATE_ICONS[Terrain.TileState.FROZEN]
 	var live := _overlays.markers_of(BoardOverlays.Layer.TERRAIN)

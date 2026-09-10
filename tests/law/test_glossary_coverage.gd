@@ -45,8 +45,8 @@ func test_every_stat_is_bridged() -> void:
 func test_every_tile_state_is_bridged() -> void:
 	for value: int in Terrain.TileState.values():
 		var state: Terrain.TileState = value
-		if state == Terrain.TileState.NONE:
-			continue
+		if state == Terrain.TileState.NONE or Terrain.RETIRED_STATES.has(state):
+			continue   # a tombstone is unreachable by construction, so it owes the player nothing
 		var term: Glossary.Term = Glossary.term_for_tile_state(state)
 		assert_str(Glossary.short(term)) \
 			.override_failure_message("Terrain.TileState.%s bridges to an empty glossary entry" % Terrain.TileState.keys()[state]) \

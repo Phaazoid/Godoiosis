@@ -16,6 +16,15 @@ class_name TerrainReaction
 @export var add_tile_states: Array[Terrain.TileState] = []
 @export var remove_tile_states: Array[Terrain.TileState] = []   # omit to NOT consume
 
+# How long each added state lasts, in turn cycles (#890). ElementalReaction.add_state_turns' exact
+# grammar applied to the map: ABSENT = no clock = permanent, which is already how COVER and FROZEN
+# spell it. There is no sentinel for "forever" because omission is the sentinel.
+#
+# For fire this dictionary IS the ground's fuel. Grass carries 3; a ground with no ignition
+# reaction at all carries nothing, so a fire on stone is consuming nothing and never runs out --
+# which is what the authored braziers on Prolog's flagstones have always meant.
+@export var add_state_turns: Dictionary[Terrain.TileState, int] = {}
+
 @export var popup: String = ""
 @export var icon: Texture2D
 

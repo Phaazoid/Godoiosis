@@ -17,6 +17,7 @@ const GRASS_ATLAS := Vector2i(0, 0)         # unnamed GRASS -- the default paint
 const NAMED_GRASS_ATLAS := Vector2i(1, 0)   # GRASS authored "spring meadow"
 const CRATE_ATLAS := Vector2i(2, 0)         # kindless scenery authored "crate"
 const WATER_ATLAS := Vector2i(3, 0)         # unnamed WATER, no walkable flag (impassable)
+const STONE_ATLAS := Vector2i(4, 0)         # DIRT: no ignition reaction keys on it, so it is not fuel
 
 var _main: Node
 var game: Node2D
@@ -55,13 +56,14 @@ func _build_tile_set() -> TileSet:
 	tiles.set_custom_data_layer_type(3, TYPE_STRING)
 	var source := TileSetAtlasSource.new()
 	source.texture = ImageTexture.create_from_image(
-		Image.create_empty(64, 16, false, Image.FORMAT_RGBA8))
+		Image.create_empty(80, 16, false, Image.FORMAT_RGBA8))
 	source.texture_region_size = Vector2i(16, 16)
 	_src_id = tiles.add_source(source)
 	_author_tile(source, GRASS_ATLAS, Terrain.Kind.GRASS, "", true)
 	_author_tile(source, NAMED_GRASS_ATLAS, Terrain.Kind.GRASS, "spring meadow", true)
 	_author_tile(source, CRATE_ATLAS, Terrain.Kind.NONE, "crate", false)
 	_author_tile(source, WATER_ATLAS, Terrain.Kind.WATER, "", false)
+	_author_tile(source, STONE_ATLAS, Terrain.Kind.DIRT, "flagstones", true)
 	return tiles
 
 
@@ -229,17 +231,20 @@ func test_a_unit_on_a_burning_tile_shows_both_halves() -> void:
 	assert_str(_tile_block_text()).contains(Terrain.tile_state_display_name(Terrain.TileState.BURNING))
 
 
-func test_a_permanent_blaze_shows_no_countdown() -> void:
-	# BLAZE has no STATE_DURATIONS entry — the readout must not invent a clock for it.
+func test_a_fire_on_ground_that_is_not_fuel_shows_no_countdown() -> void:
+	# The BLAZE case re-aimed by #890, which retired that state: a fire's clock comes from its
+	# GROUND, and flagstones give it none, so the readout must not invent one. The counting half is
+	# pinned by the BURNING case above, which sits on grass.
 	var cell := Vector2i(5, 0)
-	_set_tile_state(cell, Terrain.TileState.BLAZE)
+	game.grid.set_cell(cell, _src_id, STONE_ATLAS)
+	_set_tile_state(cell, Terrain.TileState.BURNING)
 	game.hover_presenter.update_hover_visuals(cell)
 	await await_idle_frame()
 
 	assert_str(_tile_block_text()) \
-		.contains(Terrain.tile_state_display_name(Terrain.TileState.BLAZE))
+		.contains(Terrain.tile_state_display_name(Terrain.TileState.BURNING))
 	assert_str(_tile_block_text()) \
-		.override_failure_message("a permanent Blaze rendered a turns-left clock: '%s'" % _tile_block_text()) \
+		.override_failure_message("a fire with no fuel rendered a turns-left clock: '%s'" % _tile_block_text()) \
 		.not_contains("left.")
 
 
