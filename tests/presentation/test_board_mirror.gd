@@ -2719,7 +2719,7 @@ func _mirror() -> BoardMirror:
 # WALLS specifically -- a shaft also carries a floor, and a test that means "how many sides are
 # closed" must not count it.
 func _walls_at(cell: Vector2i) -> int:
-	return _mirror().shaft_parts(cell, "wall")
+	return _mirror().lip_parts(cell, "wall")
 
 
 func test_a_hole_grows_one_wall_per_edge_that_meets_ground() -> void:
@@ -2795,8 +2795,8 @@ func test_every_hole_wall_faces_into_the_pit() -> void:
 	var checked := 0
 	for child in lip.get_children():
 		# WALLS only: the shaft's floor is a child too and faces UP by design.
-		if not (child.has_meta(BoardMirror.SHAFT_PART_META)
-				and child.get_meta(BoardMirror.SHAFT_PART_META) == "wall"):
+		if not (child.has_meta(BoardMirror.LIP_PART_META)
+				and child.get_meta(BoardMirror.LIP_PART_META) == "wall"):
 			continue
 		var mesh_node := child as MeshInstance3D
 		assert_object(mesh_node).is_not_null()
@@ -2907,13 +2907,13 @@ func test_a_shaft_is_floored_so_the_sky_does_not_show_through_it() -> void:
 	await _settle()
 	var lip := _mirror().lip_at(cell)
 	assert_object(lip).is_not_null()
-	assert_int(_mirror().shaft_parts(cell, "floor")).override_failure_message(
+	assert_int(_mirror().lip_parts(cell, "floor")).override_failure_message(
 			"the shaft has no floor -- the pit is open to the sky").is_equal(1)
 	# ...and it has to FACE UP, or culling drops it and the sky is back with the pit still
 	# looking correctly built. Asked of the engine's own winding, as the walls are.
 	for child in lip.get_children():
-		if not (child.has_meta(BoardMirror.SHAFT_PART_META)
-				and child.get_meta(BoardMirror.SHAFT_PART_META) == "floor"):
+		if not (child.has_meta(BoardMirror.LIP_PART_META)
+				and child.get_meta(BoardMirror.LIP_PART_META) == "floor"):
 			continue
 		var arrays: Array = (child as MeshInstance3D).mesh.surface_get_arrays(0)
 		var st := SurfaceTool.new()
@@ -2925,3 +2925,286 @@ func test_a_shaft_is_floored_so_the_sky_does_not_show_through_it() -> void:
 		assert_float((wound[Mesh.ARRAY_NORMAL] as PackedVector3Array)[0].dot(Vector3.UP)) 				.override_failure_message(
 				"the shaft floor winds downward; culling drops it and the sky shows through"
 				).is_greater(0.9)
+
+
+# --- The rim (#876 slice 2) ----------------------------------------------------------------------
+#
+# Headless renders nothing, so none of these can see whether a rim LOOKS like the mouth of a pit.
+# What they can see is where its vertices are, and after #885 that is the half that has been wrong
+# twice: slice 1 put a surface in a plane something else already drew, and this slice's first draft
+# seated the frame at the hole's own height, which on Terraces is 1-3 levels BELOW the ground it
+# meets -- a shelf partway down the pit wall.
+
+func _rim_pieces_at(cell: Vector2i) -> Array[MeshInstance3D]:
+	var found: Array[MeshInstance3D] = []
+	var lip := _mirror().lip_at(cell)
+	if lip == null:
+		return found
+	for child in lip.get_children():
+		if child.has_meta(BoardMirror.LIP_PART_META) \
+				and child.get_meta(BoardMirror.LIP_PART_META) == "rim":
+			found.append(child as MeshInstance3D)
+	return found
+
+
+func _rim_vertices_at(cell: Vector2i) -> PackedVector3Array:
+	var points := PackedVector3Array()
+	for piece in _rim_pieces_at(cell):
+		var arrays: Array = piece.mesh.surface_get_arrays(0)
+		points.append_array(arrays[Mesh.ARRAY_VERTEX] as PackedVector3Array)
+	return points
+
+
+# The dev's ruling, 2026-09-10: a PAINTED hole is a dressed mouth and an ERASED cell is a bare pit.
+# Both halves in one case on purpose -- either alone passes while the rim is drawn for everything or
+# for nothing, which is exactly the state this slice starts and ends in.
+func test_a_painted_hole_wears_a_rim_and_an_erased_cell_does_not() -> void:
+	_scene.load_mission(PROLOG)
+	await _settle()
+	_game.game_state = _game.GameState.DEV_MODE
+	var painted := _an_inland_cell()
+	assert_bool(painted != GridUtils.NO_CELL).override_failure_message(
+			"no cell on this board has ground on all four sides; the case is vacuous").is_true()
+	var erased := _an_inland_cell_other_than(painted)
+	assert_bool(erased != GridUtils.NO_CELL).override_failure_message(
+			"needed a second inland cell; the case is vacuous").is_true()
+	var hole := _a_tile_of_kind(Terrain.Kind.VOID)
+	assert_bool(hole.source >= 0).override_failure_message(
+			"the tileset authors no VOID tile; the case is vacuous").is_true()
+	_game.grid.paint(painted, hole.source, hole.coords)
+	_game.grid.erase(erased)
+	await _settle()
+	assert_int(_mirror().lip_parts(painted, "rim")).override_failure_message(
+			"a painted hole ringed by ground should wear a rim on all four sides "
+			+ "and in all four corners").is_equal(8)
+	assert_int(_mirror().lip_parts(erased, "rim")).override_failure_message(
+			"an erased cell has no tile and no art, so it must stay a bare pit").is_equal(0)
+	# The pit itself is unchanged by any of this: the erased cell still hangs its walls.
+	assert_int(_walls_at(erased)).override_failure_message(
+			"an erased cell lost its walls when it lost its rim").is_equal(4)
+
+
+# THE MITRE. Two coplanar quads sharing a span is the z-fight slice 1 shipped, and a frame assembled
+# from strips that each ran the cell's full width would rebuild it in every corner. Asked as
+# geometry rather than as a piece count, so it cannot pass by counting the right number of wrong
+# pieces.
+func test_no_two_pieces_of_one_rim_overlap() -> void:
+	_scene.load_mission(PROLOG)
+	await _settle()
+	_game.game_state = _game.GameState.DEV_MODE
+	var cell := _an_inland_cell()
+	var hole := _a_tile_of_kind(Terrain.Kind.VOID)
+	_game.grid.paint(cell, hole.source, hole.coords)
+	await _settle()
+	var pieces := _rim_pieces_at(cell)
+	assert_int(pieces.size()).override_failure_message("no rim to check").is_equal(8)
+	var boxes: Array[Rect2] = []
+	for piece in pieces:
+		var box := piece.mesh.get_aabb()
+		# FLATTENED to the ground plane: two pieces at different heights still fight when they
+		# share a footprint, because the seating is what decides which is on top and a ramped
+		# neighbour can put them level.
+		boxes.append(Rect2(box.position.x, box.position.z, box.size.x, box.size.z))
+	for i in boxes.size():
+		for j in range(i + 1, boxes.size()):
+			# Shrunk, so pieces that merely TOUCH along a shared edge are not counted as overlapping
+			# -- that is the frame joining up, which is the point.
+			var overlap := boxes[i].grow(-0.01).intersects(boxes[j].grow(-0.01))
+			assert_bool(overlap).override_failure_message(
+					("rim pieces %d and %d share footprint %s / %s -- two coplanar quads, "
+					+ "which is the #885 z-fight rebuilt") % [i, j, boxes[i], boxes[j]]).is_false()
+
+
+# THE SEAT, and the finding that forced it. A rim hangs at the height of the GROUND IT MEETS, never
+# at the hole's own -- measured on Terraces, 10 of its 14 ground-facing hole edges have the ground
+# 1-3 levels above the hole, and no shipped board has ever raised a hole at all. Seated at its own
+# height the frame is a shelf partway down the pit wall.
+func test_a_rim_seats_at_its_neighbours_height_not_the_holes_own() -> void:
+	_scene.load_mission(PROLOG)
+	await _settle()
+	_game.game_state = _game.GameState.DEV_MODE
+	var cell := _an_inland_cell()
+	var hole := _a_tile_of_kind(Terrain.Kind.VOID)
+	_game.grid.paint(cell, hole.source, hole.coords)
+	var raised := cell + Vector2i.UP
+	var climb := Terrain.UNITS_PER_LEVEL
+	_game.board_heights.set_corners(raised, Vector4i(climb, climb, climb, climb))
+	await _settle()
+	var points := _rim_vertices_at(cell)
+	assert_int(points.size()).override_failure_message("no rim to measure").is_greater(0)
+	var highest := -INF
+	var lowest := INF
+	for point: Vector3 in points:
+		highest = maxf(highest, point.y)
+		lowest = minf(lowest, point.y)
+	assert_float(highest).override_failure_message(
+			"no part of the rim reached the raised neighbour's surface, so the frame is seated at "
+			+ "the hole's own height -- a shelf partway down the pit wall").is_equal_approx(
+			BoardSpace.world_y_of_height(float(climb)), 0.001)
+	assert_float(lowest).override_failure_message(
+			"the whole rim rose with one neighbour; each edge seats at its OWN neighbour"
+			).is_equal_approx(BoardSpace.world_y_of_height(0.0), 0.001)
+
+
+# A ramped neighbour's shared edge is TILTED, and one height for the edge cannot follow it -- which
+# is why the seat reads edge_of_corners' TWO corner heights and interpolates along the edge. Asked
+# of the north MID STRIP rather than of every vertex on the north edge: the corners there answer to
+# two neighbours and take the lower, which is the cliff and not the ramp.
+func test_a_rim_follows_a_tilted_neighbour_edge() -> void:
+	_scene.load_mission(PROLOG)
+	await _settle()
+	_game.game_state = _game.GameState.DEV_MODE
+	var cell := _an_inland_cell()
+	var hole := _a_tile_of_kind(Terrain.Kind.VOID)
+	_game.grid.paint(cell, hole.source, hole.coords)
+	# Corners run (NW, NE, SE, SW), and the north neighbour's SOUTH edge is the one facing this hole
+	# -- so lifting SE against SW tilts exactly the edge the hole's north rim sits on.
+	var climb := Terrain.UNITS_PER_LEVEL
+	_game.board_heights.set_corners(cell + Vector2i.UP, Vector4i(0, climb, climb, 0))
+	await _settle()
+	var strip := _widest_rim_piece_on_north(cell)
+	assert_object(strip).override_failure_message(
+			"no rim piece spans the north edge").is_not_null()
+	var arrays: Array = strip.mesh.surface_get_arrays(0)
+	var points: PackedVector3Array = arrays[Mesh.ARRAY_VERTEX]
+	var west_x := INF
+	var east_x := -INF
+	var west_y := 0.0
+	var east_y := 0.0
+	for point: Vector3 in points:
+		if point.x < west_x:
+			west_x = point.x
+			west_y = point.y
+		if point.x > east_x:
+			east_x = point.x
+			east_y = point.y
+	assert_float(east_y).override_failure_message(
+			"the north strip is flat across a neighbour whose edge rises west to east -- the seat "
+			+ "is reading ONE height for the edge (its midpoint) instead of its two corners"
+			).is_greater(west_y + 0.001)
+
+
+# #308's law: the key has to name the TILE, or repainting one hole tile as another leaves the first
+# one's ring lying in the second one's pit.
+func test_repainting_a_hole_replaces_its_rim() -> void:
+	_scene.load_mission(PROLOG)
+	await _settle()
+	_game.game_state = _game.GameState.DEV_MODE
+	var voids := _tiles_of_kind(Terrain.Kind.VOID)
+	assert_int(voids.size()).override_failure_message(
+			"the tileset authors fewer than two VOID tiles; the case is vacuous").is_greater(1)
+	var cell := _an_inland_cell()
+	_game.grid.paint(cell, voids[0].source, voids[0].coords)
+	await _settle()
+	var before := _rim_material_of(cell)
+	var first_uv := _rim_uv_of(cell)
+	_game.grid.paint(cell, voids[1].source, voids[1].coords)
+	await _settle()
+	assert_object(_rim_material_of(cell)).override_failure_message(
+			"the rim lost its material on repaint").is_not_null()
+	assert_bool(_rim_uv_of(cell).is_equal_approx(first_uv)).override_failure_message(
+			"the rim still samples the FIRST tile's patch after a repaint -- the diff key does not "
+			+ "name the tile, so the old ring is left lying in the new pit").is_false()
+	assert_object(before).is_not_null()
+
+
+# The dev's per-placement toggle (2026-09-10). A merged hole drops the corner pieces that would
+# otherwise carry the ring's art across an edge it shares with another hole, so two mouths read as
+# one; an unmerged one keeps its whole ring. Both spellings of the same pair of cells, so the case
+# cannot pass by drawing the same thing twice.
+func test_merging_a_hole_opens_its_mouth_toward_the_hole_beside_it() -> void:
+	_scene.load_mission(PROLOG)
+	await _settle()
+	_game.game_state = _game.GameState.DEV_MODE
+	var cell := _an_inland_cell()
+	var near := cell + Vector2i.RIGHT
+	var hole := _a_tile_of_kind(Terrain.Kind.VOID)
+	var merged := GridUtils.void_merge_alternative(_game.grid.tile_set, hole.source, hole.coords)
+	assert_int(merged).override_failure_message(
+			"the tileset authors no void_merge alternative; the case is vacuous").is_greater(0)
+	_game.grid.paint(cell, hole.source, hole.coords)
+	_game.grid.paint(near, hole.source, hole.coords)
+	await _settle()
+	# Three sides meet ground and the fourth is the hole next door: the whole ring, minus the strip
+	# on that side -- three mid pieces and all four corners.
+	var neighbour_before := _mirror().lip_parts(near, "rim")
+	var whole := _mirror().lip_parts(cell, "rim")
+	assert_int(whole).override_failure_message(
+			"an unmerged hole beside another should keep every corner of its ring").is_equal(7)
+	_game.grid.paint(cell, hole.source, hole.coords, merged)
+	await _settle()
+	assert_int(_mirror().lip_parts(cell, "rim")).override_failure_message(
+			"merging did not drop the corners facing the hole next door, so the two mouths still "
+			+ "read as separate pits").is_equal(5)
+	# And the neighbour is untouched: a cell's flag governs its OWN rim, so there is no pair rule
+	# to disagree about and a half-merged chasm is legible rather than contradictory.
+	assert_int(_mirror().lip_parts(near, "rim")).override_failure_message(
+			"merging one hole changed the rim of the hole beside it").is_equal(neighbour_before)
+
+
+# A second inland cell, far enough from the first that painting one cannot change the other mask.
+func _an_inland_cell_other_than(exclude: Vector2i) -> Vector2i:
+	for cell: Vector2i in _game.grid.get_used_cells():
+		if absi(cell.x - exclude.x) <= 1 and absi(cell.y - exclude.y) <= 1:
+			continue
+		var ringed := true
+		for dir in GridUtils.CARDINAL_DIRECTIONS:
+			if not GridUtils.has_ground(_game.grid, cell + dir):
+				ringed = false
+				break
+		if ringed:
+			return cell
+	return GridUtils.NO_CELL
+
+
+# Every tile of a kind rather than the first: the repaint case needs two DIFFERENT hole tiles, and
+# naming their coordinates here is what an atlas swap would silently invalidate.
+func _tiles_of_kind(wanted: Terrain.Kind) -> Array[Dictionary]:
+	var found: Array[Dictionary] = []
+	var tiles: TileSet = _game.grid.tile_set
+	for s in tiles.get_source_count():
+		var source_id := tiles.get_source_id(s)
+		var source := tiles.get_source(source_id) as TileSetAtlasSource
+		if source == null:
+			continue
+		for i in source.get_tiles_count():
+			var coords := source.get_tile_id(i)
+			var data := source.get_tile_data(coords, 0)
+			if data != null and GridUtils.terrain_kind_of(data) == wanted:
+				found.append({"source": source_id, "coords": coords})
+	return found
+
+
+func _rim_material_of(cell: Vector2i) -> Material:
+	var pieces := _rim_pieces_at(cell)
+	if pieces.is_empty():
+		return null
+	return pieces[0].mesh.surface_get_material(0)
+
+
+# WHERE IN THE ATLAS a rim samples, which is the one thing that says whose ring it is wearing. The
+# two hole tiles are cut into patches of their own, so their UVs cannot collide.
+func _rim_uv_of(cell: Vector2i) -> Vector2:
+	var pieces := _rim_pieces_at(cell)
+	if pieces.is_empty():
+		return Vector2(-1.0, -1.0)
+	var arrays: Array = pieces[0].mesh.surface_get_arrays(0)
+	var uvs: PackedVector2Array = arrays[Mesh.ARRAY_TEX_UV]
+	return uvs[0]
+
+
+# The north MID strip: the widest piece touching the hole's north edge. The corners touch it too and
+# are a fifth its width, which is what makes "widest" the discriminator rather than a part name no
+# case outside BoardMirror should have to spell.
+func _widest_rim_piece_on_north(cell: Vector2i) -> MeshInstance3D:
+	var north := BoardSpace.vertex_point(cell, 0.0).z
+	var widest: MeshInstance3D = null
+	var span := 0.0
+	for piece in _rim_pieces_at(cell):
+		var box := piece.mesh.get_aabb()
+		if absf(box.position.z - north) > 0.001:
+			continue
+		if box.size.x > span:
+			span = box.size.x
+			widest = piece
+	return widest

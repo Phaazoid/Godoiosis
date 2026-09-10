@@ -240,6 +240,52 @@ static func wall_edges_at_cell(grid: TileMapLayer, cell: Vector2i) -> int:
 	return wall_edges_of(grid.get_cell_tile_data(cell))
 
 
+# Does this hole MERGE its mouth with the holes beside it (#876 slice 2)? False for anything that is
+# not an authored hole, and false for a hole authored without the flag, so an untouched board keeps
+# every ring whole.
+#
+# AUTHORED PER PLACEMENT, not per tile -- the dev wanted either reading "depending on the situation"
+# (2026-09-10). It is the override wall_edges_of predicts one column along: "the seam if a facing
+# ever has to vary per PLACEMENT ... lands HERE, in the reader, rather than as a second column." The
+# choice rides the CELL'S ALTERNATIVE TILE, and this reader is where that becomes a rule.
+#
+# THE ALTERNATIVE IS THE STORE, AND IT COSTS NOTHING. A TileMapLayer cell already carries one;
+# tile_map_data -- what ScenarioData saves and what BoardHistory snapshots for undo -- is Godot's own
+# encoding of source, coords AND alternative; and get_cell_tile_data resolves it, so every reader in
+# this file would see such a flag without a lookup of its own. No new store, no new serialisation,
+# no new undo.
+#
+# BoardHeights refused per-TILE storage for elevation and that argument does not reach here: it
+# refused because twenty-one levels would need twenty-one tiles. This is two states.
+static func void_merge_of(data: TileData) -> bool:
+	if data == null or not data.has_custom_data("void_merge"):
+		return false
+	return data.get_custom_data("void_merge")
+
+
+static func void_merge_at_cell(grid: TileMapLayer, cell: Vector2i) -> bool:
+	return void_merge_of(grid.get_cell_tile_data(cell))
+
+
+# Which ALTERNATIVE of this tile carries the merge flag, or 0 when the tile authors none.
+#
+# SCANNED, never a literal id. The tileset is the declaration -- add an alternative, tick
+# void_merge, and both the brush that paints it and the case that tests it find it -- where a
+# hardcoded 1 would be a second answer to "which alternative means merged" living in code, and
+# would quietly point at a flip variant the day one is authored.
+static func void_merge_alternative(tile_set: TileSet, source_id: int, coords: Vector2i) -> int:
+	if tile_set == null:
+		return 0
+	var atlas := tile_set.get_source(source_id) as TileSetAtlasSource
+	if atlas == null or not atlas.has_tile(coords):
+		return 0
+	for i in atlas.get_alternative_tiles_count(coords):
+		var alternative := atlas.get_alternative_tile_id(coords, i)
+		if alternative != 0 and void_merge_of(atlas.get_tile_data(coords, alternative)):
+			return alternative
+	return 0
+
+
 # How tall this cell's prop stands FOR THE RULES (#660), in the board's own height units (#427, two
 # per level) -- the column the sight trace stacks on top of the ground. A wall is a painted TILE and
 # not geometry, so before this every wall was 100% transparent to Reach.sight_trace: it read

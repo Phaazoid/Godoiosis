@@ -404,7 +404,7 @@ var _props: Dictionary[Vector2i, Node3D] = {}
 const LIP_KEY_META := "lip_key"
 # Which PART of a shaft a piece is. A meta rather than the node name, because add_child
 # uniquifies a colliding name to "@ShaftWall@12345" and no prefix test survives that.
-const SHAFT_PART_META := "shaft_part"
+const LIP_PART_META := "lip_part"
 var _lips: Dictionary[Vector2i, Node3D] = {}
 
 # Marks a prop sprite as a TUFT, so the tuft_scale setter can find the standing ones. A mark on the
@@ -629,7 +629,7 @@ func reconcile_cell(grid: TileMapLayer, cell: Vector2i, heights: BoardHeights,
 	if GridUtils.is_void_at(grid, cell):
 		_clear_column(cell, floor_row)
 		_free_prop_at(cell)
-		_reconcile_lip(grid, cell, floor_row)
+		_reconcile_lip(grid, cell, heights, floor_row)
 		return
 	_free_lip_at(cell)   # repainted from a hole back to ground
 	if not GridUtils.has_ground(grid, cell):
@@ -909,6 +909,17 @@ static func tile_item_name(source_id: int, coords: Vector2i) -> String:
 # cell's SURFACE looks like, and what STANDS on it.
 static func prop_item_name(source_id: int, coords: Vector2i) -> String:
 	return "prop_%d_%d_%d" % [source_id, coords.x, coords.y]
+
+
+# And the same contract for ONE PIECE of a VOID tile's rim (#876 slice 2). A fourth namespace: what
+# a hole's MOUTH is dressed with is a different question from what its cell's surface looks like,
+# and the tile has no surface -- its column is cleared.
+#
+# The part is a piece of the frame, not a mask: "n"/"s"/"w"/"e" are the mid-edge strips and
+# "nw"/"ne"/"sw"/"se" the corners. The frame is composed at RUNTIME from up to eight of them,
+# because each edge seats at its own NEIGHBOUR'S height and one baked frame could carry only one.
+static func rim_item_name(source_id: int, coords: Vector2i, part: String) -> String:
+	return "rim_%d_%d_%d_%s" % [source_id, coords.x, coords.y, part]
 
 
 # And the same contract for the tile's own ramp wedge (#340). A third namespace, not a flag on the
@@ -1722,6 +1733,19 @@ func _free_prop_at(cell: Vector2i) -> void:
 # Which two grid VERTICES bound the hole's edge in each direction, as offsets from the cell, IN THE
 # SAME ORDER Terrain.edge_of_corners returns that edge's two heights. One table, so the vertex and
 # the height it carries cannot get out of step -- two tables is how a wall ends up twisted.
+# The eight pieces of a rim frame, and which cardinal each one answers to. A mid strip belongs to
+# one direction, a corner to two -- and that is the whole placement rule, plus the dev's merge flag.
+const RIM_PARTS: Dictionary[String, Array] = {
+	"n": [Vector2i.UP],
+	"s": [Vector2i.DOWN],
+	"w": [Vector2i.LEFT],
+	"e": [Vector2i.RIGHT],
+	"nw": [Vector2i.UP, Vector2i.LEFT],
+	"ne": [Vector2i.UP, Vector2i.RIGHT],
+	"sw": [Vector2i.DOWN, Vector2i.LEFT],
+	"se": [Vector2i.DOWN, Vector2i.RIGHT],
+}
+
 const LIP_EDGE_VERTICES: Dictionary[Vector2i, Array] = {
 	Vector2i.UP: [Vector2i(0, 0), Vector2i(1, 0)],
 	Vector2i.DOWN: [Vector2i(0, 1), Vector2i(1, 1)],
@@ -1734,7 +1758,7 @@ const LIP_EDGE_VERTICES: Dictionary[Vector2i, Array] = {
 # direction, BOTH corner heights of the neighbour's facing edge, and the item that edge borrows. A
 # key naming only some of what the build reads goes stale in silence -- repaint the cell next door
 # and a lip left standing is exactly that bug.
-func lip_key(grid: TileMapLayer, cell: Vector2i, floor_row: int) -> Array:
+func lip_key(grid: TileMapLayer, cell: Vector2i, heights: BoardHeights, floor_row: int) -> Array:
 	var walled: Array = []
 	for dir in GridUtils.CARDINAL_DIRECTIONS:
 		var near: Vector2i = cell + dir
@@ -1744,14 +1768,25 @@ func lip_key(grid: TileMapLayer, cell: Vector2i, floor_row: int) -> Array:
 		# the neighbour's own surface.
 		if GridUtils.is_void_at(grid, near) or not GridUtils.has_ground(grid, near):
 			continue
-		walled.append(dir)
+		# THE DIRECTION AND THE NEIGHBOUR'S TWO CORNER HEIGHTS AS ONE ENTRY, never two arrays kept
+		# side by side: the shaft reads the direction and the rim reads the heights, and a pair that
+		# could drift is how a rim ends up seated on the edge next door. edge_of_corners is asked of
+		# the NEIGHBOUR facing back (-dir), which is its own contract for "do these two meet here?".
+		walled.append([dir, Terrain.edge_of_corners(heights.corners_at(near), -dir)])
 	# The FLOOR joins the key because a lowered board floor moves every shaft at once, and the depth
 	# because it is a live knob -- #308's law, which is about naming everything the build reads.
-	return [walled, floor_row, lip_shaft_depth]
+	#
+	# The TILE joins it for slice 2: the rim wears that tile's own cut art, so repainting hole ->
+	# grass_hole has to replace a standing rim rather than leave the old ring in the new pit. Source
+	# -1 is an ERASED cell, which gets no rim at all (dev, 2026-09-10) and is how a dug hole stays
+	# visibly different from an authored one.
+	return [walled, floor_row, lip_shaft_depth, grid.get_cell_source_id(cell),
+			grid.get_cell_atlas_coords(cell), GridUtils.void_merge_at_cell(grid, cell)]
 
 
-func _reconcile_lip(grid: TileMapLayer, cell: Vector2i, floor_row: int) -> void:
-	var key := lip_key(grid, cell, floor_row)
+func _reconcile_lip(grid: TileMapLayer, cell: Vector2i, heights: BoardHeights,
+		floor_row: int) -> void:
+	var key := lip_key(grid, cell, heights, floor_row)
 	var standing: Node3D = _lips.get(cell)
 	if standing != null:
 		if standing.get_meta(LIP_KEY_META) == key:
@@ -1765,7 +1800,7 @@ func _reconcile_lip(grid: TileMapLayer, cell: Vector2i, floor_row: int) -> void:
 	# vertices. It still takes the tear-out's offset from the same store surface_point reads (#521),
 	# so a hole inside a staged fight lifts with the ground around it.
 	root.position = BoardSpace.staged_offset(cell)
-	_fill_shaft(root, cell, key)
+	_fill_lip(root, cell, key)
 	root.set_meta(LIP_KEY_META, key)
 	_lips[cell] = root
 
@@ -1776,13 +1811,14 @@ func _reconcile_lip(grid: TileMapLayer, cell: Vector2i, floor_row: int) -> void:
 # and what you see is the SKY, which is exactly what the dev reported (pale grey-blue, the scene's
 # own sky_horizon_color). A hole with ground on no side still gets one, because the middle of a wide
 # chasm is the most open part of it.
-func _fill_shaft(root: Node3D, cell: Vector2i, key: Array) -> void:
+func _fill_lip(root: Node3D, cell: Vector2i, key: Array) -> void:
 	var walled: Array = key[0]
 	var floor_row: int = key[1]
 	var pieces: Array[MeshInstance3D] = []
-	for dir: Vector2i in walled:
-		pieces.append(_make_lip_wall(cell, dir, floor_row))
+	for entry: Array in walled:
+		pieces.append(_make_lip_wall(cell, entry[0], floor_row))
 	pieces.append(_make_shaft_floor(cell, floor_row))
+	pieces.append_array(_rim_pieces(cell, key))
 	for piece in pieces:
 		if piece == null:
 			continue
@@ -1847,7 +1883,7 @@ func _make_lip_wall(cell: Vector2i, dir: Vector2i, floor_row: int) -> MeshInstan
 
 	var node := MeshInstance3D.new()
 	node.name = "ShaftWall"
-	node.set_meta(SHAFT_PART_META, "wall")
+	node.set_meta(LIP_PART_META, "wall")
 	node.mesh = mesh
 	return node
 
@@ -1884,9 +1920,127 @@ func _make_shaft_floor(cell: Vector2i, floor_row: int) -> MeshInstance3D:
 	mesh.surface_set_material(0, _lip_material())
 	var node := MeshInstance3D.new()
 	node.name = "ShaftFloor"
-	node.set_meta(SHAFT_PART_META, "floor")
+	node.set_meta(LIP_PART_META, "floor")
 	node.mesh = mesh
 	return node
+
+
+# THE RIM (#876 slice 2): the ring cut out of the hole tile's own sprite, lying flat around the
+# mouth of the pit, on the hole's own footprint.
+#
+# WHY NOTHING VERTICAL IS ADDED, though the dev asked for "the inner walls of the tile drop from
+# that new outline". A horizontal shelf and the wall behind it project CONTIGUOUSLY at every pitch:
+# a sight ray that grazes the rim's inner edge lands on the neighbour's side face exactly where the
+# rim stops hiding it, so the wall already appears to drop from the outline. Drawing a real wall
+# there would put a surface in the plane the neighbour's own block draws in -- the coplanarity that
+# shipped in slice 1 (#885). The ask is answered by geometry that was already there.
+#
+# WHICH PIECES: a mid strip when its edge meets ground; a corner when EITHER of its two edges does,
+# unless this cell is authored to MERGE, in which case both must. That is the dev's per-placement
+# toggle (2026-09-10) -- merging drops the corners that would otherwise carry the ring's art across
+# a hole-facing edge, so two mouths read as one.
+func _rim_pieces(cell: Vector2i, key: Array) -> Array[MeshInstance3D]:
+	var pieces: Array[MeshInstance3D] = []
+	var source: int = key[3]
+	if source < 0:
+		return pieces   # an erased cell has no tile and no art: it keeps the bare pit
+	var coords: Vector2i = key[4]
+	var merged: bool = key[5]
+	var rimmed: Dictionary[Vector2i, Vector2i] = {}
+	for entry: Array in key[0]:
+		rimmed[entry[0]] = entry[1]
+	if rimmed.is_empty():
+		return pieces   # the middle of a wide chasm: nothing of this cell meets ground
+	for part: String in RIM_PARTS:
+		var dirs: Array = RIM_PARTS[part]
+		var met := 0
+		for dir: Vector2i in dirs:
+			if rimmed.has(dir):
+				met += 1
+		if met == 0 or (merged and met < dirs.size()):
+			continue
+		var item := _rim_item(source, coords, part)
+		if item == GridMap.INVALID_CELL_ITEM:
+			continue
+		var piece := _seat_rim_piece(board.mesh_library.get_item_mesh(item), cell, dirs, rimmed)
+		if piece != null:
+			piece.name = "Rim"
+			piece.set_meta(LIP_PART_META, "rim")
+			pieces.append(piece)
+	return pieces
+
+
+# One piece, re-cut at the heights it actually has to sit at.
+#
+# The library's copy is a flat quad in cell-local space, and every rim piece in the board would be
+# flat if it were placed by a transform -- but a ramped neighbour's edge is TILTED and two
+# neighbours of one hole routinely disagree, so the piece is rebuilt with a height PER VERTEX. Its
+# footprint and its UVs are the artifact's, untouched: this moves vertices in y and nothing else.
+func _seat_rim_piece(source_mesh: Mesh, cell: Vector2i, dirs: Array,
+		rimmed: Dictionary[Vector2i, Vector2i]) -> MeshInstance3D:
+	if source_mesh == null or source_mesh.get_surface_count() == 0:
+		return null
+	var arrays := source_mesh.surface_get_arrays(0)
+	var flat: PackedVector3Array = arrays[Mesh.ARRAY_VERTEX]
+	var nw := BoardSpace.vertex_point(cell, 0.0)
+	var seated := PackedVector3Array()
+	var normals := PackedVector3Array()
+	for point: Vector3 in flat:
+		var fx := point.x + 0.5
+		var fz := point.z + 0.5
+		seated.append(Vector3(nw.x + fx * BoardSpace.CELL_SIZE,
+				_rim_seat_y(fx, fz, dirs, rimmed),
+				nw.z + fz * BoardSpace.CELL_SIZE))
+		normals.append(Vector3.UP)
+	var out := []
+	out.resize(Mesh.ARRAY_MAX)
+	out[Mesh.ARRAY_VERTEX] = seated
+	out[Mesh.ARRAY_NORMAL] = normals
+	out[Mesh.ARRAY_TEX_UV] = arrays[Mesh.ARRAY_TEX_UV]
+	var mesh := ArrayMesh.new()
+	mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, out)
+	mesh.surface_set_material(0, source_mesh.surface_get_material(0))
+	var node := MeshInstance3D.new()
+	node.mesh = mesh
+	return node
+
+
+# Where one vertex of a rim sits: on the ground its own PIECE answers to, sampled along that edge.
+#
+# A mid strip answers to one direction, so it lies flat on that neighbour and TILTS with it -- read
+# from edge_of_corners' two corner heights and interpolated along the edge, never from a midpoint,
+# because a ramped neighbour's edge is a slope and a midpoint seats the strip flat across it.
+#
+# A CORNER answers to two, and takes the LOWER. Where its neighbours disagree there is a cliff
+# between them, and no seat can be flush with both -- so the frame steps at the corner, which is
+# where the cliff is. Seated to the HIGHER instead it would hang in the air over the lower ground,
+# and a shelf floating off a cliff reads as a bug rather than as terrain.
+#
+# The piece's own directions and not the vertex's POSITION, which is the draft this replaces: a mid
+# strip's four vertices all sit exactly on the perpendicular bands' boundaries (the strip runs from
+# corner to corner), so a position test claimed every one of them for the side edges too and the MINIMUM
+# pulled the whole strip down to the lowest neighbour of the four. It seated every rim on this board
+# flat, and the suite caught it.
+func _rim_seat_y(fx: float, fz: float, dirs: Array,
+		rimmed: Dictionary[Vector2i, Vector2i]) -> float:
+	var lowest := INF
+	for dir: Vector2i in dirs:
+		if not rimmed.has(dir):
+			continue
+		var edge: Vector2i = rimmed[dir]
+		var along := fx if dir == Vector2i.UP or dir == Vector2i.DOWN else fz
+		lowest = minf(lowest, BoardSpace.world_y_of_height(
+				lerpf(float(edge.x), float(edge.y), along)))
+	# Unreachable: a piece is placed only when at least one of its own directions meets ground.
+	# Kept because the alternative to a defined answer here is a vertex at infinity.
+	return BoardSpace.world_y_of_height(0.0) if is_inf(lowest) else lowest
+
+
+# One rim piece's meshlib id, asked of the LIBRARY by name like every other item here. A tile the
+# generator has not been re-run for simply has none, and the frame is skipped rather than half-built.
+func _rim_item(source: int, coords: Vector2i, part: String) -> int:
+	_ensure_item_index()
+	return _item_by_name.get(rim_item_name(source, coords, part), GridMap.INVALID_CELL_ITEM)
 
 
 # Which way a triangle FACES, in Godot's winding convention -- the rule the rasteriser culls by, and
@@ -1919,7 +2073,7 @@ func _recut_lips() -> void:
 		var key: Array = root.get_meta(LIP_KEY_META)
 		for child in root.get_children():
 			child.queue_free()
-		_fill_shaft(root, cell, key)
+		_fill_lip(root, cell, key)
 
 
 func _set_lip_shaft_depth(value: float) -> void:
@@ -1969,15 +2123,18 @@ func lip_at(cell: Vector2i) -> Node3D:
 	return _lips.get(cell)
 
 
-# How many pieces of one KIND a hole's shaft carries -- "wall" or "floor". The test seam, so no
-# caller outside this file has to know the meta or the naming.
-func shaft_parts(cell: Vector2i, kind: String) -> int:
+# How many pieces of one KIND a hole's lip carries -- "wall", "floor" or "rim". The test seam, so
+# no caller outside this file has to know the meta or the naming.
+#
+# Was shaft_parts until slice 2 hung a RIM on the same node: the shaft is what lies below the board,
+# and a rim is the ring lying flat at its mouth, so the old name had stopped covering what it counts.
+func lip_parts(cell: Vector2i, kind: String) -> int:
 	var lip: Node3D = _lips.get(cell)
 	if lip == null:
 		return 0
 	var found := 0
 	for child in lip.get_children():
-		if child.has_meta(SHAFT_PART_META) and child.get_meta(SHAFT_PART_META) == kind:
+		if child.has_meta(LIP_PART_META) and child.get_meta(LIP_PART_META) == kind:
 			found += 1
 	return found
 

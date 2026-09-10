@@ -65,6 +65,12 @@ var _elevation_row: HBoxContainer
 var _elevation_spin: SpinBox
 var _rise_row: HBoxContainer
 var _rise_option: OptionButton
+# Whether a hole painted now MERGES its mouth with the holes beside it (#876 slice 2). A third rider
+# on the terrain brush, exactly like the level and the rise: the dev wanted either reading
+# "depending on the situation", so this is a per-PLACEMENT choice and not a knob.
+var _merge_holes := false
+var _merge_row: HBoxContainer
+var _merge_check: CheckBox
 var _climb_row: HBoxContainer
 var _climb_option: OptionButton
 
@@ -240,6 +246,10 @@ func _sync_rise_availability() -> void:
 		_rise_option.disabled = not ground
 	if _climb_option != null:
 		_climb_option.disabled = not ground
+	# The merge box is the mirror image: greyed for everything EXCEPT a hole, because that is the
+	# only tile the flag means anything on -- selected_alternative's refusal, made visible.
+	if _merge_check != null:
+		_merge_check.disabled = selected_merge_alternative() == 0
 
 func deactivate():
 	$Panel/TileBrushRow/TileBoxCheck.button_pressed = false
@@ -409,6 +419,21 @@ func _build_extra_controls() -> void:
 		+ "up (a rock, a lantern): only flat ground can slope, and the ramp wears whatever ground you "
 		+ "paint on it."))
 
+	_merge_row = HBoxContainer.new()
+	var merge_label := Label.new()
+	merge_label.text = "Merge Holes"
+	_merge_row.add_child(merge_label)
+	_merge_check = CheckBox.new()
+	_merge_check.button_pressed = _merge_holes
+	_merge_check.toggled.connect(func(on: bool): _merge_holes = on)
+	_merge_row.add_child(_merge_check)
+	add_child(_merge_row)
+	DevWidgets.apply_tooltip(_merge_row, DevWidgets.wrap_tooltip(
+		"Paint holes whose mouths JOIN. A hole normally keeps its whole rim, so a chasm reads as a "
+		+ "row of mouths; a merged one drops the rim where it meets another hole, so the chasm "
+		+ "reads as one pit. Per CELL, not per board — paint a chasm merged and a lone pothole "
+		+ "whole. Greyed out for anything that is not a hole tile."))
+
 	_climb_row = HBoxContainer.new()
 	var climb_label := Label.new()
 	climb_label.text = "Rise Amount"
@@ -441,6 +466,24 @@ func selected_elevation() -> int:
 # prop and coming back to grass restores the direction you had.
 func selected_rise() -> Terrain.RampRise:
 	return _rise if selected_tile_is_ground() else Terrain.RampRise.NONE
+
+
+# WHICH ALTERNATIVE a click paints, and the reason a click paints one at all: the merge flag rides
+# the CELL, so the board already stores it, saves it and undoes it (tile_map_data carries the
+# alternative, and BoardHistory snapshots that whole layer). No new store.
+#
+# Gated the way selected_rise is -- a tile with no merge alternative paints alternative 0 however
+# the box reads, so a stale tick cannot follow you onto a rock.
+func selected_alternative() -> int:
+	return selected_merge_alternative() if _merge_holes else 0
+
+
+# The merge alternative this tile authors, 0 for none. Split out from selected_alternative so the
+# availability sweep can ask "could this tile merge?" without asking "is the box ticked?".
+func selected_merge_alternative() -> int:
+	if game == null or game.grid == null or game.grid.tile_set == null:
+		return 0
+	return GridUtils.void_merge_alternative(game.grid.tile_set, selected_source, selected_tile)
 
 # How far that slope climbs. NOT gated on the flat tile the way selected_rise is: a refused rise is
 # already NONE, and corners_of_ramp ignores the climb entirely then — gating both would be two
@@ -615,6 +658,7 @@ func _set_paint_mode(mode: PaintMode) -> void:
 	# slice 2 and stayed visible in Zone and State mode, greying itself but describing nothing.
 	_elevation_row.visible = mode == PaintMode.TERRAIN or mode == PaintMode.CORNER
 	_rise_row.visible = mode == PaintMode.TERRAIN
+	_merge_row.visible = mode == PaintMode.TERRAIN
 	_climb_row.visible = mode == PaintMode.TERRAIN
 	update_zone_highlight()   # draws on entering ZONE mode, clears on leaving it
 
