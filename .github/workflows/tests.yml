@@ -54,7 +54,7 @@ jobs:
       # to the first failure turns one debugging pass into several.
       fail-fast: false
       matrix:
-        shard: [pres-a, pres-rest, dev, ui-flow, rest]
+        shard: [pres-a, pres-rest, dev, ui-flow, rest, export]
 
     steps:
       - uses: actions/checkout@v4
@@ -164,8 +164,13 @@ jobs:
                        for s in $PRES_A; do targets="$targets -i $s"; done ;;
             dev)       targets="-a res://tests/dev" ;;
             ui-flow)   targets="-a res://tests/ui -a res://tests/flow" ;;
+            # The one shard that proves the ARTIFACT rather than the source (#868). It exports a
+            # pack and runs it, so it is the only shard whose verdict can differ from a source run --
+            # which is the entire point, and why it is worth ~40s of its own rather than folded into
+            # rest. Needs no export templates: --export-pack writes resources, never an executable.
+            export)    targets="-a res://tests/export" ;;
             rest)      targets="-a res://tests"
-                       for d in presentation dev ui flow; do targets="$targets -i res://tests/$d/"; done ;;
+                       for d in presentation dev ui flow export; do targets="$targets -i res://tests/$d/"; done ;;
             *)         echo "::error::Unknown shard '${{ matrix.shard }}'"; exit 1 ;;
           esac
 
