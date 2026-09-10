@@ -139,7 +139,7 @@ func test_what_stands_on_torn_out_ground_goes_up_with_it() -> void:
 	var cell := _painted_cells()[0]
 	var effect := ResolvedCellEffect.new()
 	effect.cell = cell
-	effect.states_added.assign([Terrain.TileState.BLAZE])
+	effect.states_added.assign([Terrain.TileState.BURNING])
 	_game.terrain_states.apply(effect)
 	await _settle()
 

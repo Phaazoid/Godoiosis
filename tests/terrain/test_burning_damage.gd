@@ -1,7 +1,9 @@
 # The end-of-turn burn, pinned for the first time (#174 -- it had zero coverage): a unit standing
 # in fire when ITS faction's turn ends takes Terrain.BURNING_TILE_DAMAGE. "Fire" is
-# Terrain.FIRE_STATES, so BURNING and BLAZE burn identically and a cell holding both burns ONCE.
-# Damage asserts derive from the constant, never a literal (the tuning-value law).
+# Terrain.FIRE_STATES, and #890 retired BLAZE, so it has one member -- the burns-identically case
+# went with it, having become the same deposit twice. What survives is that the pass asks
+# Terrain.occupant_damage rather than naming a state, so a second fire spelling reaches it with no
+# edit here. Damage asserts derive from the constant, never a literal (the tuning-value law).
 #
 # Needs the real game scene: apply_burning_tile_damage reads game.get_unit_at_cell and settles
 # through _process_downed_pending. Fixture is tests/ui/test_game_scene_smoke.gd's.
@@ -53,19 +55,13 @@ func test_burning_damages_the_occupant_when_its_faction_turn_ends() -> void:
 
 	assert_int(unit.get_current_hp()).is_equal(hp_before - Terrain.BURNING_TILE_DAMAGE)
 
-func test_blaze_burns_exactly_like_burning() -> void:
+# A cell can still hold fire alongside another state, and the burn must stay single. It was two
+# fire members that made this worth asserting; with one, what would have to break is the
+# de-duplication in burning_cells, so the case keeps its teeth against the pass growing a second walk.
+func test_a_burning_cell_that_also_holds_cover_burns_once() -> void:
 	var unit := _spawn(CELL, Team.Faction.PLAYER)
-	_deposit(CELL, Terrain.TileState.BLAZE)
-	var hp_before: int = unit.get_current_hp()
-
-	await game.order_executor.apply_burning_tile_damage(Team.Faction.PLAYER)
-
-	assert_int(unit.get_current_hp()).is_equal(hp_before - Terrain.BURNING_TILE_DAMAGE)
-
-func test_a_cell_holding_both_fire_states_burns_once() -> void:
-	var unit := _spawn(CELL, Team.Faction.PLAYER)
-	_deposit(CELL, Terrain.TileState.BLAZE)
-	_deposit(CELL, Terrain.TileState.BURNING)   # a fireball over an authored blaze
+	_deposit(CELL, Terrain.TileState.BURNING)
+	_deposit(CELL, Terrain.TileState.COVER)   # a fireball over a dug-in cell
 	var hp_before: int = unit.get_current_hp()
 
 	await game.order_executor.apply_burning_tile_damage(Team.Faction.PLAYER)
@@ -74,7 +70,7 @@ func test_a_cell_holding_both_fire_states_burns_once() -> void:
 
 func test_fire_spares_the_faction_whose_turn_is_not_ending() -> void:
 	var unit := _spawn(CELL, Team.Faction.PLAYER)
-	_deposit(CELL, Terrain.TileState.BLAZE)
+	_deposit(CELL, Terrain.TileState.BURNING)
 	var hp_before: int = unit.get_current_hp()
 
 	await game.order_executor.apply_burning_tile_damage(Team.Faction.ENEMY)

@@ -61,11 +61,9 @@ func test_a_burning_cell_is_a_fire_source() -> void:
 	var board := _board({ HERE: Terrain.Kind.GRASS }, { HERE: [Terrain.TileState.BURNING] })
 	assert_array(Materia.sources_at(HERE, board)).contains([FIRE])
 
-# BLAZE is authored set-dressing fire; Terrain.is_burning owns which members count, and asking it
-# rather than naming BURNING is what makes this pass without a second list here.
-func test_a_blazing_cell_is_a_fire_source() -> void:
-	var board := _board({ HERE: Terrain.Kind.GRASS }, { HERE: [Terrain.TileState.BLAZE] })
-	assert_array(Materia.sources_at(HERE, board)).contains([FIRE])
+# The BLAZE twin of the case above went with #890, which retired that state -- with one fire member
+# it was a byte-identical duplicate. Materia still asks Terrain.is_burning rather than naming
+# BURNING, so a second fire spelling would reach here with no edit.
 
 func test_a_lit_prop_is_a_fire_source() -> void:
 	var board := _board({ HERE: Terrain.Kind.ROCK }, {}, { HERE: true })

@@ -61,6 +61,10 @@ static func build(parent: Node, root_name := "PlayRoot") -> Dictionary:
 	# Same rule as the flat game's store (#245) — a tile state needs a tile under it. The parallel
 	# stacks each wire it; neither is allowed to be the one that forgets, which is how #103 happened.
 	terrain_states.ground_source = func(cell: Vector2i) -> bool: return GridUtils.has_ground(grid, cell)
+	# And the same for the ground's fire clock (#890) -- same reason, same pair of stacks: a
+	# headless board whose fires never went out would let the Play API and the game disagree about
+	# how long a burn lasts.
+	terrain_states.fuel_source = TerrainReactionCatalog.fuel_source_for(grid)
 	root.add_child(terrain_states)
 
 	# Elevation (#257), the twin of game.board_heights. RefCounted, so nothing to parent -- it lives

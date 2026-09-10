@@ -37,7 +37,7 @@ enum Term {
 	# Elemental
 	ELEMENTS, WET, CHILLED, REACTIONS,
 	# Terrain
-	TERRAIN_KINDS, WATER_TILE, SHALLOW_WATER, BURNING, BLAZE, FROZEN, COVER,
+	TERRAIN_KINDS, WATER_TILE, SHALLOW_WATER, BURNING, FROZEN, COVER,
 	# Will & lifecycle
 	DOWNED, CRISIS, MAIM, PROSTHETIC,
 }
@@ -97,9 +97,13 @@ static func term_for_stat(stat: Stats.Stat) -> Term:
 
 static func term_for_tile_state(state: Terrain.TileState) -> Term:
 	const MAP: Dictionary[Terrain.TileState, Term] = {
-		Terrain.TileState.BURNING: Term.BURNING, Terrain.TileState.BLAZE: Term.BLAZE,
+		Terrain.TileState.BURNING: Term.BURNING,
 		Terrain.TileState.FROZEN: Term.FROZEN, Terrain.TileState.COVER: Term.COVER,
 	}
+	# Deliberately a bare lookup and not a get() with a fallback: test_glossary_coverage walks
+	# every live TileState through here, so a member with no row is a red suite rather than a
+	# silent wrong word. Terrain.RETIRED_STATES are the ones it skips, and they never reach a
+	# reader -- TerrainStateManager.load_state_dict drops them at the door.
 	return MAP[state]
 
 static func term_for_element_state(state: Elemental.State) -> Term:
@@ -493,19 +497,17 @@ static func _build_entries() -> Dictionary:
 			+ "shoved into it comes out WET. It is deep water, not this, that drowns — so the cost "
 			+ "of being shoved in here is position and a soaking. Waterwalk keeps you dry, and so "
 			+ "does crossing it once it is frozen."}
+	# No fixed duration in this text since #890: a fire lasts as long as its FUEL, so how long it
+	# burns is a property of the ground and differs from one to the next. The tile hover reads the
+	# live clock and is where a player learns the number for the ground actually under the cursor.
 	e[Term.BURNING] = {"category": Category.TERRAIN, "title": "Burning",
-		"short": "On fire: %d damage to whoever stands here at end of turn. Burns out after %d turns."
-			% [Terrain.BURNING_TILE_DAMAGE, TerrainStateManager.STATE_DURATIONS[Terrain.TileState.BURNING]],
+		"short": "On fire: %d damage to whoever stands here at end of turn."
+			% Terrain.BURNING_TILE_DAMAGE,
 		"long": "This ground is on fire: anyone standing on it takes %d damage at the end of the "
 			% Terrain.BURNING_TILE_DAMAGE
-			+ "turn. It burns out on its own after %d turns."
-			% TerrainStateManager.STATE_DURATIONS[Terrain.TileState.BURNING]}
-	e[Term.BLAZE] = {"category": Category.TERRAIN, "title": "Blaze",
-		"short": "A fire that will not burn out: %d damage at end of turn, no timer."
-			% Terrain.BURNING_TILE_DAMAGE,
-		"long": "A standing fire — same end-of-turn damage as Burning (%d), but it never burns out "
-			% Terrain.BURNING_TILE_DAMAGE
-			+ "on its own."}
+			+ "turn. Fire burns for as long as the ground under it has fuel — grass goes out on "
+			+ "its own, and a fire on bare stone is consuming nothing, so it burns until something "
+			+ "puts it out."}
 	e[Term.FROZEN] = {"category": Category.TERRAIN, "title": "Frozen",
 		"short": "Frozen solid. Frozen water can be walked on, and nothing melts it but fire.",
 		"long": "Ice. Frozen water is walkable ground for any unit — permanently, unless burned away."}

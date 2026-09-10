@@ -562,8 +562,8 @@ func reset_elevation() -> void:
 func _build_state_options() -> void:
 	for i in Terrain.TileState.size():
 		var state: Terrain.TileState = Terrain.TileState.values()[i]
-		if state == Terrain.TileState.NONE:
-			continue
+		if state == Terrain.TileState.NONE or Terrain.RETIRED_STATES.has(state):
+			continue   # a tombstoned member is still in the enum and must not reach the palette
 		var state_name: String = Terrain.TileState.keys()[i]
 		_state_values.append(state)
 		_state_labels.append(state_name.capitalize())

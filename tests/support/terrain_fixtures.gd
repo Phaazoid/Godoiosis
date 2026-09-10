@@ -1,0 +1,44 @@
+# Terrain-store builders for tests (#890). PRELOADED, not class_name'd, like shape_fixtures:
+#   const T := preload("res://tests/support/terrain_fixtures.gd")
+#
+# A tile state's clock belongs to the GROUND now, so a bare TerrainStateManager gives every state
+# no clock at all -- it has no board and must not invent a duration for ground it cannot see. A
+# suite about burning therefore has to say what its ground is made of, and this is that sentence.
+#
+# The fixture reaction is BUILT here with its own number and never loaded out of
+# Resources/TerrainReactions: a suite reading the authored grass would be testing content, and one
+# hardcoding 3 would go red the day grass is retuned. Whether the SHIPPED reactions carry a clock
+# at all is a content question with its own case, in test_fire_clock.
+extends RefCounted
+
+# This fixture's own dial, deliberately NOT the authored one. Cases derive from it so the number
+# here can move without touching a single assertion.
+const FUEL_TURNS := 3
+
+
+# Ground that burns: the ignition reaction a flammable kind would carry.
+static func fuel(turns := FUEL_TURNS) -> TerrainReaction:
+	var reaction := TerrainReaction.new()
+	reaction.incoming_element = Elemental.Element.FIRE
+	var added: Array[Terrain.TileState] = [Terrain.TileState.BURNING]
+	reaction.add_tile_states = added
+	var clocks: Dictionary[Terrain.TileState, int] = {Terrain.TileState.BURNING: turns}
+	reaction.add_state_turns = clocks
+	return reaction
+
+
+# A store whose every cell is fuel -- the headless stand-in for a grass field. The caller still
+# owns it (auto_free + add_child), exactly as it owned the bare store before.
+static func store_on_fuel(turns := FUEL_TURNS) -> TerrainStateManager:
+	var store := TerrainStateManager.new()
+	var reaction := fuel(turns)
+	store.fuel_source = func(_cell: Vector2i) -> TerrainReaction: return reaction
+	return store
+
+
+# A store whose ground is not fuel -- flagstone. Fire on it is consuming nothing and so never runs
+# out, which is the whole of what BLAZE used to need a second enum member to say.
+static func store_on_stone() -> TerrainStateManager:
+	var store := TerrainStateManager.new()
+	store.fuel_source = func(_cell: Vector2i) -> TerrainReaction: return null
+	return store

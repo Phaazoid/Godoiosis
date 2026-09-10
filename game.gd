@@ -192,6 +192,10 @@ func _build_collaborators() -> void:
 	# A tile state needs a tile under it (#245). Reads `grid` live rather than capturing it, so a
 	# board swap cannot leave the rule judging against the previous scenario's terrain.
 	terrain_states.ground_source = func(cell: Vector2i) -> bool: return GridUtils.has_ground(grid, cell)
+	# What fire consumes here, so a deposited state gets its GROUND's clock (#890). Holds the grid
+	# NODE, which is never reassigned and is repainted in place by a board swap, so this reads the
+	# new scenario's terrain for the same reason the rule above does.
+	terrain_states.fuel_source = TerrainReactionCatalog.fuel_source_for(grid)
 	add_child(terrain_states)
 
 	board_heights = BoardHeights.new()   # no add_child: RefCounted, and it needs nothing from the tree

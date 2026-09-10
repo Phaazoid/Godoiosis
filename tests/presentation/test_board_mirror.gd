@@ -241,7 +241,7 @@ func test_a_standing_flame_survives_a_reconcile_that_lights_another() -> void:
 
 	var effect := ResolvedCellEffect.new()
 	effect.cell = _a_cell_that_is_not_burning()
-	effect.states_added.assign([Terrain.TileState.BLAZE])
+	effect.states_added.assign([Terrain.TileState.BURNING])
 	_game.terrain_states.apply(effect)
 	await _settle()
 	assert_object(mirror.fire_marker_at(effect.cell)).override_failure_message(
@@ -260,7 +260,7 @@ func test_fire_lit_mid_turn_appears_without_a_turn_boundary() -> void:
 	var cell := _a_cell_that_is_not_burning()
 	var effect := ResolvedCellEffect.new()
 	effect.cell = cell
-	effect.states_added.assign([Terrain.TileState.BLAZE])
+	effect.states_added.assign([Terrain.TileState.BURNING])
 	_game.terrain_states.apply(effect)
 	await _settle()
 	assert_int(mirror.fire_marker_count()).override_failure_message(
@@ -2558,7 +2558,7 @@ func test_two_burning_cells_do_not_burn_in_lockstep() -> void:
 	var lit := _a_cell_that_is_not_burning()
 	var effect := ResolvedCellEffect.new()
 	effect.cell = lit
-	effect.states_added.assign([Terrain.TileState.BLAZE])
+	effect.states_added.assign([Terrain.TileState.BURNING])
 	_game.terrain_states.apply(effect)
 	await _settle()
 	var burning := _burning()

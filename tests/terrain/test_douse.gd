@@ -1,8 +1,12 @@
 # The water half of the fire/water terrain loop, tested against the AUTHORED catalog
-# (TerrainReactionCatalog.get_all(), unlike test_ice.gd's injected twins): WATER puts out both
-# fire states — BURNING and the permanent BLAZE, mirroring #199's ice symmetry (permanent states
-# are removed by the opposing element, never a clock) — FIRE ignites GRASS, and DIRT is the
-# non-flammable ground: no reaction keys on it, so fire deposits nothing there.
+# (TerrainReactionCatalog.get_all(), unlike test_ice.gd's injected twins): WATER puts out fire,
+# FIRE ignites GRASS, and DIRT is the non-flammable ground — no reaction keys on it, so fire
+# deposits nothing there.
+#
+# #890 retired BLAZE and deleted DouseBlaze.tres with it: permanence moved to the GROUND, so a fire
+# water cannot reach is no longer a second state but the same BURNING on ground with no fuel, and
+# DouseBurning already answers for it. #199's ice symmetry is unchanged — a permanent state is
+# removed by the opposing element, never by a clock — it just has one less spelling to cover.
 extends GdUnitTestSuite
 
 const H := preload("res://tests/support/squad_fixtures.gd")
@@ -53,13 +57,15 @@ func test_water_douses_a_burning_tile() -> void:
 	assert_int(plan.cell_effects.size()).is_equal(1)
 	assert_bool(plan.cell_effects[0].states_removed.has(Terrain.TileState.BURNING)).is_true()
 
-func test_water_douses_a_blaze() -> void:
-	# BLAZE has no timer — water is its ONLY exit, the way fire is FROZEN's (test_ice.gd).
+func test_water_douses_a_fire_on_ground_that_is_not_fuel() -> void:
+	# The BLAZE case, re-aimed at what replaced it: a fire with no clock has water as its ONLY exit,
+	# the way fire is FROZEN's (test_ice.gd). The reaction gates on the STATE and never on the
+	# ground, which is what makes one douse cover both kinds of fire.
 	var attacker := _map_attacker(Elemental.Element.WATER)
-	var board := _KindBoard.new(_store_with(Terrain.TileState.BLAZE), { TARGET_CELL: Terrain.Kind.GRASS })
+	var board := _KindBoard.new(_store_with(Terrain.TileState.BURNING), { TARGET_CELL: Terrain.Kind.DIRT })
 	var plan := _resolve(attacker, board)
 	assert_int(plan.cell_effects.size()).is_equal(1)
-	assert_bool(plan.cell_effects[0].states_removed.has(Terrain.TileState.BLAZE)).is_true()
+	assert_bool(plan.cell_effects[0].states_removed.has(Terrain.TileState.BURNING)).is_true()
 
 func test_water_on_a_calm_tile_deposits_nothing() -> void:
 	var attacker := _map_attacker(Elemental.Element.WATER)

@@ -1,6 +1,6 @@
 # #50 ice slice: ICE on a WATER tile freezes it (a walkable FROZEN state over non-walkable water);
 # FIRE on a FROZEN tile reverts it. FROZEN is PERMANENT since 2026-08-12 (playtest call, no
-# STATE_DURATIONS entry — COVER's exact mechanism): the auto-thaw undercut the intended pattern
+# authored clock — COVER's exact mechanism): the auto-thaw undercut the intended pattern
 # of the PLAYER choosing when ice goes away, per marketing.md's "freeze, cross, melt it behind
 # you". Headless model.
 extends GdUnitTestSuite
@@ -125,7 +125,7 @@ func test_a_tileset_that_omits_the_walkable_flag_reads_unwalkable() -> void:
 
 func test_frozen_never_melts_on_its_own() -> void:
 	# The 2026-08-12 reversal: FROZEN carried a 3-turn clock like BURNING until playtest found the
-	# auto-thaw unwelcome. No STATE_DURATIONS entry means tick_states must never touch it, however
+	# auto-thaw unwelcome. No authored clock means tick_states must never touch it, however
 	# many rounds pass — COVER's own case (test_cover_is_permanent_and_never_ticks_out) is the
 	# mirror. Falsify by re-adding the duration entry.
 	var tsm := _frozen_store()

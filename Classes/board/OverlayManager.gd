@@ -45,7 +45,7 @@ const TERRAIN_STATE_ICONS: Dictionary = {
 	Terrain.TileState.BURNING: preload("res://Art/Icons/TerrainIcons/Fire.png"),
 	Terrain.TileState.FROZEN: preload("res://Art/Icons/TerrainIcons/Ice.png"),
 	Terrain.TileState.COVER: preload("res://Art/Icons/TerrainIcons/Cover.png"),
-	Terrain.TileState.BLAZE: preload("res://Art/Icons/TerrainIcons/Fire.png"),   # #174: same art as BURNING -- permanence is the only difference
+	# No BLAZE row since #890 retired it: permanence moved to the ground, so there is only one fire.
 }
 
 const TERRAIN_Z_INDEX := 1                                # above the board, below unit sprites — tweak by eye

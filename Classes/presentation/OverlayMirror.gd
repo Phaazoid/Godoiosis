@@ -532,7 +532,7 @@ func _guard_links(om: OverlayManager) -> void:
 
 # Terrain live icons (FROZEN) + plan-time preview ghosts. A state whose art draws OBJECTS is
 # skipped on the LIVE channel, because BoardMirror stands its 3D form on the cell: the flame +
-# light IS fire (#174: one Fire texture covers BURNING and BLAZE), and the mud bumps ARE cover
+# light IS fire (one texture, and since #890 one fire state), and the mud bumps ARE cover
 # (#326). Both are kept on the PREVIEW channel, where no 3D preview exists and the ghosted icon
 # is the only warning a queued Burrow or ignite gets. FROZEN is genuinely flat and stays here.
 const STANDING_STATES: Array[Terrain.TileState] = [

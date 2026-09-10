@@ -6,10 +6,6 @@ class_name TerrainStateManager
 # attacks DEPOSIT and reactions READ (BURNING, ...). Round-trips through
 # ScenarioData.terrain_states; drawn by OverlayManager.
 
-const STATE_DURATIONS := {
-	Terrain.TileState.BURNING: 3,
-}
-
 # Injectable "does this cell have ground?" (#245) -- the GridUtils.has_ground shape, wired at the
 # two construction sites (game.gd and play/board_builder.gd). A tile state modifies what happens
 # when a unit WALKS on a tile, so a cell with no tile has nothing to modify (dev ruling).
@@ -19,6 +15,20 @@ const STATE_DURATIONS := {
 # Unset = no judgement, NOT "no ground": a bare store built without a board still accepts
 # everything, which is what the headless terrain fixtures rely on.
 var ground_source: Callable
+
+# Injectable "what does fire consume on this cell?" (#890) -- the ground's ignition reaction, or
+# null where the ground is not fuel. Composed by TerrainReactionCatalog.fuel_source_for and wired
+# at the same two construction sites as ground_source above.
+#
+# It replaced a STATE_DURATIONS table that lived here. A tile state's clock is not a property of
+# the STATE, it is a property of what is burning: grass carries 3, tall grass will carry less, and
+# the flagstone under a brazier carries none at all, so the fire on it never runs out. Deleting the
+# table rather than demoting it to a default is deliberate (dev, 2026-09-10) -- both live
+# construction sites wire this, so a fallback would have been a constant only tests could reach.
+#
+# Unset = nothing has a clock, which is the honest reading for a bare store built with no board:
+# it cannot know what any cell is made of, so it must not invent a duration.
+var fuel_source: Callable
 
 var _states: Dictionary = {}        # Vector2i -> Array[Terrain.TileState]
 var _state_turns: Dictionary = {}   # Vector2i -> { Terrain.TileState: turns_left }
@@ -48,8 +58,7 @@ func apply(effect: ResolvedCellEffect) -> void:
 		_clear_timer(effect.cell, s)
 	if grounded:
 		for s in effect.states_added:
-			if STATE_DURATIONS.has(s):
-				_start_timer(effect.cell, s)
+			_start_timer(effect.cell, s)
 
 # The remove-then-add fold one effect makes to a state list — apply()'s rule, shared so a PENDING
 # deposit reads exactly as the applied one will (#419).
@@ -113,11 +122,16 @@ func load_state_dict(data: Dictionary) -> void:
 	for cell in data:
 		var states: Array[Terrain.TileState] = []
 		states.assign(data[cell])
+		# A board saved before #890 can carry a retired state (BLAZE). Dropped HERE, at the only
+		# door one can arrive through, rather than guarded at each of the readers downstream --
+		# the hover card, the glossary bridge, the icon table -- none of which should have to know
+		# the enum has tombstones in it.
+		for retired in Terrain.RETIRED_STATES:
+			states.erase(retired)
 		if not states.is_empty():
 			_states[cell] = states
 			for s in states:
-				if STATE_DURATIONS.has(s):
-					_start_timer(cell, s)
+				_start_timer(cell, s)
 
 func cells_with(state: Terrain.TileState) -> Array[Vector2i]:
 	var result: Array[Vector2i] = []
@@ -126,8 +140,10 @@ func cells_with(state: Terrain.TileState) -> Array[Vector2i]:
 			result.append(cell)
 	return result
 
-# Every cell on fire, each listed ONCE -- a cell can legally hold both fire states (painted
-# BLAZE, then a fireball lands), and the end-of-turn burn must not damage its occupant twice.
+# Every cell on fire, each listed ONCE. Terrain.FIRE_STATES is a single member again since #890
+# retired BLAZE, so the de-duplication has nothing to do today -- it stays because the ONCE is the
+# contract the end-of-turn burn relies on, and it must not become a bug the day fire grows a
+# second spelling again.
 func burning_cells() -> Array[Vector2i]:
 	var result: Array[Vector2i] = []
 	for cell in _states:
@@ -135,8 +151,9 @@ func burning_cells() -> Array[Vector2i]:
 			result.append(cell)
 	return result
 
-# Public read of a ticking state's clock at one cell — -1 when it has no timer there (the state
-# is permanent, like COVER/BLAZE, or simply absent). The hover readout is the first reader.
+# Public read of a ticking state's clock at one cell — -1 when it has no timer there (the state is
+# permanent — COVER, or fire on ground that is not fuel — or simply absent). The hover readout is
+# the first reader.
 func turns_remaining(cell: Vector2i, state: Terrain.TileState) -> int:
 	if _state_turns.has(cell) and _state_turns[cell].has(state):
 		return _state_turns[cell][state]
@@ -149,10 +166,24 @@ func tick_states() -> void:
 			if _state_turns[cell][state] <= 0:
 				_remove_state(cell, state)
 
+# Give a freshly deposited state its clock, IF its ground gives it one. The single place that
+# question is asked, so every deposit path -- the resolver, the dev brush, a load -- reads the same
+# answer. No entry for this state (or no fuel at all) means no timer, which is the permanence COVER
+# and FROZEN have always had and which BLAZE used to need a second enum member for.
 func _start_timer(cell: Vector2i, state: Terrain.TileState) -> void:
+	var fuel := _fuel_at(cell)
+	if fuel == null or not fuel.add_state_turns.has(state):
+		return
 	if not _state_turns.has(cell):
 		_state_turns[cell] = {}
-	_state_turns[cell][state] = STATE_DURATIONS[state]
+	_state_turns[cell][state] = fuel.add_state_turns[state]
+
+
+func _fuel_at(cell: Vector2i) -> TerrainReaction:
+	if not fuel_source.is_valid():
+		return null
+	var fuel: TerrainReaction = fuel_source.call(cell)   # typed local: .call() erases to Variant
+	return fuel
 
 func _clear_timer(cell: Vector2i, state: Terrain.TileState) -> void:
 	if _state_turns.has(cell):
