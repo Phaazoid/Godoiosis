@@ -1,0 +1,20 @@
+[gd_resource type="Resource" script_class="TransmutationData" format=3 uid="uid://do43xhhg1ueb8"]
+
+[ext_resource type="Script" uid="uid://bgbidu2bbf33l" path="res://Classes/alchemy/TransmutationData.gd" id="1_wly3u"]
+
+[resource]
+script = ExtResource("1_wly3u")
+sigils = Array[int]([1, 6])
+flourishes = Array[int]([3, 5])
+display_name = "Zap"
+power = 5
+min_range = 2
+max_range = 2
+hits_allies = true
+hits_self = true
+targets = 2
+up_tolerance = 99
+down_tolerance = 99
+arc_clearance = 99
+pierces_guard = true
+damage_kind = 4
