@@ -50,9 +50,11 @@ static func list_runs() -> PackedStringArray:
 
 
 # THE EVENTS ALONE, with no board (#53 slice 5). The uploader asks "is this run sealed?" and then
-# ships board.tres as BYTES -- so load_run's `load()` of it into a ScenarioData, and into the
-# resource cache, is work it would only throw away. A seam SPLIT rather than a second parse loop:
-# load_run is this plus the board, so the truncation rule below still governs both callers.
+# ships board.tres as BYTES -- so load_run's parse of it into a ScenarioData, and into the resource
+# cache, is work it would only throw away. Since #871 that parse also text-scans and can write a
+# repaired copy, which the launch sweep pays for once per recorded run on the machine if it comes
+# through the wrong door. A seam SPLIT rather than a second parse loop: load_run is this plus the
+# board, so the truncation rule below still governs both callers.
 static func load_events(run_id: String) -> ReplayRun:
 	var run := ReplayRun.new()
 	run.run_id = run_id

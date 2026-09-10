@@ -178,7 +178,7 @@ static func events_path(run_id: String) -> String:
 # MissionLog's business.
 #
 # NEVER AN APPEND, for two reasons and either would do. WRITE truncates (see open_run_file), so a
-# careless reopen destroys the run it meant to finish; and ReplayRun.load_run stops at the first
+# careless reopen destroys the run it meant to finish; and ReplayRun.load_events stops at the first
 # line that will not parse, so an ending appended after a partial last line is unreachable by the
 # very tool that reads runs. Writing the surviving lines plus the new ones and renaming over the
 # original clears both, and comes out clean on a run that was killed mid-line.
