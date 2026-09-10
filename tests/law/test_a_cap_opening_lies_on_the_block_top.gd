@@ -54,6 +54,17 @@ func _caps() -> Array[int]:
 			continue
 		if item_name.ends_with("_block") or item_name == BoardMirror.RAMP_FILL_ITEM_NAME:
 			continue
+		# A RIM piece is not a shell (#876 slice 2). The complement above is deliberate and this is
+		# a DECLARED exemption from it, not a convenience: the law's subject is a cap's OPENING, and
+		# a rim has none -- it is a single flat quad lying on a hole's own footprint, so its whole
+		# boundary is its outline and there is no inside for an angle to see into. It also has no
+		# block beneath it to be closed by, which is the entire point of a hole.
+		#
+		# Stated rather than silently skipped because this family joined the law by EXISTING, which
+		# is the property the complement was chosen for and is worth keeping: it caught these on the
+		# first CI run.
+		if item_name.begins_with("rim_"):
+			continue
 		out.append(id)
 	return out
 
