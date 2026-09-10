@@ -629,7 +629,9 @@ func _erase() -> void:
 # selected_rise() is already gated to flat tiles, so a rock paints flat however the picker reads.
 func _paint_tile(cell: Vector2i) -> void:
 	var brush: TileBrushTool = game.dev_overlay.tile_brush
-	game.grid.paint(cell, brush.selected_source, brush.selected_tile)
+	# selected_alternative() is gated to tiles that author one, so a merge tick left on cannot
+	# follow the brush onto a tile that has no such variant.
+	game.grid.paint(cell, brush.selected_source, brush.selected_tile, brush.selected_alternative())
 	game.board_heights.set_cell(cell, brush.selected_elevation(), brush.selected_rise(),
 			brush.selected_climb())
 	_refresh_height_readout()

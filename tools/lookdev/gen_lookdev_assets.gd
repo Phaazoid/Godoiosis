@@ -428,7 +428,9 @@ func _add_tileset_items(ml: MeshLibrary, dirt_side: Material, stone_side: Materi
 
 	var next_id := FIRST_TILE_ITEM
 	var props := 0
+	var rims := 0
 	var translucent: PackedStringArray = []
+	var rim_report: PackedStringArray = []
 	# Seeded, like every other generated texture here, so an unchanged tileset regenerates an
 	# identical meshlib and a re-run produces no diff.
 	var rng := RandomNumberGenerator.new()
@@ -457,7 +459,7 @@ func _add_tileset_items(ml: MeshLibrary, dirt_side: Material, stone_side: Materi
 		# computed inside it: the finished atlas height has to be known before the first is written.
 		var patch: Vector2i = atlas.texture_region_size
 		var columns := maxi(1, source_image.get_width() / patch.x)
-		var packed := _pack_slots(_solid_patch_widths(atlas), columns, patch, source_image.get_height())
+		var packed := _pack_slots(_extra_patch_widths(atlas), columns, patch, source_image.get_height())
 		if packed.is_empty():
 			return -1
 		var slots: Array[Rect2i] = packed["slots"]
@@ -574,6 +576,30 @@ func _add_tileset_items(ml: MeshLibrary, dirt_side: Material, stone_side: Materi
 							_form_mesh(_canonical_corners(form, climb), top, side, top_uv))
 					next_id += 1
 
+			# THE HOLE'S RIM (#876 slice 2). A VOID tile's art is the ring around a painted pit, and
+			# the dev's ask was to empty the middle and hang the walls off what is left. Its patch
+			# is taken BEFORE the prop slots below, matching the order _patch_widths_for lists them
+			# -- the two walks index one array, so an order that disagreed would dress every prop in
+			# the tile next to it.
+			if kind == Terrain.Kind.VOID:
+				var ring := _cut_rim(source_image, region)
+				var ring_slot: Rect2i = slots[next_slot]
+				next_slot += 1
+				# blit, not blend: an UNBASED copy, so the emptied middle stays transparent for the
+				# scissor. The tile's own square above is still based and still opaque, which is
+				# what keeps the brush ghost previewing a solid block.
+				ground.blit_rect(ring, Rect2i(Vector2i.ZERO, region.size), ring_slot.position)
+				var bands := _rim_bands(ring)
+				var ring_uv := _uv_rect(ring_slot, atlas_size)
+				for part: String in RIM_PARTS:
+					_add_item(ml, next_id, BoardMirror.rim_item_name(source_id, coords, part),
+							_rim_mesh(prop_mat, ring_uv, _rim_footprint(part, bands, region.size)))
+					next_id += 1
+				rims += 1
+				rim_report.append("%d/%d:%d bands n%d s%d w%d e%d, uncovered %d"
+						% [source_id, coords.x, coords.y, bands.x, bands.y, bands.z, bands.w,
+								_rim_uncovered(ring, bands)])
+
 			# The solid prop's own item: real geometry sized by the art, wearing faces GENERATED in
 			# that tile's own dominant colours. A billboard prop gets none -- BoardMirror builds its
 			# sprite directly, and a billboard is the one form a sprite maps onto correctly.
@@ -645,8 +671,14 @@ func _add_tileset_items(ml: MeshLibrary, dirt_side: Material, stone_side: Materi
 		prop_mat.albedo_texture = composited
 
 	var added := next_id - FIRST_TILE_ITEM
-	print("Tileset items %d..%d (%d ground + %d prop) from %s" \
-			% [FIRST_TILE_ITEM, next_id - 1, added - props, props, TILESET_PATH])
+	print("Tileset items %d..%d (%d ground + %d prop + %d rim) from %s" \
+			% [FIRST_TILE_ITEM, next_id - 1, added - props - rims * RIM_PARTS.size(), props,
+					rims * RIM_PARTS.size(), TILESET_PATH])
+	if not rim_report.is_empty():
+		# The bands are MEASURED off each tile's own cut, and how deep they came out decides how
+		# much of a rim survives the merge toggle -- worth printing rather than reading back off
+		# the mesh later.
+		print("  hole rims (%d): %s" % [rims, ", ".join(rim_report)])
 	if not translucent.is_empty():
 		# A report, not an error. A GROUND tile this open is a sprite on an empty field wearing a
 		# kind colour behind it -- either it wants a prop_shape authored, or its base was never chosen.
@@ -1078,6 +1110,309 @@ func _quad(st: SurfaceTool, a: Vector3, b: Vector3, c: Vector3, d: Vector3, norm
 # own when one of the two sits on the floor.
 
 
+# --- The hole's rim (#876 slice 2) --------------------------------------------
+
+# The eight pieces one rim frame is composed from: four mid-edge strips and four corners.
+#
+# EIGHT PIECES AND NOT ONE FRAME PER MASK, because the frame is composed at RUNTIME. BoardMirror
+# decides which pieces a cell gets -- the mask of edges that meet ground, and the dev's per-cell
+# merge flag -- and seats each piece at its own NEIGHBOUR'S edge height. A baked frame could carry
+# only one height for all four sides, and that is not a corner case: measured on Terraces, 10 of
+# its 14 ground-facing hole edges have the ground 1-3 levels ABOVE the hole itself, so one height
+# would sit the rim partway down the pit wall rather than at its mouth.
+#
+# The footprints TILE the cell without overlapping -- a mid strip stops where its corners begin --
+# so a frame is never two coplanar quads fighting, which is the mistake slice 1 shipped (#885).
+const RIM_PARTS: Array[String] = ["n", "s", "w", "e", "nw", "ne", "sw", "se"]
+
+# How far a band may reach in from its edge, in pixels of the tile. Measured per edge off the cut,
+# then CLAMPED: two opposite bands that met would leave no mouth at all, and the clamp is what makes
+# "a rim frame always has a hole in it" a property of this file rather than of the sprite.
+const RIM_BAND_MAX := 7
+
+# Alpha at or above which a pixel counts as drawn. The sheet uses no partial alpha, so this only
+# has to sit clear of zero.
+const RIM_ALPHA_FLOOR := 0.03
+
+# A highlight is a light MINORITY: at most this share of the ring's opaque pixels, and at least this
+# much brighter than its commonest colour.
+const RIM_HIGHLIGHT_SHARE := 0.25
+const RIM_HIGHLIGHT_CONTRAST := 0.05
+
+
+# The cut: EMPTY THE MIDDLE (dev, 2026-09-09 -- "can we have that part be emptied, and the inner
+# walls of the tile drop from that new outline?"). Floods outward from the tile's centre over every
+# pixel darker than the tile's own median luminance.
+#
+# His pick off the mockup, and it NAMES NO COLOUR, which is the whole reason it won: the two rules
+# that did name one both failed. "Keep the commonest colour" picks grass_hole's own dark PIT (65px,
+# more than any single green), so it kept the hole and cut the grass; keeping one green instead
+# leaves a lacy ring the pit shows straight through. A third hole tile painted later needs no rule
+# of its own here.
+func _cut_rim(source: Image, region: Rect2i) -> Image:
+	var w := region.size.x
+	var h := region.size.y
+	var cut := Image.create_empty(w, h, false, Image.FORMAT_RGBA8)
+	cut.blit_rect(source, region, Vector2i.ZERO)
+	# Luminance is snapshotted BEFORE the flood writes, so the test never reads a pixel this pass
+	# has already cleared. Together with the visited set that makes the cut independent of the order
+	# the stack happens to pop in -- a generated artifact has to be identical every run.
+	var lums := PackedFloat32Array()
+	lums.resize(w * h)
+	for y in h:
+		for x in w:
+			var pixel := cut.get_pixel(x, y)
+			lums[y * w + x] = 0.299 * pixel.r + 0.587 * pixel.g + 0.114 * pixel.b
+	var ranked := lums.duplicate()
+	ranked.sort()
+	var mid: float = ranked[ranked.size() / 2]
+	var seen := PackedByteArray()
+	seen.resize(w * h)
+	var stack: Array[int] = []
+	for sy: int in [h / 2 - 1, h / 2]:
+		for sx: int in [w / 2 - 1, w / 2]:
+			var seed := sy * w + sx
+			if seen[seed] == 0 and lums[seed] < mid:
+				seen[seed] = 1
+				stack.append(seed)
+	while not stack.is_empty():
+		var at: int = stack.pop_back()
+		var ax := at % w
+		var ay := at / w
+		cut.set_pixel(ax, ay, Color(0.0, 0.0, 0.0, 0.0))
+		for step: Vector2i in [Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 1), Vector2i(0, -1)]:
+			var nx := ax + step.x
+			var ny := ay + step.y
+			if nx < 0 or ny < 0 or nx >= w or ny >= h:
+				continue
+			var near := ny * w + nx
+			if seen[near] != 0 or lums[near] >= mid:
+				continue
+			seen[near] = 1
+			stack.append(near)
+	_drop_rim_highlight(cut)
+	_refill_rim_pinholes(cut, source, region)
+	return cut
+
+
+# The dev's ruling 5 -- "cut the tan highlights too" -- generically, as "cut the light minority"
+# rather than as twelve named pixels. Those pixels are BAKED DIRECTIONAL LIGHT (they light the hole
+# tile's north lip) and CameraRig3D orbits yaw freely, so at 180 degrees they light the near lip
+# instead. Geometry lights correctly at every yaw; painted light cannot.
+#
+# BOTH GUARDS ARE LOAD-BEARING, and neither is theoretical. Without the SHARE test the rule eats the
+# GROUND of any tile whose ground happens to be its lightest colour. Without the CONTRAST test it
+# eats a second ground shade barely lighter than the first.
+func _drop_rim_highlight(cut: Image) -> void:
+	var tally: Dictionary[int, int] = {}
+	for y in cut.get_height():
+		for x in cut.get_width():
+			var pixel := cut.get_pixel(x, y)
+			if pixel.a < RIM_ALPHA_FLOOR:
+				continue
+			var key := pixel.to_rgba32()
+			tally[key] = tally.get(key, 0) + 1
+	if tally.size() < 2:
+		return   # one colour standing: there is nothing for it to be lighter THAN
+	var total := 0
+	var commonest := 0
+	var commonest_count := 0
+	var lightest := 0
+	var lightest_lum := -1.0
+	var lightest_count := 0
+	for key: int in tally:
+		var count: int = tally[key]
+		total += count
+		if count > commonest_count:
+			commonest_count = count
+			commonest = key
+		var lum := _rim_luminance(key)
+		if lum > lightest_lum:
+			lightest_lum = lum
+			lightest = key
+			lightest_count = count
+	if float(lightest_count) / float(total) > RIM_HIGHLIGHT_SHARE:
+		return
+	if lightest_lum - _rim_luminance(commonest) < RIM_HIGHLIGHT_CONTRAST:
+		return
+	for y in cut.get_height():
+		for x in cut.get_width():
+			if cut.get_pixel(x, y).to_rgba32() == lightest:
+				cut.set_pixel(x, y, Color(0.0, 0.0, 0.0, 0.0))
+
+
+func _rim_luminance(rgba: int) -> float:
+	var pixel := Color.hex(rgba)
+	return 0.299 * pixel.r + 0.587 * pixel.g + 0.114 * pixel.b
+
+
+# A transparent pixel the centre flood never reached is a PINHOLE -- you would see the shaft through
+# it, a single bright dot in a rim, which reads as a rendering fault rather than as art. Refilled
+# from the source, so the ring keeps the colour the artist put there.
+func _refill_rim_pinholes(cut: Image, source: Image, region: Rect2i) -> void:
+	var w := cut.get_width()
+	var h := cut.get_height()
+	var seen := PackedByteArray()
+	seen.resize(w * h)
+	var stack: Array[int] = []
+	for sy: int in [h / 2 - 1, h / 2]:
+		for sx: int in [w / 2 - 1, w / 2]:
+			var seed := sy * w + sx
+			if seen[seed] == 0 and cut.get_pixel(sx, sy).a < RIM_ALPHA_FLOOR:
+				seen[seed] = 1
+				stack.append(seed)
+	while not stack.is_empty():
+		var at: int = stack.pop_back()
+		var ax := at % w
+		var ay := at / w
+		for step: Vector2i in [Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 1), Vector2i(0, -1)]:
+			var nx := ax + step.x
+			var ny := ay + step.y
+			if nx < 0 or ny < 0 or nx >= w or ny >= h:
+				continue
+			var near := ny * w + nx
+			if seen[near] != 0 or cut.get_pixel(nx, ny).a >= RIM_ALPHA_FLOOR:
+				continue
+			seen[near] = 1
+			stack.append(near)
+	for y in h:
+		for x in w:
+			if cut.get_pixel(x, y).a >= RIM_ALPHA_FLOOR or seen[y * w + x] != 0:
+				continue
+			cut.set_pixel(x, y, source.get_pixel(region.position.x + x, region.position.y + y))
+
+
+# How deep the frame must reach from each edge to COVER the ring, per edge, returned as
+# (north, south, west, east) -- the order _rim_footprint reads it in.
+#
+# THE MEASUREMENT IS "HOW FAR IN DOES THE DEEPEST PIXEL SIT", not "how long is the longest run from
+# this edge", and the difference is not academic: the hole tile has columns opaque all the way
+# across, so a run-length reading returns 16 and pins every band at the clamp -- a frame whose four
+# corners are half the cell each, and a merge toggle that bites most of a cell out of the rim.
+# Asking instead which edge each opaque pixel is NEAREST to, and how far it sits from that one,
+# returns the ring's actual thickness.
+#
+# The frame COVERS the ring rather than tracing it, because the shaping is the art's ALPHA -- the
+# dev picked cut A for its organic inner edge over the rectangle of cut C, and any opaque pixel the
+# geometry does not reach is simply missing. Cover generously; let the alpha cut the mouth.
+func _rim_bands(cut: Image) -> Vector4i:
+	var w := cut.get_width()
+	var h := cut.get_height()
+	var deepest: Array[int] = [0, 0, 0, 0]   # north, south, west, east
+	for y in h:
+		for x in w:
+			if cut.get_pixel(x, y).a < RIM_ALPHA_FLOOR:
+				continue
+			var away: Array[int] = [y, h - 1 - y, x, w - 1 - x]
+			var nearest := 0
+			for edge in 4:
+				if away[edge] < away[nearest]:
+					nearest = edge
+			deepest[nearest] = maxi(deepest[nearest], away[nearest] + 1)
+	# Clamped so two opposite bands can never meet: a frame with no hole in it is not a frame, and
+	# that has to be a property of this function rather than of the sprite it was handed.
+	var down := mini(RIM_BAND_MAX, (h - 2) / 2)
+	var across := mini(RIM_BAND_MAX, (w - 2) / 2)
+	return Vector4i(mini(deepest[0], down), mini(deepest[1], down),
+			mini(deepest[2], across), mini(deepest[3], across))
+
+
+func _rim_run(image: Image, from: Vector2i, step: Vector2i, limit: int) -> int:
+	var run := 0
+	var at := from
+	while run < limit and image.get_pixel(at.x, at.y).a >= RIM_ALPHA_FLOOR:
+		run += 1
+		at += step
+	return run
+
+
+# How much of the ring a set of bands FAILS to cover -- the check on the rule above, run in the same
+# pass so the report states a number rather than asking the reader to trust one. Anything but zero
+# means a rim with a bite out of it.
+func _rim_uncovered(cut: Image, bands: Vector4i) -> int:
+	var w := cut.get_width()
+	var h := cut.get_height()
+	var missed := 0
+	for y in h:
+		for x in w:
+			if cut.get_pixel(x, y).a < RIM_ALPHA_FLOOR:
+				continue
+			if y < bands.x or y >= h - bands.y or x < bands.z or x >= w - bands.w:
+				continue
+			missed += 1
+	return missed
+
+
+# Which slice of the cell one piece covers, in cell fractions with (0,0) at the NORTH-WEST corner --
+# the same corner the block's top face takes its UV origin from, so a piece's art lands exactly
+# where the whole tile's would have.
+#
+# A mid strip stops where its corners begin. That is the mitre, and it lives here rather than at
+# runtime so that "no two pieces of one frame overlap" is a fact about the artifact.
+func _rim_footprint(part: String, bands: Vector4i, size: Vector2i) -> Rect2:
+	var north := float(bands.x) / float(size.y)
+	var south := float(bands.y) / float(size.y)
+	var west := float(bands.z) / float(size.x)
+	var east := float(bands.w) / float(size.x)
+	var left := 0.0
+	var right := 1.0
+	var top := 0.0
+	var bottom := 1.0
+	match part:
+		"n":
+			left = west
+			right = 1.0 - east
+			bottom = north
+		"s":
+			left = west
+			right = 1.0 - east
+			top = 1.0 - south
+		"w":
+			right = west
+			top = north
+			bottom = 1.0 - south
+		"e":
+			left = 1.0 - east
+			top = north
+			bottom = 1.0 - south
+		"nw":
+			right = west
+			bottom = north
+		"ne":
+			left = 1.0 - east
+			bottom = north
+		"sw":
+			right = west
+			top = 1.0 - south
+		"se":
+			left = 1.0 - east
+			top = 1.0 - south
+	return Rect2(left, top, right - left, bottom - top)
+
+
+# One piece: a flat quad on the cell's top plane, wearing its own slice of the cut ring.
+#
+# NO SIDE FACES AND NO SIDE_RIM SKIRT. A hole has no column, so a vertical face at the cell boundary
+# would land in the plane the NEIGHBOUR'S block already draws all four of its own sides in (#559) --
+# which is exactly the coplanarity slice 1 shipped and #885 removed. The only surface a rim adds is
+# horizontal, at a height where this cell draws nothing at all.
+func _rim_mesh(mat: Material, ring_uv: Rect2, foot: Rect2) -> ArrayMesh:
+	var up := BoardSpace.ROW_HEIGHT * 0.5
+	var west := foot.position.x - 0.5
+	var east := foot.end.x - 0.5
+	var north := foot.position.y - 0.5
+	var south := foot.end.y - 0.5
+	var uv := Rect2(ring_uv.position + ring_uv.size * foot.position, ring_uv.size * foot.size)
+	var mesh := ArrayMesh.new()
+	var st := SurfaceTool.new()
+	st.begin(Mesh.PRIMITIVE_TRIANGLES)
+	st.set_material(mat)
+	_quad(st, Vector3(west, up, north), Vector3(east, up, north),
+			Vector3(east, up, south), Vector3(west, up, south), Vector3.UP, uv)
+	st.commit(mesh)
+	return mesh
+
+
 # --- Solid props (#264) ------------------------------------------------------
 
 # How many SIDE FACES a shape's geometry has, and therefore how many independent slices its side
@@ -1180,9 +1515,15 @@ const FACETED_HEIGHT_OF_WIDTH := 0.64
 # A prism's side run is one patch PER FACET, and that is a resolution requirement rather than a
 # convenience: slicing a single 16px patch into a barrel's ten facets would leave 1.6 texels each.
 func _patch_widths_for(data: TileData) -> Array[int]:
+	var widths: Array[int] = []
+	# A VOID tile takes one patch of its own: the CUT ring (#876 slice 2). It cannot reuse the
+	# tile's own atlas square, because that square is still the BLOCK the brush ghost previews --
+	# cutting it in place would preview a hole tile as a box with a transparent lid.
+	if GridUtils.terrain_kind_of(data) == Terrain.Kind.VOID:
+		widths.append(1)
 	var shape := GridUtils.prop_shape_of(data)
 	if not GridUtils.SOLID_SHAPES.has(shape):
-		return []
+		return widths
 	if shape == GridUtils.PropShape.PLANE:
 		# Up to two, and which ones depends on which of this piece's edges are drawn face-on in the
 		# sheet (GridUtils.plane_own_art_edges). Own art needs a patch even though it is already in
@@ -1193,18 +1534,21 @@ func _patch_widths_for(data: TileData) -> Array[int]:
 		# No top patch either way: a slab's top is a PLANE_THICKNESS sliver.
 		var edges := GridUtils.wall_edges_of(data)
 		var own_edges := GridUtils.plane_own_art_edges(data)
-		var widths: Array[int] = []
 		if (edges & own_edges) != 0:
 			widths.append(1)   # the tile's own sprite, copied unbased
 		if (edges & ~own_edges) != 0:
 			widths.append(1)   # the generated face
 		return widths
-	return [_facets_of(shape), 1]   # side run, then top
+	widths.append_array([_facets_of(shape), 1])   # side run, then top
+	return widths
 
 
 # Measured ahead of the walk because the atlas has to be allocated at its finished height before the
 # first UV inside the walk is taken.
-func _solid_patch_widths(atlas: TileSetAtlasSource) -> Array[int]:
+#
+# Was _solid_patch_widths until #876 slice 2 gave a VOID tile a patch as well -- a name that had
+# stopped being true, and the kind of lie that survives because nothing reads a name.
+func _extra_patch_widths(atlas: TileSetAtlasSource) -> Array[int]:
 	var widths: Array[int] = []
 	for coords in _sorted_tile_coords(atlas):
 		if atlas.get_tile_size_in_atlas(coords) != Vector2i.ONE:
