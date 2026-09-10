@@ -1,0 +1,8 @@
+[gd_resource type="Resource" script_class="AttackShape" format=3 uid="uid://bxj8qvmm5dv8w"]
+
+[ext_resource type="Script" uid="uid://cjmftk6nqeklw" path="res://Classes/weapons/patterns/AttackShape.gd" id="1_gl426"]
+
+[resource]
+script = ExtResource("1_gl426")
+display_name = "Small Cone"
+stamp = Array[Vector2i]([Vector2i(-1, -2), Vector2i(0, -2), Vector2i(1, -2), Vector2i(0, -1)])

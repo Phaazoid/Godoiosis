@@ -1,14 +1,23 @@
-[gd_resource type="Resource" script_class="WeaponAttackData" format=3]
+[gd_resource type="Resource" script_class="WeaponAttackData" format=3 uid="uid://qdrbnkcd1ldj"]
 
 [ext_resource type="Script" uid="uid://ddqeee7njjjq2" path="res://Classes/weapons/WeaponAttackData.gd" id="1_wad"]
+[ext_resource type="Resource" uid="uid://bxj8qvmm5dv8w" path="res://Resources/AttackShapes/Small Cone.tres" id="1_y1dfg"]
 [ext_resource type="Resource" path="res://Resources/WeaponAttacks/MainAttacks/Chemical_Spitter_Charged.tres" id="2_charged"]
 
 [resource]
 script = ExtResource("1_wad")
-display_name = "Spray"
 elemental_damage_type = 8
-damage_kind = 6
-power = 4
-vertical_rule = 1
+scaling_blend = Dictionary[int, int]({
+4: 80,
+5: 20
+})
 empowered_form = ExtResource("2_charged")
+display_name = "Spray"
+power = 4
+max_range = 0
+attack_shape = ExtResource("1_y1dfg")
+hits_allies = true
+vertical_rule = 1
+pierces_guard = true
+damage_kind = 6
 metadata/_custom_type_script = "uid://ddqeee7njjjq2"
