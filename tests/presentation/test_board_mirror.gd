@@ -2716,9 +2716,10 @@ func _mirror() -> BoardMirror:
 	return _scene.get_node("BoardMirror") as BoardMirror
 
 
+# WALLS specifically -- a shaft also carries a floor, and a test that means "how many sides are
+# closed" must not count it.
 func _walls_at(cell: Vector2i) -> int:
-	var lip := _mirror().lip_at(cell)
-	return 0 if lip == null else lip.get_child_count()
+	return _mirror().shaft_parts(cell, "wall")
 
 
 func test_a_hole_grows_one_wall_per_edge_that_meets_ground() -> void:
@@ -2793,6 +2794,10 @@ func test_every_hole_wall_faces_into_the_pit() -> void:
 	var centre := BoardSpace.standing_point(BoardSpace.of_cell(cell, 0))
 	var checked := 0
 	for child in lip.get_children():
+		# WALLS only: the shaft's floor is a child too and faces UP by design.
+		if not (child.has_meta(BoardMirror.SHAFT_PART_META)
+				and child.get_meta(BoardMirror.SHAFT_PART_META) == "wall"):
+			continue
 		var mesh_node := child as MeshInstance3D
 		assert_object(mesh_node).is_not_null()
 		var arrays: Array = mesh_node.mesh.surface_get_arrays(0)
@@ -2860,3 +2865,63 @@ func test_two_painted_hole_tiles_side_by_side_draw_nothing_between_them() -> voi
 	assert_int(_walls_at(cell)).override_failure_message(
 			"a lip was drawn between two painted holes").is_equal(3)
 	assert_int(_walls_at(beside)).is_equal(3)
+
+
+# THE REGRESSION GUARD, and the one that would have caught what slice 1 shipped: no part of a shaft
+# may sit in the span the board's own columns occupy. Every ground block emits all four side faces
+# (#559), so a wall hung anywhere above the board's underside shares a plane with the neighbour's
+# and tears against it per pixel -- which is what the dev saw. Asked of every vertex against
+# BoardSpace.board_underside, so it cannot pass by agreeing with the builder's own arithmetic.
+func test_no_part_of_a_shaft_reaches_up_into_the_board() -> void:
+	_scene.load_mission(PROLOG)
+	await _settle()
+	_game.game_state = _game.GameState.DEV_MODE
+	var cell := _an_inland_cell()
+	_game.grid.erase(cell)
+	await _settle()
+	var lip := _mirror().lip_at(cell)
+	assert_object(lip).is_not_null()
+	var underside := BoardSpace.board_underside(
+			_mirror().floor_row_of(_game.board_heights))
+	var checked := 0
+	for child in lip.get_children():
+		var mesh_node := child as MeshInstance3D
+		var arrays: Array = mesh_node.mesh.surface_get_arrays(0)
+		for v: Vector3 in (arrays[Mesh.ARRAY_VERTEX] as PackedVector3Array):
+			assert_float(v.y).override_failure_message(
+					"%s reaches up to y=%f, above the board's underside at y=%f -- it shares a "
+					% [child.name, v.y, underside]
+					+ "plane with the neighbouring column's own side face").is_less_equal(underside)
+			checked += 1
+	assert_int(checked).override_failure_message("no vertices were examined").is_greater(0)
+
+
+# The shaft is CLOSED at the bottom. Without this you look down the pit and out of the world, and
+# what you see is the sky -- the pale grey-blue the dev's four reports were full of.
+func test_a_shaft_is_floored_so_the_sky_does_not_show_through_it() -> void:
+	_scene.load_mission(PROLOG)
+	await _settle()
+	_game.game_state = _game.GameState.DEV_MODE
+	var cell := _an_inland_cell()
+	_game.grid.erase(cell)
+	await _settle()
+	var lip := _mirror().lip_at(cell)
+	assert_object(lip).is_not_null()
+	assert_int(_mirror().shaft_parts(cell, "floor")).override_failure_message(
+			"the shaft has no floor -- the pit is open to the sky").is_equal(1)
+	# ...and it has to FACE UP, or culling drops it and the sky is back with the pit still
+	# looking correctly built. Asked of the engine's own winding, as the walls are.
+	for child in lip.get_children():
+		if not (child.has_meta(BoardMirror.SHAFT_PART_META)
+				and child.get_meta(BoardMirror.SHAFT_PART_META) == "floor"):
+			continue
+		var arrays: Array = (child as MeshInstance3D).mesh.surface_get_arrays(0)
+		var st := SurfaceTool.new()
+		st.begin(Mesh.PRIMITIVE_TRIANGLES)
+		for v: Vector3 in (arrays[Mesh.ARRAY_VERTEX] as PackedVector3Array):
+			st.add_vertex(v)
+		st.generate_normals()
+		var wound: Array = st.commit().surface_get_arrays(0)
+		assert_float((wound[Mesh.ARRAY_NORMAL] as PackedVector3Array)[0].dot(Vector3.UP)) 				.override_failure_message(
+				"the shaft floor winds downward; culling drops it and the sky shows through"
+				).is_greater(0.9)

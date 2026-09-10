@@ -402,6 +402,9 @@ var _props: Dictionary[Vector2i, Node3D] = {}
 # meet ground, both corner heights of each of those edges, and which item each borrows. #308's law
 # -- a key that copies only part of what the render reads goes stale in silence.
 const LIP_KEY_META := "lip_key"
+# Which PART of a shaft a piece is. A meta rather than the node name, because add_child
+# uniquifies a colliding name to "@ShaftWall@12345" and no prefix test survives that.
+const SHAFT_PART_META := "shaft_part"
 var _lips: Dictionary[Vector2i, Node3D] = {}
 
 # Marks a prop sprite as a TUFT, so the tuft_scale setter can find the standing ones. A mark on the
@@ -626,7 +629,7 @@ func reconcile_cell(grid: TileMapLayer, cell: Vector2i, heights: BoardHeights,
 	if GridUtils.is_void_at(grid, cell):
 		_clear_column(cell, floor_row)
 		_free_prop_at(cell)
-		_reconcile_lip(grid, cell, heights)
+		_reconcile_lip(grid, cell, floor_row)
 		return
 	_free_lip_at(cell)   # repainted from a hole back to ground
 	if not GridUtils.has_ground(grid, cell):
@@ -1731,53 +1734,61 @@ const LIP_EDGE_VERTICES: Dictionary[Vector2i, Array] = {
 # direction, BOTH corner heights of the neighbour's facing edge, and the item that edge borrows. A
 # key naming only some of what the build reads goes stale in silence -- repaint the cell next door
 # and a lip left standing is exactly that bug.
-func lip_key(grid: TileMapLayer, cell: Vector2i, heights: BoardHeights) -> Array:
-	var key: Array = []
+func lip_key(grid: TileMapLayer, cell: Vector2i, floor_row: int) -> Array:
+	var walled: Array = []
 	for dir in GridUtils.CARDINAL_DIRECTIONS:
 		var near: Vector2i = cell + dir
-		# Ground it can hang off: not another hole, and not off the board.
+		# A side that meets GROUND needs a wall, or you see out under the board. A side that meets
+		# another hole is contiguous shaft and is left open, which is what makes a wide chasm one
+		# pit (dev ruling 6) -- the same mask as slice 1, applied below the board rather than at
+		# the neighbour's own surface.
 		if GridUtils.is_void_at(grid, near) or not GridUtils.has_ground(grid, near):
 			continue
-		key.append([dir, lip_edge_heights(near, dir, heights), item_for_cell(grid, near)])
-	return key
+		walled.append(dir)
+	# The FLOOR joins the key because a lowered board floor moves every shaft at once, and the depth
+	# because it is a live knob -- #308's law, which is about naming everything the build reads.
+	return [walled, floor_row, lip_shaft_depth]
 
 
-# The two corner heights of the NEIGHBOUR's edge facing this hole. Read off the neighbour rather
-# than the hole because the hole has no surface of its own to measure -- and read as the two corners
-# rather than through surface_height_at_edge, which answers the edge's MIDPOINT: a neighbour on a
-# ramp has a TILTED edge, and one number cannot say so, which would seat every lip beside a slope
-# flat across a slanted edge and open a seam at both ends.
-func lip_edge_heights(neighbour: Vector2i, dir: Vector2i, heights: BoardHeights) -> Vector2i:
-	var corners := Vector4i.ZERO if heights == null else heights.corners_at(neighbour)
-	return Terrain.edge_of_corners(corners, -dir)
-
-
-func _reconcile_lip(grid: TileMapLayer, cell: Vector2i, heights: BoardHeights) -> void:
-	var key := lip_key(grid, cell, heights)
+func _reconcile_lip(grid: TileMapLayer, cell: Vector2i, floor_row: int) -> void:
+	var key := lip_key(grid, cell, floor_row)
 	var standing: Node3D = _lips.get(cell)
 	if standing != null:
 		if standing.get_meta(LIP_KEY_META) == key:
 			return
 		standing.queue_free()
 		_lips.erase(cell)
-	if key.is_empty():
-		return   # a hole with ground on no side: the middle of a chasm, nothing to hang a wall from
 	var root := Node3D.new()
 	add_child(root)
 	# The ONLY per-cell node in this file not placed by surface_point, and the reason is that it has
-	# no cell centre to be placed at: a lip's geometry spans a shared EDGE and is built in world
+	# no cell centre to be placed at: a shaft's geometry spans shared EDGES and is built in world
 	# vertices. It still takes the tear-out's offset from the same store surface_point reads (#521),
 	# so a hole inside a staged fight lifts with the ground around it.
 	root.position = BoardSpace.staged_offset(cell)
-	for edge: Array in key:
-		var wall := _make_lip_wall(cell, edge[0], edge[1])
-		if wall == null:
-			continue
-		wall.layers = BoardOverlays.WORLD_RENDER_LAYER
-		wall.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-		root.add_child(wall)
+	_fill_shaft(root, cell, key)
 	root.set_meta(LIP_KEY_META, key)
 	_lips[cell] = root
+
+
+# The shaft under one hole: a wall on every side that meets ground, and a FLOOR under all of it.
+#
+# The floor is not decoration -- without it you look straight down the shaft and out of the world,
+# and what you see is the SKY, which is exactly what the dev reported (pale grey-blue, the scene's
+# own sky_horizon_color). A hole with ground on no side still gets one, because the middle of a wide
+# chasm is the most open part of it.
+func _fill_shaft(root: Node3D, cell: Vector2i, key: Array) -> void:
+	var walled: Array = key[0]
+	var floor_row: int = key[1]
+	var pieces: Array[MeshInstance3D] = []
+	for dir: Vector2i in walled:
+		pieces.append(_make_lip_wall(cell, dir, floor_row))
+	pieces.append(_make_shaft_floor(cell, floor_row))
+	for piece in pieces:
+		if piece == null:
+			continue
+		piece.layers = BoardOverlays.WORLD_RENDER_LAYER
+		piece.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		root.add_child(piece)
 
 
 # One edge's wall: a quad from the neighbour's two corner heights down to a flat shaft floor.
@@ -1786,15 +1797,23 @@ func _reconcile_lip(grid: TileMapLayer, cell: Vector2i, heights: BoardHeights) -
 # at the hole's centre; with CULL_BACK on since #559 a mis-wound quad does not look wrong, it
 # disappears. Rather than hand-write four correct orders, the two candidates are compared against
 # the direction the face must look and the vertices swapped if the first one points outward.
-func _make_lip_wall(cell: Vector2i, dir: Vector2i, edge: Vector2i) -> MeshInstance3D:
+func _make_lip_wall(cell: Vector2i, dir: Vector2i, floor_row: int) -> MeshInstance3D:
 	var offsets: Array = LIP_EDGE_VERTICES[dir]
 	var a: Vector2i = cell + (offsets[0] as Vector2i)
 	var b: Vector2i = cell + (offsets[1] as Vector2i)
-	var top_a := BoardSpace.vertex_point(a, float(edge.x))
-	var top_b := BoardSpace.vertex_point(b, float(edge.y))
-	# A LEVEL floor under a tilted top, so a wall beside a ramp is a trapezoid rather than a
-	# parallelogram sliding out of the dark at one end.
-	var floor_y := minf(top_a.y, top_b.y) - lip_shaft_depth
+	# THE WALL STARTS WHERE THE COLUMNS STOP, and that is the whole of the coplanarity fix. Every
+	# ground block emits all four of its own side faces with no knowledge of its neighbours (#559),
+	# so the neighbour already draws the pit's face over its whole column -- a wall hung from the
+	# neighbour's SURFACE duplicates 100% of what is visible and tears against it per pixel, which
+	# is what shipped in slice 1. #259 was right: the neighbours' side faces ARE the pit walls. What
+	# was genuinely missing is only what lies BELOW them, where nothing else is drawn at all.
+	#
+	# Fixed by GEOMETRY, never by an epsilon -- the flame taught this project twice (#243/#298) and
+	# the cap taught it again (#427).
+	var lid_y := BoardSpace.board_underside(floor_row)
+	var floor_y := lid_y - lip_shaft_depth
+	var top_a := Vector3(BoardSpace.vertex_point(a, 0.0).x, lid_y, BoardSpace.vertex_point(a, 0.0).z)
+	var top_b := Vector3(BoardSpace.vertex_point(b, 0.0).x, lid_y, BoardSpace.vertex_point(b, 0.0).z)
 	var inward := Vector3(-float(dir.x), 0.0, -float(dir.y))
 	# GODOT'S OWN CONVENTION, measured rather than recalled: the face normal of (v0, v1, v2) is
 	# (v0 - v2).cross(v0 - v1) -- the NEGATIVE of the naive (v1-v0).cross(v2-v0). Getting that
@@ -1827,6 +1846,45 @@ func _make_lip_wall(cell: Vector2i, dir: Vector2i, edge: Vector2i) -> MeshInstan
 	mesh.surface_set_material(0, _lip_material())
 
 	var node := MeshInstance3D.new()
+	node.name = "ShaftWall"
+	node.set_meta(SHAFT_PART_META, "wall")
+	node.mesh = mesh
+	return node
+
+
+# The shaft's FLOOR -- one quad over the hole's own footprint, facing UP so it is seen from above
+# through the mouth of the pit. Black, and at the same depth the walls fade to, so the two meet
+# rather than showing a seam. Nothing else exists at this y, so it fights nothing.
+func _make_shaft_floor(cell: Vector2i, floor_row: int) -> MeshInstance3D:
+	var y := BoardSpace.board_underside(floor_row) - lip_shaft_depth
+	var nw := BoardSpace.vertex_point(cell, 0.0)
+	var se := BoardSpace.vertex_point(cell + Vector2i.ONE, 0.0)
+	var a := Vector3(nw.x, y, nw.z)
+	var b := Vector3(se.x, y, nw.z)
+	var c := Vector3(se.x, y, se.z)
+	var d := Vector3(nw.x, y, se.z)
+	# Wound so the face looks UP, asked of the same rule the walls use rather than hand-ordered.
+	if _face_normal(a, b, c).dot(Vector3.UP) < 0.0:
+		var swap := b
+		b = d
+		d = swap
+	var verts := PackedVector3Array([a, b, c, a, c, d])
+	var normals := PackedVector3Array()
+	var colors := PackedColorArray()
+	for _i in range(verts.size()):
+		normals.append(Vector3.UP)
+		colors.append(Color.BLACK)
+	var arrays := []
+	arrays.resize(Mesh.ARRAY_MAX)
+	arrays[Mesh.ARRAY_VERTEX] = verts
+	arrays[Mesh.ARRAY_NORMAL] = normals
+	arrays[Mesh.ARRAY_COLOR] = colors
+	var mesh := ArrayMesh.new()
+	mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arrays)
+	mesh.surface_set_material(0, _lip_material())
+	var node := MeshInstance3D.new()
+	node.name = "ShaftFloor"
+	node.set_meta(SHAFT_PART_META, "floor")
 	node.mesh = mesh
 	return node
 
@@ -1861,13 +1919,7 @@ func _recut_lips() -> void:
 		var key: Array = root.get_meta(LIP_KEY_META)
 		for child in root.get_children():
 			child.queue_free()
-		for edge: Array in key:
-			var wall := _make_lip_wall(cell, edge[0], edge[1])
-			if wall == null:
-				continue
-			wall.layers = BoardOverlays.WORLD_RENDER_LAYER
-			wall.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-			root.add_child(wall)
+		_fill_shaft(root, cell, key)
 
 
 func _set_lip_shaft_depth(value: float) -> void:
@@ -1915,6 +1967,19 @@ func lip_count() -> int:
 
 func lip_at(cell: Vector2i) -> Node3D:
 	return _lips.get(cell)
+
+
+# How many pieces of one KIND a hole's shaft carries -- "wall" or "floor". The test seam, so no
+# caller outside this file has to know the meta or the naming.
+func shaft_parts(cell: Vector2i, kind: String) -> int:
+	var lip: Node3D = _lips.get(cell)
+	if lip == null:
+		return 0
+	var found := 0
+	for child in lip.get_children():
+		if child.has_meta(SHAFT_PART_META) and child.get_meta(SHAFT_PART_META) == kind:
+			found += 1
+	return found
 
 
 # The object standing on the cell that paints it, in whatever form its art asks for. The FORM is

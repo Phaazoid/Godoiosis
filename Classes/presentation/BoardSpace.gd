@@ -64,6 +64,17 @@ static func surface_y(row: int) -> float:
 	return float(row + 1) * ROW_HEIGHT
 
 
+# The UNDERSIDE of the board -- the bottom face of the lowest row every column reaches down to, and
+# therefore the last y at which any ground geometry exists (#876). Below it nothing is drawn at all,
+# which is what makes it the one safe place to start a hole's shaft: a surface hung any higher shares
+# a plane with the neighbouring column's own side face and tears against it.
+#
+# surface_y(row) is the TOP of that row, so the bottom of row R is surface_y(R - 1). Spelled here
+# rather than at the caller for that reason -- the off-by-one is the whole content of the function.
+static func board_underside(floor_row: int) -> float:
+	return surface_y(floor_row - 1)
+
+
 # The row a cell of this rule HEIGHT tops out at (#427 slice 2) — the one conversion between the
 # store's unit and the mirror's vertical index, and the successor to Terrain.level_of at every site
 # that used to place geometry. A ground slab is one LEVEL deep, so a height-H surface is the top of
