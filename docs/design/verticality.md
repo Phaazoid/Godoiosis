@@ -6,7 +6,7 @@ grill-style. Every ruling below is his; the rationale is recorded because almost
 re-derivable from the code. Numbers (tolerances, drop damage, the 2D offset) are deliberately absent —
 they are feel values and get knobs, not guesses (`CLAUDE.md` → the tuning rule).
 
-**Canon checked through #878 (2026-09-10).**
+**Canon checked through #881 (2026-09-10).**
 
 The one-line version: **a cell has a height, height changes only via ramps, ramps are chokepoints
 rather than tolls, and what height buys you is REACH — not damage, not to-hit.**
@@ -732,12 +732,24 @@ renders as **no column at all** in 3D: the pit is the absence of the block.
 > than as a gap in the board. **Where two holes meet, nothing is drawn** (dev ruling, 2026-09-09),
 > which is what makes a wide chasm one pit instead of adjacent postholes.
 >
-> Three things about it are forced rather than chosen. Each wall hangs at **its own neighbour's two
-> corner heights** (`Terrain.edge_of_corners`), never at one number: `surface_height_at_edge` answers
-> the edge's MIDPOINT, and a neighbour on a ramp has a tilted edge that a single height would seat
-> the wall flat across. `sync()` needs its **own walk over `used_rect`**, because it iterates
-> `get_used_cells()` and an ERASED hole has no tile to be listed by. And the lips live in their own
-> store rather than in `_props`, because `sync()` frees any prop whose cell is not painted.
+> **The shaft starts BELOW the board, and that is the whole of what the first attempt got wrong.**
+> It hung each wall from the NEIGHBOUR's surface -- and every ground block emits all four of its own
+> side faces with no knowledge of its neighbours (#559), so the neighbour was already drawing the
+> pit's face over its whole column. The wall duplicated 100% of what is visible and tore against it
+> per pixel, which is what the dev saw. **#259 was right: the neighbours' side faces ARE the pit
+> walls**; what was genuinely missing is only what lies below them. `BoardSpace.board_underside` is
+> where the columns stop and nothing else is drawn, so the coplanarity is gone by GEOMETRY rather
+> than by an epsilon -- the flame taught that twice (#243/#298) and the cap again (#427).
+>
+> **A shaft is FLOORED.** Without one you look down the pit and out of the world, and what you see is
+> the sky -- the scene's own `sky_horizon_color`, pale grey-blue, which is what filled four bug
+> reports. Per-edge corner heights went with the move: the tilted part is the neighbour's own block
+> and always was.
+>
+> Two more things are forced rather than chosen. `sync()` needs its **own walk over `used_rect`**,
+> because it iterates `get_used_cells()` and an ERASED hole has no tile to be listed by. And the
+> shafts live in their own store rather than in `_props`, because `sync()` frees any prop whose cell
+> is not painted.
 >
 > **Winding is the one thing about the geometry a headless suite can check, and it is measured, not
 > recalled**: Godot's face normal for `(v0, v1, v2)` is `(v0 - v2).cross(v0 - v1)`, the *negative* of
