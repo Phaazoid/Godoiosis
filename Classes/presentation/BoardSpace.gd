@@ -558,6 +558,24 @@ static func staged_cells() -> Array[Vector2i]:
 	return cells
 
 
+# WHERE AN EFFECT MAY BE SEEN -- the board's own volume, plus the copy of it a tear-out lifts into
+# the sky, grown by the caller's slack (#656, shared at #887).
+#
+# THIS IS THE ONE THING NO TEST COULD SEE AND NO KNOB COULD BEAT. A GPUParticles3D is culled by its
+# own visibility_aabb, whose default is eight cells around the emitter's origin -- and an effect
+# node sits at the Battle3D origin while the diorama it draws into is STAGE_LIFT (40) cells
+# overhead. So #656's first entry puffs were emitted correctly, simulated correctly, and drawn
+# nowhere: measured at ZERO lit pixels against 1248 for the identical burst inside a box that
+# contains it. BOTH levels, because an effect is direction-blind -- an exit lands on the board and
+# an entry in the diorama, one lift apart.
+#
+# Here rather than on either emitter, because the second one would otherwise copy it, and a stale
+# copy of this is invisible by construction.
+static func effect_volume(board: AABB, margin: float) -> AABB:
+	var lifted := AABB(board.position + _stage_offset, board.size)
+	return board.merge(lifted).grow(margin)
+
+
 static func stage_offset() -> Vector3:
 	return _stage_offset
 

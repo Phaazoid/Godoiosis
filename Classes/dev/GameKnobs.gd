@@ -394,6 +394,7 @@ const BOARD_SPACE_SCRIPT := "res://Classes/presentation/BoardSpace.gd"
 const SIGHT_TRACE_SCRIPT := "res://Classes/board/SightTrace2D.gd"
 const STAGING_DUST_SCRIPT := "res://Classes/presentation/StagingDust.gd"
 const ARC_LIGHTNING_SCRIPT := "res://Classes/presentation/ArcLightning.gd"
+const SHOCK_SPARKS_SCRIPT := "res://Classes/presentation/ShockSparks.gd"
 
 const CLASS_KNOBS: Array[Dictionary] = [
 	# --- Player settings the dev authors the DEFAULT for (#394) ---
@@ -616,6 +617,53 @@ const CLASS_KNOBS: Array[Dictionary] = [
 	{"group": "Shock", "label": "Edge softness", "static": "bolt_softness", "script": ARC_LIGHTNING_SCRIPT,
 		"min": 0.2, "max": 6.0, "step": 0.1,
 		"tip": "How the bolt fades across its own width. 1 is a straight fade to the rim; higher concentrates a bright thread down the middle and lets the rest fall away. The rim always reaches zero, so a bolt never has a visible edge to read as geometry."},
+	{"group": "Shock", "label": "Screen flash", "static": "flash", "script": ARC_LIGHTNING_SCRIPT,
+		"tip": "Whether the screen goes white for a moment when the blow lands. It drives the tear-out.s OWN white-out rather than a second rect, so the photosensitivity setting.s muted tint and its cap already apply -- and a shock struck during a tear-out is the louder of the two rather than the sum."},
+	{"group": "Shock", "label": "Flash strength", "static": "flash_peak", "script": ARC_LIGHTNING_SCRIPT,
+		"min": 0.0, "max": 1.0, "step": 0.01,
+		"tip": "How white the screen goes at the peak. 1 is a full white-out, which the tear-out uses to hide a cut and a blow almost certainly should not -- what this wants is enough to feel the hit without losing the board."},
+	{"group": "Shock", "label": "Flash length", "static": "flash_life", "script": ARC_LIGHTNING_SCRIPT,
+		"min": 0.02, "max": 1.0, "step": 0.01,
+		"tip": "How long the flash takes to fade. It is a hard pop with no tail on purpose -- the afterimage above is the bolts. staying readable, and a screen flash that lingers is the thing photosensitive players are protected from."},
+	{"group": "Shock", "label": "Sparks", "static": "sparks", "script": SHOCK_SPARKS_SCRIPT,
+		"tip": "Whether each body the current catches throws a burst. This is the half that says WHO was caught -- the bolts say which TILES are live -- so switching it off leaves a shock that reads as terrain rather than as an attack on someone."},
+	{"group": "Shock", "label": "Sparks per body", "static": "sparks_per_victim", "script": SHOCK_SPARKS_SCRIPT,
+		"min": 0.0, "max": 60.0, "step": 1.0,
+		"tip": "How many motes one body throws. Costs nothing per spark -- the whole board.s sparks are one emitter and one draw -- so this is a look dial rather than a budget."},
+	{"group": "Shock", "label": "Spark speed", "static": "spark_speed", "script": SHOCK_SPARKS_SCRIPT,
+		"min": 0.0, "max": 12.0, "step": 0.1,
+		"tip": "How hard the sparks are thrown outward. High reads as a discharge blowing off the body; low as something smouldering on it."},
+	{"group": "Shock", "label": "Spark spread", "static": "spark_spread", "script": SHOCK_SPARKS_SCRIPT,
+		"min": 0.0, "max": 1.5, "step": 0.01,
+		"tip": "How far across the cell the sparks START, in cells. Well under half a cell keeps the burst reading as coming off the BODY rather than off the tile it stands on."},
+	{"group": "Shock", "label": "Spark rise", "static": "spark_upward", "script": SHOCK_SPARKS_SCRIPT,
+		"min": 0.0, "max": 3.0, "step": 0.05,
+		"tip": "How much of the throw goes UP rather than out. Above 1 the burst fountains, which is what separates sparks from the slam dust rolling off a landing."},
+	{"group": "Shock", "label": "Spark lifetime", "static": "spark_lifetime", "script": SHOCK_SPARKS_SCRIPT,
+		"min": 0.05, "max": 3.0, "step": 0.05,
+		"tip": "How long one spark lasts. Judge it against the bolt lifetime above: sparks outliving the bolt that threw them is what makes the moment read as an aftermath rather than as one event."},
+	{"group": "Shock", "label": "Spark size", "static": "spark_size", "script": SHOCK_SPARKS_SCRIPT,
+		"min": 0.005, "max": 0.5, "step": 0.005,
+		"tip": "How big one spark is, in cells. The tile art is 32 pixels to a cell, so 0.03 is about one art pixel -- mixing densities is the loudest amateur tell in HD-2D, so keep it near the slam dust.s grains."},
+	{"group": "Shock", "label": "Spark colour", "static": "spark_color", "script": SHOCK_SPARKS_SCRIPT,
+		"tip": "What the sparks are made of. They draw ADDITIVELY, so overlapping ones get brighter rather than merely more opaque and the alpha reads as strength -- which also means a dark colour barely shows however much of it there is."},
+	{"group": "Shock", "label": "Spark gravity", "static": "spark_gravity", "script": SHOCK_SPARKS_SCRIPT,
+		"min": 0.0, "max": 30.0, "step": 0.5,
+		"tip": "How fast the sparks fall. At 0 they hang where the burst put them, which reads as a glow rather than as debris."},
+	{"group": "Shock", "label": "Spark drag", "static": "spark_drag", "script": SHOCK_SPARKS_SCRIPT,
+		"min": 0.0, "max": 12.0, "step": 0.1,
+		"tip": "How quickly a spark loses the speed it was thrown with. High drag makes the burst bloom and stop; zero lets every mote carry to the end of its life."},
+	{"group": "Shock", "label": "Spark height", "static": "spark_lift", "script": ARC_LIGHTNING_SCRIPT,
+		"min": 0.0, "max": 2.0, "step": 0.05,
+		"tip": "How far up the body the burst starts, in cells. At 0 it comes off the feet; the default is roughly the torso, which is what makes it read as the UNIT sparking rather than the ground under it."},
+	{"group": "Shock", "label": "Crawl through the water", "static": "crawl", "script": ARC_LIGHTNING_SCRIPT,
+		"tip": "Whether the current also shows IN the water, as filaments spreading over the surface with the same ring delay the bolts use. Ranked below the arcing above the water and built to be judged against it -- it is drawn by the water shader itself, so it only appears on water and never on a wet body standing on dry land."},
+	{"group": "Shock", "label": "Crawl lifetime", "static": "crawl_life", "script": ARC_LIGHTNING_SCRIPT,
+		"min": 0.05, "max": 4.0, "step": 0.05,
+		"tip": "How long one cell.s filaments last. Longer than the bolts by default: the water holding the charge after the air has cleared is what makes it read as a current passing through rather than as a second set of bolts."},
+	{"group": "Shock", "label": "Crawl strength", "static": "crawl_strength", "script": ARC_LIGHTNING_SCRIPT,
+		"min": 0.0, "max": 1.0, "step": 0.05,
+		"tip": "How much of the water.s own colour the filaments replace at their brightest. Its HUE is not here -- it is Shock.s row under Element colours, because what colour electricity is should be one decision and not two."},
 
 	# --- THE ACTION QUEUE.S OWN COLOURS (#685 round 4) -----------------------------------------
 	#
@@ -1265,6 +1313,25 @@ static func read_static(name: String) -> Variant:
 		"core_intensity": return ArcLightning.core_intensity
 		"corona_intensity": return ArcLightning.corona_intensity
 		"bolt_softness": return ArcLightning.bolt_softness
+		"flash": return ArcLightning.flash
+		"flash_peak": return ArcLightning.flash_peak
+		"flash_life": return ArcLightning.flash_life
+		"spark_lift": return ArcLightning.spark_lift
+		"crawl": return ArcLightning.crawl
+		"crawl_life": return ArcLightning.crawl_life
+		"crawl_strength": return ArcLightning.crawl_strength
+		# ...and the sparks, whose own node holds them (#887 slice 2). A GPU particle's state cannot
+		# be read back, so each of these names the CPU-side value a burst is built from.
+		"sparks": return ShockSparks.sparks
+		"sparks_per_victim": return ShockSparks.sparks_per_victim
+		"spark_speed": return ShockSparks.spark_speed
+		"spark_spread": return ShockSparks.spark_spread
+		"spark_upward": return ShockSparks.spark_upward
+		"spark_lifetime": return ShockSparks.spark_lifetime
+		"spark_size": return ShockSparks.spark_size
+		"spark_color": return ShockSparks.spark_color
+		"spark_gravity": return ShockSparks.spark_gravity
+		"spark_drag": return ShockSparks.spark_drag
 		"PLAYBACK_PAN": return Pacing.PLAYBACK_PAN
 		"TEAR_OUT_BRACE": return Pacing.TEAR_OUT_BRACE
 		"TEAR_OUT_EMPTY_SKY": return Pacing.TEAR_OUT_EMPTY_SKY
@@ -1508,6 +1575,71 @@ static func write_static(host: Node3D, name: String, value: Variant) -> void:
 			return
 		"bolt_softness":
 			ArcLightning.bolt_softness = value
+			return
+		"flash":
+			ArcLightning.flash = value
+			return
+		"flash_peak":
+			ArcLightning.flash_peak = value
+			return
+		"flash_life":
+			ArcLightning.flash_life = value
+			return
+		"spark_lift":
+			ArcLightning.spark_lift = value
+			return
+		"crawl":
+			ArcLightning.crawl = value
+			return
+		"crawl_life":
+			ArcLightning.crawl_life = value
+			return
+		"crawl_strength":
+			ArcLightning.crawl_strength = value
+			return
+		# The sparks. Every arm RE-APPLIES, because the emission buffer `sparks_per_victim` sizes
+		# and the material's own fields are node state rather than values a burst reads as it goes
+		# -- the slam dust's rule, and one sweep for all ten beats ten that have to agree about
+		# which of them needs it.
+		"sparks":
+			ShockSparks.sparks = value
+			_reapply_sparks(host)
+			return
+		"sparks_per_victim":
+			ShockSparks.sparks_per_victim = int(value)
+			_reapply_sparks(host)
+			return
+		"spark_speed":
+			ShockSparks.spark_speed = value
+			_reapply_sparks(host)
+			return
+		"spark_spread":
+			ShockSparks.spark_spread = value
+			_reapply_sparks(host)
+			return
+		"spark_upward":
+			ShockSparks.spark_upward = value
+			_reapply_sparks(host)
+			return
+		"spark_lifetime":
+			ShockSparks.spark_lifetime = value
+			_reapply_sparks(host)
+			return
+		"spark_size":
+			ShockSparks.spark_size = value
+			_reapply_sparks(host)
+			return
+		"spark_color":
+			ShockSparks.spark_color = value
+			_reapply_sparks(host)
+			return
+		"spark_gravity":
+			ShockSparks.spark_gravity = value
+			_reapply_sparks(host)
+			return
+		"spark_drag":
+			ShockSparks.spark_drag = value
+			_reapply_sparks(host)
 			return
 		"PLAYBACK_PAN":
 			Pacing.PLAYBACK_PAN = value
@@ -1919,6 +2051,24 @@ static func _refresh_guard_markers(host: Node3D) -> void:
 # The slam dust's re-apply (#656). Its node is built in code by battle3d rather than authored into
 # the scene, so it is reached the way every effect node here is -- through the host, by type, with a
 # null answer meaning "no 3D host attached" rather than an error.
+# The sparks live one node DOWN from the host -- ArcLightning owns them, because they fire on the
+# current's own schedule and that schedule is the effect's. So this walks two levels rather than
+# one, which is the whole difference from the dust's own sweep beside it.
+static func _reapply_sparks(host: Node3D) -> void:
+	if host == null:
+		return
+	for child in host.get_children():
+		var arc := child as ArcLightning
+		if arc == null:
+			continue
+		for grandchild in arc.get_children():
+			var sparks := grandchild as ShockSparks
+			if sparks != null:
+				sparks.apply()
+				return
+		return
+
+
 static func _reapply_staging_dust(host: Node3D) -> void:
 	if host == null:
 		return

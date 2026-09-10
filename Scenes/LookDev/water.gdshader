@@ -147,6 +147,29 @@ global uniform float water_board_shore_range;
 // water_depth_range, applied after this decodes.
 global uniform float water_board_mask_range;
 
+// THE SHOCK CRAWL (#887): what a shock's current looks like IN the water, under the bolts drawn
+// above it. Not board data and not water tuning -- it is an EVENT, pushed by the effect while one
+// is playing and dormant otherwise, which is why it names neither water type and has no per-type
+// pair. A negative age is the dormant state, so a board that has never been shocked costs one
+// compare.
+//
+// The mask is one texel per cell like the board's, decoded through the SAME rect -- one board, one
+// picture of where its cells are -- but sampled NEAREST, because RED here holds a hop's own step
+// COUNT rather than a distance field, and interpolating a category between two cells gives a hop
+// that never happened. Zero means the current never came to that cell.
+global uniform sampler2D water_shock_mask : filter_nearest, repeat_disable;
+// Seconds since the strike, pushed per frame by the effect's own clock -- so the crawl freezes
+// under a hitstop exactly as the bolts do, rather than running on a clock of its own.
+global uniform float water_shock_age;
+global uniform float water_shock_life;
+// How long each ring of the flood waits behind the one before it. The same number the bolts use,
+// pushed rather than re-authored, or the water and the air would disagree about where the current
+// has got to.
+global uniform float water_shock_step;
+// Its colour, with the ALPHA carrying how strong the crawl is -- one decision, the way the foam's
+// is (a hue and how much of it there is are not two questions).
+global uniform vec4 water_shock_color;
+
 // Art pixels per cell -- the quantiser that keeps everything here pixel art instead of a smooth
 // gradient. The sheet's own resolution (gen_lookdev_assets.TILE), so it is a const rather than a
 // knob: moving it would mean re-cutting every tile.
@@ -157,6 +180,14 @@ const float SEAM_PIXELS = 1.5;
 // own knob, because it is the same water moving -- a second speed dial would let the two layers
 // disagree about that and there is no reading in which they should.
 const float CAUSTIC_SPEED = 0.45;
+// How tight and how fast the SHOCK crawl's filaments are (#887). Consts rather than knobs because
+// what they describe is what a discharge IS -- a fast tight net, against the caustics' slow wide
+// one -- while everything a dev would want to move about the crawl (its colour, its strength, how
+// long it lasts, how fast it spreads) is a uniform above. The glow multiplier puts it past the
+// diorama's own threshold of 1.2.
+const float SHOCK_NET_SCALE = 26.0;
+const float SHOCK_NET_SPEED = 14.0;
+const float SHOCK_GLOW = 2.4;
 // How tight the caustic lines pinch. Higher is thinner and brighter.
 const float CAUSTIC_SHARPNESS = 5.0;
 // How far the BODY's texture runs before it repeats, in cells.
@@ -334,6 +365,29 @@ void fragment() {
 				? 0.0
 				: 1.0 - smoothstep(0.0, 0.5 * foam_width, shore);
 		col = mix(col, foam_color.rgb, foam * foam_color.a);
+
+		// --- The SHOCK CRAWL (#887) ----------------------------------------------------------
+		// AFTER the foam, because the current runs over the whole surface including the surf, and
+		// a crawl the shoreline could paint over would break at exactly the bank a player is
+		// watching. A negative age skips the texture read entirely.
+		if (water_shock_age >= 0.0) {
+			// +1 on the way in, so ZERO can mean "the current never came here" and the struck cell
+			// itself is still a hop rather than indistinguishable from dry board.
+			float hop = texture(water_shock_mask, mask_uv).r * 255.0;
+			float live = water_shock_age - max(hop - 1.0, 0.0) * water_shock_step;
+			if (hop > 0.5 && live > 0.0 && live < max(water_shock_life, 0.001)) {
+				// The CAUSTIC net again rather than a second noise field, and not for thrift: thin
+				// bright lines between wide dark cells is what reads as a discharge for the same
+				// reason it reads as light on a lake bed, and one function cannot disagree with
+				// itself about what a filament looks like.
+				float net = caustic(p, live * SHOCK_NET_SPEED, SHOCK_NET_SCALE);
+				float crawl = clamp(net * (1.0 - live / max(water_shock_life, 0.001))
+						* water_shock_color.a, 0.0, 1.0);
+				col = mix(col, water_shock_color.rgb, crawl);
+				// Past the glow threshold, so the filaments bloom the way the bolts over them do.
+				EMISSION = water_shock_color.rgb * crawl * SHOCK_GLOW;
+			}
+		}
 
 		ALBEDO = col;
 		ROUGHNESS = mix(water_shallow_roughness, water_deep_roughness, d);

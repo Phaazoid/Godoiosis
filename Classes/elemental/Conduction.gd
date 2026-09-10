@@ -115,6 +115,23 @@ static func flood(actor: Unit, attack: AttackData, footprint: Array[Vector2i],
 	return found
 
 
+# The tree as a CELL -> HOP COUNT map (#887) -- the same answer `links` holds, in the shape a
+# per-cell reader wants. A projection rather than a second store: the water shader draws the crawl
+# one texel per cell and has no way to walk a list of hops, while a renderer drawing the current
+# travelling needs the hops themselves.
+#
+# A seed lands at 0 through being some first-ring hop's `from`, which is why nothing has to pass
+# the footprint in beside the links.
+static func steps_of(links: Array[Link]) -> Dictionary[Vector2i, int]:
+	var steps: Dictionary[Vector2i, int] = {}
+	for link in links:
+		var parent := link.step - 1
+		if not steps.has(link.from) or steps[link.from] > parent:
+			steps[link.from] = parent
+		steps[link.to] = link.step
+	return steps
+
+
 static func _link(from: Vector2i, to: Vector2i, step: int) -> Link:
 	var link := Link.new()
 	link.from = from

@@ -49,9 +49,8 @@ static var grain_damping := 2.0
 # _ready and again only when a knob moves it.
 const CONCURRENT_BURSTS := 16
 
-# The golden angle spreads consecutive grains evenly around the circle instead of clumping --
-# HealthBlockDebris's constant, and the same reason.
-const GOLDEN_ANGLE := 2.39996323
+# The scatter itself moved to ParticleFan at #887, when the shock arc needed a second burst of the
+# same shape. What stayed here is every number and the material; what left is the fan.
 
 
 # How far past the reachable volume the box is grown, in cells. A grain is thrown outward and up
@@ -84,8 +83,7 @@ func _ready() -> void:
 # diorama, one lift apart. The volume is the CALLER'S -- battle3d._board_volume() is already the one
 # answer to how big this board is, and its own comment says a second copy of that is Law #4.
 func cover(board: AABB) -> void:
-	var lifted := AABB(board.position + BoardSpace.stage_offset(), board.size)
-	var both := board.merge(lifted).grow(CULL_MARGIN)
+	var both := BoardSpace.effect_volume(board, CULL_MARGIN)
 	# Local space, and this node sits at the origin -- but say so rather than assume it, since a
 	# node moved later would silently re-break exactly what this function exists to fix.
 	visibility_aabb = AABB(both.position - global_position, both.size)
@@ -135,27 +133,10 @@ func puff(origin: Vector3, key: int) -> void:
 # particle cannot be read back, so this is the only part of the effect a headless case can see. It
 # is also what makes the scatter assertable rather than merely deterministic.
 static func grains(origin: Vector3, key: int) -> Array[Dictionary]:
-	var out: Array[Dictionary] = []
-	var count := maxi(1, grains_per_tile)
-	var rng := RandomNumberGenerator.new()
-	rng.seed = key
-	# One rotation for the whole burst, so two puffs of the same tile are not the same fan turned --
-	# the fan itself is even by construction and only its phase and per-grain jitter vary.
-	var phase := rng.randf() * TAU
-	for i in count:
-		var angle := phase + GOLDEN_ANGLE * float(i)
-		var reach := burst_spread * sqrt((float(i) + 0.5) / float(count)) * rng.randfn(1.0, 0.18)
-		var speed := burst_speed * rng.randfn(1.0, 0.25)
-		out.append({
-			# Lifted by half a grain so the quad sits ON the surface rather than half inside it.
-			# A clearance, not a proportion -- fire pays the same toll at flame_base_lift_for().
-			"position": origin + Vector3(cos(angle) * reach, grain_size * 0.5, sin(angle) * reach),
-			# Outward, with a rise: dust rolls off a landing rather than fountaining from its
-			# centre, so the horizontal term carries the speed and the lift is a fraction of it.
-			"velocity": Vector3(cos(angle) * speed, speed * upward_bias * rng.randfn(1.0, 0.3),
-					sin(angle) * speed),
-		})
-	return out
+	# Lifted by half a grain so the quad sits ON the surface rather than half inside it. A
+	# clearance, not a proportion -- fire pays the same toll at flame_base_lift_for().
+	return ParticleFan.scatter(origin, key, grains_per_tile, burst_spread, burst_speed,
+			upward_bias, grain_size * 0.5)
 
 
 # The seed for one tile's puff. staging_version rather than a counter of this file's own: it

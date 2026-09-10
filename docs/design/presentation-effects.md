@@ -748,6 +748,59 @@ writer to a single-driver channel. An effect TINT channel on the mirror belongs 
 **3D only** — the flat view keeps the aim wash it already has, on
 [#292](https://github.com/Phaazoid/Godoiosis/issues/292)'s ledger.
 
+**SLICE 2 added the three channels that each cross a system the ribbons do not**, and what they
+share is the arc's own clock: every one is measured against the same elapsed seconds the bolts are,
+so a hitstop freezes the lot rather than three of four.
+
+**The SPARKS mark a BODY, which is the half the bolts cannot say.** The arcs draw the current over
+the ground, so they answer *which tiles are live*; a burst on each caught unit answers *who was
+caught*. They fire on the hop that reaches each body, and the delay is **read back off the stamped
+tree** rather than tracked beside it — whichever hop ENDS on a victim's cell carries the step the
+current took to get there, so the sparks travel with the bolts by construction and there is no
+second schedule to keep in step.
+
+**The scatter is SHARED with the slam dust, not copied.** `ParticleFan.scatter` is #656's own fan
+with every number lifted into parameters, so what genuinely differs between dust and sparks is the
+MATERIAL and the knobs — additive rather than alpha, up rather than out. Two emitters that both mean
+*throw N particles from a point* are two answers to one question the moment either is tuned.
+`BoardSpace.effect_volume` is the same move for the cull box, and there it is stronger than tidiness:
+a stale copy of that volume draws NOTHING at all and no test can see it (#656's zero-lit-pixel
+measurement), so a second spelling of it is a bug with no symptom.
+
+**THE WHITE-OUT HAS TWO DRIVERS NOW, and that is the sharpest thing in the slice.** It was built for
+the tear-out with exactly one writer, so its driver's idle branch simply pushed a flat 0 — which
+with a second driver is one caller clearing the channel out from under the other (#602's shape). Each
+driver keeps its own LEVEL, one function composes them, and the louder wins. **MAX rather than a
+sum**, because both are the same physical thing and adding them would make a shock struck during a
+tear-out brighter than either can be alone, past the cap #217's safe mode is enforcing. The shock
+inherits that cap and the muted tint by driving the existing channel rather than a rect of its own —
+one accessibility gate, on the apply path, where it already lived.
+
+**A mutant is what got that case right, and the failure it exposed generalizes.** The first version
+called the composition function directly and PASSED with the frame-path push deleted: the arithmetic
+was under test and the wire was not. The real hazard was never the `max` — it was that the
+transition's driver returns early the moment nothing is flying, i.e. on every frame a shock is ever
+struck on, so the second driver needed a push on the ordinary frame path. *When a channel gains a
+second writer, test the frame that reaches it, not the function that composes it.*
+
+**The CRAWL is drawn by the WATER, and that is why it is the ranked-last treatment rather than the
+cheap one.** The filaments are the water shader's own caustic net at a tighter scale and a faster
+rate — one function, so a lake bed's light and a discharge cannot disagree about what a filament
+looks like — driven by a mask holding one texel per cell with that cell's own hop count, decoded
+through the board mask's **existing** rect. It samples NEAREST where the board mask samples linear,
+because a hop is a CATEGORY and a step interpolated between two cells is a hop that never happened.
+
+**Five new shader globals, in a NAMED CLOSED CATEGORY on the water law rather than an exception to
+it.** They describe something happening TO the water rather than a property of either water, so a
+deep/shallow pair could mean nothing and a Water knob row would be a second answer to values the
+effect already owns. That law's own comment predicted this shape — *"the mechanism working as
+designed rather than around"* — and this is its second use.
+
+**The `project.godot` edit round-trips through `ProjectSettings.save()` with zero churn, measured
+rather than argued** (a throwaway tool SCENE, run and deleted). That is the dirty-tree rule's own
+instruction: make the committed bytes BE what the writer emits, and prove it by round-tripping
+rather than by reasoning that the format looks right.
+
 ### Conventions the art commission must carry (pending look-dev experiments)
 
 Two Tier-1/2 ideas below change *what art gets ordered*, so they are experiments to run in the look-dev scene **before** any commission, then locked into #176's conventions list:

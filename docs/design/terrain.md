@@ -118,6 +118,13 @@ a drowning came back one unit short. And a body nobody can reach is a body nobod
 simply runs out, which is the deliberate cost of the catch rule keeping most bodies one cell from
 shore.
 
+**The water shader has a SECOND kind of tenant since [#887](https://github.com/Phaazoid/Godoiosis/issues/887)
+(2026-09-10): an EVENT.** A shock's current crawls across the surface as filaments, driven by a mask
+and a clock the effect pushes while one is playing and dormant otherwise — so unlike every other
+water global it names neither water type, has no knob row of its own, and could never be tuned. It
+is a declared category on that file's law rather than an exception to it. What it looks like is
+[`presentation-effects.md`](presentation-effects.md)'s; what it MEANS is #884's conduction rule.
+
 **The tiles now LOOK it, since [#552](https://github.com/Phaazoid/Godoiosis/issues/552) slice 1
 (2026-08-26).** They did not until then, and this section shipped before anyone measured that: the
 sheet paints both water tiles the **identical** flat blue `(77, 155, 230)` — all 256 pixels of the
