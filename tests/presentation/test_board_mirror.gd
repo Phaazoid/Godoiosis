@@ -2797,14 +2797,24 @@ func test_every_hole_wall_faces_into_the_pit() -> void:
 		assert_object(mesh_node).is_not_null()
 		var arrays: Array = mesh_node.mesh.surface_get_arrays(0)
 		var verts: PackedVector3Array = arrays[Mesh.ARRAY_VERTEX]
-		var normals: PackedVector3Array = arrays[Mesh.ARRAY_NORMAL]
 		var middle := Vector3.ZERO
 		for v in verts:
 			middle += v
 		middle /= float(verts.size())
 		var toward_centre := Vector3(centre.x - middle.x, 0.0, centre.z - middle.z).normalized()
-		assert_float(normals[0].dot(toward_centre)).override_failure_message(
-				"a hole wall faces away from the pit; with backface culling on it draws "
+		# ASK THE ENGINE which way the triangles wind, never the authored normal array. Culling
+		# reads WINDING; the normal attribute is a separate channel this material does not even
+		# use (it is unshaded). Reading normals[0] pins a value the builder writes unconditionally,
+		# so it cannot fail -- which is exactly what a mutant proved before this line existed.
+		var st := SurfaceTool.new()
+		st.begin(Mesh.PRIMITIVE_TRIANGLES)
+		for v in verts:
+			st.add_vertex(v)
+		st.generate_normals()
+		var wound: Array = st.commit().surface_get_arrays(0)
+		var geometric: PackedVector3Array = wound[Mesh.ARRAY_NORMAL]
+		assert_float(geometric[0].dot(toward_centre)).override_failure_message(
+				"a hole wall winds away from the pit; with backface culling on it draws "
 				+ "nothing at all").is_greater(0.5)
 		checked += 1
 	assert_int(checked).override_failure_message("no walls were examined").is_equal(4)

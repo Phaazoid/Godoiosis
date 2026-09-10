@@ -1796,7 +1796,11 @@ func _make_lip_wall(cell: Vector2i, dir: Vector2i, edge: Vector2i) -> MeshInstan
 	# parallelogram sliding out of the dark at one end.
 	var floor_y := minf(top_a.y, top_b.y) - lip_shaft_depth
 	var inward := Vector3(-float(dir.x), 0.0, -float(dir.y))
-	if (top_b - top_a).cross(Vector3(top_a.x, floor_y, top_a.z) - top_a).dot(inward) < 0.0:
+	# GODOT'S OWN CONVENTION, measured rather than recalled: the face normal of (v0, v1, v2) is
+	# (v0 - v2).cross(v0 - v1) -- the NEGATIVE of the naive (v1-v0).cross(v2-v0). Getting that
+	# backwards culls every wall instead of turning it round, and looks exactly like the feature
+	# not being wired at all.
+	if _face_normal(top_a, top_b, Vector3(top_b.x, floor_y, top_b.z)).dot(inward) < 0.0:
 		var swap := top_a
 		top_a = top_b
 		top_b = swap
@@ -1825,6 +1829,13 @@ func _make_lip_wall(cell: Vector2i, dir: Vector2i, edge: Vector2i) -> MeshInstan
 	var node := MeshInstance3D.new()
 	node.mesh = mesh
 	return node
+
+
+# Which way a triangle FACES, in Godot's winding convention -- the rule the rasteriser culls by, and
+# the one thing about a wall a headless suite can still check. Static and pure so a test can ask it
+# of three points without building a mesh.
+static func _face_normal(v0: Vector3, v1: Vector3, v2: Vector3) -> Vector3:
+	return (v0 - v2).cross(v0 - v1).normalized()
 
 
 # One material for every wall on the board: they differ by vertex colour, not by material, which is
