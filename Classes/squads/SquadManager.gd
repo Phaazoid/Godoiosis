@@ -802,8 +802,13 @@ func _resolve_actions(squad: Squad, actions: Array[BaseAction], board: BoardCont
 			continue
 		var aim := action as AttackAction
 		var origin := aim.actor.get_projected_destination()
-		var affected := Reach.get_affected_cells_from(aim.actor, origin, aim.target_cell, aim.fired_attack, board)
-		var victims := RulesService.gather_attack_victims(aim.actor, affected, board, aim.fired_attack)
+		var blast := Reach.get_affected_cells_from(aim.actor, origin, aim.target_cell, aim.fired_attack, board)
+		# The current travels once the blast lands, judged against THIS pass's own wetness (E4): a
+		# target an earlier order in the same plan soaked conducts for this one, which is the whole
+		# of the water-then-shock combo previewing correctly.
+		var reach := Conduction.sweep(aim.actor, aim.fired_attack, blast, board, hypo)
+		var affected := reach.cells
+		var victims := reach.victims
 		var group: Array[AttackAction] = []
 		if victims.is_empty():
 			# #47: a legal aim at cells with no unit still resolves — a cell-targeted attack
@@ -862,8 +867,12 @@ func _resolve_actions(squad: Squad, actions: Array[BaseAction], board: BoardCont
 		# victim -- #148's bug one layer down from where it was reported. A player-AIMED heal keeps
 		# its enemy splash; that is agency, and only the derived reaction is restricted (dev call).
 		var healing := c_attack != null and c_attack.heals
-		var c_affected := Reach.get_affected_cells_from(aim.actor, c_origin, c_aim_cell, c_attack, board)
-		var c_victims := RulesService.gather_attack_victims(aim.actor, c_affected, board, c_attack, healing)
+		var c_blast := Reach.get_affected_cells_from(aim.actor, c_origin, c_aim_cell, c_attack, board)
+		# A counter is an attack like any other, so a shock counter arcs (E7 -- counters are in the
+		# chain). Its current reads the hypo the attacks have already resolved into.
+		var c_reach := Conduction.sweep(aim.actor, c_attack, c_blast, board, hypo, healing)
+		var c_affected := c_reach.cells
+		var c_victims := c_reach.victims
 		for ctr in CounterAttackAction.create_counter_volley(aim.actor, c_origin, c_victims, aim.source_attack, c_affected):
 			plan.counters.append(ctr)
 	# Phase 2: counters, now built from post-shove positions.

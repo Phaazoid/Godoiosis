@@ -70,7 +70,11 @@ func setup(action_ref: BaseAction):
 	# Any order carrying an outcome shows the readout, not attacks alone (#419) -- a tile's
 	# end-of-turn damage reads as a hit like any other.
 	if outcome != null:
-		_show_hp_delta(outcome, action.aimed_at())
+		# The number is shown by an outcome that READ HP, not by every outcome (#874). An order that
+		# only changed a state -- a walk that soaked its mover -- has no hit to report, and printing
+		# its subject's HP unchanged either side of an arrow would invent one.
+		if outcome.reads_hp:
+			_show_hp_delta(outcome, action.aimed_at())
 		_build_consequence(outcome)
 
 	action_icon.modulate = action.get_ui_modulate()

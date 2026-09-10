@@ -247,10 +247,22 @@ static func _revalidate_rescue_targets(actions: Array[BaseAction], board: BoardC
 static func aim_finds_a_target(aim: AttackAction, actions: Array[BaseAction], units: Array[Unit], board: BoardContext) -> bool:
 	var origin := Unit.projected_cell(aim.actor, actions, true, true)
 	var footprint := Reach.get_affected_cells_from(aim.actor, origin, aim.target_cell, aim.fired_attack, board)
+	# The current is reach, so an aim whose only casualties arrive by the arc is not a whiff. Asked
+	# with this function's own projection rather than through Conduction.sweep, which reads the
+	# occupancy seam a RESOLVED plan uses -- the two falses above are load-bearing here (#126).
+	#
+	# It reads LIVE wetness, so it is CONSERVATIVE by exactly one case: an aim that would only catch
+	# somebody a not-yet-executed order in this same plan soaks is refused at the gate. An over-read
+	# would be the harmful direction (a victimless aim still resolves as a cell attack, #47); this
+	# way costs one exotic order and never queues a shot that finds nobody.
+	var arc := Conduction.arc_cells(aim.actor, aim.fired_attack, footprint, board)
 	for unit in units:
 		if not is_instance_valid(unit):
 			continue
-		if not footprint.has(Unit.projected_cell(unit, actions, true, true)):
+		var cell := Unit.projected_cell(unit, actions, true, true)
+		if arc.has(cell):
+			return true     # the current does not check tags -- anybody in it is a casualty
+		if not footprint.has(cell):
 			continue
 		if RulesService.is_attack_victim(aim.actor, unit, aim.fired_attack):
 			return true

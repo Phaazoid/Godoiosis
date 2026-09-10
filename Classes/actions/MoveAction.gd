@@ -16,6 +16,15 @@ var is_trailing := false
 # stops at the crossing cell, and so does one it throws.
 var resolved_stop_index := -1
 
+# What the WALK ITSELF did to the mover (#874 -- wading soaks you). Written every resolve beside
+# resolved_stop_index and for the same reason: a walk re-planned out of the river must not keep last
+# pass's verdict. Null when the walk changes nothing, which is nearly always.
+#
+# A ResolvedOutcome rather than a bare Array[Elemental.State] because BaseAction.resolved_outcome()
+# is already the door the queue row reads (#419) -- an order that changes something says so through
+# the channel every other order says it through, and the Wet chip draws with no edit to the panel.
+var resolved: ResolvedOutcome
+
 # PLAYBACK ONLY (#567): the steps of `path` this walk HALTS at while a triggered shot plays, in
 # ascending order. Written by OrderExecutor before execute(), off the moments the resolve stamped on
 # the shots — never by the resolver, and never read by anything that decides an outcome. Nothing
@@ -83,6 +92,15 @@ func execute():
 			await actor.get_tree().process_frame
 	await _walk_leg(walk.slice(start))
 
+	# What the walk did to the mover, played back exactly as resolved (E3/R3) -- remove-then-add,
+	# the order AttackAction.execute applies. Guarded because a triggered shot can down or remove the
+	# crosser mid-walk, and a halted walk only ever resolved the cells it actually reached.
+	if resolved != null and actor != null and is_instance_valid(actor):
+		for s in resolved.states_removed:
+			actor.remove_element_state(s)
+		for s in resolved.states_added:
+			actor.add_element_state(s, resolved.state_turns.get(s, 0))
+
 	finish_execution()
 
 
@@ -121,6 +139,9 @@ func parked_at() -> int:
 func release() -> void:
 	_parked_at = -1
 
+
+func resolved_outcome() -> ResolvedOutcome:
+	return resolved
 
 func get_action_icon() -> Texture2D:
 	if is_hold_position:

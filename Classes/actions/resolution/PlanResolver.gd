@@ -201,6 +201,7 @@ static func resolve_move(action: MoveAction, plan: ResolvedPlan, hypo: Dictionar
 	if mover == null or not is_instance_valid(mover):
 		return
 	action.resolved_stop_index = -1   # a re-resolve must not inherit last pass's halt
+	action.resolved = null            # ...nor last pass's soaking, if the walk has left the water
 	var walk := action.path
 	# A hold crosses nothing and a one-cell path never leaves its origin: no entry either way.
 	if action.is_hold_position or walk.size() < 2:
@@ -213,6 +214,12 @@ static func resolve_move(action: MoveAction, plan: ResolvedPlan, hypo: Dictionar
 	# fired, and the shot's landing cell when one shoved them.
 	for i in range(1, walk.size()):
 		_hypo_for(mover, hypo).position = walk[i]
+		# Wading soaks you (#874), and it happens BEFORE the step's watch shots fire: you are in the
+		# river by the time anything can shoot you standing in it, so a shock shot that catches a
+		# crosser mid-ford electrocutes them. The walk is already this pass's clock, which is what
+		# makes ONE cell-by-cell loop answer both.
+		if board != null and RulesService.wets_in(walk[i], mover, board):
+			_soak(mover, hypo, action)
 		# ...and THIS step is the moment the shot plays back at (#567): the walk halts here, the
 		# shot fires, the walk resumes. The moment is stamped where the shots are made because
 		# nothing downstream can recover it — a crosser who walks on leaves no trace of the step.
@@ -226,6 +233,24 @@ static func resolve_move(action: MoveAction, plan: ResolvedPlan, hypo: Dictionar
 			# that this mover did NOT walk out from under a shove (Unit.projected_cell).
 			action.resolved_stop_index = i
 			return
+
+
+# Soak the mover: threaded so a SHOCK hit later in this same pass sees it (E4, the whole of the
+# water-then-shock combo), and STAMPED on the order so execution applies it and the queue row shows
+# the chip. Both halves are required -- the hypo alone never reaches the board, the stamp alone never
+# reaches the preview.
+#
+# Idempotent, and that is the row's rule rather than an optimisation: a four-cell ford is one
+# soaking, and a mover who was ALREADY wet grows no chip at all, because the row says what CHANGED.
+static func _soak(mover: Unit, hypo: Dictionary, action: MoveAction) -> void:
+	var mover_hypo := _hypo_for(mover, hypo)
+	if mover_hypo.states.has(Elemental.State.WET):
+		return
+	mover_hypo.states.append(Elemental.State.WET)
+	if action.resolved == null:
+		action.resolved = ResolvedOutcome.new()
+		action.resolved.reads_hp = false   # a walk hits nobody; the row must not print an HP arrow
+	action.resolved.states_added.append(Elemental.State.WET)
 
 
 # Every watch these entrants trigger, plus every watch the resulting shots' shoves trigger in turn.
@@ -320,16 +345,22 @@ static func _derive_watch_shot(watch: Watch, entrant: Unit, board: BoardContext,
 			continue
 		if RulesService.is_attack_victim(watch.watcher, unit, watch.attack):
 			victims.append(unit)
+	# A watch shot conducts like any other attack. Its footprint is the watch's own STORED one, so the
+	# widened copy is what the shot carries and the armed watch is left alone -- re-arming it over the
+	# current would let the arc grow the watched cells with every trigger.
+	var arc := Conduction.arc_cells(watch.watcher, watch.attack, watch.footprint, board, hypo)
+	victims.append_array(Conduction.caught(arc, board, hypo, victims))
+	var covered := Conduction.widened(watch.footprint, arc)
 	var group: Array[AttackAction] = []
 	if victims.is_empty():
 		# #47's rule: a shot with nobody left in the footprint still resolves as a cell attack. Only
 		# reachable through a chain that shoved the crosser out before this watch fired.
 		var cell_shot := AttackAction.create(watch.watcher, watch.anchor_cell, null, watch.aim_cell)
 		cell_shot.fired_attack = watch.attack
-		cell_shot.footprint = watch.footprint
+		cell_shot.footprint = covered
 		group.append(cell_shot)
 	else:
-		group = AttackAction.create_volley(watch.watcher, watch.anchor_cell, watch.aim_cell, victims, watch.attack, watch.footprint)
+		group = AttackAction.create_volley(watch.watcher, watch.anchor_cell, watch.aim_cell, victims, watch.attack, covered)
 	for shot in group:
 		shot.is_watch_shot = true
 		shot.triggered_by = entrant
@@ -499,6 +530,17 @@ static func _resolve_one(action: AttackAction, plan: ResolvedPlan, reactions: Ar
 		outcome.damage += outcome.drown_damage
 		outcome.popups.append(DROWNING_POPUP)
 
+	# A shove that ENDS in water soaks its victim (#874). Appended AFTER the remove-wins fold above
+	# rather than composed into it, because these are sequential facts and not competing ones: a FIRE
+	# hit dries you, and then the lake you were thrown into soaks you again. Only the LANDING asks --
+	# the flight is airborne and passes over water the way it passes over a void.
+	#
+	# Deep water included, so a drowning body comes up wet and goes on conducting for whatever shock
+	# touches the lake it went under in. That is the intended reading, not an oversight.
+	if landing != null and board != null and RulesService.wets_in(landing.cell, target, board) \
+			and not outcome.states_added.has(Elemental.State.WET):
+		outcome.states_added.append(Elemental.State.WET)
+
 	# --- thread the hypothetical forward (R4) ---
 	for s in outcome.states_removed:
 		target_hypo.states.erase(s)
@@ -655,12 +697,19 @@ static func _source_kind(action: AttackAction) -> AttackData.Kind:
 	return AttackData.Kind.BLUNT
 
 static func _source_elements(action: AttackAction) -> Array[Elemental.Element]:
-	if action.fired_attack is TransmutationData:
-		return (action.fired_attack as TransmutationData).get_elements()
-	if action.fired_attack is WeaponAttackData:
-		var weapon := action.actor.get_equipped_weapon() as WeaponInstance
+	return elements_of(action.actor, action.fired_attack)
+
+# What elements would this (actor, attack) pair carry? PUBLIC because the conduction arc asks it at
+# sites holding no AttackAction -- a counter derives from (actor, counter_attack), the hover preview
+# and the AI from (attacker, live pick) -- and a second copy of the Transmutation-vs-weapon branch is
+# exactly the duplicate Law #4 refuses. _source_elements above is its one-argument reading.
+static func elements_of(actor: Unit, attack: AttackData) -> Array[Elemental.Element]:
+	if attack is TransmutationData:
+		return (attack as TransmutationData).get_elements()
+	if attack is WeaponAttackData and actor != null and is_instance_valid(actor):
+		var weapon := actor.get_equipped_weapon() as WeaponInstance
 		if weapon != null:
-			return weapon.get_elements(action.actor, action.fired_attack as WeaponAttackData)
+			return weapon.get_elements(actor, attack as WeaponAttackData)
 	var none: Array[Elemental.Element] = []
 	return none
 
@@ -880,6 +929,21 @@ static func projected_position(unit: Unit, hypo: Dictionary) -> Vector2i:
 	if not hypo.has(unit):
 		return unit.get_projected_destination()
 	return (hypo[unit] as _Hypo).position
+
+# What states the pass has left on the unit — projected_position's twin, and the read the conduction
+# arc needs: a unit a WATER hit soaked earlier in this plan conducts for the SHOCK hit that follows,
+# which is the whole of E4 pointed at the board instead of at one target. Same read-only contract:
+# no hypo entry means nothing has touched it, and its live states ARE its projected ones.
+static func projected_states(unit: Unit, hypo: Dictionary) -> Array[Elemental.State]:
+	if unit == null or not is_instance_valid(unit):
+		var none: Array[Elemental.State] = []
+		return none
+	# A COPY at both ends, projected_situation's rule: these hand back a container rather than a
+	# value, and a caller that appended to it would be writing into the pass -- or, worse, straight
+	# into the live unit's own states.
+	if not hypo.has(unit):
+		return unit.element_states.duplicate()
+	return (hypo[unit] as _Hypo).states.duplicate()
 
 # The unit as this pass LEAVES it, as a Situation the ladder can read (#419) — a COPY, so asking
 # cannot alter the pass. situation_for's threaded twin.
