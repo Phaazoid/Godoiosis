@@ -622,7 +622,7 @@ h(t) = lerp(elev_origin + EYE, elev_target + EYE, t) + arc_clearance * 4t(1 - t)
 - **What the diorama DRAWS those points as is a ribbon, not a line ([#506](https://github.com/Phaazoid/Godoiosis/issues/506)).** The LINE kind emitted an
   `ImmediateMesh` line strip, which **Godot draws at one screen pixel regardless of distance** — so
   the bead stayed a hairline however far [#410](https://github.com/Phaazoid/Godoiosis/issues/410)'s zoom pushed the camera in, which is what the dev
-  reported: *"the current one of just a thin line doesn't look good."* `set_line` now emits each
+  reported: *"the current one of just a thin line doesn't look good."* The ribbon emits each
   centreline point TWICE with a side flag and the joint-averaged tangent, and
   `Classes/presentation/sight_beam.gdshader` pushes the pair apart toward the camera. **The
   expansion is in the VERTEX stage rather than in GDScript** because the side vector depends on
@@ -633,6 +633,12 @@ h(t) = lerp(elev_origin + EYE, elev_target + EYE, t) + arc_clearance * 4t(1 - t)
   splits the strip open at each joint), and `extra_cull_margin` (the mesh's AABB is the centreline,
   and the shader draws outside it). **The centreline store is untouched** — `line_of` still returns
   the points, so `Reach`, `HoverPresenter` and `OverlayMirror` needed no edit at all.
+- **The recipe is `BoardOverlays.add_beam_strip` and the shader has TWO tenants since
+  [#887](https://github.com/Phaazoid/Godoiosis/issues/887)** — the sight bead, and a shock's bolts,
+  which are twenty ribbons on one mesh at twenty different ages. That is why the strip build and
+  `beam_tangents` are statics now and why the shader multiplies by the VERTEX COLOUR: a material
+  carries one colour, and only a per-vertex channel can vary inside one draw. The bead passes white
+  and is unchanged. The file is still named for the sight beam; the shader is both.
 - **Two visual regressions shipped on this before it was right, and both are worth carrying.** The
   cross-ribbon `abs()` was taken in the VERTEX stage, where every vertex sits on a rim, so it
   interpolated to a constant and ALPHA came out **zero everywhere** — a beam built correctly,

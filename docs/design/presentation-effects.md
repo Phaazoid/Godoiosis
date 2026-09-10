@@ -2,7 +2,7 @@
 
 **Status: an idea wall plus two locked decisions.** Solicited by the dev on 2026-08-12, the day Stage 0 (#203) passed its GO gate: *"a full thought experiment, all ideas on the wall."* Nothing below the Decisions section is a commitment — it is the candidate pool for #176's stage 5 and beyond, kept so it can't evaporate from chat. The look-dev scene (`Scenes/LookDev/LookDev.tscn`) is the standing playground where any of it gets prototyped before it's real — and since #212 (2026-08-15) the **Moods tab** in the dev-tools window tunes the *shipping* view live, so a value on this wall can be judged on a real board rather than in the diorama. **It is a playground, not a scratch scene ([#393](https://github.com/Phaazoid/Godoiosis/issues/393), 2026-08-19)** — seven presentation suites fixture on it, `Battle3D.tscn` loads its MeshLibrary, and `BoardMirror`/`BoardOverlays` read textures out of `Art/LookDev/`, so it is edited with the same care as shipping code. Its four moods stopped being a second copy at the same time: `look_dev.gd` held them as a hardcoded `PRESETS` table, seeded from the same values four of the twelve `LookPreset` files now carry, and it resolves them by NAME through `LookKnobs` instead.
 
-**Canon checked through #767 (2026-09-05).**
+**Canon checked through #887 (2026-09-10).**
 
 ---
 
@@ -660,6 +660,93 @@ Four rulings, and each is reusable past fire:
 **Hitstop is not this effect's problem and IS the neighbours'.** `Pacing.hitstop` has one caller, `battle3d._on_impact` during the action pass; the tear-out is a different phase, so the two never overlap. [#188](https://github.com/Phaazoid/Godoiosis/issues/188) and [#523](https://github.com/Phaazoid/Godoiosis/issues/523) put particles *inside* the pass and owe the measurement — whether `GPUParticles3D` honours `Engine.time_scale`, with `speed_scale` as the wire if it does not.
 
 **Not gated by [#217](https://github.com/Phaazoid/Godoiosis/issues/217), deliberately.** That switch governs strobe and flicker; dust does neither, and the white-out beside it already reads the setting. Gating a non-flashing effect would be gating by category rather than by behaviour. If a puff ever gains a bright pop or a lit flash, it acquires the gate.
+
+### THE BLOW-LANDED WIRE, and the first attack that draws itself ([#887](https://github.com/Phaazoid/Godoiosis/issues/887), slice 1 BUILT 2026-09-10)
+
+**A presentation layer knew nothing about attacks until this.** The diorama learned that a blow had
+landed by watching HP fall — `UnitMirror` polls it and calls `report_impact`, which knows a number
+moved and nothing else: not what fired, not which element, not where it was aimed, not whom else it
+caught. `battle3d` connected to nothing on `OrderExecutor`, and `ElementalReaction.vfx_tag` had been
+declared since the elemental system landed with no reader at all. So an effect that draws the
+*attack* had no channel to hear about one, and #884's shock arc — a rule that pulls half a squad
+into one volley — played on screen as three unrelated lunges.
+
+**`AttackAction.impact` is that channel, and `OrderExecutor.volley_struck` re-publishes it.** Three
+things about its shape are the reusable part:
+
+- **It fires at the PAYLOAD moment**, after the lunge, not at the top of `execute()` — a bolt has to
+  arrive when the blow does, and a lunge is a wind-up.
+- **It is ABOVE the target block**, so a cell attack (#47, target null) publishes too. Every shock
+  rune touches the MAP, so a shock aimed at open water is a legal order that hits nobody and lights
+  a whole river; an emit guarded on having a victim would go silent exactly when there is most to
+  draw.
+- **One blast, one moment.** The `is_secondary_hit` gate lives on the action beside the readiness,
+  vial and watch spends rather than at the subscriber, because it is the same rule they enforce.
+
+The event carries the `AttackAction`, which is what makes it worth building once: everything an
+effect could want is already stamped on one — the aim, the attack, the footprint, and now the
+current's own route tree.
+
+**The current is a TREE, and it is stamped rather than re-derived.** `Conduction`'s flood always knew
+which live cell it reached each new one from and discarded it; `Conduction.Link` keeps that, one hop
+per conducting cell with the BFS depth on it. It is stamped on the volley beside the footprint at all
+three sites, and playback may not ask again — the conductor set depends on the **pass's own wetness**
+(a soak queued three orders earlier lives in the resolver's hypo and nowhere else), so a flood run at
+execution reads the live board and quietly draws a different current from the one that dealt the
+damage. R3, one system over.
+
+**The bolts cover every cell the current reached, occupied or not** (dev, 2026-09-10: *"the only
+thing that's missing is arcing above water tiles it effects as well"*). That is the honest picture as
+well as the asked-for one: `Conduction`'s whole doctrine is that the conductor set IS the victim set
+and the danger reads off the board rather than off the bodies, so a player looking at the flash can
+see which tiles are live and therefore where it is safe to stand next turn.
+
+**`ArcLightning` is `StagingDust`'s shape one effect along** — a resident node owned by `battle3d`,
+its own clock, handed events, every look value a `static var` with a Game-tab row. Four things it
+settles that the next ribbon effect inherits:
+
+- **One mesh for the whole storm, twice.** Every bolt is a SURFACE on a shared `ImmediateMesh`
+  rebuilt each frame, so a twenty-cell current is two draws and there is no pool to grow,
+  round-robin or exhaust — the failure mode a per-node effect has. The pair is a narrow blooming
+  CORE and a wide dim CORONA, two instances rather than two materials because the width is a shader
+  uniform and the point of the pair is two widths.
+- **The per-bolt AGE rides in the VERTEX COLOUR**, which is the only channel that varies inside one
+  draw. `sight_beam.gdshader` multiplies by it and a mesh with no colour array reads white, so the
+  aim's own sight beam is untouched — the shader has two tenants now and the file name is the
+  first one's.
+- **`BoardOverlays.add_beam_strip` is the one spelling of the ribbon recipe**, static and appending,
+  with `beam_tangents` beside it. The overlay's `set_line` is one caller of it.
+- **The STRIKE is the attack's own trajectory.** `Reach.sight_trace` already computes what the aim
+  gate judged, so an attack authored to clear any height (Zap's `arc_clearance` of 99) descends
+  almost vertically and one authored flat draws a horizontal rod — the effect describes the content
+  instead of overriding it, and there is no angle constant anywhere in it. `ArcLightning.strike_tail`
+  takes the last N cells of that fall; `BoardSpace.trace_point` is the one conversion from a trace's
+  space to the world, hoisted out of `OverlayMirror` for the second drawing of it.
+
+**It is computed at PLAYBACK, and that is the one place this arc parts company with R3 —
+deliberately, because a sight trace is not an OUTCOME.** It is pure geometry over the attack, two
+cells and the terrain's heights, none of which can change during a pass, so it answers the same
+whenever asked; stamping it would put a trace on every attack in the game to serve the few that are
+shock. The staging offset is the host's half: the trace knows nothing about the tear-out, and the aim
+cell's offset is the whole fight's, the stage lifting as one body.
+
+**[#217](https://github.com/Phaazoid/Godoiosis/issues/217)'s second reader, and only its flicker is
+gated.** What strobes is the RE-ROLL, so the safe mode freezes each bolt at its first shape; the
+strike, the spread and the fade are untouched. A bolt that appears and fades is not a flash, and the
+setting's promise is a steady state rather than a missing effect — the same reading the tear-out's
+white-out makes. Fire's `flame_animated` was that toggle's only reader until now.
+
+**`EFFECT_RENDER_PRIORITY` is `FLAME_RENDER_PRIORITY` renamed**, its own comment having asked for
+exactly that on a third tenant (fire, then the slam dust, now the arc). The band is unchanged and the
+two laws under it still speak of fire, fire being what a layer drawing over it would visibly erase.
+
+**Deliberately absent: the sprite blowout.** `UnitMirror` rewrites every unit sprite's `modulate`
+each frame from the 2D authority, so an effect writing the same property is stomped and is a second
+writer to a single-driver channel. An effect TINT channel on the mirror belongs to
+[#358](https://github.com/Phaazoid/Godoiosis/issues/358), which owns what a unit LOOKS like.
+
+**3D only** — the flat view keeps the aim wash it already has, on
+[#292](https://github.com/Phaazoid/Godoiosis/issues/292)'s ledger.
 
 ### Conventions the art commission must carry (pending look-dev experiments)
 
