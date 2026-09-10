@@ -259,6 +259,7 @@ func _apply_board_look() -> void:
 # heights are this node's to hand over; the mirror is passed them per call and stores neither.
 func rebuild_props() -> void:
 	_board_mirror.drop_props()
+	_board_mirror.drop_lips()
 	rebuild()
 
 
@@ -497,6 +498,9 @@ func _sync_staging() -> void:
 	# ground just left. The flames re-seat through OverlayMirror's own staging poll.
 	for cell in cells:
 		_board_mirror.drop_prop_at(cell)
+		# ...and a hole's walls, for the identical reason one line up: a tear-out changes where a
+		# cell renders without touching anything lip_key is made of (#876).
+		_board_mirror.drop_lip_at(cell)
 	_board_mirror.sync_cells(game.grid, cells, game.board_heights,
 			_board_mirror.floor_row_of(game.board_heights))
 

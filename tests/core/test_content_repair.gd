@@ -57,6 +57,23 @@ func test_a_dangling_reference_makes_godot_fail_the_whole_file() -> void:
 		).is_null()
 
 
+# THE PREMISE ABOVE HAS AN EDGE, and it decides how a caller may WORD what it reports: an
+# ext_resource that NOTHING USES does not fail the file. Godot prints the load error and carries on.
+# So a missing reference is not always a missing PROPERTY, and ContentRepair.missing_references says
+# a file REFERENCES what it cannot load rather than that it lost it (#871).
+func test_a_dangling_reference_nothing_uses_does_not_fail_the_file() -> void:
+	_write('[gd_resource type="Resource" script_class="WeaponModData" format=3]\n\n'
+		+ '[ext_resource type="Script" path="%s" id="1_mod"]\n' % SCRIPT_PATH
+		+ '[ext_resource type="Resource" path="%s" id="2_unused"]\n\n' % GONE
+		+ '[resource]\nscript = ExtResource("1_mod")\ndisplay_name = "Whole"\n')
+	var res := ResourceLoader.load(BROKEN_PATH, "", ResourceLoader.CACHE_MODE_IGNORE)
+	assert_object(res).override_failure_message(
+		"an UNUSED dangling ext_resource now fails the file too, so missing_references could be worded "
+		+ "as a LOSS rather than a reference -- and ReplayRun should be told to say so."
+	).is_not_null()
+	assert_array(ContentRepair.missing_references(BROKEN_PATH)).contains([GONE])
+
+
 # ==============================================================================
 #  What the repair does
 # ==============================================================================
@@ -199,3 +216,34 @@ func test_a_file_referencing_a_degraded_file_still_loads() -> void:
 		+ "the shape #596 had: Level_1 -> Noemie -> a weapon that was gone"
 	).is_not_null()
 	assert_str(res.display_name).is_equal("Top")
+
+
+# ==============================================================================
+#  The diagnosis, without the repair (#871)
+# ==============================================================================
+
+# WHY THIS IS NOT _dangling(). That one answers "what can be STRIPPED" and returns NOTHING AT ALL
+# when the missing reference is a Script, because stripping a script would change what the resource
+# IS -- so the caller who needs to report why a load failed gets nothing back in exactly the case it
+# most needs named. This is the same walk with that refusal removed.
+func test_missing_references_names_a_missing_script_which_the_repair_refuses_to() -> void:
+	var gone_script := "res://Classes/weapons/__test_no_such_script.gd"
+	# The resource's OWN script, so the reference is USED -- see the premise case below.
+	_write('[gd_resource type="Resource" script_class="WeaponModData" format=3]\n\n'
+		+ '[ext_resource type="Script" path="%s" id="1_mod"]\n\n' % gone_script
+		+ '[resource]\nscript = ExtResource("1_mod")\ndisplay_name = "Scriptless"\n')
+	assert_array(ContentRepair.missing_references(BROKEN_PATH)).contains([gone_script])
+	# The half that makes the two answers differ: the repair still refuses this file, as it should.
+	assert_object(ContentRepair.load_tolerant(BROKEN_PATH)).is_null()
+	assert_array(ContentRepair.missing_targets(BROKEN_PATH)).override_failure_message(
+		"a refused repair records nothing, which is why a caller cannot ask the registry").is_empty()
+
+
+# The non-vacuity guard: a file whose references all resolve must come back with an empty list, or
+# every caller reading this would report a healthy board as broken.
+func test_missing_references_is_quiet_when_every_reference_resolves() -> void:
+	_write('[gd_resource type="Resource" script_class="WeaponModData" format=3]\n\n'
+		+ '[ext_resource type="Script" path="%s" id="1_mod"]\n\n' % SCRIPT_PATH
+		+ '[resource]\nscript = ExtResource("1_mod")\ndisplay_name = "Whole"\n')
+	assert_array(ContentRepair.missing_references(BROKEN_PATH)).is_empty()
+	assert_object(ContentRepair.load_tolerant(BROKEN_PATH)).is_not_null()

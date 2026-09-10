@@ -87,12 +87,13 @@ func terrain_kind_at(cell: Vector2i) -> Terrain.Kind:
 # VOID would leak into terrain reactions and alchemy sources. That is the same split as
 # GridUtils.walkable_of (a tile fact) against is_walkable (a cell answer that also knows state):
 # two questions, not two answers to one.
+#
+# The RULE moved to GridUtils at #876, where the 3D mirror can reach it -- a lip is drawn on exactly
+# the cells this answers for, and BoardMirror holds no BoardContext. This stays the spelling the
+# rules layer reads, for is_walkable's reason: a caller holding a board should not have to hold a
+# grid as well.
 func is_void_at(cell: Vector2i) -> bool:
-	if terrain_kind_at(cell) == Terrain.Kind.VOID:
-		return true
-	# has_ground calls a null grid grounded, so a board with no TileMapLayer answers "not a hole"
-	# here -- the same permissive default every other accessor on this class keeps.
-	return not GridUtils.has_ground(grid, cell) and grid.get_used_rect().has_point(cell)
+	return GridUtils.is_void_at(grid, cell)
 
 # The rules' single read-point for a cell's terrain DEF (#84): a Burrow-dug COVER tile shelters
 # whoever stands on it. Sibling of terrain_kind_at, same rationale — the resolver's mitigation
