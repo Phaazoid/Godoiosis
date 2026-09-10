@@ -16,6 +16,12 @@ var game   # the Game coordinator (Node2D); set by game._ready()
 @onready var camera: Camera2D = $Camera2D
 const TILE_SIZE := GridUtils.TILE_SIZE
 const CELL_WORLD := TILE_SIZE * 2   # 32px/cell — matches your existing min/max_world math
+# The FLAT view's own pan margin, and a DECLARED asymmetry with the 3D rig as of 2026-09-09: that
+# one stopped measuring its stray in cells and now derives it from a screenful at the zoom ceiling,
+# because a cell count is useless at a close zoom. This stays a cell count on purpose -- F4's flat
+# view is dev-only (DevTools.enabled()), so no player can meet this wall, and giving it the same
+# derivation would mean teaching a 2D camera about a 3D frustum for nobody's benefit. Filed as an
+# asymmetry on #292 rather than left to be found.
 const EDIT_MARGIN_CELLS := 8
 
 var map_width = 32
