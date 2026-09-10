@@ -16,7 +16,7 @@
 >
 > **The walls** are `terrain_type` = ROCK + `prop_shape` = PLANE + a `wall_edges` mask, i.e. exactly the fence setup — the sheet ships a stone twin of the fence's 3×3 hollow frame at `10:7`–`12:9`, and all eight pieces map onto the fence's own masks one-for-one. They block movement the way the fences do, by leaving `walkable` unset, and since #660 they block SIGHT as well — a PLANE stands one block tall for the trace unless its tile authors otherwise (`prop_rule_height`). What did *not* transfer is the wall FACE: see `presentation-effects.md` → *WHICH slabs wear the tile's own art is a fact about the MATERIAL, not the axis*.
 
-**Canon checked through #877 (2026-09-09).**
+**Canon checked through #877 (2026-09-09); shallow water re-costed 2026-09-10.**
 
 ## The tile model (implemented — [LOCKED shape])
 
@@ -67,8 +67,10 @@ either extreme.
 
 The answer dissolves the fork instead of picking a side — **two water tiles, ONE `Terrain.Kind`**:
 
-- **Shallow water** — walkable at **`move_cost` 3** (mud is 2). Being shoved in is *annoying*, not
-  lethal. It is the tile that declares the `walkable` flag; nothing else marks it.
+- **Shallow water** — walkable at **`move_cost` 2, the same as mud** (dev, 2026-09-10, when The
+  Ford was authored: at 3 a wade was a two-turn event, so the clock decided the crossing and the
+  player never did). Being shoved in is *annoying*, not lethal. It is the tile that declares the
+  `walkable` flag; nothing else marks it.
 - **Deep water** — the tile that does NOT declare it. A shove ends **in** it and the water takes
   whatever health the blow and the fall left, so the unit goes DOWN on the ordinary
   `Unit.DOWNED_TURNS` clock and `RescueAction` is the rescue. The slow cousin of the ledge kill,
