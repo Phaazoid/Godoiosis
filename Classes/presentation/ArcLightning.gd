@@ -79,6 +79,28 @@ static var corona_intensity := 2.4
 # an @export on a node this does not own.
 static var bolt_softness := 1.1
 
+# THE SCREEN FLASH (slice 2). It drives the tear-out's own white-out rather than a rect of its own,
+# so #217's safe cap and muted tint are inherited rather than re-spelled -- see flash_level().
+static var flash := true
+static var flash_peak := 0.28
+static var flash_life := 0.16
+
+# HOW HIGH THE SPARKS ARE THROWN FROM, in cells above the surface a caught body stands on -- the
+# torso rather than the feet, so a burst reads as coming off the unit and not off the ground it is
+# standing on. Everything else about a spark is ShockSparks' own knob.
+static var spark_lift := 0.45
+
+# THE CRAWL: the current seen IN the water, under the bolts drawn over it -- the dev's second-ranked
+# treatment (2026-09-10: *"through the water as well would be interesting, but not as standout"*).
+# It is drawn by the water shader, so this node only says WHEN and HOW STRONG; the filaments' own
+# shape is the water's business and the same caustic net its lake beds use.
+#
+# Its HUE is not here for the corona's reason -- SHOCK's colour is ElementPalette's answer and a copy
+# defaulting to the same violet is a second store of it. What is authored is how much of it there is.
+static var crawl := true
+static var crawl_life := 0.9
+static var crawl_strength := 0.55
+
 
 # How far past the drawn geometry the instances are grown, in cells. An ImmediateMesh reports its own
 # bounds, so unlike a particle system this cannot be culled to nothing by a stale box (#656) -- the
@@ -94,6 +116,17 @@ class Bolt extends RefCounted:
 	var born := 0.0
 	var life := 0.0
 	var key := 0
+
+
+# A spark burst waiting for the current to reach the body it belongs to.
+class _Burst extends RefCounted:
+	var point := Vector3.ZERO
+	var at := 0.0
+	var key := 0
+	func _init(p_point: Vector3, p_at: float, p_key: int) -> void:
+		point = p_point
+		at = p_at
+		key = p_key
 
 
 # Cell -> the world point on that cell's surface, pushed by the host (battle3d) because only it knows
@@ -117,11 +150,22 @@ var bolts_drawn := 0
 
 var _core: MeshInstance3D
 var _corona: MeshInstance3D
+# The sparks emitter, owned here rather than by the host: it fires on the CURRENT's own schedule,
+# and that schedule is this node's.
+var _sparks: ShockSparks
+# Bursts whose hop has not arrived yet.
+var _pending: Array[_Burst] = []
+# When the screen flash was struck; negative means never.
+var _flash_at := -1.0
+# ...and when the crawl was, on the same clock and for the same reason.
+var _crawl_at := -1.0
 
 
 func _ready() -> void:
 	_core = _make_ribbon()
 	_corona = _make_ribbon()
+	_sparks = ShockSparks.new()
+	add_child(_sparks)
 
 
 # Is this blow one of ours? Asked by the HOST before it builds a trajectory for us, so an ordinary
@@ -159,6 +203,85 @@ func strike(attack: AttackAction, sky: PackedVector3Array) -> void:
 			# this file knows the flood's shape and nothing needs to.
 			_bolts.append(_bolt(path, born + strike_delay + float(link.step) * arc_step_delay,
 					bolt_life, hash([key, i])))
+	if flash:
+		_flash_at = born
+	if crawl:
+		_crawl_at = born
+	_schedule_sparks(attack, born)
+
+
+# A burst per body the blast caught, each waiting for the hop that reaches it (#887 slice 2).
+#
+# The DELAY is read back off the stamped tree rather than tracked alongside it: whichever hop ENDS
+# on a victim's cell carries the step the current took to get there, and a body standing in the
+# blast itself is in no hop at all and sparks with the strike. So the sparks travel with the bolts
+# by construction, with no second schedule to keep in step.
+func _schedule_sparks(attack: AttackAction, born: float) -> void:
+	if _sparks == null or not ShockSparks.sparks:
+		return
+	for member in attack.volley:
+		var body := member.target
+		if body == null or not is_instance_valid(body):
+			continue
+		# The board cell, live: this runs at the payload moment, so every move in the pass has
+		# already been walked and a shoved body has already slid.
+		var cell: Vector2i = body.movement.cell
+		var at := born + spark_delay_for(cell, attack.arc_links)
+		var point: Vector3 = point_of.call(cell)
+		_pending.append(_Burst.new(point + Vector3.UP * spark_lift, at,
+				ShockSparks.burst_key(cell, _strikes)))
+
+
+# When the current reaches this cell, in seconds after the strike.
+static func spark_delay_for(cell: Vector2i, links: Array[Conduction.Link]) -> float:
+	for link in links:
+		if link.to == cell:
+			return strike_delay + float(link.step) * arc_step_delay
+	return 0.0     # struck directly, or reached by nothing -- either way, with the blast
+
+
+# How bright the screen goes, for the host to compose against the tear-out's own white-out (#887).
+#
+# NOT applied here, and that is the point: there is ONE white-out, `battle3d` owns it, and #217's
+# safe cap already lives on its apply path -- so this effect inherits the accessibility gate rather
+# than spelling a second one, and two drivers cannot fight over the channel.
+func flash_level() -> float:
+	if not _flash_live():
+		return 0.0
+	return flash_peak * envelope((_elapsed - _flash_at) / maxf(flash_life, 0.01), 0.0)
+
+
+func _flash_live() -> bool:
+	return flash and _flash_at >= 0.0 and _elapsed - _flash_at < maxf(flash_life, 0.01)
+
+
+# How far into the crawl the water is, in seconds, or NEGATIVE while nothing is running -- which is
+# the shader's own dormant test, so a board that has never been shocked costs one compare per
+# fragment and no texture read.
+#
+# It is this node's OWN clock, which is the point: the crawl and the bolts freeze together under a
+# hitstop instead of the water running on while the air stops.
+func crawl_age() -> float:
+	if not crawl or _crawl_at < 0.0:
+		return -1.0
+	var age := _elapsed - _crawl_at
+	# Done when the LAST ring's own window has closed, which is the rule's reach behind the far
+	# hop rather than a duration of this effect's own -- retuning either knob moves it correctly.
+	var total := maxf(crawl_life, 0.01) + float(Conduction.SHOCK_ARC_RANGE) * arc_step_delay
+	return age if age < total else -1.0
+
+
+# The crawl's colour: the element's own hue, with the authored strength as its alpha. One decision
+# rather than two, the way the water's foam colour carries its own weight.
+func crawl_tint() -> Color:
+	var hue := ElementPalette.color_for_element(Elemental.Element.SHOCK)
+	return Color(hue.r, hue.g, hue.b, clampf(crawl_strength, 0.0, 1.0))
+
+
+# Where the sparks may be drawn, forwarded from the host's own board-extent poll.
+func cover(board: AABB) -> void:
+	if _sparks != null:
+		_sparks.cover(board)
 
 
 # Where the drawn bolts actually ARE. The second observable, and the one that can answer the ruling
@@ -166,6 +289,13 @@ func strike(attack: AttackAction, sky: PackedVector3Array) -> void:
 # without any case having to pin the lift knob's own number.
 func drawn_bounds() -> AABB:
 	return (_core.mesh as ImmediateMesh).get_aabb()
+
+
+# How many spark bursts have really been thrown. The sparks' own observable, forwarded because the
+# emitter is a child this node owns -- and it is the ONLY one they have: a GPU particle is simulated
+# on the card and never read back (#506).
+func sparks_thrown() -> int:
+	return 0 if _sparks == null else _sparks.burst_count
 
 
 func _bolt(path: PackedVector3Array, born: float, life: float, key: int) -> Bolt:
@@ -178,7 +308,10 @@ func _bolt(path: PackedVector3Array, born: float, life: float, key: int) -> Bolt
 
 
 func _process(delta: float) -> void:
-	if _bolts.is_empty():
+	# Nothing in the air of ANY kind. Every channel is in this test, not just the bolts, because the
+	# clock only advances inside it -- with both ribbon toggles off, a flash or a crawl measured
+	# against a frozen clock would never end.
+	if _bolts.is_empty() and _pending.is_empty() and not _flash_live() and crawl_age() < 0.0:
 		return
 	_elapsed += delta
 	var live: Array[Bolt] = []
@@ -186,7 +319,23 @@ func _process(delta: float) -> void:
 		if _elapsed - bolt.born < bolt.life:
 			live.append(bolt)
 	_bolts = live
+	_fire_due_sparks()
 	_rebuild()
+
+
+# Every burst whose hop has arrived, thrown and dropped. In arrival order, which is BFS order, so a
+# volley's sparks travel outward exactly as its bolts do.
+func _fire_due_sparks() -> void:
+	if _pending.is_empty():
+		return
+	var waiting: Array[_Burst] = []
+	for pending in _pending:
+		if pending.at > _elapsed:
+			waiting.append(pending)
+			continue
+		if _sparks != null:
+			_sparks.burst(pending.point, pending.key)
+	_pending = waiting
 
 
 # Both meshes, from scratch, this frame. Wholesale rather than incremental because every bolt's

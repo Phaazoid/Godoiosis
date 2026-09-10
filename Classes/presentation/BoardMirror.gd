@@ -1247,6 +1247,10 @@ func _push_all_water() -> void:
 # the ImageTexture the moment this returns.
 var _water_mask := ImageTexture.new()
 
+# ...and the SHOCK crawl's own picture (#887), held for the same reason: the global uniform stores
+# an RID and a local would free the texture the moment this returns.
+var _shock_mask := ImageTexture.new()
+
 
 # How far from the shore the distance ramp runs before it saturates, in CELLS, and the reason the
 # mask stopped being a bitmap (#552 slice 2b). A BINARY mask thresholded through filter_linear gives
@@ -1425,6 +1429,50 @@ func _push_mask(image: Image, rect: Vector4) -> void:
 	# a mask pushed before its scale would be decoded through a zero.
 	_push_water(&"water_board_shore_range", SHORE_RANGE)
 	_push_water(&"water_board_mask_range", MASK_RANGE)
+
+
+# WHERE A SHOCK'S CURRENT IS RUNNING, as a picture the water shader can read (#887).
+#
+# Here rather than in the effect, because "what picture does the water read" already has an owner
+# and a rect: the board mask is built over `grid.get_used_rect()` and decoded through
+# `water_board_mask_rect`, so the crawl rides the SAME rect and the two can never disagree about
+# where a cell is. A second rect would be a second answer to that (Law #4).
+#
+# ONE TEXEL PER CELL holding the hop's own STEP, +1 so that zero can mean "the current never came
+# here" -- which also keeps the struck cell itself distinguishable from dry board. R8 and sampled
+# NEAREST at the far end, because this is a category rather than a field: a step interpolated
+# between two cells is a hop that never happened.
+func push_shock(grid: TileMapLayer, steps: Dictionary[Vector2i, int]) -> void:
+	var rect := grid.get_used_rect() if grid != null else Rect2i()
+	if rect.size.x <= 0 or rect.size.y <= 0:
+		_push_shock_image(Image.create(1, 1, false, Image.FORMAT_R8))
+		return
+	var image := Image.create(rect.size.x, rect.size.y, false, Image.FORMAT_R8)
+	image.fill(Color(0.0, 0.0, 0.0, 1.0))
+	for cell in steps:
+		if not rect.has_point(cell):
+			continue
+		# Clamped at the byte, not at the rule's own reach: the encoding is what constrains this,
+		# and a current that ever ran further would silently wrap rather than saturate.
+		var hop := clampi(steps[cell] + 1, 1, 255)
+		image.set_pixel(cell.x - rect.position.x, cell.y - rect.position.y,
+				Color(float(hop) / 255.0, 0.0, 0.0, 1.0))
+	_push_shock_image(image)
+
+
+func _push_shock_image(image: Image) -> void:
+	_shock_mask.set_image(image)
+	_push_water(&"water_shock_mask", _shock_mask)
+
+
+# The crawl's CLOCK and its look. Pushed per frame while a shock is playing, because the age is the
+# effect's own elapsed time -- which is what makes the water freeze under a hitstop exactly as the
+# bolts above it do, rather than running on a clock of its own. A negative age is dormant.
+func push_shock_clock(age: float, life: float, step_delay: float, color: Color) -> void:
+	_push_water(&"water_shock_age", age)
+	_push_water(&"water_shock_life", life)
+	_push_water(&"water_shock_step", step_delay)
+	_push_water(&"water_shock_color", color)
 
 
 func _set_water_deep_color(value: Color) -> void:

@@ -262,3 +262,23 @@ water_board_mask_range={
 "type": "float",
 "value": 8.0
 }
+water_shock_mask={
+"type": "sampler2D",
+"value": ""
+}
+water_shock_age={
+"type": "float",
+"value": -1.0
+}
+water_shock_life={
+"type": "float",
+"value": 0.9
+}
+water_shock_step={
+"type": "float",
+"value": 0.05
+}
+water_shock_color={
+"type": "color",
+"value": Color(0.706, 0.541, 0.91, 0.55)
+}

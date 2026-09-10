@@ -265,6 +265,18 @@ const BOARD_GLOBALS := ["water_board_mask", "water_board_mask_rect", "water_boar
 # knob landing here to dodge the naming rule.
 const SHARED_GLOBALS := ["water_depth_range", "water_shore_fade_range"]
 
+# EVENT data: the THIRD declared exemption (#887), and it is a different kind again from the two
+# above. These describe a shock's current crawling over the surface -- something happening TO the
+# water rather than a property of either water -- so a deep/shallow pair could mean nothing (the
+# same current crosses both) and a Water knob row would be a second answer to values the effect
+# already owns on `ArcLightning`. Its clock and its mask are pushed while a shock plays and dormant
+# otherwise, which no water knob has ever been.
+#
+# Closed and asserted in both directions like the others, for the reason the board-data comment
+# gives: a hole a future knob could fall into unnamed is the law quietly deleted.
+const SHOCK_GLOBALS := ["water_shock_mask", "water_shock_age", "water_shock_life",
+		"water_shock_step", "water_shock_color"]
+
 # PHASE globals: the ones that set WHERE a wave is rather than how strong it is. Interpolating one
 # across the depth seam is #646, and the closed list is the BOARD_GLOBALS shape for the same reason
 # -- the suffix check below catches a renamed or duplicated wave knob, but a NEW kind of phase knob
@@ -301,7 +313,9 @@ func test_every_water_knob_is_spelled_the_same_in_all_three_places() -> void:
 			"the water shader declares no globals; the case is vacuous").is_greater(0)
 	var tunable: Array[String] = []
 	for name in declared:
-		if not BOARD_GLOBALS.has(name):
+		# Board data and event data are both spelled in TWO of the three places -- no knob row,
+		# because nobody tunes the shape of the board and the shock's own values live on the effect.
+		if not BOARD_GLOBALS.has(name) and not SHOCK_GLOBALS.has(name):
 			tunable.append(name)
 
 	var rows: Dictionary[String, bool] = {}
@@ -337,12 +351,16 @@ func test_no_water_uniform_is_ambiguous_about_its_type() -> void:
 	var shallow_side: Dictionary[String, bool] = {}
 	var board_side: Array[String] = []
 	var shared_side: Array[String] = []
+	var shock_side: Array[String] = []
 	for name in _declared_globals():
 		if BOARD_GLOBALS.has(name):
 			board_side.append(name)
 			continue
 		if SHARED_GLOBALS.has(name):
 			shared_side.append(name)
+			continue
+		if SHOCK_GLOBALS.has(name):
+			shock_side.append(name)
 			continue
 		var deep := name.begins_with("water_deep_")
 		var shallow := name.begins_with("water_shallow_")
@@ -371,6 +389,10 @@ func test_no_water_uniform_is_ambiguous_about_its_type() -> void:
 			"the shared-tuning exemption is declared as %s and the shader's is %s -- a knob that " \
 			% [SHARED_GLOBALS, shared_side] + "genuinely acts on one water type belongs in a " \
 			+ "deep/shallow pair, not in here").contains_exactly_in_any_order(SHARED_GLOBALS)
+	assert_array(shock_side).override_failure_message(
+			"the event-data exemption is declared as %s and the shader's is %s -- a value that " \
+			% [SHOCK_GLOBALS, shock_side] + "describes the WATER rather than something happening " \
+			+ "to it belongs in a deep/shallow pair").contains_exactly_in_any_order(SHOCK_GLOBALS)
 
 
 # A DECLARED uniform is not a READ one, and a knob wired to a uniform nobody samples is a slider

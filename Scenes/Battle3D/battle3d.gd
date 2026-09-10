@@ -111,6 +111,13 @@ var _staged_drawn: Array[Vector2i] = []
 # Both are created on demand: a board that never stages pays nothing for either.
 var _flight_drawn: Dictionary[Vector2i, GridMap] = {}
 var _whiteout: ColorRect = null
+# The TEAR-OUT's share of it (#887 gave the channel a second driver). Held rather than pushed
+# straight through, because the two levels have to be composed and neither writer may zero the
+# other -- see _push_whiteout.
+var _transition_flash := 0.0
+# The crawl age last pushed at the water shader, so a dormant board pushes nothing per frame. Starts
+# at a value no age can be, which is what makes the first frame push the dormant state once.
+var _crawl_pushed := -2.0
 # The dust a landing throws (#656). Built in _ready rather than on demand, unlike the two above:
 # a particle system compiles its shader the first time it draws, and paying that on the first slam
 # is a hitch in the one moment this effect exists for.
@@ -300,7 +307,7 @@ func rebuild() -> void:
 func _refresh_tops() -> void:
 	_tops = BoardPicker.column_tops_from($Board)
 	_board_rect = BoardPicker.used_rect(_tops)
-	_cover_with_dust(_board_volume())
+	_cover_effects(_board_volume())
 
 
 # The live terrain poll (#231). Confined to DEV_MODE on purpose: the sim never paints
@@ -332,8 +339,9 @@ func _drive_transition(delta: float) -> void:
 	if not BoardSpace.flight_active():
 		if not _flight_drawn.is_empty():
 			_clear_flight_maps()
-		if _whiteout != null and _whiteout.visible:
-			_apply_whiteout(0.0)
+		if _transition_flash > 0.0:
+			_transition_flash = 0.0
+			_push_whiteout()
 		return
 	var landed := BoardSpace.advance_flight(delta)
 	_puff_landings(landed)
@@ -368,6 +376,11 @@ func _on_volley_struck(attack: AttackAction) -> void:
 	if _arc == null or not ArcLightning.draws(attack):
 		return
 	_arc.strike(attack, _shot_arc(attack))
+	# ...and the same current as a picture the water can read (#887 slice 2). Pushed here rather
+	# than by the effect, because the mask has to share the board mask's own rect and BoardMirror is
+	# what owns that; the effect only says when and how strong.
+	if ArcLightning.crawl:
+		_board_mirror.push_shock(game.grid, Conduction.steps_of(attack.arc_links))
 
 
 # Where anything standing on this cell goes -- the mirror's one answer, which already carries the
@@ -479,7 +492,36 @@ func _drive_whiteout() -> void:
 	var cuts: bool = Experiments.is_on(Experiments.Flag.DIORAMA_CAMERA_CUTS_AHEAD)
 	var anchor := StagingFlight.flash_anchor(
 			BoardSpace.flight_entering(), cuts, BoardSpace.flight_total())
-	_apply_whiteout(StagingFlight.whiteout_level(BoardSpace.flight_elapsed(), anchor))
+	_transition_flash = StagingFlight.whiteout_level(BoardSpace.flight_elapsed(), anchor)
+	_push_whiteout()
+
+
+# THE WHITE-OUT HAS TWO DRIVERS SINCE #887, and this is the only place either reaches it.
+#
+# It was built for the tear-out and had exactly one writer, so `_drive_transition`'s idle branch
+# could simply push a 0 — which with a second driver is a channel one caller silently clears out
+# from under the other (#602's shape, one layer along). Each driver keeps its OWN level and the
+# louder wins; a flash that is not running is a 0 rather than an absence, so `max` needs no
+# special case and nothing has to be told when the other stops.
+#
+# MAX rather than a sum, because both are the same physical thing -- the screen going white -- and
+# adding them would make a shock struck during a tear-out brighter than either could ever be alone,
+# past the cap #217's safe mode is enforcing.
+func _push_whiteout() -> void:
+	var shock := 0.0 if _arc == null else _arc.flash_level()
+	_apply_whiteout(maxf(_transition_flash, shock))
+
+
+# The crawl's clock, into the water shader (#887 slice 2). CHANGE-GATED rather than pushed every
+# frame: the dormant answer is a constant -1, so a board nobody has shocked pays one compare here
+# and one in the shader, and the transition into dormancy pushes exactly once.
+func _drive_crawl() -> void:
+	var age := -1.0 if _arc == null else _arc.crawl_age()
+	if is_equal_approx(age, _crawl_pushed):
+		return
+	_crawl_pushed = age
+	_board_mirror.push_shock_clock(age, ArcLightning.crawl_life, ArcLightning.arc_step_delay,
+			_arc.crawl_tint() if _arc != null else Color.TRANSPARENT)
 
 
 # #217's photosensitivity switch, which every white-out in this arc owes a reading of. The TIMING is
@@ -618,7 +660,7 @@ func _update_tops(columns: Array[Vector2i], floor_row: int) -> void:
 # it simply retires the width knob for that board.
 func fit_camera() -> void:
 	var board := _board_volume()
-	_cover_with_dust(board)
+	_cover_effects(board)
 	var start: CameraPose = game.scenario_manager.current_camera_start
 	if start != null:
 		_rig.pose(start.aim, start.yaw_degrees, start.distance, board)
@@ -671,14 +713,19 @@ func _opening_volume(board: AABB) -> AABB:
 func _board_extent_changed() -> void:
 	var board := _board_volume()
 	_rig.rebound(board)
-	_cover_with_dust(board)
+	_cover_effects(board)
 
 
-# The dust's cull box follows the board (#656 round 2). Not folded into _board_volume(), which is a
-# QUERY -- three callers read it and only two of them mean "the extent just moved".
-func _cover_with_dust(board: AABB) -> void:
+# Every particle effect's cull box follows the board (#656 round 2; a second tenant at #887). Not
+# folded into _board_volume(), which is a QUERY -- three callers read it and only two of them mean
+# "the extent just moved". One sweep rather than one call per effect, because the question they are
+# all being asked is the same one and a new emitter that forgets to subscribe draws NOTHING, which
+# is the failure mode with no symptom.
+func _cover_effects(board: AABB) -> void:
 	if _staging_dust != null:
 		_staging_dust.cover(board)
+	if _arc != null:
+		_arc.cover(board)
 
 
 # The volume the camera must see, derived from the picker's column tops rather than the
@@ -880,6 +927,13 @@ func _process(_delta: float) -> void:
 	_sync_brush_ghost()
 	_sync_bracket_tint()
 	_mirror_camera()
+	# The shock's flash rides here rather than inside _drive_transition, which returns early the
+	# moment no tear-out is flying -- i.e. for every frame a shock is ever struck on. Cheap when
+	# nothing is flashing: _apply_whiteout returns on its first line while the level is 0 and the
+	# node has never been built.
+	if not BoardSpace.flight_active():
+		_push_whiteout()
+	_drive_crawl()
 
 
 # The 3D view follows the action by MIRRORING the 2D camera, which is already the
