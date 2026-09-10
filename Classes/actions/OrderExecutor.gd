@@ -18,6 +18,19 @@ class_name OrderExecutor
 
 var game   # the Game coordinator (Node2D); set by game._ready()
 
+# ONE BLAST LANDED, and here is the whole blast (#887). Playback's own event, published from
+# playback's own node -- the diorama's effects layer is the subscriber, and it wants the ATTACK,
+# which is a thing only the pass being played knows.
+#
+# Not relayed through `game` even though every other tells-the-diorama signal is: game.gd is where
+# the coordinator's own state changes are announced, and this announces nothing about the
+# coordinator. battle3d already reaches for `game.order_executor` the same way it reaches for
+# `game.camera_controller`.
+#
+# ONE PER VOLLEY, not one per victim, and the gate for that lives on the action beside the other
+# once-per-blast economies rather than being restated here.
+signal volley_struck(attack: AttackAction)
+
 # Units downed mid-execution. Squad ejection is DEFERRED to the end of the pass -- restructuring
 # squads while execute_orders sat mid-await was buggy. (A Crisis unit never lands here since #158:
 # take_damage carries that rung out directly and the unit never goes DOWNED.)
@@ -457,6 +470,7 @@ func _execute_action_sequence(actions: Array, beat: float = 0.0, holds: Dictiona
 			game.camera_controller.beat_profile = profiles.get(action, Pacing.Profile.BOARD)
 			await game.camera_controller.pan_to(subjects[action], Pacing.PLAYBACK_PAN)
 		await Pacing.beat(self, hold)
+		_listen_for_the_blow(action)
 		action.begin_execution()
 		action.execute()
 
@@ -473,6 +487,26 @@ func _execute_action_sequence(actions: Array, beat: float = 0.0, holds: Dictiona
 		# resolve-pass test off the wall clock). Same declaration clear_guard_preview carries at the
 		# top of this function, and for the same reason. What IS pinned is the schedule and the table.
 		await Pacing.beat(self, float(lingers.get(action, 0.0)))
+
+
+# Subscribe to one order's landing, if it is the kind of order that lands (#887). Every attack in
+# the game passes through the loop above -- the authored volleys, the counters, and the triggered
+# watch shots the walk stops for -- so this one line covers all three and there is no per-phase
+# spelling to keep in step.
+#
+# ONE-SHOT, because a blow lands once; the guard is for the connect rather than the fire, since a
+# derived action rebuilt every resolve is a fresh object and a re-executed one would need a fresh
+# connection anyway. Belt and braces on a wire whose failure mode is a second flash.
+func _listen_for_the_blow(action: BaseAction) -> void:
+	var blow := action as AttackAction
+	if blow == null or blow.impact.is_connected(_relay_the_blow):
+		return
+	blow.impact.connect(_relay_the_blow, CONNECT_ONE_SHOT)
+
+
+func _relay_the_blow(attack: AttackAction) -> void:
+	volley_struck.emit(attack)
+
 
 # Which ground goes on stage (#521). BOARD stages nothing at all -- the tear-out is the cinematic's,
 # and #410's ruling that the two profiles SHARE timings is about pacing, not about lifting the board

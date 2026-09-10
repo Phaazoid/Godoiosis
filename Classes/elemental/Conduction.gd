@@ -46,9 +46,31 @@ static func wet_cells(board: BoardContext, hypo: Dictionary) -> Dictionary[Vecto
 	return wet
 
 
-# The cells this attack's current reaches, or empty when it carries no SHOCK or lands on nothing
-# conductive. Every caller gets both of those gates for free, which is what keeps the arc from
-# needing a clause at each of the eight sites that ask.
+# ONE HOP the current made: from a conductor that is already live to the next one out, at the
+# distance in hops that the far end sits from the blast (#887).
+#
+# The tree these form is a by-product of the flood rather than a second walk -- the search already
+# knows which live cell it reached each new one FROM, and threw that away until the effect needed
+# to draw the current travelling. Which is also why `step` is here and not recomputed: it is the
+# BFS depth, so a renderer lighting the hops in step order is showing the spread the rule made.
+class Link extends RefCounted:
+	var from: Vector2i
+	var to: Vector2i
+	var step: int       # hops from the struck cell -- 1 for the first ring out
+
+
+# Everything one flood found: the conductors, and how the current got to each of them.
+class Flood extends RefCounted:
+	var cells: Array[Vector2i] = []
+	var links: Array[Link] = []
+
+
+# WHERE THE CURRENT GOES, whole. The two accessors below are projections of this and nothing else
+# computes it, so a caller that wants both pays for one walk.
+#
+# Empty when the attack carries no SHOCK or lands on nothing conductive. Every caller gets both of
+# those gates for free, which is what keeps the arc from needing a clause at each of the eight
+# sites that ask.
 #
 # The SEED is the footprint's own conducting cells -- the current has to touch water (or a soaked
 # body) to travel, so a shock on a dry target standing BESIDE a lake does not arc. Seeds are part of
@@ -56,16 +78,17 @@ static func wet_cells(board: BoardContext, hypo: Dictionary) -> Dictionary[Vecto
 # whatever the attack's own friendly-fire rule says.
 #
 # One flood, so relaying is bounded and order-independent by construction -- a conductor is reached
-# or it is not, and no cell can be visited twice.
-static func arc_cells(actor: Unit, attack: AttackData, footprint: Array[Vector2i],
-		board: BoardContext, hypo: Dictionary = {}) -> Array[Vector2i]:
-	var reached: Array[Vector2i] = []
+# or it is not, and no cell can be visited twice. That is also what makes the tree a TREE: a cell
+# reached twice would have two parents and the current would draw as a mesh rather than a spread.
+static func flood(actor: Unit, attack: AttackData, footprint: Array[Vector2i],
+		board: BoardContext, hypo: Dictionary = {}) -> Flood:
+	var found := Flood.new()
 	if board == null:
-		return reached
+		return found
 	if attack != null and attack.heals:
-		return reached   # a heal carries no current, whatever element it is tagged with
+		return found   # a heal carries no current, whatever element it is tagged with
 	if not PlanResolver.elements_of(actor, attack).has(Elemental.Element.SHOCK):
-		return reached
+		return found
 	var wet := wet_cells(board, hypo)
 	var seen: Dictionary[Vector2i, bool] = {}
 	var frontier: Array[Vector2i] = []
@@ -74,8 +97,8 @@ static func arc_cells(actor: Unit, attack: AttackData, footprint: Array[Vector2i
 			continue
 		seen[cell] = true
 		frontier.append(cell)
-	reached.append_array(frontier)
-	for _step in SHOCK_ARC_RANGE:
+	found.cells.append_array(frontier)
+	for step in SHOCK_ARC_RANGE:
 		if frontier.is_empty():
 			break
 		var next: Array[Vector2i] = []
@@ -86,9 +109,25 @@ static func arc_cells(actor: Unit, attack: AttackData, footprint: Array[Vector2i
 					continue
 				seen[neighbour] = true
 				next.append(neighbour)
-		reached.append_array(next)
+				found.links.append(_link(cell, neighbour, step + 1))
+		found.cells.append_array(next)
 		frontier = next
-	return reached
+	return found
+
+
+static func _link(from: Vector2i, to: Vector2i, step: int) -> Link:
+	var link := Link.new()
+	link.from = from
+	link.to = to
+	link.step = step
+	return link
+
+
+# The cells this attack's current reaches -- the flood's own answer, for the seven sites that only
+# ask what is caught.
+static func arc_cells(actor: Unit, attack: AttackData, footprint: Array[Vector2i],
+		board: BoardContext, hypo: Dictionary = {}) -> Array[Vector2i]:
+	return flood(actor, attack, footprint, board, hypo).cells
 
 
 # Everyone the current catches, minus whoever the attack was already hitting.
@@ -138,6 +177,10 @@ static func widened(footprint: Array[Vector2i], arc: Array[Vector2i]) -> Array[V
 class Sweep extends RefCounted:
 	var cells: Array[Vector2i] = []     # the blast's footprint plus the current's, each cell once
 	var victims: Array[Unit] = []       # aimed victims first, then whoever the current caught
+	# ...and HOW the current got there (#887), which `cells` alone cannot say: a set of live tiles
+	# is not a spread. Carried on the sweep rather than fetched separately so the volley sites stamp
+	# what they already asked for -- see AttackAction.arc_links for why playback may not re-derive it.
+	var links: Array[Link] = []
 
 
 # THE ONE ANSWER to "what does this aim reach", asked by every site that has to agree about it: the
@@ -160,7 +203,8 @@ static func sweep(actor: Unit, attack: AttackData, footprint: Array[Vector2i], b
 	if board == null:
 		return result
 	result.victims = RulesService.gather_attack_victims(actor, footprint, board, attack, allies_only)
-	var arc := arc_cells(actor, attack, footprint, board, hypo)
-	result.victims.append_array(caught(arc, board, hypo, result.victims))
-	result.cells = widened(footprint, arc)
+	var current := flood(actor, attack, footprint, board, hypo)
+	result.victims.append_array(caught(current.cells, board, hypo, result.victims))
+	result.cells = widened(footprint, current.cells)
+	result.links = current.links
 	return result

@@ -370,7 +370,7 @@ func test_the_readout_sorts_above_every_unit_and_every_overlay() -> void:
 	# and units already sort above all board markup. Pins the band the way the existing consts are
 	# pinned rather than restating their numbers.
 	assert_int(BoardOverlays.UNIT_HUD_RENDER_PRIORITY).is_greater(BoardOverlays.UNIT_RENDER_PRIORITY)
-	assert_int(BoardOverlays.UNIT_RENDER_PRIORITY).is_greater(BoardOverlays.FLAME_RENDER_PRIORITY)
+	assert_int(BoardOverlays.UNIT_RENDER_PRIORITY).is_greater(BoardOverlays.EFFECT_RENDER_PRIORITY)
 	for layer: BoardOverlays.Layer in BoardOverlays.LAYERS:
 		var spec: Dictionary = BoardOverlays.LAYERS[layer]
 		assert_int(BoardOverlays.UNIT_HUD_RENDER_PRIORITY).is_greater(spec["sort"])

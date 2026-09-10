@@ -817,9 +817,13 @@ func _resolve_actions(squad: Squad, actions: Array[BaseAction], board: BoardCont
 			var cell_attack := AttackAction.create(aim.actor, origin, null, aim.target_cell)
 			cell_attack.fired_attack = aim.fired_attack
 			cell_attack.footprint = affected
+			# ...and the current (#887). The victimless branch needs it MOST: the water is conducting
+			# whether or not anybody is standing in it, so this is the one attack whose whole arc
+			# would otherwise have nowhere to be recorded.
+			cell_attack.arc_links = reach.links
 			group.append(cell_attack)
 		else:
-			group = AttackAction.create_volley(aim.actor, origin, aim.target_cell, victims, aim.fired_attack, affected)
+			group = AttackAction.create_volley(aim.actor, origin, aim.target_cell, victims, aim.fired_attack, affected, reach.links)
 
 		# Back-link every derived action to the order that produced it -- read by the whiff clause
 		# and the queue row's tint. One place, so a new expansion branch can't forget it.
@@ -873,7 +877,7 @@ func _resolve_actions(squad: Squad, actions: Array[BaseAction], board: BoardCont
 		var c_reach := Conduction.sweep(aim.actor, c_attack, c_blast, board, hypo, healing)
 		var c_affected := c_reach.cells
 		var c_victims := c_reach.victims
-		for ctr in CounterAttackAction.create_counter_volley(aim.actor, c_origin, c_victims, aim.source_attack, c_affected):
+		for ctr in CounterAttackAction.create_counter_volley(aim.actor, c_origin, c_victims, aim.source_attack, c_affected, c_reach.links):
 			plan.counters.append(ctr)
 	# Phase 2: counters, now built from post-shove positions.
 	PlanResolver.resolve_counters(plan, hypo, reactions, board, terrain_reactions)

@@ -252,9 +252,9 @@ func _sight_trace(om: OverlayManager) -> void:
 		if trace.blocked:
 			tint = SightTrace2D.BLOCKED_COLOR
 		for p in trace.points:
-			# Rule-height h counts height UNITS (#427) above the level-0 floor plane, so it converts
-			# at UNITS_PER_LEVEL. Since slice 2 a ROW is that same unit, so it is one multiply.
-			points.append(Vector3(p.x * BoardSpace.CELL_SIZE, BoardSpace.surface_y(BoardSpace.top_row_of(0)) + p.y * BoardSpace.ROW_HEIGHT, p.z * BoardSpace.CELL_SIZE))
+			# The conversion is BoardSpace's since #887 -- the arc's sky strike draws the same
+			# trajectory, and two spellings of "where does a trace point sit" is Law #4.
+			points.append(BoardSpace.trace_point(p))
 	overlays.set_line(BoardOverlays.Layer.SIGHT_TRACE, points, tint)
 
 

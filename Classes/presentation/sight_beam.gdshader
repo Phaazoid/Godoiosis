@@ -1,9 +1,13 @@
 shader_type spatial;
 
-// The aim's sight beam (#506): a camera-facing ribbon expanded in the VERTEX stage, so one built
-// mesh is correct at every camera angle. BoardOverlays.set_line feeds it a centreline emitted
-// twice per point -- NORMAL carries the (joint-averaged) tangent and UV.y the 0/1 side flag -- and
-// this shader pushes each pair apart perpendicular to the view direction.
+// THE PROJECT'S RIBBON (#506, shared since #887): a camera-facing strip expanded in the VERTEX
+// stage, so one built mesh is correct at every camera angle. BoardOverlays.add_beam_strip feeds it
+// a centreline emitted twice per point -- NORMAL carries the (joint-averaged) tangent and UV.y the
+// 0/1 side flag -- and this shader pushes each pair apart perpendicular to the view direction.
+//
+// Two tenants: the hovered aim's sight beam, which is one ribbon whose colour is a verdict, and the
+// arc's bolts (#887), which are twenty ribbons on one mesh at twenty different ages. The file name
+// is the first one's; the shader is both.
 //
 // WHY NOT ON THE CPU: the side vector depends on where the camera is, so a GDScript ribbon would
 // need rebuilding every frame the rig orbits or zooms, which is most frames. BoardOverlays has no
@@ -77,6 +81,11 @@ void fragment() {
 	// less moving part -- UV interpolates on its own, 0 and 1 at the rims and 0.5 down the middle.
 	float edge = abs(UV.y * 2.0 - 1.0);
 	float falloff = pow(max(1.0 - edge, 0.0), beam_softness);
-	ALBEDO = beam_color.rgb * beam_intensity;
-	ALPHA = beam_color.a * falloff;
+	// COLOR is the PER-RIBBON term (#887) and beam_color the per-DRAW one. A material can only carry
+	// one colour, and the arc needs one mesh to hold bolts that were struck at different moments and
+	// are therefore at different brightnesses -- so the age rides in the vertex colour, which is the
+	// only channel that varies within a draw. A mesh with no colour array reads vec4(1.0) here, so
+	// the sight beam is exactly what it was.
+	ALBEDO = beam_color.rgb * COLOR.rgb * beam_intensity;
+	ALPHA = beam_color.a * COLOR.a * falloff;
 }

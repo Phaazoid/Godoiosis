@@ -115,6 +115,7 @@ var _whiteout: ColorRect = null
 # a particle system compiles its shader the first time it draws, and paying that on the first slam
 # is a hitch in the one moment this effect exists for.
 var _staging_dust: StagingDust = null
+var _arc: ArcLightning = null
 # Which grid VERTEX the pointer is nearest (#427 slice 4). Stored beside the cell rather than derived
 # from it: it changes as the cursor crosses the MIDDLE of a cell, so the cell early-out below would
 # freeze it for the whole tile.
@@ -198,6 +199,12 @@ func _ready() -> void:
 	_unit_mirror.frame_floor = _shot_floor
 	_staging_dust = StagingDust.new()
 	add_child(_staging_dust)
+	# The shock effect (#887), owned exactly as the dust is: resident, its own clock, handed events.
+	# It takes its cell -> world answer as a callable for the same reason report_impact is one --
+	# only this host knows the mirror, and the answer MOVES when the fight is torn out onto a stage.
+	_arc = ArcLightning.new()
+	_arc.point_of = _surface_of
+	add_child(_arc)
 	_overlay_mirror.game = game
 	_overlay_mirror.overlays = _overlays
 	_overlay_mirror.unit_mirror = _unit_mirror
@@ -206,6 +213,10 @@ func _ready() -> void:
 	# The visible camera answers "look at this cell" (#471). Wired unconditionally, beside the other
 	# game-tells-us signals: demo_mode has no action ring to fire it, so there is nothing to branch on.
 	game.view_focus_requested.connect(_center_rig_on)
+	# ...and the blow landing (#887). Through a typed local: `game` is untyped, so the signal would
+	# be reached through a Variant. Unconditional like the line above -- demo_mode fights too.
+	var executor: OrderExecutor = game.order_executor
+	executor.volley_struck.connect(_on_volley_struck)
 	if auto_play:
 		_start.call_deferred()
 
@@ -349,6 +360,42 @@ func _puff_landings(cells: Array[Vector2i]) -> void:
 	for cell in cells:
 		_staging_dust.puff(_board_mirror.surface_point(cell, heights),
 				StagingDust.burst_key(cell, BoardSpace.staging_version))
+
+
+# A shock landed (#887). The effect owns everything about what a bolt looks like; this owns the two
+# facts only the host has -- where a cell IS right now, and the shot's trajectory in world space.
+func _on_volley_struck(attack: AttackAction) -> void:
+	if _arc == null or not ArcLightning.draws(attack):
+		return
+	_arc.strike(attack, _shot_arc(attack))
+
+
+# Where anything standing on this cell goes -- the mirror's one answer, which already carries the
+# tear-out's offset, so a bolt drawn during a fight lands on the diorama and not on the empty socket
+# forty cells below it. Pushed at the effect rather than looked up by it.
+func _surface_of(cell: Vector2i) -> Vector3:
+	return _board_mirror.surface_point(cell, game.board_heights)
+
+
+# The shot's own trajectory, in world space.
+#
+# COMPUTED HERE RATHER THAN STAMPED AT RESOLVE, which is the one place this arc parts company with
+# R3 -- and deliberately, because it is not an OUTCOME. A sight trace is pure geometry over the
+# attack, the two cells and the terrain's heights, none of which can change during a pass, so it
+# gives the same answer whenever it is asked; stamping it would put a trace on every attack in the
+# game to serve the few that are shock.
+#
+# The STAGING OFFSET is the host's half of it. The trace knows nothing about the tear-out, and the
+# aim cell's offset is the whole fight's -- the stage lifts as one body, and both ends of the shot
+# are fight cells by construction (an attacker's origin is its post-move cell, which is on stage).
+func _shot_arc(attack: AttackAction) -> PackedVector3Array:
+	var trace := Reach.sight_trace(attack.fired_attack, attack.origin_cell, attack.target_cell,
+			game._board())
+	var lift := BoardSpace.staged_offset(attack.target_cell)
+	var points := PackedVector3Array()
+	for p in trace.points:
+		points.append(BoardSpace.trace_point(p) + lift)
+	return points
 
 
 # WHERE THE CAMERA WATCHES FROM, and the only thing the Experiments flag decides about the ENTRY.
