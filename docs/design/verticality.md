@@ -6,7 +6,7 @@ grill-style. Every ruling below is his; the rationale is recorded because almost
 re-derivable from the code. Numbers (tolerances, drop damage, the 2D offset) are deliberately absent —
 they are feel values and get knobs, not guesses (`CLAUDE.md` → the tuning rule).
 
-**Canon checked through #877 (2026-09-09).**
+**Canon checked through #878 (2026-09-10).**
 
 The one-line version: **a cell has a height, height changes only via ramps, ramps are chokepoints
 rather than tolls, and what height buys you is REACH — not damage, not to-hit.**
@@ -725,6 +725,31 @@ in the trail's own surface hangs a **drop pointer** ("in the air until he would 
 straight down" — dev), the rule for which is
 [#431](https://github.com/Phaazoid/Godoiosis/issues/431)'s and is stated in full below. A VOID cell
 renders as **no column at all** in 3D: the pit is the absence of the block.
+
+> **The absence is DRESSED since [#876](https://github.com/Phaazoid/Godoiosis/issues/876)
+> (2026-09-10).** #259's ruling stands — the column still clears — and what changed is that every
+> edge where a hole meets ground now hangs a **wall** into the dark, so a chasm reads as depth rather
+> than as a gap in the board. **Where two holes meet, nothing is drawn** (dev ruling, 2026-09-09),
+> which is what makes a wide chasm one pit instead of adjacent postholes.
+>
+> Three things about it are forced rather than chosen. Each wall hangs at **its own neighbour's two
+> corner heights** (`Terrain.edge_of_corners`), never at one number: `surface_height_at_edge` answers
+> the edge's MIDPOINT, and a neighbour on a ramp has a tilted edge that a single height would seat
+> the wall flat across. `sync()` needs its **own walk over `used_rect`**, because it iterates
+> `get_used_cells()` and an ERASED hole has no tile to be listed by. And the lips live in their own
+> store rather than in `_props`, because `sync()` frees any prop whose cell is not painted.
+>
+> **Winding is the one thing about the geometry a headless suite can check, and it is measured, not
+> recalled**: Godot's face normal for `(v0, v1, v2)` is `(v0 - v2).cross(v0 - v1)`, the *negative* of
+> the naive form. With `CULL_BACK` on since #559 a mis-wound quad does not look wrong, it VANISHES.
+> `BoardMirror._face_normal` is that rule; the test asks `SurfaceTool.generate_normals` for the
+> engine's own answer rather than reading the authored normal array — that array is written
+> unconditionally and pinning it is an assertion that cannot fail, which a mutant proved.
+>
+> Depth and colour are Game-tab knobs (`lip_shaft_depth` / `lip_shaft_color`) with a re-cut sweep,
+> the key each lip was built from riding its own node. **Still open:** the authored RIM — the ring
+> cut out of the two `hole` sprites, drawn on the hole's own footprint. Today the pit's visible edge
+> is where the neighbouring ground stops.
 
 **The fall is a BEAT of the slide, and it happens where the pointer hangs
 ([#472](https://github.com/Phaazoid/Godoiosis/issues/472), 2026-08-22).** A segment whose entry
