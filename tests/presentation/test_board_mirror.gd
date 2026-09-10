@@ -2837,3 +2837,26 @@ func test_a_full_rebuild_still_dresses_an_erased_hole() -> void:
 	assert_int(_walls_at(cell)).override_failure_message(
 			"a full rebuild left the erased hole bare -- sync() never visited a cell with no "
 			+ "tile, which is the walk it needs of its own").is_equal(4)
+
+
+# The PAINTED half of the same ruling, and the one a mutant caught missing: two `hole` TILES side by
+# side. An erased cell has no ground, so a lip rule asking only has_ground already skips it -- an
+# authored VOID tile HAS ground, and only is_void_at knows it is a hole. Without that half the two
+# grow a wall between them, which is the egg carton in its original form.
+func test_two_painted_hole_tiles_side_by_side_draw_nothing_between_them() -> void:
+	_scene.load_mission(PROLOG)
+	await _settle()
+	_game.game_state = _game.GameState.DEV_MODE
+	var hole := _a_tile_of_kind(Terrain.Kind.VOID)
+	assert_bool(hole.source >= 0).override_failure_message(
+			"the tileset authors no VOID tile; the case is vacuous").is_true()
+	var cell := _an_inland_cell()
+	var beside: Vector2i = cell + Vector2i.RIGHT
+	if not GridUtils.has_ground(_game.grid, beside + Vector2i.RIGHT):
+		return
+	_game.grid.paint(cell, hole.source, hole.coords)
+	_game.grid.paint(beside, hole.source, hole.coords)
+	await _settle()
+	assert_int(_walls_at(cell)).override_failure_message(
+			"a lip was drawn between two painted holes").is_equal(3)
+	assert_int(_walls_at(beside)).is_equal(3)
