@@ -50,6 +50,24 @@ Numbered for test coverage. Violating any is a bug.
 
 Derived-from-plan logic — same family as `SquadManager.calculate_reactions_for_squad` / `get_display_entries_for_squad`. A dedicated `ElementResolver` invoked by `SquadManager` is the clean seam (and the 2026-07-26 split — `SquadPlanValidator`/`GroupMoveSolver`/`ActionQueueDisplayEntry.build_for` — set the precedent: pure static collaborators that read a plan and return a result); the concrete touchpoint is that the damage `AttackAction.create()` computes today becomes a value the resolver writes. *[Class layout is a build-time call, not locked here.]*
 
+### Which elements an attack CARRIES is two layers ([#900](https://github.com/Phaazoid/Godoiosis/issues/900), 2026-09-10)
+
+`PlanResolver.elements_of(actor, attack)` is still the one answer, and the fork on KIND moved down
+into the attacks themselves. **What an attack AUTHORS is `AttackData.authored_elements()`** — a
+carving resolves each distinct sigil through its flourishes, a weapon attack names one field, the
+base carries none — and **what a WIELDER adds is the fitted mods on top**, which only `elements_of`
+knows about.
+
+The split is what a second reader forced: the Attack Editor has a file and no wielder, and asking
+`elements_of` there would have meant writing a third branch on the same question. It is a collapse
+rather than an addition — the resolver used to branch on the subclass itself, which is a fact the
+resources were always better placed to state.
+
+Worth knowing at both ends: a weapon attack with **no weapon in hand** carries nothing, which is the
+bare-fists reading the resolver has always taken and is deliberately not its authored element; and
+an attack that gains an element only from a **mod** authors nothing, so it can carry no per-attack
+look (`presentation-effects.md` → *An ATTACK may author what its element looks like*).
+
 ## Reactions as data
 
 Small resources, edited in the reflection-based dev editor (same grain as `WeaponData` / `AttackShape`). Proposed `ElementalReaction` shape:
@@ -61,7 +79,7 @@ Small resources, edited in the reflection-based dev editor (same grain as `Weapo
 | `add_states` | states applied on react |
 | `remove_states` | states cleared on react (omit to *not* consume) |
 | `popup` | feedback hook ("Electrocuted!") — the DRAMATIC word, read by the glossary's composed interaction line and the bug report |
-| ~~`vfx_tag`~~ | **declared and read by NOTHING** (grepped #887, 2026-09-10). It was proposed as this table's hook for "what does this reaction LOOK like", and the row above used to claim both fields were read, which was true of `popup` alone. What actually draws an elemental event is the attack that carried it, not the reaction it fired: `ArcLightning` reads the volley's own element and route (#887). Kept as a field because a reaction-specific look is still plausible; the correction stands as the record that a hook nobody consumes is not a seam. |
+| ~~`vfx_tag`~~ | **declared and read by NOTHING** (grepped #887, 2026-09-10). It was proposed as this table's hook for "what does this reaction LOOK like", and the row above used to claim both fields were read, which was true of `popup` alone. What actually draws an elemental event is the attack that carried it, not the reaction it fired: `ArcLightning` reads the volley's own element and route (#887). Kept as a field because a reaction-specific look is still plausible; the correction stands as the record that a hook nobody consumes is not a seam. **#900 makes the distinction sharper rather than filling it**: what an ATTACK plays is now authorable per attack (a shared `EffectLook` keyed by element, see presentation-effects.md), and this field is the REACTION-side question -- still unfilled, still out of scope, and not the same seam. |
 | `short_name` | the BADGE word ("Shock"), for a surface with no room for the dramatic one — the action queue's chip is ~40px (#685). Blank means the popup already fits, so only a long reaction needs one. A **declared** second representation per Law #4: two questions (what does this SHOUT vs what fits a badge), `badge_name()` is the one accessor, and every compact surface reads it rather than re-deriving a truncation. |
 
 Resolution against a target: collect *every* reaction with a trigger matching the snapshot's `(element ∈ attack.elements) × (state ∈ target.states)`, fire them all, compose per E8.

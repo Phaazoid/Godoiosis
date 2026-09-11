@@ -2,13 +2,13 @@
 
 **Status: an idea wall plus two locked decisions.** Solicited by the dev on 2026-08-12, the day Stage 0 (#203) passed its GO gate: *"a full thought experiment, all ideas on the wall."* Nothing below the Decisions section is a commitment — it is the candidate pool for #176's stage 5 and beyond, kept so it can't evaporate from chat. The look-dev scene (`Scenes/LookDev/LookDev.tscn`) is the standing playground where any of it gets prototyped before it's real — and since #212 (2026-08-15) the **Moods tab** in the dev-tools window tunes the *shipping* view live, so a value on this wall can be judged on a real board rather than in the diorama. **It is a playground, not a scratch scene ([#393](https://github.com/Phaazoid/Godoiosis/issues/393), 2026-08-19)** — seven presentation suites fixture on it, `Battle3D.tscn` loads its MeshLibrary, and `BoardMirror`/`BoardOverlays` read textures out of `Art/LookDev/`, so it is edited with the same care as shipping code. Its four moods stopped being a second copy at the same time: `look_dev.gd` held them as a hardcoded `PRESETS` table, seeded from the same values four of the twelve `LookPreset` files now carry, and it resolves them by NAME through `LookKnobs` instead.
 
-**Canon checked through #887 (2026-09-10).**
+**Canon checked through #900 (2026-09-10).**
 
 ---
 
 ## Where a presentation value is authored (#272, #373; one-tab-per-row since #380, 2026-08-19)
 
-A tuned value has **three** possible homes, and picking the wrong one is how a value ends up with
+A tuned value has **four** possible homes, and picking the wrong one is how a value ends up with
 nowhere to live. The question to ask is *who is allowed to disagree about this?*
 
 | home | who may differ | surface | stored in |
@@ -16,6 +16,11 @@ nowhere to live. The question to ask is *who is allowed to disagree about this?*
 | **mission mood** | one board vs another | Moods tab | a `LookPreset` a `ScenarioData` names (#253), or the DEFAULT every board with no named mood wears (#386) |
 | **game constant** | nobody, ever | Game tab → *Save to source* | the declaration that authors it — an `@export` default, a `static var`, or one entry of `BoardOverlays.LAYERS` |
 | **per object type** | one tile type vs another | Objects tab → *Save object fields* | a TileSet custom-data column |
+| **per authored attack** | one attack vs another, for an effect the attack PLAYS | Attack Editor → its element's look section | a shared `EffectLook` the attack names ([#900](https://github.com/Phaazoid/Godoiosis/issues/900)) |
+
+The fourth row is the newest and the first whose owner is a piece of **content** rather than a board,
+a mission or a tile type — see *An ATTACK may author what its element looks like* below for what
+makes a value eligible for it, which is the line between an effect's RULE and its LOOK.
 
 The middle row is the one that was missing until #272, and its absence is what both tickets were
 actually about: prop geometry and the whole fire block are world construction rather than mood, so a
@@ -366,6 +371,12 @@ It stays a SUB-TAB rather than its own tree leaf, and that is the storage rule a
 are game constants, so they want `GameTool`'s existing Save-to-source. A separate leaf would need
 its own panel and its own save — a duplicate seam for nothing. A new element is one `GROUP_TABS`
 line.
+
+Shock arrived beside them at #887 and split into **six groups** at #900 — the strike, the current,
+one bolt, the screen flash, sparks, the crawl — all on this tab. Thirty-five rows under one heading
+was past the ~15 where Water took its own sub-tab, and the split does double duty: the Attack
+Editor's per-attack look sections are those same groups, read off the same table, so the two panels
+cannot arrange the values differently (see *An ATTACK may author what its element looks like*).
 
 **A tab named for a category with two members is a promise, not a category** — what keeps it is
 [#455](https://github.com/Phaazoid/Godoiosis/issues/455), the board channel of *elemental state made
@@ -801,6 +812,97 @@ rather than argued** (a throwaway tool SCENE, run and deleted). That is the dirt
 instruction: make the committed bytes BE what the writer emits, and prove it by round-tripping
 rather than by reasoning that the format looks right.
 
+
+### An ATTACK may author what its element looks like ([#900](https://github.com/Phaazoid/Godoiosis/issues/900), BUILT 2026-09-10)
+
+#887 put all thirty-five of shock's values on the Game tab, which is the right home for *what
+electricity is* and the wrong one for *what THIS attack is*. The dev's ask, on merging both slices:
+*"I want these lightning effects to be tunable per lightning attack I author... I imagine having a
+new section in the attack editor that only exists if the attack is an authored lightning attack?"*
+
+**THE RULE STAYS GLOBAL; THE LOOK BECOMES PER-ATTACK.** `elemental-interactions.md` already ruled
+the arc's reach a game constant — *"arcing through water is a property of electricity"* — and
+`ArcLightning`'s own header says the order the hops light in is the rule showing rather than a look.
+That line is what decides eligibility: everything on the far side of it is an attack's to author,
+and `SHOCK_ARC_RANGE` is not.
+
+**A NAMED LOOK SEVERAL ATTACKS POINT AT** (dev, 2026-09-10, on the one fork the ticket left open).
+`EffectLook` is a shared library resource under `Resources/EffectLooks/`, the way `AttackShape` has
+been a shared stamp since #808 — so a family of shock weapons can wear one feel and one of them can
+differ. It is a REFERENCE rather than a name, which is the opposite of `ScenarioData.look_preset`
+and deliberate: #253 chose a name because a dangling `ext_resource` can take a whole file down, and
+#808 answered that same hazard the other way by REFUSING to delete a library file anything still
+references. Same hazard, guard already built, so this follows #808.
+
+**PARTIAL BY CONSTRUCTION, and the alternative was measured against the dev's own loop.** A look
+holds only the rows it disagrees with; everything absent falls through to the Game tab's value. A
+COMPLETE capture (`LookPreset`'s shape) would leave that tab tuning a set nobody is looking at — the
+cost #422's palette carries — and would break iteration: retune the base bolt width and every look
+would stop following. So a new look is empty and changes nothing, and there is no *capture the Game
+tab into a look* button and no default file. `(none)` IS the default, which is also why #253's
+outside-the-scanned-folder rule does not apply here: there is nothing to shadow.
+
+**PRESENCE IS THE OVERRIDE — no sentinel, and that is the one way this improves on ObjectKnobs'
+columns.** A `.tres` dictionary can say *no opinion* directly, so #660's trap (a row whose resolved
+value EQUALS the sentinel cannot be authored at all) cannot arise. A row authored to the same number
+the default happens to hold is still an override.
+
+**THE ROWS ARE A PROJECTION OF `GameKnobs.CLASS_KNOBS`, never a second table.** Label, tooltip,
+range and type are declared there already; a parallel list would be Law #4 with the ink still wet.
+The split that keeps it honest: **shipping code needs no table at all** — a read is the look's
+dictionary with the effect's own static as the fallback — so `GameKnobs` stays dev-only, the
+property that made `ObjectKnobs` safe to put in `dev/`. What each side declares is the smallest
+thing it can: `EffectLook.LOOKABLE` (shipping) says which elements may be authored for at all,
+`GameKnobs.LOOK_GROUPS` (dev) says which rows each has, and a law refuses them to drift.
+
+**The Shock group split into SIX**, all on the Elemental tab — the strike, the current, one bolt,
+the screen flash, sparks, the crawl. Thirty-five rows under one heading was already past the ~15
+where Water took its own sub-tab, the runs were contiguous already, and it costs six `GROUP_TABS`
+lines. It also hands the attack editor its sub-headings from the same store, so the panel that tunes
+the default and the panel that overrides it cannot arrange the values differently.
+
+**FIRE IS DELIBERATELY NOT A TENANT.** Its knob group is what a BURNING TILE looks like while it
+stands, and since #890 a tile's fire outlives the attack that lit it — the ground owns that clock.
+Only an effect scoped to the blow itself can be an attack's to author.
+
+**Six of the rows are MATERIAL-level** (the core colour, both widths, both brightnesses, the edge):
+shader uniforms on one shared pair of meshes, which is the whole reason there are two instances.
+While two shocks overlap in the air the most recent strike owns them. Declared rather than solved —
+grouping bolts by look means an instance pair per distinct look, for the case of two simultaneous
+shock attacks with different authored looks.
+
+**Two things the panel structurally cannot author, and one it cannot prevent.** A look stamps the
+element it describes and a slot lists only matching looks, so a mismatch is unreachable through the
+UI; and a new look is stamped from the slot it was made in. What no panel can show is an ORPHANED
+KEY — a knob rename leaves a row nothing reads — so `GameKnobs.stale_look_keys` sweeps that per
+FILE, since a shared look would otherwise be counted once per wearer and an unworn one never at all.
+`AttackLint` carries the per-attack half (a mismatched element, a slot for an element the attack no
+longer carries), both DEGRADES: the attack fires correctly either way, and a BLOCKS would refuse the
+one panel that can repair it.
+
+**A SECTION NOW HIDES WITH ITS ROWS.** #825 made relevance the resource's own answer and applied it
+live off `changed`; the look section is the first that can be empty, and a heading drawn over
+nothing is worse than an absent section. The rule is DERIVED in `_draw_sections` — a heading hides
+when every row the section drew is registered and hidden — so the resource states relevance once,
+and a section with a bespoke row that owns its own visibility (the range block) keeps its title.
+
+**Three consequences worth knowing before meeting them.** A carving's element is DERIVED, so adding
+Quickening to a Fire circle makes the section appear — which comes free from the existing binder. An
+attack that gains SHOCK only from a fitted MOD authors no look and plays the defaults, because the
+editor authors a file and the mod belongs to a weapon. And the Chemical Spitter's charged form is
+its own attack: if it names no look it plays the defaults, not the base form's.
+
+**What it cost elsewhere, and both were collapses rather than additions.** #808's pick / name / fork
+/ delete / used-by flow is now `LibraryField`, shared by the stamp and every look — six non-obvious
+decisions in one place instead of two copies that agree until one is taught something — and
+`users_of` moved with it to `ResourceCatalog`, the question being about a path and a `.tres` rather
+than about shapes. And `PlanResolver.elements_of` stopped branching on the subclass: what an attack
+AUTHORS is `AttackData.authored_elements`, which the editor asks too, and the resolver adds the
+wielder's fitted mods on top. One answer, two readers, one fewer branch than before.
+
+**Measured rather than argued: the new field adds no save churn.** An empty dictionary is omitted at
+its default, and no shipped attack's round trip emits it — checked with a throwaway tool SCENE, run
+and deleted, which is the dirty-tree rule's own instruction one ticket on.
 ### Conventions the art commission must carry (pending look-dev experiments)
 
 Two Tier-1/2 ideas below change *what art gets ordered*, so they are experiments to run in the look-dev scene **before** any commission, then locked into #176's conventions list:
