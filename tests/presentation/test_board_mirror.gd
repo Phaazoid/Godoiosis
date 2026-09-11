@@ -778,8 +778,9 @@ func test_a_standing_tile_stands_up_and_a_ground_tile_does_not() -> void:
 func test_a_prop_cell_bakes_ground_not_the_prop() -> void:
 	var board := _scene.get_node("Board") as GridMap
 	var tiles: TileSet = _game.grid.tile_set
-	var source := tiles.get_source(tiles.get_source_id(0)) as TileSetAtlasSource
-	var baked := _baked_atlas(board)
+	var source_id := tiles.get_source_id(0)
+	var source := tiles.get_source(source_id) as TileSetAtlasSource
+	var baked := _baked_atlas(board, source_id)
 	assert_object(baked).override_failure_message("the meshlib carries no baked atlas").is_not_null()
 	var art := source.texture.get_image()
 	if art.is_compressed():
@@ -807,16 +808,22 @@ func test_a_prop_cell_bakes_ground_not_the_prop() -> void:
 			.is_true()
 
 
-func _baked_atlas(board: GridMap) -> Image:
-	var mesh := board.mesh_library.get_item_mesh(BoardMirror.FALLBACK_ITEM + 4)
+# The baked ground atlas for ONE source. The generator writes one atlas PER SOURCE
+# (`ground_atlas_%d`), so since #891 put a second source in the tileset "the baked atlas" stopped
+# being a question with one answer: a tile's region coords are relative to its OWN sheet, and
+# reading them out of another source's atlas compares a tile against whatever happens to sit at
+# those coords over there. It took the first source before that and was right only by there being
+# one.
+func _baked_atlas(board: GridMap, source_id: int) -> Image:
+	var prefix := "tile_%d_" % source_id
 	for id: int in board.mesh_library.get_item_list():
-		if board.mesh_library.get_item_name(id).begins_with("tile_"):
-			mesh = board.mesh_library.get_item_mesh(id)
-			break
-	var material := mesh.surface_get_material(0) as StandardMaterial3D
-	if material == null or material.albedo_texture == null:
-		return null
-	return material.albedo_texture.get_image()
+		if not board.mesh_library.get_item_name(id).begins_with(prefix):
+			continue
+		var material := board.mesh_library.get_item_mesh(id).surface_get_material(0) as StandardMaterial3D
+		if material == null or material.albedo_texture == null:
+			return null
+		return material.albedo_texture.get_image()
+	return null
 
 
 # The tile baked as BARE GROUND with the fewest see-through pixels, and how many it has. Measured
@@ -1263,7 +1270,7 @@ func test_a_generated_face_only_wears_colours_from_its_own_sprite() -> void:
 		if art.is_compressed():
 			art.decompress()
 		var mesh := _mesh_named(board, BoardMirror.prop_item_name(entry.source, entry.coords))
-		var atlas := _baked_atlas(board)
+		var atlas := _baked_atlas(board, entry.source)
 		var spans := _facet_spans(mesh)
 		var size := _atlas_size(mesh)
 		# Read exactly what the mesh points at: facet 0's own slice, inset a pixel off each edge so
@@ -1912,13 +1919,15 @@ func test_every_plane_tile_declares_which_way_it_runs() -> void:
 func test_a_tuft_bakes_speckled_ground_and_not_its_own_plants() -> void:
 	var board := _scene.get_node("Board") as GridMap
 	var tiles: TileSet = _game.grid.tile_set
-	var baked := _baked_atlas(board)
-	assert_object(baked).override_failure_message("the meshlib carries no baked atlas").is_not_null()
-
 	var tufts := _tiles_with_shape(GridUtils.PropShape.TUFT)
 	assert_bool(not tufts.is_empty()).override_failure_message(
 			"no TUFT tiles authored; the case is vacuous").is_true()
 	for entry in tufts:
+		# Per ENTRY, not once for the case: tufts live in more than one source since #891, and a
+		# region read out of the wrong source's atlas is a comparison against a different tile.
+		var baked := _baked_atlas(board, entry.source)
+		assert_object(baked).override_failure_message(
+				"the meshlib carries no baked atlas for source %d" % [entry.source]).is_not_null()
 		var source := tiles.get_source(entry.source) as TileSetAtlasSource
 		var art := _readable(source.texture)
 		var region := source.get_tile_texture_region(entry.coords, 0)
