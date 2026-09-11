@@ -2,6 +2,7 @@
 
 [ext_resource type="Script" uid="uid://dle5ob08qngde" path="res://Classes/presentation/EffectLook.gd" id="1_y0x1n"]
 [ext_resource type="Script" uid="uid://ddqeee7njjjq2" path="res://Classes/weapons/WeaponAttackData.gd" id="2_wad"]
+[ext_resource type="AudioStream" uid="uid://j5otcgvsdjib" path="res://Audio/SFX/springspear.mp3" id="3_q46o7"]
 
 [resource]
 script = ExtResource("2_wad")
@@ -14,4 +15,5 @@ display_name = "Stab"
 power = 3
 vertical_rule = 1
 damage_kind = 2
+sound = ExtResource("3_q46o7")
 metadata/_custom_type_script = "uid://ddqeee7njjjq2"

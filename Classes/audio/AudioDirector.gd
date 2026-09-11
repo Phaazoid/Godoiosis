@@ -23,8 +23,9 @@ class_name AudioDirector
 # camera may fly anywhere and the sound is unaffected. Going positional later changes the play site,
 # not this design.
 
-# One cue this slice. Per-weapon sound is the next one (WeaponData.icon's shape, a `sound` beside
-# it); the lethality rungs are the one after.
+# The FALLBACK voice -- what a blow sounds like when its attack authors nothing, which is most of
+# them. An attack's own sound is `AttackData.sound` and beats this; the lethality rungs (a kill, a
+# Crisis) are the next slice.
 const IMPACT: AudioStream = preload("res://Audio/SFX/impact.mp3")
 
 const BUS_NAME := "SFX"
@@ -75,14 +76,28 @@ func _process(_delta: float) -> void:
 # ONE PER VOLLEY -- OrderExecutor emits once per blast however many it hits (#887), so the
 # granularity is the project's own rather than a choice made here.
 func _on_volley_struck(attack: AttackAction) -> void:
-	if not plays_impact(attack):
-		return
-	play(IMPACT)
+	var cue := cue_for(attack)
+	if cue != null:
+		play(cue)
 
 
-# Does this blow make the impact sound? NULL-TOLERANT: fired_attack is null for the bare-fists
-# fallback, and a bare fist damages, so null plays. A heal or a pure-utility attack does not --
-# volley_struck fires for those too, and a heal that punches is the bug this refuses.
+# What this blow sounds like: the attack's OWN voice if it authors one, else the generic impact if
+# it damages, else nothing.
+#
+# THE DAMAGE GATE NOW GOVERNS THE DEFAULT ALONE, and that is a deliberate narrowing (#136 slice 2).
+# A generic punch is wrong on a heal; an AUTHORED heal chime is not, and there is no reason the data
+# cannot say so. Nothing changes today -- no heal authors a sound -- so this widens what is
+# expressible without moving any live behaviour.
+static func cue_for(attack: AttackAction) -> AudioStream:
+	var fired := attack.fired_attack
+	if fired != null and fired.sound != null:
+		return fired.sound
+	return IMPACT if plays_impact(attack) else null
+
+
+# Does this blow make the GENERIC impact sound? NULL-TOLERANT: fired_attack is null for the
+# bare-fists fallback, and a bare fist damages, so null plays. A heal or a pure-utility attack does
+# not -- volley_struck fires for those too, and a heal that punches is the bug this refuses.
 static func plays_impact(attack: AttackAction) -> bool:
 	var fired := attack.fired_attack
 	if fired == null:
@@ -124,6 +139,16 @@ func voices_playing() -> int:
 		if player.playing:
 			n += 1
 	return n
+
+
+# WHICH streams are sounding, not just how many -- the seam a per-weapon case asserts identity
+# through, so a test never reaches into the pool itself.
+func streams_playing() -> Array[AudioStream]:
+	var live: Array[AudioStream] = []
+	for player in _players:
+		if player.playing and player.stream != null:
+			live.append(player.stream)
+	return live
 
 
 func pool_size() -> int:
