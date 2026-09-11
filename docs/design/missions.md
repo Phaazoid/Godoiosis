@@ -2,7 +2,7 @@
 
 **Status: ALL FOUR SLICES BUILT 2026-07-28 ([#96](https://github.com/Phaazoid/Godoiosis/issues/96)).** Filed 2026-07-27, when the project acquired a win condition for the first time. Before this, Iosis had ten interlocking systems and no way to finish a battle — which meant a design question could be answered *"is this coherent?"* but never *"does this improve play?"*
 
-**Canon checked through #860 (2026-09-09).**
+**Canon checked through #860 (2026-09-09); the visible-leash note added 2026-09-11.**
 
 ## What a mission is
 
@@ -286,6 +286,8 @@ Zones now supply **geometry only**. The cost is a second source of truth, which 
 ### Zones overlap, and a zone's kind locks at creation (2026-08-12)
 
 Two authoring rules replaced the original one-zone-per-cell store: **zones overlap freely** — the motivating case is a patrol area containing a capture point — and **a zone's kind is fixed when its first cell is painted** (repainting never retypes; changing kind = delete and repaint, which closes the trap where continuing to paint under an existing name with a different Kind picked silently converted the whole zone). Consequences: "the zone at this cell" stopped being a well-formed question — the kind-sensitive reader is `MissionController.capturable_zone_at(cell)` (the uncaptured CAPTURE zone there, which the menu gate and `CaptureAction`'s stamp both read) — and brush erase is **scoped to the picked zone**, since an unscoped erase could never carve one zone out from under another. Where two capture zones overlap, claiming one leaves the other capturable from the shared cell.
+
+**And the overlap is how a leash becomes VISIBLE (The Causeway, 2026-09-11).** A PATROL zone draws only while the Tile Brush tab is up -- deliberately, so AI internals stay out of play (see `Kind.DEPLOYMENT` below for that gate's reasoning) -- which means a Sentry's boundary is invisible to the player. That is harmless on a map where the leash is incidental and load-bearing on one where it IS the design: a lure-proof zone the player cannot see is a rule they can only learn by being shot for crossing it. The fix needs no code and no second visibility input, because the motivating case above already allows it: **paint a CAPTURE zone over the same cells**. CAPTURE is drawn, so the glowing objective and the boundary become one mark, and "the ground you must take is the ground they hold" is a sentence the board says by itself. Worth reaching for whenever a Sentry's leash is something the player is meant to plan around rather than discover.
 
 ### `Kind.DEPLOYMENT` — where the player's force starts (#736)
 
