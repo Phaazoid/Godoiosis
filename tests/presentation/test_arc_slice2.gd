@@ -158,8 +158,8 @@ func test_a_body_sparks_when_the_current_reaches_it() -> void:
 	ArcLightning.arc_step_delay = 0.25
 	var links := _river(3)
 
-	assert_float(ArcLightning.spark_delay_for(Vector2i(2, 0), links)).is_equal_approx(0.6, 0.001)
-	assert_float(ArcLightning.spark_delay_for(Vector2i(0, 0), links)).override_failure_message(
+	assert_float(ArcLightning.spark_delay_for(Vector2i(2, 0), links, EffectLook.new())).is_equal_approx(0.6, 0.001)
+	assert_float(ArcLightning.spark_delay_for(Vector2i(0, 0), links, EffectLook.new())).override_failure_message(
 		"a body standing in the blast itself waited for a hop").is_equal(0.0)
 
 

@@ -45,7 +45,7 @@ func _with_named_shape() -> AttackShape:
 	_editor._mode = AttackEditorTool.Mode.WEAPON_ATTACK
 	_editor.current = WeaponAttackData.new()
 	_editor.current.attack_shape = library
-	_editor._stage_shape()
+	_editor._stage_fields()
 	_editor.populate()
 	return library
 
@@ -82,14 +82,14 @@ func _row(text: String) -> int:
 # every other attack is still holding, so the fork would drag them all with it.
 func test_the_grid_edits_a_copy_and_leaves_the_library_object_alone() -> void:
 	var library := _with_named_shape()
-	assert_object(_editor._shape_copy).override_failure_message(
+	assert_object(_editor._shape.staged).override_failure_message(
 		"the editor is editing the library object itself -- a click would reach every attack using it"
 	).is_not_same(library)
 	assert_object(_editor.current.attack_shape).override_failure_message(
 		"the attack stopped referencing the library file, so its save would embed a copy"
 	).is_same(library)
 
-	_editor._shape_copy.stamp = [Vector2i(0, -1), Vector2i(0, -2)]
+	_staged().stamp = [Vector2i(0, -1), Vector2i(0, -2)]
 	assert_int(library.stamp.size()).override_failure_message(
 		"a grid edit reached the shared shape before Update").is_equal(1)
 
@@ -100,8 +100,8 @@ func test_an_unnamed_shape_is_edited_in_place() -> void:
 	_editor._mode = AttackEditorTool.Mode.WEAPON_ATTACK
 	_editor.current = WeaponAttackData.new()
 	_editor.current.attack_shape = P.shape([Vector2i.ZERO] as Array[Vector2i])
-	_editor._stage_shape()
-	assert_object(_editor._shape_copy).is_same(_editor.current.attack_shape)
+	_editor._stage_fields()
+	assert_object(_editor._shape.staged).is_same(_editor.current.attack_shape)
 
 
 # --- the picker assigns BY REFERENCE ------------------------------------------------------------
@@ -127,7 +127,7 @@ func test_picking_none_leaves_the_attack_shapeless_rather_than_empty() -> void:
 	_with_named_shape()
 	_picker().item_selected.emit(_row(AttackEditorTool.NO_SHAPE_KEY))
 	assert_object(_editor.current.attack_shape).is_null()
-	assert_object(_editor._shape_copy).is_null()
+	assert_object(_editor._shape.staged).is_null()
 	assert_array(Reach.get_affected_cells_from(null, Vector2i.ZERO, Vector2i(1, 0), _editor.current, null)) \
 		.contains_exactly([Vector2i(1, 0)])
 
@@ -137,7 +137,7 @@ func test_the_none_row_is_first_so_a_shapeless_attack_displays_honestly() -> voi
 	# ordering IS the mechanism, exactly as in DevWidgets._add_resource_swapper (#807).
 	_editor._mode = AttackEditorTool.Mode.WEAPON_ATTACK
 	_editor.current = WeaponAttackData.new()
-	_editor._stage_shape()
+	_editor._stage_fields()
 	_editor.populate()
 	var picker := _picker()
 	assert_str(picker.get_item_text(0)).is_equal(AttackEditorTool.NO_SHAPE_KEY)
@@ -151,9 +151,9 @@ func test_save_as_re_points_this_attack_and_leaves_every_other_holder_alone() ->
 	var library := _with_named_shape()
 	var other := WeaponAttackData.new()
 	other.attack_shape = library          # a second attack sharing the same file
-	_editor._shape_copy.stamp = [Vector2i(0, -1), Vector2i(0, -2)]
+	_staged().stamp = [Vector2i(0, -1), Vector2i(0, -2)]
 
-	_editor._on_shape_save_as("__test_forked_shape")
+	_editor._shape._save_as("__test_forked_shape")
 	var forked_path := AttackShapeCatalog.LIBRARY_DIR + "__test_forked_shape.tres"
 
 	assert_bool(FileAccess.file_exists(forked_path)).is_true()
@@ -172,9 +172,9 @@ func test_save_as_re_points_this_attack_and_leaves_every_other_holder_alone() ->
 # at a stamp the dev never drew.
 func test_updating_writes_the_shape_file_too_and_the_attack_keeps_referencing_it() -> void:
 	var library := _with_named_shape()
-	_editor._shape_copy.stamp = [Vector2i(0, -1), Vector2i(0, -2)]
+	_staged().stamp = [Vector2i(0, -1), Vector2i(0, -2)]
 
-	assert_bool(_editor._save_named_shape()).is_true()
+	assert_bool(_editor._save_shared_files()).is_true()
 
 	assert_int(library.stamp.size()).override_failure_message(
 		"Update did not reach the object the board is holding").is_equal(2)
@@ -188,14 +188,14 @@ func test_an_unnamed_shape_needs_no_second_write() -> void:
 	_editor._mode = AttackEditorTool.Mode.WEAPON_ATTACK
 	_editor.current = WeaponAttackData.new()
 	_editor.current.attack_shape = P.shape([Vector2i.ZERO] as Array[Vector2i])
-	_editor._stage_shape()
-	assert_bool(_editor._save_named_shape()).is_true()
-	assert_str(_editor._shape_victim()).is_empty()
+	_editor._stage_fields()
+	assert_bool(_editor._save_shared_files()).is_true()
+	assert_str(_editor._shared_victims()).is_empty()
 
 
 func test_the_overwrite_confirm_names_the_shared_shape() -> void:
 	_with_named_shape()
-	assert_str(_editor._shape_victim()).override_failure_message(
+	assert_str(_editor._shared_victims()).override_failure_message(
 		"the confirm does not say a shared file is about to be written").contains("__test_library_shape.tres")
 
 
@@ -210,7 +210,7 @@ func test_users_of_finds_a_referrer_a_catalog_cannot_see() -> void:
 	var found_any := false
 	for key in shipped:
 		var shape: AttackShape = shipped[key]
-		if not AttackShapeCatalog.users_of(shape.resource_path).is_empty():
+		if not ResourceCatalog.users_of(shape.resource_path).is_empty():
 			found_any = true
 	assert_bool(found_any).override_failure_message(
 		"no shipped shape has a single referrer, so the caption and the delete gate are both blind"
@@ -220,4 +220,10 @@ func test_users_of_finds_a_referrer_a_catalog_cannot_see() -> void:
 func test_an_unsaved_shape_has_no_users_rather_than_matching_everything() -> void:
 	# The empty path is the one input that could match every file on the disk, which would make a
 	# brand new shape look shared and refuse to delete.
-	assert_array(AttackShapeCatalog.users_of("")).is_empty()
+	assert_array(ResourceCatalog.users_of("")).is_empty()
+
+
+# The staged shape, typed. `LibraryField.staged` is a Resource -- the flow is shared with the look
+# rows since #900 -- so a case reaching for the stamp names the kind it is asking about.
+func _staged() -> AttackShape:
+	return _editor._shape.staged as AttackShape

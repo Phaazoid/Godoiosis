@@ -48,3 +48,43 @@ static func by_file(dir: String, type) -> Dictionary:
 		if is_instance_of(res, type):
 			found[file.get_basename()] = res
 	return found
+
+
+# The roots a referrer can live under. Resources/ holds the attacks, the families and the looks;
+# Scenarios/ holds missions, which EMBED attacks -- and an embedded attack is exactly the referrer
+# a catalog scan cannot see, which is why this reads files rather than asking a catalog.
+const SCANNED_ROOTS: Array[String] = ["res://Resources/", "res://Scenarios/"]
+
+# Which FILES name this resource, by basename. Read as text rather than by loading: a mission is
+# expensive to load and its embedded attacks are not in any catalog anyway, and both forms Godot
+# writes a reference in (`uid=` plus `path=`) carry the path, so one substring answers both.
+#
+# It is what a dev tool's "used by" caption says out loud before a shared edit, and what refuses to
+# delete a library file something still holds -- a dangling ext_resource is a hard PARSE error that
+# takes the whole referring file down, never a field that comes back null.
+#
+# LIVED ON AttackShapeCatalog until #900. The question is about a path and a .tres rather than
+# about shapes, so the second library (EffectLook) wanted the identical answer, not a copy of it.
+static func users_of(resource_path: String) -> Array[String]:
+	var users: Array[String] = []
+	if resource_path == "":
+		return users
+	for root in SCANNED_ROOTS:
+		_collect_users(root, resource_path, users)
+	users.sort()
+	return users
+
+static func _collect_users(dir_path: String, resource_path: String, users: Array[String]) -> void:
+	var dir := DirAccess.open(dir_path)
+	if dir == null:
+		return
+	for sub in dir.get_directories():
+		_collect_users(dir_path.path_join(sub), resource_path, users)
+	for file in ResourceDir.files_with_extension(dir_path, RESOURCE_EXT):
+		var path := dir_path.path_join(file)
+		# NO self-reference guard, and that is measured rather than assumed: a .tres never names its
+		# own path -- the [gd_resource] header carries a uid and nothing else -- so a file can never
+		# be found as its own user. One sat here and was DEAD; deleting it reddened nothing, which is
+		# what named the file format as the mechanism. The #807 select(0) lesson, one ticket on.
+		if FileAccess.get_file_as_string(path).contains(resource_path):
+			users.append(file)

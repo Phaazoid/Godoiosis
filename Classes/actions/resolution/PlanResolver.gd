@@ -704,15 +704,25 @@ static func _source_elements(action: AttackAction) -> Array[Elemental.Element]:
 # sites holding no AttackAction -- a counter derives from (actor, counter_attack), the hover preview
 # and the AI from (attacker, live pick) -- and a second copy of the Transmutation-vs-weapon branch is
 # exactly the duplicate Law #4 refuses. _source_elements above is its one-argument reading.
+#
+# TWO LAYERS SINCE #900, and the fork on kind moved DOWN into the attacks: what an attack AUTHORS is
+# `AttackData.authored_elements`, which the Attack Editor also asks (it has a file and no wielder),
+# and what a WIELDER adds is the fitted mods on top. This function used to branch on the subclass
+# itself, i.e. a second answer to a question the resources are better placed to answer -- and the
+# editor would have had to write a third.
 static func elements_of(actor: Unit, attack: AttackData) -> Array[Elemental.Element]:
-	if attack is TransmutationData:
-		return (attack as TransmutationData).get_elements()
-	if attack is WeaponAttackData and actor != null and is_instance_valid(actor):
-		var weapon := actor.get_equipped_weapon() as WeaponInstance
-		if weapon != null:
-			return weapon.get_elements(actor, attack as WeaponAttackData)
 	var none: Array[Elemental.Element] = []
-	return none
+	if attack == null:
+		return none
+	if attack is WeaponAttackData:
+		# A weapon attack's elements are the WEAPON's answer -- the authored one composed with
+		# whatever fitted mods add. With no weapon in hand nothing is being delivered, which is the
+		# bare-fists reading this has always taken and is deliberately NOT the authored element.
+		if actor == null or not is_instance_valid(actor):
+			return none
+		var weapon := actor.get_equipped_weapon() as WeaponInstance
+		return none if weapon == null else weapon.get_elements(actor, attack as WeaponAttackData)
+	return attack.authored_elements()
 
 # hits_map() lives on the shared AttackData base, so both kinds answer it directly — and with the
 # fallback gone, WeaponInstance.hits_map()'s only remaining job was that fallback, so it's deleted.

@@ -41,7 +41,34 @@ static func check(attack: AttackData) -> Array[Dictionary]:
 	_check_blend_totals(attack, found)
 	_check_kind_is_authored(attack, found)
 	_check_empowered_form_is_flat(attack, found)
+	_check_effect_looks_match(attack, found)
 	return found
+
+
+# A look slot that has come loose from the attack wearing it (#900) -- two faults, both silent.
+#
+# A look stamps the ELEMENT it describes and the picker only ever offers matching ones, so a
+# mismatch means the .tres was hand-edited or an element was retyped underneath it; the effect
+# reading that slot would wear another element's numbers. And a slot for an element this attack no
+# longer carries is simply never read -- harmless, but it is also the tell that the sigils or the
+# damage type moved and somebody's authored look went quiet.
+#
+# DEGRADES for both: the attack fires correctly either way, it just does not look the way its file
+# says. A BLOCKS here would also refuse the one panel that can repair it, which is the tier ruling
+# `_check_blend_totals` already made for the same reason.
+static func _check_effect_looks_match(attack: AttackData, found: Array[Dictionary]) -> void:
+	var carried := attack.authored_elements()
+	for element: Elemental.Element in attack.effect_looks:
+		var look: EffectLook = attack.effect_looks[element]
+		if look == null:
+			continue
+		var name := Elemental.display_name(element)
+		if look.element != element:
+			_add(found, Severity.DEGRADES, "the %s look is authored for %s -- it would play %s's values"
+				% [name, Elemental.display_name(look.element), Elemental.display_name(look.element)])
+		elif not carried.has(element):
+			_add(found, Severity.DEGRADES,
+				"a %s look is attached but this attack carries no %s -- nothing will read it" % [name, name])
 
 
 # The supercharge substitution reads ONE level (#97): WeaponInstance.effective_main swaps the main

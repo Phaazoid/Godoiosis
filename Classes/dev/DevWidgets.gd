@@ -115,13 +115,21 @@ static func add_label(container: Node, text: String) -> void:
 # one answer: the copies are gone and the colour lives here with the only code that reads it.
 const HEADING_COLOR := Color(1, 0.83, 0.4, 1)   # the Look and Scenario tabs' heading gold
 
-static func add_heading(container: Node, text: String) -> void:
+#
+# Returns the nodes it added -- the rule and its label -- so a caller that can HIDE a whole section
+# has something to hide (#900). Both, because a lone rule floating over nothing reads as a bug.
+static func add_heading(container: Node, text: String) -> Array[Node]:
+	var added: Array[Node] = []
 	if container.get_child_count() > 0:
-		container.add_child(HSeparator.new())
+		var rule := HSeparator.new()
+		container.add_child(rule)
+		added.append(rule)
 	var heading := Label.new()
 	heading.text = text
 	heading.add_theme_color_override("font_color", HEADING_COLOR)
 	container.add_child(heading)
+	added.append(heading)
+	return added
 
 # Returns the SpinBox (add_slider/add_option/add_lineedit's convention), so a caller can narrow its
 # range or write a value back into the widget on a refresh.
@@ -537,7 +545,15 @@ static func add_property_row(container: Node, resource: Resource, prop_name: Str
 #
 # The connection is dropped with the form -- a lambda has no object to auto-disconnect against, so
 # it rides the first registered row's tree_exiting, exactly as the grid's caption sync does.
-static func bind_hidden_fields(resource: Resource, rows: Dictionary) -> void:
+#
+# `headings` is the optional second half (#900): `{"nodes": [...], "fields": PackedStringArray}` per
+# section whose title should hide when every row under it does, so a heading drawn over nothing goes
+# with them. A LIST of entries rather than a node-keyed dictionary, because GDScript hashes an Array
+# key BY VALUE -- a fine way to lose a heading the day two of them hold equal spans.
+#
+# The CALLER decides which headings are eligible; it is the only one that knows what else it drew
+# under each. This applies the rule and does not derive it.
+static func bind_hidden_fields(resource: Resource, rows: Dictionary, headings: Array[Dictionary] = []) -> void:
 	if resource == null or not resource.has_method("hidden_fields"):
 		return
 	var anchor: Node = null
@@ -556,6 +572,17 @@ static func bind_hidden_fields(resource: Resource, rows: Dictionary) -> void:
 				var control := node as Control
 				if control != null:
 					control.visible = shown
+		for heading: Dictionary in headings:
+			var governed: PackedStringArray = heading["fields"]
+			var any := false
+			for field: String in governed:
+				if not hidden.has(field):
+					any = true
+					break
+			for node: Node in heading["nodes"]:
+				var control := node as Control
+				if control != null:
+					control.visible = any
 	apply.call()
 	resource.changed.connect(apply)
 	anchor.tree_exiting.connect(func() -> void:

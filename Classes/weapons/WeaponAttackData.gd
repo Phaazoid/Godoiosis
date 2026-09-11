@@ -9,6 +9,15 @@ extends AttackData
 
 @export var elemental_damage_type: Elemental.Element = Elemental.Element.NONE
 
+
+# A weapon attack authors exactly one element (#900). A fitted mod may ADD another, which belongs
+# to the weapon rather than to this file -- PlanResolver.elements_of composes that on top.
+func authored_elements() -> Array[Elemental.Element]:
+	var found: Array[Elemental.Element] = []
+	if elemental_damage_type != Elemental.Element.NONE:
+		found.append(elemental_damage_type)
+	return found
+
 # Which stats this attack's damage scales off, as percentage weights across STR/DEX/PER/CON.
 # MOVED here off WeaponData by #485 (2026-08-25): the blend was a property of the whole FAMILY, so
 # every attack a weapon owned scaled identically and there was no reason to prefer one over another.

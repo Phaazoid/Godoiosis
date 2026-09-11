@@ -58,7 +58,7 @@ func _ready() -> void:
 	cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	process_material = _process_material()
 	draw_pass_1 = _spark_mesh()
-	apply()
+	apply(EffectLook.new())
 
 
 # Where the sparks can be, so the renderer does not cull them. BoardSpace owns the volume since
@@ -72,41 +72,44 @@ func cover(board: AABB) -> void:
 # Re-push everything a knob can move: `amount` and the material's fields are node state rather than
 # values a burst reads as it goes, so a knob that only applied to the NEXT burst is not a knob
 # (#324's rule).
-func apply() -> void:
-	amount = maxi(1, sparks_per_victim * CONCURRENT_BURSTS)
-	lifetime = maxf(spark_lifetime, 0.05)
+func apply(look: EffectLook) -> void:
+	amount = maxi(1, look.whole("sparks_per_victim", sparks_per_victim) * CONCURRENT_BURSTS)
+	lifetime = maxf(look.num("spark_lifetime", spark_lifetime), 0.05)
+	var drag := look.num("spark_drag", spark_drag)
 	var mat := process_material as ParticleProcessMaterial
 	if mat != null:
-		mat.gravity = Vector3(0.0, -spark_gravity, 0.0)
-		mat.damping_min = spark_drag
-		mat.damping_max = spark_drag
-		mat.color = spark_color
+		mat.gravity = Vector3(0.0, -look.num("spark_gravity", spark_gravity), 0.0)
+		mat.damping_min = drag
+		mat.damping_max = drag
+		mat.color = look.tint("spark_color", spark_color)
 		mat.scale_min = 1.0
 		mat.scale_max = 1.0
 	var mesh := draw_pass_1 as QuadMesh
 	if mesh != null:
-		mesh.size = Vector2(spark_size, spark_size)
+		var size := look.num("spark_size", spark_size)
+		mesh.size = Vector2(size, size)
 
 
 # Throw a burst at `origin` -- a world point, already carrying whatever offset the tear-out has put
 # the ground under. `key` separates one burst from another; the caller derives it, this spends it.
-func burst(origin: Vector3, key: int) -> void:
-	if not sparks:
+func burst(origin: Vector3, key: int, look: EffectLook) -> void:
+	if not look.flag("sparks", sparks):
 		return
 	last_origin = origin
 	last_key = key
 	burst_count += 1
 	var flags := EMIT_FLAG_POSITION | EMIT_FLAG_VELOCITY
-	for spark in fan(origin, key):
+	for spark in fan(origin, key, look):
 		emit_particle(Transform3D(Basis(), spark["position"]), spark["velocity"],
 				Color.WHITE, Color.BLACK, flags)
 
 
 # One burst, as data -- the only part of it a headless case can see. The scatter itself is
 # ParticleFan's, shared with the slam dust; what is this effect's own is every number handed in.
-static func fan(origin: Vector3, key: int) -> Array[Dictionary]:
-	return ParticleFan.scatter(origin, key, sparks_per_victim, spark_spread, spark_speed,
-			spark_upward, spark_size * 0.5)
+static func fan(origin: Vector3, key: int, look: EffectLook) -> Array[Dictionary]:
+	return ParticleFan.scatter(origin, key, look.whole("sparks_per_victim", sparks_per_victim),
+			look.num("spark_spread", spark_spread), look.num("spark_speed", spark_speed),
+			look.num("spark_upward", spark_upward), look.num("spark_size", spark_size) * 0.5)
 
 
 # The seed for one victim's burst: the cell it was standing on and which strike this was, so two

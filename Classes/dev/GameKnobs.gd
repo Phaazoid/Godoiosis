@@ -566,102 +566,109 @@ const CLASS_KNOBS: Array[Dictionary] = [
 	#
 	# The one value NOT here is the corona's HUE -- it reads Shock's row above, because the colour of
 	# the element is one decision (#422) and this effect is not entitled to a second opinion.
-	{"group": "Shock", "label": "Sky strike", "static": "sky_strike", "script": ARC_LIGHTNING_SCRIPT,
+	#
+	# SIX GROUPS, ALL ON THE ELEMENTAL TAB (#900). Thirty-five rows under one heading was already
+	# past the ~15 where Water took its own sub-tab, and the split costs six GROUP_TABS lines and no
+	# reordering -- each run of rows was already contiguous and in this order. It also hands the
+	# Attack Editor its own sub-headings from this one store: a per-attack look draws the rows of
+	# these groups, so the panel that tunes the default and the panel that overrides it cannot
+	# disagree about how the values are arranged, and neither holds a second table.
+	{"group": "Shock: the strike", "label": "Sky strike", "static": "sky_strike", "script": ARC_LIGHTNING_SCRIPT,
 		"tip": "Whether the bolt comes down out of the sky onto the aimed cell at all. It is drawn down the attack.s OWN trajectory, so a rune authored to clear any height falls almost vertically and one authored flat draws a horizontal rod instead -- there is nothing to tune about the angle because the content already decided it."},
-	{"group": "Shock", "label": "Strike height", "static": "strike_height", "script": ARC_LIGHTNING_SCRIPT,
+	{"group": "Shock: the strike", "label": "Strike height", "static": "strike_height", "script": ARC_LIGHTNING_SCRIPT,
 		"min": 0.0, "max": 40.0, "step": 0.5,
 		"tip": "How much of that trajectory is drawn, in cells above the tile it lands on. Zap.s authored clearance puts the apex some fifty cells up, so this is really 'how tall is the strike' -- past about twelve it leaves the top of any framing the camera holds."},
-	{"group": "Shock", "label": "Strike lifetime", "static": "strike_life", "script": ARC_LIGHTNING_SCRIPT,
+	{"group": "Shock: the strike", "label": "Strike lifetime", "static": "strike_life", "script": ARC_LIGHTNING_SCRIPT,
 		"min": 0.05, "max": 2.0, "step": 0.05,
 		"tip": "How long the sky bolt lasts. Judge it against the volley.s own beat rather than on its own: a strike shorter than the camera.s push-in is over before anyone has looked at it."},
-	{"group": "Shock", "label": "Arc over the water", "static": "arcs", "script": ARC_LIGHTNING_SCRIPT,
+	{"group": "Shock: the current", "label": "Arc over the water", "static": "arcs", "script": ARC_LIGHTNING_SCRIPT,
 		"tip": "Whether the current itself is drawn -- a bolt over every conducting cell the flood reached, occupied or not. This is the half that shows which tiles are LIVE, so switching it off leaves the rule invisible again even though it still fires."},
-	{"group": "Shock", "label": "Bolt lift", "static": "bolt_lift", "script": ARC_LIGHTNING_SCRIPT,
+	{"group": "Shock: the current", "label": "Bolt lift", "static": "bolt_lift", "script": ARC_LIGHTNING_SCRIPT,
 		"min": 0.0, "max": 2.0, "step": 0.01,
 		"tip": "How far above the surface the arcing bolts hang, in cells. At 0 they lie on the water and read as markup; the whole point of the effect is that the current is ABOVE the water, so this wants to be clearly off the surface without floating free of it."},
-	{"group": "Shock", "label": "Bolt lifetime", "static": "bolt_life", "script": ARC_LIGHTNING_SCRIPT,
+	{"group": "Shock: the current", "label": "Bolt lifetime", "static": "bolt_life", "script": ARC_LIGHTNING_SCRIPT,
 		"min": 0.05, "max": 2.0, "step": 0.05,
 		"tip": "How long one hop of the current lasts. Each hop lights on its own schedule, so a long life plus a long step delay leaves the whole network standing at once, and a short life plus a long delay draws a travelling pulse."},
-	{"group": "Shock", "label": "Strike-to-current gap", "static": "strike_delay", "script": ARC_LIGHTNING_SCRIPT,
+	{"group": "Shock: the current", "label": "Strike-to-current gap", "static": "strike_delay", "script": ARC_LIGHTNING_SCRIPT,
 		"min": 0.0, "max": 1.0, "step": 0.01,
 		"tip": "How long the current waits after the sky bolt before it starts travelling. Small values read as one event; larger ones read as a strike and then a consequence."},
-	{"group": "Shock", "label": "Step delay", "static": "arc_step_delay", "script": ARC_LIGHTNING_SCRIPT,
+	{"group": "Shock: the current", "label": "Step delay", "static": "arc_step_delay", "script": ARC_LIGHTNING_SCRIPT,
 		"min": 0.0, "max": 0.5, "step": 0.01,
 		"tip": "How long each ring of the flood waits behind the one before it. THIS IS THE DIAL THAT MAKES THE CURRENT TRAVEL -- at 0 the whole network lights at once and reads as a shape rather than a spread. The rule.s own reach is three cells, so the far edge is three of these behind the blast."},
-	{"group": "Shock", "label": "Bolt segments", "static": "bolt_segments", "script": ARC_LIGHTNING_SCRIPT,
+	{"group": "Shock: one bolt", "label": "Bolt segments", "static": "bolt_segments", "script": ARC_LIGHTNING_SCRIPT,
 		"min": 1.0, "max": 24.0, "step": 1.0,
 		"tip": "How many straight pieces one bolt is made of. At 1 it is a clean line with no kink at all; high counts turn the kinks into noise the eye reads as a blur rather than as lightning. Costs two vertices each."},
-	{"group": "Shock", "label": "Bolt jag", "static": "bolt_jag", "script": ARC_LIGHTNING_SCRIPT,
+	{"group": "Shock: one bolt", "label": "Bolt jag", "static": "bolt_jag", "script": ARC_LIGHTNING_SCRIPT,
 		"min": 0.0, "max": 0.6, "step": 0.01,
 		"tip": "How far the kinks throw the bolt off its straight line, as a fraction of that bolt.s own length -- so a one-cell hop and a tall strike bend the same amount relative to themselves. At 0 every bolt is a rod."},
-	{"group": "Shock", "label": "Flicker rate", "static": "flicker_rate", "script": ARC_LIGHTNING_SCRIPT,
+	{"group": "Shock: one bolt", "label": "Flicker rate", "static": "flicker_rate", "script": ARC_LIGHTNING_SCRIPT,
 		"min": 0.0, "max": 60.0, "step": 1.0,
 		"tip": "How many times a second a bolt re-rolls its kinks. This is the only channel that strobes, so it is the one the photosensitivity setting freezes -- with that setting on the bolt still draws, holds and fades, it simply holds ONE shape."},
-	{"group": "Shock", "label": "Afterimage", "static": "afterimage", "script": ARC_LIGHTNING_SCRIPT,
+	{"group": "Shock: one bolt", "label": "Afterimage", "static": "afterimage", "script": ARC_LIGHTNING_SCRIPT,
 		"min": 0.0, "max": 1.0, "step": 0.05,
 		"tip": "How much of the flash the tail hangs on to. At 0 the bolt is a hard pop that is gone a third of the way through its life; at 1 it fades evenly over the whole life, which is what keeps the network readable long enough to see who got caught."},
-	{"group": "Shock", "label": "Core colour", "static": "core_color", "script": ARC_LIGHTNING_SCRIPT,
+	{"group": "Shock: one bolt", "label": "Core colour", "static": "core_color", "script": ARC_LIGHTNING_SCRIPT,
 		"tip": "The hot line down the middle of every bolt. Near-white on purpose: the violet is the corona.s job, and a core tinted toward the element loses the hot look that reads as electricity. Its ALPHA is the whole effect.s master strength."},
-	{"group": "Shock", "label": "Bolt width", "static": "bolt_width", "script": ARC_LIGHTNING_SCRIPT,
+	{"group": "Shock: one bolt", "label": "Bolt width", "static": "bolt_width", "script": ARC_LIGHTNING_SCRIPT,
 		"min": 0.01, "max": 0.5, "step": 0.005,
 		"tip": "How wide the core is, in cells. A cell is 1.0 and the tile art is 32 pixels to a cell, so 0.03 is about one art pixel -- this is the dial that decides whether a bolt reads as a thread or as a beam."},
-	{"group": "Shock", "label": "Corona width scale", "static": "corona_scale", "script": ARC_LIGHTNING_SCRIPT,
+	{"group": "Shock: one bolt", "label": "Corona width scale", "static": "corona_scale", "script": ARC_LIGHTNING_SCRIPT,
 		"min": 1.0, "max": 10.0, "step": 0.1,
 		"tip": "How much wider the violet corona is than the core it wraps. Below about 2 the two read as one thick bolt; high values make a haze the core sits inside."},
-	{"group": "Shock", "label": "Core brightness", "static": "core_intensity", "script": ARC_LIGHTNING_SCRIPT,
+	{"group": "Shock: one bolt", "label": "Core brightness", "static": "core_intensity", "script": ARC_LIGHTNING_SCRIPT,
 		"min": 0.5, "max": 12.0, "step": 0.1,
 		"tip": "How far past white the core is pushed. The diorama.s glow threshold is 1.2, so anything above that BLOOMS -- which is where the HD look comes from, not from more geometry. Below 1.2 the bolt is flat colour."},
-	{"group": "Shock", "label": "Corona brightness", "static": "corona_intensity", "script": ARC_LIGHTNING_SCRIPT,
+	{"group": "Shock: one bolt", "label": "Corona brightness", "static": "corona_intensity", "script": ARC_LIGHTNING_SCRIPT,
 		"min": 0.5, "max": 12.0, "step": 0.1,
 		"tip": "The same push for the violet wrap. Keep it under the core.s or the corona blooms out the very thing it is supposed to be framing."},
-	{"group": "Shock", "label": "Edge softness", "static": "bolt_softness", "script": ARC_LIGHTNING_SCRIPT,
+	{"group": "Shock: one bolt", "label": "Edge softness", "static": "bolt_softness", "script": ARC_LIGHTNING_SCRIPT,
 		"min": 0.2, "max": 6.0, "step": 0.1,
 		"tip": "How the bolt fades across its own width. 1 is a straight fade to the rim; higher concentrates a bright thread down the middle and lets the rest fall away. The rim always reaches zero, so a bolt never has a visible edge to read as geometry."},
-	{"group": "Shock", "label": "Screen flash", "static": "flash", "script": ARC_LIGHTNING_SCRIPT,
+	{"group": "Shock: the screen flash", "label": "Screen flash", "static": "flash", "script": ARC_LIGHTNING_SCRIPT,
 		"tip": "Whether the screen goes white for a moment when the blow lands. It drives the tear-out.s OWN white-out rather than a second rect, so the photosensitivity setting.s muted tint and its cap already apply -- and a shock struck during a tear-out is the louder of the two rather than the sum."},
-	{"group": "Shock", "label": "Flash strength", "static": "flash_peak", "script": ARC_LIGHTNING_SCRIPT,
+	{"group": "Shock: the screen flash", "label": "Flash strength", "static": "flash_peak", "script": ARC_LIGHTNING_SCRIPT,
 		"min": 0.0, "max": 1.0, "step": 0.01,
 		"tip": "How white the screen goes at the peak. 1 is a full white-out, which the tear-out uses to hide a cut and a blow almost certainly should not -- what this wants is enough to feel the hit without losing the board."},
-	{"group": "Shock", "label": "Flash length", "static": "flash_life", "script": ARC_LIGHTNING_SCRIPT,
+	{"group": "Shock: the screen flash", "label": "Flash length", "static": "flash_life", "script": ARC_LIGHTNING_SCRIPT,
 		"min": 0.02, "max": 1.0, "step": 0.01,
 		"tip": "How long the flash takes to fade. It is a hard pop with no tail on purpose -- the afterimage above is the bolts. staying readable, and a screen flash that lingers is the thing photosensitive players are protected from."},
-	{"group": "Shock", "label": "Sparks", "static": "sparks", "script": SHOCK_SPARKS_SCRIPT,
+	{"group": "Shock: sparks", "label": "Sparks", "static": "sparks", "script": SHOCK_SPARKS_SCRIPT,
 		"tip": "Whether each body the current catches throws a burst. This is the half that says WHO was caught -- the bolts say which TILES are live -- so switching it off leaves a shock that reads as terrain rather than as an attack on someone."},
-	{"group": "Shock", "label": "Sparks per body", "static": "sparks_per_victim", "script": SHOCK_SPARKS_SCRIPT,
+	{"group": "Shock: sparks", "label": "Sparks per body", "static": "sparks_per_victim", "script": SHOCK_SPARKS_SCRIPT,
 		"min": 0.0, "max": 60.0, "step": 1.0,
 		"tip": "How many motes one body throws. Costs nothing per spark -- the whole board.s sparks are one emitter and one draw -- so this is a look dial rather than a budget."},
-	{"group": "Shock", "label": "Spark speed", "static": "spark_speed", "script": SHOCK_SPARKS_SCRIPT,
+	{"group": "Shock: sparks", "label": "Spark speed", "static": "spark_speed", "script": SHOCK_SPARKS_SCRIPT,
 		"min": 0.0, "max": 12.0, "step": 0.1,
 		"tip": "How hard the sparks are thrown outward. High reads as a discharge blowing off the body; low as something smouldering on it."},
-	{"group": "Shock", "label": "Spark spread", "static": "spark_spread", "script": SHOCK_SPARKS_SCRIPT,
+	{"group": "Shock: sparks", "label": "Spark spread", "static": "spark_spread", "script": SHOCK_SPARKS_SCRIPT,
 		"min": 0.0, "max": 1.5, "step": 0.01,
 		"tip": "How far across the cell the sparks START, in cells. Well under half a cell keeps the burst reading as coming off the BODY rather than off the tile it stands on."},
-	{"group": "Shock", "label": "Spark rise", "static": "spark_upward", "script": SHOCK_SPARKS_SCRIPT,
+	{"group": "Shock: sparks", "label": "Spark rise", "static": "spark_upward", "script": SHOCK_SPARKS_SCRIPT,
 		"min": 0.0, "max": 3.0, "step": 0.05,
 		"tip": "How much of the throw goes UP rather than out. Above 1 the burst fountains, which is what separates sparks from the slam dust rolling off a landing."},
-	{"group": "Shock", "label": "Spark lifetime", "static": "spark_lifetime", "script": SHOCK_SPARKS_SCRIPT,
+	{"group": "Shock: sparks", "label": "Spark lifetime", "static": "spark_lifetime", "script": SHOCK_SPARKS_SCRIPT,
 		"min": 0.05, "max": 3.0, "step": 0.05,
 		"tip": "How long one spark lasts. Judge it against the bolt lifetime above: sparks outliving the bolt that threw them is what makes the moment read as an aftermath rather than as one event."},
-	{"group": "Shock", "label": "Spark size", "static": "spark_size", "script": SHOCK_SPARKS_SCRIPT,
+	{"group": "Shock: sparks", "label": "Spark size", "static": "spark_size", "script": SHOCK_SPARKS_SCRIPT,
 		"min": 0.005, "max": 0.5, "step": 0.005,
 		"tip": "How big one spark is, in cells. The tile art is 32 pixels to a cell, so 0.03 is about one art pixel -- mixing densities is the loudest amateur tell in HD-2D, so keep it near the slam dust.s grains."},
-	{"group": "Shock", "label": "Spark colour", "static": "spark_color", "script": SHOCK_SPARKS_SCRIPT,
+	{"group": "Shock: sparks", "label": "Spark colour", "static": "spark_color", "script": SHOCK_SPARKS_SCRIPT,
 		"tip": "What the sparks are made of. They draw ADDITIVELY, so overlapping ones get brighter rather than merely more opaque and the alpha reads as strength -- which also means a dark colour barely shows however much of it there is."},
-	{"group": "Shock", "label": "Spark gravity", "static": "spark_gravity", "script": SHOCK_SPARKS_SCRIPT,
+	{"group": "Shock: sparks", "label": "Spark gravity", "static": "spark_gravity", "script": SHOCK_SPARKS_SCRIPT,
 		"min": 0.0, "max": 30.0, "step": 0.5,
 		"tip": "How fast the sparks fall. At 0 they hang where the burst put them, which reads as a glow rather than as debris."},
-	{"group": "Shock", "label": "Spark drag", "static": "spark_drag", "script": SHOCK_SPARKS_SCRIPT,
+	{"group": "Shock: sparks", "label": "Spark drag", "static": "spark_drag", "script": SHOCK_SPARKS_SCRIPT,
 		"min": 0.0, "max": 12.0, "step": 0.1,
 		"tip": "How quickly a spark loses the speed it was thrown with. High drag makes the burst bloom and stop; zero lets every mote carry to the end of its life."},
-	{"group": "Shock", "label": "Spark height", "static": "spark_lift", "script": ARC_LIGHTNING_SCRIPT,
+	{"group": "Shock: sparks", "label": "Spark height", "static": "spark_lift", "script": ARC_LIGHTNING_SCRIPT,
 		"min": 0.0, "max": 2.0, "step": 0.05,
 		"tip": "How far up the body the burst starts, in cells. At 0 it comes off the feet; the default is roughly the torso, which is what makes it read as the UNIT sparking rather than the ground under it."},
-	{"group": "Shock", "label": "Crawl through the water", "static": "crawl", "script": ARC_LIGHTNING_SCRIPT,
+	{"group": "Shock: the crawl", "label": "Crawl through the water", "static": "crawl", "script": ARC_LIGHTNING_SCRIPT,
 		"tip": "Whether the current also shows IN the water, as filaments spreading over the surface with the same ring delay the bolts use. Ranked below the arcing above the water and built to be judged against it -- it is drawn by the water shader itself, so it only appears on water and never on a wet body standing on dry land."},
-	{"group": "Shock", "label": "Crawl lifetime", "static": "crawl_life", "script": ARC_LIGHTNING_SCRIPT,
+	{"group": "Shock: the crawl", "label": "Crawl lifetime", "static": "crawl_life", "script": ARC_LIGHTNING_SCRIPT,
 		"min": 0.05, "max": 4.0, "step": 0.05,
 		"tip": "How long one cell.s filaments last. Longer than the bolts by default: the water holding the charge after the air has cleared is what makes it read as a current passing through rather than as a second set of bolts."},
-	{"group": "Shock", "label": "Crawl strength", "static": "crawl_strength", "script": ARC_LIGHTNING_SCRIPT,
+	{"group": "Shock: the crawl", "label": "Crawl strength", "static": "crawl_strength", "script": ARC_LIGHTNING_SCRIPT,
 		"min": 0.0, "max": 1.0, "step": 0.05,
 		"tip": "How much of the water.s own colour the filaments replace at their brightest. Its HUE is not here -- it is Shock.s row under Element colours, because what colour electricity is should be one decision and not two."},
 
@@ -1191,8 +1198,14 @@ const GROUP_TABS: Dictionary[String, String] = {
 	# ...and what an element looks like in 2D UI (#685), beside what it looks like on the board.
 	"Element colours": "Elemental",
 	# ...and what a shock looks like when it LANDS (#887). Beside fire rather than in it: fire is
-	# what a burning tile looks like while it stands, this is half a second of an attack.
-	"Shock": "Elemental",
+	# what a burning tile looks like while it stands, this is half a second of an attack. SIX groups
+	# since #900 -- see the table's own note where they are declared.
+	"Shock: the strike": "Elemental",
+	"Shock: the current": "Elemental",
+	"Shock: one bolt": "Elemental",
+	"Shock: the screen flash": "Elemental",
+	"Shock: sparks": "Elemental",
+	"Shock: the crawl": "Elemental",
 	# The queue.s own invented colour, beside the element chips it has to read against (#685).
 	"Action queue": "Elemental",
 	# Playback is SIX groups on one tab (dev, 2026-08-27) -- thirty flat rows was unreadable, and a
@@ -1217,6 +1230,59 @@ const GROUP_TABS: Dictionary[String, String] = {
 	"Motion": "Playback",
 	"Action ring": "Action ring",
 }
+
+
+# --- What an ATTACK may override (#900) ----------------------------------------------------------
+#
+# Which groups of CLASS_KNOBS describe an element's attack-scoped effect, so an authored EffectLook
+# can offer exactly those rows. A PROJECTION of the table above rather than a second one: every
+# label, tooltip and range is already there, and a parallel list would be Law #4 with the ink still
+# wet on the first.
+#
+# FIRE IS DELIBERATELY ABSENT. Its group is what a BURNING TILE looks like while it stands, and a
+# tile's fire outlives the attack that lit it (#890) -- the ground owns that clock, so an attack has
+# no standing to author it. A future element with an attack-scoped effect is one line here.
+#
+# It stays on the DEV side, and that is what keeps the arrangement free: shipping code never asks
+# this. An effect reads the look's dictionary with its own static as the fallback, so GameKnobs is
+# read by dev tools alone, exactly as ObjectKnobs is.
+const LOOK_GROUPS: Dictionary[Elemental.Element, Array] = {
+	Elemental.Element.SHOCK: [
+		"Shock: the strike", "Shock: the current", "Shock: one bolt",
+		"Shock: the screen flash", "Shock: sparks", "Shock: the crawl",
+	],
+}
+
+
+# Every CLASS_KNOBS row an attack may override for this element, in the table's own order, so the
+# attack editor's sections read in the same sequence the Game tab's do.
+static func look_rows(element: Elemental.Element) -> Array[Dictionary]:
+	var rows: Array[Dictionary] = []
+	var groups: Array = LOOK_GROUPS.get(element, [])
+	if groups.is_empty():
+		return rows
+	for knob: Dictionary in CLASS_KNOBS:
+		if groups.has(knob.get("group", "")):
+			rows.append(knob)
+	return rows
+
+
+# Keys in this look that name no live row for its own element -- what a knob RENAME leaves behind,
+# and the one failure this storage shape has that the panel cannot show you (an orphaned key draws
+# no row, so the file quietly carries an override nothing reads). Swept per FILE rather than per
+# attack: a shared look would otherwise be counted once per wearer and an unworn one never at all.
+static func stale_look_keys(look: EffectLook) -> PackedStringArray:
+	var stale: PackedStringArray = []
+	if look == null:
+		return stale
+	var live: PackedStringArray = []
+	for knob: Dictionary in look_rows(look.element):
+		live.append(knob["static"])
+	for key: String in look.overrides:
+		if not live.has(key):
+			stale.append(key)
+	return stale
+
 
 # Which table an edit came from, carried through the save report. The two tables share an index
 # space, so a saved row's number alone cannot say whose baseline to move.
@@ -2054,19 +2120,18 @@ static func _refresh_guard_markers(host: Node3D) -> void:
 # The sparks live one node DOWN from the host -- ArcLightning owns them, because they fire on the
 # current's own schedule and that schedule is the effect's. So this walks two levels rather than
 # one, which is the whole difference from the dust's own sweep beside it.
+#
+# SINCE #900 IT GOES THROUGH THE ARC rather than reaching the emitter itself: the effect holds the
+# look the last strike adopted, and a re-apply that pushed the bare statics would silently strip an
+# authored look the moment any spark knob was dragged.
 static func _reapply_sparks(host: Node3D) -> void:
 	if host == null:
 		return
 	for child in host.get_children():
 		var arc := child as ArcLightning
-		if arc == null:
-			continue
-		for grandchild in arc.get_children():
-			var sparks := grandchild as ShockSparks
-			if sparks != null:
-				sparks.apply()
-				return
-		return
+		if arc != null:
+			arc.reapply_sparks()
+			return
 
 
 static func _reapply_staging_dust(host: Node3D) -> void:
