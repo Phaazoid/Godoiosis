@@ -291,3 +291,33 @@ func test_the_source_cell_is_never_taken_by_its_own_reach() -> void:
 	assert_bool(store.has_state(HERE, Terrain.TileState.SCORCHED)) \
 		.override_failure_message("the source burnt out without leaving scorched ground") \
 		.is_true()
+
+
+func test_a_wide_fire_cannot_cross_a_one_cell_lane_of_non_fuel() -> void:
+	# The firebreak, and the whole of what an authored non-flammable lane is worth (#895): the
+	# reach is ONE ring, so a lane a single cell wide is enough to stop even a fire that takes its
+	# corners -- the diagonal lands IN the lane, not across it.
+	#
+	# It is the target-side half of the fuel question, and no case above asks it: every other
+	# non-fuel case here puts the non-fuel under the SOURCE. Fire on wide ground either side of a
+	# bare column must light every cell of its own side and none of the far one.
+	var lane_x := 4
+	var store: TerrainStateManager = auto_free(TerrainStateManager.new())
+	add_child(store)
+	var wide := T.wide_fuel()
+	store.fuel_source = func(cell: Vector2i) -> TerrainReaction:
+		return null if cell.x == lane_x else wide
+	var near := Vector2i(lane_x - 1, 5)
+	_deposit(store, near, Terrain.TileState.BURNING)
+	store.tick_states()
+
+	for dy in [-1, 0, 1]:
+		assert_bool(store.has_state(Vector2i(lane_x, 5 + dy), Terrain.TileState.BURNING)) \
+			.override_failure_message("the bare lane itself caught fire") \
+			.is_false()
+		assert_bool(store.has_state(Vector2i(lane_x + 1, 5 + dy), Terrain.TileState.BURNING)) \
+			.override_failure_message("fire crossed a one-cell lane of non-fuel") \
+			.is_false()
+	assert_bool(store.has_state(near + Vector2i(-1, -1), Terrain.TileState.BURNING)) \
+		.override_failure_message("the fire stopped spreading on its own side of the lane too") \
+		.is_true()
