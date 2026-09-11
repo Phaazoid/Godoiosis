@@ -11,12 +11,17 @@ class_name PlayerSettings
 ## `docs/design/presentation-effects.md` ruled that a settings surface DRIVES that switch rather
 ## than a second one growing beside it.
 ##
-## TWO KINDS OF ROW (#418). A row is a TOGGLE unless it declares `options`, in which case it is a
-## CHOICE the player picks a value from. The kind is derived from the table rather than stated in a
-## second field, so there is nothing to keep in step. The generic three — value_of / set_value /
-## default_value — are what a caller walking DEFS uses; is_on and choice_of are typed façades over
-## them for the callers that know which kind they are reading, and since #647 each REFUSES the other
-## kind's row rather than coercing it silently (see the note above them).
+## THREE KINDS OF ROW (#418, third kind #136). A row is a TOGGLE unless it declares `options`, in
+## which case it is a CHOICE the player picks a value from, or `step`, in which case it is a LEVEL
+## the player slides. The kind is derived from the table rather than stated in a second field, so
+## there is nothing to keep in step. The generic three — value_of / set_value / default_value — are
+## what a caller walking DEFS uses; is_on, choice_of and level_of are typed façades over them for the
+## callers that know which kind they are reading, and since #647 each REFUSES the other kinds' rows
+## rather than coercing it silently (see the note above them).
+##
+## A LEVEL's bounds are FLAT keys on the entry (`min`/`max`/`step`), never a nested dictionary: DEFS
+## is a const literal and KnobSource's SETTING_DEFAULT rewriter is brace-bounded per entry, so a
+## nested `{}` here would break a save it has no way to see coming.
 ##
 ## A static class, not an autoload: this project has none, and Stats / Elemental / Experiments are
 ## all class-level statics for the same reason. Callers poll it; there is no changed signal, because
@@ -38,6 +43,7 @@ enum Setting {
 	CAMERA_PAN_SPEED,
 	MOUSE_SENSITIVITY,
 	CAMERA_SMOOTHING,
+	SFX_VOLUME,
 }
 
 ## How far a camera-handling value is scaled from its authored one (#394). ONE enum over three rows,
@@ -118,6 +124,10 @@ enum QueuePalette {
 #   default — the value before anyone has ever touched it
 #   options — CHOICE ROWS ONLY: the labels, in the value order of the row's own enum. Its PRESENCE
 #             is what makes the row a choice.
+#   min/max/step — LEVEL ROWS ONLY: the slider's bounds. The PRESENCE of `step` is what makes the
+#             row a level, and it is also the write budget -- set_value saves the cfg per change and
+#             a slider emits one per step, so 0.05 is 20 small saves across a full drag where 0.01
+#             would be 100.
 const DEFS := {
 	Setting.HEALTH_BARS: {
 		"title": "Health bars",
@@ -185,6 +195,16 @@ const DEFS := {
 		"options": ["Cinematic", "Normal", "Snappy"],
 		"default": Scale.NORMAL,
 	},
+	# The first LEVEL row (#136). AudioDirector polls it and moves the SFX bus; all the way down
+	# mutes the bus rather than sending it to -inf dB.
+	Setting.SFX_VOLUME: {
+		"title": "Sound effects",
+		"desc": "How loud the game's sounds are -- blows landing, and whatever else comes to have a voice. All the way down is silent.",
+		"min": 0.0,
+		"max": 1.0,
+		"step": 0.05,
+		"default": 0.8,
+	},
 }
 
 const CONFIG_SECTION := "settings"
@@ -238,25 +258,43 @@ static func is_on(setting: Setting) -> bool:
 	if is_choice(setting):
 		push_error("PlayerSettings: %s is a choice row -- read it with choice_of" % _name_of(setting))
 		return false
+	if is_level(setting):
+		push_error("PlayerSettings: %s is a level row -- read it with level_of" % _name_of(setting))
+		return false
 	return bool(value_of(setting))
 
 static func set_on(setting: Setting, value: bool) -> void:
 	if is_choice(setting):
 		push_error("PlayerSettings: %s is a choice row -- write it with set_choice" % _name_of(setting))
 		return
+	if is_level(setting):
+		push_error("PlayerSettings: %s is a level row -- write it with set_level" % _name_of(setting))
+		return
 	set_value(setting, value)
 
 static func choice_of(setting: Setting) -> int:
 	if not is_choice(setting):
-		push_error("PlayerSettings: %s is a toggle row -- read it with is_on" % _name_of(setting))
+		push_error("PlayerSettings: %s is not a choice row -- read it with is_on or level_of" % _name_of(setting))
 		return 0
 	return int(value_of(setting))
 
 static func set_choice(setting: Setting, value: int) -> void:
 	if not is_choice(setting):
-		push_error("PlayerSettings: %s is a toggle row -- write it with set_on" % _name_of(setting))
+		push_error("PlayerSettings: %s is not a choice row -- write it with set_on or set_level" % _name_of(setting))
 		return
 	set_value(setting, value)
+
+static func level_of(setting: Setting) -> float:
+	if not is_level(setting):
+		push_error("PlayerSettings: %s is not a level row -- read it with is_on or choice_of" % _name_of(setting))
+		return 0.0
+	return float(value_of(setting))
+
+static func set_level(setting: Setting, value: float) -> void:
+	if not is_level(setting):
+		push_error("PlayerSettings: %s is not a level row -- write it with set_on or set_choice" % _name_of(setting))
+		return
+	set_value(setting, clampf(value, min_of(setting), max_of(setting)))
 
 # The enum member's own name, for an error a reader can act on. Same spelling the cfg keys use.
 static func _name_of(setting: Setting) -> String:
@@ -273,6 +311,19 @@ static func desc_of(setting: Setting) -> String:
 ## Which widget this row wants. Asked of the table itself rather than a second `kind` field.
 static func is_choice(setting: Setting) -> bool:
 	return DEFS[setting].has("options")
+
+## A LEVEL row -- a slider. `step`'s presence is the marker, the way `options`' is for a choice.
+static func is_level(setting: Setting) -> bool:
+	return DEFS[setting].has("step")
+
+static func min_of(setting: Setting) -> float:
+	return float(DEFS[setting]["min"])
+
+static func max_of(setting: Setting) -> float:
+	return float(DEFS[setting]["max"])
+
+static func step_of(setting: Setting) -> float:
+	return float(DEFS[setting]["step"])
 
 ## The labels, in the row's own enum order. Read-only — it is the const's own array, and that is
 ## deliberate: these are canon, not a caller's scratch list.
@@ -294,6 +345,14 @@ static func load_state() -> void:
 		if not cfg.has_section_key(CONFIG_SECTION, key):
 			continue
 		var raw: Variant = cfg.get_value(CONFIG_SECTION, key)
+		# A LEVEL is answered FIRST, because the toggle branch below coerces with bool() -- which
+		# would read any saved volume back as `true` and lose it silently, consistently, across
+		# every relaunch (#647's shape, from the persistence side). CLAMPED rather than defaulted,
+		# unlike the choice branch: an index outside the options list means nothing, where a volume
+		# outside the range means the nearest end of it.
+		if is_level(setting):
+			_state[setting] = clampf(float(raw), min_of(setting), max_of(setting))
+			continue
 		if not is_choice(setting):
 			_state[setting] = bool(raw)
 			continue
