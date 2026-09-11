@@ -8,7 +8,7 @@ class_name Abilities
 # counter path / action / movement), but every site reads its id and numbers from here,
 # so the roster and the balance surface both live in one place.
 
-enum Id { NONE, IRON_WILL, INTIMIDATION, TAUNT, WATERWALK, INSULATED_SHOCK, CRISIS, BRACE }
+enum Id { NONE, IRON_WILL, INTIMIDATION, TAUNT, WATERWALK, INSULATED_SHOCK, CRISIS, BRACE, INSULATED_FIRE }
 
 const IRON_WILL_DAMAGE_CAP := 6      # playtest-tunable
 const INTIMIDATION_WILL_DRAIN := 3   # playtest-tunable
@@ -38,6 +38,12 @@ const CRISIS_SURGE_TURNS := 3                          # playtest-tunable: a gam
 # reader, and gear reaches immunity by GRANTING an ability rather than declaring elements itself.
 # One id per element (the ratified fork): a piece blocking two elements grants two abilities. An
 # element absent here has no insulation ability authored yet, which reads as "nobody is immune."
+#
+# FIRE is read by one more rule than the others (#892): RulesService.occupant_damage_for asks it of
+# the ground a unit stands on, so the same immunity answers a fireball and a burning tile. Insulation
+# strips the EFFECT of a delivered hit and leaves its damage to DEF (#424) -- a tile burn is not a
+# delivered hit and DEF never sees it, so there is no second half to offer there.
 const INSULATION: Dictionary[Elemental.Element, Id] = {
 	Elemental.Element.SHOCK: Id.INSULATED_SHOCK,
+	Elemental.Element.FIRE: Id.INSULATED_FIRE,
 }

@@ -288,7 +288,13 @@ static func def_tooltip(armor_name: String, def_power: int, con: int, armor_def:
 	if armor_name == "":
 		lines.append("No armor worn")
 	else:
-		lines.append("%s: %d armor x CON %d = %d" % [armor_name, def_power, con, armor_def])
+		# A piece may pay a SCALED term, an un-scaled one, or both (ArmorData). With no scaled term
+		# there is no "x CON" to print, and the unforked line read "0 armor x CON 7 = 2" -- the
+		# Asbestos Shroud (#892) is the first flat-only piece, so this had never been on screen.
+		if def_power > 0:
+			lines.append("%s: %d armor x CON %d = %d" % [armor_name, def_power, con, armor_def])
+		else:
+			lines.append("%s: %d armor (flat)" % [armor_name, armor_def])
 		# Which kinds the piece answers (#424): "" when it covers everything, which is what every piece
 		# authored before kinds existed still does. The standing readout shows the full number; the
 		# queue row is where a specific hit learns whether the piece covers it.

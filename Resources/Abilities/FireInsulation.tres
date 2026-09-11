@@ -1,0 +1,11 @@
+[gd_resource type="Resource" script_class="AbilityData" format=3 uid="uid://behtn3o6jviqf"]
+
+[ext_resource type="Script" uid="uid://7w7ajveltxx5" path="res://Classes/jobs/AbilityData.gd" id="1_uwhxj"]
+
+[resource]
+script = ExtResource("1_uwhxj")
+id = 8
+display_name = "Fire Insulation"
+kind = 2
+description = "FIRE is erased from any hit that carries it, and burning ground costs the holder nothing at the end of the turn. A fire-tagged weapon still lands its swing."
+metadata/_custom_type_script = "uid://7w7ajveltxx5"

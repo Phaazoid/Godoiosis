@@ -826,7 +826,10 @@ func apply_burning_tile_damage(faction: Team.Faction) -> void:
 # Who this phase is about, answered ONCE before any of it plays -- the same TileHitAction the queue
 # forecasts (#419), derived here from LIVE positions and tile state instead of the plan's projected
 # ones. Two derivations of one rule: a plan is per-SQUAD and this phase is per-FACTION, so neither
-# can consume the other's list -- what they share is Terrain.occupant_damage and the maker below it.
+# can consume the other's list -- what they share is RulesService.occupant_damage_for and the maker
+# below it. That rule is TWO layers since #892: what the ground charges (Terrain.occupant_damage)
+# and whether this unit pays it (fire insulation), and BOTH callers must ask the outer one or an
+# immune unit gets a forecast that lies about it.
 #
 # Walks UNITS rather than burning cells, which is what keeps it symmetric with the forecast: both
 # ask "what is under this unit", so a hazard family the forecast can see cannot be one this misses.
@@ -838,7 +841,7 @@ func _tile_hits_for(faction: Team.Faction) -> Array[TileHitAction]:
 		if unit == null or not is_instance_valid(unit) or unit.get_faction() != faction:
 			continue
 		var states := states_store.states_at(unit.movement.cell)
-		var damage := Terrain.occupant_damage(states)
+		var damage := RulesService.occupant_damage_for(unit, states)
 		if damage > 0:
 			hits.append(TileHitAction.make(unit, Terrain.burning_state(states), damage,
 					LethalityRules.situation_for(unit)))

@@ -445,6 +445,19 @@ per-kind DEF table — the list is its subset. Falsified in PR 1: the resolver r
 kind instead of the composed one, `def_against` zeroing cover with armour, and the queue row
 composing its tip but never assigning it — each reddened exactly one case.
 
+**Amended by #892 (2026-09-11), and the amendment is narrower than it first reads.** *Strip the
+effect and let DEF answer the damage* governs a **delivered hit** — something with a kind, resolved
+through `PlanResolver`, that `def_against` gets a look at. The end-of-turn tile burn is none of
+those: `TileHitAction.make` sets `outcome.damage` directly, there is no `damage_kind` and DEF never
+sees it. So on the ground there is no second half to offer, and fire insulation stops the burn
+outright (`RulesService.occupant_damage_for`). Nothing about a delivered fire hit changed.
+
+One consequence of the strip is worth stating rather than discovering: **a reaction that was
+HELPING the target goes with the rest.** `fire_wet_quickdry.tres` gives a WET target
+`damage_mult = 0.5`, so a soaked fire-insulated unit takes MORE from a fireball than a soaked
+unarmoured one. That is the model working, not a defect — the Asbestos Shroud's DEF covering FIRE
+narrows the gap without closing it. Pinned in `tests/elemental/test_insulation.gd`.
+
 ## Playtest telemetry — #53 (2026-09-07 → 2026-09-09, five slices)
 
 Filed 2026-07-14, parked, unparked 2026-09-07 on the dev's *"now that we've started to close the loop of a player playing a mission, we can start on it."* Canon lives in [`docs/design/playtest-telemetry.md`](design/playtest-telemetry.md); what follows is how it got built.

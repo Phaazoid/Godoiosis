@@ -1,4 +1,4 @@
-[gd_resource type="Resource" script_class="ArmorData" format=3]
+[gd_resource type="Resource" script_class="ArmorData" format=3 uid="uid://d34p7eo3eg3pa"]
 
 [ext_resource type="Script" uid="uid://dj0617uewvdny" path="res://Classes/items/ArmorData.gd" id="1_armor"]
 [ext_resource type="Script" uid="uid://7w7ajveltxx5" path="res://Classes/jobs/AbilityData.gd" id="2_ability"]
@@ -7,8 +7,8 @@
 [resource]
 script = ExtResource("1_armor")
 def_power = 3
-covered_kinds = Array[int]([0, 1, 2])
 flat_def = 1
+covered_kinds = Array[int]([0, 1, 2])
 stat_minimums = Dictionary[int, int]({
 6: 8
 })

@@ -505,7 +505,8 @@ static func _build_entries() -> Dictionary:
 			% Terrain.BURNING_TILE_DAMAGE,
 		"long": "This ground is on fire: anyone standing on it takes %d damage at the end of the "
 			% Terrain.BURNING_TILE_DAMAGE
-			+ "turn. Fire burns for as long as the ground under it has fuel — grass goes out on "
+			+ "turn — unless they are insulated against fire, which nothing else protects against. "
+			+ "Fire burns for as long as the ground under it has fuel — grass goes out on "
 			+ "its own, and a fire on bare stone is consuming nothing, so it burns until something "
 			+ "puts it out. Fire spreads to whatever it can burn beside it, one tile a round."}
 	e[Term.SCORCHED] = {"category": Category.TERRAIN, "title": "Scorched",

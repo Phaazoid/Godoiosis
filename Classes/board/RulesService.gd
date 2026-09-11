@@ -64,6 +64,25 @@ static func wets_in(cell: Vector2i, unit: Unit, board: BoardContext) -> bool:
 		return false
 	return not unit.has_live_ability(Abilities.Id.WATERWALK)
 
+# What standing here costs THIS unit at end of turn (#892). Terrain.occupant_damage answers the
+# cell-only form; this is the per-unit layer over it, exactly as can_traverse is over is_walkable --
+# and for #115's reason rather than by analogy: the burn is derived TWICE (the queue's forecast per
+# squad, the end-of-turn pass per faction), so an immunity either of them owned privately is one the
+# other lies about. Law #2 -- the number previewed is the number dealt.
+#
+# Takes the STATES rather than a cell, because the two callers hold different ones: the pass reads
+# the live store, the forecast reads projected_states_at with its own pass's deposits folded in.
+#
+# is_burning is asked FIRST, and not only because the only damaging ground is fire: is_immune_to
+# walks jobs, worn armour and every mod on every contributing weapon, and this runs per unit on every
+# queue refresh -- can_traverse's hot-path lesson. It is also the FIRST reading in the
+# TileState -> Element direction (TerrainReaction bridges the other way), which Terrain.gd's header
+# calls out as the two vocabularies staying apart until something explicitly crosses them.
+static func occupant_damage_for(unit: Unit, states: Array[Terrain.TileState]) -> int:
+	if Terrain.is_burning(states) and unit.is_immune_to(Elemental.Element.FIRE):
+		return 0
+	return Terrain.occupant_damage(states)
+
 # May this unit step FROM one cell TO an orthogonally adjacent one (#257)? The EDGE question, and
 # the reason elevation needs one at all: can_traverse above answers "may this unit be on that cell",
 # which cannot express "only via a ramp, and only along the ramp's slope".
