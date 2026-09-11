@@ -91,7 +91,7 @@ static func resolve_tile_hits(plan: ResolvedPlan, squad: Squad, actions: Array[B
 			continue
 		var states := board.terrain_states.projected_states_at(
 				unit.get_projected_destination(), plan.cell_effects)
-		var damage := Terrain.occupant_damage(states)
+		var damage := RulesService.occupant_damage_for(unit, states)
 		if damage <= 0:
 			continue
 		plan.tile_hits.append(TileHitAction.make(unit, Terrain.burning_state(states), damage, situation))

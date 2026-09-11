@@ -2,8 +2,11 @@
 # in fire when ITS faction's turn ends takes Terrain.BURNING_TILE_DAMAGE. "Fire" is
 # Terrain.FIRE_STATES, and #890 retired BLAZE, so it has one member -- the burns-identically case
 # went with it, having become the same deposit twice. What survives is that the pass asks
-# Terrain.occupant_damage rather than naming a state, so a second fire spelling reaches it with no
-# edit here. Damage asserts derive from the constant, never a literal (the tuning-value law).
+# RulesService.occupant_damage_for rather than naming a state, so a second fire spelling reaches it
+# with no edit here. Damage asserts derive from the constant, never a literal (the tuning-value law).
+#
+# That rule is TWO layers since #892 -- what the ground charges, and whether this unit pays it -- and
+# the fireproofing cases below are about the outer one.
 #
 # Needs the real game scene: apply_burning_tile_damage reads game.get_unit_at_cell and settles
 # through _process_downed_pending. Fixture is tests/ui/test_game_scene_smoke.gd's.
@@ -46,6 +49,19 @@ func _deposit(cell: Vector2i, state: Terrain.TileState) -> void:
 	effect.states_added.assign([state])
 	game.terrain_states.apply(effect)
 
+# Armour granting fire insulation (#892), built ad hoc rather than loaded: the Asbestos Shroud is
+# authored content and what this suite is about is the RULE. It goes through the real kit path --
+# worn gear -> the live ability union -> is_immune_to -- which is what the production gate asks.
+func _fireproof() -> ArmorData:
+	var piece := ArmorData.new()
+	piece.display_name = "Test Shroud"
+	var ability := AbilityData.new()
+	ability.id = Abilities.INSULATION[Elemental.Element.FIRE]
+	ability.kind = AbilityData.AbilityKind.PASSIVE
+	var grants: Array[AbilityData] = [ability]
+	piece.granted_abilities = grants
+	return piece
+
 func test_burning_damages_the_occupant_when_its_faction_turn_ends() -> void:
 	var unit := _spawn(CELL, Team.Faction.PLAYER)
 	_deposit(CELL, Terrain.TileState.BURNING)
@@ -81,7 +97,7 @@ func test_fire_spares_the_faction_whose_turn_is_not_ending() -> void:
 
 # LAW #2 over the whole seam: the number the END OF TURN section forecasts is the number the pass
 # deals. The two derive it separately -- the queue from a squad's projected positions, the phase
-# from live ones -- and what stops them drifting is Terrain.occupant_damage plus TileHitAction.make,
+# from live ones -- and what stops them drifting is RulesService.occupant_damage_for plus TileHitAction.make,
 # so this is the case that reds if either half grows its own answer.
 func test_the_queue_forecasts_exactly_what_the_end_of_turn_pass_deals() -> void:
 	var unit := _spawn(CELL, Team.Faction.PLAYER)
@@ -113,6 +129,57 @@ func test_burning_finishes_a_downed_unit_standing_on_the_fire() -> void:
 	assert_bool(unit.is_dead()) \
 		.override_failure_message("a downed unit standing in fire survived its faction's turn end") \
 		.is_true()
+
+
+# --- fireproofing (#892) ------------------------------------------------------------------------
+#
+# Insulation strips the EFFECT of a delivered hit and leaves its damage to DEF (#424). A tile burn is
+# not a delivered hit -- it carries no kind and DEF never sees it -- so immunity is the whole answer
+# there or there is none, which is what these three pin.
+
+func test_a_fireproof_unit_takes_nothing_from_the_tile_it_stands_on() -> void:
+	var unit := _spawn(CELL, Team.Faction.PLAYER)
+	unit.worn_armor = _fireproof()
+	_deposit(CELL, Terrain.TileState.BURNING)
+	var hp_before: int = unit.get_current_hp()
+
+	await game.order_executor.apply_burning_tile_damage(Team.Faction.PLAYER)
+
+	assert_int(unit.get_current_hp()) \
+		.override_failure_message("fire insulation did not stop the end-of-turn burn") \
+		.is_equal(hp_before)
+
+# Law #2's half of the same rule, and the case that reds if only the executor learns it: the queue
+# must not forecast a burn the pass will not deal. No damage is no ROW -- the section simply does not
+# list an immune unit, which is why this asserts on the list's size rather than on a number in it.
+func test_the_queue_forecasts_no_burn_for_a_fireproof_unit() -> void:
+	var unit := _spawn(CELL, Team.Faction.PLAYER)
+	unit.worn_armor = _fireproof()
+	_deposit(CELL, Terrain.TileState.BURNING)
+
+	var plan: ResolvedPlan = game.squad_manager.resolve_plan(unit.squad, game._board())
+
+	assert_int(plan.tile_hits.size()) \
+		.override_failure_message("the queue forecast a burn for a unit the fire cannot touch") \
+		.is_equal(0)
+
+# The gate is PER UNIT, so it must not end the walk. A pass that returned at the first immune unit
+# would pass both cases above and silently spare everyone standing behind them.
+func test_a_fireproof_unit_does_not_spare_the_one_burning_beside_it() -> void:
+	var shrouded := _spawn(CELL, Team.Faction.PLAYER)
+	shrouded.worn_armor = _fireproof()
+	var bare := _spawn(Vector2i(3, 0), Team.Faction.PLAYER)
+	_deposit(CELL, Terrain.TileState.BURNING)
+	_deposit(Vector2i(3, 0), Terrain.TileState.BURNING)
+	var shrouded_before: int = shrouded.get_current_hp()
+	var bare_before: int = bare.get_current_hp()
+
+	await game.order_executor.apply_burning_tile_damage(Team.Faction.PLAYER)
+
+	assert_int(shrouded.get_current_hp()).is_equal(shrouded_before)
+	assert_int(bare.get_current_hp()) \
+		.override_failure_message("an immune unit in the same pass spared one that is not") \
+		.is_equal(bare_before - Terrain.BURNING_TILE_DAMAGE)
 
 
 # --- the phase is SHOWN, not settled between frames (#534) --------------------------------------

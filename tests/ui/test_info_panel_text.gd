@@ -129,6 +129,16 @@ func test_def_tooltip_with_armor() -> void:
 	assert_str(tip).contains("Total: 10")
 
 
+func test_def_tooltip_states_a_flat_only_piece_without_the_con_arithmetic() -> void:
+	# ArmorData pays a SCALED term, an un-scaled one, or both, and with no scaled term there is no
+	# "x CON" to print. Unforked the line read "0 armor x CON 5 = 2" -- arithmetic nonsense on screen,
+	# unreachable until the Asbestos Shroud (#892) became the first flat-only piece authored.
+	var tip: String = InfoPanel.def_tooltip("Asbestos Shroud", 0, 5, 2, 0, 2)
+	assert_str(tip).contains("Asbestos Shroud")
+	assert_str(tip).not_contains("x CON")
+	assert_str(tip).contains("Total: 2")
+
+
 func test_def_tooltip_itemizes_terrain_cover() -> void:
 	# Standing in a Burrow-dug entrenchment (#84): the terrain term is broken out, not folded
 	# silently into the armor figure, so the player can see WHY the number is up.

@@ -7,6 +7,11 @@ const COVER_DEF := 2   # flat DEF a Cover tile grants its occupant (#84 Burrow) 
 # Tile vocabulary for #50 — deliberately SEPARATE from Elemental (dev call 2026-06-28).
 # A tile's condition is its own enum, not Elemental.State; the two stay independent until
 # something explicitly bridges them. docs/design/terrain.md owns the persistent bookkeeping.
+#
+# TWO THINGS BRIDGE THEM, both outside this file and both one-way. TerrainReaction reads an incoming
+# ELEMENT and deposits a TileState; RulesService.occupant_damage_for (#892) reads a burning cell as
+# FIRE to ask whether its occupant is insulated against it. Nothing here knows either mapping, which
+# is the separation still doing its job -- a bridge is named where it is crossed.
 
 # Dynamic per-cell condition an attack deposits and a reaction reads. Stored in
 # TerrainStateManager + (later) ScenarioData.tile_data, so it serializes as an int:
@@ -57,8 +62,10 @@ static func burning_state(states: Array[TileState]) -> TileState:
 static func is_burning(states: Array[TileState]) -> bool:
 	return burning_state(states) != TileState.NONE
 
-# What standing here costs its occupant at end of turn. The queue's forecast and the end-of-turn
-# pass both ask here, so the number previewed is the number dealt (#419).
+# What standing here costs WHOEVER stands here at end of turn -- the ground's own charge, with no
+# unit in scope. Since #892 the forecast and the end-of-turn pass ask one layer up
+# (RulesService.occupant_damage_for), which subtracts nothing and only zeroes this for a unit the
+# fire cannot touch; both still ask ONE rule, so the number previewed is the number dealt (#419).
 static func occupant_damage(states: Array[TileState]) -> int:
 	return BURNING_TILE_DAMAGE if is_burning(states) else 0
 
