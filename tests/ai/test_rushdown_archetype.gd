@@ -167,6 +167,33 @@ func test_walking_at_the_cargo_still_takes_a_main_action() -> void:
 		.contains([BaseAction.ActionType.REV])
 
 
+# THE NORMAL STATE OF A DEFEND MAP, and the one that would quietly make this whole feature inert:
+# the player is STANDING on the cargo, so an occupancy-blocked flood reports every cell of it
+# UNREACHABLE. A rusher that read that as "no point here" would turn round and go back to hunting
+# bodies in precisely the situation the point exists for. _nearest_cargo_cell falls back to
+# straight-line distance for this, and closest_reachable_cell_to closes on it from there.
+#
+# Same discriminating shape as the case above -- a nearer body the other way -- because a fixture
+# with the defender and the quarry on the same side passes under either rule.
+func test_a_cargo_the_player_is_standing_on_still_pulls_the_rusher() -> void:
+	var board: Dictionary = _build_board()
+	var leader: Unit = _spawn(board, Team.Faction.ENEMY, Vector2i(4, 1))
+	var squad: Squad = _bind_rushdown(leader)
+	_spawn(board, Team.Faction.PLAYER, Vector2i(3, 1))    # the nearer body, one step LEFT
+	_spawn(board, Team.Faction.PLAYER, Vector2i(7, 1))    # the defender, standing ON the cargo
+	var zones := _zone(ZoneManager.Kind.DEFEND, [Vector2i(7, 1)])
+
+	RushdownArchetype.take_squad_turn(squad, _zoned_context(board, zones), board.squad_manager)
+
+	var moves: Array[Vector2i] = _move_destinations(squad)
+	assert_array(moves) \
+		.override_failure_message("a defended cargo stopped the rusher moving at all") \
+		.is_not_empty()
+	assert_int(moves[0].x) \
+		.override_failure_message("the rusher gave up on an occupied cargo and went back to the nearest body (x=%d)" % moves[0].x) \
+		.is_greater(4)
+
+
 # The gate is the KIND, not "any painted zone". A capture point is the player's to take and means
 # nothing to the enemy -- CAPTURE is still NEVER for every archetype (missions.md, #96).
 func test_a_capture_zone_is_not_cargo() -> void:
