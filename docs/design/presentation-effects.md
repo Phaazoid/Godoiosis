@@ -2,7 +2,7 @@
 
 **Status: an idea wall plus two locked decisions.** Solicited by the dev on 2026-08-12, the day Stage 0 (#203) passed its GO gate: *"a full thought experiment, all ideas on the wall."* Nothing below the Decisions section is a commitment — it is the candidate pool for #176's stage 5 and beyond, kept so it can't evaporate from chat. The look-dev scene (`Scenes/LookDev/LookDev.tscn`) is the standing playground where any of it gets prototyped before it's real — and since #212 (2026-08-15) the **Moods tab** in the dev-tools window tunes the *shipping* view live, so a value on this wall can be judged on a real board rather than in the diorama. **It is a playground, not a scratch scene ([#393](https://github.com/Phaazoid/Godoiosis/issues/393), 2026-08-19)** — seven presentation suites fixture on it, `Battle3D.tscn` loads its MeshLibrary, and `BoardMirror`/`BoardOverlays` read textures out of `Art/LookDev/`, so it is edited with the same care as shipping code. Its four moods stopped being a second copy at the same time: `look_dev.gd` held them as a hardcoded `PRESETS` table, seeded from the same values four of the twelve `LookPreset` files now carry, and it resolves them by NAME through `LookKnobs` instead.
 
-**Canon checked through #900 (2026-09-10).**
+**Canon checked through #905 (2026-09-11).**
 
 ---
 
@@ -949,6 +949,16 @@ Two consequences worth knowing:
 
 - **Only clusters above `BoardMirror.TUFT_MIN_CLUSTER_PIXELS` stand up**, and the threshold is measured rather than picked: the shipped sheet's clusters are 2-px specks or 23-px-plus objects with nothing in between. A speck loses nothing by staying flat, because the tile keeps its full bake — it is still drawn, just not duplicated. Standing every speck up as well is [#311](https://github.com/Phaazoid/Godoiosis/issues/311), and needs one mesh per cell plus a per-quad billboard to stay affordable, because a whole-mesh billboard would swing the plants around the cell centre as the camera orbits.
 - **`grass_clover` is not a tuft**, and that is the art's own answer rather than a design call: its content is five 2-pixel dots. It is grass speckle, not clover.
+
+#### How much grass a tuft plants is a KNOB, and what made the first tall grass wrong ([#904](https://github.com/Phaazoid/Godoiosis/issues/904), 2026-09-11)
+
+**The measurement that settles every density question: a map sprite is 16 px drawn at `UnitMirror.texels_per_unit` = 32, so a soldier stands 0.50 world units -- half a cell.** [#891](https://github.com/Phaazoid/Godoiosis/issues/891)'s first tall grass stood 0.22, i.e. ankle-deep, and shipped because the tile was treated as an art footnote on a mechanics ticket rather than a LOOK decision owed a rendered mockup. Read blade height against 0.50, never against the cell.
+
+**What read as wrong was REGULARITY, not blade count.** Every cell draws the same tile, so a comb of equal stalks tiles into visible stripes across a field-sized board; varying height, tone and column offset per blade is most of the difference between a thicket and a fence. Randomising WHERE the blades sit per CELL is the real cure for the repeat and is [#905](https://github.com/Phaazoid/Godoiosis/issues/905) -- deliberately deferred, and it wants a hash of the CELL rather than a per-build random, since `_tuft_tiles` caches the decomposition per TILE.
+
+**Touching blades are a TOOL rather than a failure.** Two that collide weld into one wider cluster, which stands up as a single broader sprite -- a clump rather than two stalks, which is both cheaper and less mechanical. The shipped tall grass draws 20 blades and decomposes to 9 clusters, 4 of them welded, so a cell costs 9 sprites and not 20; engineering blades apart to guarantee a count is the mistake #891 made.
+
+**`BoardMirror.tuft_density` is `tuft_scale`'s twin for COUNT.** Each blade carries the density it needs, RANKED by a stable hash of its own rect -- build order walks the art top-down, so thinning by it would strip whole bands off the back of the cell rather than thinning evenly -- and the ranks spread over `[0, 1)` against a strict compare, so n blades at density d show `ceil(d * n)` and dragging off zero shows a blade immediately. **It HIDES rather than skips building**, which is what makes it live at all: the sweep has no grid to rebuild a tuft from (`_override_on`'s reason), and a value read only at build time would need a repaint to show. **So it is a LOOK dial and not a node-count one** -- a density that settles below 1.0 wants the tile redrawn with fewer blades and the knob put back, and if the COUNT itself ever bites the answer is #311, not this.
 
 #### A tuft is planted PER PLANT, because a corner cell has no one surface ([#342](https://github.com/Phaazoid/Godoiosis/issues/342), 2026-08-25)
 

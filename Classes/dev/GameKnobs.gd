@@ -218,6 +218,8 @@ const KNOBS: Array[Dictionary] = [
 		"tip": "The colour a hole's wall starts at where it meets the ground, fading to black at the bottom. Reads best a little darker and a little cooler than the ground it hangs off, so the eye takes it for shadow rather than for a different material."},
 	{"group": "World", "node": "BoardMirror", "prop": "tuft_scale", "label": "Grass tuft scale", "min": 0.0, "max": 2.0, "step": 0.01,
 		"tip": "How tall the plants on a grass tile stand -- the flowers and weeds that pop up off a tile which is also still painted flat. 1.0 draws each one at the size the art draws it. Only the height changes: where they sit in the cell comes off the art."},
+	{"group": "World", "node": "BoardMirror", "prop": "tuft_density", "label": "Grass tuft density", "min": 0.0, "max": 1.0, "step": 0.01,
+		"tip": "How MANY of a grass tile's plants are planted, where the scale above is how tall each one stands. 1.0 plants every one the art draws; below that an even, always-the-same subset is hidden, so a tile can be drawn dense and thinned by eye. It HIDES rather than skips building -- if you settle below 1.0, the tile is better redrawn with fewer blades and this put back to 1.0."},
 	# The lamp defaults (#255's light, #380's rows -- these four had NO surface anywhere before
 	# this). Tuning one re-lights every standing lamp through BoardMirror's sweep; a lamp whose
 	# tile authors its own light deliberately does not move, since an authored override wins.
