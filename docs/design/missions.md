@@ -331,6 +331,30 @@ So it is its own Kind, and the reckoning is what a fifth kind actually cost agai
 
 **It is never hidden.** `hidden_zone_names` means *this zone has stopped being information*, and a defended point has not — it is the thing the player is watching. It needed no edit: a DEFEND zone is never captured, so it was never in that list.
 
+### `PROTECTED_UNIT_LOST` — the escort ([#572](https://github.com/Phaazoid/Godoiosis/issues/572), 2026-09-11)
+
+A unit the mission named dies, and the mission is over. Escort and VIP missions.
+
+**The ticket said this was sized by `ScenarioUnitEntry` having no stable identity field, and that was wrong.** The reasoning was that a mission has to *name* the person it protects, which needs an id that survives a unit being added, removed or reordered. It does not: the condition's subject is **marked where the subject lives** — `ScenarioUnitEntry.must_survive`, an authored bool — exactly as a `CAPTURE` objective's subject is marked by painting a zone rather than by naming one on `ScenarioData`. Every lose condition now parameterises the same way: `ROUND_LIMIT` by an int on the board, `POINT_LOST` by a painted zone, this one by a flag on a unit.
+
+No id, no lookup, nothing to dangle. *Which person is this* is a real question and [#501](https://github.com/Phaazoid/Godoiosis/issues/501) will ask it; a half-answer built here would be the one it had to beat.
+
+**It is authored per PLACEMENT, not per character.** The same person can be the VIP on one board and an ordinary soldier on the next, so the flag belongs on the scenario entry and not on `UnitData`. Ticked on the selected unit in the dev Unit Editor.
+
+**It rides `ScenarioManager`'s direct write, outside [#177](https://github.com/Phaazoid/Godoiosis/issues/177)'s reference/snapshot fork** — beside `cell`, `squad_id` and `is_leader`, never inside `capture_unit_state`/`apply_unit_state`. That is load-bearing rather than tidy: a **reference** entry (`state_saved = false`) never calls `apply_unit_state` at all, and a VIP is exactly the kind of unit authored as cast, so a flag carried in that block would survive a snapshot save and vanish from the authored one — silently, and only for cast units.
+
+**Death is a LATCH, because a corpse cannot be asked.** `Unit.die()` calls `queue_free()`, so by the time any `check()` runs the unit is simply gone — and *gone* is indistinguishable from *never placed*. `game._on_unit_died` is the one door every death arrives through (both branches of `take_damage`, the downed countdown, the dev kill button; `die()` is idempotent and emits once), so the latch hangs there and is asked once per unit. It is battle-scoped and needs no saving: the mission ends on the very next `check()` after the death, and `check()` runs at the end of the pass the death resolved in, so no save can be taken while it is true.
+
+**Fork B was called DEATH ONLY.** `Unit.is_dead()` means *went down the permanent path this mission*; DOWNED is recoverable and `RescueAction` revives to 1 HP and ACTIVE. Losing on a down would also make the downed clock a second, invisible timer on the whole mission.
+
+**Fork C — "left behind" — is nothing to build.** An `EXTRACT` objective is already *every surviving player unit inside the zone* and refuses to be MET while one is outside. That is a win condition not being met, not a lose condition firing, and conflating the two would give one situation two answers.
+
+**The setup guard needs one clause that is not decoration.** `lose_conditions_missing_setup` asks *and the condition has not already fired* as well as *is anybody flagged* — because once the VIP is dead there is genuinely nobody flagged on the board, so the naive predicate flips to "nothing to fire on" at the exact instant the condition **fired**, and the HUD reports a broken board for the one thing that worked.
+
+**And its SHOUT moved out of `set_lose_conditions`** into `MissionController.report_missing_setup()`, called where `apply_scenario` already re-pushes the HUD. `set_lose_conditions` runs mid-load, before a single unit has spawned, so a board-dependent condition judged there is judged against an empty board — a perfectly good escort mission would have `push_error`'d on every load, for ever. Same write-point trap [#134](https://github.com/Phaazoid/Godoiosis/issues/134) hit and the same fix `EXTRACT` needed.
+
+**The HUD names the unit** (fork D): `Protect — Elara`, off `MissionController.protected_units(board)`. "Protect" alone on a board with twelve units says nothing about which one you are being graded on.
+
 ### The guard: declared without painted
 
 An objective ticked with no matching zone painted can never be met — the mission is unwinnable. Three things catch it, all reading the one rule (`MissionController.objectives_missing_geometry`):
@@ -357,6 +381,7 @@ At runtime the unpainted objective reads **PENDING, not NONE** — deliberately.
 - **`SQUAD_LOST`** — the #96 floor. Always on, never authored.
 - **`ROUND_LIMIT`** — the objectives were not met within `round_limit` rounds.
 - **`POINT_LOST`** — a hostile unit reached a `Kind.DEFEND` zone ([#571](https://github.com/Phaazoid/Godoiosis/issues/571)). See *`Kind.DEFEND` — the cargo* above.
+- **`PROTECTED_UNIT_LOST`** — a unit the mission said must survive died ([#572](https://github.com/Phaazoid/Godoiosis/issues/572)). See *`PROTECTED_UNIT_LOST` — the escort* above.
 - **`NONE`** is a sentinel meaning *nothing fired*, not a condition.
 
 **Lose conditions compose by ANY**, stated rather than inherited from a loop's shape: the first one that fires ends the mission. Losses are rarely conjunctive.
@@ -395,7 +420,8 @@ The **banner names the reason**: `MissionRules.defeat_reason` is the one place t
 **#101 is CLOSED** (dev, 2026-08-26): with the seam built, the rest of it was three unrelated features sharing one design capture, so they were split out and it closed rather than becoming an umbrella. That number is history now — the successors are:
 
 - **[#571](https://github.com/Phaazoid/Godoiosis/issues/571) — defend a point. BUILT 2026-09-11**, and its stated cost turned out to be wrong. This section used to say the expensive half was that **a captured zone has no OWNER**, on the premise that a defended point is a capture point an enemy takes. It is not: the dev's rule is **presence** — *"if any tile of a capture point is taken by the enemy, the player loses… very fragile, and if an enemy makes it that close, it has been destroyed"* — so nothing captures it, nothing changes hands, and no owner is needed anywhere. It shipped as `ZoneManager.Kind.DEFEND` plus `LoseCondition.POINT_LOST`, leaving `_captured_zones`, `ScenarioData.captured_zones`, `capturable_zone_at`, `capture_counts` and the #87 snapshot untouched. See *`Kind.DEFEND` — the cargo* above. **The lesson is the one an issue's own architecture section always risks: it was written against a mechanic nobody had stated yet, and a month later it was sizing a ticket for a design the dev never had in mind.** Ask what the rule *is* before costing how to store it.
-- **[#572](https://github.com/Phaazoid/Godoiosis/issues/572) — protect a unit.** Escort and VIP. Same shape: the rule is nearly free on this seam, and the gap is that **`ScenarioUnitEntry` has no stable identity field**, so a mission has nothing to point at when it names a person.
+- **[#572](https://github.com/Phaazoid/Godoiosis/issues/572) — protect a unit. BUILT 2026-09-11**, and like its sibling above its stated cost was wrong: this section used to say the gap was **`ScenarioUnitEntry` having no stable identity field** to name a person with. A mission does not have to name anybody — the subject is marked where the subject lives (`must_survive` on the entry), which is what every other lose condition already does with its own parameter. See *`PROTECTED_UNIT_LOST` — the escort* above. **Both successors were sized by an architecture section written before the mechanic was stated, and both were wrong the same way.**
+
 - **Authorable OR-composition (fork F)** — grouped OR-lists inside an AND, so a mission can be won by *either* taking the point *or* routing. **Not filed**, deliberately: the lean was always *arriving only when a real mission design wants it*, and this section is the record until one does. A flat `require_all` flag is the version to avoid — it cannot express *"A and (B or C)"* and gets outgrown.
 
 The Play API's blindness to all of this went to **[#46](https://github.com/Phaazoid/Godoiosis/issues/46)**, the Play API evergreen, rather than becoming a fourth issue.
