@@ -207,6 +207,51 @@ func test_an_unarmored_target_still_gets_electrocuted() -> void:
 	assert_bool(shock.resolved.states_removed.has(Elemental.State.WET)).is_true()
 
 
+# --- FIRE insulation, and the edge that comes with stripping the element (#892) ---
+
+# The strip is UNCONDITIONAL: every reaction keyed on the element goes, including one that was
+# HELPING the target. FIRE x WET is authored as a quick-dry at damage_mult 0.5, so a soaked wearer
+# takes MORE from a fireball than a soaked unarmoured unit would -- surprising, and inherent to
+# #424's model rather than something this ticket introduced. Pinned here so it reads as a decision.
+#
+# The comparison is derived from the reaction's own mult, never a literal: retuning quick-dry is
+# meant to be free (the tuning-value law).
+func test_fire_insulation_strips_a_reaction_that_was_helping_the_target() -> void:
+	var quickdry := _fire_quickdry()
+	var alch: Unit = _alchemist({ Elemental.Element.FIRE: 4 })
+	var foe: Unit = H.spawn_solo(self, _sm, ENEMY, Vector2i(1, 0), {Stats.Stat.MHP: 50})
+	foe.worn_armor = _insulated_against(Elemental.Element.FIRE)
+	foe.element_states.append(Elemental.State.WET)
+
+	var fireball := TransmutationData.new()
+	fireball.power = 5
+	fireball.sigils.assign([Elemental.Element.FIRE])   # no quickening -> stays FIRE
+	var atk := _attack(alch, foe)
+	atk.fired_attack = fireball
+	var plan := ResolvedPlan.new()
+	plan.attacks.append(atk)
+	var reactions: Array[ElementalReaction] = [quickdry]
+	PlanResolver.resolve(plan, reactions)
+
+	assert_int(atk.resolved.states_removed.size()) \
+		.override_failure_message("a reaction fired on an element the wearer is immune to") \
+		.is_equal(0)
+	assert_int(atk.resolved.damage) \
+		.override_failure_message("the quick-dry mitigation reached a unit fire cannot touch") \
+		.is_greater(int(round(float(atk.resolved.base_damage) * quickdry.damage_mult)))
+
+
+func _fire_quickdry() -> ElementalReaction:
+	var r := ElementalReaction.new()
+	r.incoming_element = Elemental.Element.FIRE
+	r.required_state = Elemental.State.WET
+	r.damage_mult = 0.5
+	var removes: Array[Elemental.State] = [Elemental.State.WET]
+	r.remove_states = removes
+	r.popup = "Dried Off!"
+	return r
+
+
 # --- an insulated hit still ARRIVES (#424 repealed the 2026-07-24 turn-aside) ---
 
 func test_an_insulated_bolt_still_finishes_a_downed_unit() -> void:
@@ -291,6 +336,8 @@ func test_a_blocked_hit_says_so() -> void:
 func test_the_ground_is_not_insulated() -> void:
 	# Deliberate: armor protects its WEARER, not the tile they stand on. A bolt that can't hurt
 	# an insulated unit still electrifies the terrain -- cell effects read the UNFILTERED elements.
+	# Unchanged by #892, and the two are easy to conflate: the ground still CATCHES under a fireproof
+	# unit; what it cannot do is burn them. That half lives in tests/terrain/test_burning_damage.gd.
 	var alch: Unit = _alchemist({ Elemental.Element.FIRE: 4 })
 	var atk := AttackAction.create(alch, alch.movement.cell, null, TREE_CELL)
 	atk.fired_attack = _lightning_bolt(5, EquippableData.TargetMode.BOTH)

@@ -10,6 +10,7 @@
 extends GdUnitTestSuite
 
 const MAIN_SCENE := "res://Scenes/Main.tscn"
+const LEVEL_SETTING := PlayerSettings.Setting.SFX_VOLUME
 
 var _main: Node
 var game: Node2D
@@ -277,6 +278,62 @@ func _press_escape() -> void:
 	up.pressed = false
 	Input.parse_input_event(up)
 	await _frames(2)
+
+
+# --- the LEVEL row, the third kind (#136) --------------------------------------------------------
+
+func _first_slider(root: Node) -> HSlider:
+	if root is HSlider:
+		return root
+	for child: Node in root.get_children():
+		var found: HSlider = _first_slider(child)
+		if found != null:
+			return found
+	return null
+
+
+func test_a_level_row_draws_a_slider_carrying_its_own_bounds() -> void:
+	# The projection property one level down from "the row exists": a level row that drew a
+	# CheckButton would still pass the every-setting-gets-a-row case, because the TITLE would be
+	# there either way.
+	SettingsScreen.show_screen(game)
+	await _frames(4)
+	var screen: Node = _first_modal_of(SettingsScreen)
+
+	var slider: HSlider = _first_slider(screen)
+	assert_object(slider).override_failure_message(
+		"a level row is declared and the page drew no slider").is_not_null()
+	assert_float(slider.min_value).is_equal_approx(PlayerSettings.min_of(LEVEL_SETTING), 0.001)
+	assert_float(slider.max_value).is_equal_approx(PlayerSettings.max_of(LEVEL_SETTING), 0.001)
+	assert_float(slider.step).is_equal_approx(PlayerSettings.step_of(LEVEL_SETTING), 0.001)
+
+
+func test_moving_the_slider_writes_the_preference() -> void:
+	SettingsScreen.show_screen(game)
+	await _frames(4)
+	var screen: Node = _first_modal_of(SettingsScreen)
+	var slider: HSlider = _first_slider(screen)
+
+	slider.value = 0.25
+	await _frames(2)
+
+	assert_float(PlayerSettings.level_of(LEVEL_SETTING)).override_failure_message(
+		"dragging the slider did not reach the store").is_equal_approx(0.25, 0.001)
+
+
+func test_the_slider_reconciles_against_a_change_made_elsewhere() -> void:
+	# _process mirrors the store, and it must write with set_value_no_signal -- a plain assignment
+	# fires value_changed straight back into the store, which is the second writer #647 refuses.
+	SettingsScreen.show_screen(game)
+	await _frames(4)
+	var screen: Node = _first_modal_of(SettingsScreen)
+	var slider: HSlider = _first_slider(screen)
+
+	PlayerSettings.set_level(LEVEL_SETTING, 0.15)
+	await _frames(3)
+
+	assert_float(slider.value).override_failure_message(
+		"the page did not follow a level changed underneath it").is_equal_approx(0.15, 0.001)
 
 
 func test_the_close_button_is_somewhere_a_player_can_actually_reach() -> void:

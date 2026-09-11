@@ -1,0 +1,14 @@
+[gd_resource type="Resource" script_class="ArmorData" format=3 uid="uid://oysqp74gyp72"]
+
+[ext_resource type="Script" uid="uid://7w7ajveltxx5" path="res://Classes/jobs/AbilityData.gd" id="1_ccbcd"]
+[ext_resource type="Resource" uid="uid://behtn3o6jviqf" path="res://Resources/Abilities/FireInsulation.tres" id="2_bjmtt"]
+[ext_resource type="Script" uid="uid://dj0617uewvdny" path="res://Classes/items/ArmorData.gd" id="3_4lc5w"]
+
+[resource]
+script = ExtResource("3_4lc5w")
+flat_def = 2
+covered_kinds = Array[int]([3])
+granted_abilities = Array[ExtResource("1_ccbcd")]([ExtResource("2_bjmtt")])
+display_name = "Asbestos Shroud"
+description = "Loomed mineral fibre, stiff as sailcloth and just as dead to a blade. Flame finds nothing in it to take hold of: embers land and go out, and the ground underfoot can burn all it likes."
+metadata/_custom_type_script = "uid://dj0617uewvdny"
