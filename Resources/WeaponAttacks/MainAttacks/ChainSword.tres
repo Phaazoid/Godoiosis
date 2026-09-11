@@ -1,5 +1,6 @@
 [gd_resource type="Resource" script_class="WeaponAttackData" format=3 uid="uid://b6vpj5w5com0o"]
 
+[ext_resource type="Script" uid="uid://dle5ob08qngde" path="res://Classes/presentation/EffectLook.gd" id="1_2uaw2"]
 [ext_resource type="Script" uid="uid://ddqeee7njjjq2" path="res://Classes/weapons/WeaponAttackData.gd" id="2_wad"]
 
 [resource]

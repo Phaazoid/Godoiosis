@@ -1,5 +1,6 @@
-[gd_resource type="Resource" script_class="WeaponAttackData" format=3]
+[gd_resource type="Resource" script_class="WeaponAttackData" format=3 uid="uid://diskgnxfldfch"]
 
+[ext_resource type="Script" uid="uid://dle5ob08qngde" path="res://Classes/presentation/EffectLook.gd" id="1_dppa1"]
 [ext_resource type="Script" uid="uid://ddqeee7njjjq2" path="res://Classes/weapons/WeaponAttackData.gd" id="2_wad"]
 
 [resource]
@@ -9,7 +10,7 @@ scaling_blend = Dictionary[int, int]({
 6: 20
 })
 display_name = "Gouge"
-damage_kind = 2
 power = 3
 vertical_rule = 1
+damage_kind = 2
 metadata/_custom_type_script = "uid://ddqeee7njjjq2"

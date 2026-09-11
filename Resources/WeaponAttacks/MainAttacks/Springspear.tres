@@ -1,16 +1,17 @@
 [gd_resource type="Resource" script_class="WeaponAttackData" format=3 uid="uid://dcvtdn0xtuyem"]
 
+[ext_resource type="Script" uid="uid://dle5ob08qngde" path="res://Classes/presentation/EffectLook.gd" id="1_y0x1n"]
 [ext_resource type="Script" uid="uid://ddqeee7njjjq2" path="res://Classes/weapons/WeaponAttackData.gd" id="2_wad"]
 
 [resource]
 script = ExtResource("2_wad")
-display_name = "Stab"
-damage_kind = 2
-power = 3
-requires_readiness = true
-vertical_rule = 1
 scaling_blend = Dictionary[int, int]({
 1: 70,
 4: 30
 })
+requires_readiness = true
+display_name = "Stab"
+power = 3
+vertical_rule = 1
+damage_kind = 2
 metadata/_custom_type_script = "uid://ddqeee7njjjq2"

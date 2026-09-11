@@ -1,5 +1,6 @@
 [gd_resource type="Resource" script_class="TransmutationData" format=3 uid="uid://do43xhhg1ueb8"]
 
+[ext_resource type="Script" uid="uid://dle5ob08qngde" path="res://Classes/presentation/EffectLook.gd" id="1_ka4hy"]
 [ext_resource type="Script" uid="uid://bgbidu2bbf33l" path="res://Classes/alchemy/TransmutationData.gd" id="1_wly3u"]
 
 [resource]

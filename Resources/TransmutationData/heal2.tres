@@ -1,6 +1,7 @@
-[gd_resource type="Resource" script_class="TransmutationData" format=3]
+[gd_resource type="Resource" script_class="TransmutationData" format=3 uid="uid://n88c221tsymv"]
 
-[ext_resource type="Script" path="res://Classes/alchemy/TransmutationData.gd" id="2_fa0vc"]
+[ext_resource type="Script" uid="uid://dle5ob08qngde" path="res://Classes/presentation/EffectLook.gd" id="1_f1qh4"]
+[ext_resource type="Script" uid="uid://bgbidu2bbf33l" path="res://Classes/alchemy/TransmutationData.gd" id="2_fa0vc"]
 
 [resource]
 script = ExtResource("2_fa0vc")
