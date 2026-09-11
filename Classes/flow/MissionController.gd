@@ -1011,7 +1011,8 @@ func lose_conditions_missing_setup() -> Array[MissionRules.LoseCondition]:
 	# genuinely nobody flagged on the board, and without `not _protected_lost` the row would flip to
 	# "not set" at the exact moment the condition FIRED -- reporting a broken board for the one
 	# thing that worked.
-	if lose_conditions.has(MissionRules.LoseCondition.PROTECTED_UNIT_LOST) and not _protected_lost 			and protected_units(game._board()).is_empty():
+	if lose_conditions.has(MissionRules.LoseCondition.PROTECTED_UNIT_LOST) and not _protected_lost \
+			and protected_units(game._board()).is_empty():
 		missing.append(MissionRules.LoseCondition.PROTECTED_UNIT_LOST)
 	return missing
 
