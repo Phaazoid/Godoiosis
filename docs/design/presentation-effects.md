@@ -129,7 +129,8 @@ worth having written down before anyone builds it:
 **The player chooses WHICH palette; the dev goes on authoring what is IN one.** Two different axes, so
 this is the camera-pitch case above and not the one-store case — which is what kept it small: the store
 gains a single ordinary CHOICE row (`PlayerSettings.AIM_PALETTE`, #418's kind, no new widget and no
-third row kind) and not one colour leaves `OverlayManager`.
+third row kind — the store had two at the time; [#136](https://github.com/Phaazoid/Godoiosis/issues/136)
+added a LEVEL for volume later, which does not touch this) and not one colour leaves `OverlayManager`.
 
 **DEFAULT IS NOT A ROW IN `AIM_PALETTES`, and that is the load-bearing part.** It falls through to the
 authored statics — what the Game tab's knobs write and what Save-to-source authors. A copied row would
