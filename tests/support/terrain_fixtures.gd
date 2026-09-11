@@ -16,6 +16,34 @@ extends RefCounted
 const FUEL_TURNS := 3
 
 
+# Ground that burns and throws to its CORNERS as well as its sides (#891) -- tall grass's shape,
+# built here with the fixture's own dial rather than loaded from the authored reaction.
+static func wide_fuel(turns := FUEL_TURNS) -> TerrainReaction:
+	var reaction := fuel(turns)
+	reaction.spread_and_a_half = true
+	return reaction
+
+
+# A store whose every cell throws wide. store_on_fuel's twin.
+static func store_on_wide_fuel(turns := FUEL_TURNS) -> TerrainStateManager:
+	var store := TerrainStateManager.new()
+	var reaction := wide_fuel(turns)
+	store.fuel_source = func(_cell: Vector2i) -> TerrainReaction: return reaction
+	return store
+
+
+# A board of TWO grounds, split at a column: cells left of `wide_before_x` throw to their corners,
+# cells from it rightward only to their sides. The fixture for the question #891 actually decides --
+# whose ground governs the reach, the cell that is ALIGHT or the cell catching.
+static func store_on_split_ground(wide_before_x: int, turns := FUEL_TURNS) -> TerrainStateManager:
+	var store := TerrainStateManager.new()
+	var wide := wide_fuel(turns)
+	var narrow := fuel(turns)
+	store.fuel_source = func(cell: Vector2i) -> TerrainReaction:
+		return wide if cell.x < wide_before_x else narrow
+	return store
+
+
 # Ground that burns: the ignition reaction a flammable kind would carry.
 static func fuel(turns := FUEL_TURNS) -> TerrainReaction:
 	var reaction := TerrainReaction.new()

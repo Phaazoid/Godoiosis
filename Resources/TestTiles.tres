@@ -1,6 +1,7 @@
 [gd_resource type="TileSet" format=3 uid="uid://br1jl2l6yxyuf"]
 
 [ext_resource type="Texture2D" uid="uid://ecc1uluccnee" path="res://Art/Board/Solaria Demo Tiles.png" id="1_halkr"]
+[ext_resource type="Texture2D" uid="uid://jkrb7urmn6su" path="res://Art/Board/IosisTiles.png" id="2_703en"]
 
 [sub_resource type="TileSetAtlasSource" id="TileSetAtlasSource_e2o6t"]
 texture = ExtResource("1_halkr")
@@ -502,6 +503,16 @@ texture = ExtResource("1_halkr")
 18:13/0/custom_data_4 = 1
 18:13/0/custom_data_13 = 1
 
+[sub_resource type="TileSetAtlasSource" id="TileSetAtlasSource_rvxgj"]
+texture = ExtResource("2_703en")
+0:0/0 = 0
+0:0/0/custom_data_0 = true
+0:0/0/custom_data_1 = 1
+0:0/0/custom_data_2 = 8
+0:0/0/custom_data_3 = "tall_grass"
+0:0/0/custom_data_4 = 6
+0:0/0/custom_data_12 = 0.5
+
 [resource]
 custom_data_layer_0/name = "walkable"
 custom_data_layer_0/type = 1
@@ -534,3 +545,4 @@ custom_data_layer_13/type = 2
 custom_data_layer_14/name = "void_merge"
 custom_data_layer_14/type = 1
 sources/0 = SubResource("TileSetAtlasSource_e2o6t")
+sources/1 = SubResource("TileSetAtlasSource_rvxgj")

@@ -194,3 +194,100 @@ func test_a_save_that_carries_no_clocks_still_lights_its_fires() -> void:
 	assert_int(store.turns_remaining(HERE, Terrain.TileState.BURNING)) \
 		.override_failure_message("a board authored with fire and no clocks did not get its ground's clock") \
 		.is_equal(T.FUEL_TURNS)
+
+
+# --- #891: ground that throws to its corners ------------------------------------------------------
+#
+# The reach is the BURNING cell's own ground, never the ground catching: a taller flame throws
+# sparks further, so tall grass carries fire diagonally into whatever is beside it while ordinary
+# grass does not take a corner however flammable that corner is.
+
+func test_ground_that_spreads_wide_takes_all_eight_neighbours() -> void:
+	var store: TerrainStateManager = auto_free(T.store_on_wide_fuel())
+	add_child(store)
+	_deposit(store, HERE, Terrain.TileState.BURNING)
+	store.tick_states()
+	var want: Array[Vector2i] = [HERE]
+	for dx in [-1, 0, 1]:
+		for dy in [-1, 0, 1]:
+			var cell := HERE + Vector2i(dx, dy)
+			if not want.has(cell):
+				want.append(cell)
+	assert_array(_burning(store)) \
+		.override_failure_message("wide ground did not take all eight neighbours") \
+		.contains_exactly_in_any_order(want)
+
+
+func test_a_wide_fire_still_advances_only_one_ring_a_round() -> void:
+	# The snapshot at the top of tick_states governs the wide shape exactly as it governs the
+	# cardinal one -- a corner lit this tick must not throw its own corner in the same tick.
+	var store: TerrainStateManager = auto_free(T.store_on_wide_fuel())
+	add_child(store)
+	_deposit(store, HERE, Terrain.TileState.BURNING)
+	store.tick_states()
+	assert_bool(store.has_state(HERE + Vector2i(2, 2), Terrain.TileState.BURNING)) \
+		.override_failure_message("a wide fire crossed two rings in one round") \
+		.is_false()
+
+
+func test_the_reach_is_the_burning_grounds_and_not_the_catching_grounds() -> void:
+	# The load-bearing case. A fire standing on WIDE ground at x=2 must reach the corner at x=3,
+	# which is NARROW ground -- the flame's reach, not the target's catchability.
+	var store: TerrainStateManager = auto_free(T.store_on_split_ground(3))
+	add_child(store)
+	var on_wide := Vector2i(2, 5)
+	_deposit(store, on_wide, Terrain.TileState.BURNING)
+	store.tick_states()
+	assert_bool(store.has_state(on_wide + Vector2i(1, 1), Terrain.TileState.BURNING)) \
+		.override_failure_message("a fire in wide ground failed to reach a corner of narrow ground") \
+		.is_true()
+
+
+func test_narrow_ground_takes_no_corner_even_when_that_corner_spreads_wide() -> void:
+	# The mirror, and what makes the case above about the SOURCE rather than about either cell: a
+	# fire on NARROW ground at x=3 must not reach the corner at x=2, however wide that ground is.
+	var store: TerrainStateManager = auto_free(T.store_on_split_ground(3))
+	add_child(store)
+	var on_narrow := Vector2i(3, 5)
+	_deposit(store, on_narrow, Terrain.TileState.BURNING)
+	store.tick_states()
+	assert_bool(store.has_state(on_narrow + Vector2i(-1, -1), Terrain.TileState.BURNING)) \
+		.override_failure_message("narrow ground reached a corner because the CORNER spreads wide") \
+		.is_false()
+
+
+func test_fire_on_ground_that_is_not_fuel_stays_cardinal() -> void:
+	# A brazier on flagstone is consuming nothing, so there is nothing to tell it to throw wide --
+	# _spreads_wide has to answer false for null fuel rather than erroring or defaulting open.
+	# The neighbours are wide fuel, so anything taken is the SOURCE's doing.
+	var store: TerrainStateManager = auto_free(TerrainStateManager.new())
+	add_child(store)
+	var wide := T.wide_fuel()
+	store.fuel_source = func(cell: Vector2i) -> TerrainReaction:
+		return null if cell == HERE else wide
+	_deposit(store, HERE, Terrain.TileState.BURNING)
+	store.tick_states()
+	assert_bool(store.has_state(HERE + Vector2i(1, 1), Terrain.TileState.BURNING)) \
+		.override_failure_message("a fire on non-fuel ground threw to a corner") \
+		.is_false()
+	assert_bool(store.has_state(HERE + Vector2i.RIGHT, Terrain.TileState.BURNING)) \
+		.override_failure_message("a fire on non-fuel ground stopped spreading altogether") \
+		.is_true()
+
+
+func test_the_source_cell_is_never_taken_by_its_own_reach() -> void:
+	# cells_within_blended_range hands back the ORIGIN as well as the ring, and what drops it is
+	# _catches_fire refusing a cell that is already alight -- every source being a burning cell by
+	# construction. That guard now carries two rules, so it is worth asking about directly: re-taking
+	# the source would deposit BURNING again and reset its clock, and the fire would never go out.
+	var store: TerrainStateManager = auto_free(T.store_on_wide_fuel())
+	add_child(store)
+	_deposit(store, HERE, Terrain.TileState.BURNING)
+	for _round in T.FUEL_TURNS:
+		store.tick_states()
+	assert_bool(store.has_state(HERE, Terrain.TileState.BURNING)) \
+		.override_failure_message("the source re-lit itself and its clock never ran out") \
+		.is_false()
+	assert_bool(store.has_state(HERE, Terrain.TileState.SCORCHED)) \
+		.override_failure_message("the source burnt out without leaving scorched ground") \
+		.is_true()
