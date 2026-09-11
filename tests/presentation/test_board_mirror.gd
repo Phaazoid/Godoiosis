@@ -3217,3 +3217,106 @@ func _widest_rim_piece_on_north(cell: Vector2i) -> MeshInstance3D:
 			span = box.size.x
 			widest = piece
 	return widest
+
+
+# --- #904: how MANY blades a tuft plants ---------------------------------------------------------
+#
+# tuft_density is tuft_scale's twin for COUNT, and the same live-knob rule applies: a value read
+# only at build time would need a repaint to show, which is the one failure that makes a tuning
+# panel worthless. So the sweep is what these cases are about, not the arithmetic.
+#
+# Deliberately NOT pinned: how many plants any authored tile draws. That is content (the razor), so
+# every expectation below derives from the tuft standing in front of it.
+
+func test_the_density_knob_thins_a_tuft_that_is_already_standing() -> void:
+	_scene.load_mission(PROLOG)
+	await _settle()
+	_game.game_state = _game.GameState.DEV_MODE
+	var mirror := _scene.get_node("BoardMirror") as BoardMirror
+	var richest := _richest_tuft_tile()
+	assert_bool(not richest.is_empty()).override_failure_message(
+			"no TUFT tile draws more than one plant, so there is nothing to thin and this case " \
+			+ "would pass against any bug").is_true()
+
+	var cell: Vector2i = _game.grid.get_used_cells()[0]
+	_game.grid.paint(cell, richest.source, richest.coords)
+	await _settle()
+	var root := mirror.prop_at(cell)
+	assert_object(root).override_failure_message("a TUFT tile stood nothing up").is_not_null()
+	var planted := root.get_child_count()
+
+	mirror.tuft_density = 1.0
+	assert_int(_visible_blades(root)).override_failure_message(
+			"at density 1.0 the tuft shows %s of its %s plants — full density must plant every one " \
+			% [_visible_blades(root), planted] + "the art draws").is_equal(planted)
+
+	mirror.tuft_density = 0.5
+	assert_object(mirror.prop_at(cell)).override_failure_message(
+			"the tuft was REBUILT between the writes — a rebuilt one picks the new density up at " \
+			+ "build time, so this case can no longer see the knob failing to reach a standing tuft" \
+			).is_same(root)
+	assert_int(_visible_blades(root)).override_failure_message(
+			"halving the density left %s of %s plants showing — the knob does not reach a tuft that " \
+			% [_visible_blades(root), planted] + "is already built, so tuning it does nothing until " \
+			+ "the cell is repainted").is_equal(int(ceil(planted * 0.5)))
+
+	mirror.tuft_density = 0.0
+	assert_int(_visible_blades(root)).override_failure_message(
+			"at density 0 the tuft still shows plants").is_equal(0)
+
+	mirror.tuft_density = 1.0
+	assert_int(_visible_blades(root)).override_failure_message(
+			"thinning a tuft and putting the knob back did not bring every plant back — the knob is " \
+			+ "one-way, which makes it unusable for tuning by eye").is_equal(planted)
+
+
+func test_thinning_hides_the_SAME_plants_every_time_a_tuft_is_built() -> void:
+	# A tuft is rebuilt whenever its cell is repainted, so an unstable subset means the grass
+	# reshuffles itself as the board is edited. The threshold is ranked off the cluster's own rect
+	# for exactly this, and nothing else in the suite would notice it drifting.
+	_scene.load_mission(PROLOG)
+	await _settle()
+	_game.game_state = _game.GameState.DEV_MODE
+	var mirror := _scene.get_node("BoardMirror") as BoardMirror
+	var richest := _richest_tuft_tile()
+	assert_bool(not richest.is_empty()).override_failure_message(
+			"no TUFT tile draws more than one plant; the case is vacuous").is_true()
+
+	mirror.tuft_density = 0.5
+	var cell: Vector2i = _game.grid.get_used_cells()[0]
+	_game.grid.paint(cell, richest.source, richest.coords)
+	await _settle()
+	var first := _blade_visibility(mirror.prop_at(cell))
+	assert_bool(first.has(true) and first.has(false)).override_failure_message(
+			"half density hid all or none of this tile's plants, so this case cannot tell a stable " \
+			+ "subset from an unstable one").is_true()
+
+	# Repaint the same tile over the same cell: a fresh tuft off the same art.
+	_game.grid.erase(cell)
+	await _settle()
+	_game.grid.paint(cell, richest.source, richest.coords)
+	await _settle()
+	assert_array(_blade_visibility(mirror.prop_at(cell))).override_failure_message(
+			"rebuilding the tuft hid a different set of plants — the grass reshuffles itself every " \
+			+ "time a cell is repainted").is_equal(first)
+
+
+# How many of a standing tuft's plants are drawn.
+func _visible_blades(root: Node3D) -> int:
+	var shown := 0
+	for child in root.get_children():
+		var sprite := child as Sprite3D
+		if sprite != null and sprite.has_meta(BoardMirror.TUFT_META) and sprite.visible:
+			shown += 1
+	return shown
+
+
+# Which of them, in build order — an ORDERED answer, so a case can compare two builds rather than
+# just counting and missing a reshuffle that kept the count.
+func _blade_visibility(root: Node3D) -> Array[bool]:
+	var out: Array[bool] = []
+	for child in root.get_children():
+		var sprite := child as Sprite3D
+		if sprite != null and sprite.has_meta(BoardMirror.TUFT_META):
+			out.append(sprite.visible)
+	return out

@@ -339,6 +339,18 @@ var _lip_mat: StandardMaterial3D = null
 # failure that makes a tuning knob worthless.
 @export var tuft_scale := 0.25: set = _set_tuft_scale
 
+# How MANY of a tuft tile's blades are planted (#904), where tuft_scale is how tall each one stands.
+# 1.0 plants every cluster the art draws; below that a deterministic subset is hidden, so a tile can
+# be authored dense and thinned by eye without redrawing it.
+#
+# It hides rather than skips BUILDING, which is what makes it a live knob at all -- the sweep has no
+# grid to rebuild a tuft from (see _override_on), and a value read only at build time would need a
+# repaint to show. **So it is a LOOK dial and not a node-count one**: the hidden sprites still
+# exist. If a setting below 1.0 becomes permanent, redraw the tile with fewer blades and put this
+# back to 1.0 rather than shipping a board carrying hidden nodes; if the COUNT itself ever bites,
+# the answer is #311's one-mesh-per-cell, not this.
+@export var tuft_density := 1.0: set = _set_tuft_density
+
 # The same, for the mud bumps a Burrow's COVER state stands up (#326). A SECOND knob rather than
 # a shared one, on the lantern-vs-flame rule: cover and grass are different objects drawn at
 # different sizes, so one number would force whoever tunes the second to un-tune the first.
@@ -416,6 +428,13 @@ var _lips: Dictionary[Vector2i, Node3D] = {}
 # node rather than a second dictionary keyed by cell: _props already tracks prop LIFETIME, and a
 # parallel store would have to be kept in step with every free.
 const TUFT_META := "tuft"
+
+# The density at or above which this blade is planted (#904) -- a RANK rather than a raw hash, so
+# `tuft_density` shows exactly ceil(d * n) of a tile's n blades instead of however many a hash
+# happened to land under d. Ranked by a hash of the cluster's own rect rather than by build order,
+# because build order walks the art top-down and thinning it would strip whole bands off the back
+# of the cell rather than thinning the field evenly.
+const TUFT_KEEP_META := "tuft_keep"
 
 # What the prop's own tile authored for its SIZE, carried on the prop root (#272 slice 2). The two
 # global setters have no grid to ask — the mirror is handed one per call and stores none — so the
@@ -2385,10 +2404,14 @@ func _make_tuft(grid: TileMapLayer, cell: Vector2i, at: Vector3, heights: BoardH
 	# global setter below can re-derive rather than stomp an authored size. See OVERRIDE_META.
 	var authored := GridUtils.prop_override_of(grid.get_cell_tile_data(cell), "prop_tuft_scale")
 	root.set_meta(OVERRIDE_META, authored)
-	for rect: Rect2i in clusters:
+	var keep := _keep_thresholds(clusters)
+	for i in clusters.size():
+		var rect: Rect2i = clusters[i]
 		var sprite := _make_cluster_sprite(sheet, rect, _tuft_pixel_size(authored),
 				float(GridUtils.TILE_SIZE))
 		sprite.set_meta(TUFT_META, true)
+		sprite.set_meta(TUFT_KEEP_META, keep[i])
+		sprite.visible = keep[i] < tuft_density
 		# Its own foot, not the root's: the sprite is already placed across the cell, so the lift is
 		# the surface under THAT point minus the surface under the centre, which `at.y` is. Exactly
 		# zero on a LEVEL cell — i.e. on almost every cell on any board — so this moves a plant only
@@ -2463,6 +2486,44 @@ func _set_tuft_scale(value: float) -> void:
 			var sprite := child as Sprite3D
 			if sprite != null and sprite.has_meta(TUFT_META):
 				sprite.pixel_size = _tuft_pixel_size(_override_on(root))
+
+
+# tuft_scale's twin for the COUNT (#904). Each blade already carries the density it needs, so this
+# is a visibility sweep and never a rebuild -- see the export's own note for why that is the design
+# rather than a shortcut.
+func _set_tuft_density(value: float) -> void:
+	tuft_density = clampf(value, 0.0, 1.0)
+	for root: Node3D in _props.values():
+		for child in root.get_children():
+			var sprite := child as Sprite3D
+			if sprite != null and sprite.has_meta(TUFT_META):
+				sprite.visible = float(sprite.get_meta(TUFT_KEEP_META)) < tuft_density
+
+
+# The density each cluster needs to be planted: rank them by a stable hash of their own rect, then
+# spread the ranks over [0, 1). Compared with a STRICT less-than, n blades at density d show exactly
+# ceil(d * n) -- so dragging the slider off zero shows a blade immediately rather than nothing until
+# d passes 1/n, which is what spreading them over (0, 1] would do. Full density plants every one and
+# zero plants none, both by construction. The SAME blades survive every time, because the cluster
+# list is derived from the tile art and a rebuild reproduces it exactly.
+static func _keep_thresholds(clusters: Array[Rect2i]) -> PackedFloat32Array:
+	var order: Array[int] = []
+	order.resize(clusters.size())
+	for i in clusters.size():
+		order[i] = i
+	order.sort_custom(func(a: int, b: int) -> bool:
+		return _cluster_key(clusters[a]) < _cluster_key(clusters[b]))
+	var out := PackedFloat32Array()
+	out.resize(clusters.size())
+	for rank in order.size():
+		out[order[rank]] = float(rank) / float(order.size())
+	return out
+
+
+# A stable, well-mixed key for one cluster. hash() over the rect alone orders nearly-identical
+# stalks nearly identically, which thins a column at a time; the multiply scatters them.
+static func _cluster_key(rect: Rect2i) -> int:
+	return hash(Vector2i(rect.position.x * 73856093, rect.end.y * 19349663))
 
 
 # What the tile under a standing prop authored for its own size, INHERIT when it said nothing. Read
