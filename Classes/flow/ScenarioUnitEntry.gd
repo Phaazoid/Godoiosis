@@ -19,6 +19,19 @@ class_name ScenarioUnitEntry
 @export var squad_name := ""
 @export var squad_archetype: AIArchetype.Type = AIArchetype.Type.FACTION_DEFAULT
 @export var squad_zone := ""   # only meaningful on the leader's entry; "" = none
+# Does the mission END if this unit dies (#572)? Authored per PLACEMENT, not per character: the same
+# person can be the VIP on one board and an ordinary soldier on the next, so this belongs here and
+# not on UnitData.
+#
+# NO STABLE ID ANYWHERE, and that is the design. #572 was sized on the premise that a mission has to
+# NAME the unit it protects -- which needs an identity field ScenarioUnitEntry does not have. It does
+# not: the condition's subject is marked WHERE THE SUBJECT LIVES, exactly as a CAPTURE objective's
+# subject is marked by painting a zone rather than by naming one on ScenarioData. "Which person is
+# this" is a real question and #501 will ask it; a half-answer built here would be the one to beat.
+#
+# Written and read by ScenarioManager directly, OUTSIDE the #177 reference/snapshot fork -- a
+# reference entry (state_saved = false) never calls apply_unit_state, and a VIP must survive that.
+@export var must_survive := false
 @export var jobs: Array[String] = []
 
 # --- UnitInstance state (#83). All additive: a pre-#83 save reads defaults, and every

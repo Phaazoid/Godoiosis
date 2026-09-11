@@ -60,7 +60,7 @@ static func briefing_rows(controller: MissionController, board: BoardContext) ->
 	if not controller.lose_conditions.is_empty():
 		rows.append(_build_header("FAIL IF"))
 	for condition in controller.lose_conditions:
-		rows.append(_build_lose_row(condition, controller))
+		rows.append(_build_lose_row(condition, controller, board))
 	return rows
 
 func show_status(controller: MissionController, board: BoardContext, instruction := "") -> void:
@@ -97,7 +97,10 @@ static func _build_header(text: String) -> Label:
 	return header
 
 # One declared lose condition. Rules and counts come off the controller, never re-derived here.
-static func _build_lose_row(condition: MissionRules.LoseCondition, controller: MissionController) -> Label:
+# Takes the board since #572: a protect row NAMES the units it is grading you on, and who is still
+# standing is a board question -- the same argument _build_row has always needed.
+static func _build_lose_row(condition: MissionRules.LoseCondition, controller: MissionController,
+		board: BoardContext) -> Label:
 	var label := Label.new()
 	label.add_theme_font_size_override("font_size", 13)
 	# Declared with nothing to fire on -- the objectives' unpainted-geometry row, same doctrine: the
@@ -111,6 +114,15 @@ static func _build_lose_row(condition: MissionRules.LoseCondition, controller: M
 			var left: int = controller.rounds_remaining()
 			label.text = "Time — %d %s" % [left, "round left" if left == 1 else "rounds left"]
 			label.modulate = URGENT_COLOR if left <= URGENT_ROUNDS else PENDING_COLOR
+			return label
+		MissionRules.LoseCondition.PROTECTED_UNIT_LOST:
+			# NAMED, not counted (#572 fork D): "Protect" on a board with twelve units tells the
+			# player nothing about which one they are being graded on.
+			var names: Array[String] = []
+			for unit in controller.protected_units(board):
+				names.append(unit.get_unit_name())
+			label.text = "Protect — %s" % ", ".join(names)
+			label.modulate = PENDING_COLOR
 			return label
 		MissionRules.LoseCondition.POINT_LOST:
 			# NAMED, not counted (#571): a defended point is a place on the board, and "Defend — 1

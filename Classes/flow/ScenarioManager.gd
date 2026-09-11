@@ -230,6 +230,7 @@ func capture_scenario(scenario_name: String, authored := false) -> ScenarioData:
 		else:
 			entry.unit_data = unit.unit_data.duplicate(true)
 		entry.cell = unit.movement.cell
+		entry.must_survive = unit.must_survive   # #572: authored, and outside the #177 fork above
 		entry.squad_id = squad_manager.squads.find(unit.squad)
 		entry.is_leader = unit.is_leader()
 		if entry.is_leader:
@@ -310,6 +311,8 @@ func apply_scenario(scenario: ScenarioData) -> void:
 			push_warning("Could not spawn unit at %s (blocked or off-map)" % entry.cell)
 			continue
 
+		unit.must_survive = entry.must_survive   # #572, and BEFORE the fork: apply_unit_state never
+		                                         # runs for a reference entry, and a VIP is cast
 		if entry.state_saved:
 			entry.apply_unit_state(unit)
 
@@ -366,6 +369,10 @@ func apply_scenario(scenario: ScenarioData) -> void:
 	# this one). set_objectives refreshed it mid-load, BEFORE units spawned, so extraction read its
 	# progress off an empty board and the stale answer sat until the first turn event.
 	game.refresh_mission_status()
+	# ...and only NOW can a board-dependent lose condition be judged (#572). set_lose_conditions
+	# shouts the rest mid-load, which is before a single unit has spawned -- so a PROTECTED_UNIT_LOST
+	# declared on a perfectly good board would report itself broken every single load.
+	game.mission_controller.report_missing_setup()
 	board_loaded.emit()
 
 func reload_current():

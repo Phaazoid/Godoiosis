@@ -21,6 +21,7 @@ var _current_will := 0
 var _faction: Team.Faction = Team.Faction.PLAYER
 var _squad_name := ""
 var _unit_name := ""
+var _must_survive := false   # #572: does the mission end if this one dies?
 var _jobs: Array[String] = []
 var _limb_states: Dictionary[UnitInstance.LimbSlot, UnitInstance.LimbState] = {}
 var _limb_prosthetics: Dictionary[UnitInstance.LimbSlot, int] = {}   # slot -> _inventory index, or -1 (placeholder)
@@ -75,6 +76,7 @@ func _capture(unit: Unit) -> void:
 	_faction = unit.get_faction()
 	_squad_name = unit.squad.squad_name
 	_unit_name = unit.get_unit_name()
+	_must_survive = unit.must_survive
 	_jobs = inst.jobs.duplicate()
 	_affinity = inst.affinity.duplicate()
 	_alkahest = inst.is_alkahest_affine
@@ -144,6 +146,7 @@ func _apply(unit: Unit) -> void:
 	if unit.get_faction() != _faction:
 		unit.change_faction(_faction)
 	unit.squad.squad_name = _squad_name
+	unit.must_survive = _must_survive
 	var trimmed_name := _unit_name.strip_edges()
 	if trimmed_name != "":
 		unit.unit_data.display_name = trimmed_name
@@ -337,6 +340,8 @@ func _add_stats_section(page: VBoxContainer) -> void:
 		func(s): _stage_faction(s))
 	DevWidgets.add_lineedit(page, "Name", _unit_name, func(s): _stage_unit_name(s))
 	DevWidgets.add_lineedit(page, "Squad Name", _squad_name, func(s): _stage_squad_name(s))
+	DevWidgets.add_checkbox(page, "Must survive", _must_survive, func(v): _stage_must_survive(v),
+		"#572: the mission is LOST if this unit dies. Declare PROTECTED_UNIT_LOST on the Scenario tab too -- this flag is the geometry, that list is the rule.")
 
 func _add_grid_spinbox(grid: GridContainer, label_text: String, value: int, on_change: Callable) -> void:
 	var label := Label.new()
@@ -377,6 +382,11 @@ func _stage_will(value: int) -> void:
 func _stage_faction(faction_name: String) -> void:
 	_faction = Team.Faction[faction_name]
 	_touch()
+
+func _stage_must_survive(value: bool) -> void:
+	_must_survive = value
+	_touch()
+
 
 func _stage_squad_name(new_name: String) -> void:
 	_squad_name = new_name

@@ -1484,6 +1484,9 @@ func undeploy_unit(unit: Unit) -> void:
 	unit.movement.set_grid(null)
 
 func _on_unit_died(unit: Unit):
+	# FIRST, while the unit is still readable: die() has already queue_freed it, and the mission may
+	# have been protecting this one (#572). A latch, because nothing downstream can ask a corpse.
+	mission_controller.note_unit_died(unit)
 	# The selection is stored (#107) and die() frees the node -- release it or every reader dangles.
 	if unit == selected_unit:
 		selected_unit = null
