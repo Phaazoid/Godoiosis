@@ -278,3 +278,21 @@ func test_a_row_authored_to_its_own_default_is_still_authored() -> void:
 	assert_bool(look.is_silent()).override_failure_message(
 		"a row authored to the default's own value read as no opinion at all").is_false()
 	assert_float(look.num("bolt_life", 99.0)).is_equal_approx(ArcLightning.bolt_life, 0.001)
+
+
+# --- the Game tab's own sweep must not strip an authored look ---------------------------
+
+# The emitter's `amount` and material fields are NODE state, so a spark knob dragged on the Game tab
+# re-pushes them -- and a re-apply that read the bare statics would quietly strip whatever look the
+# last strike adopted. That is why GameKnobs goes through the arc rather than reaching the emitter.
+func test_a_game_tab_spark_sweep_keeps_the_looks_own_numbers() -> void:
+	ShockSparks.sparks_per_victim = 18
+	_arc.strike(_shot(_look({"sparks_per_victim": 40})), PackedVector3Array())
+	var with_look: int = _arc._sparks.amount
+
+	ShockSparks.sparks_per_victim = 4      # the dev drags the slider mid-flash
+	_arc.reapply_sparks()
+
+	assert_int(_arc._sparks.amount).override_failure_message(
+		"the Game tab's sweep pushed its own count over the look the strike had adopted"
+	).is_equal(with_look)
