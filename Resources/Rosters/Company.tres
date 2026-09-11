@@ -18,6 +18,7 @@
 [ext_resource type="Resource" path="res://Resources/Armor/BallastHarness.tres" id="16_ballast"]
 [ext_resource type="Resource" path="res://Resources/RuneVariants/Fire Rune.tres" id="17_fire"]
 [ext_resource type="Resource" path="res://Resources/RuneVariants/Electric Rune.tres" id="26_electric"]
+[ext_resource type="Resource" path="res://Resources/RuneVariants/woosh.tres" id="27_woosh"]
 [ext_resource type="Resource" path="res://Resources/Weapons/WeaponVariants/Gun.tres" id="18_gun"]
 [ext_resource type="Resource" path="res://Resources/Vials/FireVial.tres" id="19_firevial"]
 [ext_resource type="Resource" path="res://Resources/Vials/WaterVial.tres" id="20_watervial"]
@@ -80,5 +81,5 @@ state_saved = false
 [resource]
 script = ExtResource("1_roster")
 entries = Array[ExtResource("2_entry")]([SubResource("Resource_aldin"), SubResource("Resource_aster"), SubResource("Resource_bram"), SubResource("Resource_celest"), SubResource("Resource_dorian"), SubResource("Resource_isaac"), SubResource("Resource_noemie"), SubResource("Resource_rebecca"), SubResource("Resource_ross"), SubResource("Resource_torv")])
-stash = Array[ExtResource("13_equippable")]([ExtResource("14_bulwark"), ExtResource("15_mail"), ExtResource("16_ballast"), ExtResource("17_fire"), ExtResource("26_electric"), ExtResource("18_gun"), ExtResource("19_firevial"), ExtResource("20_watervial"), ExtResource("21_earthvial"), ExtResource("22_alkavial"), ExtResource("23_ichorvial"), ExtResource("24_nitrevial"), ExtResource("25_vitriolvial")])
+stash = Array[ExtResource("13_equippable")]([ExtResource("14_bulwark"), ExtResource("15_mail"), ExtResource("16_ballast"), ExtResource("17_fire"), ExtResource("26_electric"), ExtResource("27_woosh"), ExtResource("18_gun"), ExtResource("19_firevial"), ExtResource("20_watervial"), ExtResource("21_earthvial"), ExtResource("22_alkavial"), ExtResource("23_ichorvial"), ExtResource("24_nitrevial"), ExtResource("25_vitriolvial")])
 offers_every_mod = true
