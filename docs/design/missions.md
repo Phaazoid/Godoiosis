@@ -2,7 +2,7 @@
 
 **Status: ALL FOUR SLICES BUILT 2026-07-28 ([#96](https://github.com/Phaazoid/Godoiosis/issues/96)).** Filed 2026-07-27, when the project acquired a win condition for the first time. Before this, Iosis had ten interlocking systems and no way to finish a battle — which meant a design question could be answered *"is this coherent?"* but never *"does this improve play?"*
 
-**Canon checked through #860 (2026-09-09); the visible-leash note added 2026-09-11.**
+**Canon checked through #895 (2026-09-11).**
 
 ## What a mission is
 
@@ -21,6 +21,12 @@ The loop lives in four places, and the split is load-bearing:
 | **who the player may BRING, and how many** | `ScenarioData.roster` (#735) + `deployment_cap` (#736) | The pre-mission phase's authored half ([#731](https://github.com/Phaazoid/Godoiosis/issues/731)). `roster` is a NAME resolved against `RosterCatalog.ROSTER_DIR`, for `look_preset`'s two reasons directly below; **empty = this board has no pre-mission phase**, which is what every board saved before #735 is, and is why adding it broke nothing. `deployment_cap` is a MAXIMUM only — a mission cannot demand a minimum force — with `0` meaning *as many as the deployment zone holds*, that sentinel being the field's own default (`round_limit`'s rule). Deliberately **not** derived from the zone's size: force size and starting spread must move independently. Both live on `ScenarioManager` as `current_*` stores with the four-writer contract, not on `MissionController`, which owns the mission's ENDING. |
 
 Plus two UI surfaces: `MissionSelectScreen` (`ui/`) is the game's front door, and `MissionEndBanner` (`ui/`) is the card at the end.
+
+### Two things a board authors that a generator silently gets wrong (The Dry Field, [#895](https://github.com/Phaazoid/Godoiosis/issues/895), 2026-09-11)
+
+**An enemy's WORN ARMOUR only survives an authored save if its `UnitData` is PATHLESS.** `UnitFactory` stamps `Unit.unit_data_source` for any `UnitData` carrying a standalone `resource_path`, and `capture_scenario(name, authored = true)` then writes that unit as a **reference** with `state_saved = false` — so the loader takes *spawn + starting kit* as the whole answer and `worn_armor_index` is never read. Spawning from `load("res://Resources/Units/Bandit.tres")` therefore ships enemies who load naked, silently, with every test green. Build the `UnitData` fresh (or `duplicate(true)` it) so it has no path, which is why The Ford's "Wader" is an embedded sub-resource rather than a pointer at a character file. The Dry Field is the first board to author worn armour at all, so nothing had exercised this.
+
+**Authored fire is `BURNING` deposited through `TerrainStateManager.apply`, and the save must then DROP `terrain_state_turns`.** The deposit seam is what gives a state the clock of the ground it lands on (#890), so painting fire on FUEL starts a real countdown and the capture records it — but `ScenarioData.terrain_state_turns` is a *battle* fact, the remainder a mid-battle save is mid-way through, and authored content never sets it. An absent dict reads back as *give each state its ground's own clock*, which is the same number said in the place that owns it. Prolog's braziers dodged this only because flagstone is not fuel and gives no clock at all.
 
 ## The pre-mission draw (#737)
 
