@@ -18,6 +18,11 @@ extends GdUnitTestSuite
 # preload, never load(): a per-test load() reloads the 5 MB mesh library every case (#621).
 const SCENE: PackedScene = preload("res://Scenes/Battle3D/Battle3D.tscn")
 
+# The one file any case here writes, into the real library dir because that is the only place the
+# catalog looks. Removed in after_test as well as where it is written.
+const PROBE_LOOK := "__test_probe_fire_look"
+const PROBE_PATH := EffectLookCatalog.LIBRARY_DIR + PROBE_LOOK + ".tres"
+
 var _scene: Node3D
 var _editor: AttackEditorTool
 
@@ -37,6 +42,8 @@ func after_test() -> void:
 	await await_idle_frame()
 	get_tree().root.remove_child(_scene)
 	_scene.free()
+	if FileAccess.file_exists(PROBE_PATH):
+		DirAccess.remove_absolute(PROBE_PATH)
 
 
 # --- helpers -------------------------------------------------------------------------------
@@ -267,20 +274,30 @@ func test_the_picker_lists_only_looks_authored_for_its_own_element() -> void:
 
 # ...and the picker the panel builds asks THAT question rather than listing the whole library. The
 # wire between the two halves above, and the one a case over a pure filter cannot see.
+#
+# IT HAS TO WRITE A FILE, and the reason is worth stating: the look folder is empty until the dev
+# saves his first one, so a case reading the live catalog would find nothing and pass whatever the
+# slot listed. test_shape_library.gd's Save As case sets the precedent of writing into the real
+# library dir; the cleanup is in after_test as well as inline, so a case that dies part-way cannot
+# leave the tree dirty.
 func test_the_slots_picker_asks_for_its_own_element() -> void:
+	var fire := EffectLook.new()
+	fire.display_name = PROBE_LOOK
+	fire.element = Elemental.Element.FIRE
+	# The folder does not exist until the first look is saved -- DevWidgets.save_over makes it on the
+	# real path, and ResourceSaver on its own does not.
+	DirAccess.make_dir_recursive_absolute(EffectLookCatalog.LIBRARY_DIR)
+	assert_int(ResourceSaver.save(fire, PROBE_PATH)).override_failure_message(
+		"could not write a probe look, so the filter below proves nothing").is_equal(OK)
+
 	_open(_shock_attack())
 	var field: LibraryField = _editor._looks[Elemental.Element.SHOCK]
-
 	var listed: Dictionary = field.list.call()
 
-	var strangers: Array[String] = []
-	for key in listed:
-		var look: EffectLook = listed[key]
-		if look.element != Elemental.Element.SHOCK:
-			strangers.append(key)
-	assert_array(strangers).override_failure_message(
-		"the shock slot's picker offered looks authored for other elements: %s" % str(strangers)
-	).is_empty()
+	assert_bool(EffectLookCatalog.get_library().has(PROBE_LOOK)).override_failure_message(
+		"the catalog cannot see the probe at all, so the filter below proves nothing").is_true()
+	assert_bool(listed.has(PROBE_LOOK)).override_failure_message(
+		"the shock slot's picker offered a look authored for fire").is_false()
 
 
 # A NEW look is stamped with the slot's element, so the panel structurally cannot author the
