@@ -1,5 +1,6 @@
-[gd_resource type="Resource" script_class="WeaponAttackData" format=3]
+[gd_resource type="Resource" script_class="WeaponAttackData" format=3 uid="uid://dv4rg5w7g8gj3"]
 
+[ext_resource type="Script" uid="uid://dle5ob08qngde" path="res://Classes/presentation/EffectLook.gd" id="1_0r8pj"]
 [ext_resource type="Script" uid="uid://ddqeee7njjjq2" path="res://Classes/weapons/WeaponAttackData.gd" id="1_wad"]
 
 [resource]
@@ -7,8 +8,7 @@ script = ExtResource("1_wad")
 elemental_damage_type = 8
 display_name = "Pressurised Spray"
 power = 7
-min_range = 1
 max_range = 3
-damage_kind = 6
 vertical_rule = 1
+damage_kind = 6
 metadata/_custom_type_script = "uid://ddqeee7njjjq2"

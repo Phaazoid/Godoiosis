@@ -1,5 +1,6 @@
 [gd_resource type="Resource" script_class="TransmutationData" format=3 uid="uid://cedpdcssc3i8a"]
 
+[ext_resource type="Script" uid="uid://dle5ob08qngde" path="res://Classes/presentation/EffectLook.gd" id="2_1bq0e"]
 [ext_resource type="Script" uid="uid://bgbidu2bbf33l" path="res://Classes/alchemy/TransmutationData.gd" id="2_l1t8p"]
 [ext_resource type="Resource" uid="uid://cv1sjjfg45guk" path="res://Resources/AttackShapes/Line 5.tres" id="3_shape0"]
 
@@ -7,8 +8,8 @@
 script = ExtResource("2_l1t8p")
 sigils = Array[int]([1, 1, 6])
 display_name = "Zap Cannon"
-damage_kind = 4
 power = 7
 max_range = 0
 attack_shape = ExtResource("3_shape0")
 hits_allies = true
+damage_kind = 4

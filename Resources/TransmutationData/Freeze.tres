@@ -1,6 +1,7 @@
-[gd_resource type="Resource" script_class="TransmutationData" format=3]
+[gd_resource type="Resource" script_class="TransmutationData" format=3 uid="uid://bmpv62rqepwaq"]
 
-[ext_resource type="Script" path="res://Classes/alchemy/TransmutationData.gd" id="2_24q66"]
+[ext_resource type="Script" uid="uid://bgbidu2bbf33l" path="res://Classes/alchemy/TransmutationData.gd" id="2_24q66"]
+[ext_resource type="Script" uid="uid://dle5ob08qngde" path="res://Classes/presentation/EffectLook.gd" id="2_xrrob"]
 [ext_resource type="Resource" uid="uid://bow4n5t5o3t8v" path="res://Resources/AttackShapes/Line 3.tres" id="3_shape0"]
 
 [resource]
@@ -8,9 +9,9 @@ script = ExtResource("2_24q66")
 sigils = Array[int]([2, 2])
 flourishes = Array[int]([4, 3])
 display_name = "Freeze"
-damage_kind = 5
 power = 4
 max_range = 0
 attack_shape = ExtResource("3_shape0")
 hits_allies = true
 targets = 2
+damage_kind = 5

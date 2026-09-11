@@ -1,7 +1,8 @@
-[gd_resource type="Resource" script_class="TransmutationData" format=3]
+[gd_resource type="Resource" script_class="TransmutationData" format=3 uid="uid://di65u0h4kh6q0"]
 
-[ext_resource type="Script" path="res://Classes/alchemy/TransmutationData.gd" id="1_6nsqn"]
-[ext_resource type="Texture2D" path="res://Art/Icons/StateIcons/WetIcon.png" id="2_emron"]
+[ext_resource type="Script" uid="uid://bgbidu2bbf33l" path="res://Classes/alchemy/TransmutationData.gd" id="1_6nsqn"]
+[ext_resource type="Texture2D" uid="uid://c0sxhv5hl83yc" path="res://Art/Icons/StateIcons/WetIcon.png" id="2_emron"]
+[ext_resource type="Script" uid="uid://dle5ob08qngde" path="res://Classes/presentation/EffectLook.gd" id="2_jx6qm"]
 [ext_resource type="Resource" uid="uid://cu0du4b08ervn" path="res://Resources/AttackShapes/Wide 3 Deep 2.tres" id="3_shape0"]
 
 [resource]

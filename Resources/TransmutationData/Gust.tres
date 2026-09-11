@@ -1,11 +1,12 @@
-[gd_resource type="Resource" script_class="TransmutationData" format=3]
+[gd_resource type="Resource" script_class="TransmutationData" format=3 uid="uid://cxhr4ihodwbgm"]
 
+[ext_resource type="Script" uid="uid://dle5ob08qngde" path="res://Classes/presentation/EffectLook.gd" id="1_4kgxa"]
 [ext_resource type="Script" uid="uid://bgbidu2bbf33l" path="res://Classes/alchemy/TransmutationData.gd" id="1_gust"]
 
 [resource]
 script = ExtResource("1_gust")
-display_name = "Gust"
 sigils = Array[int]([6])
+display_name = "Gust"
 max_range = 3
 hits_allies = true
 knockback = 2
