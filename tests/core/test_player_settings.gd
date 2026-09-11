@@ -1,6 +1,6 @@
 # Guards for the player-preferences store (Classes/core/PlayerSettings.gd, #350; two row KINDS
-# since #418). Pure static calls — no nodes built — so this stays orphan-clean. tests/experiments's
-# shape.
+# since #418, three since #136's level row). Pure static calls — no nodes built — so this stays
+# orphan-clean. tests/experiments's shape.
 #
 # before_test() calls PlayerSettings.reset_for_test() so every case starts hermetic (in-memory,
 # defaults only, no disk I/O). The cases that need real disk opt back in against a temp cfg and
@@ -14,6 +14,7 @@ extends GdUnitTestSuite
 const BOOL_SETTING := PlayerSettings.Setting.ALWAYS_SHOW_SQUAD_RINGS
 const CHOICE_SETTING := PlayerSettings.Setting.HEALTH_BARS
 const ZOOM_SETTING := PlayerSettings.Setting.BATTLE_ZOOM_MODE
+const LEVEL_SETTING := PlayerSettings.Setting.SFX_VOLUME
 
 func before_test() -> void:
 	PlayerSettings.reset_for_test()
@@ -196,6 +197,90 @@ func test_a_headless_run_honours_nobodys_preferences() -> void:
 
 	DirAccess.remove_absolute(path)
 	PlayerSettings.reset_for_test()
+
+# --- the LEVEL row, the third kind (#136) --------------------------------------------------------
+
+func test_a_level_row_is_derived_from_its_step_and_is_neither_of_the_other_kinds() -> void:
+	# The kind is read off the table, so a row that loses `step` silently becomes a toggle and
+	# SettingsScreen draws a CheckButton for a volume.
+	assert_bool(PlayerSettings.is_level(LEVEL_SETTING)).is_true()
+	assert_bool(PlayerSettings.is_choice(LEVEL_SETTING)).is_false()
+	assert_bool(PlayerSettings.is_level(BOOL_SETTING)).is_false()
+	assert_bool(PlayerSettings.is_level(CHOICE_SETTING)).is_false()
+
+func test_every_level_row_can_actually_be_rendered() -> void:
+	# The choice row's twin law: bounds that do not admit the default draw a slider parked outside
+	# its own range, and a zero step makes the handle unmovable.
+	for setting: PlayerSettings.Setting in PlayerSettings.Setting.values():
+		if not PlayerSettings.is_level(setting):
+			continue
+		var name: String = PlayerSettings.Setting.keys()[setting]
+		var low := PlayerSettings.min_of(setting)
+		var high := PlayerSettings.max_of(setting)
+		assert_float(high).override_failure_message(
+				"%s is a level row whose max is not above its min" % name).is_greater(low)
+		assert_float(PlayerSettings.step_of(setting)).override_failure_message(
+				"%s is a level row with a zero step -- the handle cannot move" % name).is_greater(0.0)
+		var fallback: float = PlayerSettings.default_value(setting)
+		assert_float(fallback).override_failure_message(
+				"%s defaults outside its own range" % name).is_between(low, high)
+
+func test_a_level_reads_and_writes_through_its_own_facade() -> void:
+	PlayerSettings.set_level(LEVEL_SETTING, 0.5)
+	assert_float(PlayerSettings.level_of(LEVEL_SETTING)).is_equal_approx(0.5, 0.001)
+
+func test_writing_a_level_outside_its_range_is_clamped_rather_than_stored() -> void:
+	# The slider cannot author one, but GameKnobs' generic set_value and a hand-edited cfg both can.
+	PlayerSettings.set_level(LEVEL_SETTING, 4.0)
+	assert_float(PlayerSettings.level_of(LEVEL_SETTING)).is_equal_approx(
+			PlayerSettings.max_of(LEVEL_SETTING), 0.001)
+
+func test_writing_a_level_row_through_the_toggle_facade_is_refused() -> void:
+	# set_on would write a BOOL into a level row; level_of then reads float(true) = 1.0, i.e. the
+	# volume silently jumps to full and stays there across relaunches. #647's shape, third kind.
+	PlayerSettings.set_level(LEVEL_SETTING, 0.25)
+	PlayerSettings.set_on(LEVEL_SETTING, true)
+	assert_float(PlayerSettings.level_of(LEVEL_SETTING)).override_failure_message(
+			"set_on wrote a bool into a level row -- the volume is now whatever float(true) means") \
+		.is_equal_approx(0.25, 0.001)
+
+func test_writing_a_toggle_row_through_the_level_facade_is_refused() -> void:
+	PlayerSettings.set_on(BOOL_SETTING, true)
+	PlayerSettings.set_level(BOOL_SETTING, 0.5)
+	assert_bool(PlayerSettings.is_on(BOOL_SETTING)).override_failure_message(
+			"set_level wrote a float into a toggle row").is_true()
+
+func test_a_level_survives_a_relaunch_as_a_NUMBER() -> void:
+	# THE FALSIFICATION TARGET. load_state's toggle branch coerces with bool(), so a level answered
+	# after it comes back as `true` -- and float(true) is 1.0, so every saved volume relaunches at
+	# maximum, consistently, with nothing in the log. Reverting the is_level branch reds this case
+	# and nothing else in this file.
+	var path := "user://settings_level_roundtrip_test.cfg"
+	_open_disk(path)
+	PlayerSettings.set_level(LEVEL_SETTING, 0.35)
+	_relaunch()
+
+	assert_float(PlayerSettings.level_of(LEVEL_SETTING)).override_failure_message(
+			"a saved level did not come back as the number that was written") \
+		.is_equal_approx(0.35, 0.001)
+	_close_disk()
+
+func test_a_hand_edited_level_out_of_range_is_clamped_on_load() -> void:
+	# The cfg is a text file the player can open, so this is reachable input rather than a bug --
+	# the choice branch's own reasoning, answered by clamping because the nearest end of a range
+	# means something where an index outside a list does not.
+	var path := "user://settings_level_clamp_test.cfg"
+	_open_disk(path)
+	PlayerSettings.set_level(LEVEL_SETTING, 0.5)
+	var cfg := ConfigFile.new()
+	assert_int(cfg.load(path)).is_equal(OK)
+	cfg.set_value("settings", PlayerSettings.Setting.keys()[LEVEL_SETTING], 9.0)
+	cfg.save(path)
+	_relaunch()
+
+	assert_float(PlayerSettings.level_of(LEVEL_SETTING)).is_equal_approx(
+			PlayerSettings.max_of(LEVEL_SETTING), 0.001)
+	_close_disk()
 
 # --- helpers -----------------------------------------------------------------------------------
 

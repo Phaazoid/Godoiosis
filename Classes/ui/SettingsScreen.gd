@@ -32,6 +32,8 @@ signal closed
 const BODY_WIDTH := 520
 const SEGMENT_GAP := 6
 const SEGMENT_HEIGHT := 32
+# Wide enough for "100%" without the slider reflowing as the number's width changes under a drag.
+const LEVEL_READOUT_WIDTH := 52
 const ROW_SEPARATION := 14
 # A floor, not a look: on a viewport too short to hold the chrome the subtraction below goes
 # negative, and a card with no body at all is the bug this whole file is fixing.
@@ -57,9 +59,12 @@ var _panes: Dictionary[Pane, Control] = {}
 var _pane_buttons: Dictionary[Pane, Button] = {}
 
 # Every control this page built, by the setting it shows: a CheckButton for a toggle row, the ordered
-# segment Buttons for a choice row. Kept only so _process can reconcile them against the store.
+# segment Buttons for a choice row, the HSlider and its readout for a level row. Kept only so
+# _process can reconcile them against the store.
 var _toggles: Dictionary[PlayerSettings.Setting, CheckButton] = {}
 var _segments: Dictionary[PlayerSettings.Setting, Array] = {}
+var _levels: Dictionary[PlayerSettings.Setting, HSlider] = {}
+var _readouts: Dictionary[PlayerSettings.Setting, Label] = {}
 
 func _init() -> void:
 	button_size = Vector2(150, 36)
@@ -237,6 +242,8 @@ func _add_row(parent: Container, setting: PlayerSettings.Setting) -> void:
 	var first := parent.get_child_count()
 	if PlayerSettings.is_choice(setting):
 		_add_choice_row(parent, setting)
+	elif PlayerSettings.is_level(setting):
+		_add_level_row(parent, setting)
 	else:
 		_add_toggle_row(parent, setting)
 	_apply_desc_tooltip(parent, first, setting)
@@ -288,6 +295,47 @@ func _add_choice_row(parent: Container, setting: PlayerSettings.Setting) -> void
 	_segments[setting] = built
 
 
+# An HSlider, which needs none of the choice row's popup caution — a slider is a plain Control and
+# opens nothing. The readout beside it is what makes the value legible without dragging, the same
+# want the segmented strip answers by showing every option at once.
+func _add_level_row(parent: Container, setting: PlayerSettings.Setting) -> void:
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", SEGMENT_GAP)
+
+	var title := Label.new()
+	title.text = PlayerSettings.title_of(setting)
+	row.add_child(title)
+
+	var slider := HSlider.new()
+	slider.min_value = PlayerSettings.min_of(setting)
+	slider.max_value = PlayerSettings.max_of(setting)
+	slider.step = PlayerSettings.step_of(setting)
+	slider.value = PlayerSettings.level_of(setting)
+	slider.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	slider.custom_minimum_size = Vector2(0, SEGMENT_HEIGHT)
+
+	var readout := Label.new()
+	readout.custom_minimum_size = Vector2(LEVEL_READOUT_WIDTH, 0)
+	readout.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	readout.text = _level_text(slider.value)
+
+	# Straight through to the store, same as every other row -- no Apply, no local copy. The store
+	# persists per write and a slider emits one per STEP, which is what sets the step in DEFS.
+	slider.value_changed.connect(func(v: float):
+		PlayerSettings.set_level(setting, v)
+		readout.text = _level_text(v))
+
+	row.add_child(slider)
+	row.add_child(readout)
+	parent.add_child(row)
+	_levels[setting] = slider
+	_readouts[setting] = readout
+
+
+static func _level_text(value: float) -> String:
+	return "%d%%" % roundi(value * 100.0)
+
+
 # Reconcile every control against the store, so a change made anywhere else lands here (#647 — see
 # the header). Each write is `no_signal`, or setting the control would fire its own handler back into
 # the store; the value would agree, but the page would be writing on a frame the player did not touch
@@ -307,6 +355,13 @@ func _process(_delta: float) -> void:
 			# button through the SIGNAL path, which is the path this is deliberately not using.
 			if segment.button_pressed != (i == picked):
 				segment.set_pressed_no_signal(i == picked)
+	for setting: PlayerSettings.Setting in _levels:
+		var slider: HSlider = _levels[setting]
+		var level := PlayerSettings.level_of(setting)
+		if not is_equal_approx(slider.value, level):
+			slider.set_value_no_signal(level)
+			var readout: Label = _readouts[setting]
+			readout.text = _level_text(level)
 
 # THE DESCRIPTION IS HOVER TEXT, not a line under the row (dev, 2026-09-02: the page was getting too
 # crowded). The store is untouched -- `desc` is still the one place the words live and this page still
