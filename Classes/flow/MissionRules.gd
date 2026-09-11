@@ -37,11 +37,12 @@ enum LoseCondition {
 	NONE,         # sentinel: nothing fired. Never authored.
 	SQUAD_LOST,   # the #96 floor: always on, never authored.
 	ROUND_LIMIT,  # the objectives were not met within ScenarioData.round_limit rounds.
+	POINT_LOST,   # a hostile unit reached a Kind.DEFEND zone (#571).
 }
 
 # What the Scenario tab offers. A const rather than "every enum value" so the two non-authored
 # members are a decision, not an accident of a loop's shape.
-const AUTHORABLE: Array[LoseCondition] = [LoseCondition.ROUND_LIMIT]
+const AUTHORABLE: Array[LoseCondition] = [LoseCondition.ROUND_LIMIT, LoseCondition.POINT_LOST]
 
 # The banner's body text for a defeat. One answer, one reader (MissionEndBanner).
 static func defeat_reason(condition: LoseCondition) -> String:
@@ -50,6 +51,8 @@ static func defeat_reason(condition: LoseCondition) -> String:
 			return "Your squad has fallen."
 		LoseCondition.ROUND_LIMIT:
 			return "Time ran out."
+		LoseCondition.POINT_LOST:
+			return "The position was overrun."
 	return ""
 
 # Rounds left on the clock -- the HUD's countdown. A limit of 0 is NO limit, so it never runs out.
@@ -62,6 +65,34 @@ static func rounds_remaining(rounds_elapsed: int, round_limit: int) -> int:
 # shape). The clock expires when the LAST allowed round completes, not a round early.
 static func round_limit_reached(rounds_elapsed: int, round_limit: int) -> bool:
 	return round_limit > 0 and rounds_remaining(rounds_elapsed, round_limit) <= 0
+
+# A hostile unit standing anywhere inside one of these zones (#571). PRESENCE, not capture: a
+# defended point is fragile cargo, so an enemy getting that close has already destroyed it -- there
+# is no action to spend, nothing changes hands, and the zone therefore carries no owner. Its own
+# Kind rather than a CAPTURE zone with an owner, because the two do opposite jobs: one is claimed by
+# spending a main action, the other is lost by somebody standing there.
+#
+# DOWNED COUNTS. "Made it that close" is about arrival, and the alternative -- ACTIVE only -- would
+# let the player shove enemy bodies onto their own cargo for free.
+static func defend_zone_breached(board: BoardContext, zone_names: Array[String],
+		zones: ZoneManager) -> bool:
+	return breaching_unit(board, zone_names, zones) != null
+
+# WHO is standing on it, for the HUD and for a test that wants to name the intruder. Derived from by
+# the predicate above so the two cannot drift (has_active_hostiles' shape).
+static func breaching_unit(board: BoardContext, zone_names: Array[String],
+		zones: ZoneManager) -> Unit:
+	if zones == null or zone_names.is_empty():
+		return null
+	for unit in board.units:
+		if not is_instance_valid(unit) or unit.is_dead():
+			continue
+		if not Team.is_enemy(Team.Faction.PLAYER, unit.get_faction()):
+			continue
+		for name in zone_names:
+			if zones.contains(name, unit.movement.cell):
+				return unit
+	return null
 
 # Is anyone hostile to the player still commandable? Downed counts the same as dead, on both
 # sides. Hostility is Team's call, not ours -- an ALLY faction fighting beside you needs no edit.

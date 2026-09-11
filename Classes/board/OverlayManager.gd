@@ -21,6 +21,7 @@ class_name OverlayManager
 @onready var capture_overlay = $CaptureOverlay
 @onready var extraction_overlay = $ExtractionOverlay
 @onready var deployment_overlay = $DeploymentOverlay
+@onready var defend_overlay = $DefendOverlay
 
 const PATH_ERROR := preload("res://Art/Icons/ArrowIcons/ERROR.png")
 const PATH_HORIZONTAL := preload("res://Art/Icons/ArrowIcons/horizontal.png")
@@ -153,6 +154,11 @@ static var PICK_FLASH_PERIOD := 0.45
 # stacks' rule is that a mirrored color is COPIED from here, never restated — a literal on
 # each side is two answers to "what colour is a patrol zone".
 const ZONE_PATROL_MODULATE := Color(1, 0.5, 0, 0.35)
+# Gold, for the #571 cargo. Deliberately NOT a fourth blue-green: capture is cyan, extraction green
+# and deployment violet all read as "go here", and a defended point means the opposite. It sits near
+# PATROL's orange, which is survivable because PATROL is authoring-only -- set_zone_visibility keeps
+# it off the board outside the Tile Brush tab, so the two never draw together in play.
+const ZONE_DEFEND_MODULATE := Color(1, 0.82, 0.25, 0.45)
 const ZONE_HIGHLIGHT_MODULATE := Color(1, 1, 1, 0.45)
 
 
@@ -387,6 +393,7 @@ func _ready() -> void:
 	capture_overlay.modulate = Color(0.3, 0.9, 1, 0.5)
 	extraction_overlay.modulate = Color(0.4, 1, 0.5, 0.5)
 	deployment_overlay.modulate = Color(0.65, 0.5, 1, 0.45)
+	defend_overlay.modulate = ZONE_DEFEND_MODULATE
 	# These three restate BoardOverlays.LAYERS' literal rather than sharing a const the way PATROL
 	# does, and that fork is deliberate: the Game tab's markup-colour knob rewrites the LAYERS
 	# entry, so a shared const would be replaced by a literal on the first Save. PATROL is excluded
@@ -401,6 +408,7 @@ func _ready() -> void:
 		ZoneManager.Kind.CAPTURE: capture_overlay,
 		ZoneManager.Kind.EXTRACTION: extraction_overlay,
 		ZoneManager.Kind.DEPLOYMENT: deployment_overlay,
+		ZoneManager.Kind.DEFEND: defend_overlay,
 	}
 	# The Tile Brush's picked-zone highlight: a white lift drawn over the kind layers so the picked
 	# zone reads against its neighbours. Code-built as a duplicate of zone_overlay (same tileset and

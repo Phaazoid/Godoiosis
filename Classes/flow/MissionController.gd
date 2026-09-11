@@ -947,6 +947,20 @@ func _in_any_zone(zone_names: Array[String], cell: Vector2i) -> bool:
 #  Lose conditions (#101)
 # ==============================================================================
 
+# The cargo this mission is holding -- every painted Kind.DEFEND zone. ONE answer, and both readers
+# are downstream of it: the lose condition asks whether a hostile is standing in any of them, and
+# the HUD names them. There is no owner and no progress to hold, which is why this whole section is
+# a pass-through to the zone store rather than a battle-scoped field like _captured_zones: a
+# defended point is authored geometry that either still holds or has ended the mission.
+func defend_zone_names() -> Array[String]:
+	return game.zone_manager.zone_names_of(ZoneManager.Kind.DEFEND)
+
+# Who is standing on the cargo right now, null while it holds. The HUD's readout and the predicate
+# both come off MissionRules, so the row and the rule cannot disagree.
+func breaching_unit(board: BoardContext) -> Unit:
+	return MissionRules.breaching_unit(board, defend_zone_names(), game.zone_manager)
+
+
 func set_lose_conditions(list: Array[MissionRules.LoseCondition], limit: int) -> void:
 	lose_conditions.assign(list)
 	round_limit = limit
@@ -960,6 +974,11 @@ func lose_conditions_missing_setup() -> Array[MissionRules.LoseCondition]:
 	var missing: Array[MissionRules.LoseCondition] = []
 	if lose_conditions.has(MissionRules.LoseCondition.ROUND_LIMIT) and round_limit <= 0:
 		missing.append(MissionRules.LoseCondition.ROUND_LIMIT)
+	# #571's geometry half, and it is objectives_missing_geometry's rule rather than the clock's:
+	# the cargo IS the painted zone, so a declared POINT_LOST with nothing painted has nothing to
+	# lose and the mission is simply not the mission that was authored.
+	if lose_conditions.has(MissionRules.LoseCondition.POINT_LOST) and defend_zone_names().is_empty():
+		missing.append(MissionRules.LoseCondition.POINT_LOST)
 	return missing
 
 # The ONE increment point, called from game._on_round_completed. TurnManager emits round_completed
@@ -983,14 +1002,16 @@ func failure_for(board: BoardContext) -> MissionRules.LoseCondition:
 	if not board.faction_has_active_units(Team.Faction.PLAYER):
 		return MissionRules.LoseCondition.SQUAD_LOST
 	for condition in lose_conditions:
-		if _condition_fired(condition):
+		if _condition_fired(condition, board):
 			return condition   # ANY, not all -- the first one that fires ends it
 	return MissionRules.LoseCondition.NONE
 
-func _condition_fired(condition: MissionRules.LoseCondition) -> bool:
+func _condition_fired(condition: MissionRules.LoseCondition, board: BoardContext) -> bool:
 	match condition:
 		MissionRules.LoseCondition.ROUND_LIMIT:
 			return MissionRules.round_limit_reached(_rounds_elapsed, round_limit)
+		MissionRules.LoseCondition.POINT_LOST:
+			return MissionRules.defend_zone_breached(board, defend_zone_names(), game.zone_manager)
 		MissionRules.LoseCondition.NONE, MissionRules.LoseCondition.SQUAD_LOST:
 			return false   # never authored; the wipe is answered above, not from the list
 	push_error("MissionController: no rule for lose condition %s" % MissionRules.LoseCondition.keys()[condition])
