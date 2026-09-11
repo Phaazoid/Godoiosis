@@ -135,3 +135,54 @@ func test_an_authored_kind_is_clean() -> void:
 	var attack := _manhattan(2, 2)
 	attack.damage_kind = AttackData.Kind.CORROSION
 	assert_array(AttackLint.check(attack)).is_empty()
+
+
+# --- a look that has come loose from the attack wearing it (#900) -----------------------------
+
+func _shock() -> WeaponAttackData:
+	var attack := _manhattan(2, 2)   # a range the lint is happy with, so only the look can red
+	attack.elemental_damage_type = Elemental.Element.SHOCK
+	return attack
+
+
+func _look(element: Elemental.Element) -> EffectLook:
+	var look := EffectLook.new()
+	look.element = element
+	return look
+
+
+# The picker only ever offers matching looks, so a mismatch means the .tres was hand-edited or an
+# element was retyped underneath it -- and the effect would play another element's numbers.
+func test_a_look_authored_for_another_element_is_reported() -> void:
+	var attack := _shock()
+	attack.effect_looks[Elemental.Element.SHOCK] = _look(Elemental.Element.FIRE)
+
+	var findings := AttackLint.check(attack)
+
+	assert_int(findings.size()).override_failure_message(
+		"a shock slot holding a fire look passed the lint").is_equal(1)
+	assert_int(findings[0]["severity"]).override_failure_message(
+		"a mismatched look was reported as BLOCKS -- it must not be, or the one panel that can "
+		+ "repair it is refused the save. The attack still fires; it just does not look like its file"
+	).is_equal(AttackLint.Severity.DEGRADES)
+
+
+# A slot for an element the attack no longer carries is never read. Harmless in itself, and the tell
+# that the element moved and somebody's authored look went quiet.
+func test_a_look_for_an_element_the_attack_does_not_carry_is_reported() -> void:
+	var attack := _manhattan(2, 2)   # no element at all, and a range the lint is happy with
+	attack.effect_looks[Elemental.Element.SHOCK] = _look(Elemental.Element.SHOCK)
+
+	var findings := AttackLint.check(attack)
+
+	assert_int(findings.size()).override_failure_message(
+		"a look nothing will ever read passed the lint").is_equal(1)
+	assert_str(findings[0]["text"]).contains("carries no")
+
+
+func test_a_matching_look_on_an_attack_that_carries_it_is_clean() -> void:
+	var attack := _shock()
+	attack.effect_looks[Elemental.Element.SHOCK] = _look(Elemental.Element.SHOCK)
+
+	assert_array(AttackLint.check(attack)).override_failure_message(
+		"a correctly attached look was reported as a fault").is_empty()

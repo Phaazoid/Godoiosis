@@ -379,7 +379,9 @@ func _on_volley_struck(attack: AttackAction) -> void:
 	# ...and the same current as a picture the water can read (#887 slice 2). Pushed here rather
 	# than by the effect, because the mask has to share the board mask's own rect and BoardMirror is
 	# what owns that; the effect only says when and how strong.
-	if ArcLightning.crawl:
+	# Asked of the NODE, not of the static, since #900: the attack may author a look that turns the
+	# crawl off for this shock alone, and the effect is what has just resolved it.
+	if _arc.draws_crawl():
 		_board_mirror.push_shock(game.grid, Conduction.steps_of(attack.arc_links))
 
 
@@ -520,8 +522,13 @@ func _drive_crawl() -> void:
 	if is_equal_approx(age, _crawl_pushed):
 		return
 	_crawl_pushed = age
-	_board_mirror.push_shock_clock(age, ArcLightning.crawl_life, ArcLightning.arc_step_delay,
-			_arc.crawl_tint() if _arc != null else Color.TRANSPARENT)
+	if _arc == null:
+		_board_mirror.push_shock_clock(age, 0.0, 0.0, Color.TRANSPARENT)
+		return
+	# The life and the ring delay are the EFFECT's answers rather than the statics since #900 -- an
+	# attack may author both, and on this frame path there is no attack in hand to resolve from.
+	_board_mirror.push_shock_clock(age, _arc.crawl_life_now(), _arc.crawl_step_now(),
+			_arc.crawl_tint())
 
 
 # #217's photosensitivity switch, which every white-out in this arc owes a reading of. The TIMING is

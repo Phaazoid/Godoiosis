@@ -45,7 +45,7 @@ func _open(attack: AttackData) -> void:
 	_editor._mode = AttackEditorTool.Mode.WEAPON_ATTACK
 	_editor.current = attack
 	_editor._loaded_name = ""
-	_editor._stage_shape()
+	_editor._stage_fields()
 	_editor.populate()
 
 
@@ -157,7 +157,7 @@ func test_the_headings_are_drawn_in_the_order_the_resource_declares() -> void:
 func test_a_carving_gets_its_sigils_section_between_identity_and_the_geometry() -> void:
 	_editor._mode = AttackEditorTool.Mode.TRANSMUTATION
 	_editor.current = TransmutationData.new()
-	_editor._stage_shape()
+	_editor._stage_fields()
 	_editor.populate()
 	var identity := _index_of("Identity")
 	var sigils := _index_of("Sigils and flourishes")

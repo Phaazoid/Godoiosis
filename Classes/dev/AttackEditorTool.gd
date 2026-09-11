@@ -26,12 +26,17 @@ class_name AttackEditorTool
 # because nobody excluded it. Which rows are HIDDEN right now is the resource's answer too
 # (hidden_fields), applied live off `changed` rather than by rebuilding -- see DevWidgets.
 #
-# Five fields get a bespoke drawer instead, each because a reflective control cannot express what
+# Six fields get a bespoke drawer instead, each because a reflective control cannot express what
 # is being authored: the RANGE trio (one toggle over max_range 0, which is a different kind of
 # attack rather than a shorter one), the SHAPE (a shared library file needs picking, naming and
-# deleting -- #808), the EFFECT pair (two bools over one three-way question), the damage KIND (NONE
-# is answered by rule and must never be offered) and the empowered form (a picker, never a nested
-# editor). The blend, sigils and flourishes were already bespoke for their own reasons.
+# deleting -- #808), the EFFECT LOOKS (the same, once per element, with a page of override rows
+# under each -- #900), the EFFECT pair (two bools over one three-way question), the damage KIND
+# (NONE is answered by rule and must never be offered) and the empowered form (a picker, never a
+# nested editor). The blend, sigils and flourishes were already bespoke for their own reasons.
+#
+# A SECTION HIDES WITH ITS ROWS since #900 -- the look section is the first that can be empty, and a
+# heading drawn over nothing is worse than an absent section. Derived in _draw_sections rather than
+# declared, so the resource states relevance once (hidden_fields) and not twice.
 #
 # FAMILY also carries the family's EXTRA_ATTACKS (#473), which is what closed the loop the Weapon
 # Attack mode had been authoring into: WeaponAttackCatalog's library had exactly ONE reader in the
@@ -60,22 +65,40 @@ const NEW_SHAPE_KEY := "(new shape)"
 const UNNAMED_SHAPE_KEY := "(unnamed - Save as... to name it)"
 const NO_EMPOWERED_KEY := "(none — fires the same however full the tank is)"
 
+# ...and the look picker's three, worded for what THEY explain (#900). Same order and same reason.
+const NO_LOOK_KEY := "(none - the Game tab's own values)"
+const NEW_LOOK_KEY := "(new look)"
+const UNNAMED_LOOK_KEY := "(unnamed - Save as... to name it)"
+
 var _mode := Mode.TRANSMUTATION
 var current: AttackData = null
 var current_template: WeaponData = null   # FAMILY only: which family "current" belongs to
-# The shape the GRID edits: a COPY of the library resource `current.attack_shape` points at, never
-# the library resource itself (#808). Editing the shared object directly would break the dev's own
-# ruling twice over -- the commit point is Update, not every keystroke (2026-08-27), and Save As
-# could not fork, since take_over_path would move the object every other attack is still holding.
-# An UNNAMED shape has no library object to protect, so the attack points straight at this copy and
-# is saved with it embedded.
-var _shape_copy: AttackShape = null
+# The two SHARED-LIBRARY fields this form edits, both on `LibraryField` since #900: what the grid
+# stamps, and one look per element the loaded attack can author for. Each holds a COPY of the
+# library resource it points at, never the library resource itself -- editing the shared object
+# would break the commit-point ruling (Update, not every keystroke) and make Save As impossible,
+# take_over_path moving the object every other attack is still holding.
+var _shape: LibraryField = null
+var _looks: Dictionary[Elemental.Element, LibraryField] = {}
 var _items := {}
 # Which dropdown entry "current" was loaded from ("" = a New attack). Pool modes load a COPY with
 # no resource_path, so nothing else records this -- and Update's load-gate needs it (2026-08-11).
 var _loaded_name := ""
 
 func _ready():
+	_shape = LibraryField.new(self, status_label)
+	_shape.noun = "shape"
+	_shape.library_dir = AttackShapeCatalog.LIBRARY_DIR
+	_shape.none_key = NO_SHAPE_KEY
+	_shape.new_key = NEW_SHAPE_KEY
+	_shape.unnamed_key = UNNAMED_SHAPE_KEY
+	_shape.list = func() -> Dictionary: return AttackShapeCatalog.get_library()
+	_shape.held = func() -> Resource: return null if current == null else current.attack_shape
+	_shape.assign = func(picked: Resource) -> void:
+		if current != null:
+			current.attack_shape = picked as AttackShape
+	_shape.make = func() -> Resource: return AttackShape.new()
+	_shape.refresh = populate
 	_refresh_list()
 	_on_new_pressed()
 
@@ -98,7 +121,7 @@ func _on_family_mode_selected():
 	if _items.is_empty():
 		current_template = null
 		current = null
-		_shape_copy = null
+		_stage_fields()
 		_loaded_name = ""
 		name_input.text = ""
 		populate()
@@ -161,7 +184,7 @@ func _load_selected():
 		current_template = null
 		current = picked.duplicate(true)
 	_loaded_name = target
-	_stage_shape()
+	_stage_fields()
 	_refresh_buttons()
 	populate()
 
@@ -180,7 +203,7 @@ func _on_new_pressed():
 	# covers the aimed cell, which is an ordinary single-target attack rather than the useless state
 	# a pattern-less attack used to be (#808). The shape row is where it gains a footprint -- either
 	# by adopting a library shape or by starting a new one.
-	_stage_shape()
+	_stage_fields()
 	_loaded_name = ""
 	name_input.text = ""
 	load_dropdown.select(-1)
@@ -215,7 +238,7 @@ func _on_update_pressed():
 		var main_path: String = current.resource_path if current != null else ""
 		var victim := "family '%s'" % target
 		victim += " and its main attack" if main_path != "" else " (extras only -- its main has no file yet)"
-		victim += _shape_victim()
+		victim += _shared_victims()
 		# Confirmed as well as load-gated (#380's convention), both branches: the gate cannot
 		# catch a mis-click at the attack you DID load.
 		DevWidgets.confirm_overwrite(self, victim, "the editor's values",
@@ -227,12 +250,12 @@ func _on_update_pressed():
 		push_warning(msg)
 		status_label.text = msg
 		return
-	DevWidgets.confirm_overwrite(self, "attack '%s'%s" % [target, _shape_victim()], "the editor's values",
+	DevWidgets.confirm_overwrite(self, "attack '%s'%s" % [target, _shared_victims()], "the editor's values",
 		func() -> void: _update_confirmed(path))
 
 
 func _update_confirmed(path: String) -> void:
-	if not _save_named_shape():
+	if not _save_shared_files():
 		return
 	if DevWidgets.save_over(current, path, status_label):
 		_loaded_name = current.display_name   # a rename moves the loaded identity with it
@@ -243,7 +266,7 @@ func _update_confirmed(path: String) -> void:
 # back -- save_over already puts its own failure in the status label, and the half that landed is
 # on disk either way.
 func _update_family_confirmed(family_path: String, main_path: String) -> void:
-	if not _save_named_shape():
+	if not _save_shared_files():
 		return
 	if main_path != "" and not DevWidgets.save_over(current, main_path, status_label):
 		return
@@ -312,7 +335,7 @@ func _on_save_as_pressed():
 	var path := dir + chosen_name + ".tres"
 	if DevWidgets.refuse_existing_file(path, "attack", status_label):
 		return
-	if not _save_named_shape():
+	if not _save_shared_files():
 		return
 	current.display_name = chosen_name
 	if DevWidgets.save_over(current, path, status_label):
@@ -345,16 +368,36 @@ func populate():
 func _draw_sections() -> void:
 	var rows := {}
 	var drawn := {}
+	var headings: Array[Dictionary] = []
 	for section: Dictionary in current.call("property_sections"):
 		var title: String = section["title"]
-		DevWidgets.add_heading(editor_container, title)
+		var heading := DevWidgets.add_heading(editor_container, title)
+		var before := rows.size()
+		var here: PackedStringArray = []
 		for field: String in section["fields"]:
 			if drawn.has(field):
 				continue
 			for claimed: String in _draw_field(field, rows):
 				drawn[claimed] = true
-		_section_tail(title)
-	DevWidgets.bind_hidden_fields(current, rows)
+				here.append(claimed)
+		var tail := _section_tail(title)
+		# A HEADING HIDES WITH ITS OWN ROWS (#900) -- but only when every row the section drew is one
+		# the binder governs. A section whose fields are partly bespoke (the range block owns its own
+		# visibility and registers nothing) still has something visible under it, so its title stays;
+		# a title drawn over nothing at all is worse than an absent section. Derived here rather than
+		# declared on the resource, so a new fully-hideable section needs no second statement.
+		if not tail and rows.size() > before and rows.size() - before == here.size():
+			headings.append({"nodes": heading, "fields": _registered(here, rows)})
+	DevWidgets.bind_hidden_fields(current, rows, headings)
+
+
+# The registered field names among the ones a section drew, as the binder wants them.
+func _registered(drawn_here: PackedStringArray, rows: Dictionary) -> PackedStringArray:
+	var named: PackedStringArray = []
+	for field in drawn_here:
+		if rows.has(field):
+			named.append(field)
+	return named
 
 
 # One field, and the names it consumed. The match is the whole list of fields this panel authors
@@ -366,6 +409,14 @@ func _draw_field(field: String, rows: Dictionary) -> PackedStringArray:
 		"attack_shape":
 			_populate_shape()
 			return PackedStringArray(["attack_shape"])
+		"effect_looks":
+			# REGISTERED EVEN WHEN IT DREW NOTHING, which is the whole point: an attack carrying no
+			# lookable element draws no rows, and it is exactly then that the heading has to hide.
+			# An unregistered field leaves its title standing over an empty section.
+			var first := editor_container.get_child_count()
+			_populate_effect_looks()
+			rows["effect_looks"] = DevWidgets._added_since(editor_container, first)
+			return PackedStringArray(["effect_looks"])
 		"heals":
 			return _populate_effect()
 		"damage_kind":
@@ -392,9 +443,14 @@ func _draw_field(field: String, rows: Dictionary) -> PackedStringArray:
 # A line this panel adds under a section that is not a field of the attack at all. Carriers answer
 # "can anything actually swing this", which is an identity question about the loaded file rather
 # than a property, so it belongs under Identity and not in a section of its own.
-func _section_tail(title: String) -> void:
+#
+# TRUE when it added something, which is what stops that section's heading joining the hide rule
+# above: a tail is not a registered field, so it would go on drawing under a hidden title.
+func _section_tail(title: String) -> bool:
 	if title == "Identity" and _mode == Mode.WEAPON_ATTACK:
 		_populate_carriers()
+		return true
+	return false
 
 
 # The RANGE fork as ONE toggle (#825; dev, 2026-09-07: "there should be a toggle here between max
@@ -580,217 +636,200 @@ func _populate_family() -> void:
 # property edit -- and because the grid's caption has to come from the ATTACK, the shape having no
 # range to derive an anchor from.
 #
-# What the grid edits is `_shape_copy`, never the library resource. See its declaration.
+# The pick/name/fork/delete flow itself is `LibraryField` since #900, shared with the look rows
+# below; what stays here is the part that is about SHAPES -- the caption, the grid, and the sentence
+# a shapeless attack gets.
 func _populate_shape() -> void:
 	if current == null:
 		return
-	var library := AttackShapeCatalog.get_library()
-	var row := HBoxContainer.new()
-	var label := Label.new()
-	label.text = "Shape"
-	row.add_child(label)
-
-	# The rows, in the order they are added, so the index the picker reports maps straight back.
-	var keys: Array[String] = [NO_SHAPE_KEY, NEW_SHAPE_KEY]
-	var named: Array[String] = []
-	for k in library:
-		named.append(k)
-	named.sort()
-	keys.append_array(named)
-	# One row for "a shape the library cannot name": never saved, or saved and since deleted. Both
-	# are held shapes, and the picker has to be able to SHOW a held shape whatever its provenance.
-	var unnamed := current.attack_shape != null and _library_key_for(library) == ""
-	if unnamed:
-		keys.append(UNNAMED_SHAPE_KEY)
-
-	var picker := OptionButton.new()
-	for k in keys:
-		picker.add_item(k)
-	picker.select(_shape_row_index(keys, library, unnamed))
-	picker.item_selected.connect(func(idx: int) -> void: _on_shape_picked(keys[idx], library))
-	row.add_child(picker)
-	editor_container.add_child(row)
-	DevWidgets.apply_tooltip(row, DevWidgets.property_tip(current, "attack_shape"))
-
-	if _shape_copy == null:
+	var tip := DevWidgets.property_tip(current, "attack_shape")
+	_shape.draw_picker(editor_container, "Shape", tip)
+	if _shape.staged == null:
 		DevWidgets.add_label(editor_container, "No shape: this attack covers the cell it is aimed at.")
 		return
-
-	_populate_shape_users()
+	_shape.draw_users(editor_container, "Unnamed shape -- this attack alone. Save it to share it.")
 	var first := editor_container.get_child_count()
-	DevWidgets.add_cell_grid(editor_container, "Stamp", _shape_copy, "stamp", current)
-	DevWidgets._tip_rows_from(editor_container, first, DevWidgets.property_tip(current, "attack_shape"))
-
-	var save_row := HBoxContainer.new()
-	var name_field := LineEdit.new()
-	name_field.placeholder_text = "shape name"
-	name_field.custom_minimum_size = Vector2(160, 0)
-	save_row.add_child(name_field)
-	var save_as := Button.new()
-	save_as.text = "Save shape as..."
-	save_as.pressed.connect(func() -> void: _on_shape_save_as(name_field.text.strip_edges()))
-	save_row.add_child(save_as)
-	var shape_path: String = _shape_copy.resource_path if _shape_copy != null else ""
-	if shape_path != "" or (current.attack_shape != null and current.attack_shape.resource_path != ""):
-		var delete := Button.new()
-		delete.text = "Delete shape"
-		delete.pressed.connect(_on_shape_delete_pressed)
-		save_row.add_child(delete)
-	editor_container.add_child(save_row)
+	DevWidgets.add_cell_grid(editor_container, "Stamp", _shape.staged, "stamp", current)
+	DevWidgets._tip_rows_from(editor_container, first, tip)
+	_shape.draw_save_row(editor_container)
 
 
-# Which library row the picker opens on. A named shape names itself; an unnamed one is its own row;
-# nothing at all is row zero, which is where (none) has to sit for the same reason the resource
-# swapper's does.
-func _shape_row_index(keys: Array[String], library: Dictionary, unnamed: bool) -> int:
-	if current.attack_shape == null:
-		return 0
-	if unnamed:
-		return keys.find(UNNAMED_SHAPE_KEY)
-	return keys.find(_library_key_for(library))
-
-
-# The library's name for the shape this attack holds, "" if the library does not have it. Matched on
-# resource_path rather than identity: the catalog scan and the attack's own load are the same cached
-# object today, but a path compare cannot be broken by a cache miss (AttackLint.carriers_of's rule).
-func _library_key_for(library: Dictionary) -> String:
-	var path: String = current.attack_shape.resource_path if current.attack_shape != null else ""
-	if path == "":
-		return ""
-	for k in library:
-		var shape: AttackShape = library[k]
-		if shape.resource_path == path:
-			return k
-	return ""
-
-
-func _on_shape_picked(key: String, library: Dictionary) -> void:
-	match key:
-		NO_SHAPE_KEY:
-			current.attack_shape = null
-		NEW_SHAPE_KEY:
-			# Unnamed, so the attack points straight at the staged copy: there is no shared object to
-			# protect yet, and the attack saves with it embedded until Save shape as... names it.
-			current.attack_shape = AttackShape.new()
-		UNNAMED_SHAPE_KEY:
-			pass   # already what is held; re-picking it is a no-op rather than a re-fork
-		_:
-			if library.has(key):
-				current.attack_shape = library[key]
-	_stage_shape()
-	populate()
-
-
-# Every FILE that names this shape, so an edit says out loud how far it reaches. Read at draw time
-# off the repo rather than off a catalog: an attack embedded in a mission or a rune is in no
-# catalog, and those are exactly the referrers a caption listing only saved attacks would hide.
-func _populate_shape_users() -> void:
-	var path := ""
-	if current.attack_shape != null:
-		path = current.attack_shape.resource_path
-	if path == "":
-		DevWidgets.add_label(editor_container, "Unnamed shape -- this attack alone. Save it to share it.")
+# The LOOK rows (#900): per element this attack carries that HAS an attack-scoped effect, a picker
+# over the shared look library and then every knob that effect owns, each with an inherit tick.
+#
+# The rows are a PROJECTION of GameKnobs.CLASS_KNOBS, never a table of this panel's own -- label,
+# tooltip and range are already declared there for the Game tab, and a second copy would drift the
+# first time a row was reworded. They are drawn through DevWidgets.add_knob_row for the same reason:
+# one answer to how a bool, a colour and a float are drawn, whichever panel is asking.
+#
+# The SUB-HEADINGS are that table's own group names, which is what the #900 split bought: the Game
+# tab and this form arrange the same values identically without either holding the arrangement.
+func _populate_effect_looks() -> void:
+	if current == null:
 		return
-	var users := AttackShapeCatalog.users_of(path)
-	if users.is_empty():
-		DevWidgets.add_label(editor_container, "Used by nothing else yet.")
+	for element in current.lookable_elements():
+		var field: LibraryField = _looks.get(element)
+		if field == null:
+			continue
+		var name := Elemental.display_name(element)
+		field.draw_picker(editor_container, "%s look" % name,
+			DevWidgets.property_tip(current, "effect_looks"))
+		if field.staged == null:
+			DevWidgets.add_label(editor_container,
+				"No look: %s plays exactly as the Game tab has it tuned." % name.to_lower())
+			continue
+		field.draw_users(editor_container,
+			"Unnamed look -- this attack alone. Save it to share it.")
+		_populate_look_rows(field, element)
+		field.draw_save_row(editor_container)
+
+
+# One look's rows, in the knob table's own order, grouped by its own group names.
+func _populate_look_rows(field: LibraryField, element: Elemental.Element) -> void:
+	var look := field.staged as EffectLook
+	if look == null:
+		return
+	var heading := ""
+	for knob: Dictionary in GameKnobs.look_rows(element):
+		var group: String = knob["group"]
+		if group != heading:
+			heading = group
+			DevWidgets.add_heading(editor_container, group)
+		_populate_look_row(look, knob)
+
+
+# An override row is TWO controls, ObjectTool's idiom and for its reason: the tick says whether this
+# look has an opinion, the control says what it is, and an inheriting row SHOWS what it falls back
+# to rather than an empty slot -- a row that cannot name its default sends you to the other panel.
+#
+# Unticking adopts the value the row currently RESOLVES to, so switching a row to authored never
+# moves the effect by itself; re-ticking ERASES the key rather than writing a sentinel, which is the
+# whole reason this storage has none (#660's trap cannot arise where absence is representable).
+func _populate_look_row(look: EffectLook, knob: Dictionary) -> void:
+	var key: String = knob["static"]
+	var label: String = knob["label"]
+	var tip: String = DevWidgets.wrap_tooltip(knob.get("tip", ""))
+	var default: Variant = GameKnobs.read_static(key)
+	var authored: bool = look.overrides.has(key)
+	var first := editor_container.get_child_count()
+	DevWidgets.add_checkbox(editor_container, "%s - inherit" % label, not authored,
+		func(on: bool) -> void: _write_look(look, knob, on))
+	if not authored:
+		DevWidgets.add_label(editor_container, "    inherits %s" % _shown(default))
 	else:
-		DevWidgets.add_label(editor_container, "Used by %d file(s): %s -- editing this shape changes all of them."
-			% [users.size(), ", ".join(users)])
+		DevWidgets.add_knob_row(editor_container, knob, look.overrides[key],
+			func(moved: Variant) -> void: _set_look_value(look, key, moved), tip)
+	DevWidgets._tip_rows_from(editor_container, first, tip)
 
 
-func _on_shape_save_as(chosen_name: String) -> void:
-	if _shape_copy == null:
-		return
-	if chosen_name == "":
-		var msg := "Needs a name to save the shape"
-		push_warning(msg)
-		status_label.text = msg
-		return
-	if DevWidgets.refuse_illegal_name(chosen_name, "shape", status_label):
-		return
-	var path := AttackShapeCatalog.LIBRARY_DIR + chosen_name + ".tres"
-	if DevWidgets.refuse_existing_file(path, "shape", status_label):
-		return
-	_shape_copy.display_name = chosen_name
-	if not DevWidgets.save_over(_shape_copy, path, status_label):
-		return
-	# save_over take_over_path'd it, so the copy IS the library file now -- the attack adopts it and
-	# the grid moves onto a fresh copy of it. Only THIS attack re-points; every other user of the
-	# shape it came from is untouched, which is what makes Save As a fork.
-	current.attack_shape = _shape_copy
-	_stage_shape()
-	status_label.text = "Saved shape %s" % chosen_name
+# The tick. Ticking gives the row back to the Game tab; unticking adopts what it resolves to now.
+func _write_look(look: EffectLook, knob: Dictionary, inherit: bool) -> void:
+	var key: String = knob["static"]
+	if inherit:
+		look.overrides.erase(key)
+	else:
+		look.overrides[key] = GameKnobs.read_static(key)
 	populate()
 
 
-func _on_shape_delete_pressed() -> void:
-	var shape := current.attack_shape
-	var path: String = shape.resource_path if shape != null else ""
-	if path == "":
-		return
-	# A dangling ext_resource is a hard PARSE error that takes the whole referring file down, so a
-	# shape in use is refused rather than warned about (CLAUDE.md's ContentRepair edge).
-	var users := AttackShapeCatalog.users_of(path)
-	if not users.is_empty():
-		var msg := "%s is used by %s -- re-point them first" % [path.get_file(), ", ".join(users)]
-		push_warning(msg)
-		status_label.text = msg
-		return
-	DevWidgets.confirm_delete(self, "shape '%s'" % path.get_file(), func() -> void:
-		if DevWidgets.delete_saved_file(path, "shape", status_label):
-			current.attack_shape = null
-			_stage_shape()
-			populate())
+# A slider hands back a float whatever the value's own kind is, so the write is COERCED to the type
+# the default wears -- read off the storage rather than from a list of which rows are ints, which is
+# a second answer waiting to go stale.
+func _set_look_value(look: EffectLook, key: String, moved: Variant) -> void:
+	var default: Variant = GameKnobs.read_static(key)
+	match typeof(default):
+		TYPE_INT: look.overrides[key] = int(moved)
+		TYPE_BOOL: look.overrides[key] = bool(moved)
+		TYPE_COLOR: look.overrides[key] = Color(moved)
+		_: look.overrides[key] = float(moved)
 
 
-# The shape the grid edits. A NAMED shape is copied, so nothing reaches the board (or the other
-# attacks holding it) before Update; an UNNAMED one has no other holder, so it is edited directly
-# and saved embedded.
-func _stage_shape() -> void:
-	_shape_copy = null
-	if current == null or current.attack_shape == null:
+# What an inherited value reads as beside its tick. Colours as their hex, everything else plainly.
+func _shown(value: Variant) -> String:
+	if typeof(value) == TYPE_COLOR:
+		return "#" + (value as Color).to_html(false)
+	return str(value)
+
+
+# Everything the form edits that is NOT a property of the attack itself: the staged stamp, and one
+# staged look per element this attack can author for. Rebuilt whenever the loaded attack changes,
+# because which look slots exist is the attack's own answer and it moves when its element does.
+func _stage_fields() -> void:
+	_shape.stage()
+	_looks.clear()
+	if current == null:
 		return
-	var shape := current.attack_shape
-	_shape_copy = shape.duplicate() as AttackShape if shape.resource_path != "" else shape
+	for element in current.lookable_elements():
+		_looks[element] = _make_look_field(element)
+
+
+# One element's look slot, bound to that key of the attack's dictionary. The picker offers only
+# looks authored for THIS element and a new one is stamped with it, so the mismatch AttackLint
+# reports cannot be produced by the panel at all -- only by hand-editing a file.
+func _make_look_field(element: Elemental.Element) -> LibraryField:
+	var field := LibraryField.new(self, status_label)
+	field.noun = "look"
+	field.library_dir = EffectLookCatalog.LIBRARY_DIR
+	field.none_key = NO_LOOK_KEY
+	field.new_key = NEW_LOOK_KEY
+	field.unnamed_key = UNNAMED_LOOK_KEY
+	field.list = func() -> Dictionary: return EffectLookCatalog.for_element(element)
+	field.held = func() -> Resource: return null if current == null else current.look_for(element)
+	field.assign = func(picked: Resource) -> void: _assign_look(element, picked as EffectLook)
+	field.make = func() -> Resource:
+		var fresh := EffectLook.new()
+		fresh.element = element
+		return fresh
+	field.refresh = populate
+	field.stage()
+	return field
+
+
+# An absent slot and a null slot are the same state, so a (none) pick ERASES rather than storing a
+# null -- one spelling of "this attack authors no look for this element", which is what keeps the
+# saved .tres free of rows that mean nothing.
+func _assign_look(element: Elemental.Element, picked: EffectLook) -> void:
+	if current == null:
+		return
+	if picked == null:
+		current.effect_looks.erase(element)
+		return
+	current.effect_looks[element] = picked
 
 
 # The attack as it would be SAVED -- the editor's own values plus the staged stamp. The lint has to
 # judge this rather than `current`, whose shape is still the library object the grid is not editing.
+# The looks need no substitution: a staged look is reached through the same dictionary either way.
 func _staged_attack() -> AttackData:
-	if current == null or _shape_copy == null:
+	if current == null or _shape.staged == null:
 		return current
 	var probe := current.duplicate() as AttackData   # shallow: only the shape reference differs
-	probe.attack_shape = _shape_copy
+	probe.attack_shape = _shape.staged as AttackShape
 	return probe
 
 
-# The clause an overwrite confirm appends when a named shape is going to be written alongside the
-# attack -- FAMILY mode's two-file confirm, one file further out. An unnamed shape is embedded in
-# the attack's own file and is not a second victim.
-func _shape_victim() -> String:
-	if _shape_copy == null or current == null or current.attack_shape == null:
-		return ""
-	var path: String = current.attack_shape.resource_path
-	if path == "":
-		return ""
-	var users := AttackShapeCatalog.users_of(path)
-	var clause := " and the shared shape '%s'" % path.get_file()
-	if users.size() > 1:
-		clause += " (used by %d files)" % users.size()
+# The clause an overwrite confirm appends for every shared file this save will also write -- the
+# stamp and each named look. Each one is a real second file, and a confirm that named only the
+# attack would understate what an Update reaches.
+func _shared_victims() -> String:
+	var clause := _shape.victim_clause()
+	for element in _looks:
+		var field: LibraryField = _looks[element]
+		clause += field.victim_clause()
 	return clause
 
 
-# Write the staged stamp back over the library file it came from. save_over adopts onto the object
-# every other attack is holding, so the shared edit lands at the COMMIT point and not before.
-# Returns false only on a real write failure, which save_over has already reported.
-func _save_named_shape() -> bool:
-	if _shape_copy == null or current == null or current.attack_shape == null:
-		return true
-	var path: String = current.attack_shape.resource_path
-	if path == "":
-		return true   # unnamed: it rides along inside the attack's own file
-	return DevWidgets.save_over(_shape_copy, path, status_label)
+# Write every shared file the form has staged, at the COMMIT point. False only on a real write
+# failure, which save_over has already reported.
+func _save_shared_files() -> bool:
+	if not _shape.save_named():
+		return false
+	for element in _looks:
+		var field: LibraryField = _looks[element]
+		if not field.save_named():
+			return false
+	return true
+
 # The empowered-form picker (#97), and it is `replaces_main`'s row rather than the reflective one
 # for that row's exact two reasons. A lone object @export auto-renders as a resource swapper that
 # can only ever `.new()`, which EMBEDS an inline sub-resource -- invisible to every catalog and to

@@ -180,6 +180,14 @@ func get_elements() -> Array[Elemental.Element]:
 		result.append(_resolved_element(e))
 	return result
 
+
+# A carving's authored elements ARE its outgoing tags (#900) -- derived from sigils and flourishes
+# rather than stored, so adding Quickening to a Fire circle makes it a shock attack and the Attack
+# Editor's look section appears with it. Nothing else to compose: a carving carries no mods.
+func authored_elements() -> Array[Elemental.Element]:
+	return get_elements()
+
+
 func _resolved_element(e: Elemental.Element) -> Elemental.Element:
 	for f in flourishes:
 		var derived := Flourish.derive(e, f)

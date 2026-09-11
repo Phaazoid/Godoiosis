@@ -93,6 +93,21 @@ enum VerticalRule { RANGED, MELEE }
 enum Kind { BLUNT, SLASH, PIERCE, FIRE, SHOCK, COLD, CORROSION, NONE }
 @export var damage_kind: Kind = Kind.BLUNT
 
+# What this attack's elemental effect LOOKS like, per element it carries (#900) -- a named, shared
+# EffectLook, empty meaning every value falls through to the Game tab's own. On the shared base
+# rather than on WeaponAttackData because the Electric Rune is a shock attack too, and the question
+# is about what an attack CARRIES rather than about where its element was authored.
+#
+# KEYED BY ELEMENT, and that is not a deferred seam wearing a dictionary: a carving resolves each
+# distinct sigil separately, so the Electric Rune carries SHOCK and AIR today. A single reference
+# would need a content migration the first time a second element earned a look, and it could not
+# say which of two looks was which.
+#
+# The RULE stays global: SHOCK_ARC_RANGE and the order the hops light in are properties of
+# electricity, so no attack may disagree about them (elemental-interactions.md). What an attack may
+# author is everything on the other side of that line.
+@export var effect_looks: Dictionary[Elemental.Element, EffectLook] = {}
+
 # What this attack would deliver if it delivered `kind`: NONE for a heal or a pure-utility attack,
 # the kind itself otherwise. ONE home for that rule -- delivered_kind() reads it for the authored
 # field, WeaponInstance.effective_kind for the field with a mod's override composed on top.
@@ -107,6 +122,37 @@ func delivered_kind() -> Kind:
 # Player-facing spelling, lower case so it sits inside a sentence ("Damage 12, slash").
 static func kind_name(kind: Kind) -> String:
 	return Kind.keys()[kind].to_lower()
+
+# Which elements THIS ATTACK AUTHORS -- the base carries none, a carving resolves its sigils, a
+# weapon attack names one field (#900). It is the authored half of PlanResolver.elements_of, which
+# calls it and adds the wielder's fitted mods on top: one answer with two readers, rather than the
+# two hand-written branches that function used to carry.
+#
+# The Attack Editor asks THIS rather than elements_of, and the difference is the point: the editor
+# authors a file and has no wielder, while a mod-granted element belongs to a weapon rather than to
+# the attack. So an attack that gains SHOCK only from a fitted mod authors no look and plays the
+# defaults -- correct, and worth knowing before it reads as a gap.
+func authored_elements() -> Array[Elemental.Element]:
+	var none: Array[Elemental.Element] = []
+	return none
+
+
+# The look this attack wears for one element, or null to inherit every value. The effects read
+# through it; nothing else should reach into the dictionary.
+func look_for(element: Elemental.Element) -> EffectLook:
+	return effect_looks.get(element, null) as EffectLook
+
+
+# The elements this attack may author a look for: what it carries, narrowed to what has an
+# attack-scoped effect at all. Drawn by the Attack Editor, and the reason the section is absent on
+# an ordinary sword swing rather than empty.
+func lookable_elements() -> Array[Elemental.Element]:
+	var found: Array[Elemental.Element] = []
+	for element in authored_elements():
+		if EffectLook.is_lookable(element) and not found.has(element):
+			found.append(element)
+	return found
+
 
 func hits_map() -> bool:
 	return targets == EquippableData.TargetMode.MAP or targets == EquippableData.TargetMode.BOTH
@@ -181,6 +227,10 @@ static func property_sections() -> Array[Dictionary]:
 		{"title": "Height", "fields": PackedStringArray(["vertical_rule", "up_tolerance", "down_tolerance", "arc_clearance"])},
 		{"title": "Payload", "fields": PackedStringArray(["heals", "deals_no_damage", "power", "damage_kind", "knockback"])},
 		{"title": "How it is used", "fields": PackedStringArray(["can_counter", "can_overwatch"])},
+		# LAST because it is the biggest: one picker plus every look row the element has, which for
+		# SHOCK is thirty-five. Placed above "How it is used" it would push two checkboxes off the
+		# bottom of the form on the only attacks that have it.
+		{"title": "What its element looks like", "fields": PackedStringArray(["effect_looks"])},
 	]
 	return sections
 
@@ -233,6 +283,11 @@ func hidden_fields() -> PackedStringArray:
 		hidden.append_array(["power", "scaling_blend"])
 	if delivered_kind() == Kind.NONE:
 		hidden.append("damage_kind")
+	# ...and the look section is absent unless this attack carries an element that HAS one (#900).
+	# Its heading goes with it: a section drawn as a bare title over nothing is worse than no
+	# section, and _draw_sections derives that rather than being told (see its own note).
+	if lookable_elements().is_empty():
+		hidden.append("effect_looks")
 	return hidden
 
 
@@ -267,5 +322,6 @@ static func property_tips() -> Dictionary:
 		"deals_no_damage": "Pure utility: scaling is suppressed, so neither aura nor a weapon's stat blend can sneak damage into a damageless effect. Mutually exclusive with Heals.",
 		"pierces_guard": "Ignores a Guard -- the hit lands on whoever it was aimed at, bodyguard or no.",
 		"damage_kind": "How the damage ARRIVES -- the thing armour can answer. Blunt is a plane (hammer, fist, thrown rock, a jet of water), slash a line (blade), pierce a point (spear, bullet, arrow, ice spear). Fire, shock, cold and corrosion are non-physical deliveries. SEPARATE from the element: a fireball is Fire kind AND applies the fire effect; an ice spear is Pierce AND applies the ice effect. Ignored on a heal or a no-damage attack, which read as None.",
+		"effect_looks": "A named LOOK for this attack's elemental effect, shared with every other attack that names it -- so a family of shock weapons can share one feel and one of them can differ.\nEach row inherits the Game tab's value until you untick it. Leave the look empty and nothing changes; pick (none) and the effect plays exactly as the Game tab has it tuned.\nThe RULE is never in here: how far a current arcs is a property of electricity, not of an attack.",
 		"can_overwatch": "Makes this an OVERWATCH attack, and only that -- it is aimed as a standing watch and never fired directly, so it does not appear in the attack menu, the AI never picks it, and it cannot be a weapon's main. It fires on the first enemy who enters the aimed cells during someone else's turn, once, then it is spent.",
 	}

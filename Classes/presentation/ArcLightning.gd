@@ -148,6 +148,18 @@ var _strikes := 0
 # can go further and ask where the bolt was put.
 var bolts_drawn := 0
 
+# The look the CURRENT strike is wearing (#900): the attack's own EffectLook for SHOCK, or an empty
+# one meaning every value falls through to the statics above. Never null, so every read below is one
+# call with no guard, and REPLACED per strike rather than merged -- a Zap's overrides leaking into
+# the next Shock Rod is the failure this shape has.
+#
+# The six MATERIAL rows (the core's colour, both widths, both brightnesses, the edge) are shader
+# uniforms on one shared pair of meshes, which is the whole reason there are two instances at all.
+# So while two shocks overlap in the air the most recent strike owns them. Declared rather than
+# solved: grouping bolts by look would mean an instance pair per distinct look, for a case that is
+# two simultaneous shock attacks with different authored looks.
+var _look := EffectLook.new()
+
 var _core: MeshInstance3D
 var _corona: MeshInstance3D
 # The sparks emitter, owned here rather than by the host: it fires on the CURRENT's own schedule,
@@ -185,15 +197,21 @@ static func draws(attack: AttackAction) -> bool:
 func strike(attack: AttackAction, sky: PackedVector3Array) -> void:
 	if not draws(attack) or not point_of.is_valid():
 		return
+	# The attack's own look, adopted for this strike and everything it leaves in the air. ASSIGNED
+	# rather than merged into: the previous strike's overrides are not this one's.
+	_look = look_of(attack)
 	_strikes += 1
 	var key := hash([attack.origin_cell, attack.target_cell, _strikes])
 	var born := _elapsed
-	if sky_strike:
-		var tail := strike_tail(sky, strike_height)
+	var step := _look.num("arc_step_delay", arc_step_delay)
+	var gap := _look.num("strike_delay", strike_delay)
+	if _look.flag("sky_strike", sky_strike):
+		var tail := strike_tail(sky, _look.num("strike_height", strike_height))
 		if tail.size() >= 2:
-			_bolts.append(_bolt(tail, born, strike_life, hash([key, -1])))
-	if arcs:
-		var lift := Vector3.UP * bolt_lift
+			_bolts.append(_bolt(tail, born, _look.num("strike_life", strike_life), hash([key, -1])))
+	if _look.flag("arcs", arcs):
+		var lift := Vector3.UP * _look.num("bolt_lift", bolt_lift)
+		var life := _look.num("bolt_life", bolt_life)
 		for i in attack.arc_links.size():
 			var link: Conduction.Link = attack.arc_links[i]
 			var from: Vector3 = point_of.call(link.from)
@@ -201,13 +219,23 @@ func strike(attack: AttackAction, sky: PackedVector3Array) -> void:
 			var path := PackedVector3Array([from + lift, to + lift])
 			# The hop's own depth is its delay, which is the current travelling. Nothing else in
 			# this file knows the flood's shape and nothing needs to.
-			_bolts.append(_bolt(path, born + strike_delay + float(link.step) * arc_step_delay,
-					bolt_life, hash([key, i])))
-	if flash:
+			_bolts.append(_bolt(path, born + gap + float(link.step) * step, life, hash([key, i])))
+	if _look.flag("flash", flash):
 		_flash_at = born
-	if crawl:
+	if draws_crawl():
 		_crawl_at = born
 	_schedule_sparks(attack, born)
+
+
+# Which look an attack wears for SHOCK, or an empty one. Its own function because `strike` is not
+# the only caller that has to agree about it -- a case building a strike by hand needs the same
+# answer -- and because "no attack, no fired attack, no look" is three null checks nobody should
+# spell twice.
+static func look_of(attack: AttackAction) -> EffectLook:
+	if attack == null or attack.fired_attack == null:
+		return EffectLook.new()
+	var look := attack.fired_attack.look_for(Elemental.Element.SHOCK)
+	return EffectLook.new() if look == null else look
 
 
 # A burst per body the blast caught, each waiting for the hop that reaches it (#887 slice 2).
@@ -217,8 +245,13 @@ func strike(attack: AttackAction, sky: PackedVector3Array) -> void:
 # blast itself is in no hop at all and sparks with the strike. So the sparks travel with the bolts
 # by construction, with no second schedule to keep in step.
 func _schedule_sparks(attack: AttackAction, born: float) -> void:
-	if _sparks == null or not ShockSparks.sparks:
+	if _sparks == null or not _look.flag("sparks", ShockSparks.sparks):
 		return
+	# The emitter's own node state -- the buffer size and every material field -- is per-strike now,
+	# so it is re-pushed HERE rather than only when a Game-tab knob moves (#324's rule, one layer on:
+	# a look that only applied to the NEXT shock is not a look).
+	_sparks.apply(_look)
+	var lift := _look.num("spark_lift", spark_lift)
 	for member in attack.volley:
 		var body := member.target
 		if body == null or not is_instance_valid(body):
@@ -226,17 +259,20 @@ func _schedule_sparks(attack: AttackAction, born: float) -> void:
 		# The board cell, live: this runs at the payload moment, so every move in the pass has
 		# already been walked and a shoved body has already slid.
 		var cell: Vector2i = body.movement.cell
-		var at := born + spark_delay_for(cell, attack.arc_links)
+		var at := born + spark_delay_for(cell, attack.arc_links, _look)
 		var point: Vector3 = point_of.call(cell)
-		_pending.append(_Burst.new(point + Vector3.UP * spark_lift, at,
+		_pending.append(_Burst.new(point + Vector3.UP * lift, at,
 				ShockSparks.burst_key(cell, _strikes)))
 
 
-# When the current reaches this cell, in seconds after the strike.
-static func spark_delay_for(cell: Vector2i, links: Array[Conduction.Link]) -> float:
+# When the current reaches this cell, in seconds after the strike. Takes the strike's LOOK rather
+# than reading the statics, because the two delays it composes are exactly the two a look may move
+# -- so the sparks stay on the bolts' own schedule by construction rather than by both sides
+# remembering to ask the same question.
+static func spark_delay_for(cell: Vector2i, links: Array[Conduction.Link], look: EffectLook) -> float:
 	for link in links:
 		if link.to == cell:
-			return strike_delay + float(link.step) * arc_step_delay
+			return look.num("strike_delay", strike_delay) + float(link.step) * look.num("arc_step_delay", arc_step_delay)
 	return 0.0     # struck directly, or reached by nothing -- either way, with the blast
 
 
@@ -248,11 +284,14 @@ static func spark_delay_for(cell: Vector2i, links: Array[Conduction.Link]) -> fl
 func flash_level() -> float:
 	if not _flash_live():
 		return 0.0
-	return flash_peak * envelope((_elapsed - _flash_at) / maxf(flash_life, 0.01), 0.0)
+	var life := maxf(_look.num("flash_life", flash_life), 0.01)
+	return _look.num("flash_peak", flash_peak) * envelope((_elapsed - _flash_at) / life, 0.0)
 
 
 func _flash_live() -> bool:
-	return flash and _flash_at >= 0.0 and _elapsed - _flash_at < maxf(flash_life, 0.01)
+	if not _look.flag("flash", flash) or _flash_at < 0.0:
+		return false
+	return _elapsed - _flash_at < maxf(_look.num("flash_life", flash_life), 0.01)
 
 
 # How far into the crawl the water is, in seconds, or NEGATIVE while nothing is running -- which is
@@ -262,26 +301,49 @@ func _flash_live() -> bool:
 # It is this node's OWN clock, which is the point: the crawl and the bolts freeze together under a
 # hitstop instead of the water running on while the air stops.
 func crawl_age() -> float:
-	if not crawl or _crawl_at < 0.0:
+	if not draws_crawl() or _crawl_at < 0.0:
 		return -1.0
 	var age := _elapsed - _crawl_at
 	# Done when the LAST ring's own window has closed, which is the rule's reach behind the far
 	# hop rather than a duration of this effect's own -- retuning either knob moves it correctly.
-	var total := maxf(crawl_life, 0.01) + float(Conduction.SHOCK_ARC_RANGE) * arc_step_delay
+	var total := maxf(crawl_life_now(), 0.01) + float(Conduction.SHOCK_ARC_RANGE) * crawl_step_now()
 	return age if age < total else -1.0
+
+
+# The three the HOST needs on a frame path, where it has no attack in hand to resolve a look from
+# (#900). They live here because this node already owns the clock they belong to; battle3d used to
+# read the statics over its shoulder, which a per-attack look makes wrong rather than merely untidy.
+func draws_crawl() -> bool:
+	return _look.flag("crawl", crawl)
+
+
+func crawl_life_now() -> float:
+	return _look.num("crawl_life", crawl_life)
+
+
+func crawl_step_now() -> float:
+	return _look.num("arc_step_delay", arc_step_delay)
 
 
 # The crawl's colour: the element's own hue, with the authored strength as its alpha. One decision
 # rather than two, the way the water's foam colour carries its own weight.
 func crawl_tint() -> Color:
 	var hue := ElementPalette.color_for_element(Elemental.Element.SHOCK)
-	return Color(hue.r, hue.g, hue.b, clampf(crawl_strength, 0.0, 1.0))
+	return Color(hue.r, hue.g, hue.b, clampf(_look.num("crawl_strength", crawl_strength), 0.0, 1.0))
 
 
 # Where the sparks may be drawn, forwarded from the host's own board-extent poll.
 func cover(board: AABB) -> void:
 	if _sparks != null:
 		_sparks.cover(board)
+
+
+# Push the emitter's node state again, through the LOOK the last strike adopted (#900). The Game
+# tab's sweep calls this rather than reaching the emitter directly: a re-apply from the bare statics
+# would strip an authored look the moment any spark knob was dragged.
+func reapply_sparks() -> void:
+	if _sparks != null:
+		_sparks.apply(_look)
 
 
 # Where the drawn bolts actually ARE. The second observable, and the one that can answer the ruling
@@ -334,7 +396,7 @@ func _fire_due_sparks() -> void:
 			waiting.append(pending)
 			continue
 		if _sparks != null:
-			_sparks.burst(pending.point, pending.key)
+			_sparks.burst(pending.point, pending.key, _look)
 	_pending = waiting
 
 
@@ -346,14 +408,17 @@ func _rebuild() -> void:
 	core.clear_surfaces()
 	corona.clear_surfaces()
 	var frozen: bool = PlayerSettings.is_on(PlayerSettings.Setting.PHOTOSENSITIVITY)
+	var tail := _look.num("afterimage", afterimage)
+	var segments := _look.whole("bolt_segments", bolt_segments)
+	var jag := _look.num("bolt_jag", bolt_jag)
 	for bolt in _bolts:
 		var age := _elapsed - bolt.born
 		if age < 0.0:
 			continue          # this hop has not been reached yet -- the stagger
-		var alpha := envelope(age / bolt.life, afterimage)
+		var alpha := envelope(age / bolt.life, tail)
 		if alpha <= 0.002:
 			continue
-		var line := jagged(bolt.path, _shape_key(bolt, frozen), bolt_segments, bolt_jag)
+		var line := jagged(bolt.path, _shape_key(bolt, frozen), segments, jag)
 		var tint := Color(1.0, 1.0, 1.0, alpha)
 		if BoardOverlays.add_beam_strip(core, line, tint):
 			BoardOverlays.add_beam_strip(corona, line, tint)
@@ -372,18 +437,22 @@ func _rebuild() -> void:
 # untouched. A bolt that appears and fades is not a flash, and the setting's promise is a steady
 # state rather than a missing effect.
 func _shape_key(bolt: Bolt, frozen: bool) -> int:
-	if frozen or flicker_rate <= 0.0:
+	var rate := _look.num("flicker_rate", flicker_rate)
+	if frozen or rate <= 0.0:
 		return bolt.key
-	return hash([bolt.key, int((_elapsed - bolt.born) * flicker_rate)])
+	return hash([bolt.key, int((_elapsed - bolt.born) * rate)])
 
 
 # The knobs, pushed at both materials. EVERY FRAME a bolt is drawn, which is why there is no
 # re-apply hook on the Game tab's side: nothing about this effect stands still long enough to go
 # stale, so a slider moved mid-flash is already showing.
 func _style() -> void:
-	_shade(_core, core_color, bolt_width, core_intensity)
+	var width := _look.num("bolt_width", bolt_width)
+	_shade(_core, _look.tint("core_color", core_color), width,
+			_look.num("core_intensity", core_intensity))
 	_shade(_corona, ElementPalette.color_for_element(Elemental.Element.SHOCK),
-			bolt_width * corona_scale, corona_intensity)
+			width * _look.num("corona_scale", corona_scale),
+			_look.num("corona_intensity", corona_intensity))
 
 
 func _shade(node: MeshInstance3D, color: Color, width: float, intensity: float) -> void:
@@ -393,7 +462,7 @@ func _shade(node: MeshInstance3D, color: Color, width: float, intensity: float) 
 	material.set_shader_parameter("beam_color", color)
 	material.set_shader_parameter("beam_width", width)
 	material.set_shader_parameter("beam_intensity", intensity)
-	material.set_shader_parameter("beam_softness", bolt_softness)
+	material.set_shader_parameter("beam_softness", _look.num("bolt_softness", bolt_softness))
 
 
 func _make_ribbon() -> MeshInstance3D:
