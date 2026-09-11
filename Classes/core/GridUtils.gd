@@ -28,7 +28,8 @@ const TERRAIN_ICONS: Dictionary[Terrain.Kind, Texture2D] = {
 	Terrain.Kind.WATER: preload("res://Art/Icons/TerrainIcons/Water.png"),
 	# DIRT is the first WALKABLE kind to get one (#554): an unmapped kind falls back to ERROR_ICON,
 	# which VOID could get away with because nothing ever ends a move on a hole.
-	Terrain.Kind.DIRT: preload("res://Art/Icons/TerrainIcons/Dirt.png")
+	Terrain.Kind.DIRT: preload("res://Art/Icons/TerrainIcons/Dirt.png"),
+	Terrain.Kind.TALL_GRASS: preload("res://Art/Icons/TerrainIcons/TallGrass.png")
 }
 
 const ERROR_ICON: Texture2D = preload("res://Art/Icons/ArrowIcons/ERROR.png")

@@ -30,11 +30,17 @@
 >
 > **Two things stop a fire: spent fuel and the edge of the board.** An unbounded field of grass genuinely burns for ever, which is the rule working rather than a gap -- worth knowing before reading a headless fixture's behaviour as a bug.
 >
+> **[#891](https://github.com/Phaazoid/Godoiosis/issues/891) (2026-09-10): TALL GRASS, and the reach belongs to the ground that is ALIGHT.** `Terrain.Kind.TALL_GRASS` carries fire to its CORNERS as well as its sides -- the dev's *"1.5 tiles per turn (sides and corners)"* -- and nothing in code keys on the kind: both halves of what makes it different are authored on `TallGrassIgnites.tres`, so a third flammable ground costs a `.tres` and no edit. **`TerrainReaction.spread_and_a_half` is the reach, `add_state_turns` the duration**, and the field is spelled with `AttackData.max_and_a_half`'s word because `GridUtils.cells_within_blended_range` is already the one answer to *sides, or sides and corners* -- aiming asks it for every attack in the game, and a second answer here would be the duplicate seam Law #4 is about.
+>
+> **It is read off the BURNING cell, never the cell catching.** A taller flame throws sparks further, so a fire IN tall grass reaches diagonally into ordinary grass while a fire in ordinary grass takes no corner however flammable that corner is -- reach is a property of the flame, not of what it reaches for. Ground that is not fuel answers false, so a brazier on flagstone stays cardinal. **`cells_within_blended_range` hands back the ORIGIN too, and that costs nothing by construction**: every source comes from `burning_cells()` and `_catches_fire` refuses a cell already alight, so the guard that stops two neighbours restoking each other now also stops a fire re-lighting itself and resetting its own clock -- one clause, two rules, and a mutant for each.
+>
+> **The tile is a SECOND ATLAS SOURCE** (`Art/Board/IosisTiles.png`, source 1), not an edit to the licensed Solaria sheet the 2D board shares -- and the meshlib generator writes one atlas PER SOURCE, so every existing item id is untouched. Its 3D form costs no new asset: `prop_shape` is #280's **TUFT**, so `BoardMirror` cuts the drawn blades out of the tile and stands one billboard up per blade, at the tile's own `prop_tuft_scale` (0.5, twice a flower's -- an Objects-tab slider). `move_cost` stays **1**, same as grass: tall grass's cost is fire, and a PER/COH downside arrives with fog of war (dev, 2026-09-10).
+>
 > **The clocks serialize** (`ScenarioData.terrain_state_turns`, carried by `BoardSnapshot`), so a mid-battle save puts a fire back where it had got to instead of restarting every front at full. A SECOND dict rather than a richer `terrain_states`, which is authored by hand in a mission `.tres` and read by the brush -- a countdown is a battle fact, not something an author sets. **No sentinel distinguishes an old save from a permanent fire**, and that falls out rather than being arranged: neither has an entry, and both want their ground's own clock, so the absent case is simply right.
 >
 > SCORCHED rides FROZEN's flat-icon path (it is not in `OverlayMirror.STANDING_STATES`), so the diorama mirrors it for free -- one row in `TERRAIN_STATE_ICONS` and one PNG. **The art is a generated PLACEHOLDER soot smudge.**
 
-**Canon checked through #898 (2026-09-10); shallow water re-costed 2026-09-10.**
+**Canon checked through #899 (2026-09-10); shallow water re-costed 2026-09-10.**
 
 ## The tile model (implemented — [LOCKED shape])
 

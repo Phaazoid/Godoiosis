@@ -78,6 +78,10 @@ const KIND_TO_ITEM: Dictionary[Terrain.Kind, int] = {
 	Terrain.Kind.MUD: 4,
 	Terrain.Kind.WATER: 5,
 	Terrain.Kind.TREE: 6,
+	# TALL_GRASS (#891) has no block of its own in the hand-picked 0-8 range and wants none: this
+	# table is the FALLBACK, and the grass block is the honest stand-in for ground the meshlib has
+	# no item for. A real tall-grass cell draws its own generated item off its atlas coords.
+	Terrain.Kind.TALL_GRASS: 0,
 }
 const FALLBACK_ITEM := 3  # dirt
 

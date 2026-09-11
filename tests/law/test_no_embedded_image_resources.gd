@@ -119,6 +119,53 @@ func test_the_generated_ground_atlas_imports_as_a_faithful_passthrough() -> void
 	).is_greater(0)
 
 
+# Every texture a committed TileSet SOURCE references must import as a faithful passthrough too --
+# the same two flags, for a different reason and a different population. A tile sheet is not just 2D:
+# BoardMirror._make_tuft cuts AtlasTexture regions out of it onto Sprite3D billboards (#280), so its
+# FIRST 3D render fires detect_3d and silently rewrites compression AND mipmaps -- and the 2D board
+# draws from that same texture, so the damage lands on both stacks at once. Mipmaps on a tile sheet
+# bleed neighbouring tiles into each other exactly as they do on the generated atlas.
+#
+# The atlas case above cannot see this: it scans Art/LookDev/ground_atlas_*. Solaria Demo Tiles.png
+# carries the right flags only because #250 cleared them by hand, with nothing to keep them cleared.
+func test_every_committed_tile_sheet_imports_as_a_faithful_passthrough() -> void:
+	var checked := 0
+	var offenders: PackedStringArray = []
+	for file: String in _scan():
+		var tiles := load(file) as TileSet
+		if tiles == null:
+			continue
+		for i in tiles.get_source_count():
+			var atlas := tiles.get_source(tiles.get_source_id(i)) as TileSetAtlasSource
+			if atlas == null or atlas.texture == null:
+				continue
+			var png := atlas.texture.resource_path
+			if png.is_empty():
+				continue
+			var import_path := png + ".import"
+			if not FileAccess.file_exists(import_path):
+				offenders.append("%s has no committed .import" % png)
+				continue
+			var text := FileAccess.get_file_as_string(import_path).replace("", "")
+			for key: String in ["detect_3d/compress_to", "mipmaps/generate"]:
+				var want: String = REQUIRED_IMPORT_PARAMS[key]
+				if not text.contains("
+%s=%s
+" % [key, want]):
+					offenders.append("%s must import with %s=%s" % [png, key, want])
+			checked += 1
+
+	assert_array(offenders).override_failure_message(
+		"A tile sheet is rendered in 3D by the TUFT billboards, so detect_3d rewrites its compression "
+		+ "and mipmaps the first time it draws -- and the 2D board shares the texture: %s"
+		% ", ".join(offenders)
+	).is_empty()
+
+	assert_int(checked).override_failure_message(
+		"no committed TileSet with an atlas texture was found -- this law stopped asking about anything"
+	).is_greater(0)
+
+
 # Every .tscn/.tres under the scanned roots, recursively. Deliberately local rather than shared with
 # test_resource_uid_references.gd: a directory listing is not a fact two answers can disagree about.
 func _scan() -> Array[String]:

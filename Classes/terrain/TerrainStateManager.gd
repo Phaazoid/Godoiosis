@@ -193,28 +193,43 @@ func tick_states() -> void:
 		_deposit(cell, Terrain.TileState.BURNING)
 
 
-# Which cells fire takes this round. Cardinal neighbours only -- tall grass reaching all eight is
-# #891's, and belongs to the GROUND rather than to the fire.
+# Which cells fire takes this round, each burning cell reaching as far as ITS OWN ground throws
+# (#891) -- the four sides, or the corners too where the fuel says so.
 #
-# GridUtils.CARDINAL_DIRECTIONS rather than RulesService.NEIGHBOURS: the same four vectors, but the
-# rules service is a layer this store does not otherwise reach into.
+# cells_within_blended_range(cell, 1, and_a_half) is the reach, not a list of neighbour vectors:
+# aiming already answers "sides, or sides and corners" for every attack in the game
+# (AttackData.max_and_a_half), and a second answer to it here is the duplicate seam Law #4 is about.
+# It hands back the ORIGIN as well, which costs nothing and cannot go wrong by construction -- every
+# source comes from burning_cells(), and _catches_fire refuses a cell that is alight.
 func _cells_fire_takes() -> Array[Vector2i]:
 	var taken: Array[Vector2i] = []
 	for source in burning_cells():
-		for dir in GridUtils.CARDINAL_DIRECTIONS:
-			var cell: Vector2i = source + dir
+		for cell in GridUtils.cells_within_blended_range(source, 1, _spreads_wide(source)):
 			if not taken.has(cell) and _catches_fire(cell):
 				taken.append(cell)
 	return taken
+
+
+# Does the fire standing HERE throw to the corners? Asked of the burning cell's own ground, which is
+# the whole of the rule: a taller flame reaches further, so tall grass carries fire diagonally into
+# whatever is beside it while ordinary grass does not take a corner however flammable it is.
+#
+# Ground that is not fuel answers false -- a brazier on flagstone is consuming nothing, so there is
+# nothing to tell it to throw wide.
+func _spreads_wide(cell: Vector2i) -> bool:
+	var fuel := _fuel_at(cell)
+	return fuel != null and fuel.spread_and_a_half
 
 
 # Would fire take this cell? Its ground must be fuel AND must admit fire in the state it is
 # currently holding -- which is what refuses SCORCHED, and refuses it identically to a direct hit,
 # since both ask the same authored clause.
 #
-# A cell ALREADY ALIGHT is never taken, and that exclusion is load-bearing rather than an
-# optimisation: two burning neighbours would otherwise restoke each other every round through
-# apply()'s timer reset, and no field would ever go out however much of it had already burnt.
+# A cell ALREADY ALIGHT is never taken, and that exclusion carries TWO rules rather than being an
+# optimisation. Two burning neighbours would otherwise restoke each other every round through
+# apply()'s timer reset, and no field would ever go out however much of it had already burnt. Since
+# #891 it is also what drops the ORIGIN out of _cells_fire_takes' reach, every source there being a
+# burning cell by construction -- so a fire cannot re-light itself and lose its own clock.
 func _catches_fire(cell: Vector2i) -> bool:
 	if Terrain.is_burning(states_at(cell)) or not _has_ground(cell):
 		return false

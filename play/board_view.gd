@@ -4,7 +4,7 @@ extends RefCounted
 # token-light, no layer ever occluded. Reads PlaySession directly (the structured
 # dicts stay internal; this is the channel a player reads).
 
-const TERRAIN_GLYPH := {"grass": ".", "mud": "~", "rock": "#", "offmap": " ", "void": " "}   # offmap = past the board's rect; "void" = a hole, painted or erased (#875) -- both render as empty space
+const TERRAIN_GLYPH := {"grass": ".", "tall_grass": ",", "mud": "~", "rock": "#", "offmap": " ", "void": " "}   # offmap = past the board's rect; "void" = a hole, painted or erased (#875) -- both render as empty space; "," is the glyph #895's own map sketch already uses for tall grass
 
 # ---- public renders ----
 

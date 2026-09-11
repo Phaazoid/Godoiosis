@@ -31,6 +31,18 @@ class_name TerrainReaction
 # which is what the authored braziers on Prolog's flagstones have always meant.
 @export var add_state_turns: Dictionary[Terrain.TileState, int] = {}
 
+# How FAR fire reaches out of this ground (#891), the twin of the duration above: add_state_turns
+# says how long the fire lasts, this says how wide it throws while it burns. False = the four sides;
+# true = the corners too, which is the dev's "1.5 tiles per turn" and therefore spelled with
+# AttackData.max_and_a_half's word rather than a new one -- GridUtils.cells_within_blended_range is
+# the one answer to "sides, or sides and corners", and aiming already asks it.
+#
+# It is read off the ground that is ALIGHT, never off the ground catching: tall flames throw sparks
+# further, so a fire IN tall grass reaches diagonally into whatever is beside it, while a fire in
+# ordinary grass does not reach a corner however flammable that corner is. Reach belongs to the
+# flame, not to what it is reaching for.
+@export var spread_and_a_half: bool = false
+
 @export var popup: String = ""
 @export var icon: Texture2D
 
