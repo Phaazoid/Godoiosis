@@ -112,9 +112,13 @@ func _hostiles() -> Array[Unit]:
 	return found
 
 
-# Flood fill over RulesService.can_traverse -- the REAL per-unit rule, not the tile's own walkable
-# flag. The two disagree wherever tile state does (a frozen water cell is solid ground), and it is
-# the rule that disagrees which the player actually plays under.
+# Flood fill over RulesService.can_step -- the EDGE rule movement itself asks (traversal AND the
+# height step), never the tile's own walkable flag. It was can_traverse until The Quarry (2026-09-11),
+# and a mutant that erased both of that board's flank ramps PASSED: can_traverse is per-CELL, so the
+# flood walked straight up the cliff. That is the defect class Terraces first shipped -- an upper
+# band no ramp reaches -- and this law had been blind to it on every board with a height in it.
+# The tile flag and the rule also disagree wherever tile STATE does (a frozen water cell is solid
+# ground), and it is the rule that disagrees which the player actually plays under.
 #
 # Returns {} rather than a partial answer when the probe cannot be placed, so a caller reports
 # nothing instead of reporting everything.
@@ -141,7 +145,7 @@ func _flood(start: Array[Vector2i]) -> Dictionary:
 			var next: Vector2i = at + d
 			if seen.has(next) or not rect.has_point(next):
 				continue
-			if not RulesService.can_traverse(next, probe, board):
+			if not RulesService.can_step(at, next, probe, board):
 				continue
 			seen[next] = true
 			frontier.append(next)
