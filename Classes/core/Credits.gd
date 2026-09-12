@@ -26,6 +26,12 @@ class_name Credits
 # ships with the zip for no benefit. It belongs in #139's record, not here. This absence is a
 # decision; it is not an oversight to fix.
 
+# THE TWO DEVELOPMENT CREDITS ARE EQUAL AND THE ORDER IS ALPHABETICAL BY SURNAME, not a lead and a
+# second (dev, 2026-09-12). Do not "correct" this against who wrote the code in THIS repo: the
+# GameMaker build a decade earlier was ~90% Simeon's where this one is ~90% Daniel's, and in his
+# words the ideas synthesis has been a fully collaborative effort throughout. Simeon appears again
+# under Music because composing the score is a separate contribution, not a second billing.
+
 enum Section { DEVELOPMENT, ART, MUSIC, SOUND, ENGINE }
 
 const SECTION_NAMES := {
@@ -40,7 +46,8 @@ const SECTION_NAMES := {
 # for (empty when none is owed). `required` marks a licence condition -- see the header.
 const ENTRIES := {
 	Section.DEVELOPMENT: [
-		{"name": "Phaazoid", "role": "Design, code and writing", "detail": "", "required": false},
+		{"name": "Simeon Anfinrud", "role": "Design and development", "detail": "", "required": false},
+		{"name": "Daniel Manzella", "role": "Design and development", "detail": "", "required": false},
 	],
 	Section.ART: [
 		{
