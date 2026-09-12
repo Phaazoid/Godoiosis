@@ -32,7 +32,7 @@ enum Layer {
 	TARGET_PICK, PATH_ARROWS, KNOCKBACK, TERRAIN, TERRAIN_PREVIEW, ICONS,
 	ZONE_PATROL, ZONE_HIGHLIGHT, GROUND_ICONS, ATTACK_BLOCKED, SIGHT_TRACE,
 	GUARD_ICONS, GUARD_LINK, WATCH_ICONS,
-	ZONE_DEPLOYMENT,
+	ZONE_DEPLOYMENT, ZONE_DEFEND,
 }
 enum Kind { FILL, BRACKET, SPRITE, BILLBOARD, LINE }
 
@@ -83,6 +83,9 @@ const LAYERS: Dictionary[Layer, Dictionary] = {
 	# #736. In the band with the others: it is markup lying on the tile face like every zone, and it
 	# is gone before any of them matter -- turn 1 stops it being drawn at all.
 	Layer.ZONE_DEPLOYMENT: {"color": Color(0.65, 0.5, 1, 0.45), "sort": -3, "kind": Kind.FILL},
+	# #571, and in the band for ZONE_DEPLOYMENT's reason. Reads its colour off OverlayManager rather
+	# than restating it, the way ZONE_PATROL does -- the three literals above predate that rule.
+	Layer.ZONE_DEFEND: {"color": OverlayManager.ZONE_DEFEND_MODULATE, "sort": -3, "kind": Kind.FILL},
 	Layer.ZONE_HIGHLIGHT: {"color": OverlayManager.ZONE_HIGHLIGHT_MODULATE, "sort": -2, "kind": Kind.FILL},
 	Layer.HOVER: {"color": Color(1, 0.9, 0.3, 0.9), "sort": 2, "kind": Kind.BRACKET},
 	Layer.INVALID_MOVE: {"color": Color(0.5, 0.36, 0.4, 0.5), "sort": 0, "kind": Kind.FILL},

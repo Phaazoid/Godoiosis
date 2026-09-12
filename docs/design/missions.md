@@ -305,6 +305,32 @@ Two `BoardLint` findings guard the pair, both gated on a roster being named (a c
 
 **That first tier MOVED, and the move is the rule working.** #736 filed it at DEGRADES because a tier is judged against what the code in the tree does with the board, and #736's tree read no roster at all — such a board booted with its authored cast and played exactly as before. #737's draw is what changed the answer: no zone means nobody deploys, so a board whose player force *is* the roster opens on a turn with nothing to command, the faction auto-skip bounces PLAYER→ENEMY forever, and `is_contested` never latches (it needs an active player unit), so there is no defeat either. No win, no loss, only Quit — which is `_check_objectives`' own shape, a requirement declared with no geometry to satisfy it.
 
+### `Kind.DEFEND` — the cargo ([#571](https://github.com/Phaazoid/Godoiosis/issues/571), 2026-09-11)
+
+The fifth kind, and the first whose rule is **presence** rather than an action. A hostile unit standing anywhere inside a DEFEND zone ends the mission, immediately and outright. The dev's framing is the whole specification:
+
+> *"If any tile of a capture point is taken by the enemy, the player loses. You can think of it as a priceless piece of cargo that needs defending, that is very fragile, and if an enemy makes it that close, it has been destroyed. No need to gate it in any way."*
+
+**Nothing captures it, which is why it carries no owner.** The plan for #571 was a CAPTURE zone with an authored owner, on the reasoning that a defended point and a capture point are the same geometry doing the same job from opposite ends. Once the mechanic was pinned down that reasoning collapsed: they do *opposite* jobs. A capture point is claimed by spending a main action and changes hands; a defended point is lost by somebody standing there and never changes anything. The owner field's entire value had been making one mechanism serve both ends of a capture that does not happen here.
+
+So it is its own Kind, and the reckoning is what a fifth kind actually cost against what the owner would have:
+
+| | `Kind.DEFEND` | `CAPTURE` + an owner |
+|---|---|---|
+| authoring UI | **none** — the Tile Brush's Kind dropdown is built off `Kind.values()` | an Owner control, and a rule for what an owned zone means |
+| `capturable_zone_at` | untouched — a DEFEND zone is not a CAPTURE zone, so it is never offered | must refuse your own zones, or the menu offers *Capture* on your own cargo |
+| `capture_counts` | untouched | must count an owned zone as already claimed |
+| board tint | its own colour, free (per-layer modulate) | shares the capture tint, or costs a layer anyway |
+| persisted state | **none** — `_captured_zones`, `ScenarioData.captured_zones` and the #87 snapshot are all untouched | a live owner map, a type change on a persisted field, and a migration |
+
+**It is a LOSE CONDITION's geometry, not an objective's.** `MissionRules.LoseCondition.POINT_LOST` is what a mission declares; the painted zone is where. Painting one without declaring the condition is legal and inert, exactly as a decorative CAPTURE zone is — what a mission requires is the authored list, never what happens to be on the board. Declared with nothing painted is `objectives_missing_geometry`'s twin and is reported the same three ways.
+
+**A DOWNED hostile on the cargo still loses it.** *"Made it that close"* is about arrival, and the alternative — counting only the ACTIVE — would let the player shove enemy bodies onto their own cargo for free.
+
+**The tint is gold** (`OverlayManager.ZONE_DEFEND_MODULATE`), deliberately not a fourth blue-green: capture cyan, extraction green and deployment violet all read as *go here*, and a defended point means the opposite. It sits near PATROL's orange, which is survivable only because PATROL is authoring-only — the two never draw together in play.
+
+**It is never hidden.** `hidden_zone_names` means *this zone has stopped being information*, and a defended point has not — it is the thing the player is watching. It needed no edit: a DEFEND zone is never captured, so it was never in that list.
+
 ### The guard: declared without painted
 
 An objective ticked with no matching zone painted can never be met — the mission is unwinnable. Three things catch it, all reading the one rule (`MissionController.objectives_missing_geometry`):
@@ -330,6 +356,7 @@ At runtime the unpainted objective reads **PENDING, not NONE** — deliberately.
 
 - **`SQUAD_LOST`** — the #96 floor. Always on, never authored.
 - **`ROUND_LIMIT`** — the objectives were not met within `round_limit` rounds.
+- **`POINT_LOST`** — a hostile unit reached a `Kind.DEFEND` zone ([#571](https://github.com/Phaazoid/Godoiosis/issues/571)). See *`Kind.DEFEND` — the cargo* above.
 - **`NONE`** is a sentinel meaning *nothing fired*, not a condition.
 
 **Lose conditions compose by ANY**, stated rather than inherited from a loop's shape: the first one that fires ends the mission. Losses are rarely conjunctive.
@@ -367,7 +394,7 @@ The **banner names the reason**: `MissionRules.defeat_reason` is the one place t
 
 **#101 is CLOSED** (dev, 2026-08-26): with the seam built, the rest of it was three unrelated features sharing one design capture, so they were split out and it closed rather than becoming an umbrella. That number is history now — the successors are:
 
-- **[#571](https://github.com/Phaazoid/Godoiosis/issues/571) — defend a point.** An enemy taking a friendly zone. The first non-player-faction objective, and what *The AI and CAPTURE* below is waiting on. Its real cost is not the condition: **a captured zone has no OWNER** (`_captured_zones: Array[String]`, and `CaptureAction.execute` discards its own actor), so "captured" is a per-zone boolean that only works while the player is the only faction that can claim one.
+- **[#571](https://github.com/Phaazoid/Godoiosis/issues/571) — defend a point. BUILT 2026-09-11**, and its stated cost turned out to be wrong. This section used to say the expensive half was that **a captured zone has no OWNER**, on the premise that a defended point is a capture point an enemy takes. It is not: the dev's rule is **presence** — *"if any tile of a capture point is taken by the enemy, the player loses… very fragile, and if an enemy makes it that close, it has been destroyed"* — so nothing captures it, nothing changes hands, and no owner is needed anywhere. It shipped as `ZoneManager.Kind.DEFEND` plus `LoseCondition.POINT_LOST`, leaving `_captured_zones`, `ScenarioData.captured_zones`, `capturable_zone_at`, `capture_counts` and the #87 snapshot untouched. See *`Kind.DEFEND` — the cargo* above. **The lesson is the one an issue's own architecture section always risks: it was written against a mechanic nobody had stated yet, and a month later it was sizing a ticket for a design the dev never had in mind.** Ask what the rule *is* before costing how to store it.
 - **[#572](https://github.com/Phaazoid/Godoiosis/issues/572) — protect a unit.** Escort and VIP. Same shape: the rule is nearly free on this seam, and the gap is that **`ScenarioUnitEntry` has no stable identity field**, so a mission has nothing to point at when it names a person.
 - **Authorable OR-composition (fork F)** — grouped OR-lists inside an AND, so a mission can be won by *either* taking the point *or* routing. **Not filed**, deliberately: the lean was always *arriving only when a real mission design wants it*, and this section is the record until one does. A flat `require_all` flag is the version to avoid — it cannot express *"A and (B or C)"* and gets outgrown.
 
@@ -493,7 +520,11 @@ The end-of-mission banner offers **Retry** (hidden when the board wasn't loaded 
 **This is not the Burrow-style drift** (Rev shipped for Rushdown 2026-08-06; Burrow followed in
 [#726](https://github.com/Phaazoid/Godoiosis/issues/726), 2026-09-03 — the drift is closed, and
 the example is now historical). There is nothing for an AI faction
-to *win* by capturing, because enemy objectives are out of #96's scope — the point is the player's. The AI contests it positionally, which it already does: Rushdown walks into the approach, and a Sentry squad zoned over the point defends it with no AI code at all. Revisit when non-player factions get objectives of their own, which is [#571](https://github.com/Phaazoid/Godoiosis/issues/571), *defend a point*.
+to *win* by capturing, because enemy objectives are out of #96's scope — the point is the player's. The AI contests it positionally, which it already does: Rushdown walks into the approach, and a Sentry squad zoned over the point defends it with no AI code at all.
+
+**[#571](https://github.com/Phaazoid/Godoiosis/issues/571) was named here as the revisit, and it came and went without one** (2026-09-11). This section predicted that *defend a point* would be "the first thing that will need a real capture builder". It needed none: the dev's rule is presence, not capture, so the AI half is a **destination** and nothing more — a Rushdown squad hostile to the player walks at a `Kind.DEFEND` zone instead of at the nearest body, then takes its ordinary main actions, so it still hits whatever is in reach on arrival. `CAPTURE` is still `NEVER` on all three archetypes and `MAIN_ACTION_PRIORITY` was not touched. **RUSHDOWN ONLY is the dev's call** (*"only rushdown will target it for now"*); Hold and Sentry are unchanged. Because no shipped board paints a DEFEND zone and `board_builder` hands its `BoardContext` a null `ZoneManager`, every existing board and fixture takes the unchanged branch.
+
+The one thing the branch does need is the *fallback*: a defended point has the player standing on it, which is exactly when an occupancy-blocked flood reports every one of its cells UNREACHABLE. `RushdownArchetype._nearest_cargo_cell` ranks by route with straight-line distance as the tie-break **and** as the fallback, or the feature would go inert in the only situation it exists for.
 
 ## Known gaps
 

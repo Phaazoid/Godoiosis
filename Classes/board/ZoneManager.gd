@@ -27,6 +27,7 @@ enum Kind {
 	CAPTURE,   # objective: stand inside, spend a main action, the zone is claimed (#96 slice 3)
 	EXTRACTION,   # objective: get every surviving unit inside, and the mission ends (#96 slice 4)
 	DEPLOYMENT,   # where the player may place the force it brings, before turn 1 (#736)
+	DEFEND,       # the cargo: a hostile standing anywhere inside loses the mission (#571)
 }
 
 # "DEPLOYMENT" -> "Deployment", derived rather than a parallel label array (Terrain.gd's shape).

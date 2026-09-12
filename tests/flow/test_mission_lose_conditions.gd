@@ -70,6 +70,17 @@ func _objectives(list: Array) -> void:
 	mc.set_objectives(typed)
 
 
+func _paint(zone_name: String, kind: ZoneManager.Kind, cells: Array) -> void:
+	for cell: Vector2i in cells:
+		game.zone_manager.paint_cell(zone_name, kind, cell)
+
+
+func _defend(cells: Array, zone_name := "The Cargo") -> void:
+	_paint(zone_name, ZoneManager.Kind.DEFEND, cells)
+	var typed: Array[MissionRules.LoseCondition] = [MissionRules.LoseCondition.POINT_LOST]
+	mc.set_lose_conditions(typed, 0)
+
+
 # ONE full round of the real cycle. Two factions are on the board, so the cycle wraps every second
 # hand-off -- deliberately driven through game.end_turn rather than advance_round(), because the
 # thing most likely to be wrong is WHEN the count moves, and calling the counter directly cannot
@@ -285,3 +296,114 @@ func test_every_authorable_condition_has_a_defeat_reason() -> void:
 # The sentinel is not a reason: an ONGOING mission must not be able to describe its own defeat.
 func test_the_sentinel_has_no_wording() -> void:
 	assert_str(MissionRules.defeat_reason(MissionRules.LoseCondition.NONE)).is_empty()
+
+
+# ==============================================================================
+#  The defended point (#571) -- PRESENCE, not capture
+# ==============================================================================
+#
+# The cargo is painted clear of _contest()'s own units: that helper parks an ENEMY on (5,5) to latch
+# `contested`, and a zone painted under it would be breached before the case had begun.
+
+func test_a_hostile_standing_on_the_cargo_loses_the_mission() -> void:
+	_contest()
+	_defend([Vector2i(10, 10), Vector2i(11, 10)])
+	assert_bool(mc.is_over()) \
+		.override_failure_message("the mission ended before anybody reached the cargo") \
+		.is_false()
+
+	_spawn(Team.Faction.ENEMY, Vector2i(11, 10))
+	mc.check()
+	assert_int(mc.outcome).is_equal(MissionRules.Outcome.DEFEAT)
+	# The banner has to name THIS reason -- a defeat reporting the wrong one is exactly what #101's
+	# "_failed_by is set beside outcome" rule exists to stop.
+	assert_str(MissionRules.defeat_reason(mc._failed_by)) \
+		.is_equal(MissionRules.defeat_reason(MissionRules.LoseCondition.POINT_LOST))
+
+
+# The gate that decides WHOSE presence matters, and the likeliest way to get this rule backwards:
+# without it the player loses the mission by standing on the thing they are defending.
+func test_the_player_may_stand_on_their_own_cargo() -> void:
+	_contest()
+	_defend([Vector2i(10, 10)])
+	_spawn(Team.Faction.PLAYER, Vector2i(10, 10))
+	mc.check()
+	assert_bool(mc.is_over()) \
+		.override_failure_message("defending the cargo lost the mission") \
+		.is_false()
+
+
+# The declared call (dev, 2026-09-11): "if an enemy makes it that close" is about ARRIVAL, so a body
+# on the cargo still counts. Through the domain's own door -- a hand-set lifecycle_state leaves the
+# unit at FULL HP, a state the game cannot produce.
+func test_a_downed_hostile_on_the_cargo_still_loses_it() -> void:
+	_contest()
+	_defend([Vector2i(10, 10)])
+	var intruder := _spawn(Team.Faction.ENEMY, Vector2i(10, 10))
+	intruder.force_down()
+	mc.check()
+	assert_int(mc.outcome) \
+		.override_failure_message("a hostile that reached the cargo and then fell stopped counting") \
+		.is_equal(MissionRules.Outcome.DEFEAT)
+
+
+# The boundary a zone-membership bug walks straight through: one cell out is out.
+func test_a_hostile_beside_the_cargo_loses_nothing() -> void:
+	_contest()
+	_defend([Vector2i(10, 10)])
+	_spawn(Team.Faction.ENEMY, Vector2i(11, 10))
+	mc.check()
+	assert_bool(mc.is_over()) \
+		.override_failure_message("standing NEXT to the cargo lost the mission") \
+		.is_false()
+
+
+# objectives_missing_geometry's rule, one list over: declared with nothing painted is a BROKEN board
+# that says so out loud, never a clause quietly dropped.
+func test_declared_with_no_zone_painted_is_reported_as_broken() -> void:
+	var typed: Array[MissionRules.LoseCondition] = [MissionRules.LoseCondition.POINT_LOST]
+	mc.set_lose_conditions(typed, 0)
+	assert_array(mc.lose_conditions_missing_setup()) \
+		.contains([MissionRules.LoseCondition.POINT_LOST])
+	# ...and it stops being broken the moment the cargo exists.
+	_paint("The Cargo", ZoneManager.Kind.DEFEND, [Vector2i(10, 10)])
+	assert_array(mc.lose_conditions_missing_setup()).is_empty()
+
+
+# A board may paint the zone without declaring the condition -- decorative geometry, exactly as a
+# CAPTURE zone can be. That is #96 doctrine: what a mission REQUIRES is the authored list, never
+# what happens to be painted.
+func test_an_undeclared_zone_is_only_scenery() -> void:
+	_contest()
+	_paint("The Cargo", ZoneManager.Kind.DEFEND, [Vector2i(10, 10)])
+	_spawn(Team.Faction.ENEMY, Vector2i(10, 10))
+	mc.check()
+	assert_bool(mc.is_over()) \
+		.override_failure_message("a painted zone fired a condition the mission never declared") \
+		.is_false()
+
+
+# THE WIRE, end to end (#571). Every case above pins one layer: the archetype suite pins that
+# Rushdown aims at the cargo, the cases above pin that a hostile standing on it loses the mission.
+# Neither can see the JOIN -- that the move is actually executed and that a pass-end check() runs
+# afterwards to notice. A signal with no listener is legal GDScript, and #103 sat in exactly that
+# gap for thirteen months.
+#
+# Driven through the real AIController, so the chain is: archetype plans -> group move queued ->
+# OrderExecutor walks it -> OrderExecutor's own check() -> DEFEAT naming POINT_LOST.
+func test_the_ai_walking_onto_the_cargo_ends_the_mission() -> void:
+	_contest()
+	_defend([Vector2i(10, 10)])
+	var rusher := _spawn(Team.Faction.ENEMY, Vector2i(8, 10))   # two steps off the cargo
+	assert_int(rusher.squad.archetype) \
+		.override_failure_message("the fixture's enemy is not a rusher, so nothing walks at the cargo") \
+		.is_equal(AIArchetype.Type.FACTION_DEFAULT)
+	assert_bool(mc.is_over()).is_false()
+
+	await game.ai_controller.take_faction_turn(Team.Faction.ENEMY)
+
+	assert_int(mc.outcome) \
+		.override_failure_message("the AI reached the cargo (or failed to) and the mission did not end") \
+		.is_equal(MissionRules.Outcome.DEFEAT)
+	assert_str(MissionRules.defeat_reason(mc._failed_by)) \
+		.is_equal(MissionRules.defeat_reason(MissionRules.LoseCondition.POINT_LOST))

@@ -112,6 +112,13 @@ static func _build_lose_row(condition: MissionRules.LoseCondition, controller: M
 			label.text = "Time — %d %s" % [left, "round left" if left == 1 else "rounds left"]
 			label.modulate = URGENT_COLOR if left <= URGENT_ROUNDS else PENDING_COLOR
 			return label
+		MissionRules.LoseCondition.POINT_LOST:
+			# NAMED, not counted (#571): a defended point is a place on the board, and "Defend — 1
+			# point" tells a player nothing about which one. Zone names are already authored to be
+			# read ("South Bank", "Landing"), so they are the readout.
+			label.text = "Defend — %s" % ", ".join(controller.defend_zone_names())
+			label.modulate = PENDING_COLOR
+			return label
 	label.text = _lose_title(condition)
 	label.modulate = PENDING_COLOR
 	return label
