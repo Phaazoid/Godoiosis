@@ -35,6 +35,7 @@ signal load_game_chosen
 signal sandbox_chosen
 signal glossary_chosen
 signal settings_chosen
+signal credits_chosen
 signal feedback_chosen
 signal quit_chosen
 
@@ -167,6 +168,10 @@ func _build(mission_paths: Array[String], other_paths: Array[String], dev_tools 
 	# The options page (#350), beside the reference page and for the same reason -- a preference
 	# set before the first mission is one the player never has to pause to find.
 	_add_button(column, "Settings", func(): settings_chosen.emit())
+
+	# Who made what in this build (#139). Two of its rows are licence CONDITIONS rather than
+	# courtesies, so this row is what keeps the build inside the terms it was granted under.
+	_add_button(column, "Credits", func(): credits_chosen.emit())
 
 	# Someone who bounces off this screen without ever starting a mission still has something to
 	# tell us, and it is the one thing a mid-battle pause menu can never collect (#131).
