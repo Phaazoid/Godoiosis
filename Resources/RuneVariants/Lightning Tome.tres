@@ -4,6 +4,7 @@
 [ext_resource type="Texture2D" uid="uid://d26i1cvn6ffwl" path="res://Art/Icons/ElementIcons/Fire.png" id="4_qddlg"]
 [ext_resource type="Script" uid="uid://ckrp1phgirys0" path="res://Classes/alchemy/RuneData.gd" id="5_h6ami"]
 [ext_resource type="Resource" uid="uid://cv1sjjfg45guk" path="res://Resources/AttackShapes/Line 5.tres" id="6_shape0"]
+[ext_resource type="AudioStream" uid="uid://b7kprqvft0cdn" path="res://Audio/SFX/fire.mp3" id="7_firlt"]
 
 [sub_resource type="Resource" id="Resource_vbu1b"]
 script = ExtResource("1_bs7q6")
@@ -28,6 +29,7 @@ hits_allies = true
 targets = 2
 up_tolerance = 6
 arc_clearance = 6
+sound = ExtResource("7_firlt")
 metadata/_custom_type_script = "uid://bgbidu2bbf33l"
 
 [resource]
