@@ -2,6 +2,7 @@
 
 [ext_resource type="Script" uid="uid://dle5ob08qngde" path="res://Classes/presentation/EffectLook.gd" id="1_dppa1"]
 [ext_resource type="Script" uid="uid://ddqeee7njjjq2" path="res://Classes/weapons/WeaponAttackData.gd" id="2_wad"]
+[ext_resource type="AudioStream" uid="uid://b4bmrk11aqvty" path="res://Audio/SFX/drill.mp3" id="3_73lch"]
 
 [resource]
 script = ExtResource("2_wad")
@@ -13,4 +14,5 @@ display_name = "Gouge"
 power = 3
 vertical_rule = 1
 damage_kind = 2
+sound = ExtResource("3_73lch")
 metadata/_custom_type_script = "uid://ddqeee7njjjq2"

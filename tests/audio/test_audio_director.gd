@@ -57,14 +57,27 @@ func _spawn(faction: Team.Faction, cell: Vector2i) -> Unit:
 	return unit
 
 
+# A stream the TEST owns, built rather than loaded: the content razor forbids asserting on authored
+# content, and identity is only assertable against something this file made.
+func _own_stream() -> AudioStream:
+	var wav := AudioStreamWAV.new()
+	wav.format = AudioStreamWAV.FORMAT_8_BITS
+	wav.mix_rate = 22050
+	var d := PackedByteArray()
+	d.resize(22050)
+	wav.data = d
+	return wav
+
+
 # A plain damaging swing at range, on the volley_struck suite's own fixture shape.
-func _swinger(heals := false, no_damage := false) -> WeaponData:
+func _swinger(heals := false, no_damage := false, sound: AudioStream = null) -> WeaponData:
 	var swing := WeaponAttackData.new()
 	swing.display_name = "Test Swing"
 	swing.power = 4
 	swing.heals = heals
 	swing.deals_no_damage = no_damage
 	swing.hits_allies = heals
+	swing.sound = sound
 	var offsets: Array[Vector2i] = [Vector2i(0, 0)]
 	P.stamped(swing, 3, offsets)
 
@@ -76,8 +89,8 @@ func _swinger(heals := false, no_damage := false) -> WeaponData:
 	return template
 
 
-func _arm(hero: Unit, heals := false, no_damage := false) -> void:
-	hero.equipped_weapon = WeaponInstance.make(_swinger(heals, no_damage))
+func _arm(hero: Unit, heals := false, no_damage := false, sound: AudioStream = null) -> void:
+	hero.equipped_weapon = WeaponInstance.make(_swinger(heals, no_damage, sound))
 
 
 func _fire_at(hero: Unit, cell: Vector2i) -> void:
@@ -154,6 +167,65 @@ func test_a_damaging_attack_plays_and_the_two_silent_kinds_do_not() -> void:
 	var utility := AttackAction.new()
 	utility.fired_attack = _swinger(false, true).main_attack
 	assert_bool(AudioDirector.plays_impact(utility)).is_false()
+
+
+# --- the attack's OWN voice (#136 slice 2) --------------------------------------------------------
+
+func test_an_attack_that_authors_a_sound_plays_THAT_one_through_a_real_pass() -> void:
+	# THE CASE THIS SLICE EXISTS FOR, and it has to assert IDENTITY: a per-weapon sound that
+	# silently fell back to the generic impact is indistinguishable from working, because a sound
+	# still plays. Making cue_for ignore fired.sound reds this and test_authored_beats_the_default
+	# and nothing else.
+	var mine := _own_stream()
+	var hero := _spawn(Team.Faction.PLAYER, Vector2i(0, 2))
+	_arm(hero, false, false, mine)
+	var victim := _spawn(Team.Faction.ENEMY, Vector2i(1, 2))
+	victim.unit_instance.stats[Stats.Stat.MHP] = 200
+	victim.set_current_hp(200)
+	await await_idle_frame()
+
+	await _fire_at(hero, Vector2i(1, 2))
+
+	var live := _director().streams_playing()
+	assert_int(live.size()).override_failure_message(
+		"a blow landed and nothing played").is_greater(0)
+	assert_bool(live.has(mine)).override_failure_message(
+		"the blow played the generic impact rather than the attack's own authored sound").is_true()
+
+
+func test_a_heal_that_authors_a_sound_plays_it() -> void:
+	# The deliberate narrowing: the damage gate governs the DEFAULT, not the authored voice. A
+	# generic punch is wrong on a heal; an authored chime is not. Nothing authors one today, so
+	# this moves no live behaviour -- it pins what the rule MEANS.
+	var mine := _own_stream()
+	var medic := _spawn(Team.Faction.PLAYER, Vector2i(0, 2))
+	_arm(medic, true, false, mine)
+	var patient := _spawn(Team.Faction.PLAYER, Vector2i(1, 2))
+	patient.unit_instance.stats[Stats.Stat.MHP] = 200
+	patient.set_current_hp(100)
+	await await_idle_frame()
+
+	await _fire_at(medic, Vector2i(1, 2))
+
+	assert_bool(_director().streams_playing().has(mine)).override_failure_message(
+		"an authored heal sound was swallowed by the generic damage gate").is_true()
+
+
+func test_authored_beats_the_default_and_silence_is_still_silence() -> void:
+	var mine := _own_stream()
+
+	var voiced := AttackAction.new()
+	voiced.fired_attack = _swinger(false, false, mine).main_attack
+	assert_object(AudioDirector.cue_for(voiced)).is_same(mine)
+
+	var plain := AttackAction.new()
+	plain.fired_attack = _swinger().main_attack
+	assert_object(AudioDirector.cue_for(plain)).is_same(AudioDirector.IMPACT)
+
+	var heal := AttackAction.new()
+	heal.fired_attack = _swinger(true).main_attack
+	assert_object(AudioDirector.cue_for(heal)).override_failure_message(
+		"an unvoiced heal should stay silent").is_null()
 
 
 # --- the pool ------------------------------------------------------------------------------------

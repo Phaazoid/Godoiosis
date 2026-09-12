@@ -93,6 +93,17 @@ enum VerticalRule { RANGED, MELEE }
 enum Kind { BLUNT, SLASH, PIERCE, FIRE, SHOCK, COLD, CORROSION, NONE }
 @export var damage_kind: Kind = Kind.BLUNT
 
+# What this attack SOUNDS like when it lands (#136). Null = no opinion, and AudioDirector falls
+# through to the game's generic impact -- so this is authored where a family has a voice of its own
+# and left alone everywhere else.
+#
+# ON THE SHARED BASE, so a weapon attack and a rune carving author it identically -- #485's ruling
+# one field along: per FAMILY, every attack a weapon owned would sound alike, a mod-granted attack
+# could bring no voice of its own, and an element's sound would need a second mechanism because a
+# carving has no WeaponData to hang off. There is deliberately no fallback on the template; a
+# family's sound IS its main attack's, or that is a second answer to what a blow sounds like.
+@export var sound: AudioStream = null
+
 # What this attack's elemental effect LOOKS like, per element it carries (#900) -- a named, shared
 # EffectLook, empty meaning every value falls through to the Game tab's own. On the shared base
 # rather than on WeaponAttackData because the Electric Rune is a shock attack too, and the question
@@ -225,7 +236,7 @@ static func property_sections() -> Array[Dictionary]:
 		{"title": "Range and shape", "fields": PackedStringArray(["max_range", "min_range", "max_and_a_half", "attack_shape"])},
 		{"title": "Who it can hit", "fields": PackedStringArray(["targets", "hits_allies", "hits_self", "pierces_guard"])},
 		{"title": "Height", "fields": PackedStringArray(["vertical_rule", "up_tolerance", "down_tolerance", "arc_clearance"])},
-		{"title": "Payload", "fields": PackedStringArray(["heals", "deals_no_damage", "power", "damage_kind", "knockback"])},
+		{"title": "Payload", "fields": PackedStringArray(["heals", "deals_no_damage", "power", "damage_kind", "knockback", "sound"])},
 		{"title": "How it is used", "fields": PackedStringArray(["can_counter", "can_overwatch"])},
 		# LAST because it is the biggest: one picker plus every look row the element has, which for
 		# SHOCK is thirty-five. Placed above "How it is used" it would push two checkboxes off the
@@ -304,6 +315,7 @@ func hidden_fields() -> PackedStringArray:
 static func property_tips() -> Dictionary:
 	return {
 		"display_name": "What this attack is called wherever a player meets it -- the action menu, the queue row, a weapon's tooltip. Saving under a new name renames it.",
+		"sound": "What this attack sounds like when it lands. Leave it empty and the blow makes the game's generic impact noise, which is what most attacks want -- author one where a weapon has a voice of its own. Set in Godot's own inspector; this form cannot pick an audio file.",
 		"power": "Base damage before scaling. A weapon attack scales this off its weapon's stat blend and fitted mods; a carving scales it off the wielder's aura.",
 		"min_range": "The CLOSEST cell this attack can be aimed at, in Manhattan steps. Untick Custom minimum range and it is 1, i.e. adjacent, which is what nearly every attack wants.\n0 also allows the attacker's OWN cell (a self-heal). Above 1 leaves a dead zone it cannot hit at all, which is how a carbine cannot shoot what has closed on it.\nMUST NOT EXCEED Max range: nothing refuses the pair, the attack simply reaches no cells and stops showing any range at all.",
 		"max_range": "Placed at range OFF is max range 0, and it is a different kind of attack rather than a shorter one: the shape sits on the ATTACKER and the aim is a FACING -- the player points a direction and the whole shape TURNS to fire that way. That is what a cleave or a line is.\nON, this is the FURTHEST cell the attack can be aimed at, in Manhattan steps (no diagonals). The shape is PLACED on the aimed cell and never turns: it lands exactly as you drew it, so the grid's top is board north rather than a facing.",
