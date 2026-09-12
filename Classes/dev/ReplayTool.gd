@@ -7,7 +7,8 @@ class_name ReplayTool
 #
 # The run list is rebuilt on show rather than cached: the folder gains a run every time the dev
 # plays a mission, and a list built once at _ready would never show the run they came here to look
-# at. DevInfoTool's refresh_on_show idiom, for the same reason it has one.
+# at. DevInfoTool's refresh_on_show idiom, for the same reason it has one. It is also where the
+# one-turn filter is applied, since the filter is a property of the LIST rather than of a run.
 #
 # A REPLAY REPLACES WHAT IS ON THE BOARD, because seeding is apply_scenario. That is stated on the
 # page rather than guarded against -- this is the dev tools, and refusing to load over a live battle
@@ -23,6 +24,11 @@ var _run: ReplayRun = null
 
 var _rows: VBoxContainer
 var _list: OptionButton
+# SESSION-ONLY, and not a `PlayerSettings` row: this is a dev-tools list filter, not a preference a
+# player keeps. It defaults to hiding because most of what the folder holds is board swaps -- but a
+# CRASHED run is usually one turn long too, so the box is what gets one back rather than a rebuild.
+var _hide_one_turn := true
+var _hidden_count := 0
 var _status: Label
 var _report: RichTextLabel
 var _step_button: Button
@@ -45,12 +51,22 @@ func refresh_on_show() -> void:
 	var selected := _list.get_item_text(_list.selected) if _list.selected >= 0 else ""
 	_list.clear()
 	_list.select(-1)   # add_item auto-selects the first entry, so a vanished run would silently point at another
+	_hidden_count = 0
 	for run_id: String in ReplayRun.list_runs():
+		# load_events, never load_run: the board is the expensive half and a filter has no use for it
+		# (#53 slice 5 split them for exactly this). A run the filter keeps is parsed twice, which is
+		# the cost of not caching a list that gains a run every time the dev plays.
+		if _hide_one_turn and ReplayRun.load_events(run_id).is_one_turn():
+			_hidden_count += 1
+			continue
 		_list.add_item(run_id)
 		if run_id == selected:
 			_list.select(_list.item_count - 1)
 	if _list.item_count == 0:
-		_status.text = "No recorded runs yet. Play a mission, then come back."
+		# TWO DIFFERENT EMPTINESSES. "No recorded runs yet" in front of thirty hidden ones sends the
+		# dev looking for a recorder that is working perfectly.
+		_status.text = ("Every recorded run is one turn long (%d hidden). Untick the box to see them."
+			% _hidden_count) if _hidden_count > 0 else "No recorded runs yet. Play a mission, then come back."
 	elif _list.selected < 0:
 		_list.select(0)
 		_on_pick(0)
@@ -69,6 +85,11 @@ func _build() -> void:
 	copy.tooltip_text = "Copy the telemetry folder's path. Never opens Explorer -- a second OS window stealing focus is how every dev key ends up going nowhere."
 	copy.pressed.connect(func(): _copy(ProjectSettings.globalize_path(TelemetryStore.root), copy))
 	pick_row.add_child(copy)
+
+	DevWidgets.add_checkbox(_rows, "Hide one-turn runs", _hide_one_turn, func(on: bool):
+		_hide_one_turn = on
+		refresh_on_show(),
+		"A run that never reached round 2 -- a board swap, an F2, a mission opened and left. There is nothing in one to replay. Untick to see them; a crashed run is often one of them.")
 
 	_status = Label.new()
 	_status.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
@@ -116,7 +137,13 @@ func _on_pick(index: int) -> void:
 		flags.append("sandbox")
 	if bool(head.get("dev_mode", false)):
 		flags.append("dev mode")
-	if bool(head.get("dev_touched", false)):
+	# THREE-VALUED (see ReplayRun.headline). Null is a swept run: nobody was there to clear the flag,
+	# so it says so rather than reporting the clean answer it does not have. ReplayDriver's
+	# `unbindable` is the real guard for a run in that state.
+	var touched: Variant = head.get("dev_touched", false)
+	if touched == null:
+		flags.append("swept -- whether a dev tool touched this is unknown")
+	elif bool(touched):
 		flags.append("DEV-TOUCHED -- a replay of this cannot be trusted")
 	_status.text = "%s -- %s, %d rounds%s" % [
 		str(head.get("scenario")), str(head.get("outcome")), int(head.get("rounds", 0)),

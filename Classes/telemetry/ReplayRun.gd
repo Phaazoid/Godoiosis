@@ -142,22 +142,45 @@ func all(kind: String) -> Array[Dictionary]:
 	return out
 
 
+# HOW FAR THE RUN GOT, off the events themselves. Every line carries the round it happened in, so
+# the highest one seen is the answer whether or not the run was ever sealed -- which is the point: a
+# run whose process died still has to be able to say how much of it there was.
+func rounds() -> int:
+	var seen := 0
+	for e: Dictionary in events:
+		seen = maxi(seen, int(e.get("round", 0)))
+	return seen
+
+
+# NOTHING HAPPENED IN THIS ONE -- a board swap, an F2, a mission opened and left. Rounds start at 1
+# (MissionLog stamps `rounds_elapsed() + 1`), so "never reached 2" is exactly the dev's "just 1 turn".
+#
+# DELIBERATELY HALF OF D1'S `trivial` CUT (#851), not a copy of it. That column is
+# `rounds < 2 OR orders_queued < 2`, evaluated at read time so the threshold can be re-cut across
+# every row ever collected; this is a dev-tools list that cannot reach D1, and one turn is what was
+# asked for. Taking the orders half too would hide a three-round run carrying one order, which is a
+# different question from the one being asked here.
+func is_one_turn() -> bool:
+	return rounds() < 2
+
+
 # What the run list shows per row. Read off the events rather than the folder name, so a run that
 # never sealed says so instead of reading as a finished mission.
 func headline() -> Dictionary:
 	var start := first("mission_start")
 	var end := first("mission_end")
-	var rounds := 0
-	for e: Dictionary in events:
-		rounds = maxi(rounds, int(e.get("round", 0)))
 	return {
 		"run_id": run_id,
 		"scenario": str(start.get("scenario_name", start.get("scenario", "(unknown)"))),
 		"outcome": str(end.get("outcome", "UNSEALED")),
-		"rounds": rounds,
+		"rounds": rounds(),
 		"sandbox": bool(start.get("sandbox", false)),
 		"dev_mode": bool(start.get("dev_mode", false)),
-		"dev_touched": bool(end.get("dev_touched", false)),
+		# THREE-VALUED, PASSED THROUGH RATHER THAN COERCED. The launch sweep writes null here on
+		# purpose -- the flag lived in memory and died with the process, so "we do not know" must not
+		# flatten into "no dev tool was used". `bool(null)` is also a hard script error, which is how
+		# this was found: it froze the tab on every swept run.
+		"dev_touched": end.get("dev_touched", false),
 		# Read off WHERE THE FOLDER IS, never off a stored flag (#53 slice 5) -- the move is the
 		# state, so this cannot go stale the way a marker could.
 		"sent": TelemetryStore.is_sent(run_id),
