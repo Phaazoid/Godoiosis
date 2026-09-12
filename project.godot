@@ -31,7 +31,8 @@ directories/dtl_directory={
 "prolog_intro": "res://Scenarios/dialog/prolog_intro.dtl",
 "prolog_step_complete": "res://Scenarios/dialog/prolog_step_complete.dtl",
 "prolog_step_first_join": "res://Scenarios/dialog/prolog_step_first_join.dtl",
-"prolog_step_selected": "res://Scenarios/dialog/prolog_step_selected.dtl"
+"prolog_step_selected": "res://Scenarios/dialog/prolog_step_selected.dtl",
+"quarry_intro": "res://Scenarios/dialog/quarry_intro.dtl"
 }
 layout/style_directory={}
 
