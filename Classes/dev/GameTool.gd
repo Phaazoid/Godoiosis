@@ -248,15 +248,10 @@ func _build_class_row(rows: VBoxContainer, knob: Dictionary) -> void:
 
 
 # The where-does-this-live note is appended per table rather than typed into each tip, so it cannot
-# drift out of step with what Save actually writes. GameKnobs owns the which-stack half.
-#
-# A SETTING row is the exception and gets no game-wide line: it is not one value for every board, it
-# is one value per PLAYER, and GameKnobs.tip_for has already said so.
+# drift out of step with what Save actually writes. GameKnobs owns the whole sentence since #902 --
+# the Tiles page draws declaration-backed rows too now, and one wording serves both pages.
 func tip_for(knob: Dictionary) -> String:
-	if knob.has("setting"):
-		return GameKnobs.tip_for(knob)
-	return GameKnobs.tip_for(knob) + "\n\n" + DevWidgets.wrap_tooltip(
-		"GAME-WIDE -- one value for every board. Save to source writes it into the declaration that authors it; no mission can carry its own.")
+	return GameKnobs.declaration_tip(knob)
 
 
 # A setting row's checkbox, kept so _process can reconcile it against the store. Found by TYPE rather

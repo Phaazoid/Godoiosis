@@ -120,13 +120,13 @@ func test_a_tuned_game_knob_marks_its_save_button() -> void:
 
 func test_an_edited_object_field_marks_its_save_button() -> void:
 	assert_bool(_objects.has_unsaved_changes()).is_false()
-	assert_str(_objects._save_button.text).is_equal("Save object fields")
+	assert_str(_objects._save_button.text).is_equal("Save tile fields")
 
 	var field: Dictionary = ObjectKnobs.FIELDS[0]
 	_objects._write_field(_synthetic_tile(), field["layer"], GridUtils.INHERIT)
 
 	assert_bool(_objects.has_unsaved_changes()).is_true()
-	assert_str(_objects._save_button.text).is_equal("Save object fields *")
+	assert_str(_objects._save_button.text).is_equal("Save tile fields *")
 	await await_idle_frame()
 
 
@@ -170,5 +170,5 @@ func test_the_object_marker_survives_until_the_write_actually_lands() -> void:
 		"the tileset save stopped asking first").is_not_null()
 	assert_bool(_objects.has_unsaved_changes()).override_failure_message(
 		"the marker cleared on the PRESS -- a cancelled save would read as saved").is_true()
-	assert_str(_objects._save_button.text).is_equal("Save object fields *")
+	assert_str(_objects._save_button.text).is_equal("Save tile fields *")
 	await await_idle_frame()
