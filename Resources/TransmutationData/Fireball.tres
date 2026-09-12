@@ -3,6 +3,7 @@
 [ext_resource type="Script" uid="uid://dle5ob08qngde" path="res://Classes/presentation/EffectLook.gd" id="1_mq7ng"]
 [ext_resource type="Script" uid="uid://bgbidu2bbf33l" path="res://Classes/alchemy/TransmutationData.gd" id="1_o3s3f"]
 [ext_resource type="Texture2D" uid="uid://d26i1cvn6ffwl" path="res://Art/Icons/ElementIcons/Fire.png" id="2_bcr2w"]
+[ext_resource type="AudioStream" uid="uid://b7kprqvft0cdn" path="res://Audio/SFX/fire.mp3" id="3_firfb"]
 
 [resource]
 script = ExtResource("1_o3s3f")
@@ -19,4 +20,5 @@ targets = 2
 up_tolerance = 6
 arc_clearance = 6
 damage_kind = 3
+sound = ExtResource("3_firfb")
 metadata/_custom_type_script = "uid://bgbidu2bbf33l"

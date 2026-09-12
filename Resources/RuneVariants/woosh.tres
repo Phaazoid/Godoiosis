@@ -2,6 +2,7 @@
 
 [ext_resource type="Script" path="res://Classes/alchemy/TransmutationData.gd" id="1_6pbac"]
 [ext_resource type="Script" path="res://Classes/alchemy/RuneData.gd" id="3_rbhbv"]
+[ext_resource type="AudioStream" uid="uid://d2gkck8sv1kgq" path="res://Audio/SFX/air.mp3" id="4_airwo"]
 
 [sub_resource type="Resource" id="Resource_iovrl"]
 script = ExtResource("1_6pbac")
@@ -11,6 +12,7 @@ max_range = 3
 hits_allies = true
 knockback = 2
 deals_no_damage = true
+sound = ExtResource("4_airwo")
 metadata/_custom_type_script = "uid://bgbidu2bbf33l"
 
 [resource]
