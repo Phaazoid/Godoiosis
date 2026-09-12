@@ -238,3 +238,44 @@ func test_every_track_is_imported_to_loop() -> void:
 	assert_array(not_looping).override_failure_message(
 		"Tracks that stop at the end instead of looping: %s" % ", ".join(not_looping)).is_empty()
 
+
+
+# --- the way out ---------------------------------------------------------------------------------
+
+# A SCORE STILL SOUNDING AT TEARDOWN LEAKS ITS STREAM, and the export smoke can only see it 7 times
+# in 8. Measured on the packed boot (2026-09-12): 7 failures in 8 with the score playing, 0 in 8
+# with it never started, so the flake is in the shutdown race and not in the fault. This case is the
+# deterministic half -- it asks the property directly instead of waiting for the race to land.
+#
+# BOTH HALVES ARE ASSERTED BECAUSE stop() ALONE DOES NOT FIX IT: measured 7 failures in 10 with only
+# the stop, 0 in 10 once the player's own `stream` reference goes too. The player hands its playback
+# to the audio server, and dropping the server's reference is not the same act as dropping ours --
+# what Godot reports is the pair, `AudioStreamPlaybackMP3` holding `AudioStreamMP3`:
+#
+#   Resource still in use: res://Audio/Music/splendor_of_adventure.mp3 (AudioStreamMP3)
+#   ERROR: 1 resources still in use at exit.
+#
+# An ERROR line, so tests/export/test_export_smoke.gd's clean-boot case reds on it.
+func test_leaving_the_tree_puts_every_track_down() -> void:
+	var director := _director()
+	await await_idle_frame()
+	assert_int(director.current_track()).override_failure_message(
+		"fixture: nothing was playing, so this case cannot see the teardown").is_not_equal(-1)
+
+	director._exit_tree()
+
+	var still_sounding: Array[String] = []
+	var still_holding: Array[String] = []
+	for track: MusicDirector.Track in MusicDirector.TRACKS:
+		var player: AudioStreamPlayer = director._players[track]
+		if player.playing:
+			still_sounding.append(str(track))
+		if player.stream != null:
+			still_holding.append(str(track))
+	assert_array(still_sounding).override_failure_message(
+		"tracks still sounding after the teardown: %s" % ", ".join(still_sounding)).is_empty()
+	assert_array(still_holding).override_failure_message(
+		"tracks still holding their stream after the teardown: %s -- stopping is not enough, the"
+		% ", ".join(still_holding)
+		+ " player's own reference is what keeps the AudioStreamMP3 alive past the resource sweep"
+		).is_empty()

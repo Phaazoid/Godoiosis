@@ -185,3 +185,14 @@ func tracks_playing() -> Array[Track]:
 		if _players[track].playing:
 			live.append(track)
 	return live
+
+
+# PUT THE SCORE DOWN ON THE WAY OUT. A stream still sounding at process teardown leaves its
+# AudioStreamPlaybackMP3 alive holding the AudioStreamMP3, and Godot's resource sweep reports the
+# pair as `1 resources still in use at exit` -- an ERROR line, which reds the exported-build boot
+# smoke (#868).
+func _exit_tree() -> void:
+	for track: Track in _players:
+		var player: AudioStreamPlayer = _players[track]
+		player.stop()
+		player.stream = null
