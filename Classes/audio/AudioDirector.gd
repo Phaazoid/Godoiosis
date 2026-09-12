@@ -31,28 +31,37 @@ const IMPACT: AudioStream = preload("res://Audio/SFX/impact.mp3")
 const BUS_NAME := "SFX"
 const POOL_SIZE := 4
 
+# WHICH VOLUME ROW DRIVES WHICH BUS -- one answer for every bus, so a third is one line here rather
+# than a second copy of the reconcile below. It covers MusicDirector's bus as well as this one's, and
+# that is the division: this file owns how loud a bus is, that one owns which track. Each name is
+# read from the director that owns the bus rather than spelled twice (Law #4).
+const BUS_FOR_SETTING := {
+	PlayerSettings.Setting.SFX_VOLUME: BUS_NAME,
+	PlayerSettings.Setting.MUSIC_VOLUME: MusicDirector.BUS_NAME,
+}
+
 var game: Node
 
 var _players: Array[AudioStreamPlayer] = []
 # Monotonic per play, so a stolen voice is the oldest rather than an arbitrary one.
 var _started: Array[int] = []
 var _stamp := 0
-var _bus := 0
-# What the bus was last set to, so _process writes only on a change rather than every frame.
-var _applied := -1.0
+# Resolved once: which bus each row moves, Master being the fallback when a layout has no such bus.
+var _buses: Dictionary[PlayerSettings.Setting, int] = {}
+# What each bus was last set to, so _process writes only on a change rather than every frame.
+var _applied: Dictionary[PlayerSettings.Setting, float] = {}
 
 
 func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
 
-	_bus = AudioServer.get_bus_index(BUS_NAME)
-	if _bus == -1:
-		push_warning("AudioDirector: no '%s' bus -- falling back to Master." % BUS_NAME)
-		_bus = 0
+	for setting: PlayerSettings.Setting in BUS_FOR_SETTING:
+		_buses[setting] = _resolve_bus(BUS_FOR_SETTING[setting])
 
+	var own_bus: int = _buses[PlayerSettings.Setting.SFX_VOLUME]
 	for i in POOL_SIZE:
 		var player := AudioStreamPlayer.new()
-		player.bus = AudioServer.get_bus_name(_bus)
+		player.bus = AudioServer.get_bus_name(own_bus)
 		add_child(player)
 		_players.append(player)
 		_started.append(-1)
@@ -61,16 +70,31 @@ func _ready() -> void:
 	executor.volley_struck.connect(_on_volley_struck)
 
 
+static func _resolve_bus(bus_name: String) -> int:
+	var bus := AudioServer.get_bus_index(bus_name)
+	if bus == -1:
+		push_warning("AudioDirector: no '%s' bus -- falling back to Master." % bus_name)
+		return 0
+	return bus
+
+
 func _process(_delta: float) -> void:
-	var level := PlayerSettings.level_of(PlayerSettings.Setting.SFX_VOLUME)
-	if is_equal_approx(level, _applied):
-		return
-	_applied = level
-	# Mute rather than linear_to_db(0), which is -inf and reads as a broken slider anywhere it is
-	# shown as a number.
-	AudioServer.set_bus_mute(_bus, level <= 0.0)
-	if level > 0.0:
-		AudioServer.set_bus_volume_db(_bus, linear_to_db(level))
+	for setting: PlayerSettings.Setting in _buses:
+		var level := PlayerSettings.level_of(setting)
+		if is_equal_approx(level, _applied.get(setting, -1.0)):
+			continue
+		_applied[setting] = level
+		var bus: int = _buses[setting]
+		# Mute rather than linear_to_db(0), which is -inf and reads as a broken slider anywhere it is
+		# shown as a number.
+		AudioServer.set_bus_mute(bus, level <= 0.0)
+		if level > 0.0:
+			AudioServer.set_bus_volume_db(bus, linear_to_db(level))
+
+
+# Which bus a row moves, for a test that wants to read it back without re-deriving the table.
+func bus_of(setting: PlayerSettings.Setting) -> int:
+	return _buses.get(setting, -1)
 
 
 # ONE PER VOLLEY -- OrderExecutor emits once per blast however many it hits (#887), so the

@@ -133,6 +133,7 @@ var bug_reporter: BugReporter
 var mission_log: MissionLog   # the playtest recorder (#53); writes down what the others decide
 var telemetry_uploader: TelemetryUploader   # ships a sealed run to the intake (#53 slice 5)
 var audio_director: AudioDirector   # the one place a sound is played (#136)
+var music_director: MusicDirector   # ...and the one place a TRACK is chosen (#136 slice 3)
 
 # ==============================================================================
 #  Lifecycle
@@ -243,6 +244,10 @@ func _build_collaborators() -> void:
 	audio_director = AudioDirector.new()
 	audio_director.game = self
 	add_child(audio_director)   # AFTER order_executor: its _ready connects to volley_struck
+
+	music_director = MusicDirector.new()
+	music_director.game = self
+	add_child(music_director)   # AFTER mission_controller: its reconcile reads mission_select_is_up
 
 func _wire_signals() -> void:
 	turn_manager.turn_started.connect(_on_turn_started)

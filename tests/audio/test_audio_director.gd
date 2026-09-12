@@ -22,9 +22,12 @@ const GRASS_ATLAS := Vector2i(5, 0)
 
 var _main: Node
 var game: Node2D
+var _levels_were: Dictionary[PlayerSettings.Setting, float] = {}
 
 
 func before_test() -> void:
+	for setting: PlayerSettings.Setting in AudioDirector.BUS_FOR_SETTING:
+		_levels_were[setting] = PlayerSettings.level_of(setting)
 	_main = (load(MAIN_SCENE) as PackedScene).instantiate()
 	_main.name = "Main"
 	get_tree().root.add_child(_main)
@@ -39,6 +42,11 @@ func before_test() -> void:
 
 
 func after_test() -> void:
+	# A volume row is a process-wide static, so a case that moved one would otherwise ride into every
+	# suite after this in the shard. The BUS is left where it is deliberately: the next director
+	# re-applies from the restored rows on its own first frame.
+	for setting: PlayerSettings.Setting in _levels_were:
+		PlayerSettings.set_level(setting, _levels_were[setting])
 	await await_idle_frame()
 	get_tree().root.remove_child(_main)
 	_main.free()
@@ -237,3 +245,56 @@ func test_more_cues_than_voices_steals_rather_than_growing_or_dropping() -> void
 		director.play(AudioDirector.IMPACT)
 	assert_int(director.voices_playing()).override_failure_message(
 		"the pool grew or went silent under overload -- it should cap at its own size").is_equal(voices)
+
+
+# --- the volume rows ------------------------------------------------------------------------------
+#
+# Slice 1 shipped the bus reconcile with NO case over it at all, so these close a real gap rather
+# than pad the count. Asserted as the RELATIONSHIP between a row and its bus, never as a number: the
+# levels below are test inputs, and the DEFAULTS in PlayerSettings.DEFS are the dev's to retune.
+
+func test_each_volume_row_moves_ITS_OWN_bus() -> void:
+	var director := _director()
+	var wanted: Dictionary[PlayerSettings.Setting, float] = {
+		PlayerSettings.Setting.SFX_VOLUME: 0.5,
+		PlayerSettings.Setting.MUSIC_VOLUME: 0.25,
+	}
+	for setting: PlayerSettings.Setting in wanted:
+		PlayerSettings.set_level(setting, wanted[setting])
+	await await_idle_frame()
+
+	var wrong: Array[String] = []
+	for setting: PlayerSettings.Setting in wanted:
+		var bus := director.bus_of(setting)
+		assert_int(bus).override_failure_message(
+			"fixture: '%s' resolved no bus" % PlayerSettings.title_of(setting)).is_greater(-1)
+		var want_db := linear_to_db(wanted[setting])
+		if not is_equal_approx(AudioServer.get_bus_volume_db(bus), want_db):
+			wrong.append("%s: bus %s is %.2f dB, wanted %.2f" % [
+				PlayerSettings.title_of(setting), AudioServer.get_bus_name(bus),
+				AudioServer.get_bus_volume_db(bus), want_db])
+	assert_array(wrong).override_failure_message(
+		"Rows whose bus did not follow them: %s" % ", ".join(wrong)).is_empty()
+
+	# ...and they are genuinely different buses, or one row silently moves both.
+	assert_int(director.bus_of(PlayerSettings.Setting.SFX_VOLUME)).override_failure_message(
+		"the two rows resolved to ONE bus, so either slider moves the other's sound") \
+		.is_not_equal(director.bus_of(PlayerSettings.Setting.MUSIC_VOLUME))
+
+
+func test_all_the_way_down_mutes_rather_than_sending_a_bus_to_minus_infinity() -> void:
+	var director := _director()
+	for setting: PlayerSettings.Setting in AudioDirector.BUS_FOR_SETTING:
+		PlayerSettings.set_level(setting, 0.0)
+	await await_idle_frame()
+
+	var leaky: Array[String] = []
+	for setting: PlayerSettings.Setting in AudioDirector.BUS_FOR_SETTING:
+		var bus := director.bus_of(setting)
+		if not AudioServer.is_bus_mute(bus):
+			leaky.append("%s is not muted" % PlayerSettings.title_of(setting))
+		elif is_inf(AudioServer.get_bus_volume_db(bus)):
+			leaky.append("%s went to -inf dB" % PlayerSettings.title_of(setting))
+	assert_array(leaky).override_failure_message(
+		"All the way down should MUTE and leave the number readable: %s" % ", ".join(leaky)) \
+		.is_empty()
