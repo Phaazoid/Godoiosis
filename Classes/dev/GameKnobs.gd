@@ -394,6 +394,7 @@ const ELEMENT_PALETTE_SCRIPT := "res://Classes/ui/ElementPalette.gd"
 const QUEUE_STYLE_SCRIPT := "res://Classes/ui/queue/QueueStyle.gd"
 const BOARD_SPACE_SCRIPT := "res://Classes/presentation/BoardSpace.gd"
 const SIGHT_TRACE_SCRIPT := "res://Classes/board/SightTrace2D.gd"
+const MUSIC_DIRECTOR_SCRIPT := "res://Classes/audio/MusicDirector.gd"
 const STAGING_DUST_SCRIPT := "res://Classes/presentation/StagingDust.gd"
 const ARC_LIGHTNING_SCRIPT := "res://Classes/presentation/ArcLightning.gd"
 const SHOCK_SPARKS_SCRIPT := "res://Classes/presentation/ShockSparks.gd"
@@ -1120,6 +1121,13 @@ const CLASS_KNOBS: Array[Dictionary] = [
 	{"group": "Action ring", "label": "Slice (unavailable)", "static": "SLICE_DISABLED_COLOR",
 		"script": ACTION_MENU_SCRIPT,
 		"tip": "An option the unit owns but cannot use right now -- a dry magazine, a carving it cannot pay for. It stays listed and says why, so this must read as present-but-dead, not as absent."},
+
+	# How one track replaces another (#136 slice 3). A static on MusicDirector, which is a game
+	# collaborator rather than a node of the Battle3D world -- the MissionStatusPanel case again, so a
+	# class row is the only form available rather than a preference.
+	{"group": "Music", "label": "Crossfade", "static": "CROSSFADE_SECONDS",
+		"script": MUSIC_DIRECTOR_SCRIPT, "min": 0.0, "max": 4.0, "step": 0.05,
+		"tip": "Seconds for one track to replace another. The swap fires twice a round, so judge this against a whole mission rather than against one hand-off: short enough and it reads as a cut every turn, long enough and the two tracks are audibly playing over each other. Zero is a hard cut. Takes effect on the next swap."},
 ]
 
 
@@ -1182,6 +1190,9 @@ const GROUP_TABS: Dictionary[String, String] = {
 	# a line of separation from the knobs that simply are what they say.
 	"Player settings": "Unit HUD",
 	"Mission HUD": "Mission",
+	# Its own tab with one row in it, which is thin today and is where the lethality stings and any
+	# ducking land next -- a crossfade length has nothing to do with any other tab's subject.
+	"Music": "Audio",
 	"Camera handling": "Camera",
 	"Playback framing": "Playback",
 	"World": "World",
@@ -1496,6 +1507,7 @@ static func read_static(name: String) -> Variant:
 		"SLICE_COLOR": return ActionMenuController.SLICE_COLOR
 		"SLICE_SELECTED_COLOR": return ActionMenuController.SLICE_SELECTED_COLOR
 		"SLICE_DISABLED_COLOR": return ActionMenuController.SLICE_DISABLED_COLOR
+		"CROSSFADE_SECONDS": return MusicDirector.CROSSFADE_SECONDS
 		"URGENT_ROUNDS": return MissionStatusPanel.URGENT_ROUNDS
 		"URGENT_COLOR": return MissionStatusPanel.URGENT_COLOR
 		"ELEMENT_FIRE": return ElementPalette.ELEMENT_FIRE
@@ -1988,6 +2000,11 @@ static func write_static(host: Node3D, name: String, value: Variant) -> void:
 			return
 		"SLICE_DISABLED_COLOR":
 			ActionMenuController.SLICE_DISABLED_COLOR = value
+			return
+		# Needs NO re-apply, unlike the clock below: the director lerps toward its target every frame
+		# and reads this value each time, so a drag mid-swap is honoured on the next frame by itself.
+		"CROSSFADE_SECONDS":
+			MusicDirector.CROSSFADE_SECONDS = value
 			return
 		# The mission clock (#101). These DO need a re-apply: the status panel is push-refreshed from
 		# MissionController's write points, so with nothing happening on the board -- which is exactly

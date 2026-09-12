@@ -44,6 +44,7 @@ enum Setting {
 	MOUSE_SENSITIVITY,
 	CAMERA_SMOOTHING,
 	SFX_VOLUME,
+	MUSIC_VOLUME,
 }
 
 ## How far a camera-handling value is scaled from its authored one (#394). ONE enum over three rows,
@@ -204,6 +205,19 @@ const DEFS := {
 		"max": 1.0,
 		"step": 0.05,
 		"default": 0.8,
+	},
+	# Its own row and not a share of the one above (#136 slice 3), because the buses are SIBLINGS:
+	# SFX and Music both send to Master, so the row above moves nothing on Music and music without
+	# this is music the player cannot turn down. Quieter by default than the effects -- a score is
+	# meant to sit under the game rather than in front of it, and a player who wants it forward can
+	# say so.
+	Setting.MUSIC_VOLUME: {
+		"title": "Music",
+		"desc": "How loud the score is -- the title theme and whatever is playing during a battle. Separate from sound effects, so you can keep the blows and lose the music. All the way down is silent.",
+		"min": 0.0,
+		"max": 1.0,
+		"step": 0.05,
+		"default": 0.6,
 	},
 }
 
