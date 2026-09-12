@@ -174,3 +174,60 @@ func test_existing_saves_read_as_snapshots() -> void:
 	assert_bool(legacy.unit_entries.is_empty()).is_false()
 	for entry: ScenarioUnitEntry in legacy.unit_entries:
 		assert_bool(entry.state_saved).is_true()
+
+
+# ==============================================================================
+#  The protected-unit flag crosses BOTH sides of the fork (#572)
+# ==============================================================================
+#
+# `must_survive` is written and read by ScenarioManager DIRECTLY, not by
+# capture_unit_state/apply_unit_state -- so it lives in the same lane as cell/squad_id/is_leader and
+# test_battle_state_snapshot.gd's round-trip fixture structurally cannot see it. It belongs here
+# because the thing most likely to break it is the fork this suite exists for: a REFERENCE entry
+# never calls apply_unit_state at all, so a flag carried in that block would survive a snapshot save
+# and vanish from the authored one -- silently, and only for cast units.
+
+func test_must_survive_survives_an_authored_reference_save() -> void:
+	var vip := _spawn_cast(Vector2i(1, 1))
+	vip.must_survive = true
+
+	var snap: ScenarioData = sm.capture_scenario("__vip", true)
+	var entry: ScenarioUnitEntry = snap.unit_entries[0]
+	assert_bool(entry.state_saved) \
+		.override_failure_message("the fixture is not a REFERENCE entry, so the fork is not being crossed") \
+		.is_false()
+	assert_bool(entry.must_survive).is_true()
+
+	sm.apply_scenario(snap)
+	await await_idle_frame()
+	assert_bool(_sole_unit().must_survive) \
+		.override_failure_message("a reference entry came back unprotected -- apply_unit_state never runs for one") \
+		.is_true()
+
+
+func test_must_survive_survives_a_snapshot_save() -> void:
+	var data := H.make_unit_data({}, Team.Faction.PLAYER)
+	var vip: Unit = game.spawn_unit(data, Vector2i(1, 1))
+	assert_object(vip).is_not_null()
+	vip.must_survive = true
+
+	var snap: ScenarioData = sm.capture_scenario("__vip_snap")   # ad-hoc unit -> full snapshot
+	assert_bool(snap.unit_entries[0].state_saved).is_true()
+
+	sm.apply_scenario(snap)
+	await await_idle_frame()
+	assert_bool(_sole_unit().must_survive).is_true()
+
+
+# The default matters as much as the flag: every board that predates #572, and every ordinary
+# soldier on one that does not, must come back unprotected. A default of true would end every
+# mission on its first casualty.
+func test_an_unflagged_unit_round_trips_unflagged() -> void:
+	_spawn_cast(Vector2i(1, 1))
+
+	var snap: ScenarioData = sm.capture_scenario("__plain", true)
+	assert_bool(snap.unit_entries[0].must_survive).is_false()
+
+	sm.apply_scenario(snap)
+	await await_idle_frame()
+	assert_bool(_sole_unit().must_survive).is_false()

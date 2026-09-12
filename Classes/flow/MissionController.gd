@@ -69,6 +69,13 @@ var _rounds_elapsed := 0
 # Why the mission was lost, for the banner. Set beside `outcome`, so it can never name a reason for
 # an ending that did not happen.
 var _failed_by: MissionRules.LoseCondition = MissionRules.LoseCondition.NONE
+# Has a unit the mission was protecting died (#572)? A LATCH, not a board question, and it has to be:
+# Unit.die() queue_frees the node, so by the time any check() runs the unit is simply gone -- which
+# is indistinguishable from one that was never placed at all. Battle-scoped, cleared by reset().
+#
+# It never needs saving. The mission ends on the very next check() after the death, and check() runs
+# at the end of the pass the death resolved in, so no save can be taken while this is true.
+var _protected_lost := false
 # Has a turn actually STARTED on this board (#736)? Battle-scoped like the two above, and set from
 # _begin_turn -- the one door every arrival takes (mission select, restart, resume, sandbox), and
 # NOT from begin_mission, which #737's pre-mission phase will run inside. False therefore means
@@ -153,6 +160,7 @@ func reset() -> void:
 	round_limit = 0
 	_rounds_elapsed = 0
 	_failed_by = MissionRules.LoseCondition.NONE
+	_protected_lost = false
 	_battle_begun = false
 	# Through the setter, so the HUD comes back up on every board teardown (#739). This is the edge
 	# that covers F2, a board swap, Load Game and Abandon -- none of which pass through commit.
@@ -952,6 +960,18 @@ func _in_any_zone(zone_names: Array[String], cell: Vector2i) -> bool:
 # the HUD names them. There is no owner and no progress to hold, which is why this whole section is
 # a pass-through to the zone store rather than a battle-scoped field like _captured_zones: a
 # defended point is authored geometry that either still holds or has ended the mission.
+# THE #572 WIRE. game._on_unit_died is the one place every death arrives -- take_damage's two
+# branches, the downed countdown and the dev kill button all reach Unit.die(), which emits once and
+# is idempotent -- so this is asked once per unit and never re-asked about a corpse.
+func note_unit_died(unit: Unit) -> void:
+	if unit != null and unit.must_survive:
+		_protected_lost = true
+
+# Who this mission is protecting, still standing -- the HUD's readout.
+func protected_units(board: BoardContext) -> Array[Unit]:
+	return MissionRules.protected_units(board)
+
+
 func defend_zone_names() -> Array[String]:
 	return game.zone_manager.zone_names_of(ZoneManager.Kind.DEFEND)
 
@@ -964,9 +984,17 @@ func breaching_unit(board: BoardContext) -> Unit:
 func set_lose_conditions(list: Array[MissionRules.LoseCondition], limit: int) -> void:
 	lose_conditions.assign(list)
 	round_limit = limit
+	game.refresh_mission_status()
+
+# The shout, MOVED OUT of set_lose_conditions above (#572) rather than duplicated. It used to fire
+# there, which is mid-load -- before a single unit has spawned -- and a board-dependent condition
+# judged then is judged against an empty board: a perfectly good PROTECTED_UNIT_LOST would have
+# reported itself broken on every load, for ever. ScenarioManager.apply_scenario calls this at the
+# point it already re-pushes the HUD, which is the one moment the board has finished mutating (the
+# #134 write-point trap, and the same fix EXTRACT needed).
+func report_missing_setup() -> void:
 	for condition in lose_conditions_missing_setup():
 		push_error("Lose condition %s is declared but has nothing to fire on — this mission would be lost immediately." % MissionRules.LoseCondition.keys()[condition])
-	game.refresh_mission_status()
 
 # Declared lose conditions with no usable parameter -- objectives_missing_geometry's twin, and the
 # same doctrine: the mission really is broken, so say so loudly rather than dropping the clause.
@@ -979,6 +1007,13 @@ func lose_conditions_missing_setup() -> Array[MissionRules.LoseCondition]:
 	# lose and the mission is simply not the mission that was authored.
 	if lose_conditions.has(MissionRules.LoseCondition.POINT_LOST) and defend_zone_names().is_empty():
 		missing.append(MissionRules.LoseCondition.POINT_LOST)
+	# #572's twin, with one extra clause that is not decoration: once the VIP has died there is
+	# genuinely nobody flagged on the board, and without `not _protected_lost` the row would flip to
+	# "not set" at the exact moment the condition FIRED -- reporting a broken board for the one
+	# thing that worked.
+	if lose_conditions.has(MissionRules.LoseCondition.PROTECTED_UNIT_LOST) and not _protected_lost \
+			and protected_units(game._board()).is_empty():
+		missing.append(MissionRules.LoseCondition.PROTECTED_UNIT_LOST)
 	return missing
 
 # The ONE increment point, called from game._on_round_completed. TurnManager emits round_completed
@@ -1012,6 +1047,8 @@ func _condition_fired(condition: MissionRules.LoseCondition, board: BoardContext
 			return MissionRules.round_limit_reached(_rounds_elapsed, round_limit)
 		MissionRules.LoseCondition.POINT_LOST:
 			return MissionRules.defend_zone_breached(board, defend_zone_names(), game.zone_manager)
+		MissionRules.LoseCondition.PROTECTED_UNIT_LOST:
+			return _protected_lost
 		MissionRules.LoseCondition.NONE, MissionRules.LoseCondition.SQUAD_LOST:
 			return false   # never authored; the wipe is answered above, not from the list
 	push_error("MissionController: no rule for lose condition %s" % MissionRules.LoseCondition.keys()[condition])

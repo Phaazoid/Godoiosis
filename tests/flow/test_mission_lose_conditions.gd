@@ -407,3 +407,141 @@ func test_the_ai_walking_onto_the_cargo_ends_the_mission() -> void:
 		.is_equal(MissionRules.Outcome.DEFEAT)
 	assert_str(MissionRules.defeat_reason(mc._failed_by)) \
 		.is_equal(MissionRules.defeat_reason(MissionRules.LoseCondition.POINT_LOST))
+
+
+# ==============================================================================
+#  The protected unit (#572) -- a LATCH, because a corpse cannot be asked
+# ==============================================================================
+
+func _protect() -> void:
+	var typed: Array[MissionRules.LoseCondition] = [MissionRules.LoseCondition.PROTECTED_UNIT_LOST]
+	mc.set_lose_conditions(typed, 0)
+
+
+# The rule, through the domain's own door: every death path in the game reaches Unit.die().
+func test_the_protected_unit_dying_loses_the_mission() -> void:
+	_contest()
+	var vip := _spawn(Team.Faction.PLAYER, Vector2i(10, 10))
+	vip.must_survive = true
+	_protect()
+	assert_bool(mc.is_over()) \
+		.override_failure_message("the mission ended before the VIP was touched") \
+		.is_false()
+
+	vip.die()
+	mc.check()
+	assert_int(mc.outcome).is_equal(MissionRules.Outcome.DEFEAT)
+	assert_str(MissionRules.defeat_reason(mc._failed_by)) \
+		.is_equal(MissionRules.defeat_reason(MissionRules.LoseCondition.PROTECTED_UNIT_LOST))
+
+
+# Fork B, called DEATH ONLY. A down is recoverable -- RescueAction revives to 1 HP and ACTIVE -- and
+# losing on one would make the downed clock a second, invisible timer on the whole mission.
+func test_the_protected_unit_going_down_loses_nothing() -> void:
+	_contest()
+	var vip := _spawn(Team.Faction.PLAYER, Vector2i(10, 10))
+	vip.must_survive = true
+	_protect()
+
+	vip.force_down()
+	mc.check()
+	assert_bool(mc.is_over()) \
+		.override_failure_message("a DOWN ended the mission -- fork B was called death only") \
+		.is_false()
+	# ...and the row still names them, because they are still alive to be protected.
+	assert_array(mc.protected_units(game._board())).contains([vip])
+
+
+# An ordinary casualty is an ordinary casualty. Without the flag check the first death of the battle
+# would end it, which is the loudest possible way to get this wrong and the easiest to not notice on
+# a board where the VIP happens to die first anyway.
+func test_an_unflagged_unit_dying_loses_nothing() -> void:
+	_contest()
+	var vip := _spawn(Team.Faction.PLAYER, Vector2i(10, 10))
+	vip.must_survive = true
+	var bystander := _spawn(Team.Faction.PLAYER, Vector2i(9, 10))
+	_protect()
+
+	bystander.die()
+	mc.check()
+	assert_bool(mc.is_over()) \
+		.override_failure_message("a unit nobody was protecting ended the mission") \
+		.is_false()
+
+
+# Declared with nobody flagged is lose_conditions_missing_setup's rule, one condition over.
+func test_declared_with_nobody_flagged_is_reported_as_broken() -> void:
+	_contest()
+	_protect()
+	assert_array(mc.lose_conditions_missing_setup()) \
+		.contains([MissionRules.LoseCondition.PROTECTED_UNIT_LOST])
+
+	var vip := _spawn(Team.Faction.PLAYER, Vector2i(10, 10))
+	vip.must_survive = true
+	assert_array(mc.lose_conditions_missing_setup()).is_empty()
+
+
+# THE CLAUSE THAT IS NOT DECORATION. Once the VIP is dead there is genuinely nobody flagged on the
+# board -- Unit.die() frees the node -- so the naive predicate flips to "nothing to fire on" at the
+# exact instant the condition FIRED, and the HUD reports a broken board for the one thing that
+# worked.
+func test_a_fired_condition_is_not_reported_as_broken() -> void:
+	_contest()
+	var vip := _spawn(Team.Faction.PLAYER, Vector2i(10, 10))
+	vip.must_survive = true
+	_protect()
+
+	vip.die()
+	mc.check()
+	assert_array(mc.lose_conditions_missing_setup()) \
+		.override_failure_message("the condition reported itself unset the moment it fired") \
+		.is_empty()
+
+
+# THE WIRE (#572). The latch hangs off game._on_unit_died, and a signal with no listener is legal
+# GDScript -- #103 sat in exactly that gap for thirteen months. Driven through take_damage rather
+# than die() so the whole real chain runs: damage -> LethalityRules names the rung -> die() ->
+# unit_died -> the handler -> the latch.
+func test_the_death_signal_actually_reaches_the_latch() -> void:
+	_contest()
+	var vip := _spawn(Team.Faction.PLAYER, Vector2i(10, 10))
+	vip.must_survive = true
+	vip.force_down()   # a body takes the permanent path on the next hit
+	_protect()
+
+	vip.take_damage(999)
+	# The LIFECYCLE, not is_instance_valid: die() queue_frees, which does not land until end of
+	# frame, so a validity check here reads TRUE on a unit that is already dead. die() sets the
+	# state synchronously, and that is the fact the latch actually hangs off.
+	assert_int(vip.lifecycle_state) \
+		.override_failure_message("the fixture did not kill the VIP, so nothing is being pinned") \
+		.is_equal(Unit.LifecycleState.DEAD)
+	mc.check()
+	assert_int(mc.outcome) \
+		.override_failure_message("the VIP died through the real damage path and nothing noticed") \
+		.is_equal(MissionRules.Outcome.DEFEAT)
+
+
+# reset() is mission START (#87): the latch is battle-scoped, so a board that lost its VIP must not
+# come back already lost. It is the one piece of #572 state that could strand a mission unplayable.
+func test_the_latch_clears_on_mission_start() -> void:
+	_contest()
+	var vip := _spawn(Team.Faction.PLAYER, Vector2i(10, 10))
+	vip.must_survive = true
+	_protect()
+	vip.die()
+	mc.check()
+	assert_bool(mc.is_over()).is_true()
+
+	# Through the REAL door -- clear_board is what calls reset(), and it is the one every exit takes
+	# (F2, a board swap, Load Game, Mission Select). Calling reset() alone would leave the old units
+	# standing and the re-spawn would land on an occupied cell.
+	game.scenario_manager.clear_board()
+	_contest()
+	_protect()
+	var replacement := _spawn(Team.Faction.PLAYER, Vector2i(10, 10))
+	replacement.must_survive = true
+	mc.check()
+	assert_bool(mc.is_over()) \
+		.override_failure_message("a restarted mission opened already lost") \
+		.is_false()

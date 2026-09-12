@@ -46,6 +46,10 @@ var dev_edited := false
 # A save slot captures them like anything else: a resume has to restore the force that was actually
 # standing there, which is why this rides the `authored` fork rather than refusing outright.
 var drawn_from_roster := false
+# Does the mission end if this unit dies (#572)? Authored content, carried from this unit's
+# ScenarioUnitEntry at spawn and written back on save. Not @export'd, for drawn_from_roster's reason:
+# a Unit is never serialized directly, and ScenarioManager is the one writer and one reader.
+var must_survive := false
 var inventory : Array[Item] = []
 var squad: Squad
 var pending_grid : TileMapLayer

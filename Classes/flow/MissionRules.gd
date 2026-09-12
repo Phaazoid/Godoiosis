@@ -38,11 +38,13 @@ enum LoseCondition {
 	SQUAD_LOST,   # the #96 floor: always on, never authored.
 	ROUND_LIMIT,  # the objectives were not met within ScenarioData.round_limit rounds.
 	POINT_LOST,   # a hostile unit reached a Kind.DEFEND zone (#571).
+	PROTECTED_UNIT_LOST,   # a unit the mission said must survive died (#572).
 }
 
 # What the Scenario tab offers. A const rather than "every enum value" so the two non-authored
 # members are a decision, not an accident of a loop's shape.
-const AUTHORABLE: Array[LoseCondition] = [LoseCondition.ROUND_LIMIT, LoseCondition.POINT_LOST]
+const AUTHORABLE: Array[LoseCondition] = [LoseCondition.ROUND_LIMIT, LoseCondition.POINT_LOST,
+		LoseCondition.PROTECTED_UNIT_LOST]
 
 # The banner's body text for a defeat. One answer, one reader (MissionEndBanner).
 static func defeat_reason(condition: LoseCondition) -> String:
@@ -53,6 +55,8 @@ static func defeat_reason(condition: LoseCondition) -> String:
 			return "Time ran out."
 		LoseCondition.POINT_LOST:
 			return "The position was overrun."
+		LoseCondition.PROTECTED_UNIT_LOST:
+			return "Someone you were charged to protect has fallen."
 	return ""
 
 # Rounds left on the clock -- the HUD's countdown. A limit of 0 is NO limit, so it never runs out.
@@ -93,6 +97,17 @@ static func breaching_unit(board: BoardContext, zone_names: Array[String],
 			if zones.contains(name, unit.movement.cell):
 				return unit
 	return null
+
+# Who this mission is protecting, still standing (#572). NOT the answer to "has one died" -- a dead
+# unit is FREED (Unit.die queue_frees), so it is not absent from this list, it is absent from the
+# BOARD, and the two are indistinguishable from a unit that was never placed. That question is a
+# latch on MissionController; this one is the HUD's readout and the setup guard's.
+static func protected_units(board: BoardContext) -> Array[Unit]:
+	var protected: Array[Unit] = []
+	for unit in board.units:
+		if is_instance_valid(unit) and unit.must_survive and not unit.is_dead():
+			protected.append(unit)
+	return protected
 
 # Is anyone hostile to the player still commandable? Downed counts the same as dead, on both
 # sides. Hostility is Team's call, not ours -- an ALLY faction fighting beside you needs no edit.
