@@ -4,8 +4,13 @@ class_name GameKnobs
 # WHAT the game's own presentation constants are -- board markup, the unit readout, camera handling,
 # dev chrome, world construction and the fire effect -- and how a tuned one is KEPT (#373, widened
 # by #380 when the Objects tab's globals moved in). Static and pure; LookKnobs' opposite number.
-# ObjectKnobs is now purely per-TYPE (TileSet custom-data fields); this table is the game constants,
-# entire.
+#
+# THIS TABLE IS NO LONGER THE GAME CONSTANTS ENTIRE, and the distinction is which PAGE draws a row
+# rather than what kind of value it is. #902 moved seven world-construction rows to
+# ObjectKnobs.GLOBALS so they sit on the tile that falls back to them; they are the same
+# node:property shape, saved by the same KnobSource into the same @export declaration, and the laws
+# that are about that SHAPE walk both tables (tests/dev/test_game_knobs.gd's _declaration_tables).
+# What stays here is everything a TILE is not how you would look for.
 #
 # The split it exists to make. A LookPreset is a mission's MOOD: one board may look unlike another,
 # so a board names a preset and wears it. Everything here is the same in every mission forever --

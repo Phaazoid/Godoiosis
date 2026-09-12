@@ -2,11 +2,11 @@
 
 **Status: an idea wall plus two locked decisions.** Solicited by the dev on 2026-08-12, the day Stage 0 (#203) passed its GO gate: *"a full thought experiment, all ideas on the wall."* Nothing below the Decisions section is a commitment — it is the candidate pool for #176's stage 5 and beyond, kept so it can't evaporate from chat. The look-dev scene (`Scenes/LookDev/LookDev.tscn`) is the standing playground where any of it gets prototyped before it's real — and since #212 (2026-08-15) the **Moods tab** in the dev-tools window tunes the *shipping* view live, so a value on this wall can be judged on a real board rather than in the diorama. **It is a playground, not a scratch scene ([#393](https://github.com/Phaazoid/Godoiosis/issues/393), 2026-08-19)** — seven presentation suites fixture on it, `Battle3D.tscn` loads its MeshLibrary, and `BoardMirror`/`BoardOverlays` read textures out of `Art/LookDev/`, so it is edited with the same care as shipping code. Its four moods stopped being a second copy at the same time: `look_dev.gd` held them as a hardcoded `PRESETS` table, seeded from the same values four of the twelve `LookPreset` files now carry, and it resolves them by NAME through `LookKnobs` instead.
 
-**Canon checked through #905 (2026-09-11).**
+**Canon checked through #902 (2026-09-12).**
 
 ---
 
-## Where a presentation value is authored (#272, #373; one-tab-per-row since #380, 2026-08-19)
+## Where a presentation value is authored (#272, #373, #380; two PAGES per row since #902, 2026-09-12)
 
 A tuned value has **four** possible homes, and picking the wrong one is how a value ends up with
 nowhere to live. The question to ask is *who is allowed to disagree about this?*
@@ -14,8 +14,8 @@ nowhere to live. The question to ask is *who is allowed to disagree about this?*
 | home | who may differ | surface | stored in |
 |---|---|---|---|
 | **mission mood** | one board vs another | Moods tab | a `LookPreset` a `ScenarioData` names (#253), or the DEFAULT every board with no named mood wears (#386) |
-| **game constant** | nobody, ever | Game tab → *Save to source* | the declaration that authors it — an `@export` default, a `static var`, or one entry of `BoardOverlays.LAYERS` |
-| **per object type** | one tile type vs another | Objects tab → *Save object fields* | a TileSet custom-data column |
+| **game constant** | nobody, ever | Game tab → *Save to source*, **or** Tiles tab → *Save game-wide defaults* for the seven world-construction rows | the declaration that authors it — an `@export` default, a `static var`, or one entry of `BoardOverlays.LAYERS` |
+| **per tile** | one tile vs another | Tiles tab → *Save tile fields* | a TileSet custom-data column |
 | **per authored attack** | one attack vs another, for an effect the attack PLAYS | Attack Editor → its element's look section | a shared `EffectLook` the attack names ([#900](https://github.com/Phaazoid/Godoiosis/issues/900)) |
 
 The fourth row is the newest and the first whose owner is a piece of **content** rather than a board,
@@ -34,10 +34,31 @@ is now scene mood entire, so a knob added to it joins presets automatically and 
 
 The middle row briefly read "Game tab *or* Objects tab" while the Objects tab still held the
 world-construction globals; #380 moved those (and the fire block, and the four lamp defaults —
-which had NO surface anywhere) into the Game tab, so each row is one tab again. The Objects tab is
-purely per-type now: which object glows, how tall THIS one stands. The lamp defaults also gained
-the setter-plus-sweep the geometry globals already had, so tuning one re-lights every standing lamp
-instead of waiting for a repaint (#264's born-dead slider, closed for lights).
+which had NO surface anywhere) into the Game tab, so each row was one tab again. The lamp defaults
+also gained the setter-plus-sweep the geometry globals already had, so tuning one re-lights every
+standing lamp instead of waiting for a repaint (#264's born-dead slider, closed for lights).
+
+**[#902](https://github.com/Phaazoid/Godoiosis/issues/902) (2026-09-12) sent seven of them back to
+the tile's own page, and the distinction that makes that compatible with #380 is STORE versus
+PAGE.** The dev's ask was findability — *"the look values for objects on their individual pages, so
+that they are easier to find"* — and what moved is the table row, not the answer: a
+`ObjectKnobs.GLOBALS` row is the same `node:property` shape `GameKnobs.KNOBS` holds, saved through
+the same `KnobSource` into the same `@export` declaration, and `BoardMirror._resolved` is still the
+only place a global and a per-tile override meet. #380's real finding — *two stores, declared* —
+is untouched; only one of them changed which page draws it. The Objects tab became the **Tiles**
+tab in the same ticket, because it lists 36 named tiles rather than 25 props.
+
+**What that costs, stated rather than solved:** a global is now reachable from every tile page that
+falls back to it, and it is still one value — *Grass tuft scale* moved on `grass_weed`'s page moves
+`tall_grass` too. Three things carry that and none of them is the storage, because there is nothing
+per-tile about it to store: the page reads narrowest scope first under section headings that name
+what each moves, every row wears `GameKnobs.declaration_tip`'s GAME-WIDE line (one sentence, one
+home, both pages), and the Save that writes them is a separate button from the one that writes the
+tile.
+
+**A THIRD store joined that page with them, and it is not a presentation value at all**: the burn
+clock and spread reach of the ground a tile is made of, which live in an ignition `.tres` and are
+scoped per `Terrain.Kind`. See [terrain.md](terrain.md) → *The ground's burn rules have a surface*.
 
 ### A value the PLAYER also moves sits on both sides of the split ([#586](https://github.com/Phaazoid/Godoiosis/issues/586), 2026-08-27)
 
@@ -220,7 +241,7 @@ business.
 
 **Every save that can overwrite asks first (#380's convention, dev: "anything that can overwrite
 settings should").** Every tool's Update — load-gated *and* confirmed — plus the Game tab's source
-save, the Objects tab's tileset save, and the Moods tab's *Update default* (#386, confirmed but not
+save, the Tiles tab's tileset save, and the Moods tab's *Update default* (#386, confirmed but not
 load-gated: there is one default and it is always the target, so what the ask guards is "not yet"
 rather than "the wrong file"); `DevWidgets.confirm_overwrite` is the shared wording. Save
 As is the one save that never confirms, because `refuse_existing_file` makes it structurally unable to
@@ -618,7 +639,7 @@ Burrow's COVER pops up as three mud bumps — the dev's ask, twice: *"cover shou
 
 **The art had to answer "three" before the code could.** Measured before building, and it reversed the issue's own premise: `Cover.png`'s three mounds *touched* — one cluster 8-connected, two 4-connected — so the mechanism as shipped would have stood the whole icon up, which is the exact outcome the dev vetoed. Three pixels of seam were erased (dev's call). The general rule: **a decomposition can only find the objects the art separates**, so before reusing one, count the clusters in the art you are pointing it at.
 
-Two smaller rulings ride along. The icon is the **2D's own**, not a 3D copy, so a re-drawn Cover reaches both views — which is also why its `detect_3d/compress_to` had to be cleared in the same diff (#250's trap: first 3D use silently re-imports a shared texture to VRAM + mipmaps, degrading the 2D that draws it too). And `cover_scale` is a **second** knob beside `tuft_scale` rather than a shared one, on the lantern-vs-flame rule: two different objects at two different drawn sizes, and one number would force whoever tunes the second to un-tune the first. (Both were Look knobs until [#272](https://github.com/Phaazoid/Godoiosis/issues/272) moved them to the Objects tab, and both left again — `tuft_scale` and `cover_scale` are Game-tab globals since #380, and `cover_scale` sits on the Elemental sub-tab since #420. See *Where a presentation value is authored* below.)
+Two smaller rulings ride along. The icon is the **2D's own**, not a 3D copy, so a re-drawn Cover reaches both views — which is also why its `detect_3d/compress_to` had to be cleared in the same diff (#250's trap: first 3D use silently re-imports a shared texture to VRAM + mipmaps, degrading the 2D that draws it too). And `cover_scale` is a **second** knob beside `tuft_scale` rather than a shared one, on the lantern-vs-flame rule: two different objects at two different drawn sizes, and one number would force whoever tunes the second to un-tune the first. (Both were Look knobs until [#272](https://github.com/Phaazoid/Godoiosis/issues/272) moved them to the Objects tab, and both left again — `cover_scale` is a Game-tab global on the Elemental sub-tab since #420, and `tuft_scale` went back to the tile page in #902. See *Where a presentation value is authored* below.)
 
 ### Fire is an EFFECT, not a sprite standing on a tile ([#324](https://github.com/Phaazoid/Godoiosis/issues/324), 2026-08-16)
 

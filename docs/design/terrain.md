@@ -48,7 +48,15 @@
 >
 > **The ground is still not insulated, and the two are easy to conflate:** a fireball at a fireproof unit's feet lights the grass exactly as before. Armour protects its wearer, not the tile.
 
-**Canon checked through #905 (2026-09-11); the #895 firebreak measurement and fireproofing #892 folded in 2026-09-11; shallow water re-costed 2026-09-10.**
+> **[#902](https://github.com/Phaazoid/Godoiosis/issues/902) (2026-09-12): the ground's burn rules have a SURFACE.** The dev's ask while ruling on tall grass — *"a tick if something is burnable, and if it is, a dial for how many turns"* — answered as a **projection of the reaction catalog**, on the dev-tools **Tiles** page: pick a tile, and under *Every `<Kind>` tile* sit a Burnable tick, a Burn turns dial and a Spreads-to-corners tick, with the `.tres` they write named on the row.
+>
+> **It is reached from a TILE and scoped to a KIND, and that is the whole design.** Flammability has exactly one answer, `TerrainReactionCatalog.fuel_for_kind`, asked of the authored reactions; a `burnable` column beside it would be worse than the usual duplicate seam, because a reaction is per-KIND while a custom-data column is per-TILE — so the sheet's four grass tiles could disagree about whether grass burns, a state the rules layer has no way to represent. The row therefore says *every Grass tile* out loud rather than pretending to be about the one you picked.
+>
+> Three things it had to get right, each now a case. **The tick acts on the file the catalog RETURNED, never a name composed from the kind** — TREE's ignition reaction is `Burning.tres`, named before it had a kind to be named after, so a composed `TreeIgnites.tres` would report a successful un-tick while every fence went on burning. **A created reaction sets `required_kind`** (NONE means *don't care*, so a bare one makes every ground on the board catch) **and carries `forbidden_tile_state = SCORCHED`** (#890's terminator, without which a field never settles). And **the tick re-wires the live board**: `game.gd` composes `fuel_source` once at boot over the reaction list as it was then, so a ground that has just become fuel is invisible to the running fire until the source is composed again — #264's born-dead slider, in the one place a dev tool can create it. A dial or reach edit needs no re-wire, the loaded resource being the same instance that closure holds.
+>
+> **The dial's floor is ONE** (dev, 2026-09-12). An absent clock is legal `.tres` and means *burns forever* — but `tests/terrain/test_fire_clock.gd` refuses one on a shipped fuel, because a grass field that never goes out would ship silently. Forever is already spelled, and better: **ground that is not fuel never runs out**, which is what Prolog's braziers on flagstone have always been. So the TICK is how you say forever, and the dial cannot author a file CI reds.
+
+**Canon checked through #902 (2026-09-12); the burn-rule surface folded in 2026-09-12; the #895 firebreak measurement and fireproofing #892 folded in 2026-09-11; shallow water re-costed 2026-09-10.**
 
 ## The tile model (implemented — [LOCKED shape])
 
