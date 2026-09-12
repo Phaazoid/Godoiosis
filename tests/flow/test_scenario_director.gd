@@ -374,9 +374,22 @@ func test_the_briefing_plays_and_the_mission_start_beat_still_waits_for_the_comm
 	assert_bool(_director.pre_mission_started()).override_failure_message(
 		"the phase was told nothing would play").is_true()
 	await _await_starts(1)
+
+	# The briefing has to be the ONLY thing the phase queued, and a frame-count assert cannot see
+	# that: a MISSION_START beat fired here would QUEUE behind the briefing rather than play, so
+	# _starts reads 1 either way until the first timeline ends. Drain it and ask again.
+	Dialogic.end_timeline(true)
+	await Dialogic.timeline_ended
 	await get_tree().process_frame
 	assert_int(_starts).override_failure_message(
-		"the MISSION_START beat played before the battle").is_equal(1)
+		"the MISSION_START beat was queued by the briefing").is_equal(1)
+	assert_int(_quiets).override_failure_message(
+		"something was still queued when the briefing ended").is_equal(1)
+
+	# ...and it was not merely queued-and-dropped: the commit still plays it, so the beat is intact
+	# in the fired-once-per-battle set rather than consumed by the phase.
+	_director.mission_started()
+	await _await_starts(2)
 
 
 func test_the_briefing_does_not_arm_the_director() -> void:
@@ -388,14 +401,20 @@ func test_the_briefing_does_not_arm_the_director() -> void:
 	])
 	_set_steps([_step(DialogBeat.Trigger.SQUAD_FORMED, "Form a squad.")])
 	_director.pre_mission_started()
+	# Asked BEFORE the squad lands, because an armed director would ADVANCE past this one step and
+	# answer "" again from the far end of the lesson -- the same reading for opposite reasons.
+	assert_str(_director.active_instruction()).override_failure_message(
+		"the lesson's first instruction was up before the battle").is_empty()
 	await _await_starts(1)
+
 	_stub.squad_manager.squad_created.emit(_player_squad())
-	await get_tree().process_frame
+	# Drained, not counted in place: a beat fired here QUEUES behind the briefing instead of
+	# playing, so _starts reads 1 whether or not the director answered that squad.
+	Dialogic.end_timeline(true)
+	await Dialogic.timeline_ended
 	await get_tree().process_frame
 	assert_int(_starts).override_failure_message(
 		"the briefing armed the director, so the draw tripped a beat").is_equal(1)
-	assert_str(_director.active_instruction()).override_failure_message(
-		"the lesson started before the battle did").is_empty()
 
 
 func test_went_quiet_waits_for_the_LAST_timeline_rather_than_the_first() -> void:
