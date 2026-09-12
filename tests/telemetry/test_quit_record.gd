@@ -95,6 +95,27 @@ func test_a_run_the_process_never_sealed_is_finished_at_the_next_launch() -> voi
 	assert_str(str(summary.get("outcome"))).is_equal("CRASHED")
 
 
+# THE WIRE FROM THE SWEPT ROW TO THE RUN LIST, and it was missing for the whole of #53's life. The
+# case above asserts the sweep WRITES null; this asserts the run list can READ one. Between them
+# sat `bool(end.get("dev_touched", false))`, which is a hard script error on a stored null -- so
+# clicking a crashed run in the Replay tab froze the game on it (#925). Slice 4 wrote the reader,
+# slice 4b wrote the null 65 minutes later, and nothing ever called headline() on a swept run.
+#
+# THE `has` ASSERTION IS THE LOAD-BEARING ONE: a script error aborts headline() and hands back null,
+# and a case that only compared the value would read null out of the failure and call it a pass.
+func test_the_run_list_can_headline_a_swept_run() -> void:
+	var run_id := await _record_a_mission()
+	_die()
+	assert_int(MissionLog.sweep_unsealed()).is_equal(1)
+
+	var head: Dictionary = ReplayRun.load_run(run_id).headline()
+	assert_bool(head.has("dev_touched")).override_failure_message(
+		"headline() did not survive the swept run -- it built no row at all").is_true()
+	assert_bool(head.get("dev_touched") == null).override_failure_message(
+		"the swept run's 'we do not know' was flattened into 'no dev tool was used'").is_true()
+	assert_str(str(head.get("outcome"))).is_equal("CRASHED")
+
+
 # THE EQUIVALENCE CASE, and it is a comparison of one run against ITSELF: the swept half is the
 # sealed half's own bytes with the seal's two lines removed, which is exactly what the process
 # would have left had it died there.
