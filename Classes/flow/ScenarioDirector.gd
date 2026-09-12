@@ -18,6 +18,12 @@ extends Node
 # the order is pinned here -- step advances (HUD refreshes) then beats fire -- instead of racing
 # between two listeners.
 
+# Nothing is talking and nothing is queued to. Emitted on every timeline end that empties the queue,
+# so a caller waiting on "the director has finished" needs no count of its own (#882: the pre-mission
+# screen waits on it before showing itself). Deliberately not "the beat you asked for ended" -- a
+# beat is one of several a trigger may fire, and Dialogic plays them one at a time.
+signal went_quiet
+
 var game   # the Game coordinator; set by game._build_collaborators()
 
 var _fired: Dictionary = {}   # DialogBeat -> true; battle-scoped, cleared with the board
@@ -64,6 +70,24 @@ func mission_started() -> void:
 	for beat: DialogBeat in _beats():
 		if beat.trigger == DialogBeat.Trigger.MISSION_START:
 			_fire(beat)
+
+
+# The pre-mission phase opened (#882). Fires the briefing beats and answers whether anything will
+# actually play, so MissionController knows whether to hold its screen back or show it at once.
+#
+# It deliberately does NOT arm. Arming belongs to the commit, where the battle begins: the phase
+# spawns and squads units, and an armed director answers squad_created by firing SQUAD_FORMED beats
+# and advancing the lesson -- the same reason deploy_roster runs before mission_started().
+#
+# The _pending half of the answer is load-bearing, not belt and braces. end_timeline is async, so a
+# restart taken mid-dialog reaches here while the outgoing timeline is still ending and _fire QUEUES
+# the briefing rather than starting it; reading _dialog_active alone would report "nothing to say",
+# reveal the screen, and then play the briefing over it.
+func pre_mission_started() -> bool:
+	for beat: DialogBeat in _beats():
+		if beat.trigger == DialogBeat.Trigger.PRE_MISSION_START:
+			_fire(beat)
+	return _dialog_active or not _pending.is_empty()
 
 
 # A resume (or watch-only boot) is not a fresh start. Silences EXECUTION only: the content stays
@@ -207,6 +231,8 @@ func _on_timeline_ended() -> void:
 	if not _pending.is_empty():
 		_dialog_active = true
 		_start(_pending.pop_front())
+		return
+	went_quiet.emit()
 
 
 # WHERE the dialog MOUNTS -- handed over per timeline, because Dialogic FREES the layout on every

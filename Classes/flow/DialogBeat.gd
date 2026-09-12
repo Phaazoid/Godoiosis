@@ -17,6 +17,12 @@ enum Trigger {
 	STEP_COMPLETED,       # the lesson advanced past step N (`step` below) -- beats only, the
 	                      # payoff voice for tutorial progress (a board event fires at its FIRST
 	                      # occurrence; "the squad is COMPLETE" is a lesson fact, not a board one)
+	PRE_MISSION_START,    # the pre-mission phase opens, over the bare board and BEFORE the loadout
+	                      # screen (#882) -- the briefing slot, for a line the player can still act
+	                      # on. Only a board that HAS a phase (a roster that drew somebody) fires
+	                      # one. What it may talk about is the map and the enemy, both standing;
+	                      # the player's own force is not placed yet. APPEND ONLY -- a trigger
+	                      # serializes as its int, so inserting renumbers every authored beat.
 }
 
 @export var trigger := Trigger.MISSION_START

@@ -22,6 +22,7 @@
 
 [sub_resource type="Resource" id="Resource_5otid"]
 script = ExtResource("1_u8whh")
+trigger = 6
 timeline = ExtResource("2_xx234")
 
 [sub_resource type="Resource" id="Resource_0al7a"]

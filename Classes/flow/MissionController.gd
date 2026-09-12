@@ -54,6 +54,11 @@ var _loadout: Loadout = Loadout.new()
 # A demo boot (armed=false, #375) replays one like any other arrival. Harmless and deliberate: it
 # never opens the phase, so what it inherits is a force somebody chose rather than the plain walk.
 var _staged: PreMissionSnapshot = null
+# The phase is open and its BRIEFING is still talking (#882), so the screen is built but withheld:
+# a line telling you what the map wants has to arrive over the map, and before the loadout, or it
+# is advice about a choice already made. Cleared in _close_deployment_menu rather than in reset(),
+# which is the only door every exit takes -- abandon_mission never reaches reset() at all.
+var _briefing := false
 # Which CAPTURE zones have been claimed, by name. Battle-scoped, which is why it lives here and
 # not on ScenarioData: the zones are authored content, taking them is this battle's progress.
 var _captured_zones: Array[String] = []
@@ -326,6 +331,25 @@ func _open_deployment() -> void:
 	_premission_screen = PreMissionScreen.open(game, self)
 	_premission_bar = PreMissionBar.open(game, self)
 	_premission_bar.set_shown(false)   # the screen is what the phase opens ON; the bar is its swap
+	# ...unless the board has a BRIEFING (#882), in which case the phase opens on the BOARD and the
+	# screen waits for the last line. It is HIDDEN rather than shown-on-quiet, because a Control is
+	# visible the moment it is built -- the line above is the bar's own default being corrected, not
+	# a pattern to copy. Both fresh-start doors come through here, so a restart replays the briefing
+	# for free -- the same parity MISSION_START has always had.
+	_briefing = game.scenario_director.pre_mission_started()
+	if _briefing:
+		_premission_screen.set_shown(false)
+
+
+# The briefing has finished (#882). Wired to the director's went_quiet in game._build_collaborators,
+# which fires on every timeline that empties the queue -- so the flag, not the signal, is what says
+# this one was ours.
+func _on_director_quiet() -> void:
+	if not _briefing:
+		return
+	_briefing = false
+	if is_instance_valid(_premission_screen):
+		_premission_screen.set_shown(true)
 
 
 # THE menu's whole lifecycle, in one place because every path that ends the phase has to take it
@@ -333,6 +357,7 @@ func _open_deployment() -> void:
 # load_scenario frees, which is the #107 stale-reference shape. #774's bar rides here rather than
 # growing a second teardown -- reset, commit and abandon already all come through this one door.
 func _close_deployment_menu() -> void:
+	_briefing = false   # #882: every exit passes here, and reset() does not cover abandon_mission
 	if is_instance_valid(_premission_screen):
 		_premission_screen.queue_free()
 	_premission_screen = null
@@ -353,6 +378,8 @@ func deployment_menu_is_up() -> bool:
 # the screen and the bar are each other's complement, so a swap that moved only one of them would
 # leave the phase showing two surfaces or none.
 func toggle_deployment_menu() -> void:
+	if _briefing:
+		return   # #882: the screen is deliberately withheld while the briefing plays
 	if not is_instance_valid(_premission_screen):
 		return
 	var shown := not _premission_screen.visible
@@ -394,6 +421,11 @@ func commit_deployment() -> bool:
 # exit is what stops the wording becoming a second copy.
 func confirm_and_commit() -> void:
 	if not _deploying:
+		return
+	# #882: Enter is BOTH this commit and Dialogic's advance (dialogic_default_action carries Enter,
+	# Space and left click), so without this the keypress that closes Torv's last line would open
+	# the Begin Mission card behind it. The player has not seen the loadout yet either way.
+	if _briefing:
 		return
 	if deployed_roster_count() == 0:
 		commit_deployment()   # refuses, and speaks
