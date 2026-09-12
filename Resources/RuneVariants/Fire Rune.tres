@@ -3,6 +3,7 @@
 [ext_resource type="Script" uid="uid://bgbidu2bbf33l" path="res://Classes/alchemy/TransmutationData.gd" id="1_tgbeh"]
 [ext_resource type="Texture2D" uid="uid://d26i1cvn6ffwl" path="res://Art/Icons/ElementIcons/Fire.png" id="3_vrxf1"]
 [ext_resource type="Script" uid="uid://ckrp1phgirys0" path="res://Classes/alchemy/RuneData.gd" id="4_ulpbg"]
+[ext_resource type="AudioStream" uid="uid://b7kprqvft0cdn" path="res://Audio/SFX/fire.mp3" id="5_fircu"]
 
 [sub_resource type="Resource" id="Resource_2aefx"]
 script = ExtResource("1_tgbeh")
@@ -18,6 +19,7 @@ hits_allies = true
 targets = 2
 up_tolerance = 6
 arc_clearance = 6
+sound = ExtResource("5_fircu")
 metadata/_custom_type_script = "uid://bgbidu2bbf33l"
 
 [resource]

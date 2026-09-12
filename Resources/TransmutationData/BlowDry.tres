@@ -2,6 +2,7 @@
 
 [ext_resource type="Script" uid="uid://bgbidu2bbf33l" path="res://Classes/alchemy/TransmutationData.gd" id="1_bldry"]
 [ext_resource type="Script" uid="uid://dle5ob08qngde" path="res://Classes/presentation/EffectLook.gd" id="1_ivxhy"]
+[ext_resource type="AudioStream" uid="uid://b7kprqvft0cdn" path="res://Audio/SFX/fire.mp3" id="2_firbd"]
 
 [resource]
 script = ExtResource("1_bldry")
@@ -10,4 +11,5 @@ display_name = "Blow Dry"
 max_range = 2
 hits_allies = true
 deals_no_damage = true
+sound = ExtResource("2_firbd")
 metadata/_custom_type_script = "uid://bgbidu2bbf33l"
