@@ -312,7 +312,7 @@ func apply_scenario(scenario: ScenarioData) -> void:
 			continue
 
 		unit.must_survive = entry.must_survive   # #572, and BEFORE the fork: apply_unit_state never
-		                                         # runs for a reference entry, and a VIP is cast
+												 # runs for a reference entry, and a VIP is cast
 		if entry.state_saved:
 			entry.apply_unit_state(unit)
 
