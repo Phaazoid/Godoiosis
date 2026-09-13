@@ -75,6 +75,18 @@ func after_test() -> void:
 
 # --- Helpers -------------------------------------------------------------------------------
 
+# Every table whose rows are node:property and are saved into an @export declaration. There are TWO
+# since #902 -- ObjectKnobs.GLOBALS holds the seven world-construction rows that moved onto the
+# Tiles page -- and the laws that use this are about that SHAPE, not about which page draws a row,
+# so they ask both. Deliberately NOT used by the group / row-somewhere / Reset cases below: those
+# are about the Game panel itself, and a GLOBALS row is drawn elsewhere and carries no group at all.
+func _declaration_tables() -> Array[Dictionary]:
+	var out: Array[Dictionary] = []
+	out.append_array(GameKnobs.KNOBS)
+	out.append_array(ObjectKnobs.GLOBALS)
+	return out
+
+
 func _knob(node: String, prop: String) -> Dictionary:
 	for knob: Dictionary in GameKnobs.KNOBS:
 		if knob["node"] == node and knob["prop"] == prop:
@@ -188,7 +200,7 @@ func test_v_reaches_the_selector_from_the_dev_tools_window_too() -> void:
 
 func test_every_knob_resolves_against_the_real_scene() -> void:
 	var unresolved: Array[String] = []
-	for knob: Dictionary in GameKnobs.KNOBS:
+	for knob: Dictionary in _declaration_tables():
 		if typeof(LookKnobs.read(_scene, knob)) == TYPE_NIL:
 			unresolved.append("%s:%s" % [knob["node"], knob["prop"]])
 	assert_array(unresolved).override_failure_message(
@@ -207,7 +219,7 @@ func test_every_class_knob_resolves() -> void:
 func test_a_written_knob_survives_the_next_frame() -> void:
 	var wanted: Array = []
 	var inert: Array[String] = []
-	for knob: Dictionary in GameKnobs.KNOBS:
+	for knob: Dictionary in _declaration_tables():
 		var value: Variant = LookKnobs.read(_scene, knob)
 		if typeof(value) == TYPE_NIL:
 			continue
@@ -564,19 +576,26 @@ func _value_of(knob: Dictionary) -> Variant:
 
 func test_every_knob_has_a_tooltip() -> void:
 	var untipped: Array[String] = []
-	for knob: Dictionary in GameKnobs.KNOBS + GameKnobs.CLASS_KNOBS:
+	for knob: Dictionary in _declaration_tables() + GameKnobs.CLASS_KNOBS:
 		if String(knob.get("tip", "")).strip_edges() == "":
 			untipped.append(knob["label"])
 	assert_array(untipped).override_failure_message(
 		"Knobs with no tooltip: %s" % ", ".join(untipped)).is_empty()
 
 
-# A tooltip is a plain Label with no autowrap, so an unwrapped one runs off the screen.
+# A tooltip is a plain Label with no autowrap, so an unwrapped one runs off the screen. The GLOBALS
+# rows are measured through the LONGER of the two save-button names, since that is the sentence they
+# actually wear on the Tiles page -- the shorter one would pass a line the real page wraps.
 func test_no_tooltip_line_runs_too_long() -> void:
 	var wide: Array[String] = []
 	for knob: Dictionary in GameKnobs.KNOBS + GameKnobs.CLASS_KNOBS:
 		for line: String in _game.tip_for(knob).split("\n"):
 			if line.length() > 90:   # the wrapper targets 74; this catches a wrap that never ran
+				wide.append(knob["label"])
+				break
+	for knob: Dictionary in ObjectKnobs.GLOBALS:
+		for line: String in GameKnobs.declaration_tip(knob, "Save game-wide defaults").split("\n"):
+			if line.length() > 90:
 				wide.append(knob["label"])
 				break
 	assert_array(wide).override_failure_message(
@@ -624,7 +643,7 @@ func test_a_tab_with_no_host_degrades_instead_of_crashing() -> void:
 # aim at, against the real source -- which is the whole assumption, and the one that rots silently.
 
 func test_every_knob_is_declared_in_the_script_its_node_carries() -> void:
-	for knob: Dictionary in GameKnobs.KNOBS:
+	for knob: Dictionary in _declaration_tables():
 		var path := KnobSource.script_path_for(_scene, knob)
 		assert_str(path).override_failure_message(
 			"no script on node '%s' -- '%s' has nowhere to save to" % [knob["node"], knob["label"]]).is_not_empty()
@@ -689,7 +708,7 @@ func test_every_class_knob_is_findable_in_the_file_it_names() -> void:
 # Rewriting with each knob's OWN literal rather than a stand-in: `var x: Color = 1.0` is a type
 # error rather than a syntax one, and this law is about what Save actually writes.
 func test_a_saved_knob_leaves_its_script_still_parsing() -> void:
-	for knob: Dictionary in GameKnobs.KNOBS:
+	for knob: Dictionary in _declaration_tables():
 		var path := KnobSource.script_path_for(_scene, knob)
 		if path.is_empty():
 			continue   # the findable law above owns that failure; do not report it twice
@@ -730,7 +749,7 @@ func test_the_scene_overrides_no_game_knob_property() -> void:
 	var scene := _read_file(SCENE_PATH)
 	assert_str(scene).override_failure_message(
 		"could not read %s -- this law would pass vacuously" % SCENE_PATH).is_not_empty()
-	for knob: Dictionary in GameKnobs.KNOBS:
+	for knob: Dictionary in _declaration_tables():
 		var section := _node_section(scene, knob["node"])
 		assert_bool(section.is_empty()).override_failure_message(
 			"Battle3D.tscn has no node '%s'" % knob["node"]).is_false()
@@ -888,13 +907,136 @@ func test_a_save_with_nothing_moved_never_reaches_a_dialog() -> void:
 
 
 func test_save_object_fields_asks_before_writing() -> void:
-	var dev_overlay := _scene.get_node("Main/DevOverlay") as DevOverlay
-	var objects: ObjectTool = dev_overlay.object_tool
+	var objects := _tiles_page()
 	assert_bool(objects.has_host()).is_true()
 
 	objects._on_save_fields_pressed()
 
 	assert_object(_find_dialog(objects)).is_not_null()
+
+
+func test_saving_the_game_wide_defaults_asks_before_writing() -> void:
+	var objects := _tiles_page()
+	var knob: Dictionary = ObjectKnobs.GLOBALS[0]
+	objects._write_global(knob, _nudged(knob, LookKnobs.read(_scene, knob)))
+
+	objects._on_save_globals_pressed()
+
+	assert_object(_find_dialog(objects)).override_failure_message(
+		"a save that rewrites a declaration every board reads went straight to disk").is_not_null()
+
+
+func test_a_defaults_save_with_nothing_moved_never_reaches_a_dialog() -> void:
+	var objects := _tiles_page()
+
+	objects._on_save_globals_pressed()
+
+	assert_object(_find_dialog(objects)).is_null()
+	assert_str(objects._status.text).is_not_empty()
+
+
+# --- The game-wide defaults on the Tiles page (#902) -------------------------------------------
+
+# THE WIRE. A row drawn on a page nobody has proved reaches the property is two correct ends with
+# nothing between them (#103), and this one cannot go through _write_field -- that rebuilds the
+# whole page per write and would free the slider under the dragging mouse.
+func test_a_global_row_moves_the_live_property() -> void:
+	var objects := _tiles_page()
+	var knob: Dictionary = _global("tuft_scale")
+	var before: Variant = LookKnobs.read(_scene, knob)
+	var wanted: Variant = _nudged(knob, before)
+
+	objects._write_global(knob, wanted)
+
+	assert_float(LookKnobs.read(_scene, knob)).override_failure_message(
+		"the Tiles page's global row never reached BoardMirror -- the slider moves and the board does not"
+		).is_equal_approx(wanted, 0.0001)
+	assert_bool(objects.has_unsaved_changes()).override_failure_message(
+		"a moved game-wide default left the page reading as saved").is_true()
+
+
+# Reset is the only way back once these rows left the Game tab, so losing it would strand a value
+# with no door home at all.
+func test_reset_puts_a_moved_default_back() -> void:
+	var objects := _tiles_page()
+	var knob: Dictionary = _global("tuft_scale")
+	var before: Variant = LookKnobs.read(_scene, knob)
+	objects._write_global(knob, _nudged(knob, before))
+
+	objects._on_reset_globals_pressed()
+
+	assert_float(LookKnobs.read(_scene, knob)).override_failure_message(
+		"Reset did not put the game-wide default back").is_equal_approx(before, 0.0001)
+	assert_bool(objects.has_unsaved_changes()).is_false()
+	# Reset redraws the page, and _rebuild queue_frees every row it replaces -- deferred, so without
+	# a frame they are counted as orphans (the standing gdUnit4 workaround).
+	await await_idle_frame()
+
+
+# The GAME-WIDE sentence has ONE home (GameKnobs.declaration_tip) and both pages read it, so a
+# reworded warning cannot reach one page and not the other. Only the button name differs.
+func test_a_global_row_wears_the_game_wide_warning() -> void:
+	var knob: Dictionary = _global("tuft_density")
+	var tip := GameKnobs.declaration_tip(knob, "Save game-wide defaults")
+
+	assert_str(tip).override_failure_message(
+		"a game-wide row on a tile's page does not say it is game-wide").contains("GAME-WIDE")
+	assert_str(tip).override_failure_message(
+		"the warning names the Game tab's button, which this page does not have"
+		).contains("Save game-wide defaults")
+
+
+# --- The ground rules reach the live board (#902) -----------------------------------------------
+
+# game.gd wires terrain_states.fuel_source ONCE at boot, closing over the reaction list AS IT WAS
+# THEN. So a ground that has just become fuel -- or stopped being it -- is invisible to the running
+# fire until the source is composed again: a born-dead control otherwise (#264's shape).
+#
+# It lives here rather than beside the rest of #902's ground cases because it needs a HOST: the flat
+# Main.tscn has no 3D scene, so the Tiles page there degrades to "no 3D host" and every wire through
+# it answers vacuously.
+func test_a_tick_rewires_the_live_board() -> void:
+	var panel := _tiles_page()
+	var game: Node2D = _scene.get_node("Main/GameContainer/GameView/Game")
+	var grass := _paint_a_grass_cell(game)
+	# A SENTINEL the re-wire must REPLACE, rather than comparing the source before and after. That
+	# compare proves nothing and passes whatever the code does: a GDScript lambda compares by its
+	# CAPTURED VALUES, and two fuel_source_for calls capture the same grid and two reaction arrays
+	# holding the same objects, so they test EQUAL however often the source is recomposed. Measured
+	# 2026-09-12 -- the identity version of this case went red against correct code.
+	game.terrain_states.fuel_source = func(_cell: Vector2i) -> TerrainReaction: return null
+	assert_object(game.terrain_states.fuel_source.call(grass)).override_failure_message(
+		"the sentinel did not take, so this case cannot tell a re-wire from no re-wire").is_null()
+
+	panel._rewire_fuel()
+
+	assert_object(game.terrain_states.fuel_source.call(grass)).override_failure_message(
+		"a tick left the board reading the fuel source it had at boot, so a ground that just became "
+		+ "fuel -- or stopped being it -- goes on behaving the old way until a relaunch"
+		).is_not_null()
+
+
+func _paint_a_grass_cell(game: Node2D) -> Vector2i:
+	for entry: Dictionary in ObjectKnobs.authorable_tiles(game.grid.tile_set):
+		if GridUtils.terrain_kind_of(entry["data"]) != Terrain.Kind.GRASS:
+			continue
+		var cell := Vector2i(0, 0)
+		game.grid.paint(cell, entry["source_id"], entry["coords"])
+		return cell
+	fail("the sheet declares no grass tile, so this case is vacuous")
+	return Vector2i.ZERO
+
+
+func _tiles_page() -> ObjectTool:
+	var dev_overlay := _scene.get_node("Main/DevOverlay") as DevOverlay
+	return dev_overlay.object_tool
+
+
+func _global(prop: String) -> Dictionary:
+	for knob: Dictionary in ObjectKnobs.GLOBALS:
+		if knob["prop"] == prop:
+			return knob
+	return {}
 
 
 # --- The aim-palette notice (#422) ---------------------------------------------------------

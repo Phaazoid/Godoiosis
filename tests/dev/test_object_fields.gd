@@ -274,3 +274,137 @@ func test_unticking_a_solid_prop_adopts_what_it_already_resolved() -> void:
 	assert_int(GridUtils.prop_rule_height_of(_data)).override_failure_message(
 		"unticking moved a wall's height instead of adopting what it already stood at"
 		).is_equal(Terrain.UNITS_PER_LEVEL)
+
+
+# --- The page widened to every NAMED tile (#902) -----------------------------------------------
+#
+# The picker listed props alone, so `grass_basic` and `grass_clover` -- FLAT, and half the grass in
+# the game -- had no page at all while their ground's burn rules needed one.
+
+func test_a_flat_ground_tile_gets_a_page() -> void:
+	var tiles := load(BOARD_TILES) as TileSet
+	var named_flat: Variant = _flat_named_tile(tiles)
+	assert_object(named_flat).override_failure_message(
+		"the sheet names no FLAT tile, so this case is vacuous").is_not_null()
+
+	var pages := _coords_of(ObjectKnobs.authorable_tiles(tiles))
+
+	assert_array(pages).override_failure_message(
+		"a named flat ground tile has no page, so its burn rules are unreachable"
+		).contains([named_flat])
+
+
+# object_tiles() answers a DIFFERENT question -- which tiles stand something up -- and BoardMirror's
+# light coverage plus the prop_lit content law both ask it. Widening it in place would have left
+# test_board_mirror picking a flat tile as its unlit example, prop_at returning null, and its
+# assertion passing VACUOUSLY: a test going blind, which is worse than one going red.
+func test_the_prop_list_stays_narrow_while_the_page_list_widens() -> void:
+	var tiles := load(BOARD_TILES) as TileSet
+	var props := _coords_of(ObjectKnobs.object_tiles(tiles))
+	var pages := _coords_of(ObjectKnobs.authorable_tiles(tiles))
+
+	assert_array(props).override_failure_message(
+		"object_tiles now lists a flat tile, so every prop-only reader has quietly widened with it"
+		).not_contains([_flat_named_tile(tiles)])
+	assert_int(pages.size()).override_failure_message(
+		"the page list is no wider than the prop list, so the widening did not happen"
+		).is_greater(props.size())
+	for coords: Vector2i in props:
+		assert_array(pages).override_failure_message(
+			"a prop lost its page when the list widened").contains([coords])
+
+
+# `shapes: []` has always meant "every OBJECT", and every object was non-FLAT. Re-reading it as
+# "flat ground too" would hand `grass_basic` a Rules height, which Reach honours for ANY cell
+# (Reach.gd's column_top asks prop_rule_height_at) -- flat ground that blocks a shot, smuggled in by
+# a picker filter.
+func test_a_flat_tile_is_offered_no_per_tile_prop_field() -> void:
+	assert_array(_layers_of(ObjectKnobs.fields_for(GridUtils.PropShape.FLAT, true))
+		).override_failure_message(
+		"a flat ground tile is offered prop fields, so it can be given a rules height a gun dies on"
+		).is_empty()
+	assert_array(_layers_of(ObjectKnobs.globals_for(GridUtils.PropShape.FLAT, true))
+		).is_empty()
+
+
+func _flat_named_tile(tiles: TileSet) -> Variant:
+	for entry: Dictionary in ObjectKnobs.authorable_tiles(tiles):
+		if entry["shape"] == GridUtils.PropShape.FLAT:
+			return entry["coords"]
+	return null
+
+
+func _coords_of(entries: Array[Dictionary]) -> Array[Vector2i]:
+	var out: Array[Vector2i] = []
+	for entry: Dictionary in entries:
+		out.append(entry["coords"])
+	return out
+
+
+# --- The game-wide defaults, moved onto the tile's page (#902) ----------------------------------
+
+# The dev's ask was that these be easier to FIND, so a row that falls back to a global must be able
+# to show that global on the same page. This is that property, pinned.
+func test_every_override_field_can_see_its_default_on_the_same_page() -> void:
+	var globals: Array[String] = []
+	for knob: Dictionary in ObjectKnobs.GLOBALS:
+		globals.append(knob["prop"])
+	var orphans: Array[String] = []
+	for field: Dictionary in ObjectKnobs.FIELDS:
+		var knob: String = field["knob"]
+		if knob != "" and not globals.has(knob):
+			orphans.append(field["layer"])
+	assert_array(orphans).override_failure_message(
+		"these fields fall back to a global the page cannot show: %s" % ", ".join(orphans)
+		).is_empty()
+
+
+# The same shape-and-lit filter as the fields, for the fields' reason: a crate must not be offered a
+# tuft density any more than it is offered a tuft scale.
+func test_a_tuft_is_offered_the_tuft_globals_and_a_crate_is_not() -> void:
+	var tuft := _props_of(ObjectKnobs.globals_for(GridUtils.PropShape.TUFT, false))
+	var crate := _props_of(ObjectKnobs.globals_for(GridUtils.PropShape.CUBE, false))
+
+	assert_array(tuft).contains(["tuft_scale", "tuft_density"])
+	assert_array(crate).override_failure_message(
+		"a crate's page offers grass tuft dials").not_contains(["tuft_scale", "tuft_density"])
+	assert_array(crate).override_failure_message(
+		"a solid prop is not offered the block height it falls back to").contains(["block_height_scale"])
+
+
+func test_the_lamp_defaults_appear_only_once_a_tile_says_it_is_lit() -> void:
+	assert_array(_props_of(ObjectKnobs.globals_for(GridUtils.PropShape.BILLBOARD, false))
+		).not_contains(["prop_light_energy"])
+	assert_array(_props_of(ObjectKnobs.globals_for(GridUtils.PropShape.BILLBOARD, true))
+		).contains(["prop_light_energy"])
+
+
+# A GLOBALS row is saved into its @export declaration, so it must name a property that is really
+# declared there -- the law GameKnobs' own rows carry, applied to the table that left it.
+func test_every_global_is_declared_in_the_script_its_node_carries() -> void:
+	var source := FileAccess.get_file_as_string("res://Classes/presentation/BoardMirror.gd")
+	assert_str(source).override_failure_message("BoardMirror.gd did not read").is_not_empty()
+	var missing: Array[String] = []
+	for knob: Dictionary in ObjectKnobs.GLOBALS:
+		assert_str(knob["node"]).override_failure_message(
+			"a global names a node other than BoardMirror -- widen this law before moving it"
+			).is_equal("BoardMirror")
+		if not source.contains("var %s" % knob["prop"]):
+			missing.append(knob["prop"])
+	assert_array(missing).override_failure_message(
+		"these globals name no declaration to save into: %s" % ", ".join(missing)).is_empty()
+
+
+# They carry no `group`: a group names which SUB-TAB of the Game page a row lands on, and these land
+# on none. A stray one would send test_every_knob_group_has_a_sub_tab hunting for a tab.
+func test_a_global_declares_no_game_tab_group() -> void:
+	for knob: Dictionary in ObjectKnobs.GLOBALS:
+		assert_bool(knob.has("group")).override_failure_message(
+			"'%s' still carries a Game-tab group" % knob["label"]).is_false()
+
+
+func _props_of(knobs: Array[Dictionary]) -> Array[String]:
+	var out: Array[String] = []
+	for knob: Dictionary in knobs:
+		out.append(knob["prop"])
+	return out

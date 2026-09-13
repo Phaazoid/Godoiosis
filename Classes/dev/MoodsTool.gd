@@ -193,7 +193,7 @@ func _rebuild() -> void:
 
 
 # The where-does-this-live note is appended per TABLE rather than typed into each tip, so it cannot
-# drift out of step with what Save actually writes -- the Game and Objects tabs say their own.
+# drift out of step with what Save actually writes -- the Game and Tiles tabs say their own.
 func tip_for(knob: Dictionary) -> String:
 	return DevWidgets.wrap_tooltip(String(knob.get("tip", ""))
 		+ "\n\nMISSION MOOD -- a preset captures this, and a board wearing that preset wears this value. Save As / Update is how it is kept; a value that must be the same on every board is a Game tab knob instead.")

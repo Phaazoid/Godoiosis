@@ -3,7 +3,7 @@ class_name KnobSource
 
 # HOW a tuned game constant gets written back to the place it is authored (#272, widened by #373).
 # Static and pure -- no table of its own, and that is the point: it is the one answer to "keep this
-# value". Since #380 the Game tab is its one caller (the Objects tab saves per-type fields into the
+# value". Since #380 the Game tab is its one caller (the Tiles tab saves per-tile fields into the
 # TILESET instead), but the split stands on its own: the transform is testable without a table, and
 # the next table that wants a Save gets this one rather than a copy that agrees right up until one
 # of them is taught something the other is not.
