@@ -173,3 +173,37 @@ func _def_value() -> String:
 			if value != null:
 				return value.text
 	return ""
+
+
+# --- the panel's own height budget (#930) ---
+
+# THE PANEL IS AS TALL AS THE SCREEN AND ITS CONTENT NEARLY FILLS IT, which nothing said out loud
+# until #930 measured it: the body wanted 648 of a 720px column, so the 72px left over is the entire
+# budget any future row has to fit in. That ticket's first attempt put a 160px wheel in the body and
+# overflowed by 92 -- the squad box and the states bar ran off the bottom of the screen, silently,
+# because a VBoxContainer simply lays its children past its own rect and nothing complains.
+#
+# Asked as a PROPERTY against the panel's own height rather than a pixel count, which is what
+# tests/ui/test_title_screen_fits_the_viewport.gd learned: the design space is exactly 720 tall for
+# any 16:9 window, so this is never resolution-dependent, and the number to compare against is the
+# thing the .tscn anchors rather than a literal.
+#
+# It reads the outermost CONTAINER, never the panel Control: a plain Control aggregates no minimum,
+# so asking `panel.get_combined_minimum_size()` answers (0, 0) however much is built underneath it.
+func test_the_inspect_panels_content_fits_the_column_it_is_anchored_to() -> void:
+	var panel: Control = game.find_child("UnitInfoPanelControl", true, false)
+	assert_object(panel).is_not_null()
+	var units: Array = game._all_units()
+	assert_int(units.size()).override_failure_message(
+		"the sandbox stood nobody up, so there is no unit to inspect").is_greater(0)
+
+	var subject: Unit = units[0]
+	panel.set_unit(subject)
+	panel.visible = true
+	await await_idle_frame()
+	await await_idle_frame()
+
+	var body: Control = panel.get_node("UnitInfoPanel/Margin/VBox")
+	assert_float(body.get_combined_minimum_size().y).override_failure_message(
+		"the inspect panel wants %d of the %d it has -- its bottom rows are off screen"
+			% [body.get_combined_minimum_size().y, panel.size.y]).is_less_equal(panel.size.y)

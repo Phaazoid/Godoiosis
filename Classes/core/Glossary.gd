@@ -34,8 +34,9 @@ enum Term {
 	GUARD, OVERWATCH, RESCUE, RALLY, CAPTURE, SQUAD_UP, JOIN_SQUAD, LEAVE_SQUAD, DISBAND_SQUAD, WAIT,
 	CANCEL_ACTIONS, INSPECT, END_TURN,
 	ACTION, RUNE, SQUAD_ACTIONS, UNDEPLOY, REPOSITION, PLACEMENT,
-	# Elemental
-	ELEMENTS, WET, CHILLED, REACTIONS,
+	# Elemental -- affinity then aura, in the order a reader needs them: which elements you can touch
+	# at all, then how hard you hit with one (#930 put both on screen for the first time).
+	ELEMENTS, AFFINITY, AURA, WET, CHILLED, REACTIONS,
 	# Terrain
 	TERRAIN_KINDS, WATER_TILE, SHALLOW_WATER, BURNING, SCORCHED, FROZEN, COVER,
 	# Will & lifecycle
@@ -451,6 +452,24 @@ static func _build_entries() -> Dictionary:
 			+ "where it reacts with whatever state the target already holds — see Reactions. Fire, "
 			+ "Water, Earth, Air and Aether are the five base sigils; the rest arise from "
 			+ "combinations."}
+	e[Term.AFFINITY] = {"category": Category.ELEMENTAL, "title": "Affinity",
+		"short": "Which elements a unit can ever channel — inherited, fixed for life, and not the "
+			+ "same thing as how deep they run.",
+		"long": "Alchemy runs in the blood: an affinity is the right to grow aura in an element, and "
+			+ "it is set at birth. Most alchemists carry one, a few carry several, and the set is "
+			+ "ORDERED — the first is their primary. Someone with no affinity at all can carry a "
+			+ "rune but never wield one; it is inert rock in their hands. Affinity is tracked apart "
+			+ "from aura on purpose, because losing a limb can empty a pool without costing the "
+			+ "right to fill it again — see Aura."}
+	e[Term.AURA] = {"category": Category.ELEMENTAL, "title": "Aura",
+		"short": "How deep a unit's pull on an element runs — it scales every transmutation they "
+			+ "channel through it.",
+		"long": "A pool per element, seeded at birth and grown rarely: each point is an achievement, "
+			+ "not a level. A carving's damage scales off the sum of the wielder's aura across the "
+			+ "elements it is made of, and a pool must hold at least 1 for them to channel that "
+			+ "element at all — so a pool emptied to 0 silences those carvings while the affinity "
+			+ "behind it survives. Every lost limb docks a point off the deepest pool: aura rides "
+			+ "living flesh, and specialists bleed depth first."}
 	e[Term.WET] = {"category": Category.ELEMENTAL, "title": "Wet",
 		"short": "Soaked through — and a conductor. Some elements react hard with a wet target.",
 		"long": "The soaked condition, left by a water attack or simply by being in water: wading "

@@ -7,7 +7,7 @@ its child [#49 Action Queue UX](https://github.com/Phaazoid/Godoiosis/issues/49)
 This is a *guidelines* doc, not a spec — it captures the principles we're holding the work to,
 plus the running order of the queue-UX checklist. Update it as items land.
 
-**Canon checked through #837 (2026-09-08).**
+**Canon checked through #932 (2026-09-12).**
 
 ## Principles
 
@@ -3224,3 +3224,16 @@ put into** — enumerate the doors that write the same property, not the propert
 One consequence outside the roles: `PlayerSettings`' own description still said Parchment dressed
 *"the order panel on the right"*, which stopped being true when the pre-mission surfaces adopted the
 palette. Ruled a whole-UI skin (dev, 2026-09-07), so the setting is now **Menu colours**.
+
+## A ring frames the CHARACTER, not the canvas ([#930](https://github.com/Phaazoid/Godoiosis/issues/930), BUILT 2026-09-12)
+
+The aura readout is a ring of ticks around a portrait, on the pre-mission card and in the inspect panel both. Three things it settled are about looking at things generally rather than about aura.
+
+**The measurement moved, not the number.** Every 32×32 map sprite draws its ink in the lower half of its sheet — `x 8..23, y 13..31` — so a ring centred on the sprite's BOX sits a third of the box above the person inside it. #560 found that scanning the deployed-force strip and solved it there as `INK_OFFSET = (-4, -11)`: the right answer, at one size, in one screen's constants. A second consumer at a different size cannot reuse a pixel offset, so the **texel rect** is now `MapSpriteInk` and both surfaces derive from it — `window_offset()` reproduces the shipped `(-4, -11)` exactly, which is what makes this a MOVE rather than a rewrite, and a test pins that it still does. **Law #4 belongs on the measurement, not on whichever consumer solved it first.**
+
+**Geometry is derived from the rect a widget lands in, never from a size passed to it.** The panel's ring is a `FULL_RECT` child of a `Panel`, and a `Panel` aggregates no minimum from its children — so the constructor argument that looked like it sized the ring never did, and the scene's own 108 was silently the only answer. Two answers to *how big is this*, agreeing by luck. A mutant is what found it: growing the constant changed nothing at all, which is the tell that a value is not load-bearing.
+
+**Fixed positions are what make a wheel learnable, so the ORDER is a rule with a reason.** `FIRE / AIR / WATER / AETHER / EARTH`, clockwise from twelve: Fire↔Water and Earth↔Air are the two elemental oppositions, five arcs put the furthest pair 144° apart, and this order puts *both* pairs there — Aether, the odd one, takes the arc left over. Because the positions never move, colour alone carries identity at card scale and no labels are needed; the tooltip names what the cursor is in.
+
+**A docked panel has a height budget and nothing says so out loud.** The inspect panel is 300 × **720** — the viewport's own height — and its body already wanted 648 of that before this ticket, so every future row competes for 72px. The first attempt put a 160px wheel in the body and overflowed by 92: the squad box and the states bar ran off the bottom of the screen, silently, because a `VBoxContainer` lays its children past its own rect without complaint. The ring moved onto the portrait (108px box, +12px of header) and the budget is now a law in `tests/ui/test_unit_info_panel_refresh.gd`, asked as a property against the panel's own height rather than as a pixel count — the lesson [#723](https://github.com/Phaazoid/Godoiosis/issues/723) learned on the title screen, arriving at a surface that is not a `ModalCard`. It reads the outermost CONTAINER, never the panel `Control`, because a plain Control aggregates nothing and answers `(0, 0)` however much is built underneath it.
+

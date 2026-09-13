@@ -1195,6 +1195,21 @@ func get_element_aura(element: Elemental.Element) -> int:
 		return 0
 	return unit_instance.get_element_aura(element)
 
+# Can this unit EVER grow aura in this element -- its own field, never "aura >= 1" (UnitInstance's
+# note: the limb tax empties a pool while the growth right survives). Delegated for the same reason
+# the accessor above is: a surface reaching unit_instance directly is the duplicate seam #930's
+# readout would otherwise open, and both of its surfaces ask this question.
+func has_affinity(element: Elemental.Element) -> bool:
+	return unit_instance != null and unit_instance.has_affinity(element)
+
+# The affinity set IN RANK ORDER, [0] first. A COPY: the stored array is the unit's own, and a menu
+# holding the live one could reorder a genetic fact by accident.
+func affinity_order() -> Array[Elemental.Element]:
+	if unit_instance == null:
+		var none: Array[Elemental.Element] = []
+		return none
+	return unit_instance.affinity.duplicate()
+
 # What a burned vial empowers this unit in (#697) — [] when nothing is attuned. Deliberately NOT
 # folded into get_element_aura above: that accessor must stay blind to materia, because the anchor,
 # the channel deficit, both wildcard pools and the equip gate all read it, and making it aware would

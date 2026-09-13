@@ -32,12 +32,12 @@ const CONTRACT_WIDTH := 296
 const GRID_COLUMNS := 3
 const REGION_GAP := 12
 
-# The deployed-force ring hugs the CHARACTER, not its canvas. Measured over all seven shipped map
-# sprites: the ink runs x 8..23, y 13..31 of a 32x32 sheet, so the top half is empty on every one of
-# them and a ring sized to the canvas frames padding. These centre that ink box in a 24px window.
+# The deployed-force ring hugs the CHARACTER, not its canvas -- the ink runs in the lower half of
+# every 32x32 map sprite, so a ring sized to the canvas frames padding. The MEASUREMENT moved to
+# MapSpriteInk when #930's aura ring became its second consumer at a different size; window_offset()
+# reproduces the (-4, -11) that used to be spelled out here, and test_aura_ring pins that it still does.
 const RING := 28
 const RING_WINDOW := 24
-const INK_OFFSET := Vector2(-4, -11)
 
 var _controller: MissionController
 var _cards: Array[PreMissionCard] = []
@@ -443,7 +443,7 @@ func _ring(member: Unit, squad: Squad) -> Control:
 
 	var sprite := TextureRect.new()
 	sprite.texture = member.unit_data.map_sprite
-	sprite.position = INK_OFFSET
+	sprite.position = MapSpriteInk.window_offset(RING_WINDOW)
 	sprite.size = Vector2(32, 32)
 	sprite.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 	window.add_child(sprite)

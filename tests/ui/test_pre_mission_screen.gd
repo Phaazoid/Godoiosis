@@ -445,3 +445,51 @@ func test_a_deployed_units_card_wears_the_friendly_outline_and_gives_it_back() -
 func _border_of(card: PreMissionCard) -> Color:
 	var box := card.get_theme_stylebox("panel") as StyleBoxFlat
 	return Color.MAGENTA if box == null else box.border_color
+
+
+# --- the aura ring rides the portrait (#930) ---
+
+# THE WIRE, not the two ends: the card's own identity column has to carry a real AuraRing reading this
+# card's own unit. A widget that exists and a card that draws one are different facts, and only the
+# second is what the player sees.
+#
+# It also pins the PLACEMENT, which is a dev ruling rather than a detail: the ring rides the portrait
+# so the card's BODY stays free for a weapon-proficiency readout the day proficiency does something
+# (dev, 2026-09-12). A ring that drifted into the stat region would spend room that is spoken for.
+func test_every_card_wears_its_units_aura_ring_around_the_portrait() -> void:
+	if not await _enter_phase():
+		return
+	var cards := _cards()
+	assert_int(cards.size()).is_greater(0)
+
+	for card in cards:
+		var rings: Array[Node] = []
+		for node in _walk(card):
+			if node is AuraRing:
+				rings.append(node)
+		assert_int(rings.size()).override_failure_message(
+			"%s's card draws %d aura rings" % [card.unit.get_unit_name(), rings.size()]).is_equal(1)
+
+		var ring: AuraRing = rings[0]
+		assert_object(ring.unit).is_same(card.unit)
+		# It draws the portrait itself -- that is what lets the hover readout land on top of the
+		# sprite rather than under it, and it is why nothing else in the column holds one.
+		assert_object(ring.portrait).is_same(card.unit.unit_data.map_sprite)
+		assert_that(ring.ground).is_equal(AuraRing.Ground.SKINNED)
+		# It frames the CHARACTER, not the canvas: every map sprite draws its ink in the lower half of
+		# its sheet, so an ink-centred ring sits BELOW the box's middle and a box-centred one does not.
+		# Without this the difference is invisible to a headless suite -- a mutant proved it.
+		assert_float(ring._centre.y).override_failure_message(
+			"the ring is centred on the sprite's canvas, so it frames the empty half above the "
+			+ "character").is_greater(ring.size.x * 0.5)
+
+		# THE RESERVATION, as an assertion rather than a comment: the ring ends above the stat grid,
+		# so the card's bottom-left region is still empty for the proficiency readout to land in.
+		var grid: GridContainer = null
+		for node in _walk(card):
+			if node is GridContainer:
+				grid = node
+		assert_object(grid).is_not_null()
+		assert_float(ring.global_position.y + ring.size.y).override_failure_message(
+			"the aura ring reaches into the card body that #930 reserved").is_less_equal(
+			grid.global_position.y)
