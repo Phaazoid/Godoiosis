@@ -2,8 +2,9 @@ extends Control
 class_name AuraRing
 
 # A unit's elemental aura, as a ring of five fixed sectors with five ticks each -- one filled tick per
-# aura point (#930). Two surfaces draw it: small around the pre-mission card's portrait, large and
-# labelled in the in-battle inspect panel, which is #292's parity asked before rather than after.
+# aura point (#930). Two surfaces draw it and BOTH wrap a portrait: the pre-mission card's 52px map
+# sprite, and the inspect panel's 96px portrait at twice the size. #292's parity asked before rather
+# than after, and one motif rather than two.
 #
 # THE FIRST _draw() WIDGET IN Classes/ui/ (presentation/UnitHealthBar.gd is the only precedent
 # anywhere). A ring of 25 rotated ticks is not a container of Labels, and the hover highlight has to
@@ -76,8 +77,7 @@ class Row:
 
 var unit: Unit
 var ground: Ground = Ground.AUTHORED
-var labelled := false                   # element names at the arcs (the panel has room; the card does not)
-var portrait: Texture2D                 # drawn in the middle, card-side; null leaves the centre empty
+var portrait: Texture2D                 # drawn in the middle, card-side; the panel's is a node below us
 
 # Which element the cursor is in, or NONE. Public because it is the one piece of hover state a
 # headless case can assert -- _gui_input takes a synthetic motion event and this is the answer.
@@ -155,26 +155,34 @@ static func for_portrait(target: Unit, sprite: Texture2D, box_px: float) -> Aura
 	return ring
 
 
-# The inspect panel's: no portrait in the middle, and the room to name every element (dev, #930).
-static func standing(target: Unit, size_px: float) -> AuraRing:
+# The inspect panel's: laid OVER its own 96px portrait, which is drawn by the TextureRect beneath
+# this node rather than by us -- so no ink offset (a portrait is not a map sprite) and no texture.
+#
+# IT SITS ON THE PORTRAIT'S OUTER EDGE RATHER THAN OUTSIDE IT, and that is arithmetic rather than
+# taste: a circle clears a square only at radius >= half its diagonal, so a ring standing clear of a
+# 96px portrait needs a 162px box -- +66px of header against the 72px of headroom the panel has
+# (measured: its body wants 648 of 720 before this ticket). 108 costs 12 and reads as a ring laid on
+# a portrait, which is the ordinary form of this motif anyway.
+static func over_portrait(target: Unit, box_px: float) -> AuraRing:
 	var ring := AuraRing.new()
 	ring.unit = target
-	ring.labelled = true
 	ring.ground = Ground.AUTHORED
-	ring._centre = Vector2(size_px, size_px) * 0.5
-	ring._outer = size_px * 0.30          # the rest of the radius is the label ring
+	ring._centre = Vector2(box_px, box_px) * 0.5
+	ring._outer = box_px * 0.5
 	ring._inner = ring._outer * (1.0 - BAND_RATIO)
-	ring.custom_minimum_size = Vector2(size_px, size_px)
+	ring.custom_minimum_size = Vector2(box_px, box_px)
 	ring._ready_common()
 	return ring
 
 
 func _ready_common() -> void:
-	# STOP, or _gui_input never fires and the whole hover is dead. There is no child node to steal it
-	# from us: the portrait is DRAWN rather than parented, which is also what lets the hover scrim
-	# land on top of it instead of underneath.
+	# STOP, or _gui_input never fires and the whole hover is dead. On the card there is no child node
+	# to steal it either -- the portrait is DRAWN rather than parented, which is also what lets the
+	# hover scrim land on top of it instead of underneath; on the panel the portrait is a SIBLING
+	# below us, so the same is true one node along.
 	mouse_filter = Control.MOUSE_FILTER_STOP
 	texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	_bind()
 	refresh()
 
 
@@ -185,9 +193,27 @@ func refresh() -> void:
 
 
 func set_unit(target: Unit) -> void:
+	_release()
 	unit = target
 	hovered = Elemental.Element.NONE
+	_bind()
 	refresh()
+
+
+# THE RING KEEPS ITSELF CURRENT rather than waiting to be told, because the pool moves under a
+# standing panel: every lost limb docks the deepest one, and `stats_changed` is the signal the settle
+# pass after a maim already fires (Unit._go_downed -> _settle_stat_change). A host that had to
+# remember to refresh it is a host that will forget on the next door that downs somebody.
+func _bind() -> void:
+	if unit != null and not unit.stats_changed.is_connected(refresh):
+		unit.stats_changed.connect(refresh)
+
+
+# Guarded the way info_panel guards its own teardown: a freed ref compares == null as TRUE (#149),
+# so this has to ask whether the instance is still valid rather than whether it is null.
+func _release() -> void:
+	if unit != null and is_instance_valid(unit) and unit.stats_changed.is_connected(refresh):
+		unit.stats_changed.disconnect(refresh)
 
 
 # --- hover -----------------------------------------------------------------------------------------
@@ -256,27 +282,13 @@ func _draw_sector(row: Row, index: int, width: float) -> void:
 			if not row.affine:
 				ink = _neutral_ink(ink.a)
 		draw_line(from, to, ink, width, true)
-	if labelled:
-		_draw_label(row, index, highlighted)
 
 
-func _draw_label(row: Row, index: int, highlighted: bool) -> void:
-	var font := get_theme_default_font()
-	var font_size := 11
-	var angle := ARC_START + (float(index) + 0.5) * SECTOR
-	var at := _centre + Vector2(cos(angle), sin(angle)) * (_outer + font_size * 1.4)
-	var ink := _outline_ink() if highlighted else _element_ink(row.element)
-	if not highlighted and not row.affine:
-		ink = _neutral_ink(0.55)
-	var box := font.get_string_size(Elemental.display_name(row.element),
-		HORIZONTAL_ALIGNMENT_LEFT, -1, font_size)
-	draw_string(font, at - box * Vector2(0.5, -0.35), Elemental.display_name(row.element),
-		HORIZONTAL_ALIGNMENT_LEFT, -1, font_size, ink)
-
-
-# "Aether 2" across the middle while the cursor is in that arc (dev, #930). On the card that means
-# over the portrait, so the ground's own colour goes down first -- a SCRIM rather than a modulate,
-# because darkening the sprite would be right on slate and wrong on parchment's cream paper.
+# "Aether 2" across the middle while the cursor is in that arc (dev, #930). Both surfaces have art
+# behind that text -- this ring's own sprite on the card, the TextureRect below it on the panel -- so
+# the ground's own colour goes down first. A SCRIM rather than a modulate, because darkening the
+# picture would be right on slate and wrong on parchment's cream paper, and because on the panel the
+# portrait is not ours to touch.
 func _draw_hover_readout(model: Array[Row]) -> void:
 	var row: Row = null
 	for candidate: Row in model:
@@ -287,10 +299,9 @@ func _draw_hover_readout(model: Array[Row]) -> void:
 	var font := get_theme_default_font()
 	var font_size := 11
 	var text := "%s %d" % [Elemental.display_name(row.element), row.depth]
-	if portrait != null:
-		var scrim := _ground_ink()
-		scrim.a = 0.86
-		draw_circle(_centre, _inner, scrim)
+	var scrim := _ground_ink()
+	scrim.a = 0.86
+	draw_circle(_centre, _inner, scrim)
 	var box := font.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, font_size)
 	draw_string(font, _centre - box * Vector2(0.5, -0.35), text,
 		HORIZONTAL_ALIGNMENT_LEFT, -1, font_size, _element_ink(row.element))

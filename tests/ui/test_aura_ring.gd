@@ -157,7 +157,7 @@ func test_a_pool_past_the_display_cap_still_states_its_real_depth() -> void:
 # motion event is the real door -- _gui_input is what the engine calls.
 func test_the_hovered_sector_is_the_one_the_cursor_is_in() -> void:
 	var celest := _alchemist([EARTH, FIRE, AETHER], {FIRE: 2, EARTH: 1, AETHER: 2})
-	var ring: AuraRing = auto_free(AuraRing.standing(celest, 160.0))
+	var ring: AuraRing = auto_free(AuraRing.over_portrait(celest, 160.0))
 	var centre := Vector2(80, 80)
 
 	for i in AuraRing.WHEEL.size():
@@ -172,7 +172,7 @@ func test_the_hovered_sector_is_the_one_the_cursor_is_in() -> void:
 
 func test_a_motion_event_sets_and_clears_the_highlight() -> void:
 	var celest := _alchemist([EARTH, FIRE, AETHER], {FIRE: 2, EARTH: 1, AETHER: 2})
-	var ring: AuraRing = auto_free(AuraRing.standing(celest, 160.0))
+	var ring: AuraRing = auto_free(AuraRing.over_portrait(celest, 160.0))
 	assert_that(ring.hovered).is_equal(Elemental.Element.NONE)
 
 	var angle := AuraRing.ARC_START + 3.5 * AuraRing.SECTOR   # sector 3 is AETHER
@@ -222,10 +222,8 @@ func test_a_maim_moves_the_panels_wheel() -> void:
 	panel.set_unit(dorian)
 	await await_idle_frame()
 
-	var stats: VBoxContainer = panel.get_node("UnitInfoPanel/Margin/VBox/StatsSection")
-	var ring: AuraRing = stats.aura_row.get_child(0)
+	var ring := _panel_ring(panel)
 	assert_object(ring).is_not_null()
-	assert_bool(ring.visible).is_true()
 	var before := ring.tooltip_text
 	assert_int(before.find("Aether 3")).is_greater(-1)
 
@@ -240,8 +238,31 @@ func test_a_maim_moves_the_panels_wheel() -> void:
 	assert_str(ring.tooltip_text).is_equal(AuraRing.readout(dorian))
 
 
-# The other half of "a section hides with its rows": Rebecca gets the sentence, not a wheel of nothing.
-func test_the_panel_swaps_the_wheel_for_a_sentence_when_there_is_no_affinity() -> void:
+# The ring wraps the PORTRAIT on both surfaces, which is the whole reason it fits here at all: the
+# panel's body had 72px of headroom against a 720px column, and a wheel in it overflowed by 92.
+# Drawn AFTER the texture, so the hover readout lands on the portrait rather than behind it.
+func test_the_panels_ring_wraps_its_portrait_and_draws_over_it() -> void:
+	var celest := _alchemist([EARTH, FIRE, AETHER], {FIRE: 2, EARTH: 1, AETHER: 2})
+	var panel: Control = auto_free((load(PANEL_SCENE) as PackedScene).instantiate())
+	add_child(panel)
+	await await_idle_frame()
+	panel.set_unit(celest)
+	await await_idle_frame()
+
+	var portrait: Control = panel.get_node("UnitInfoPanel/Margin/VBox/HeaderRow/PortraitPanel")
+	var ring := _panel_ring(panel)
+	assert_object(ring.get_parent()).is_same(portrait)
+	assert_object(ring.unit).is_same(celest)
+	assert_that(ring.ground).is_equal(AuraRing.Ground.AUTHORED)
+	# Later sibling = drawn later = on top of the portrait texture.
+	assert_int(ring.get_index()).is_greater(portrait.get_node("PortraitTexture").get_index())
+	# ...and it carries no sprite of its own, since the node below it is the picture.
+	assert_object(ring.portrait).is_null()
+
+
+# A unit with no affinity gets the all-faint wheel rather than a hidden section -- the card's answer,
+# now that both surfaces wear the same ring. The sentence is in the readout.
+func test_a_unit_with_no_affinity_still_wears_a_wheel_on_the_panel() -> void:
 	var rebecca := _alchemist([], {})
 	var panel: Control = auto_free((load(PANEL_SCENE) as PackedScene).instantiate())
 	add_child(panel)
@@ -249,7 +270,22 @@ func test_the_panel_swaps_the_wheel_for_a_sentence_when_there_is_no_affinity() -
 	panel.set_unit(rebecca)
 	await await_idle_frame()
 
-	var stats: VBoxContainer = panel.get_node("UnitInfoPanel/Margin/VBox/StatsSection")
-	var ring: AuraRing = stats.aura_row.get_child(0)
-	assert_bool(ring.visible).is_false()
-	assert_bool(stats.aura_row.get_child(1).visible).is_true()
+	var ring := _panel_ring(panel)
+	assert_bool(ring.visible).is_true()
+	assert_int(ring.tooltip_text.find("No elemental affinity")).is_greater(-1)
+
+
+func _panel_ring(panel: Control) -> AuraRing:
+	for node in _walk(panel):
+		var ring := node as AuraRing
+		if ring != null:
+			return ring
+	return null
+
+
+static func _walk(root: Node) -> Array[Node]:
+	var out: Array[Node] = []
+	for child in root.get_children():
+		out.append(child)
+		out.append_array(_walk(child))
+	return out
