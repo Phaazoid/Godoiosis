@@ -224,6 +224,10 @@ func _build_collaborators() -> void:
 	mission_controller = MissionController.new()
 	mission_controller.game = self
 	add_child(mission_controller)
+	# The pre-mission briefing's one wire (#882): the phase holds its loadout screen back until the
+	# director has stopped talking. Connected here rather than in either node's _ready, because the
+	# director is built well above and MissionController has no _ready of its own.
+	scenario_director.went_quiet.connect(mission_controller._on_director_quiet)
 
 	hover_presenter = HoverPresenter.new()
 	hover_presenter.game = self

@@ -22,6 +22,7 @@ const ROW_WIDTH := 8                  # the known-walkable strip every case auth
 
 var _main: Node
 var game: Node2D
+var _starts := 0   # timelines actually started -- the briefing's own wire (#882)
 var sm: ScenarioManager
 var mc: MissionController
 
@@ -39,10 +40,13 @@ func before_test() -> void:
 	mc._close_mission_select()
 	sm.clear_board()
 	game.game_state = game.GameState.IDLE
+	_starts = 0
+	Dialogic.timeline_started.connect(_count_start)
 	await await_idle_frame()
 
 
 func after_test() -> void:
+	Dialogic.timeline_started.disconnect(_count_start)
 	await DialogFixtures.end_all_dialog(self)
 	sm.clear_board()
 	await await_idle_frame()
@@ -79,7 +83,7 @@ func _roster_size(name: String) -> int:
 # Author a board with `zone_cells` deployment cells and NO authored cast, so its whole player force
 # is the draw. Returns the saved path, or "" when there is no roster to name.
 func _author(roster: String, cap: int, zone_cells: int, steps: Array[TutorialStep] = [],
-		blocked: Array[Vector2i] = []) -> String:
+		blocked: Array[Vector2i] = [], beats: Array[DialogBeat] = []) -> String:
 	for x in range(ROW_WIDTH):
 		game.grid.paint(Vector2i(x, 0), GRASS_SOURCE, GRASS_ATLAS)
 	for x in range(zone_cells):
@@ -90,6 +94,7 @@ func _author(roster: String, cap: int, zone_cells: int, steps: Array[TutorialSte
 	sm.current_roster = roster
 	sm.current_deployment_cap = cap
 	sm.current_tutorial_steps = steps
+	sm.current_dialog_beats = beats
 
 	var scenario := sm.capture_scenario("pre_mission_737", true)
 	assert_int(ResourceSaver.save(scenario, SCRATCH)).is_equal(OK)
@@ -333,3 +338,135 @@ func test_a_roster_that_offers_every_character_still_stands_someone_up() -> void
 	assert_int(stood).override_failure_message(
 		"a roster offering every character deployed nobody -- the two walks saw different entries"
 		).is_greater(0)
+
+
+# --- the briefing, and the screen that waits for it (#882) ---
+#
+# A MISSION_START beat fires at the COMMIT, so a line about what the map wants used to arrive after
+# the roster, the loadout and the placement were already final. PRE_MISSION_START plays over the
+# bare board first and the loadout screen waits for it. The director's half is pinned in
+# tests/flow/test_scenario_director.gd; these drive the real begin_mission door.
+
+func _count_start() -> void:
+	_starts += 1
+
+
+# start() hands the timeline to the layout's ready callback, so "it started" is a wait, never an
+# immediate assert (the frame-late trap #182 wrote down).
+func _await_starts(expected: int) -> void:
+	for i in range(120):
+		if _starts >= expected:
+			break
+		await await_idle_frame()
+	assert_int(_starts).is_equal(expected)
+
+
+# The first .dtl on disk, or null -- a content precondition, never an assertion. What it holds is
+# authored; that it can be PLAYED is the wire under test. Built in memory instead would not do:
+# DialogicTimeline.events is not an @export, so a timeline saved into a scenario comes back empty.
+func _a_timeline() -> DialogicTimeline:
+	for file: String in ResourceDir.files_with_extension("res://Scenarios/dialog", "dtl"):
+		var timeline := load("res://Scenarios/dialog/" + file) as DialogicTimeline
+		if timeline != null:
+			return timeline
+	push_warning("no dialog timelines are shipped, so the briefing cannot be exercised")
+	return null
+
+
+func _briefing_beats(triggers: Array[DialogBeat.Trigger], timeline: DialogicTimeline) -> Array[DialogBeat]:
+	var beats: Array[DialogBeat] = []
+	for trigger: DialogBeat.Trigger in triggers:
+		var beat := DialogBeat.new()
+		beat.trigger = trigger
+		beat.timeline = timeline
+		beats.append(beat)
+	return beats
+
+
+func test_a_briefing_plays_over_the_board_and_the_loadout_screen_waits_for_it() -> void:
+	var roster := _a_roster()
+	var timeline := _a_timeline()
+	if roster == "" or timeline == null:
+		return
+	var path := _author(roster, 3, 4, [], [], _briefing_beats(
+		[DialogBeat.Trigger.PRE_MISSION_START, DialogBeat.Trigger.MISSION_START], timeline))
+
+	mc.begin_mission(path)
+	await _await_starts(1)
+
+	assert_bool(mc.is_deploying()).override_failure_message(
+		"the phase never opened").is_true()
+	assert_bool(mc.deployment_menu_is_up()).override_failure_message(
+		"the loadout screen was up while the briefing was still talking").is_false()
+
+	Dialogic.end_timeline(true)
+	await Dialogic.timeline_ended
+	await await_idle_frame()
+
+	assert_bool(mc.deployment_menu_is_up()).override_failure_message(
+		"the briefing ended and the loadout screen never appeared").is_true()
+	assert_int(_starts).override_failure_message(
+		"the MISSION_START beat played before the battle began").is_equal(1)
+
+
+func test_a_board_with_no_briefing_opens_straight_onto_the_loadout_screen() -> void:
+	var roster := _a_roster()
+	if roster == "":
+		return
+	var path := _author(roster, 3, 4)
+
+	mc.begin_mission(path)
+	await await_idle_frame()
+
+	assert_bool(mc.deployment_menu_is_up()).override_failure_message(
+		"a board with nothing to say still withheld its loadout screen").is_true()
+
+
+func test_the_phase_keys_are_dead_while_the_briefing_plays() -> void:
+	# Enter is BOTH the commit and Dialogic's own advance action, so the press that closes the last
+	# line would otherwise open the Begin Mission card behind a screen nobody has seen yet.
+	var roster := _a_roster()
+	var timeline := _a_timeline()
+	if roster == "" or timeline == null:
+		return
+	var path := _author(roster, 3, 4, [], [],
+		_briefing_beats([DialogBeat.Trigger.PRE_MISSION_START], timeline))
+
+	mc.begin_mission(path)
+	await _await_starts(1)
+
+	mc.toggle_deployment_menu()
+	mc.confirm_and_commit()   # un-awaited: the guard returns before the card's own await
+	await await_idle_frame()
+	await await_idle_frame()
+
+	assert_bool(mc.deployment_menu_is_up()).override_failure_message(
+		"Tab swapped to the loadout screen mid-briefing").is_false()
+	assert_bool(ModalLock.any_open(get_tree())).override_failure_message(
+		"Enter opened the Begin Mission card mid-briefing").is_false()
+	assert_bool(mc.is_deploying()).override_failure_message(
+		"the phase ended before the player saw it").is_true()
+
+
+func test_abandoning_mid_briefing_leaves_nothing_for_the_last_line_to_reveal() -> void:
+	# Abandon never reaches reset(), so _close_deployment_menu is the door that has to drop the
+	# flag. The reveal's own is_instance_valid guard covers the same instant from the other side --
+	# kept as the belt to this braces, since one of them is what a future exit will forget.
+	var roster := _a_roster()
+	var timeline := _a_timeline()
+	if roster == "" or timeline == null:
+		return
+	var path := _author(roster, 3, 4, [], [],
+		_briefing_beats([DialogBeat.Trigger.PRE_MISSION_START], timeline))
+
+	mc.begin_mission(path)
+	await _await_starts(1)
+	mc.abandon_mission()
+	await await_idle_frame()
+
+	Dialogic.end_timeline(true)
+	await Dialogic.timeline_ended
+	await await_idle_frame()
+
+	assert_bool(mc.deployment_menu_is_up()).override_failure_message(
+		"the briefing's last line put a loadout screen over Mission Select").is_false()

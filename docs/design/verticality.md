@@ -597,7 +597,7 @@ h(t) = lerp(elev_origin + EYE, elev_target + EYE, t) + arc_clearance * 4t(1 - t)
     stand one LEVEL, `BILLBOARD` and `TUFT` stand nothing. So the dev's standing "1 block tall blocks
     line of sight" ships as the default rather than as an authored value on every wall tile, and
     nothing in `TestTiles.tres` authors the column at all.
-  - **Authored in the Objects tab** ("Rules height"), deliberately next to "Block height" so the
+  - **Authored in the Tiles tab** ("Rules height"), deliberately next to "Block height" so the
     rules/looks split is stated rather than rediscovered. The slider stops at
     `GridUtils.MAX_DRAWABLE_RULE_HEIGHT`, and `tests/law/test_a_prop_never_claims_more_wall_than_it_draws.gd`
     refuses a hand-edited sheet that goes past it — **a wall a shot dies on but the player can see

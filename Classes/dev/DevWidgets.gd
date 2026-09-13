@@ -1045,7 +1045,7 @@ static func confirm_delete(host: Control, victim: String, on_confirm: Callable) 
 
 # Every dev save that OVERWRITES rides this or confirm() directly (#380's convention, dev:
 # "anything that can overwrite settings should" ask) -- every tool's Update, plus the Game tab's
-# source save and the Objects tab's tileset save, whose messages are their own shape. Save As is
+# source save and the Tiles tab's tileset save, whose messages are their own shape. Save As is
 # the one save that never confirms, because refuse_existing_file makes it structurally unable to
 # overwrite. First worn by the Scenario tool's Update (dev call 2026-08-12, after a mis-aimed
 # Update destroyed a level the load-gate could not protect -- it WAS the loaded file).

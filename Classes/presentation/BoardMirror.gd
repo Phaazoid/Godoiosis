@@ -2265,7 +2265,7 @@ func _make_prop(grid: TileMapLayer, cell: Vector2i, at: Vector3, heights: BoardH
 # --- Global default, per-object override (#272 slice 2) -----------------------------------------
 #
 # One shape, five times: an authored value wins, INHERIT falls back to this node's knob. Public
-# because the Objects tab shows what a field RESOLVES to beside what it is authored as -- an
+# because the Tiles tab shows what a field RESOLVES to beside what it is authored as -- an
 # "inherit" row that cannot say what it inherits is a row you have to go look up.
 
 func light_energy_for(data: TileData) -> float:

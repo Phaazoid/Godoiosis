@@ -31,6 +31,7 @@ class GameStub extends Node:
 var _stub: GameStub
 var _director: ScenarioDirector
 var _starts := 0
+var _quiets := 0
 
 
 func before_test() -> void:
@@ -43,6 +44,8 @@ func before_test() -> void:
 	_director.game = _stub
 	_stub.add_child(_director)   # _ready connects the two manager signals + Dialogic
 	_starts = 0
+	_quiets = 0
+	_director.went_quiet.connect(_count_quiet)   # dies with the director, which _stub owns
 	PlayerSettings.reset_for_test()   # is_on falls through to DISK otherwise (the #350 gotcha)
 	Dialogic.timeline_started.connect(_count_start)
 
@@ -59,6 +62,10 @@ func after_test() -> void:
 
 func _count_start() -> void:
 	_starts += 1
+
+
+func _count_quiet() -> void:
+	_quiets += 1
 
 
 func _beat(trigger: DialogBeat.Trigger, text: String, turn := 1) -> DialogBeat:
@@ -349,3 +356,105 @@ func test_dialog_off_leaves_the_instruction_row_alone() -> void:
 	_set_steps([_step(DialogBeat.Trigger.SQUAD_FORMED, "Form a squad.")])
 	_director.mission_started()
 	assert_str(_director.active_instruction()).is_equal("Form a squad.")
+
+
+# --- the pre-mission briefing (#882) ---
+#
+# A MISSION_START beat fires at the COMMIT, so a line telling you what the map wants arrives after
+# the roster, the loadout and the placement are already final. PRE_MISSION_START is the slot before
+# any of that -- the phase opens on the bare board, the briefing plays, and the loadout screen waits
+# for went_quiet. What is asserted here is the DIRECTOR's half; the screen's half is in
+# tests/flow/test_pre_mission_draw.gd, which drives the real begin_mission.
+
+func test_the_briefing_plays_and_the_mission_start_beat_still_waits_for_the_commit() -> void:
+	_set_beats([
+		_beat(DialogBeat.Trigger.PRE_MISSION_START, "A rifleman sits on the only ford."),
+		_beat(DialogBeat.Trigger.MISSION_START, "Now we begin."),
+	])
+	assert_bool(_director.pre_mission_started()).override_failure_message(
+		"the phase was told nothing would play").is_true()
+	await _await_starts(1)
+
+	# The briefing has to be the ONLY thing the phase queued, and a frame-count assert cannot see
+	# that: a MISSION_START beat fired here would QUEUE behind the briefing rather than play, so
+	# _starts reads 1 either way until the first timeline ends. Drain it and ask again.
+	Dialogic.end_timeline(true)
+	await Dialogic.timeline_ended
+	await get_tree().process_frame
+	assert_int(_starts).override_failure_message(
+		"the MISSION_START beat was queued by the briefing").is_equal(1)
+	assert_int(_quiets).override_failure_message(
+		"something was still queued when the briefing ended").is_equal(1)
+
+	# ...and it was not merely queued-and-dropped: the commit still plays it, so the beat is intact
+	# in the fired-once-per-battle set rather than consumed by the phase.
+	_director.mission_started()
+	await _await_starts(2)
+
+
+func test_the_briefing_does_not_arm_the_director() -> void:
+	# The phase itself spawns and squads the whole roster, so an armed director would answer every
+	# one of those squad_created emissions -- the same reason deploy_roster runs before the arm.
+	_set_beats([
+		_beat(DialogBeat.Trigger.PRE_MISSION_START, "Briefing."),
+		_beat(DialogBeat.Trigger.SQUAD_FORMED, "Not yet."),
+	])
+	_set_steps([_step(DialogBeat.Trigger.SQUAD_FORMED, "Form a squad.")])
+	_director.pre_mission_started()
+	# Asked BEFORE the squad lands, because an armed director would ADVANCE past this one step and
+	# answer "" again from the far end of the lesson -- the same reading for opposite reasons.
+	assert_str(_director.active_instruction()).override_failure_message(
+		"the lesson's first instruction was up before the battle").is_empty()
+	await _await_starts(1)
+
+	_stub.squad_manager.squad_created.emit(_player_squad())
+	# Drained, not counted in place: a beat fired here QUEUES behind the briefing instead of
+	# playing, so _starts reads 1 whether or not the director answered that squad.
+	Dialogic.end_timeline(true)
+	await Dialogic.timeline_ended
+	await get_tree().process_frame
+	assert_int(_starts).override_failure_message(
+		"the briefing armed the director, so the draw tripped a beat").is_equal(1)
+
+
+func test_went_quiet_waits_for_the_LAST_timeline_rather_than_the_first() -> void:
+	_set_beats([
+		_beat(DialogBeat.Trigger.PRE_MISSION_START, "First line."),
+		_beat(DialogBeat.Trigger.PRE_MISSION_START, "Second line."),
+	])
+	_director.pre_mission_started()   # the first starts, the second queues behind it
+	await _await_starts(1)
+	Dialogic.end_timeline(true)
+	await _await_starts(2)   # the second chained off timeline_ended
+	assert_int(_quiets).override_failure_message(
+		"the screen would have opened over the second line").is_equal(0)
+	Dialogic.end_timeline(true)
+	await Dialogic.timeline_ended
+	await get_tree().process_frame
+	assert_int(_quiets).is_equal(1)
+
+
+func test_dialog_off_reports_nothing_to_say_so_the_screen_opens_at_once() -> void:
+	# _fire CONSUMES the beat without playing it (#400), so there is no timeline to wait on and the
+	# phase must not sit on a hidden screen forever waiting for a went_quiet that cannot come.
+	PlayerSettings.set_on(PlayerSettings.Setting.SHOW_DIALOG, false)
+	_set_beats([_beat(DialogBeat.Trigger.PRE_MISSION_START, "Unheard.")])
+	assert_bool(_director.pre_mission_started()).is_false()
+	await get_tree().process_frame
+	await get_tree().process_frame
+	assert_int(_starts).is_equal(0)
+
+
+func test_a_restart_taken_mid_dialog_still_reports_that_the_briefing_will_play() -> void:
+	# reset() ends the outgoing timeline WITHOUT awaiting it, so the retry's briefing is fired while
+	# Dialogic still has one in hand: _fire QUEUES it rather than starting it, and _dialog_active is
+	# already false. Reading that flag alone would report silence, reveal the loadout screen, and
+	# then play the briefing over the top of it.
+	_set_beats([_beat(DialogBeat.Trigger.MISSION_START, "The attempt that just ended.")])
+	_director.mission_started()
+	await _await_starts(1)
+	_director.reset()
+	_set_beats([_beat(DialogBeat.Trigger.PRE_MISSION_START, "The retry's briefing.")])
+	assert_bool(_director.pre_mission_started()).override_failure_message(
+		"a queued briefing was reported as nothing to say").is_true()
+	await _await_starts(2)

@@ -4,8 +4,13 @@ class_name GameKnobs
 # WHAT the game's own presentation constants are -- board markup, the unit readout, camera handling,
 # dev chrome, world construction and the fire effect -- and how a tuned one is KEPT (#373, widened
 # by #380 when the Objects tab's globals moved in). Static and pure; LookKnobs' opposite number.
-# ObjectKnobs is now purely per-TYPE (TileSet custom-data fields); this table is the game constants,
-# entire.
+#
+# THIS TABLE IS NO LONGER THE GAME CONSTANTS ENTIRE, and the distinction is which PAGE draws a row
+# rather than what kind of value it is. #902 moved seven world-construction rows to
+# ObjectKnobs.GLOBALS so they sit on the tile that falls back to them; they are the same
+# node:property shape, saved by the same KnobSource into the same @export declaration, and the laws
+# that are about that SHAPE walk both tables (tests/dev/test_game_knobs.gd's _declaration_tables).
+# What stays here is everything a TILE is not how you would look for.
 #
 # The split it exists to make. A LookPreset is a mission's MOOD: one board may look unlike another,
 # so a board names a preset and wears it. Everything here is the same in every mission forever --
@@ -204,33 +209,22 @@ const KNOBS: Array[Dictionary] = [
 	{"group": "Playback framing", "node": "CameraRig", "prop": "playback_distance", "label": "Playback zoom distance", "min": 4.0, "max": 30.0, "step": 0.5,
 		"tip": "How far out the camera sits when a pass or an AI turn takes it (#520). Applied ONCE as playback starts and then the wheel is yours again -- so this is where a fight opens from, not a leash."},
 
-	# --- World (#380, from the Objects tab's Globals) ---
-	# How the world's own furniture is drawn -- art conventions matched to the tile art once and
-	# then constant for the whole game. The per-type fields on the Objects tab override these; a
-	# global here is the DEFAULT a tile that says nothing falls back to.
-	{"group": "World", "node": "BoardMirror", "prop": "block_height_scale", "label": "Prop block height", "min": 0.2, "max": 2.5, "step": 0.01,
-		"tip": "How tall a solid prop -- crate, chest, rock, pot -- stands relative to its own sprite. 1.0 is the height measured off the art; because the art is drawn in 3/4 it includes some of the object's own lid, so the honest measurement usually reads a little tall."},
-	# A hole's walls (#876). Depth is world units, not levels -- a chasm is not measured in the steps
+	# --- World (#380, from the Objects tab's Globals; most of it left again in #902) ---
+	# What is left here is world construction NO TILE OWNS. The seven rows that a tile could be
+	# picked to look at -- prop block height, the two tuft dials, the four lamp defaults -- moved to
+	# ObjectKnobs.GLOBALS and are drawn on the Tiles page beside the per-tile fields that fall back
+	# to them (dev, 2026-09-12: the look values for objects belong on their individual pages). They
+	# are the SAME KIND of value still, kept the same way -- this table and that one are both
+	# node:property rows saved into their @export declaration, and only the page differs.
+	#
+	# A hole's walls stay, and the line is worth drawing: a lip is geometry a hole's NEIGHBOURS grow
+	# into the shaft, not the `hole` tile's own art, so there is no one tile to put it on.
+	# (#876). Depth is world units, not levels -- a chasm is not measured in the steps
 	# you could have walked down it. Both re-cut every standing lip through BoardMirror's own sweep.
 	{"group": "World", "node": "BoardMirror", "prop": "lip_shaft_depth", "label": "Hole wall depth", "min": 0.5, "max": 12.0, "step": 0.1,
 		"tip": "How far the walls of a hole fall before the shaft is pure black. It is a LOOK, not a distance anything falls -- what a shove into a hole actually drops is Void fall depth, under Motion. Deep enough to read as bottomless at the zoom you play at is the whole target."},
 	{"group": "World", "node": "BoardMirror", "prop": "lip_shaft_color", "label": "Hole wall colour",
 		"tip": "The colour a hole's wall starts at where it meets the ground, fading to black at the bottom. Reads best a little darker and a little cooler than the ground it hangs off, so the eye takes it for shadow rather than for a different material."},
-	{"group": "World", "node": "BoardMirror", "prop": "tuft_scale", "label": "Grass tuft scale", "min": 0.0, "max": 2.0, "step": 0.01,
-		"tip": "How tall the plants on a grass tile stand -- the flowers and weeds that pop up off a tile which is also still painted flat. 1.0 draws each one at the size the art draws it. Only the height changes: where they sit in the cell comes off the art."},
-	{"group": "World", "node": "BoardMirror", "prop": "tuft_density", "label": "Grass tuft density", "min": 0.0, "max": 1.0, "step": 0.01,
-		"tip": "How MANY of a grass tile's plants are planted, where the scale above is how tall each one stands. 1.0 plants every one the art draws; below that an even, always-the-same subset is hidden, so a tile can be drawn dense and thinned by eye. It HIDES rather than skips building -- if you settle below 1.0, the tile is better redrawn with fewer blades and this put back to 1.0."},
-	# The lamp defaults (#255's light, #380's rows -- these four had NO surface anywhere before
-	# this). Tuning one re-lights every standing lamp through BoardMirror's sweep; a lamp whose
-	# tile authors its own light deliberately does not move, since an authored override wins.
-	{"group": "World", "node": "BoardMirror", "prop": "prop_light_color", "label": "Prop light colour",
-		"tip": "The colour a lit object casts by default -- the warm lamp tone. A tile that authors its own Light colour ignores this; everything else re-lights live as you drag."},
-	{"group": "World", "node": "BoardMirror", "prop": "prop_light_energy", "label": "Prop light brightness", "min": 0.0, "max": 8.0, "step": 0.05,
-		"tip": "How bright a lit object burns by default. The per-type Light energy field on the Objects tab overrides this for one object; this is what every other lamp uses."},
-	{"group": "World", "node": "BoardMirror", "prop": "prop_light_range", "label": "Prop light range", "min": 0.5, "max": 12.0, "step": 0.1,
-		"tip": "How far a lit object's light reaches by default, in world units (roughly cells). Range and brightness together decide whether a lamp lights a room or just its own corner."},
-	{"group": "World", "node": "BoardMirror", "prop": "prop_light_height", "label": "Prop light height", "min": 0.0, "max": 3.0, "step": 0.05,
-		"tip": "How high above the cell a lit object's light source sits by default. A wall lamp's flame is near its top; a brazier's is lower. This is where the LIGHT is, not where the art is."},
 
 	# --- Fire (#324's knobs; out of Look in #272, here from Objects in #380) ---
 	# A terrain STATE rather than an authored object, but the same KIND of value: how the world's
@@ -2239,6 +2233,21 @@ static func save_to_source(host: Node3D, indices: PackedInt32Array,
 	var edits := KnobSource.declaration_edits(host, KNOBS, indices, KNOB_SOURCE)
 	edits.append_array(class_edits(host, class_indices))
 	return KnobSource.apply_edits(edits)
+
+
+# The full tip for a row whose Save writes an authored DECLARATION -- the which-stack note above,
+# plus the line saying what moving it costs. It lives here rather than on the Game tab because that
+# tab stopped being its only reader in #902: ObjectKnobs.GLOBALS rows are drawn on the Tiles page and
+# saved exactly the same way, and a second copy of the sentence would drift the first time either was
+# reworded. The BUTTON is the parameter because only that differs between the two pages.
+#
+# A SETTING row is the exception and gets no game-wide line at all: it is not one value for every
+# board, it is one value per PLAYER, and tip_for has already said so.
+static func declaration_tip(knob: Dictionary, save_label := "Save to source") -> String:
+	if knob.has("setting"):
+		return tip_for(knob)
+	return tip_for(knob) + "\n\n" + DevWidgets.wrap_tooltip(
+		"GAME-WIDE -- one value for every board. %s writes it into the declaration that authors it; no mission can carry its own." % save_label)
 
 
 # The which-stack note is appended per KIND rather than typed into each tip, so it cannot drift out

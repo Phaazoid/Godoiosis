@@ -14,8 +14,9 @@ var _header: ScenarioHeader
 var _beat_list: VBoxContainer
 var _step_list: VBoxContainer
 
-# done_when choices: the triggers a step can WAIT on. MISSION_START is the arming moment itself
-# and STEP_COMPLETED is derived FROM steps -- neither is a thing a step can watch for.
+# done_when choices: the triggers a step can WAIT on. MISSION_START is the arming moment itself,
+# STEP_COMPLETED is derived FROM steps, and PRE_MISSION_START is before the lesson is armed at all
+# -- none of the three is a thing a step can watch for.
 const STEP_TRIGGERS: Array[DialogBeat.Trigger] = [
 	DialogBeat.Trigger.TURN_START,
 	DialogBeat.Trigger.SQUAD_FORMED,
@@ -63,7 +64,10 @@ func _build_skeleton() -> void:
 	var add_beat := Button.new()
 	add_beat.text = "Add beat"
 	DevWidgets.apply_tooltip(add_beat, "A beat fires ONCE per battle when its trigger happens: "
-		+ "a Dialogic timeline plays over the board. Beats are independent of each other.")
+		+ "a Dialogic timeline plays over the board. Beats are independent of each other. "
+		+ "Pre mission start is the BRIEFING slot -- it plays over the bare board before the "
+		+ "loadout screen opens, so a line about the map can still be acted on; it needs a "
+		+ "roster, since a board with no pre-mission phase never reaches it.")
 	add_beat.pressed.connect(_on_add_beat)
 	vbox.add_child(add_beat)
 
