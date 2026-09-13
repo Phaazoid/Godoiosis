@@ -647,10 +647,19 @@ static func _try_overwatch(unit: Unit, board: BoardContext, squad_manager: Squad
 # to any cell of the lane the enemy can reach, then the MOST such cells, then CARDINAL_DIRECTIONS
 # order (Law #1). Reading `origin + dir` alone was #127's shape a third time -- a metric measuring
 # one cell of the thing it ranks -- and it cost three answers. A lane #756 had truncated to a stub
-# tied with a whole one. A facing whose near cell was merely OCCUPIED was refused outright, and
-# since the walk runs from THE ENEMY'S side with occupancy on, the blocker is usually the watcher's
-# own squadmate. And on a diagonal approach every facing tied at its near cell and fell through to
+# tied with a whole one. A facing whose near cell was merely OCCUPIED was refused outright, and the
+# walk ran from THE ENEMY'S side with occupancy on, so the blocker was usually the watcher's own
+# squadmate. And on a diagonal approach every facing tied at its near cell and fell through to
 # cardinal order -- watching north while the enemy walked in from the east.
+#
+# THE APPROACH FIELD SEES THROUGH BODIES (#946), which is the whole-field form of that second
+# answer and survived it. #769 made an occupied NEAR CELL cost one cell instead of a facing; a body
+# on a CHOKEPOINT still sealed the map, and the report was four archers aiming into a fence because
+# three of their own squadmates were standing in the board's only ford two hundred cells away. It is
+# `can_traverse`'s own doctrine -- "an enemy body blocks a MOVE but is not a terrain fact and moves
+# every turn; a connectivity field must see through it" -- and the tense makes it sharper here than
+# anywhere: a watch stands until the watcher's faction's NEXT turn, so every body this flood would
+# refuse to see through has moved before the watch can possibly fire.
 #
 # The coverage term only ever breaks a tie, which is why the answer barely moves: wherever the old
 # read produced one, the minimum sat on the near cell and still does.
@@ -658,9 +667,10 @@ static func _try_overwatch(unit: Unit, board: BoardContext, squad_manager: Squad
 # ONE HOP FIELD, hoisted -- all four facings ask the same source, so this was four floods that each
 # had to reach the watcher's neighbourhood anyway. `until` stops early only once EVERY cell in it
 # has a distance, and a lane routinely holds one that never will (off the map, since truncation asks
-# elevation and the trace but never bounds; or under a squadmate), so the hoisted call floods the
-# component. That is the tie-break's price and the lever if it ever bites -- `nearest_enemy` one
-# frame up already floods the same class, so this path was never flood-free.
+# elevation and the trace but never bounds; or a wall the shot may hit and nobody may stand on), so
+# the hoisted call floods the component. That is the tie-break's price and the lever if it ever
+# bites -- `nearest_enemy` one frame up already floods the same class, so this path was never
+# flood-free.
 #
 # A DUD AIM MUST NEVER BE QUEUED. A self-anchored `Reach.get_attack_cells_from` answers empty
 # for a hint that yields no cardinal direction, and from there the failure is entirely silent -- the resolver
@@ -670,7 +680,12 @@ static func _try_overwatch(unit: Unit, board: BoardContext, squad_manager: Squad
 #
 # A sealed board falls back to simply facing the enemy, reusing GridUtils' own diagonal tie-break
 # rather than inventing a second. That hatch NARROWED without being touched: it used to open when no
-# near cell was reachable, and now waits until no lane cell is.
+# near cell was reachable, and now waits until no lane cell is. **AND IT MAY NOT AIM AT A WALL**
+# (#946): its only dud-guard was a non-empty lane, and a lane truncated to the one cell of fence
+# beside the shooter is not empty. The ranked pass gets that test for free -- `path_hops` cannot put
+# an untraversable cell in the field, so such a facing already scores `covered == 0` -- and the
+# fallback, which consults no field, has to ask it out loud. Reading the lane out of `footprints`
+# rather than re-deriving it is the same edit: the geometry was being computed twice.
 #
 # WHO STANDS IN THE LANE IS NOT ASKED (dev, 2026-09-05: "the overwatch is an attack"). An
 # ally-hitting watch shoots its own squad, and that is the attack behaving as authored.
@@ -687,7 +702,7 @@ static func _watch_aim(unit: Unit, origin: Vector2i, attack: AttackData, enemy: 
 	if footprints.is_empty():
 		return origin
 
-	var field := RulesService.path_hops(enemy.movement.cell, board, enemy, -1, wanted, true)
+	var field := RulesService.path_hops(enemy.movement.cell, board, enemy, -1, wanted, false)
 	var best := origin
 	var best_hops := -1
 	var best_covered := 0
@@ -713,9 +728,24 @@ static func _watch_aim(unit: Unit, origin: Vector2i, attack: AttackData, enemy: 
 	if best_hops >= 0:
 		return best
 	var facing := GridUtils.cardinal_direction_i_between(origin, enemy.movement.cell)
-	if facing != Vector2i.ZERO and not Reach.get_affected_cells_from(unit, origin, origin + facing, attack, board).is_empty():
-		return origin + facing
+	if facing != Vector2i.ZERO and footprints.has(facing):
+		var toward: Array[Vector2i] = footprints[facing]
+		if _lane_can_be_entered(toward, enemy, board):
+			return origin + facing
 	return origin
+
+
+# Can anything ever ENTER this lane? A watch fires when an ACTIVE enemy MOVES INTO a cell it covers,
+# so a lane of cells nobody may stand on can never fire however it is pointed -- the fence beside the
+# shooter is a legal thing to shoot AT and not a legal thing to watch. Asked of the ENEMY rather than
+# of the cell, because that is the traversal rule the hop field above uses, so the fallback and the
+# ranked pass cannot disagree about what counts as a cell somebody can reach -- and a lake an enemy
+# Waterwalker crosses is a lane worth watching that `BoardContext.is_walkable` would have refused.
+static func _lane_can_be_entered(lane: Array[Vector2i], enemy: Unit, board: BoardContext) -> bool:
+	for cell in lane:
+		if RulesService.can_traverse(cell, enemy, board):
+			return true
+	return false
 
 
 # Guard (#751): ward the ally the most enemies can reach. The other preparation whose payoff lands on

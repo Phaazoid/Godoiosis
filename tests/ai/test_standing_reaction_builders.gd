@@ -327,3 +327,95 @@ func test_a_guard_refuses_when_nobody_can_be_reached() -> void:
 		.override_failure_message("the guard warded an ally nothing threatens, spending an action on nothing"
 			).is_false()
 	assert_object(_queued_guard(guard)).is_null()
+
+
+# --- #946: the approach field, and the fallback's dud guard ---------------------------------------
+
+# A BODY ON A CHOKEPOINT IS NOT A SEALED BOARD. The approach walk used to run with occupancy ON, so
+# anyone standing in the one gap between the watcher and the enemy erased every route the ranking is
+# made of: `covered` went to zero on all four facings and the aim fell through to "face the enemy",
+# which on the reported board was a fence. The blocker is USUALLY THE WATCHER'S OWN SQUADMATE, since
+# squads move as clusters and the walk runs from the enemy's side -- #769 said so while fixing the
+# one-cell form of this, and the whole-field form survived it.
+#
+# The plug is a PLAYER here for that exact reason: the flood is the ENEMY's, so what blocks it is
+# somebody on the watcher's side. Same board as the route case above, one unit heavier.
+func test_a_squadmate_standing_in_the_only_gap_does_not_blind_the_watcher() -> void:
+	var board: Dictionary = BB.build(self)
+	auto_free(board.root)
+	BB.paint_rect(board.grid, Rect2i(0, 0, 5, 8))    # west block, includes the watcher
+	BB.paint_rect(board.grid, Rect2i(6, 0, 3, 8))    # east block, includes the enemy
+	BB.paint_rect(board.grid, Rect2i(5, 0, 1, 1))    # the one gap, at the top of column 5
+
+	var watcher: Unit = BB.spawn(board, H.make_unit_data({}, PLAYER), Vector2i(4, 4))
+	watcher.equipped_weapon = _watch_weapon()
+	BB.spawn(board, H.make_unit_data({}, PLAYER), Vector2i(5, 0))   # the plug, in the gap itself
+	BB.spawn(board, H.make_unit_data({}, ENEMY), Vector2i(6, 4))
+
+	assert_bool(AITactics.queue_main_action(watcher, _context(board), board.squad_manager, WATCH_ONLY)
+			).override_failure_message(
+			"a body in the gap sealed the approach field, so no facing covered anywhere the enemy "
+			+ "could reach and the watcher declined outright").is_true()
+
+	var watch := _queued_watch(watcher)
+	assert_object(watch).is_not_null()
+	if watch == null:
+		return
+	assert_vector(watch.target_cell).override_failure_message(
+			"a squadmate standing in the ford cost the watcher the route it was watching"
+			).is_equal(Vector2i(4, 3))
+
+
+# Two islands with a channel between them, so the enemy is out of reach by TERRAIN rather than by
+# anybody standing anywhere -- which is what puts the aim on the fallback, where the next two cases
+# live.
+func _two_islands() -> Dictionary:
+	var board: Dictionary = BB.build(self)
+	auto_free(board.root)
+	BB.paint_rect(board.grid, Rect2i(0, 0, 4, 8))    # west island, x 0..3
+	for y in range(8):
+		BB.paint_cell(board.grid, Vector2i(4, y), BB.WATER_ATLAS)   # the channel nobody may stand in
+	BB.paint_rect(board.grid, Rect2i(5, 0, 3, 8))    # east island, x 5..7
+	return board
+
+
+# THE FALLBACK MAY NOT AIM AT A WALL (#946, the reported symptom). With no route to rank, the aim
+# simply faces the enemy -- and its only dud-guard was that the lane be non-empty, which a lane
+# truncated to the one impassable cell beside the shooter is not. A watch fires when an enemy MOVES
+# INTO a covered cell, so this one could never have fired at all, and the watcher spends its main
+# action on air behind a legal-looking queue row.
+#
+# The channel stands in for the reported fence: a painted tile the shot may hit and nobody may stand
+# on. What the watcher must do instead is decline, and take another verb.
+func test_a_watcher_declines_rather_than_aiming_into_the_water_beside_it() -> void:
+	var board := _two_islands()
+	var watcher: Unit = BB.spawn(board, H.make_unit_data({}, PLAYER), Vector2i(3, 4))
+	watcher.equipped_weapon = _watch_weapon()
+	BB.spawn(board, H.make_unit_data({}, ENEMY), Vector2i(5, 4))
+
+	assert_bool(AITactics.queue_main_action(watcher, _context(board), board.squad_manager, WATCH_ONLY)
+			).override_failure_message(
+			"the watcher aimed its watch into the channel it is standing beside").is_false()
+	assert_object(_queued_watch(watcher)).is_null()
+
+
+# ...AND IT STILL AIMS WHEN THE CELL IN FRONT IS ONE SOMEBODY COULD STAND ON. The same board and the
+# same unreachable enemy, with the watcher one cell further west so the facing toward it lands on
+# ground instead of water. Without this the case above is satisfied by a guard that refuses
+# everything, which is the mutant that would otherwise survive.
+func test_the_same_watcher_one_cell_back_still_faces_the_enemy() -> void:
+	var board := _two_islands()
+	var watcher: Unit = BB.spawn(board, H.make_unit_data({}, PLAYER), Vector2i(2, 4))
+	watcher.equipped_weapon = _watch_weapon()
+	BB.spawn(board, H.make_unit_data({}, ENEMY), Vector2i(5, 4))
+
+	assert_bool(AITactics.queue_main_action(watcher, _context(board), board.squad_manager, WATCH_ONLY)
+			).override_failure_message(
+			"the fallback refused a facing whose cell is ordinary ground").is_true()
+
+	var watch := _queued_watch(watcher)
+	assert_object(watch).is_not_null()
+	if watch == null:
+		return
+	assert_vector(watch.target_cell).override_failure_message(
+			"with no route to rank, the watch should simply face the enemy").is_equal(Vector2i(3, 4))
