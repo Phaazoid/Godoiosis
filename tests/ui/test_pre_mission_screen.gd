@@ -493,3 +493,114 @@ func test_every_card_wears_its_units_aura_ring_around_the_portrait() -> void:
 		assert_float(ring.global_position.y + ring.size.y).override_failure_message(
 			"the aura ring reaches into the card body that #930 reserved").is_less_equal(
 			grid.global_position.y)
+
+
+# --- every name on the screen is drawn whole (#944) ---
+
+const GENERIC_FAMILY := preload("res://Resources/Weapons/MainVarieties/Carbine.tres")
+
+
+# Wide enough to draw what is written in it -- measured off the font the label ACTUALLY draws with,
+# so nothing here pins a pixel count and no theme or font change can make the assertion lie. This is
+# the property the bug report names ("cut off instead of continuing to the right") stated in the one
+# unit a feel pass cannot move.
+static func _draws_in_full(label: Label) -> bool:
+	var font: Font = label.get_theme_font("font")
+	if font == null:
+		return true   # nothing to measure against; the width assertions below still speak
+	var needed := font.get_string_size(label.text, HORIZONTAL_ALIGNMENT_LEFT, -1,
+		label.get_theme_font_size("font_size")).x
+	return label.size.x + 0.5 >= needed
+
+
+func _label_reading(root: Node, text: String) -> Label:
+	for node in _walk(root):
+		var label := node as Label
+		if label != null and label.text == text:
+			return label
+	return null
+
+
+# THE CARD. Two assertions, because either alone is blind: a short roster name might fit the portrait
+# column at some font sizes, and a box wider than the column still has to hold what is in it.
+func test_every_roster_card_draws_its_units_name_in_full() -> void:
+	if not await _enter_phase():
+		return
+	var cards := _cards()
+	assert_int(cards.size()).is_greater(0)
+
+	for card in cards:
+		var who := card.unit.get_unit_name()
+		var label := _label_reading(card, who)
+		assert_object(label).override_failure_message(
+			"%s's card draws no label carrying their name" % who).is_not_null()
+		# The RULE: the name is not confined to the portrait column. It used to be a child of the
+		# identity VBox, where a VBox child is exactly its container's width.
+		assert_float(label.size.x).override_failure_message(
+			"%s's name is clipped to the %d-px portrait column" % [who, PreMissionCard.SPRITE]) \
+			.is_greater(float(PreMissionCard.SPRITE))
+		assert_bool(_draws_in_full(label)).override_failure_message(
+			"%s's name is drawn in a box narrower than the name" % who).is_true()
+
+
+# THE DEPLOYED STRIP, the same rule at the surface that answers it the other way round: these labels
+# do not clip at all, because the strip WRAPS and SCROLLS where the card grid cannot. The squad title
+# is the half that was visibly broken -- a solo squad's block is one 46-px slot wide, so "unsquadded"
+# drew as "unsquadd".
+func test_the_deployed_strip_spells_every_name_and_squad_title_in_full() -> void:
+	if not await _enter_phase():
+		return
+	var screen := _screen()
+	assert_object(screen).is_not_null()
+
+	var titles := 0
+	var checked := 0
+	for node in _walk(screen._squads_row):
+		var label := node as Label
+		if label == null or label.text == "":
+			continue
+		checked += 1
+		if label.text == "unsquadded" or label.text.ends_with(" leads"):
+			titles += 1
+		assert_bool(_draws_in_full(label)).override_failure_message(
+			"\"%s\" is clipped on the deployed strip" % label.text).is_true()
+
+	# Both guards, because this case is entirely a loop: an empty strip and a strip of nameless chips
+	# would each pass every assertion above without one.
+	assert_int(titles).override_failure_message(
+		"no squad block drew a title, so the half that was visibly broken went unchecked") \
+		.is_greater(0)
+	assert_int(checked).override_failure_message(
+		"the strip drew no labelled chips at all").is_greater(titles)
+
+
+# --- a generic weapon lists as its family (#945) ---
+
+# An unmodified weapon carries NO display_name of its own -- the field is its optional pet name, and
+# a DERIVED generic (#835) never has one. Item.shown_name() is the one door that reads the family's
+# through, and every surface that read the raw field drew a blank row instead.
+#
+# The fixture is built rather than borrowed: a roster that happened to hold an authored VARIANT would
+# pass with the bug in place, because there the field and the door agree.
+func test_a_weapon_with_no_pet_name_of_its_own_lists_as_its_family() -> void:
+	if not await _enter_phase():
+		return
+	var cards := _cards()
+	assert_int(cards.size()).is_greater(0)
+
+	var generic := WeaponInstance.make(GENERIC_FAMILY)
+	assert_object(generic).is_not_null()
+	# The premise, asserted rather than assumed -- if make() ever started copying the template's
+	# wording, this case would be testing nothing.
+	assert_str(generic.display_name).override_failure_message(
+		"a freshly made instance already carries a name, so this case proves nothing").is_empty()
+	assert_str(GENERIC_FAMILY.display_name).is_not_empty()
+
+	var card: PreMissionCard = cards[0]
+	card.unit.inventory[Unit.MAX_INVENTORY_SIZE - 1] = generic
+	card.refresh()
+	await await_idle_frame()
+
+	assert_object(_label_reading(card, GENERIC_FAMILY.display_name)).override_failure_message(
+		"the card lists the generic with a blank name instead of \"%s\""
+		% GENERIC_FAMILY.display_name).is_not_null()

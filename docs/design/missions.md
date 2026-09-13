@@ -2,7 +2,7 @@
 
 **Status: ALL FOUR SLICES BUILT 2026-07-28 ([#96](https://github.com/Phaazoid/Godoiosis/issues/96)).** Filed 2026-07-27, when the project acquired a win condition for the first time. Before this, Iosis had ten interlocking systems and no way to finish a battle — which meant a design question could be answered *"is this coherent?"* but never *"does this improve play?"*
 
-**Canon checked through #939 (2026-09-12).**
+**Canon checked through #946 (2026-09-13).**
 
 ## What a mission is
 
@@ -131,6 +131,8 @@ end the phase while the card is up.
 **Weapon proficiency is deliberately NOT on the card** (dev, 2026-09-12: *"let's ignore proficiency until it does something"*). `UnitInstance.UNREDUCED` means *no reduction* and nothing under `Resources/` authors a reduction at all, so a proficiency readout would render identically for all ten roster members. **The ring rides the portrait so that the card's body stays free for it**: the stat grid needs 94 of its 166 width, leaving 72 × 73 in the bottom-left, and this ticket spends none of it.
 
 **Nothing in the card may demand width from its content.** The grid divides its row three ways and an `HFlowContainer`'s minimum width is its widest child, so one long ability name would walk the whole column out of the region — #685's failure, one surface over. Every content-bearing label is `clip_text` with the full string on hover, so the card's minimum size is a constant.
+
+**...but a clip is only as good as the BOX it clips against** ([#944](https://github.com/Phaazoid/Godoiosis/issues/944), 2026-09-13). The unit's name sat inside the identity VBox, whose width is pinned to the 52-px portrait column, and a VBox child is exactly its container's width — so the name clipped to the sprite while the rest of the unit half sat empty beside it, and because it drew CENTRED it lost its first letter and its last at once: `Noemie` rendered as a mangled word rather than as a truncated one. The name is a child of the unit half now, left-aligned so it grows rightwards, and still clips. **The deployed strip answers the same question the other way, on purpose**: it is an `HFlowContainer` inside a scroller, so it wraps what does not fit and scrolls what still does not, and neither its member names nor its squad titles clip at all — a solo squad's block is one 46-px slot wide, which is what drew `unsquadded` as `unsquadd`. Ask which shape a surface is before copying either answer.
 
 **Two extractions rather than second implementations.** `MissionStatusPanel.briefing_rows` is now the one builder for the objective and FAIL-IF rows, so the briefing *before* the battle and the status *during* it cannot word a condition differently. `UnitInstance.LIMB_SHORT`/`LIMB_FULL` moved beside the enum they name, `info_panel` being a scene script with no `class_name` whose vocabulary had gained a second reader.
 
