@@ -30,7 +30,7 @@ func test_factory_applies_the_hd2d_invariants() -> void:
 	assert_bool(sprite.shaded).is_true()
 	assert_int(sprite.texture_filter).is_equal(BaseMaterial3D.TEXTURE_FILTER_NEAREST)
 	assert_int(sprite.cast_shadow).is_equal(GeometryInstance3D.SHADOW_CASTING_SETTING_ON)
-	assert_float(sprite.pixel_size).is_equal_approx(1.0 / 32.0, 0.0001)
+	assert_float(sprite.pixel_size).is_equal_approx(1.0 / UnitSprite3D.texels_per_unit, 0.0001)
 	assert_object(sprite.texture).is_not_null()
 	assert_str(sprite.display_name).is_equal("Testy")
 

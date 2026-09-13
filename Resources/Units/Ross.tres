@@ -1,10 +1,10 @@
 [gd_resource type="Resource" script_class="UnitData" format=3]
 
-[ext_resource type="Texture2D" path="res://Art/Units/MapSprites/Fighter_Downed.png" id="1_yyn38"]
+[ext_resource type="Texture2D" path="res://Art/Units/MapSprites/Armored Axeman_Downed.png" id="1_yyn38"]
 [ext_resource type="Script" path="res://Classes/jobs/AbilityData.gd" id="2_hbtnj"]
 [ext_resource type="Resource" path="res://Resources/Abilities/IronWill.tres" id="3_u5t1d"]
-[ext_resource type="Texture2D" path="res://Art/Units/MapSprites/Fighter.png" id="4_3hhgk"]
-[ext_resource type="Texture2D" path="res://Art/Units/MapSprites/Fighter_Moving.png" id="5_6al02"]
+[ext_resource type="Texture2D" path="res://Art/Units/MapSprites/Armored Axeman.png" id="4_3hhgk"]
+[ext_resource type="Texture2D" path="res://Art/Units/MapSprites/Armored Axeman_Moving.png" id="5_6al02"]
 [ext_resource type="Texture2D" path="res://Art/Units/Portraits/hair_mcgee_orange.png" id="6_gl24e"]
 [ext_resource type="Script" path="res://Classes/units/UnitData.gd" id="7_m50pb"]
 [ext_resource type="Script" uid="uid://jytv7xrjv6l1" path="res://Classes/items/Item.gd" id="8_kgmcy"]

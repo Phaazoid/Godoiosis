@@ -34,7 +34,7 @@ func test_no_packed_suffix_survives_into_the_result() -> void:
 
 func test_a_known_source_name_is_present() -> void:
 	var found := ResourceDir.files_with_extension(SPRITE_DIR, ".png")
-	assert_array(found).contains(["Mage.png"])
+	assert_array(found).contains(["Archer.png"])
 
 func test_results_are_sorted_so_discovery_is_deterministic() -> void:
 	var found := ResourceDir.files_with_extension(SPRITE_DIR, ".png")

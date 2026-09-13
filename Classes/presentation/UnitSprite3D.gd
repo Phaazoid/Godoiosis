@@ -17,16 +17,18 @@ signal walk_finished
 # false: the MapSprites face screen-LEFT natively (dev feel-check 2026-08-12 —
 # "all units look like they're moonwalking" with this set true).
 const ART_FACES_SCREEN_RIGHT := false
-const FALLBACK_SPRITE := "res://Art/Units/MapSprites/Recruit.png"
+const FALLBACK_SPRITE := "res://Art/Units/MapSprites/Knight Templar.png"
 
-# Where an authored STILL hangs from, in texture pixels: 16 is half of 32, so on the 32x32 map art
-# -- whose ink runs to the texture's bottom edge -- the origin lands on the feet. A frame animation
-# overrides it per frame and _apply_state_texture puts it back (#634).
+# Where an authored STILL hangs from, in texture pixels. `Sprite3D` puts the origin at row
+# `height / 2 + offset.y` from the texture's TOP, so half the sheet lands it on the bottom row --
+# which is where every map sprite's ink ends (MapSpriteInk), i.e. on the feet. Derived from SHEET
+# rather than typed, so re-cutting the art at another size cannot leave this behind (#937). A frame
+# animation overrides it per frame and _apply_state_texture puts it back (#634).
 #
 # NOT to be confused with `art_offset` below. This is `Sprite3D.offset`: a Vector2 in TEXTURE PIXELS
 # that moves the picture against its own origin. `art_offset` is a Vector3 in WORLD UNITS that moves
 # the whole sprite against the board. Same word, two channels, and only one of them is a pivot.
-const STILL_PIVOT := Vector2(0, 16)
+const STILL_PIVOT := Vector2(0, MapSpriteInk.SHEET / 2)
 
 # Matches the 2D game's cadence: 120 px/s over 32 px cells = 3.75 cells per second.
 @export var move_speed := 3.75
@@ -55,8 +57,14 @@ var art_offset := Vector3.ZERO
 # the density stops being one. battle3d.gd owns the inspector-facing knob that writes it.
 #
 # It became a dial at #250, when the ground started wearing the real 16px tile art: at 32 the
-# ground's pixels are twice the size of a unit's, at 16 a 32px unit stands two cells tall —
-# exactly its proportion in the 2D game. Which reads better is an eye call, not a guess.
+# ground's pixels are twice the size of a unit's. Which reads better is an eye call, not a guess.
+#
+# #937 did NOT move it, and that is worth saying because the sheet doubled to 64. What decides a
+# unit's apparent size is its INK, not its canvas, and the ink barely moved -- the Fire Emblem art
+# drew 19 rows and the Zerie art draws 20, the rest of the bigger cell being the lunge room its
+# attack frames need. So a value tuned against the old art is still tuned against the new one; what
+# changed is only that the transparent quad around the character is now two cells tall instead of
+# one, which nothing reads (art_top_height measures opaque rows).
 static var texels_per_unit := 32.0
 
 var _map_texture: Texture2D

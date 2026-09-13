@@ -7,7 +7,7 @@ its child [#49 Action Queue UX](https://github.com/Phaazoid/Godoiosis/issues/49)
 This is a *guidelines* doc, not a spec — it captures the principles we're holding the work to,
 plus the running order of the queue-UX checklist. Update it as items land.
 
-**Canon checked through #932 (2026-09-12).**
+**Canon checked through #937 (2026-09-13).**
 
 ## Principles
 
@@ -1153,6 +1153,8 @@ for the Priest, 26 for the Dragon, with Pegasus, General and Wyvern between. **T
 `SPRITE_FIT` cannot grow into the disc's empty crown, which looks like waste and is not:** the crown
 is the dragon's headroom. Raising it past about 1.5 puts that art through the rim, and the ceiling
 is set by the tallest sprite in the game rather than by the one you happen to be looking at.
+
+**The rule survived the art change; both its numbers did not ([#937](https://github.com/Phaazoid/Godoiosis/issues/937), 2026-09-13).** The Fire Emblem set is gone and Zerie's replaced it, so the sheet is 64 and the feet are on row 64; the tallest art is Werebear and Orc rider at 37 rows where most units draw 20. **What is new is that the baseline is now BUILT rather than found** — the Zerie feet landed anywhere from row 54 to row 60 of their own cell, and `tools/sprites/extract_stills.gd` re-canvasses each still so the spread is zero by construction. The old set had it by an artist's care; ours has it because a tool guarantees it, which is the stronger version of the same property. `SPRITE_FIT` also stopped measuring the sheet and started measuring the INK: the Zerie cell is mostly lunge room for attack frames, so a canvas fit drew every unit at a third of its old size while reading as perfectly reasonable code.
 
 The name's WIDTH is deliberately not a third knob — it is the disc's own chord at the text's lowest
 pixel (`centre_name_width_budget`), so it follows `DEAD_ZONE_RADIUS` instead of being a number that
@@ -3230,6 +3232,8 @@ palette. Ruled a whole-UI skin (dev, 2026-09-07), so the setting is now **Menu c
 The aura readout is a ring of ticks around a portrait, on the pre-mission card and in the inspect panel both. Three things it settled are about looking at things generally rather than about aura.
 
 **The measurement moved, not the number.** Every 32×32 map sprite draws its ink in the lower half of its sheet — `x 8..23, y 13..31` — so a ring centred on the sprite's BOX sits a third of the box above the person inside it. #560 found that scanning the deployed-force strip and solved it there as `INK_OFFSET = (-4, -11)`: the right answer, at one size, in one screen's constants. A second consumer at a different size cannot reuse a pixel offset, so the **texel rect** is now `MapSpriteInk` and both surfaces derive from it — `window_offset()` reproduces the shipped `(-4, -11)` exactly, which is what makes this a MOVE rather than a rewrite, and a test pins that it still does. **Law #4 belongs on the measurement, not on whichever consumer solved it first.**
+
+**[#937](https://github.com/Phaazoid/Godoiosis/issues/937) replaced the art underneath all of that, and the measurement is the only thing that had to move** (2026-09-13): `SHEET` 32 -> 64 and `INK_RECT` to the Zerie median box, both read off the extraction tool rather than typed. The `(-4, -11)` provenance pin went with the art it described -- re-pinning whatever the new art produces would be a number nobody could check -- and its case now asserts the PROPERTY it was really protecting, that a sheet-sized sprite at `window_offset()` centres the ink in its window. **A provenance pin outlives the move it witnessed, not the content it measured.**
 
 **Geometry is derived from the rect a widget lands in, never from a size passed to it.** The panel's ring is a `FULL_RECT` child of a `Panel`, and a `Panel` aggregates no minimum from its children — so the constructor argument that looked like it sized the ring never did, and the scene's own 108 was silently the only answer. Two answers to *how big is this*, agreeing by luck. A mutant is what found it: growing the constant changed nothing at all, which is the tell that a value is not load-bearing.
 

@@ -452,7 +452,7 @@ func _ring(member: Unit, squad: Squad) -> Control:
 	var sprite := TextureRect.new()
 	sprite.texture = member.unit_data.map_sprite
 	sprite.position = MapSpriteInk.window_offset(RING_WINDOW)
-	sprite.size = Vector2(32, 32)
+	sprite.size = Vector2(MapSpriteInk.SHEET, MapSpriteInk.SHEET)
 	sprite.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 	window.add_child(sprite)
 
