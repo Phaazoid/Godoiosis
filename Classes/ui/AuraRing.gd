@@ -64,6 +64,14 @@ const HOT_RATIO := 0.6
 const DIM_ALPHA := 0.30                 # affine, pool empty -- the limb tax, or not yet grown
 const FAINT_ALPHA := 0.16               # an element this unit can never grow
 
+# What a HIGHLIGHTED bar looks like: the border is the bar's own width, and the colour shrinks to
+# this fraction of it so the border has somewhere to be. The two are a pair -- lower the ratio for a
+# heavier border, raise it to keep more colour -- and the tension they sit in is real: on the card a
+# bar is 2.55px, so at 0.55 the border lands at ~0.57px a side and antialiases to a soft white edge
+# rather than a crisp one. Growing it instead would put the footprint back where it fused.
+const HOVER_CORE_RATIO := 0.55
+const HOVER_BORDER := 0.8               # how far the border wraps past each END of the bar
+
 # Which palette this ring's colours come out of -- see the header. SKINNED follows the player's menu
 # colours (the pre-mission card); AUTHORED is the dev's own element wheel (the inspect panel).
 enum Ground { AUTHORED, SKINNED }
@@ -299,16 +307,23 @@ func _draw_sector(row: Row, index: int, width: float) -> void:
 		var step := Vector2(cos(angle), sin(angle))
 		var from := _centre + step * _inner
 		var to := _centre + step * _outer
-		# The outline is drawn UNDER a wider stroke of the same line, which is what makes it read as an
-		# outline rather than as a second tick beside the first.
-		if highlighted:
-			draw_line(from, to, _outline_ink(), width + 2.0, true)
 		var ink := lit
 		if k >= row.depth:
 			ink.a = DIM_ALPHA if row.affine else FAINT_ALPHA
 			if not row.affine:
 				ink = _neutral_ink(ink.a)
-		draw_line(from, to, ink, width, true)
+		# THE BORDER STAYS INSIDE THE BAR'S OWN FOOTPRINT: drawn at the full width and a shade longer,
+		# with the COLOUR shrinking to fit inside it. Every bar therefore keeps exactly the gap it
+		# started with -- which is the whole point, because an outline that grew SIDEWAYS fused the
+		# five of them into one arc: at the card's radius the bars sit 5.0px apart and `width + 2` is
+		# 4.55px wide, leaving 0.5px between them. The panel's are 10.8px apart, which is why the same
+		# code read correctly on one surface and as a solid ribbon on the other (dev, 2026-09-13).
+		var bar := width
+		if highlighted:
+			var cap := step * HOVER_BORDER
+			draw_line(from - cap, to + cap, _outline_ink(), width, true)
+			bar = width * HOVER_CORE_RATIO
+		draw_line(from, to, ink, bar, true)
 
 
 # "Aether 2" across the middle while the cursor is in that arc (dev, #930). Both surfaces have art
