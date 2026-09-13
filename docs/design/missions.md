@@ -2,7 +2,7 @@
 
 **Status: ALL FOUR SLICES BUILT 2026-07-28 ([#96](https://github.com/Phaazoid/Godoiosis/issues/96)).** Filed 2026-07-27, when the project acquired a win condition for the first time. Before this, Iosis had ten interlocking systems and no way to finish a battle — which meant a design question could be answered *"is this coherent?"* but never *"does this improve play?"*
 
-**Canon checked through #895 (2026-09-11).**
+**Canon checked through #939 (2026-09-12).**
 
 ## What a mission is
 
@@ -81,6 +81,30 @@ end the phase while the card is up.
 **What the player may do while standing there.** A click on one of their units opens the ring — the same widget, with nothing to say about a turn: Squad Up / Join / Leave / Disband through their own gates unchanged, plus Undeploy and Inspect. `MainActionMenu.populate` early-returns into `_pre_mission_options` *before* any gate that reads `unit.squad`, because a unit the phase has just undeployed does not have one. A click on an empty deployment cell offers the units still waiting — `ActionMenuController` already takes an arbitrary tree and already routes non-verb leaves through synthetic ids, so the ring *is* the dropdown and no widget was built for it. Undeploy is gated on `drawn_from_roster`: authored units are additive and belong to the board (ruling 2c), and enemies are `units_root` children too.
 
 **Saving is refused during the phase, at `ScenarioManager.save_to_slot` rather than at the pause-menu row.** A slot is a mid-battle snapshot and `capture_scenario` walks `units_root`, so the reserve is invisible to it: a save taken here would record only the units already placed, and the resume — which correctly bypasses the phase — would come back with the rest of the roster gone and no way to finish choosing. The pause menu greys its own row and names the reason; the refusal underneath is the gate.
+
+### The briefing plays before the loadout ([#882](https://github.com/Phaazoid/Godoiosis/issues/882), 2026-09-12)
+
+**A mission with an opening line starts on the map, not on the menu.** The board loads, the roster draws, Torv talks over the bare board, and the loadout screen appears when the last line closes. The dev's words: *"maps with pre mission dialogue always start on the map itself, not the pre mission screen, and the dialog plays out. The dialog finishing triggers the pre mission screen to pop up, then the rest goes like normal."*
+
+**Because a `MISSION_START` beat is advice that arrives after the player has already chosen.** That trigger fires at the commit, so a line saying *freeze a bridge* or *soak the fools who wade at us* reaches a player whose roster, fitting and placement are already final — and advice about the map is most of what an opening line in a tactics game is for. All three shipped intros were that: The Ford, The Causeway and The Quarry each describe the board and the enemy, and none mentions where the player's own units stand.
+
+**`DialogBeat.Trigger.PRE_MISSION_START` is the briefing slot, and `MISSION_START` keeps its own job** — the voice once the force is standing. Two triggers, two moments, no line authored twice. What a briefing may talk about is the **map and the enemy**, both fully standing during the phase; only the player's force is missing, which is exactly what the ticket's own "a beat before deployment has no board to talk about" got wrong.
+
+**The trigger is APPENDED to the enum, never inserted.** A beat serializes as its trigger's int (`Prolog.tres` reads `trigger = 5`), so a new member anywhere but the end silently renumbers every authored beat in the repo.
+
+**It fires without ARMING, and that is the same rule the draw already answers to.** The phase spawns and squads the whole roster, and an armed `ScenarioDirector` answers `squad_created` by firing `SQUAD_FORMED` beats and advancing the lesson. Arming stays at the commit; `ScenarioDirector.pre_mission_started()` reaches `_fire` directly, inheriting once-per-battle, the #400 dialog-off consume and the pending queue without inheriting the arm.
+
+**`went_quiet` is what the screen waits on, and it fires on the timeline end that EMPTIES the queue** rather than on the first one — a trigger may fire several beats and Dialogic plays them one at a time, so "the beat you asked for ended" is the wrong question. Dialog turned off consumes the beats without playing them, so `pre_mission_started()` answers *nothing will play* and the screen opens at once rather than waiting for a signal that cannot come.
+
+**Whether anything will play reads the PENDING QUEUE as well as the live latch.** `Dialogic.end_timeline` is asynchronous, so a restart taken mid-dialog reaches `_open_deployment` while the outgoing timeline is still ending, and `_fire` queues the briefing instead of starting it. Reading `_dialog_active` alone reports silence, reveals the loadout screen, and then plays the briefing over the top of it.
+
+**The screen is HIDDEN, not shown-on-quiet** — a `Control` is visible the moment it is built, which is why `PreMissionBar` is the one that gets `set_shown(false)` at the phase's entry and the screen never did.
+
+**Both phase keys stand down while the briefing plays, and Enter is the load-bearing one:** it is both `commit_deployment` and Dialogic's own advance action (`dialogic_default_action` carries Enter, Space and left click), so without the guard the keypress that closes the last line opens the Begin Mission card behind a screen nobody has seen. Tab is guarded for the plainer reason that the screen is deliberately withheld.
+
+**`_briefing` is cleared in `_close_deployment_menu`**, the one door every exit takes — commit, `reset()` for F2 / a board swap / Load Game, and `abandon_mission`, which never reaches `reset()` at all.
+
+**A restart replays the briefing**, which is parity with `MISSION_START` rather than a decision of its own: both fresh-start doors funnel through `_open_deployment`. The Prolog keeps `MISSION_START` — it names no roster, so it has no phase to brief, and its lines are about the player's own four units rather than the map.
 
 ### The screen itself (#740 + #743)
 
