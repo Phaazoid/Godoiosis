@@ -27,11 +27,20 @@ const NO_TINT := Color(0, 0, 0, 0)                   # alpha 0 = leave the theme
 @onready var will_bar: ProgressBar = $WillRow/WillBar
 @onready var will_value: Label = $WillRow/WillValue
 @onready var limbs_row: HBoxContainer = $LimbsRow
+@onready var aura_row: VBoxContainer = $AuraRow
 @onready var stats_grid: GridContainer = $StatsGrid
 @onready var abilities_list: VBoxContainer = $AbilitiesList
 
+# The aura wheel sits BETWEEN the limbs and the derived stats on purpose (#930): aura rides living
+# flesh -- every lost limb docks the deepest pool -- so an emptied element reads directly beside the
+# limb that emptied it. Big enough for the five element names, which is what this surface has room
+# for and the pre-mission card does not.
+const AURA_RING_PX := 160.0
+
 var unit: Unit
 var board: BoardContext   # for board-dependent readouts (terrain Cover DEF); null = armor only
+var _aura_ring: AuraRing
+var _aura_none: Label
 
 func set_unit(target: Unit, context: BoardContext = null):
 	board = context
@@ -57,6 +66,7 @@ func set_unit(target: Unit, context: BoardContext = null):
 func _refresh():
 	_refresh_bars()
 	_refresh_limbs()
+	_refresh_aura()
 	_refresh_stats()
 	_refresh_abilities()
 
@@ -64,6 +74,13 @@ func _clear_dynamic():
 	for container: Node in [limbs_row, stats_grid, abilities_list]:
 		for child in container.get_children():
 			child.queue_free()
+	# The aura wheel is BUILT ONCE and told, never freed and rebuilt -- so it is blanked here rather
+	# than added to the list above. Without this a panel cleared to no unit keeps drawing the last
+	# one's aura, which is the same stale-readout hole the three containers above are cleared for.
+	if _aura_ring != null:
+		_aura_ring.set_unit(null)
+		_aura_ring.visible = false
+		_aura_none.visible = false
 
 func _refresh_bars():
 	hp_bar.max_value = unit.get_max_hp()
@@ -88,6 +105,31 @@ func _refresh_limbs():
 	if unit.in_crisis:
 		limbs_row.add_child(_badge("CRISIS", CRISIS_COLOR,
 			"Will locked at 0 — another down this battle is death"))
+
+# BUILT ONCE, then told -- the card's job-picker rule, for the same reason one layer along: this ring
+# owns hover state, and a rebuild under the cursor would free the very node the pointer is on (#745).
+#
+# A unit with no affinity AT ALL gets the sentence rather than a 160px wheel of nothing: "the section
+# hides with its rows" (#900), one step short of hiding, because "can never channel" is real
+# information and an empty picture is not. The CARD keeps drawing its ring in that state -- there it
+# costs no room, and all-faint is itself the answer.
+func _refresh_aura():
+	if _aura_ring == null:
+		_aura_ring = AuraRing.standing(unit, AURA_RING_PX)
+		_aura_ring.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+		aura_row.add_child(_aura_ring)
+		_aura_none = Label.new()
+		_aura_none.text = "No elemental affinity"
+		_aura_none.add_theme_color_override("font_color", DIM_COLOR)
+		_aura_none.tooltip_text = UiText.wrap(AuraRing.readout(unit))
+		_aura_none.mouse_filter = Control.MOUSE_FILTER_STOP
+		aura_row.add_child(_aura_none)
+	else:
+		_aura_ring.set_unit(unit)
+		_aura_none.tooltip_text = UiText.wrap(AuraRing.readout(unit))
+	var affine := unit.has_any_affinity()
+	_aura_ring.visible = affine
+	_aura_none.visible = not affine
 
 func _limb_chip(inst: UnitInstance, slot: UnitInstance.LimbSlot, at_risk: int) -> Label:
 	var chip := Label.new()

@@ -69,6 +69,7 @@ var selected_item: Item
 
 var _deploy_button: Button
 var _controller: MissionController
+var _aura_ring: AuraRing
 var _limbs_row: HFlowContainer
 var _job_picker: OptionButton
 var _abilities_row: HFlowContainer
@@ -141,13 +142,13 @@ func _build_unit_half() -> Control:
 	identity.add_theme_constant_override("separation", 2)
 	who.add_child(identity)
 
-	var portrait := TextureRect.new()
-	portrait.texture = unit.unit_data.map_sprite
-	portrait.custom_minimum_size = Vector2(SPRITE, SPRITE)
-	portrait.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-	portrait.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-	portrait.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
-	identity.add_child(portrait)
+	# The portrait is DRAWN BY THE AURA RING rather than sitting beside it (#930) -- one canvas, so the
+	# ring can frame the character's own ink and the hover readout can land on top of the sprite
+	# instead of underneath it. The ring rides the portrait precisely so the card's BODY stays empty:
+	# that room is spoken for by a weapon-proficiency readout the day proficiency does something
+	# (dev, 2026-09-12), and this is the one placement of the five drawn that does not spend it.
+	_aura_ring = AuraRing.for_portrait(unit, unit.unit_data.map_sprite, SPRITE)
+	identity.add_child(_aura_ring)
 
 	var name_label := Label.new()
 	name_label.text = unit.get_unit_name()
@@ -359,6 +360,7 @@ func refresh() -> void:
 	if not is_instance_valid(unit):
 		return
 	_refresh_frame()
+	_aura_ring.refresh()   # refresh(), not set_unit(): the unit never changes, and a hover must survive
 	_refresh_limbs()
 	_refresh_job()
 	_refresh_abilities()
