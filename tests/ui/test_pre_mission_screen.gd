@@ -476,6 +476,12 @@ func test_every_card_wears_its_units_aura_ring_around_the_portrait() -> void:
 		# sprite rather than under it, and it is why nothing else in the column holds one.
 		assert_object(ring.portrait).is_same(card.unit.unit_data.map_sprite)
 		assert_that(ring.ground).is_equal(AuraRing.Ground.SKINNED)
+		# It frames the CHARACTER, not the canvas: every map sprite draws its ink in the lower half of
+		# its sheet, so an ink-centred ring sits BELOW the box's middle and a box-centred one does not.
+		# Without this the difference is invisible to a headless suite -- a mutant proved it.
+		assert_float(ring._centre.y).override_failure_message(
+			"the ring is centred on the sprite's canvas, so it frames the empty half above the "
+			+ "character").is_greater(ring.size.x * 0.5)
 
 		# THE RESERVATION, as an assertion rather than a comment: the ring ends above the stat grid,
 		# so the card's bottom-left region is still empty for the proficiency readout to land in.
