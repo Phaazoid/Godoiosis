@@ -68,6 +68,10 @@ const FAINT_ALPHA := 0.16               # an element this unit can never grow
 # colours (the pre-mission card); AUTHORED is the dev's own element wheel (the inspect panel).
 enum Ground { AUTHORED, SKINNED }
 
+# What this ring is wrapped around: a map SPRITE, whose character sits in the lower half of its
+# canvas, or a PORTRAIT, which fills its own box. It decides where the centre is and nothing else.
+enum Fit { INK, BOX }
+
 # One element's line in the readout. rows() is the model; everything below only draws it.
 class Row:
 	var element: Elemental.Element = Elemental.Element.NONE
@@ -83,6 +87,7 @@ var portrait: Texture2D                 # drawn in the middle, card-side; the pa
 # headless case can assert -- _gui_input takes a synthetic motion event and this is the answer.
 var hovered: Elemental.Element = Elemental.Element.NONE
 
+var _fit: Fit = Fit.BOX
 var _centre := Vector2.ZERO
 var _outer := 0.0
 var _inner := 0.0
@@ -146,11 +151,13 @@ static func for_portrait(target: Unit, sprite: Texture2D, box_px: float) -> Aura
 	ring.unit = target
 	ring.portrait = sprite
 	ring.ground = Ground.SKINNED
-	ring._centre = MapSpriteInk.ink_centre(box_px)
-	ring._inner = MapSpriteInk.ink_reach(box_px) + CLEARANCE
-	ring._outer = ring._inner / (1.0 - BAND_RATIO)
+	ring._fit = Fit.INK
 	# Tall enough for the band below the ink; the ink sits low, so the ring never clears the top edge.
-	ring.custom_minimum_size = Vector2(box_px, ceilf(ring._centre.y + ring._outer))
+	# The WIDTH is what the column gives us and everything else is derived from the live rect (see
+	# _layout), so this is the one place a number is stated.
+	var reach := MapSpriteInk.ink_reach(box_px) + CLEARANCE
+	ring.custom_minimum_size = Vector2(box_px,
+		ceilf(MapSpriteInk.ink_centre(box_px).y + reach / (1.0 - BAND_RATIO)))
 	ring._ready_common()
 	return ring
 
@@ -163,14 +170,11 @@ static func for_portrait(target: Unit, sprite: Texture2D, box_px: float) -> Aura
 # 96px portrait needs a 162px box -- +66px of header against the 72px of headroom the panel has
 # (measured: its body wants 648 of 720 before this ticket). 108 costs 12 and reads as a ring laid on
 # a portrait, which is the ordinary form of this motif anyway.
-static func over_portrait(target: Unit, box_px: float) -> AuraRing:
+static func over_portrait(target: Unit) -> AuraRing:
 	var ring := AuraRing.new()
 	ring.unit = target
 	ring.ground = Ground.AUTHORED
-	ring._centre = Vector2(box_px, box_px) * 0.5
-	ring._outer = box_px * 0.5
-	ring._inner = ring._outer * (1.0 - BAND_RATIO)
-	ring.custom_minimum_size = Vector2(box_px, box_px)
+	ring._fit = Fit.BOX
 	ring._ready_common()
 	return ring
 
@@ -182,8 +186,31 @@ func _ready_common() -> void:
 	# below us, so the same is true one node along.
 	mouse_filter = Control.MOUSE_FILTER_STOP
 	texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	resized.connect(_layout)
+	_layout()
 	_bind()
 	refresh()
+
+
+# THE GEOMETRY IS DERIVED FROM THE RECT THIS RING ACTUALLY OCCUPIES, never from a size passed in.
+# The panel's ring is a FULL_RECT child of a Panel, and a Panel aggregates nothing -- so a constant
+# here would be a second answer to "how big is the ring" that the scene silently overrules, and the
+# two would disagree the day either moved. Only the CARD states a number, because there its own
+# minimum is what makes the column that wide.
+func _layout() -> void:
+	match _fit:
+		Fit.INK:
+			# The card: centred on the CHARACTER, not the canvas -- a 32x32 map sprite draws its ink
+			# in the lower half, so a box-centred ring misses by a third of the box (#560).
+			_centre = MapSpriteInk.ink_centre(size.x)
+			_inner = MapSpriteInk.ink_reach(size.x) + CLEARANCE
+			_outer = _inner / (1.0 - BAND_RATIO)
+		Fit.BOX:
+			# The panel: a portrait fills its own square, so the ring is concentric with it.
+			_centre = size * 0.5
+			_outer = minf(size.x, size.y) * 0.5
+			_inner = _outer * (1.0 - BAND_RATIO)
+	queue_redraw()
 
 
 # Everything that can change under a standing ring: the pool itself moves when a limb is lost.

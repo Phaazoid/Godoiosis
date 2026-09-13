@@ -13,9 +13,11 @@ extends Panel
 # later draws on top, which is what lets the hover readout's scrim land ON the portrait rather than
 # behind it. Built once and told, never rebuilt -- it owns hover state, and freeing a node the cursor
 # is inside is #745's trap.
+#
+# ITS SIZE IS THIS PANEL'S, which is why no number is passed: the ring is a FULL_RECT child and
+# derives its geometry from the rect it lands in, so the .tscn's 108 is the one answer.
 
 const FALLBACK: Texture2D = preload("res://Art/Units/Portraits/faceless_one.png")
-const RING_PX := 108.0
 
 @onready var portrait_texture: TextureRect = $PortraitTexture
 
@@ -30,7 +32,7 @@ func set_unit(unit: Unit):
 		return
 	portrait_texture.texture = unit.unit_data.portrait if unit.unit_data.portrait != null else FALLBACK
 	if _aura_ring == null:
-		_aura_ring = AuraRing.over_portrait(unit, RING_PX)
+		_aura_ring = AuraRing.over_portrait(unit)
 		_aura_ring.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 		add_child(_aura_ring)
 	else:

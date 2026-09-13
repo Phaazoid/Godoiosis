@@ -157,7 +157,7 @@ func test_a_pool_past_the_display_cap_still_states_its_real_depth() -> void:
 # motion event is the real door -- _gui_input is what the engine calls.
 func test_the_hovered_sector_is_the_one_the_cursor_is_in() -> void:
 	var celest := _alchemist([EARTH, FIRE, AETHER], {FIRE: 2, EARTH: 1, AETHER: 2})
-	var ring: AuraRing = auto_free(AuraRing.over_portrait(celest, 160.0))
+	var ring := await _sized_ring(celest, 160.0)
 	var centre := Vector2(80, 80)
 
 	for i in AuraRing.WHEEL.size():
@@ -172,7 +172,7 @@ func test_the_hovered_sector_is_the_one_the_cursor_is_in() -> void:
 
 func test_a_motion_event_sets_and_clears_the_highlight() -> void:
 	var celest := _alchemist([EARTH, FIRE, AETHER], {FIRE: 2, EARTH: 1, AETHER: 2})
-	var ring: AuraRing = auto_free(AuraRing.over_portrait(celest, 160.0))
+	var ring := await _sized_ring(celest, 160.0)
 	assert_that(ring.hovered).is_equal(Elemental.Element.NONE)
 
 	var angle := AuraRing.ARC_START + 3.5 * AuraRing.SECTOR   # sector 3 is AETHER
@@ -184,6 +184,16 @@ func test_a_motion_event_sets_and_clears_the_highlight() -> void:
 	motion.position = Vector2(80, 80)
 	ring._gui_input(motion)
 	assert_that(ring.hovered).is_equal(Elemental.Element.NONE)
+
+
+# The ring DERIVES its geometry from the rect it lands in, so a case about angles has to give it one:
+# a Control built with .new() and never laid out is 0x0, and every point then falls in one sector.
+func _sized_ring(target: Unit, box_px: float) -> AuraRing:
+	var ring: AuraRing = auto_free(AuraRing.over_portrait(target))
+	add_child(ring)
+	ring.size = Vector2(box_px, box_px)
+	await await_idle_frame()
+	return ring
 
 
 # --- the ink box ---------------------------------------------------------------------------------
