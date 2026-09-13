@@ -346,7 +346,7 @@ func _refresh_stash() -> void:
 		# has nobody to validate against, so the marking lives on the unit card (dev, 2026-09-05). What
 		# a piece DEMANDS is the other question, and the one a list of loose gear can answer -- so the
 		# armor gate rides the tooltip, through the same _gate_text spelling the card's sentence uses.
-		var tip := item.describe() if item.describe() != "" else item.display_name
+		var tip := item.describe() if item.describe() != "" else item.shown_name()
 		var armor := item as ArmorData
 		if armor != null and armor.requirement_text() != "":
 			tip += "
@@ -357,7 +357,7 @@ Requires: %s" % armor.requirement_text()
 		line.add_theme_constant_override("separation", 4)
 		row.add_child(line)
 		var label := Label.new()
-		label.text = item.display_name
+		label.text = item.shown_name()
 		label.clip_text = true
 		label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		label.add_theme_font_size_override("font_size", 11)
@@ -406,7 +406,6 @@ func _squad_block(squad: Squad) -> Control:
 	title.text = ("%s leads" % squad.leader.get_unit_name()) if members.size() > 1 else "unsquadded"
 	title.add_theme_font_size_override("font_size", 10)
 	title.add_theme_color_override("font_color", QueueStyle.ink(QueueStyle.Role.HEADER_TEXT))
-	title.clip_text = true
 	column.add_child(title)
 
 	var row := HBoxContainer.new()
@@ -419,6 +418,15 @@ func _squad_block(squad: Squad) -> Control:
 
 # A member, in its squad's own colour -- the same hue the map draws its ring in, so the strip and the
 # board name the same squad the same way.
+#
+# NEITHER NAME ON THIS STRIP CLIPS, and that is the opposite answer to PreMissionCard's on purpose
+# (#944). There, clipping is load-bearing: the card grid divides a fixed row three ways, so a label
+# that demanded width would walk a column out of the region. HERE the strip is an HFlowContainer
+# inside a scroller -- it WRAPS what does not fit and scrolls what still does not -- so a block wide
+# enough to spell its own contents costs nothing, and the 46-px slot below is a minimum rather than
+# a lid. The squad title was the visible half (a solo squad made its block 46 px wide, so
+# "unsquadded" drew as "unsquadd"); the member name is the same trap one name longer than the
+# roster currently ships.
 func _ring(member: Unit, squad: Squad) -> Control:
 	var slot := VBoxContainer.new()
 	slot.add_theme_constant_override("separation", 2)
@@ -450,7 +458,6 @@ func _ring(member: Unit, squad: Squad) -> Control:
 
 	var name_label := Label.new()
 	name_label.text = member.get_unit_name()
-	name_label.clip_text = true
 	name_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	name_label.add_theme_font_size_override("font_size", 9)
 	name_label.add_theme_color_override("font_color", QueueStyle.ink(QueueStyle.Role.HEADER_TEXT))
@@ -601,7 +608,7 @@ func _refresh_hint() -> void:
 		return
 	var holder := "the stash" if _selected_owner == null else _selected_owner.get_unit_name()
 	_stash_hint.text = "%s, from %s. Click a unit or the stash to place it." % [
-		_selected_item.display_name, holder]
+		_selected_item.shown_name(), holder]
 
 
 # Esc lets go of what is in hand -- and ONLY then. The RULE is unchanged since #740; what it

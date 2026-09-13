@@ -135,8 +135,8 @@ func _build_unit_half() -> Control:
 	who.add_theme_constant_override("separation", 7)
 	left.add_child(who)
 
-	# Sprite with the name under it -- his sketch's top-left, and the name is clipped so a long one
-	# cannot widen the column it sits in.
+	# The sprite's own column, SPRITE wide, which is what leaves `meta` the rest of the row. The NAME
+	# used to live in here too -- see below for why it cannot.
 	var identity := VBoxContainer.new()
 	identity.custom_minimum_size.x = SPRITE
 	identity.add_theme_constant_override("separation", 2)
@@ -149,17 +149,6 @@ func _build_unit_half() -> Control:
 	# (dev, 2026-09-12), and this is the one placement of the five drawn that does not spend it.
 	_aura_ring = AuraRing.for_portrait(unit, unit.unit_data.map_sprite, SPRITE)
 	identity.add_child(_aura_ring)
-
-	var name_label := Label.new()
-	name_label.text = unit.get_unit_name()
-	name_label.clip_text = true
-	name_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	name_label.tooltip_text = unit.get_unit_name()
-	name_label.mouse_filter = Control.MOUSE_FILTER_STOP
-	# NAME_TEXT, not TITLE_TEXT: this card's ground is section_box(), which is PAPER under parchment,
-	# and TITLE_TEXT is the role that stays light for the dark frame -- the same cream, exactly (#814).
-	name_label.add_theme_color_override("font_color", QueueStyle.ink(QueueStyle.Role.NAME_TEXT))
-	identity.add_child(name_label)
 
 	# Beside the sprite: what shape they are in, what they do, and what that grants them.
 	var meta := VBoxContainer.new()
@@ -178,6 +167,25 @@ func _build_unit_half() -> Control:
 	_abilities_row.add_theme_constant_override("h_separation", 3)
 	_abilities_row.add_theme_constant_override("v_separation", 2)
 	meta.add_child(_abilities_row)
+
+	# THE NAME SPANS THE WHOLE COLUMN, and that is the fix rather than a widening (#944). It used to
+	# sit inside `identity`, where a VBox child is exactly its container's width -- so a name was
+	# clipped to the 52-px PORTRAIT column, and because it draws CENTRED it lost its first letter and
+	# its last at once: "Noemie" rendered as a mangled word rather than as a truncated one. The clip
+	# STAYS -- it is this file's header law, and what keeps the card's minimum size a constant -- but
+	# the box it clips against is now the unit half, which is five times the room and holds every
+	# name the game ships. Left-aligned so it grows rightwards into that room (dev, 2026-09-13:
+	# "cut off instead of continuing to the right"), and it still sits under the sprite, because
+	# `who` is as tall as the ring and this is the next row down.
+	var name_label := Label.new()
+	name_label.text = unit.get_unit_name()
+	name_label.clip_text = true
+	name_label.tooltip_text = unit.get_unit_name()
+	name_label.mouse_filter = Control.MOUSE_FILTER_STOP
+	# NAME_TEXT, not TITLE_TEXT: this card's ground is section_box(), which is PAPER under parchment,
+	# and TITLE_TEXT is the role that stays light for the dark frame -- the same cream, exactly (#814).
+	name_label.add_theme_color_override("font_color", QueueStyle.ink(QueueStyle.Role.NAME_TEXT))
+	left.add_child(name_label)
 
 	# Pushed to the bottom of the column, so the card's spare room sits between the kit readout and
 	# the numbers rather than under everything.
@@ -568,7 +576,9 @@ func _item_row(item: Item) -> Control:
 	row.add_child(line)
 
 	var name_label := Label.new()
-	name_label.text = item.display_name
+	# shown_name(), never the field (#945): a DERIVED generic (#835) carries no name of its own and
+	# reads its family's through, so the field is empty for every unmodified weapon a unit starts with.
+	name_label.text = item.shown_name()
 	name_label.clip_text = true
 	name_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	name_label.add_theme_font_size_override("font_size", 10)
@@ -587,8 +597,8 @@ func _item_row(item: Item) -> Control:
 		warn.add_theme_color_override("font_color", QueueStyle.ink(QueueStyle.Role.ROW_REFUSED_BORDER))
 		line.add_child(warn)
 
-	row.tooltip_text = UiText.wrap(item.display_name if reason == "" else
-		"%s — %s" % [item.display_name, reason])
+	row.tooltip_text = UiText.wrap(item.shown_name() if reason == "" else
+		"%s — %s" % [item.shown_name(), reason])
 	row.mouse_filter = Control.MOUSE_FILTER_STOP
 	return row
 

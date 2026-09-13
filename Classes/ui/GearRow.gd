@@ -60,7 +60,8 @@ func build_drag_preview(grab: Vector2) -> Control:
 	wrapper.add_child(plate)
 
 	var label := Label.new()
-	label.text = item.display_name
+	# shown_name(), never the field (#945) -- the same door the row it was dragged off reads.
+	label.text = item.shown_name()
 	label.clip_text = true
 	label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	label.add_theme_font_size_override("font_size", 11)
