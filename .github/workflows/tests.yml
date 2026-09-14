@@ -229,3 +229,7 @@ jobs:
         with:
           name: test-reports-${{ github.run_number }}-${{ matrix.shard }}
           path: reports/
+          # SEVEN DAYS, NOT THE 90-DAY DEFAULT (2026-09-14). Six shards a run, ~25 runs a day, so the
+          # default kept ~14,000 reports at steady state -- past the plan's storage quota, the one
+          # Actions cost the self-hosted runners cannot move. Nobody has opened a two-week-old report.
+          retention-days: 7
