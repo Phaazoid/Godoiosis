@@ -1,23 +1,31 @@
 extends Object
 class_name MapSpriteInk
 
-# WHERE THE CHARACTER ACTUALLY IS inside a 32x32 map sprite -- the measurement, not one surface's
-# pixels (#930, hoisting #560's scan).
+# WHERE THE CHARACTER ACTUALLY IS inside a map sprite -- the measurement, not one surface's pixels
+# (#930, hoisting #560's scan).
 #
-# Every shipped map sprite draws its ink in the LOWER half of its canvas: x 8..23, y 13..31, ending
-# on row 31. So anything that frames a portrait -- a ring, a disc, a crop window -- and centres on
-# the CANVAS frames padding and misses the character by a third of the box. #560 found this scanning
-# the deployed-force strip's disc; #930's aura ring is the second consumer, at a different size.
+# Every shipped map sprite draws its ink in the LOWER part of its canvas, ending on the bottom row.
+# So anything that frames a portrait -- a ring, a disc, a crop window -- and centres on the CANVAS
+# frames padding and misses the character. #560 found this scanning the deployed-force strip's disc;
+# #930's aura ring is the second consumer, at a different size.
 #
 # WHY A SHARED HOME RATHER THAN A SECOND CONSTANT: PreMissionScreen.INK_OFFSET is this measurement
 # already solved, but solved AT 24px -- a number, not the fact under it. A second surface needing the
 # same fact at 52px cannot reuse a px offset, and retyping the texel rect is how two answers to one
-# question start drifting. window_offset() below reproduces the shipped offset exactly, which is what
-# makes this a MOVE rather than a rewrite (test_aura_ring pins that).
+# question start drifting.
+#
+# THE BASELINE IS NOW BUILT, NOT FOUND (#937). The Fire Emblem art shared a baseline by luck -- every
+# one of those 18 sprites happened to end on row 31 -- and the Zerie art replacing it does not: its
+# feet landed anywhere from row 54 to row 60 of a 100px cell. `tools/sprites/extract_stills.gd`
+# re-canvasses each still onto SHEET x SHEET with its feet on the bottom row, so the spread is zero
+# by construction rather than by an artist's care. Re-run that tool if the art is ever re-cut, and
+# take INK_RECT from what it prints.
 
-const SHEET := 32
-# x 8..23, y 13..31 inclusive -- Rect2i's size is exclusive, hence 16 x 19.
-const INK_RECT := Rect2i(8, 13, 16, 19)
+const SHEET := 64
+# The MEDIAN ink box over all 42 characters, feet on the last row. Median rather than union, for
+# #560's reason: a ring sized to the widest member hangs slack around everyone else, and the outliers
+# (Werebear, Orc rider, Minotaur, Flame Golem) are this pack's Dragon -- they overflow it on purpose.
+const INK_RECT := Rect2i(20, 44, 23, 20)
 
 
 # Where the character's middle sits when the sheet is drawn into a box_px square.

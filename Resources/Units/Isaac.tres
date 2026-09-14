@@ -1,12 +1,12 @@
 [gd_resource type="Resource" script_class="UnitData" format=3]
 
-[ext_resource type="Texture2D" path="res://Art/Units/MapSprites/Mage_Downed.png" id="1_6qlil"]
+[ext_resource type="Texture2D" path="res://Art/Units/MapSprites/Wizard_Downed.png" id="1_6qlil"]
 [ext_resource type="Script" path="res://Classes/jobs/AbilityData.gd" id="1_eaaxa"]
 [ext_resource type="Texture2D" path="res://Art/Units/Portraits/hair_mcgee.png" id="2_vwufm"]
-[ext_resource type="Texture2D" path="res://Art/Units/MapSprites/Mage.png" id="3_eo7yh"]
+[ext_resource type="Texture2D" path="res://Art/Units/MapSprites/Wizard.png" id="3_eo7yh"]
 [ext_resource type="Script" path="res://Classes/units/UnitData.gd" id="3_pvpur"]
 [ext_resource type="Script" uid="uid://jytv7xrjv6l1" path="res://Classes/items/Item.gd" id="4_6qlil"]
-[ext_resource type="Texture2D" path="res://Art/Units/MapSprites/Mage_Moving.png" id="4_bijhs"]
+[ext_resource type="Texture2D" path="res://Art/Units/MapSprites/Wizard_Moving.png" id="4_bijhs"]
 [ext_resource type="Resource" path="res://Resources/RuneVariants/FreezeRune.tres" id="8_eo7yh"]
 
 [resource]

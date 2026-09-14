@@ -36,7 +36,13 @@ class_name ActionMenuController
 
 const MENU_MARGIN := 8.0
 const MAX_RING_DEPTH := 3      # categories, their children, and a preview beyond both
-const SPRITE_FIT := 1.4        # sprite box as a multiple of DEAD_ZONE_RADIUS (< 2.0 keeps it inside)
+# The character's INK as a multiple of DEAD_ZONE_RADIUS -- not the sheet, which is mostly padding.
+# Re-derived at #937 so the drawn character is the same size it was at 32x32 (1.4 of a 32px canvas
+# whose ink was 19 rows == 0.956 of a 23-texel ink box); the visual is unchanged, the basis is not.
+const SPRITE_FIT := 0.956
+# How far below the ring's centre a unit's feet sit before CENTRE_SPRITE_LIFT raises them, as a
+# fraction of DEAD_ZONE_RADIUS. 0.7 reproduces where the sheet-centred version put them.
+const CENTRE_SPRITE_SEAT := 0.7
 const ARC_SAMPLES_PER_SLICE := 12
 const MIN_LABEL_FONT_SIZE := 8   # a shrunk label stops here; below it the name is not a readout
 const READOUT_PADDING := 8.0     # breathing room between the readout's text and its panel edge
@@ -489,7 +495,14 @@ func _draw_centre() -> void:
 # every base map sprite ends its ink on the bottom row of its texture -- so a single lift puts every
 # unit's feet on one line, and what differs between them is only how far UP the art reaches. That is
 # also why SPRITE_FIT cannot simply grow into the disc's empty crown: the crown is headroom for the
-# tallest art (Dragon draws 26 of its 32 rows where most units draw 16), not slack.
+# tallest art (Werebear and Orc rider draw 37 rows where most units draw 20), not slack.
+#
+# EVERYTHING HERE IS MEASURED OFF THE INK, NEVER THE CANVAS (#937). Fitting the sheet was correct
+# only while the art filled it: the Zerie sprites carry a 64px cell holding a ~20px character, so a
+# canvas fit drew everyone at a third of their old size while looking perfectly reasonable in the
+# code. Both numbers below were then re-derived to land the character exactly where the Fire Emblem
+# art landed, so this ticket changed no pixel of this surface -- and the SEAT is a fraction of
+# DEAD_ZONE_RADIUS so that dragging the dead-zone knob still moves the portrait with its disc.
 func _draw_centre_sprite() -> void:
 	var tex := local_unit.get_map_sprite_texture()
 	if tex == null:
@@ -497,9 +510,12 @@ func _draw_centre_sprite() -> void:
 	var native := Vector2(tex.get_width(), tex.get_height())
 	if native.x <= 0.0 or native.y <= 0.0:
 		return
-	var scale := (DEAD_ZONE_RADIUS * SPRITE_FIT) / maxf(native.x, native.y)
+	var ink := Vector2(MapSpriteInk.INK_RECT.size)
+	var scale := (DEAD_ZONE_RADIUS * SPRITE_FIT) / maxf(ink.x, ink.y)
 	var size := native * scale
-	var origin := _centre - size * 0.5 - Vector2(0.0, CENTRE_SPRITE_LIFT)
+	# The ink ends on the sheet's bottom row, so the drawn rect's bottom edge IS the character's feet.
+	var feet := _centre.y + DEAD_ZONE_RADIUS * CENTRE_SPRITE_SEAT - CENTRE_SPRITE_LIFT
+	var origin := Vector2(_centre.x - size.x * 0.5, feet - size.y)
 	_root.draw_texture_rect(tex, Rect2(origin, size), false)
 
 # Whose menu this is, drawn ALWAYS -- not gated on the hover the readout waits for (dev call): the

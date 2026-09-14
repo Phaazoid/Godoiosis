@@ -1,9 +1,9 @@
 [gd_resource type="Resource" script_class="UnitData" format=3 uid="uid://b56p2d58ri1hr"]
 
-[ext_resource type="Texture2D" uid="uid://dnujumhyrhxk1" path="res://Art/Units/MapSprites/Archer_Downed.png" id="1_fq6i1"]
+[ext_resource type="Texture2D" uid="uid://dpd0m64njf8rn" path="res://Art/Units/MapSprites/Archer_Downed.png" id="1_fq6i1"]
 [ext_resource type="Script" uid="uid://7w7ajveltxx5" path="res://Classes/jobs/AbilityData.gd" id="2_2w65q"]
-[ext_resource type="Texture2D" uid="uid://fru8tri4sat1" path="res://Art/Units/MapSprites/Archer.png" id="3_t1a4k"]
-[ext_resource type="Texture2D" uid="uid://bjd6rwjgyea45" path="res://Art/Units/MapSprites/Archer_Moving.png" id="4_qu2qa"]
+[ext_resource type="Texture2D" uid="uid://bgvvkigtcobal" path="res://Art/Units/MapSprites/Archer.png" id="3_t1a4k"]
+[ext_resource type="Texture2D" uid="uid://cd51n0ptxrquf" path="res://Art/Units/MapSprites/Archer_Moving.png" id="4_qu2qa"]
 [ext_resource type="Texture2D" uid="uid://bg707w6kaqv1a" path="res://Art/Units/Portraits/hair_mcgee_blond.png" id="5_tddgv"]
 [ext_resource type="Script" uid="uid://cvvknuw621ar2" path="res://Classes/units/UnitData.gd" id="6_l7hev"]
 [ext_resource type="Script" uid="uid://jytv7xrjv6l1" path="res://Classes/items/Item.gd" id="7_tgyxx"]
