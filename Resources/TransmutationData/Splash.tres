@@ -4,7 +4,6 @@
 [ext_resource type="Texture2D" uid="uid://c0sxhv5hl83yc" path="res://Art/Icons/StateIcons/WetIcon.png" id="2_emron"]
 [ext_resource type="Script" uid="uid://dle5ob08qngde" path="res://Classes/presentation/EffectLook.gd" id="2_jx6qm"]
 [ext_resource type="Resource" uid="uid://cu0du4b08ervn" path="res://Resources/AttackShapes/Wide 3 Deep 2.tres" id="3_shape0"]
-[ext_resource type="AudioStream" uid="uid://bjody53h7ced4" path="res://Audio/SFX/water.mp3" id="4_watsp"]
 
 [resource]
 script = ExtResource("1_6nsqn")
@@ -18,5 +17,4 @@ attack_shape = ExtResource("3_shape0")
 hits_allies = true
 targets = 2
 deals_no_damage = true
-sound = ExtResource("4_watsp")
 metadata/_custom_type_script = "uid://bgbidu2bbf33l"

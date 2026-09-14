@@ -2,7 +2,6 @@
 
 [ext_resource type="Script" uid="uid://dle5ob08qngde" path="res://Classes/presentation/EffectLook.gd" id="1_2uaw2"]
 [ext_resource type="Script" uid="uid://ddqeee7njjjq2" path="res://Classes/weapons/WeaponAttackData.gd" id="2_wad"]
-[ext_resource type="AudioStream" uid="uid://bts214ywgrs2g" path="res://Audio/SFX/chainsword.mp3" id="3_75kvo"]
 
 [resource]
 script = ExtResource("2_wad")
@@ -14,5 +13,4 @@ display_name = "Slash"
 power = 3
 vertical_rule = 1
 damage_kind = 1
-sound = ExtResource("3_75kvo")
 metadata/_custom_type_script = "uid://ddqeee7njjjq2"

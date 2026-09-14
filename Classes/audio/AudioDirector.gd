@@ -26,7 +26,13 @@ class_name AudioDirector
 # The FALLBACK voice -- what a blow sounds like when its attack authors nothing, which is most of
 # them. An attack's own sound is `AttackData.sound` and beats this; the lethality rungs (a kill, a
 # Crisis) are the next slice.
-const IMPACT: AudioStream = preload("res://Audio/SFX/impact.mp3")
+#
+# UNASSIGNED SINCE 2026-09-14 (#139). The placeholder clips left the build on two counts -- loud and
+# unmixed (dev: "bad sound reads as more broken than no sound"), and provenance nobody could
+# recover. They are staged at C:/Iosis/old-game-sounds/sfx/, not deleted. The RULE below stays:
+# a damaging blow gets the generic voice and a heal never does, so assigning a licensed clip here
+# is the whole of bringing it back. cue_for answers null for every unvoiced blow until then.
+const IMPACT: AudioStream = null
 
 const BUS_NAME := "SFX"
 const POOL_SIZE := 4

@@ -97,7 +97,6 @@ const ENTRIES := {
 		},
 	],
 	Section.SOUND: [
-		{"name": "SoundBible.com", "role": "Sound effects", "detail": "", "required": false},
 		{
 			"name": "Tim Krief",
 			"role": "Typing sounds (Dialogic example assets)",
