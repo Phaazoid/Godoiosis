@@ -23,6 +23,8 @@ on:
   pull_request:
     branches: [main]
     paths-ignore: ['docs/**', '**.md']
+  # BY HAND, for measuring a runner change without a throwaway commit (2026-09-14).
+  workflow_dispatch:
 
 # THE ONE HAND-MAINTAINED SHARD LIST, AND THE ONLY PLACE IT IS WRITTEN. pres-rest subtracts
 # exactly these, so "pres-rest runs what pres-a does not" is true by CONSTRUCTION rather than by
@@ -46,7 +48,13 @@ env:
 
 jobs:
   test:
-    runs-on: ubuntu-latest
+    # WHERE A SHARD RUNS IS THE `RUNNER` REPO VARIABLE, NOT THIS FILE (2026-09-14). `self-hosted`
+    # sends every shard to the runners registered on the dev's machine -- Ubuntu in WSL2, so the
+    # same Linux Godot, sidecar guard and two-pass import, at zero Actions minutes. Unset, it is
+    # GitHub's image again with no edit here. PRIVATE REPO ONLY: a self-hosted runner executes
+    # whatever a pull_request carries, and a public repo's fork PRs carry a stranger's. Clear the
+    # variable before ever going public.
+    runs-on: ${{ vars.RUNNER || 'ubuntu-latest' }}
     timeout-minutes: 15
     strategy:
       # EVERY SHARD REPORTS. One red shard must not cancel the other four: a failing case
