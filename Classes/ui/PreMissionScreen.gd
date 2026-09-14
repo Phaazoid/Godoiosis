@@ -39,6 +39,12 @@ const REGION_GAP := 12
 const RING := 28
 const RING_WINDOW := 24
 
+# A squad block's heading label, found by NODE rather than by its wording. The strip test has to
+# find the title to check it draws in full, and it used to find it by matching the word the title
+# said -- so renaming "unsquadded" to "solo" reported a MISSING title rather than a renamed one.
+# The words on this screen are the dev's to change; this identity is not.
+const SQUAD_TITLE_NODE := "SquadTitle"
+
 var _controller: MissionController
 var _cards: Array[PreMissionCard] = []
 var _grid: GridContainer
@@ -403,6 +409,7 @@ func _squad_block(squad: Squad) -> Control:
 
 	var members: Array[Unit] = squad.get_members()
 	var title := Label.new()
+	title.name = SQUAD_TITLE_NODE
 	title.text = ("%s leads" % squad.leader.get_unit_name()) if members.size() > 1 else "solo"
 	title.add_theme_font_size_override("font_size", 10)
 	title.add_theme_color_override("font_color", QueueStyle.ink(QueueStyle.Role.HEADER_TEXT))

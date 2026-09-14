@@ -545,33 +545,44 @@ func test_every_roster_card_draws_its_units_name_in_full() -> void:
 
 # THE DEPLOYED STRIP, the same rule at the surface that answers it the other way round: these labels
 # do not clip at all, because the strip WRAPS and SCROLLS where the card grid cannot. The squad title
-# is the half that was visibly broken -- a solo squad's block is one 46-px slot wide, so "unsquadded"
-# drew as "unsquadd".
+# is the half that was visibly broken -- a solo squad's block is one 46-px slot wide, and the title
+# then read "unsquadded", which drew as "unsquadd".
 func test_the_deployed_strip_spells_every_name_and_squad_title_in_full() -> void:
 	if not await _enter_phase():
 		return
 	var screen := _screen()
 	assert_object(screen).is_not_null()
 
-	var titles := 0
-	var checked := 0
+	# EVERY TITLE, found by NODE and never by what it says. This case used to recognise a title by
+	# matching the word one said, so renaming "unsquadded" to "solo" reported a missing title where the
+	# title had merely been reworded -- a test pinned on a word the dev authors. Asked per block rather
+	# than counted, which retires that guard entirely: a block drawing no title now fails by name.
+	var blocks: Array[Node] = screen._squads_row.get_children()
+	assert_int(blocks.size()).override_failure_message(
+		"the deployed strip drew no squad blocks at all").is_greater(0)
+	for block: Node in blocks:
+		var title := block.find_child(PreMissionScreen.SQUAD_TITLE_NODE, true, false) as Label
+		assert_object(title).override_failure_message(
+			"a squad block on the strip drew no title").is_not_null()
+		if title == null:
+			continue
+		assert_bool(_draws_in_full(title)).override_failure_message(
+			"the squad title \"%s\" is clipped on the deployed strip" % title.text).is_true()
+
+	# Then every label the strip draws, titles and member names alike.
+	var labels := 0
 	for node in _walk(screen._squads_row):
 		var label := node as Label
 		if label == null or label.text == "":
 			continue
-		checked += 1
-		if label.text == "unsquadded" or label.text.ends_with(" leads"):
-			titles += 1
+		labels += 1
 		assert_bool(_draws_in_full(label)).override_failure_message(
 			"\"%s\" is clipped on the deployed strip" % label.text).is_true()
 
-	# Both guards, because this case is entirely a loop: an empty strip and a strip of nameless chips
-	# would each pass every assertion above without one.
-	assert_int(titles).override_failure_message(
-		"no squad block drew a title, so the half that was visibly broken went unchecked") \
-		.is_greater(0)
-	assert_int(checked).override_failure_message(
-		"the strip drew no labelled chips at all").is_greater(titles)
+	# A strip of bare titles would pass the loop above: each block also names every member under its
+	# ring, so a strip that drew a member at all has more labels than it has blocks.
+	assert_int(labels).override_failure_message(
+		"the strip drew titles but no member names").is_greater(blocks.size())
 
 
 # --- a generic weapon lists as its family (#945) ---
