@@ -114,9 +114,15 @@ func _fire_at(hero: Unit, cell: Vector2i) -> void:
 # --- the wire ------------------------------------------------------------------------------------
 
 func test_a_landed_blow_reaches_the_director_and_plays() -> void:
-	# THE CASE THIS FILE EXISTS FOR. Deleting AudioDirector's volley_struck.connect leaves every
-	# other case here green -- the gate still classifies, the pool still plays when called by hand --
-	# and the game goes silent.
+	# THE CASE THIS FILE EXISTS FOR: an UNVOICED blow through the real volley_struck wire, heard as the
+	# generic voice. THE FORK IS DECLARED (#139): while AudioDirector.IMPACT is unassigned there is no
+	# generic voice to hear, and silence cannot tell a cut wire from a null cue -- so this side warns
+	# and stands down. The wire is NOT uncovered on that side: test_an_attack_that_authors_a_sound_
+	# plays_THAT_one_through_a_real_pass fires the same pass and hears the authored voice, and cutting
+	# the connect reds it. This case bites again the day a clip is assigned.
+	if AudioDirector.IMPACT == null:
+		push_warning("AudioDirector.IMPACT is unassigned; the generic-voice wire cannot be heard -- see the authored-voice case")
+		return
 	var hero := _spawn(Team.Faction.PLAYER, Vector2i(0, 2))
 	_arm(hero)
 	var victim := _spawn(Team.Faction.ENEMY, Vector2i(1, 2))
@@ -228,7 +234,14 @@ func test_authored_beats_the_default_and_silence_is_still_silence() -> void:
 
 	var plain := AttackAction.new()
 	plain.fired_attack = _swinger().main_attack
-	assert_object(AudioDirector.cue_for(plain)).is_same(AudioDirector.IMPACT)
+	# THE FORK IS DECLARED, not assumed (#139): the generic voice is unassigned while the placeholder
+	# clips are out of the build. On that side an unvoiced blow is SILENT, not a crash; the day a
+	# clip is assigned the other side pins that the plain blow falls back to it and not to nothing.
+	if AudioDirector.IMPACT == null:
+		assert_object(AudioDirector.cue_for(plain)).override_failure_message(
+			"no generic voice is assigned, so an unvoiced blow must answer silence").is_null()
+	else:
+		assert_object(AudioDirector.cue_for(plain)).is_same(AudioDirector.IMPACT)
 
 	var heal := AttackAction.new()
 	heal.fired_attack = _swinger(true).main_attack
@@ -240,9 +253,12 @@ func test_authored_beats_the_default_and_silence_is_still_silence() -> void:
 
 func test_more_cues_than_voices_steals_rather_than_growing_or_dropping() -> void:
 	var director := _director()
+	# Any stream will do -- the pool has no opinion about WHICH voice it steals for, and pinning the
+	# generic clip here made a pool law depend on a content asset (#139).
+	var voice := _own_stream()
 	var voices := director.pool_size()
 	for i in voices + 3:
-		director.play(AudioDirector.IMPACT)
+		director.play(voice)
 	assert_int(director.voices_playing()).override_failure_message(
 		"the pool grew or went silent under overload -- it should cap at its own size").is_equal(voices)
 
