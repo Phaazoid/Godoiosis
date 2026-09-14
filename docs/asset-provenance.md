@@ -21,7 +21,6 @@
 | what ships | origin | terms | credit | evidence |
 |---|---|---|---|---|
 | `Audio/Music/splendor_of_adventure.mp3`, `battlefield.mp3`, `enemy_approaching.mp3` | **Simeon Anfinrud**, original score written for this game (album "Iosis", 2014-15; ID3-tagged on every file). Two more tracks (*Journey*, *Boss Battle 1*) are staged and unused. | Co-developer's own work for this project; permission confirmed via the dev, 2026-09-14 | Music row, by track title | #139 audio comment 2026-09-10; `C:\Iosis\old-game-sounds\MANIFEST.md`; the ID3 tags themselves |
-| `Audio/SFX/` -- 7 clips (`air`, `chainsword`, `drill`, `fire`, `impact`, `springspear`, `water`) | Sourced by the dev for the GameMaker project, 2014-18; renamed to `snd_attack_*` **before** import, so no file in either repo records an origin (checked down to the GMS1.4 definitions at `c3potheds/iosis@43429d5e`). ID3 tags survive on three: `fire` = *Large Fireball*, **Mike Koenig**, SoundBible (soundbible.com/1348); `impact` = "Fight Sounds Punches", SoundBible-tagged, not findable under that title today; `chainsword` SoundBible-tagged, untitled. The other four carry nothing. | *Large Fireball* is **CC BY 3.0** -- a credit condition. The rest: unknown. | **RULED OUT OF THE DEMO BUILD, 2026-09-14** -- the dev's call, on feel (*"bad sound reads as more broken than no sound"*) and on provenance both. Until the PR that removes them lands, they ship with a courtesy SoundBible row and Koenig's condition unmet; once it lands this row moves to *Held, not shipped* below. | this row; #136 for the audio spine they leave behind |
 
 ## Ships -- engine and addons
 
@@ -41,7 +40,8 @@ Staged outside the repo, kept because the record's job is to answer "where did t
 | what | where | why it is out |
 |---|---|---|
 | Sara Shen's 32x32 unit and board sprites | `C:\Iosis\old-game-sprites\` | reference material for the art pass; never imported. Covered by her grant if used. |
-| The old game's audio: *Journey*, *Boss Battle 1*; `snd_attack_block`, `_earth`, `_miss`; and the originals of the seven clips above | `C:\Iosis\old-game-sounds\` (+ `MANIFEST.md`) | music unused; SFX provenance unknown |
+| The old game's unused audio: *Journey*, *Boss Battle 1*; `snd_attack_block`, `_earth`, `_miss` | `C:\Iosis\old-game-sounds\` (+ `MANIFEST.md`) | never imported |
+| **The seven attack clips that shipped until 2026-09-14** -- `air`, `chainsword`, `drill`, `fire`, `impact`, `springspear`, `water` | `C:\Iosis\old-game-sounds\sfx\` (originals, bytes untouched) | Ruled out of the demo build by the dev, on feel (*"bad sound reads as more broken than no sound"*) and on provenance. `fire` is *Large Fireball*, Mike Koenig, SoundBible, CC BY 3.0 -- a credit condition, moot while it does not ship; `impact` and `chainsword` are SoundBible-tagged but unidentifiable; the other four are untraceable down to the GMS1.4 definitions at `c3potheds/iosis@43429d5e`. `AudioDirector.IMPACT` is unassigned on purpose and the rule around it stays; a licensed clip needs a row here before it goes in. |
 | Candidate tilesheets -- Solaria, ProjectUtumno, Textures-16, *Big 32x32 Tileset* (PxlDev / Team Melon, own licence: free for personal and commercial use, credit if commercial) | `C:\Iosis\potential-tilesheets\` | 1764 files that nothing referenced and that were shipping anyway; moved out in PR #916 |
 | Zerie's source sheets (the 100x100 animation strips) | the dev's purchase folder | the pack's no-redistribution clause; only derived stills are committed |
 
