@@ -297,7 +297,7 @@ static func _ground_point_of(sheet: SpriteFrames) -> Vector2:
 	var key := sheet.resource_path if not sheet.resource_path.is_empty() else str(sheet.get_instance_id())
 	if not _warned_sets.has(key):
 		_warned_sets[key] = true
-		push_warning("UnitSprite3D: '%s' carries no ground_point; frames will hang from the still pivot (#634). Regenerate it with tools/zoomanim." % key)
+		push_warning("UnitSprite3D: '%s' carries no ground_point; frames will hang from the still pivot (#634). Author one on the set (#635)." % key)
 	return Vector2(-1, -1)
 
 

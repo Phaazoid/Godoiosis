@@ -29,9 +29,10 @@ class_name Credits
 # Sara's grant and the Solaria licence are conditions, and shipping without those rows ships outside
 # the terms. Do not promote this one to match them.
 #
-# Art/Units/ZoomAnimations/ IS STILL A RIP and is still absent for the original reason. That folder
-# is a separate removal; until it goes, this page naming everything it ships is true of the map art
-# and not yet of the battle-scene sheets.
+# AND THE BATTLE-ZOOM SHEETS ARE GONE TOO (#139, 2026-09-14), which is what finally makes this page's
+# claim whole: every asset the build ships is named here. `Art/Units/ZoomAnimations/` held the last
+# Fire Emblem rips and was deleted with no replacement -- the zoom has no art until #603 resumes,
+# which is a content gap rather than a credits one. If art returns, it gets a row like anything else.
 
 # DEVELOPMENT IS ONE ROW CARRYING BOTH NAMES, not a row each (dev, 2026-09-12) -- the role is shared
 # rather than held twice, and a single line is what says so. Order is alphabetical by surname.

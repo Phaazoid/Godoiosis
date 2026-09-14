@@ -4,7 +4,7 @@
 # NO SCENE HERE, and that is the point of StagingFlight being its own class: the executor awaits a
 # total and the 3D host draws a progress, both off one plan, and the plan is arithmetic. So these
 # cases state a cell list and a set of knobs and read the answer, with no board, no viewport and no
-# waiting on frames -- the split CardSheet made for the same reason one ticket earlier.
+# waiting on frames -- the same split AttackLint made, for the same reason.
 #
 # The knobs are SET by each case rather than assumed, because they are tuned values the dev moves:
 # a case that pinned today's stagger would go red the first time he liked a different one. What is
