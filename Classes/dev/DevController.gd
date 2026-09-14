@@ -116,9 +116,14 @@ func _handle_selector_key(event: InputEvent) -> void:
 			else BoardOverlays.SelectorDepth.HALF
 
 # K plays the selected unit's zoom animations, one per press (#629). It exists for the one question
-# no test can answer: whether a 66x42 combat sprite READS at the board's texel density, which was
-# tuned for 32px map art. A dev key rather than a panel because there is nothing here to tune yet --
-# the values are all on the sheet.
+# no test can answer: whether a combat sprite READS at the board's texel density, which is tuned for
+# map art. A dev key rather than a panel because there is nothing here to tune yet.
+#
+# THERE IS NOTHING FOR IT TO FIND TODAY, and that is deliberate rather than rot (#139, 2026-09-14).
+# Every zoom set the project had was cut from a Fire Emblem rip, so it went out with the rest of that
+# art; the guard below now warns for every unit. This stays because the door is what #603 comes back
+# to once #635 builds the timing-authoring tool the dev is waiting on -- the machinery under it
+# (SpriteAnimator, UnitSprite3D.play_animation) drives ANY SpriteFrames and is unfed, not dead.
 #
 # The set is found by CONVENTION -- `Resources/ZoomAnimations/<art family>.tres` -- and NOT off a
 # field on UnitData. Where a unit's animations are authored is #603's fork 3 and is deliberately
@@ -144,12 +149,13 @@ func _handle_zoom_animation_key(event: InputEvent) -> void:
 	if sprite == null:
 		return
 
-	# Keyed on the MAP SPRITE, never on the unit's name -- a zoom sheet is the same ART FAMILY as the
-	# map art, which is why `ZoomAnimations/Sage.png` is named to pair with `MapSprites/Sage.png`.
-	# A character is NOT its sprite: the one unit on the board this could be tried against is named
-	# **Celest** and is drawn with the Sage art, so keying on display_name found nothing, for every
-	# unit, always. The AUTHORED `unit_data.map_sprite` rather than the live Sprite2D's texture,
-	# since a family is a fact about the art and must not depend on what the unit is doing.
+	# Keyed on the MAP SPRITE, never on the unit's name -- a zoom set is the same ART FAMILY as the
+	# map art, so a set for `MapSprites/Warlock.png` is named `ZoomAnimations/Warlock.tres`.
+	# A character is NOT its sprite: when this last had art to find, the one unit it could be tried
+	# against was named **Celest** and drawn with the Sage art, so keying on display_name found
+	# nothing, for every unit, always. The AUTHORED `unit_data.map_sprite` rather than the live
+	# Sprite2D's texture, since a family is a fact about the art and must not depend on what the
+	# unit is doing.
 	var art: Texture2D = null if unit.unit_data == null else unit.unit_data.map_sprite
 	var family := "" if art == null else art.resource_path.get_file().get_basename()
 	if family.is_empty():
