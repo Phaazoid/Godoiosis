@@ -1,9 +1,9 @@
 [gd_resource type="Resource" script_class="UnitData" format=3]
 
-[ext_resource type="Texture2D" path="res://Art/Units/MapSprites/Brigand_Downed.png" id="1_qm0a0"]
+[ext_resource type="Texture2D" path="res://Art/Units/MapSprites/Orc_Downed.png" id="1_qm0a0"]
 [ext_resource type="Script" path="res://Classes/jobs/AbilityData.gd" id="2_5n7y1"]
-[ext_resource type="Texture2D" path="res://Art/Units/MapSprites/Brigand.png" id="3_5ri2x"]
-[ext_resource type="Texture2D" path="res://Art/Units/MapSprites/Brigand_Moving.png" id="4_wurcy"]
+[ext_resource type="Texture2D" path="res://Art/Units/MapSprites/Orc.png" id="3_5ri2x"]
+[ext_resource type="Texture2D" path="res://Art/Units/MapSprites/Orc_Moving.png" id="4_wurcy"]
 [ext_resource type="Texture2D" path="res://Art/Units/Portraits/hair_mcgee_evil.png" id="5_1dwru"]
 [ext_resource type="Script" path="res://Classes/units/UnitData.gd" id="6_u2pba"]
 [ext_resource type="Script" uid="uid://jytv7xrjv6l1" path="res://Classes/items/Item.gd" id="7_eugk5"]

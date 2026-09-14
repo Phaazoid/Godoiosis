@@ -198,11 +198,43 @@ func _sized_ring(target: Unit, box_px: float) -> AuraRing:
 
 # --- the ink box ---------------------------------------------------------------------------------
 
-# MapSpriteInk is a MOVE, not a rewrite: the deployed-force strip's offset was (-4, -11) before #930
-# and must still be, or hoisting the measurement silently nudged a shipped surface. Provenance pinned
-# against the constant's own consumer rather than against a retyped number (#814's technique).
-func test_the_hoisted_ink_box_still_centres_the_deployed_strips_sprite() -> void:
-	assert_that(MapSpriteInk.window_offset(PreMissionScreen.RING_WINDOW)).is_equal(Vector2(-4, -11))
+# This pinned the literal (-4, -11) until #937, as provenance that hoisting the measurement out of
+# PreMissionScreen had not nudged a shipped surface. That number described the Fire Emblem art, which
+# is gone, and re-pinning whatever the Zerie art produces would be a number nobody could check --
+# the content razor, arriving at a measurement rather than at a level.
+#
+# The obvious replacement -- "window_offset() centres ink_centre() in its window" -- is VACUOUS, and
+# writing it first is how that was found: `window_offset` is DEFINED as `half the window minus
+# ink_centre`, so the assertion holds for any INK_RECT including a badly wrong one. It can never fail.
+#
+# What is actually at risk is INK_RECT drifting from the art it claims to measure, so ask the ART.
+# The load-bearing half is the SHARED BASELINE -- one INK_RECT serves every sprite only while every
+# sprite's feet are on the same row -- and that is what re-cutting the art without re-running
+# tools/sprites/extract_stills.gd would break. Content is read, never pinned: no count, no name, no
+# per-character number appears here.
+func test_every_shipped_map_sprite_ends_its_ink_where_INK_RECT_says() -> void:
+	var sheet := MapSpriteInk.SHEET
+	assert_int(MapSpriteInk.INK_RECT.end.y).is_equal(sheet) \
+		.override_failure_message("INK_RECT must sit its feet on the sheet's last row")
+
+	var checked := 0
+	for file: String in ResourceDir.files_with_extension("res://Art/Units/MapSprites/", ".png"):
+		if file.ends_with("_Moving.png") or file.ends_with("_Downed.png"):
+			continue
+		var tex: Texture2D = load("res://Art/Units/MapSprites/" + file)
+		var image := tex.get_image()
+		if image.is_compressed():
+			image = image.duplicate()
+			image.decompress()
+		var ink := image.get_used_rect()
+		assert_int(image.get_width()).is_equal(sheet).override_failure_message(
+				"%s is %dpx wide; MapSpriteInk.SHEET says %d" % [file, image.get_width(), sheet])
+		assert_int(ink.end.y).is_equal(sheet).override_failure_message(
+				"%s ends its ink on row %d, not the sheet's last row -- the baseline is not shared, "
+				% [file, ink.end.y] + "so one INK_RECT cannot serve every sprite")
+		checked += 1
+	assert_int(checked).is_greater(0).override_failure_message(
+			"scanned no map sprites -- this case would pass vacuously")
 
 
 # A ring centred on the sprite's BOX would sit a third of the box above the character, because every

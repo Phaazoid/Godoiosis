@@ -19,12 +19,19 @@ class_name Credits
 # tests/law/test_credits_required.gd asserts every required row reaches the screen. Do not delete
 # a required row to tidy the page.
 #
-# THE FIRE EMBLEM PLACEHOLDER SPRITES ARE DELIBERATELY ABSENT. Art/Units/MapSprites/ and
-# ZoomAnimations/ are GBA rips being replaced under #937; ZoomAnimations/README.md credits the
-# rippers who asked for it. That is a rip credit, not a rights answer -- crediting an asset that
-# cannot be licensed does not license it, and naming it on a public page is an admission that
-# ships with the zip for no benefit. It belongs in #139's record, not here. This absence is a
-# decision; it is not an oversight to fix.
+# THE MAP SPRITES ARE LICENSED NOW (#937, 2026-09-13) and carry an ordinary ART row. What used to
+# stand here was the opposite note: Art/Units/MapSprites/ held Fire Emblem GBA rips, and the
+# reasoning was that naming an asset which cannot be licensed at any price is an admission shipping
+# with the zip for no benefit. That is spent -- the rips are deleted and Zerie's pack replaced them.
+#
+# Its row is NOT `required`, and the distinction is the one this header is about. Zerie's terms
+# permit commercial use and modification and ask for nothing in return, so the credit is a courtesy;
+# Sara's grant and the Solaria licence are conditions, and shipping without those rows ships outside
+# the terms. Do not promote this one to match them.
+#
+# Art/Units/ZoomAnimations/ IS STILL A RIP and is still absent for the original reason. That folder
+# is a separate removal; until it goes, this page naming everything it ships is true of the map art
+# and not yet of the battle-scene sheets.
 
 # DEVELOPMENT IS ONE ROW CARRYING BOTH NAMES, not a row each (dev, 2026-09-12) -- the role is shared
 # rather than held twice, and a single line is what says so. Order is alphabetical by surname.
@@ -60,6 +67,12 @@ const ENTRIES := {
 			"role": "Element runes, weapon icons, and the logo",
 			"detail": "@stargarnishstudio  ·  instagram.com/stargarnishstudio",
 			"required": true,
+		},
+		{
+			"name": "Zerie",
+			"role": "Unit map sprites",
+			"detail": "zerie.itch.io",
+			"required": false,
 		},
 		{
 			"name": "Jamie Brownhill",
