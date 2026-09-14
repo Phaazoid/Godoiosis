@@ -84,7 +84,7 @@ const ENTRIES := {
 		{
 			"name": "ProjectUtumno",
 			"role": "Source art for the ward shield icons",
-			"detail": "",
+			"detail": "opengameart.org/content/dungeon-crawl-32x32-tiles-supplemental  ·  CC0",
 			"required": false,
 		},
 	],
@@ -98,6 +98,12 @@ const ENTRIES := {
 	],
 	Section.SOUND: [
 		{"name": "SoundBible.com", "role": "Sound effects", "detail": "", "required": false},
+		{
+			"name": "Tim Krief",
+			"role": "Typing sounds (Dialogic example assets)",
+			"detail": "CC BY-SA 4.0",
+			"required": true,
+		},
 	],
 	Section.ENGINE: [
 		{"name": "Godot Engine", "role": "MIT licence", "detail": "godotengine.org", "required": false},
