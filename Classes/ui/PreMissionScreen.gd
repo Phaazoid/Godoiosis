@@ -403,7 +403,7 @@ func _squad_block(squad: Squad) -> Control:
 
 	var members: Array[Unit] = squad.get_members()
 	var title := Label.new()
-	title.text = ("%s leads" % squad.leader.get_unit_name()) if members.size() > 1 else "unsquadded"
+	title.text = ("%s leads" % squad.leader.get_unit_name()) if members.size() > 1 else "solo"
 	title.add_theme_font_size_override("font_size", 10)
 	title.add_theme_color_override("font_color", QueueStyle.ink(QueueStyle.Role.HEADER_TEXT))
 	column.add_child(title)
