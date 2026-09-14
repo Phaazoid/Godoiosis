@@ -94,10 +94,18 @@ jobs:
       # here was the thing that differed. Reproduced both ways: one pass, 4 failures; two, none,
       # with no file changed. Cheap insurance -- the second pass has nothing left to do and exits
       # in seconds.
+      # ONE IMPORT AT A TIME ON A SHARED MACHINE (2026-09-14). Three shards importing at once on the
+      # self-hosted VM crashed Godot's import three times in a day -- exit 134, a thread race in the
+      # filesystem scan ("caller thread can't call propagate_notification") -- and every crash was a
+      # first-wave job; each job on GitHub's image had a VM to itself and never hit it. flock serialises
+      # this phase across the jobs on one host and is a no-op where hosts are separate. The retry on
+      # the first pass covers the residue: the crash is transient, and a rerun of the same commit passes.
       - name: Import project
         run: |
-          godot-bin/godot --headless --path . --import
-          godot-bin/godot --headless --path . --import
+          flock /tmp/iosis-import.lock bash -ec '
+            godot-bin/godot --headless --path . --import || godot-bin/godot --headless --path . --import
+            godot-bin/godot --headless --path . --import
+          '
 
       # THE IMPORT MUST NOT REWRITE COMMITTED PROJECT SETTINGS (#447). It used to: Dialogic
       # mutated the Dictionary ProjectSettings handed it BY REFERENCE, pruning dch_directory
