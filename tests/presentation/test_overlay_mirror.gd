@@ -789,6 +789,71 @@ func test_a_void_removal_draws_no_arrowhead_but_a_rail() -> void:
 			"the hole cell drew a flat arrowhead").is_equal(0)
 
 
+# ...and the removal is the end of the TRAIL, not the end of the FLIGHT (#969). Once a tumble can run
+# off into a hole, the hole sits several cells PAST the landing -- and the removal's dressing used to
+# be stamped inside the `i == landing` branch, back when a hole could only ever be flown into. Keyed
+# there it would hang the plummet off the ramp the flight came down on and leave the hole wearing an
+# ordinary arrowhead: the fix drawn onto the wrong cell.
+#
+# The board is test_a_tumble_that_plummets_draws_a_pointer_at_both_breaks's, with its floor cell
+# turned into the hole -- so the two are a pair differing only in `removed`, and the SPANS are what
+# separate them. Nothing is painted on the grid: `removed` arrives in the shove dict and _append_drop
+# skips the meet test for it, so this is purely a question of which cell got dressed.
+func test_a_tumble_into_a_hole_hangs_the_plummet_off_the_holes_own_lip() -> void:
+	var origin := Vector2i(2, 2)
+	var ramp := Vector2i(3, 2)
+	var hole := Vector2i(4, 2)
+	game.board_heights.set_cell(origin, 8)
+	game.board_heights.set_cell(ramp, 4, Terrain.RampRise.WEST)
+	game.board_heights.set_cell(hole, 0)
+	var foe := _spawn(ENEMY, origin)
+	var path: Array[Vector2i] = [origin, ramp, hole]
+	var shoves: Array = [{"target": foe, "path": path, "to": hole,
+			"removed": true, "landing_index": 1}]   # the FLIGHT ends on the ramp; the hole is a tumble step
+	_om().show_knockback_preview(shoves)
+	await _settle()
+
+	var rails := _rail_markers()
+	assert_int(rails.size()).override_failure_message(
+			"the two breaks did not both draw -- the flight's landing and the run-off are separate")\
+			.is_equal(2)
+	# The PLUMMET belongs to the hole's own lip, and its length is what says so: from the ramp's
+	# overhanging edge down past the hole's mouth by the whole fall the sprite takes. Stamped on the
+	# landing instead, this span would be found at the ramp and the hole would carry a short one.
+	var at_lip: Dictionary = {}
+	for marker: Dictionary in rails:
+		if absf((marker["pos"] as Vector3).x - 4.0) < 0.5:
+			at_lip = marker
+	assert_bool(not at_lip.is_empty()).override_failure_message(
+			"no pointer stands at the hole's lip at all").is_true()
+	var ramp_lip_y := BoardSpace.surface_height_at(ramp, 4.0, 2.5, game.board_heights)
+	var hole_y := BoardSpace.surface_height_at(hole, 4.0, 2.5, game.board_heights)
+	var span := -(at_lip["basis"] as Basis).x.y
+	assert_float(span).override_failure_message(
+			"the pointer at the hole is not the plummet -- the removal was dressed onto the "
+			+ "flight's landing cell instead").is_equal_approx(ramp_lip_y - hole_y
+					+ MovementComponent.VOID_PLUMMET_CELLS + OverlayMirror.JOIN_OVERLAP * 2.0, 0.001)
+
+	# ...and the arrowhead is missing from the HOLE, not from the ramp the flight landed on.
+	var hole_x := (4.0 * 16.0 + 8.0) / 16.0
+	var ramp_x := (3.0 * 16.0 + 8.0) / 16.0
+	var flat_at_hole := 0
+	var flat_at_ramp := 0
+	for marker: Dictionary in _overlays.markers_of(BoardOverlays.Layer.KNOCKBACK):
+		if not _is_flat(marker):
+			continue
+		var x := (marker["pos"] as Vector3).x
+		if absf(x - hole_x) < 0.01:
+			flat_at_hole += 1
+		elif absf(x - ramp_x) < 0.01:
+			flat_at_ramp += 1
+	assert_int(flat_at_hole).override_failure_message(
+			"the hole cell kept its arrowhead -- the removal was dressed elsewhere").is_equal(0)
+	assert_int(flat_at_ramp).override_failure_message(
+			"the ramp the flight landed on lost its arrowhead -- the removal was keyed on the "
+			+ "landing index, not the end of the trail").is_greater(0)
+
+
 # A drop pointer's own axis (basis.x) runs overwhelmingly DOWN; a ground marker's -- flat, or lying
 # on a ramp, where the 45-degree tilt makes its horizontal and vertical parts exactly equal -- never
 # does. A RATIO rather than "purely vertical", because a pointer whose foot lands on a slope leans

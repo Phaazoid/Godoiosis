@@ -364,6 +364,95 @@ func test_the_tumble_stops_at_an_occupied_cell() -> void:
 	assert_bool(outcome.knockback_to == Vector2i(3, 0)).is_true()
 
 
+# --- A tumble that runs off the end into a hole (#969) ----------------------------------------
+#
+# A hole used to share the occupied cell's `break` -- the last member of #259's conservative package
+# ("a wall, a rise, an occupied cell, water, a hole or a lip stops it") still standing, after the lip
+# went with tumble-then-plummet in that same arc and water went with #116. It made the two halves of
+# one shove disagree: the FLIGHT flies a hole over and removes on it, the tumble walled itself off at
+# the lip. Reported three times over on 2026-09-15, on a ramp chain ending in a painted `grass_hole`.
+#
+# The board is test_a_plummet_landing_on_a_ramp_tumbles_again's, with its catch cell replaced by the
+# hole -- deliberately, so the two cases are a working/failing pair differing in exactly one term.
+# That board reaches the hole having ALREADY fallen two levels off the first ramp's base, which is
+# what makes the discarded fall assertable: this is the only path that could report a fall and a
+# removal at once.
+func test_a_tumble_that_runs_off_the_end_of_a_ramp_falls_in() -> void:
+	var heights := BoardHeights.new()
+	heights.set_cell(Vector2i(1, 0), 6)
+	heights.set_cell(Vector2i(2, 0), 6)
+	heights.set_cell(Vector2i(3, 0), 4, Terrain.RampRise.WEST)     # R2, then a 2-level drop
+	heights.set_cell(Vector2i(4, 0), 0, Terrain.RampRise.WEST)     # lands on R0, tumbles again
+	var s := _setup(heights, 1, Vector2i(1, 0), Vector2i(2, 0))
+	(s.grid as TileMapLayer).set_cell(Vector2i(5, 0), 0, HOLE_TILE)   # ...off the end
+	var outcome := _resolve(s)
+	assert_bool(outcome.removed).is_true()
+	assert_that(outcome.lethality).is_equal(ResolvedOutcome.Lethality.KILLED)
+	assert_bool(outcome.knockback_to == Vector2i(5, 0)).override_failure_message(
+			"the tumble stopped at the lip instead of entering the hole").is_true()
+	var expected: Array[Vector2i] = [Vector2i(2, 0), Vector2i(3, 0), Vector2i(4, 0), Vector2i(5, 0)]
+	assert_that(_path_of(outcome)).is_equal(expected)
+	# The fall taken on the way is DISCARDED, which is the flight's own answer: its void branch
+	# returns before a drop is ever computed, so a unit flown into a hole reports no fall either.
+	# Without this the row would carry a Fell chip and a Void chip at once (ActionQueueRow draws
+	# them from two independent ifs), and the sibling case above proves this board really does
+	# accumulate two levels before it gets here.
+	assert_int(outcome.fall_levels).override_failure_message(
+			"a removal reported a fall as well").is_equal(0)
+	assert_int(outcome.fall_damage).is_equal(0)
+
+
+# The other disjunct of is_void_at, and the only case that exercises it: erased ground inside the
+# board's rect is a hole too (#875). `not has_ground` is what this one satisfies and the painted
+# case above does not, so a mutant answering only the authored kind reds here alone.
+func test_a_tumble_into_erased_ground_falls_in_too() -> void:
+	var heights := BoardHeights.new()
+	heights.set_cell(Vector2i(1, 0), 6)
+	heights.set_cell(Vector2i(2, 0), 6)
+	heights.set_cell(Vector2i(3, 0), 4, Terrain.RampRise.WEST)
+	var s := _setup(heights, 1, Vector2i(1, 0), Vector2i(2, 0))
+	(s.grid as TileMapLayer).erase_cell(Vector2i(4, 0))   # interior to PAINTED_EXTENT, so a chasm
+	var outcome := _resolve(s)
+	assert_bool(outcome.removed).is_true()
+	assert_bool(outcome.knockback_to == Vector2i(4, 0)).is_true()
+
+
+# THE REPORTED GEOMETRY, and the case any height comparison gets wrong. The board this was filed off
+# paints its hole at -4 while the ramp that ends in it bottoms out at -5, so the hole sits a unit
+# ABOVE the ground the body is sliding down. #875 already ruled that question for the flight --
+# nothing stands on a hole at any elevation, so how high it sits is not a fact about whether it
+# catches you -- and the tumble has to answer it the same way or the shove has two rules again.
+func test_a_hole_painted_above_the_ramps_foot_still_swallows() -> void:
+	var heights := BoardHeights.new()
+	heights.set_cell(Vector2i(1, 0), 6)
+	heights.set_cell(Vector2i(2, 0), 6)
+	heights.set_cell(Vector2i(3, 0), 4, Terrain.RampRise.WEST)   # the ramp bottoms out at 4...
+	heights.set_cell(Vector2i(4, 0), 5)                          # ...and the hole is painted above it
+	var s := _setup(heights, 1, Vector2i(1, 0), Vector2i(2, 0))
+	(s.grid as TileMapLayer).set_cell(Vector2i(4, 0), 0, HOLE_TILE)
+	var outcome := _resolve(s)
+	assert_bool(outcome.removed).override_failure_message(
+			"a raised hole braced the tumble like a rise").is_true()
+	assert_bool(outcome.knockback_to == Vector2i(4, 0)).is_true()
+
+
+# The refusal that keeps the rule from being "anywhere with no tile" -- is_void_at's used_rect half,
+# asked of the tumble this time. PAST the board's edge the map simply stops, and a tumble catches on
+# it exactly as the flight braces on it. Erasing a rim cell shrinks the rect; erasing an interior one
+# digs a chasm.
+func test_a_tumble_stops_at_the_boards_edge_rather_than_falling_off() -> void:
+	var edge: int = H.PAINTED_EXTENT   # typed local: a const read through a preload erases to Variant
+	var heights := BoardHeights.new()
+	heights.set_cell(Vector2i(edge - 2, 0), 6)
+	heights.set_cell(Vector2i(edge - 1, 0), 6)
+	heights.set_cell(Vector2i(edge, 0), 4, Terrain.RampRise.WEST)   # its downhill runs off the map
+	var s := _setup(heights, 1, Vector2i(edge - 2, 0), Vector2i(edge - 1, 0))
+	var outcome := _resolve(s)
+	assert_bool(outcome.knockback_to == Vector2i(edge, 0)).is_true()
+	assert_bool(outcome.removed).override_failure_message(
+			"the board's edge removed the unit as though it were a hole").is_false()
+
+
 # --- The two rules #259 deliberately does NOT change -----------------------------------------
 
 # --- Water (#116) -----------------------------------------------------------------------------

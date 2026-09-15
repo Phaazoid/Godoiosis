@@ -835,8 +835,10 @@ static func _knockback_landing(action: AttackAction, target: Unit, target_hypo: 
 
 # The tumble (#259): from a slope, slide its downhill -- continuing down slopes that keep descending
 # the same way -- until the first walkable, unoccupied cell level with the current one catches it.
-# A wall, a rise, an occupied cell or a hole stops it where it stands: no launch, no fall damage on
-# those. WATER no longer does (#116) — it is entered and drowns, the flight's own rule. A sheer DROP
+# A wall, a rise or an occupied cell stops it where it stands: no launch, no fall damage on those.
+# WATER no longer does (#116) — it is entered and drowns, the flight's own rule. Nor does a HOLE
+# (#969) — it is entered and REMOVES, the flight's own rule again, and it was the last of #259's
+# conservative stops still standing. A sheer DROP
 # below the slope's base (the deferred tumble-then-plummet) does NOT
 # stop it any more: the unit falls the remaining height -- fall damage, folded into fall_units --
 # and keeps whatever descent waits below (another slope tumbles again, a flat cell catches it).
@@ -853,7 +855,27 @@ static func _tumble(landing: _Landing, target: Unit, board: BoardContext, shove_
 		var rise := board.ramp_rise_at(cell)
 		var down := shove_dir if rise == Terrain.RampRise.NONE else -Terrain.rise_direction(rise)
 		var next: Vector2i = cell + down
-		if board.unit_at_cell(next) != null or board.is_void_at(next):
+		if board.unit_at_cell(next) != null:
+			break
+		# A slope that runs out over a hole DROPS INTO IT (#969) -- the flight's own rule applied to
+		# the slide, so the two halves of one shove cannot disagree about what a hole does. It was
+		# the last member of #259's conservative package still unreversed: the lip went with
+		# tumble-then-plummet in that same arc, water went with #116, and the dev-ruled text never
+		# named the hole at all. "A void is a drop with no floor" (verticality.md), and below a hole
+		# there is no floor to stop on.
+		#
+		# NOT compared against a height, because #875 already ruled that how high a hole sits is not
+		# a fact about whether it catches you -- the board this was reported on paints the hole a
+		# unit ABOVE the ramp that ends in it.
+		#
+		# The fall already accumulated is DISCARDED: a void is one drop with no bottom, and the
+		# flight says so by returning before it computes a drop at all. Charging the levels fallen
+		# on the way and THEN removing would make the tumble the one path that reports both.
+		if board.is_void_at(next):
+			landing.removed = true
+			landing.fall_units = 0
+			cell = next
+			landing.path.append(cell)
 			break
 		# A slope that bottoms out in a lake puts the body IN the lake (#116) — the flight's own
 		# rule, applied to the slide, so the two cannot disagree about where a shoreline is.

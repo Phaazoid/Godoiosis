@@ -708,11 +708,16 @@ func show_knockback_preview(shoves: Array) -> void:
 				trail[i].set_meta("kb_air_from", path[0])
 			elif i == landing:
 				trail[i].set_meta("kb_drop_from", path[0])
-				if shove.get("removed", false):
-					trail[i].set_meta("kb_removed", true)
-					# No flat arrowhead on a hole: the pointer alone says where it went. The
-					# sprite keeps its meta so the 3D mirror still hangs the pointer off it.
-					trail[i].texture = null
+			# The removal is the END OF THE TRAIL, never the end of the FLIGHT (#969). It was keyed
+			# on `landing` while a hole could only ever be flown into, and a tumble can now run off
+			# into one -- which puts the hole several cells past the landing and would otherwise
+			# dress the ramp the flight came down on instead. The two indices are the same cell for
+			# every shove that could remove before this ticket, so nothing already drawn moves.
+			if i == trail.size() - 1 and shove.get("removed", false):
+				trail[i].set_meta("kb_removed", true)
+				# No flat arrowhead on a hole: the pointer alone says where it went. The
+				# sprite keeps its meta so the 3D mirror still hangs the pointer off it.
+				trail[i].texture = null
 			# The 3D drop pointer's clothes and hanger (#431): every step past the first carries
 			# the trail's own straight rail texture -- turned vertical, a rail has no cardinal
 			# identity, so the EW cut serves every direction -- and the step INTO this cell, which
