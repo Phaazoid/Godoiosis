@@ -149,8 +149,8 @@ func test_a_one_level_slide_onto_a_matching_slope_never_falls() -> void:
 # cell, where `airborne` holds the launch height. As a TUMBLE cell it is ground contact, and that is
 # the one genuinely new shape this ticket makes. What a headless suite CANNOT see is what the sprite
 # does vertically on that final leg: plummet() returns before recording any depth headless (stated at
-# MovementComponent.plummet), and a hole's authored corners are read as a surface nothing draws.
-# That residual is measured and filed separately; the ENTRY is what this case owns.
+# MovementComponent.plummet), and a hole's authored corners are read as a surface nothing draws --
+# measured and filed as #970. The ENTRY is what this case owns.
 func test_a_tumble_into_a_hole_carries_the_body_over_the_lip() -> void:
 	var heights := BoardHeights.new()
 	heights.set_cell(Vector2i(1, 0), 6)

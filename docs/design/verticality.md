@@ -1016,7 +1016,12 @@ Two consequences, both ruled the conservative way:
    `test_a_tumble_that_runs_off_the_end_of_a_ramp_falls_in`, its erased-ground twin, and
    `test_a_hole_painted_above_the_ramps_foot_still_swallows`; the board's own edge still catches a
    tumble as it always did (`test_a_tumble_stops_at_the_boards_edge_rather_than_falling_off`),
-   because past the used rect the map simply stops.
+   because past the used rect the map simply stops. **Declared residual, filed as
+   [#970](https://github.com/Phaazoid/Godoiosis/issues/970):** a hole's authored elevation is read
+   as a surface by `MovementComponent._edge_drop` and `UnitMirror.stand_height` even though nothing
+   draws one there, so a hole painted *above* the ramp's foot makes the sprite rise half a cell at
+   the lip before it plummets. Latent on the flight too, and reachable on no shipped board — every
+   authored hole sits below its neighbours.
 
 Structurally it landed close to the prediction: the knockback stage still publishes
 `knockback_from`/`knockback_to` and threads the hypo — but the landing had to be computed BEFORE
