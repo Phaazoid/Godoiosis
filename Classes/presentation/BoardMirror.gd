@@ -590,13 +590,23 @@ func sync(grid: TileMapLayer, heights: BoardHeights) -> void:
 	_free_props_except(live)
 	# get_used_cells returns a copy, so erasing inside the walk is safe. BOTH maps: a torn-out cell
 	# whose ground the 2D no longer paints is over on the staged lattice (#521).
+	#
+	# The SECOND clause is where "nothing is drawn below the board" lives (#968). floor_row is
+	# board-WIDE (the lowest corner anywhere), so RAISING one cell re-floors every column at once --
+	# and _write_column only ever writes floor_row..top, so the rows a column grew while the floor
+	# sat lower are stranded. #885 then hangs each hole's shaft from board_underside(floor_row),
+	# now ABOVE them, and the shaft runs through leftover terrain and tears against it.
+	#
+	# It belongs HERE rather than in a walk down from _write_column because a raised floor can leave
+	# an orphan separated from it by a gap -- the rows the old, shorter column never filled -- so any
+	# rule of the form "clear until the first gap" stops short. A row test cannot.
 	var sweeping: Array[GridMap] = [board, staged_board]
 	sweeping.append_array(_flight_maps_list())
 	for map: GridMap in sweeping:
 		if map == null:
 			continue
 		for cell: Vector3i in map.get_used_cells():
-			if not live.has(BoardSpace.flat(cell)):
+			if not live.has(BoardSpace.flat(cell)) or cell.y < floor_row:
 				map.set_cell_item(cell, GridMap.INVALID_CELL_ITEM)
 	_rebuild_water_mask(grid)
 
@@ -691,6 +701,9 @@ func _flight_maps_list() -> Array[GridMap]:
 func _clear_column_on(map: GridMap, cell: Vector2i, floor_row: int) -> void:
 	if map == null:
 		return
+	# Rows BELOW floor_row are deliberately not this walk's job -- sync()'s end-sweep owns them
+	# (#968). Downward, "until the first gap" is the wrong rule: a raised floor leaves an orphan
+	# separated from it by the rows the old, shorter column never filled.
 	var y := floor_row
 	while map.get_cell_item(Vector3i(cell.x, y, cell.y)) != GridMap.INVALID_CELL_ITEM:
 		map.set_cell_item(Vector3i(cell.x, y, cell.y), GridMap.INVALID_CELL_ITEM)
@@ -792,6 +805,8 @@ func _write_column(cell: Vector2i, grid: TileMapLayer, item: int, heights: Board
 		top = top_row + climb
 	# LOWERING a cell strands everything the column used to hold above its new top. Walk up until
 	# the column is genuinely clear rather than assuming one stale cell — a 5-level cut leaves 5.
+	# The OTHER end -- rows left under a RAISED floor -- is sync()'s end-sweep, never a walk down
+	# from here: see _clear_column_on (#968).
 	var above := top + 1
 	while map.get_cell_item(Vector3i(cell.x, above, cell.y)) != GridMap.INVALID_CELL_ITEM:
 		map.set_cell_item(Vector3i(cell.x, above, cell.y), GridMap.INVALID_CELL_ITEM)
@@ -1899,7 +1914,8 @@ func _fill_lip(root: Node3D, cell: Vector2i, key: Array) -> void:
 		root.add_child(piece)
 
 
-# One edge's wall: a quad from the neighbour's two corner heights down to a flat shaft floor.
+# One edge's wall: a quad from the board's underside down to a flat shaft floor. (It hung from the
+# neighbour's corner heights until #885 — see the coplanarity note below.)
 #
 # WINDING IS DERIVED, NOT TABLED. The wall is seen only from inside the pit, so its face has to point
 # at the hole's centre; with CULL_BACK on since #559 a mis-wound quad does not look wrong, it
