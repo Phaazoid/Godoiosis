@@ -54,7 +54,7 @@ const LEAVES: Array[Dictionary] = [
 	{"scope": "Scenario", "label": "Squads & AI", "page": "%SquadsAI",
 		"tip": "Who is standing on this board and how it behaves — per-faction AI control, and each squad's archetype and zone."},
 	{"scope": "Scenario", "label": "Dialog & Tutorial", "page": "%Dialog",
-		"tip": "The mission's script — dialog beats (who says what, and when) and the sequential tutorial steps the HUD instructs through. Check board lints both."},
+		"tip": "The mission's script — dialog beats (who says what, and when), the timelines those beats play (written here, with a speaker minted from the cast), and the sequential tutorial steps the HUD instructs through. Check board lints all three."},
 	{"scope": "Project", "label": "Characters", "page": "%Character",
 		"tip": "Author cast characters — the Resources/Units/ files authored saves reference. Update rewrites the character everywhere; Save As or Capture creates."},
 	{"scope": "Project", "label": "Items", "page": "%Item Editor",

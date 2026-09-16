@@ -90,6 +90,26 @@ func pre_mission_started() -> bool:
 	return _dialog_active or not _pending.is_empty()
 
 
+# The dev-tools preview (#982): play THIS timeline now, over whatever board is up, so an author
+# can hear a line without walking a board to its trigger. A THIRD door beside mission_started and
+# pre_mission_started, and the narrowest -- it plays one timeline and arms nothing.
+#
+# REFUSES rather than queues while anything is talking. _pending exists so a trigger's several
+# beats play in turn; a preview is a thing the dev asked for NOW, and queueing one plays it after
+# a beat they had stopped watching for, over a board that has moved on.
+#
+# Deliberately OUTSIDE the SHOW_DIALOG gate. That check is _fire's, and it is about a PLAYER who
+# turned dialog off -- a dev pressing Play on a timeline has said what they want, and a preview
+# that silently did nothing would read as the tool being broken. It never touches _fired either,
+# so previewing a beat's timeline does not spend that beat.
+func preview(timeline: DialogicTimeline) -> bool:
+	if timeline == null or _dialog_active or Dialogic.current_timeline != null:
+		return false
+	_dialog_active = true
+	_start(timeline)
+	return true
+
+
 # A resume (or watch-only boot) is not a fresh start. Silences EXECUTION only: the content stays
 # on ScenarioManager, so a later capture_scenario still saves the lesson (#397).
 func disarm() -> void:
