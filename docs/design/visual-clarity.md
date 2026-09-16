@@ -7,7 +7,7 @@ its child [#49 Action Queue UX](https://github.com/Phaazoid/Godoiosis/issues/49)
 This is a *guidelines* doc, not a spec — it captures the principles we're holding the work to,
 plus the running order of the queue-UX checklist. Update it as items land.
 
-**Canon checked through #937 (2026-09-13).**
+**Canon checked through #982 (2026-09-16).**
 
 ## Principles
 
@@ -1728,6 +1728,42 @@ the Action picker.
 
 Still open on #520 at the time of that slice: the impact layer (pitch driver, shake, micro-sway) and
 the follows — the rest of diff 2b, landed in the next section — plus lethality-aware direction (2c).
+
+**A VERB THAT PUBLISHES NOTHING EARNS NO BEAT ([#931](https://github.com/Phaazoid/Godoiosis/issues/931), BUILT 2026-09-16).**
+The third per-verb column, `Pacing.CODA_EARNS_AN_AI_BEAT`, and the only one that can answer *no*.
+**Rev is today's one no**, because the entire presentation layer knows one thing about it — the
+menu label — so its beat panned the camera across the board and then held on a unit standing
+perfectly still, every enemy turn, for every chainsword that could not reach anybody. This is the
+restraint doctrine at the top of this page applied to the camera itself: *"using them in the correct
+places rather than everywhere makes them have more effect."*
+
+- **It is scoped to the AI's pass, by dev ruling.** The player authored the order a second ago; an
+  AI plan is being read for the first time, which is the same fork `Pacing.base_for` already makes.
+  So `HOLD_REV` and `LINGER_REV` are **player-only knobs** from here on, and their Game-tab tips say so.
+- **THE SKIP IS AT CONSTRUCTION, and that is what makes it reach the tear-out.** `BeatSheet.read`
+  simply does not append the coda — the same move it already makes for a hold-position filler,
+  *"the honest reading of a phase in which the board does not change."* Because `_gather_cells`
+  walks the beats, dropping one takes its actor's cell off the **stage** as well: with the battle
+  zoom at its shipped `ALWAYS`, every beat is CINEMATIC, so that one cell was the difference between
+  a silent pass and the full diorama — brace, flight, settle, and the same again going home. The
+  `_shows_a_fight` flag it clears is also what overrides the player's health-bar setting for a pass,
+  so the bars stop flashing around it too. One skip, three symptoms.
+- **Per ORDER, never per pass.** An AI squad that swings *and* revs still gets its diorama; the
+  rev just stops adding its own cell. Pinned, because gating the stage on the pass is the obvious
+  over-reach and would flatten a real fight the moment somebody in it revved.
+- **The missing KEY is the sentinel**, since a bool has no `-1.0` to hide in: `get()` defaults to
+  *yes* so a forgotten verb keeps playing exactly as it does today, and
+  `tests/law/test_action_registry.gd` is what refuses the omission — degrade in play, red in the
+  suite, the same bargain `hold_for` makes when it floors `coda_hold`'s sentinel.
+- **Deliberately NOT extended to the other silent verbs.** RELOAD is the same shape, and RALLY and
+  INTIMIDATE move Will, which [#965](https://github.com/Phaazoid/Godoiosis/issues/965) says has no
+  board channel at all — so all three are also spending camera on something invisible. Left alone
+  on purpose: pulling the camera off Rally and Intimidate would make Will *more* invisible while
+  #965 is open and unruled. The table asks the question out loud instead of answering it for him.
+- **What was NOT built, and why:** a persistent *revved* board marker. It fails #322's licensing
+  test — a marker answering *what is this unit* may ride the health readout's gate only where an
+  unconditional carrier already exists, and Rev has no art at all. That is the same ground #965
+  closed the head volume on, so filing one would be the same ticket twice.
 
 ## The camera JOLTS, SWAYS and STOOPS ([#520](https://github.com/Phaazoid/Godoiosis/issues/520) diff 2b, the impact layer, BUILT 2026-08-27)
 

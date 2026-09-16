@@ -321,6 +321,44 @@ func test_an_undeclared_verb_never_shortens_the_linger() -> void:
 	assert_float(Pacing.linger_for(stray)).is_equal_approx(0.0, 0.0001)
 
 
+# --- whether a beat is earned at all (#931) ---------------------------------------------------
+#
+# The third column, and the only one that can answer NO. What it costs when it says no is the whole
+# beat -- pan, hold and linger -- so these cases sit beside the two tables rather than inside them.
+
+# Rev publishes nothing, so an AI's copy of it earns no beat. Stated against a sibling rather than
+# alone: the point is not that REV is false, it is that REV is the ONLY one that is, and a rule that
+# quietly grew a second verb would pass a bare assert on REV.
+func test_only_rev_declines_an_ai_beat() -> void:
+	assert_bool(Pacing.coda_earns_a_beat(BaseAction.ActionType.REV, true)) \
+		.override_failure_message("an AI's rev earned a beat -- the camera is flying to a unit standing still again") \
+		.is_false()
+	for type in BaseAction.SIDE_CHANNEL_ORDER:
+		if type == BaseAction.ActionType.REV:
+			continue
+		assert_bool(Pacing.coda_earns_a_beat(type, true)) \
+			.override_failure_message("%s quietly stopped earning an AI beat -- #931 scoped this to REV alone, and RALLY/INTIMIDATE in particular are #965's question, not this one" % BaseAction.ActionType.keys()[type]) \
+			.is_true()
+
+
+# The player's tail is untouched, REV included -- the fork is the whole reason this takes is_ai.
+func test_the_players_tail_earns_every_beat() -> void:
+	for type in BaseAction.SIDE_CHANNEL_ORDER:
+		assert_bool(Pacing.coda_earns_a_beat(type, false)) \
+			.override_failure_message("the player's %s lost its beat -- #931 is an AI-pass rule, and the player authored this order a second ago" % BaseAction.ActionType.keys()[type]) \
+			.is_true()
+
+
+# A verb nobody declared keeps playing, which is the half the law test cannot assert FROM: in play
+# the omission must degrade to today's behaviour, and it is tests/law/test_action_registry.gd that
+# refuses it. ATTACK stands in for the undeclared verb the way it does for the two tables above.
+func test_an_undeclared_verb_still_earns_its_beat() -> void:
+	assert_bool(Pacing.CODA_EARNS_AN_AI_BEAT.has(BaseAction.ActionType.ATTACK)).is_false()
+	assert_bool(Pacing.coda_earns_a_beat(BaseAction.ActionType.ATTACK, true)) \
+		.override_failure_message("an undeclared verb lost its beat -- the default must be today's behaviour, so the law test is what catches the omission and not the player") \
+		.is_true()
+
+
 # The linger is FLAT -- the one place it deliberately differs from the hold. A hold is anticipation
 # and scales with drama; a linger is matched to an animation that runs in real time either way.
 # Falsified against the alternative: multiply it by drama_of and this reds, because BOARD_DRAMA

@@ -647,6 +647,70 @@ func test_a_coda_frames_what_its_verb_is_done_to() -> void:
 		.override_failure_message("a rally has no target -- it must fall back to the unit rallying").is_same(rallier)
 
 
+# --- a verb that earns no beat (#931) ----------------------------------------------------------
+
+# Rev publishes NOTHING -- no animation, no particle, no icon, no sound -- so on an AI pass it is
+# not a beat at all. Both halves are asserted here because they are one skip: no coda means no
+# camera trip, and because _gather_cells walks these beats it also means the rever's cell never
+# reaches the stage, so a pass that is nothing but revs does not tear the board out for it.
+#
+# The CELLS half is the expensive one and the reason this case is not just about codas: with the
+# battle zoom at its shipped default every beat is CINEMATIC, so one cell was the whole difference
+# between a silent pass and the full diorama -- brace, flight, settle, and the same again going home.
+func test_an_ai_rev_earns_no_beat_and_stages_no_ground() -> void:
+	var rever := H.spawn_solo(self, _sm, ENEMY, Vector2i(0, 0), {Stats.Stat.LDR: 3})
+	rever.squad._queue_action(_rev(rever))
+
+	var ai := BeatSheet.read(rever.squad, ResolvedPlan.new(), true)
+	assert_int(ai.codas(BaseAction.ActionType.REV).size()).override_failure_message(
+			"an AI's rev still earned a coda -- the camera flies to a unit standing perfectly still") \
+		.is_equal(0)
+	assert_int(ai.cells.size()).override_failure_message(
+			"an AI's rev still put ground on the stage -- _shows_a_fight goes true off one cell and tears the board out for it") \
+		.is_equal(0)
+
+
+# ...and the player's reading of the same queue is untouched, which is the fork's whole point. Same
+# unit, same order, same board: the only thing that differs is whose pass it is.
+func test_the_players_rev_still_earns_its_beat_and_its_stage() -> void:
+	var rever := H.spawn_solo(self, _sm, PLAYER, Vector2i(0, 0), {Stats.Stat.LDR: 3})
+	rever.squad._queue_action(_rev(rever))
+
+	var mine := BeatSheet.read(rever.squad, ResolvedPlan.new(), false)
+	assert_int(mine.codas(BaseAction.ActionType.REV).size()).override_failure_message(
+			"the player's own rev lost its beat -- #931 is an AI-pass rule") \
+		.is_equal(1)
+	assert_int(mine.cells.size()).override_failure_message(
+			"the player's own rev stopped staging its ground") \
+		.is_greater(0)
+
+
+# THE SKIP IS PER ORDER, NOT PER PASS. An AI squad that swings AND revs still gets its diorama --
+# the swing's cells are what earn it -- and the rev simply stops adding its own. Falsified against
+# the obvious over-reach: gate the stage on the pass rather than the order and this reds, because a
+# real fight would go flat the moment somebody in it revved.
+func test_an_ai_rev_beside_a_real_swing_does_not_flatten_the_pass() -> void:
+	var attacker := H.spawn_solo(self, _sm, ENEMY, Vector2i(0, 0), {Stats.Stat.LDR: 3})
+	var rever := H.spawn_solo(self, _sm, ENEMY, Vector2i(1, 0), {Stats.Stat.LDR: 3})
+	_sm.join_squad(rever, attacker.squad)
+	_sm.active_squad = attacker.squad
+	attacker.squad._queue_action(AttackAction.declare(attacker, attacker.movement.cell, Vector2i(0, 1)))
+	attacker.squad._queue_action(_rev(rever))
+
+	var plan := _sm.resolve_plan(attacker.squad, _board_with([attacker, rever]))
+	var sheet := BeatSheet.read(attacker.squad, plan, true)
+	assert_int(sheet.codas(BaseAction.ActionType.REV).size()).is_equal(0)
+	assert_int(_of_kind(sheet, BeatSheet.Kind.VOLLEY).size()).override_failure_message(
+			"the swing lost its beat too -- the skip is meant to be per ORDER").is_greater(0)
+	assert_int(sheet.cells.size()).override_failure_message(
+			"a pass with a real swing in it stopped staging -- the rev's skip took the fight's ground with it") \
+		.is_greater(0)
+	assert_bool(sheet.cells.has(rever.get_projected_destination())).override_failure_message(
+			"the rever's own cell reached the stage anyway") \
+		.is_false()
+	_break_volleys(plan)
+
+
 # --- helpers ---------------------------------------------------------------------------------
 
 func _walk(unit: Unit, to: Vector2i) -> MoveAction:
@@ -667,6 +731,12 @@ func _rescue(rescuer: Unit, body: Unit) -> RescueAction:
 	# The landing is the body's own cell: these beats are all DRY-GROUND rescues, so #116's haul
 	# never fires and nothing here is about where a body comes out.
 	action.init(rescuer, body, body.movement.cell)
+	return action
+
+
+func _rev(rever: Unit) -> RevAction:
+	var action := RevAction.new()
+	action.init(rever)
 	return action
 
 

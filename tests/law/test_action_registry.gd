@@ -59,6 +59,17 @@ func test_every_side_channel_verb_declares_a_beat_linger() -> void:
 			.override_failure_message("side-channel %s has no Pacing linger -- add LINGER_<VERB>, an arm in coda_linger, and a GameKnobs Actions row, or the camera cuts away the instant it plays" % BaseAction.ActionType.keys()[type]) \
 			.is_greater_equal(0.0)
 
+# ...and WHETHER an AI's copy of it earns a beat at all (#931), asked before the two above: a verb
+# that earns none never reaches a hold. The third column carries no -1.0 because a bool has no room
+# for one, so the MISSING KEY is the sentinel and this is the only thing that can see it -- get()'s
+# default keeps a forgotten verb playing exactly as it does today, which is the right behaviour in
+# play and precisely why the omission is invisible there.
+func test_every_side_channel_verb_declares_whether_an_ai_beat_is_earned() -> void:
+	for type in BaseAction.SIDE_CHANNEL_ORDER:
+		assert_bool(Pacing.CODA_EARNS_AN_AI_BEAT.has(type)) \
+			.override_failure_message("side-channel %s has no entry in Pacing.CODA_EARNS_AN_AI_BEAT -- say true (the camera goes to it on an AI pass) or false (it publishes nothing worth flying to, like Rev), or it inherits a yes nobody decided" % BaseAction.ActionType.keys()[type]) \
+			.is_true()
+
 
 # THE TUNING SURFACE, which is the half the two laws above cannot see: a hold that exists in Pacing
 # and nowhere on the Game tab is a value the dev cannot reach, and this ticket exists because ATTACK

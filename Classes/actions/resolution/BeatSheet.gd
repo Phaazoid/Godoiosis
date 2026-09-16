@@ -187,7 +187,11 @@ func codas(type: BaseAction.ActionType) -> Array[Beat]:
 	return found
 
 
-static func read(squad: Squad, plan: ResolvedPlan) -> BeatSheet:
+# `is_ai` is the pass's own, and it reaches the sheet for ONE question (#931): whether a
+# side-channel verb earns a beat at all. Defaulted to false -- the player's reading, under which
+# every verb earns one, so this is the answer for any caller that has no faction in hand and the
+# sheet a test builds is the unforked one.
+static func read(squad: Squad, plan: ResolvedPlan, is_ai: bool = false) -> BeatSheet:
 	var sheet := BeatSheet.new()
 	if squad == null or plan == null:
 		return sheet
@@ -253,6 +257,16 @@ static func read(squad: Squad, plan: ResolvedPlan) -> BeatSheet:
 	# beat per type would leave rescuers two and three acting off-camera and unheld (#520).
 	for type in BaseAction.SIDE_CHANNEL_ORDER:
 		if not coda_orders.has(type):
+			continue
+		# ...unless the verb earns no beat on this pass (#931) -- an AI's Rev, today's only one.
+		# It is skipped HERE, at construction, for the same reason a hold-position filler never
+		# becomes a MOVES member twenty lines up: a thing that gets no shot does not belong in the
+		# shot list, and every reader below then follows without being told twice. Dropping it
+		# takes the stage with it -- _gather_cells walks these beats, so an unearned coda stops
+		# contributing its actor's cell, _shows_a_fight goes false on a pass that is nothing but
+		# revs, and the tear-out and the health readout's override both go quiet with the camera.
+		# The order still EXECUTES; the pass just declines to make a set piece of it.
+		if not Pacing.coda_earns_a_beat(type, is_ai):
 			continue
 		var batch: Array = coda_orders[type]
 		for entry in batch:
