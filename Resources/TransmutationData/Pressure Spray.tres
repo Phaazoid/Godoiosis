@@ -1,0 +1,17 @@
+[gd_resource type="Resource" script_class="TransmutationData" format=3 uid="uid://ckkjkgfexqy2u"]
+
+[ext_resource type="Resource" uid="uid://bow4n5t5o3t8v" path="res://Resources/AttackShapes/Line 3.tres" id="1_ytj11"]
+[ext_resource type="Script" uid="uid://dle5ob08qngde" path="res://Classes/presentation/EffectLook.gd" id="2_abhgi"]
+[ext_resource type="Script" uid="uid://bgbidu2bbf33l" path="res://Classes/alchemy/TransmutationData.gd" id="3_t8oom"]
+
+[resource]
+script = ExtResource("3_t8oom")
+sigils = Array[int]([2, 2])
+flourishes = Array[int]([3, 5])
+display_name = "Pressure Spray"
+power = 5
+max_range = 0
+attack_shape = ExtResource("1_ytj11")
+hits_allies = true
+can_overwatch = true
+damage_kind = 2

@@ -1,0 +1,37 @@
+[gd_resource type="Resource" script_class="UnitData" format=3 uid="uid://cuns07k40xaxv"]
+
+[ext_resource type="Script" uid="uid://7w7ajveltxx5" path="res://Classes/jobs/AbilityData.gd" id="1_2wvai"]
+[ext_resource type="Texture2D" uid="uid://dpd0m64njf8rn" path="res://Art/Units/MapSprites/Archer_Downed.png" id="1_c0dk6"]
+[ext_resource type="Texture2D" uid="uid://5j5clrlw0olr" path="res://Art/Units/Portraits/faceless_one.png" id="2_7mujt"]
+[ext_resource type="Script" uid="uid://cvvknuw621ar2" path="res://Classes/units/UnitData.gd" id="3_4m7id"]
+[ext_resource type="Texture2D" uid="uid://bgvvkigtcobal" path="res://Art/Units/MapSprites/Archer.png" id="3_o3ygt"]
+[ext_resource type="Script" uid="uid://jytv7xrjv6l1" path="res://Classes/items/Item.gd" id="4_c0dk6"]
+[ext_resource type="Texture2D" uid="uid://cd51n0ptxrquf" path="res://Art/Units/MapSprites/Archer_Moving.png" id="4_eio8b"]
+[ext_resource type="Script" uid="uid://bncwoq0llmo08" path="res://Classes/weapons/instances/CarbineWeaponInstance.gd" id="5_o3ygt"]
+[ext_resource type="Resource" path="res://Resources/Weapons/MainVarieties/Carbine.tres" id="6_eio8b"]
+
+[sub_resource type="Resource" id="Resource_bv546"]
+script = ExtResource("5_o3ygt")
+template = ExtResource("6_eio8b")
+
+[resource]
+script = ExtResource("3_4m7id")
+display_name = "Sara"
+portrait = ExtResource("2_7mujt")
+base_stats = Dictionary[int, int]({
+1: 4,
+2: 7,
+3: 9,
+4: 8,
+5: 8,
+6: 4,
+7: 3
+})
+map_sprite = ExtResource("3_o3ygt")
+move_sprite = ExtResource("4_eio8b")
+downed_sprite = ExtResource("1_c0dk6")
+base_aura = Dictionary[int, int]({
+2: 1
+})
+base_affinity = Array[int]([2])
+starting_inventory = Array[ExtResource("4_c0dk6")]([SubResource("Resource_bv546")])

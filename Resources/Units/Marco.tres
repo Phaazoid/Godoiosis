@@ -1,0 +1,42 @@
+[gd_resource type="Resource" script_class="UnitData" format=3 uid="uid://cilw8ay33gk61"]
+
+[ext_resource type="Texture2D" uid="uid://d3mntcyfcactc" path="res://Art/Units/MapSprites/Knight Templar_Downed.png" id="1_hmnsi"]
+[ext_resource type="Script" uid="uid://7w7ajveltxx5" path="res://Classes/jobs/AbilityData.gd" id="2_x7a4n"]
+[ext_resource type="Texture2D" uid="uid://bo3adqvmrh6cm" path="res://Art/Units/MapSprites/Knight Templar.png" id="3_6kta4"]
+[ext_resource type="Texture2D" uid="uid://b2dsxr1elpcrp" path="res://Art/Units/MapSprites/Knight Templar_Moving.png" id="4_yfntj"]
+[ext_resource type="Texture2D" uid="uid://dvmd0ncpyryv7" path="res://Art/Units/Portraits/hair_mcgee_red.png" id="5_lddp7"]
+[ext_resource type="Script" uid="uid://cvvknuw621ar2" path="res://Classes/units/UnitData.gd" id="6_4prxo"]
+[ext_resource type="Script" uid="uid://jytv7xrjv6l1" path="res://Classes/items/Item.gd" id="7_t847d"]
+[ext_resource type="Script" uid="uid://p3jyhhtj7rtg" path="res://Classes/weapons/instances/ProstheticWeaponInstance.gd" id="8_gtlwd"]
+[ext_resource type="Resource" uid="uid://cx75h4chpy74e" path="res://Resources/Weapons/MainVarieties/Prosthetic.tres" id="9_7m3fw"]
+[ext_resource type="Resource" uid="uid://j6ier50surn8" path="res://Resources/RuneVariants/Water Rune.tres" id="10_x7a4n"]
+
+[sub_resource type="Resource" id="Resource_6kta4"]
+script = ExtResource("8_gtlwd")
+template = ExtResource("9_7m3fw")
+
+[resource]
+script = ExtResource("6_4prxo")
+display_name = "Marco"
+portrait = ExtResource("5_lddp7")
+base_stats = Dictionary[int, int]({
+1: 7,
+2: 8,
+3: 11,
+4: 4,
+5: 5,
+6: 7,
+7: 3
+})
+map_sprite = ExtResource("3_6kta4")
+move_sprite = ExtResource("4_yfntj")
+downed_sprite = ExtResource("1_hmnsi")
+base_aura = Dictionary[int, int]({
+2: 1
+})
+base_affinity = Array[int]([2])
+starting_inventory = Array[ExtResource("7_t847d")]([SubResource("Resource_6kta4"), ExtResource("10_x7a4n")])
+starting_equipped_index = 0
+starting_prosthetics = Dictionary[int, int]({
+0: 0
+})

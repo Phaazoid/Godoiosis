@@ -13,6 +13,15 @@
 script = ExtResource("6_l7hev")
 display_name = "Noemie"
 portrait = ExtResource("5_tddgv")
+base_stats = Dictionary[int, int]({
+1: 6,
+2: 2,
+3: 4,
+4: 8,
+5: 7,
+6: 7,
+7: 2
+})
 map_sprite = ExtResource("3_t1a4k")
 move_sprite = ExtResource("4_qu2qa")
 downed_sprite = ExtResource("1_fq6i1")

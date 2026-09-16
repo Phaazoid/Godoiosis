@@ -1,0 +1,9 @@
+[gd_resource type="Resource" script_class="CarbineWeaponInstance" format=3 uid="uid://cs5f8e2j3wahs"]
+
+[ext_resource type="Script" uid="uid://bncwoq0llmo08" path="res://Classes/weapons/instances/CarbineWeaponInstance.gd" id="1_j7q5h"]
+[ext_resource type="Resource" path="res://Resources/Weapons/MainVarieties/Carbine.tres" id="2_qonnj"]
+
+[resource]
+script = ExtResource("1_j7q5h")
+template = ExtResource("2_qonnj")
+display_name = "Wind Rune"

@@ -1,0 +1,103 @@
+[gd_resource type="Resource" script_class="Roster" format=3 uid="uid://0dfx8uckfbco"]
+
+[ext_resource type="Script" uid="uid://df2c8ssuh18ff" path="res://Classes/weapons/WeaponModData.gd" id="1_c8162"]
+[ext_resource type="Script" uid="uid://dbb0pgdet8qo0" path="res://Classes/flow/ScenarioUnitEntry.gd" id="2_pvic4"]
+[ext_resource type="Script" uid="uid://jytv7xrjv6l1" path="res://Classes/items/Item.gd" id="3_4c54j"]
+[ext_resource type="Script" uid="uid://6vu10nf3p58m" path="res://Classes/units/StatEffect.gd" id="4_qy5bt"]
+[ext_resource type="Resource" uid="uid://cy85lg7igt3g7" path="res://Resources/Units/Aldin.tres" id="5_de2c0"]
+[ext_resource type="Resource" path="res://Resources/Units/Aster.tres" id="6_vdcdv"]
+[ext_resource type="Resource" path="res://Resources/Units/Bram.tres" id="7_bse08"]
+[ext_resource type="Resource" uid="uid://82drex4vkegf" path="res://Resources/Units/Celest.tres" id="8_limnl"]
+[ext_resource type="Resource" uid="uid://d1218casms8qb" path="res://Resources/Units/Dorian.tres" id="9_alpn7"]
+[ext_resource type="Resource" path="res://Resources/Units/Isaac.tres" id="10_t12a0"]
+[ext_resource type="Resource" uid="uid://b56p2d58ri1hr" path="res://Resources/Units/Noemie.tres" id="11_t64p3"]
+[ext_resource type="Resource" path="res://Resources/Units/Rebecca.tres" id="12_235a0"]
+[ext_resource type="Resource" path="res://Resources/Units/Ross.tres" id="13_7hm0t"]
+[ext_resource type="Resource" uid="uid://cvvsnph8bcjc8" path="res://Resources/Units/Torv.tres" id="14_seyu0"]
+[ext_resource type="Resource" uid="uid://cilw8ay33gk61" path="res://Resources/Units/Marco.tres" id="15_qy5bt"]
+[ext_resource type="Script" uid="uid://cwhromthxtouo" path="res://Classes/flow/Roster.gd" id="15_refa6"]
+[ext_resource type="Resource" uid="uid://cuns07k40xaxv" path="res://Resources/Units/Sara.tres" id="16_de2c0"]
+[ext_resource type="Resource" path="res://Resources/Weapons/MainVarieties/Carbine.tres" id="16_glu08"]
+[ext_resource type="Resource" uid="uid://cfja2rrrneo3b" path="res://Resources/Units/Sophia.tres" id="17_vdcdv"]
+[ext_resource type="Resource" uid="uid://qm4wjlfxedbr" path="res://Resources/Weapons/MainVarieties/ChainSword.tres" id="17_vg61c"]
+[ext_resource type="Resource" uid="uid://d0sf3gb33rpfy" path="res://Resources/Weapons/MainVarieties/Chemical_Spitter.tres" id="18_3muxw"]
+[ext_resource type="Resource" uid="uid://bv7tui68o7xfr" path="res://Resources/Weapons/MainVarieties/Drill.tres" id="19_ea14v"]
+[ext_resource type="Resource" uid="uid://ceogmk32dfq6l" path="res://Resources/Weapons/MainVarieties/Kinetic_Mace.tres" id="20_tof68"]
+[ext_resource type="Resource" uid="uid://fx3dcqyslgbe" path="res://Resources/Weapons/MainVarieties/Springspear.tres" id="21_vt8pn"]
+[ext_resource type="Resource" uid="uid://migwb2q24cv7" path="res://Resources/RuneVariants/Fire Rune.tres" id="22_6pjdb"]
+[ext_resource type="Resource" uid="uid://b17pmec74vt1l" path="res://Resources/RuneVariants/Electric Rune.tres" id="23_6emta"]
+[ext_resource type="Resource" uid="uid://bxva1ht20h7en" path="res://Resources/RuneVariants/Wind Rune.tres" id="27_alpn7"]
+[ext_resource type="Resource" uid="uid://j6ier50surn8" path="res://Resources/RuneVariants/Water Rune.tres" id="28_t12a0"]
+[ext_resource type="Resource" path="res://Resources/RuneVariants/FreezeRune.tres" id="29_t64p3"]
+[ext_resource type="Resource" path="res://Resources/RuneVariants/Heal2.tres" id="30_235a0"]
+[ext_resource type="Resource" uid="uid://g207p44clmyf" path="res://Resources/RuneVariants/Earth Rune.tres" id="31_7hm0t"]
+
+[sub_resource type="Resource" id="Resource_bse08"]
+script = ExtResource("2_pvic4")
+unit_data = ExtResource("5_de2c0")
+state_saved = false
+
+[sub_resource type="Resource" id="Resource_limnl"]
+script = ExtResource("2_pvic4")
+unit_data = ExtResource("6_vdcdv")
+state_saved = false
+
+[sub_resource type="Resource" id="Resource_alpn7"]
+script = ExtResource("2_pvic4")
+unit_data = ExtResource("7_bse08")
+state_saved = false
+
+[sub_resource type="Resource" id="Resource_t12a0"]
+script = ExtResource("2_pvic4")
+unit_data = ExtResource("8_limnl")
+state_saved = false
+
+[sub_resource type="Resource" id="Resource_t64p3"]
+script = ExtResource("2_pvic4")
+unit_data = ExtResource("9_alpn7")
+state_saved = false
+
+[sub_resource type="Resource" id="Resource_235a0"]
+script = ExtResource("2_pvic4")
+unit_data = ExtResource("10_t12a0")
+state_saved = false
+
+[sub_resource type="Resource" id="Resource_7hm0t"]
+script = ExtResource("2_pvic4")
+unit_data = ExtResource("11_t64p3")
+state_saved = false
+
+[sub_resource type="Resource" id="Resource_seyu0"]
+script = ExtResource("2_pvic4")
+unit_data = ExtResource("12_235a0")
+state_saved = false
+
+[sub_resource type="Resource" id="Resource_refa6"]
+script = ExtResource("2_pvic4")
+unit_data = ExtResource("13_7hm0t")
+state_saved = false
+
+[sub_resource type="Resource" id="Resource_glu08"]
+script = ExtResource("2_pvic4")
+unit_data = ExtResource("14_seyu0")
+state_saved = false
+
+[sub_resource type="Resource" id="Resource_vg61c"]
+script = ExtResource("2_pvic4")
+unit_data = ExtResource("15_qy5bt")
+state_saved = false
+
+[sub_resource type="Resource" id="Resource_3muxw"]
+script = ExtResource("2_pvic4")
+unit_data = ExtResource("16_de2c0")
+state_saved = false
+
+[sub_resource type="Resource" id="Resource_ea14v"]
+script = ExtResource("2_pvic4")
+unit_data = ExtResource("17_vdcdv")
+state_saved = false
+
+[resource]
+script = ExtResource("15_refa6")
+entries = Array[ExtResource("2_pvic4")]([SubResource("Resource_bse08"), SubResource("Resource_limnl"), SubResource("Resource_alpn7"), SubResource("Resource_t12a0"), SubResource("Resource_t64p3"), SubResource("Resource_235a0"), SubResource("Resource_7hm0t"), SubResource("Resource_seyu0"), SubResource("Resource_refa6"), SubResource("Resource_glu08"), SubResource("Resource_vg61c"), SubResource("Resource_3muxw"), SubResource("Resource_ea14v")])
+stash = Array[ExtResource("3_4c54j")]([ExtResource("16_glu08"), ExtResource("17_vg61c"), ExtResource("18_3muxw"), ExtResource("19_ea14v"), ExtResource("20_tof68"), ExtResource("21_vt8pn"), ExtResource("22_6pjdb"), ExtResource("23_6emta"), ExtResource("27_alpn7"), ExtResource("28_t12a0"), ExtResource("29_t64p3"), ExtResource("30_235a0"), ExtResource("31_7hm0t")])

@@ -1,11 +1,11 @@
-[gd_resource type="Resource" script_class="UnitData" format=3]
+[gd_resource type="Resource" script_class="UnitData" format=3 uid="uid://cy85lg7igt3g7"]
 
-[ext_resource type="Texture2D" path="res://Art/Units/MapSprites/Priest_Downed.png" id="1_bseq0"]
-[ext_resource type="Script" path="res://Classes/jobs/AbilityData.gd" id="2_wx1g2"]
-[ext_resource type="Texture2D" path="res://Art/Units/MapSprites/Priest.png" id="3_bls4j"]
-[ext_resource type="Texture2D" path="res://Art/Units/MapSprites/Priest_Moving.png" id="4_fbf2d"]
-[ext_resource type="Texture2D" path="res://Art/Units/Portraits/hair_mcgee_white.png" id="5_5amud"]
-[ext_resource type="Script" path="res://Classes/units/UnitData.gd" id="6_s7xxc"]
+[ext_resource type="Texture2D" uid="uid://jatc26kj1u3" path="res://Art/Units/MapSprites/Priest_Downed.png" id="1_bseq0"]
+[ext_resource type="Script" uid="uid://7w7ajveltxx5" path="res://Classes/jobs/AbilityData.gd" id="2_wx1g2"]
+[ext_resource type="Texture2D" uid="uid://utcba4ppc03" path="res://Art/Units/MapSprites/Priest.png" id="3_bls4j"]
+[ext_resource type="Texture2D" uid="uid://bpv34jqdf236f" path="res://Art/Units/MapSprites/Priest_Moving.png" id="4_fbf2d"]
+[ext_resource type="Texture2D" uid="uid://dkb5xbjjl4q5v" path="res://Art/Units/Portraits/hair_mcgee_white.png" id="5_5amud"]
+[ext_resource type="Script" uid="uid://cvvknuw621ar2" path="res://Classes/units/UnitData.gd" id="6_s7xxc"]
 [ext_resource type="Script" uid="uid://jytv7xrjv6l1" path="res://Classes/items/Item.gd" id="7_aedfp"]
 [ext_resource type="Resource" path="res://Resources/RuneVariants/Heal2.tres" id="8_t0fxs"]
 
@@ -14,9 +14,14 @@ script = ExtResource("6_s7xxc")
 display_name = "Aldin"
 portrait = ExtResource("5_5amud")
 base_stats = Dictionary[int, int]({
-1: 5,
-2: 5,
-4: 5
+0: 15,
+1: 3,
+2: 3,
+3: 8,
+4: 3,
+5: 7,
+6: 4,
+7: 2
 })
 map_sprite = ExtResource("3_bls4j")
 move_sprite = ExtResource("4_fbf2d")

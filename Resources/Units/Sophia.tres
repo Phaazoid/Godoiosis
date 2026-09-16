@@ -1,0 +1,30 @@
+[gd_resource type="Resource" script_class="UnitData" format=3 uid="uid://cfja2rrrneo3b"]
+
+[ext_resource type="Texture2D" uid="uid://c3hqfuhr1eyhm" path="res://Art/Units/MapSprites/Wizard_Downed.png" id="1_ee7ip"]
+[ext_resource type="Script" uid="uid://7w7ajveltxx5" path="res://Classes/jobs/AbilityData.gd" id="2_awrob"]
+[ext_resource type="Texture2D" uid="uid://dh7relsdlsex2" path="res://Art/Units/MapSprites/Wizard.png" id="3_acuq7"]
+[ext_resource type="Texture2D" uid="uid://b33dttfj4adfl" path="res://Art/Units/MapSprites/Wizard_Moving.png" id="4_15xjh"]
+[ext_resource type="Texture2D" uid="uid://bg707w6kaqv1a" path="res://Art/Units/Portraits/hair_mcgee_blond.png" id="5_mss0u"]
+[ext_resource type="Script" uid="uid://cvvknuw621ar2" path="res://Classes/units/UnitData.gd" id="6_tt0d6"]
+[ext_resource type="Script" uid="uid://jytv7xrjv6l1" path="res://Classes/items/Item.gd" id="7_nftml"]
+[ext_resource type="Resource" uid="uid://g207p44clmyf" path="res://Resources/RuneVariants/Earth Rune.tres" id="8_3oytk"]
+
+[resource]
+script = ExtResource("6_tt0d6")
+display_name = "Sophia"
+portrait = ExtResource("5_mss0u")
+base_stats = Dictionary[int, int]({
+3: 12,
+4: 4,
+5: 7,
+6: 8,
+7: 2
+})
+map_sprite = ExtResource("3_acuq7")
+move_sprite = ExtResource("4_15xjh")
+downed_sprite = ExtResource("1_ee7ip")
+base_aura = Dictionary[int, int]({
+5: 2
+})
+base_affinity = Array[int]([5])
+starting_inventory = Array[ExtResource("7_nftml")]([ExtResource("8_3oytk")])
