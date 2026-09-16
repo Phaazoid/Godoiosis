@@ -109,13 +109,16 @@ func execute_orders(unit):
 				side_channel[action.action_type] = []
 			side_channel[action.action_type].append(action)
 
-	# The pass's own reading of itself (#524), consulted for PAUSES ONLY -- every action below still
-	# executes in this function's phase order, so nothing here can reorder playback (Law #2).
-	var sheet := BeatSheet.read(squad, plan)
 	# Keyed on the SAME is_ai_faction read the concede above makes, so a hotseat faction with AI off
 	# is a human and paces like one: an AI plan is being read for the first time, a player's was
 	# authored by the person watching it. CINEMATIC ignores the fork (#410); BOARD keeps it.
+	#
+	# HOISTED ABOVE THE SHEET since #931, which is the first thing the sheet itself needs it for:
+	# whether a side-channel verb earns a beat is a question about whose pass this is.
 	var is_ai: bool = game.ai_controller.is_ai_faction(squad.leader.get_faction())
+	# The pass's own reading of itself (#524), consulted for PAUSES ONLY -- every action below still
+	# executes in this function's phase order, so nothing here can reorder playback (Law #2).
+	var sheet := BeatSheet.read(squad, plan, is_ai)
 	# THE FALLBACK BASE, for an action the sheet has no beat for (#647). There is no pass-wide profile
 	# any more -- COMBAT_ONLY gives a move and the volley after it different ones -- so this asks the
 	# one collapse about NO beat rather than inventing a second rule: unclassifiable is not combat, so
@@ -187,6 +190,15 @@ func execute_orders(unit):
 	# flat beat and one camera position.
 	for type in BaseAction.SIDE_CHANNEL_ORDER:
 		var batch: Array = side_channel.get(type, [])
+		# ...unless the verb earns no beat on this pass (#931) -- an AI's Rev, today's only one.
+		# The BARE call is the whole of it: every schedule defaults to empty and the base beat to
+		# zero, which this function already reads as no subject, no hold and no linger. So the
+		# skip is spelled in the argument list rather than in a second answer to how long a Rev
+		# holds -- coda_hold keeps saying 0.5, and nothing here disagrees with it, because the
+		# question asked above is whether we get as far as asking.
+		if not Pacing.coda_earns_a_beat(type, is_ai):
+			await _execute_action_sequence(batch)
+			continue
 		var codas := sheet.codas(type)
 		await _execute_action_sequence(batch, beat, _beat_holds(codas, is_ai),
 				_beat_subjects(codas), {}, _beat_lingers(codas), _beat_emphases(codas),

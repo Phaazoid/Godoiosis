@@ -819,11 +819,11 @@ const CLASS_KNOBS: Array[Dictionary] = [
 	{"group": "Actions", "label": "Hold: a rev", "static": "HOLD_REV",
 		"action": BaseAction.ActionType.REV,
 		"script": PACING_SCRIPT, "min": 0.0, "max": 3.0, "step": 0.05,
-		"tip": "Extra time for spinning a chainsword up. Ships short, beside the reload."},
+		"tip": "Extra time for spinning a chainsword up. Ships short, beside the reload. PLAYER PASSES ONLY since #931 -- an AI's rev takes no beat at all."},
 	{"group": "Actions", "label": "Linger: a rev", "static": "LINGER_REV",
 		"action": BaseAction.ActionType.REV,
 		"script": PACING_SCRIPT, "min": 0.0, "max": 4.0, "step": 0.05,
-		"tip": "How long the camera stays on a chainsword that has just spun up."},
+		"tip": "How long the camera stays on a chainsword that has just spun up. PLAYER PASSES ONLY since #931 -- an AI's rev takes no beat at all."},
 
 	# The OUTCOMES a blast earns extra time for, on top of the Actions floor above. Largest wins.
 	{"group": "Outcomes", "label": "Hold: a unit goes down", "static": "HOLD_DOWN",

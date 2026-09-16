@@ -512,6 +512,45 @@ static func coda_linger(type: BaseAction.ActionType) -> float:
 	return -1.0
 
 
+# WHETHER AN AI'S SIDE-CHANNEL VERB EARNS A BEAT AT ALL (#931) -- the third per-verb column, asked
+# before the two above rather than beside them: a verb that earns no beat never reaches a hold.
+#
+# Rev is the one that says no, and the reason is that it publishes NOTHING. No animation, no
+# particle, no icon, no sound -- the only file in the presentation layer that knows the word is
+# MainActionMenu's label. So the beat spends PLAYBACK_PAN flying the camera across the board and
+# then holds on a unit standing perfectly still, every enemy turn, for every chainsword that could
+# not reach anyone. BeatSheet.read already states the rule for the other phase, in its own words: a
+# hold-position filler is not a MOVES member, because that is "the honest reading of a phase in
+# which the board does not change."
+#
+# THE MISSING KEY IS THE SENTINEL, which is what coda_hold's -1.0 buys and a bool cannot: a
+# dictionary can be asked whether it has an arm, where `return true` at the bottom of a match could
+# not be told from a deliberate yes. get()'s default keeps a verb somebody forgot playing exactly as
+# it does today, and tests/law/test_action_registry.gd is what refuses the omission -- degrade in
+# play, red in the suite, the same bargain hold_for makes when it floors the -1.0.
+const CODA_EARNS_AN_AI_BEAT: Dictionary[BaseAction.ActionType, bool] = {
+	BaseAction.ActionType.RESCUE: true,
+	BaseAction.ActionType.RALLY: true,
+	BaseAction.ActionType.INTIMIDATE: true,
+	BaseAction.ActionType.RELOAD: true,
+	BaseAction.ActionType.REV: false,
+	BaseAction.ActionType.BURROW: true,
+	BaseAction.ActionType.CAPTURE: true,
+	BaseAction.ActionType.GUARD: true,
+	BaseAction.ActionType.OVERWATCH: true,
+}
+
+
+# The player's tail is UNCHANGED and the fork is one line, not a second column (dev, 2026-09-16).
+# An AI's plan is being read for the first time; the player authored theirs a second ago, so the
+# case for spending camera on it was never the same case. Same fork base_for makes, one question
+# over.
+static func coda_earns_a_beat(type: BaseAction.ActionType, is_ai: bool) -> bool:
+	if not is_ai:
+		return true
+	return CODA_EARNS_AN_AI_BEAT.get(type, true)
+
+
 # THE PAUSE POINT, as well as the pacing one (#723). Esc now opens the pause menu during an AI
 # turn, and a menu that lets the battle play on behind it is not a pause -- so playback yields here,
 # at the beat it was going to take anyway, and picks up where it left off when the card closes.
