@@ -1,6 +1,6 @@
-[gd_resource type="Resource" script_class="LookPreset" format=3]
+[gd_resource type="Resource" script_class="LookPreset" format=3 uid="uid://dnfpupto65itf"]
 
-[ext_resource type="Script" path="res://Classes/presentation/LookPreset.gd" id="1_eaxcr"]
+[ext_resource type="Script" uid="uid://c2kkh85l4j1q0" path="res://Classes/presentation/LookPreset.gd" id="1_eaxcr"]
 
 [resource]
 script = ExtResource("1_eaxcr")
@@ -17,15 +17,15 @@ values = {
 "CameraRig|fit_margin_cells": 1.0,
 "CameraRig|focus_band_far": 4.0,
 "CameraRig|focus_band_near": 5.0,
-"Sun|directional_shadow_max_distance": 100.0,
+"Sun|directional_shadow_max_distance": 125.0,
 "Sun|light_color": Color(1, 0.55, 0.24, 1),
-"Sun|light_energy": 1.1,
-"Sun|rotation_degrees:x": -13.999998,
-"Sun|rotation_degrees:y": -61.999992,
+"Sun|light_energy": 0.67,
+"Sun|rotation_degrees:x": -47.5,
+"Sun|rotation_degrees:y": -100.99999,
 "Sun|shadow_bias": 0.1,
 "Sun|shadow_enabled": true,
-"Sun|shadow_normal_bias": 2.0,
-"Sun|shadow_opacity": 1.0,
+"Sun|shadow_normal_bias": 2.33,
+"Sun|shadow_opacity": 0.48,
 "WorldEnvironment|environment:adjustment_brightness": 1.0,
 "WorldEnvironment|environment:adjustment_contrast": 1.0,
 "WorldEnvironment|environment:adjustment_enabled": true,
@@ -43,10 +43,10 @@ values = {
 "WorldEnvironment|environment:ssao_power": 1.5,
 "WorldEnvironment|environment:ssao_radius": 1.0,
 "WorldEnvironment|environment:tonemap_exposure": 1.0,
-"WorldEnvironment|environment:tonemap_mode": 2,
+"WorldEnvironment|environment:tonemap_mode": 4,
 "WorldEnvironment|environment:tonemap_white": 1.0,
 "WorldEnvironment|environment:volumetric_fog_albedo": Color(0.95, 0.55, 0.25, 1),
-"WorldEnvironment|environment:volumetric_fog_anisotropy": 0.6,
-"WorldEnvironment|environment:volumetric_fog_density": 0.06,
+"WorldEnvironment|environment:volumetric_fog_anisotropy": 0.13,
+"WorldEnvironment|environment:volumetric_fog_density": 0.01,
 "WorldEnvironment|environment:volumetric_fog_enabled": true
 }

@@ -1,5 +1,6 @@
 [gd_resource type="Resource" script_class="ScenarioData" format=4 uid="uid://dkyxvm7o1nm7u"]
 
+[ext_resource type="Script" uid="uid://c3hntyytrjkko" path="res://Classes/presentation/CameraPose.gd" id="1_8udpg"]
 [ext_resource type="Script" uid="uid://b7i3qekbjuuca" path="res://Classes/flow/DialogBeat.gd" id="1_ncrpp"]
 [ext_resource type="Script" uid="uid://cw4xhmsnr71ao" path="res://Classes/flow/ScenarioData.gd" id="2_8udpg"]
 [ext_resource type="Script" uid="uid://8ryqq4dv281h" path="res://Classes/flow/TutorialStep.gd" id="3_bqqqp"]
@@ -16,8 +17,12 @@
 [ext_resource type="Script" uid="uid://cvvknuw621ar2" path="res://Classes/units/UnitData.gd" id="14_1mwkt"]
 [ext_resource type="Script" uid="uid://t6htdtobwxob" path="res://Classes/weapons/instances/KineticMaceWeaponInstance.gd" id="15_5vivb"]
 [ext_resource type="Resource" uid="uid://ceogmk32dfq6l" path="res://Resources/Weapons/MainVarieties/Kinetic_Mace.tres" id="16_k77gb"]
-[ext_resource type="Script" uid="uid://bncwoq0llmo08" path="res://Classes/weapons/instances/CarbineWeaponInstance.gd" id="17_nwqk8"]
 [ext_resource type="Resource" path="res://Resources/Weapons/MainVarieties/Carbine.tres" id="18_th2on"]
+
+[sub_resource type="Resource" id="Resource_bqqqp"]
+script = ExtResource("1_8udpg")
+aim = Vector3(7.540001, 7, 11.837208)
+distance = 9.7188
 
 [sub_resource type="Resource" id="Resource_ncrpp"]
 script = ExtResource("6_urh73")
@@ -34,7 +39,7 @@ downed_sprite = ExtResource("9_lh1lg")
 starting_inventory = Array[ExtResource("5_pfw0o")]([ExtResource("7_f5bfg")])
 starting_equipped_index = 0
 
-[sub_resource type="Resource" id="Resource_bqqqp"]
+[sub_resource type="Resource" id="Resource_v74po"]
 script = ExtResource("4_v74po")
 unit_data = SubResource("Resource_8udpg")
 cell = Vector2i(6, 9)
@@ -69,11 +74,11 @@ weapon_battle_states = Dictionary[int, Dictionary]({
 }
 })
 
-[sub_resource type="Resource" id="Resource_v74po"]
+[sub_resource type="Resource" id="Resource_pfw0o"]
 script = ExtResource("6_urh73")
 template = ExtResource("7_f5bfg")
 
-[sub_resource type="Resource" id="Resource_pfw0o"]
+[sub_resource type="Resource" id="Resource_urh73"]
 script = ExtResource("14_1mwkt")
 display_name = "Ledge Thug"
 portrait = ExtResource("13_oehpn")
@@ -84,9 +89,9 @@ downed_sprite = ExtResource("9_lh1lg")
 starting_inventory = Array[ExtResource("5_pfw0o")]([ExtResource("7_f5bfg")])
 starting_equipped_index = 0
 
-[sub_resource type="Resource" id="Resource_urh73"]
+[sub_resource type="Resource" id="Resource_f5bfg"]
 script = ExtResource("4_v74po")
-unit_data = SubResource("Resource_pfw0o")
+unit_data = SubResource("Resource_urh73")
 cell = Vector2i(8, 9)
 squad_id = 0
 stats = Dictionary[int, int]({
@@ -101,7 +106,7 @@ stats = Dictionary[int, int]({
 })
 current_hp = 20
 current_will = 5
-inventory = Array[ExtResource("5_pfw0o")]([SubResource("Resource_v74po")])
+inventory = Array[ExtResource("5_pfw0o")]([SubResource("Resource_pfw0o")])
 equipped_index = 0
 affinity_saved = true
 limb_states = Dictionary[int, int]({
@@ -116,11 +121,11 @@ weapon_battle_states = Dictionary[int, Dictionary]({
 }
 })
 
-[sub_resource type="Resource" id="Resource_f5bfg"]
+[sub_resource type="Resource" id="Resource_1pojl"]
 script = ExtResource("15_5vivb")
 template = ExtResource("16_k77gb")
 
-[sub_resource type="Resource" id="Resource_1pojl"]
+[sub_resource type="Resource" id="Resource_lh1lg"]
 script = ExtResource("14_1mwkt")
 display_name = "Brawler"
 portrait = ExtResource("13_oehpn")
@@ -131,11 +136,11 @@ downed_sprite = ExtResource("9_lh1lg")
 starting_inventory = Array[ExtResource("5_pfw0o")]([ExtResource("16_k77gb")])
 starting_equipped_index = 0
 
-[sub_resource type="Resource" id="Resource_lh1lg"]
+[sub_resource type="Resource" id="Resource_4bd7c"]
 script = ExtResource("4_v74po")
-unit_data = SubResource("Resource_1pojl")
+unit_data = SubResource("Resource_lh1lg")
 cell = Vector2i(4, 7)
-squad_id = 6
+squad_id = 2
 stats = Dictionary[int, int]({
 0: 20,
 1: 5,
@@ -148,7 +153,7 @@ stats = Dictionary[int, int]({
 })
 current_hp = 20
 current_will = 5
-inventory = Array[ExtResource("5_pfw0o")]([SubResource("Resource_f5bfg")])
+inventory = Array[ExtResource("5_pfw0o")]([SubResource("Resource_1pojl")])
 equipped_index = 0
 affinity_saved = true
 limb_states = Dictionary[int, int]({
@@ -163,11 +168,11 @@ weapon_battle_states = Dictionary[int, Dictionary]({
 }
 })
 
-[sub_resource type="Resource" id="Resource_4bd7c"]
-script = ExtResource("17_nwqk8")
-template = ExtResource("18_th2on")
-
 [sub_resource type="Resource" id="Resource_ae0da"]
+script = ExtResource("6_urh73")
+template = ExtResource("7_f5bfg")
+
+[sub_resource type="Resource" id="Resource_raot0"]
 script = ExtResource("14_1mwkt")
 display_name = "Marksman"
 portrait = ExtResource("13_oehpn")
@@ -178,9 +183,9 @@ downed_sprite = ExtResource("9_lh1lg")
 starting_inventory = Array[ExtResource("5_pfw0o")]([ExtResource("18_th2on")])
 starting_equipped_index = 0
 
-[sub_resource type="Resource" id="Resource_raot0"]
+[sub_resource type="Resource" id="Resource_oehpn"]
 script = ExtResource("4_v74po")
-unit_data = SubResource("Resource_ae0da")
+unit_data = SubResource("Resource_raot0")
 cell = Vector2i(9, 6)
 squad_id = 1
 is_leader = true
@@ -198,54 +203,7 @@ stats = Dictionary[int, int]({
 })
 current_hp = 20
 current_will = 5
-inventory = Array[ExtResource("5_pfw0o")]([SubResource("Resource_4bd7c")])
-equipped_index = 0
-affinity_saved = true
-limb_states = Dictionary[int, int]({
-0: 0,
-1: 0,
-2: 0,
-3: 0
-})
-weapon_battle_states = Dictionary[int, Dictionary]({
-0: {
-"shots": 6
-}
-})
-
-[sub_resource type="Resource" id="Resource_oehpn"]
-script = ExtResource("6_urh73")
-template = ExtResource("7_f5bfg")
-
-[sub_resource type="Resource" id="Resource_1mwkt"]
-script = ExtResource("14_1mwkt")
-display_name = "Guard"
-portrait = ExtResource("13_oehpn")
-faction = 1
-map_sprite = ExtResource("11_ae0da")
-move_sprite = ExtResource("12_raot0")
-downed_sprite = ExtResource("9_lh1lg")
-starting_inventory = Array[ExtResource("5_pfw0o")]([ExtResource("7_f5bfg")])
-starting_equipped_index = 0
-
-[sub_resource type="Resource" id="Resource_5vivb"]
-script = ExtResource("4_v74po")
-unit_data = SubResource("Resource_1mwkt")
-cell = Vector2i(8, 7)
-squad_id = 1
-stats = Dictionary[int, int]({
-0: 20,
-1: 5,
-2: 5,
-3: 5,
-4: 5,
-5: 5,
-6: 5,
-7: 4
-})
-current_hp = 20
-current_will = 5
-inventory = Array[ExtResource("5_pfw0o")]([SubResource("Resource_oehpn")])
+inventory = Array[ExtResource("5_pfw0o")]([SubResource("Resource_ae0da")])
 equipped_index = 0
 affinity_saved = true
 limb_states = Dictionary[int, int]({
@@ -260,27 +218,26 @@ weapon_battle_states = Dictionary[int, Dictionary]({
 }
 })
 
-[sub_resource type="Resource" id="Resource_k77gb"]
-script = ExtResource("15_5vivb")
-template = ExtResource("16_k77gb")
+[sub_resource type="Resource" id="Resource_1mwkt"]
+script = ExtResource("6_urh73")
+template = ExtResource("7_f5bfg")
 
-[sub_resource type="Resource" id="Resource_nwqk8"]
+[sub_resource type="Resource" id="Resource_5vivb"]
 script = ExtResource("14_1mwkt")
-display_name = "Brawler"
+display_name = "Guard"
 portrait = ExtResource("13_oehpn")
 faction = 1
 map_sprite = ExtResource("11_ae0da")
 move_sprite = ExtResource("12_raot0")
 downed_sprite = ExtResource("9_lh1lg")
-starting_inventory = Array[ExtResource("5_pfw0o")]([ExtResource("16_k77gb")])
+starting_inventory = Array[ExtResource("5_pfw0o")]([ExtResource("7_f5bfg")])
 starting_equipped_index = 0
 
-[sub_resource type="Resource" id="Resource_th2on"]
+[sub_resource type="Resource" id="Resource_k77gb"]
 script = ExtResource("4_v74po")
-unit_data = SubResource("Resource_nwqk8")
-cell = Vector2i(5, 8)
-squad_id = 6
-is_leader = true
+unit_data = SubResource("Resource_5vivb")
+cell = Vector2i(8, 7)
+squad_id = 1
 stats = Dictionary[int, int]({
 0: 20,
 1: 5,
@@ -293,7 +250,56 @@ stats = Dictionary[int, int]({
 })
 current_hp = 20
 current_will = 5
-inventory = Array[ExtResource("5_pfw0o")]([SubResource("Resource_k77gb")])
+inventory = Array[ExtResource("5_pfw0o")]([SubResource("Resource_1mwkt")])
+equipped_index = 0
+affinity_saved = true
+limb_states = Dictionary[int, int]({
+0: 0,
+1: 0,
+2: 0,
+3: 0
+})
+weapon_battle_states = Dictionary[int, Dictionary]({
+0: {
+"rev": 0
+}
+})
+
+[sub_resource type="Resource" id="Resource_nwqk8"]
+script = ExtResource("15_5vivb")
+template = ExtResource("16_k77gb")
+
+[sub_resource type="Resource" id="Resource_th2on"]
+script = ExtResource("14_1mwkt")
+display_name = "Brawler"
+portrait = ExtResource("13_oehpn")
+faction = 1
+map_sprite = ExtResource("11_ae0da")
+move_sprite = ExtResource("12_raot0")
+downed_sprite = ExtResource("9_lh1lg")
+starting_inventory = Array[ExtResource("5_pfw0o")]([ExtResource("16_k77gb")])
+starting_equipped_index = 0
+
+[sub_resource type="Resource" id="Resource_3kvl8"]
+script = ExtResource("4_v74po")
+unit_data = SubResource("Resource_th2on")
+cell = Vector2i(5, 8)
+squad_id = 2
+is_leader = true
+squad_archetype = 1
+stats = Dictionary[int, int]({
+0: 20,
+1: 5,
+2: 5,
+3: 5,
+4: 5,
+5: 5,
+6: 5,
+7: 4
+})
+current_hp = 20
+current_will = 5
+inventory = Array[ExtResource("5_pfw0o")]([SubResource("Resource_nwqk8")])
 equipped_index = 0
 affinity_saved = true
 limb_states = Dictionary[int, int]({
@@ -311,8 +317,8 @@ weapon_battle_states = Dictionary[int, Dictionary]({
 [resource]
 script = ExtResource("2_8udpg")
 scenario_name = "missions/Terraces"
-unit_entries = Array[ExtResource("4_v74po")]([SubResource("Resource_bqqqp"), SubResource("Resource_urh73"), SubResource("Resource_lh1lg"), SubResource("Resource_raot0"), SubResource("Resource_5vivb"), SubResource("Resource_th2on")])
-tile_data = PackedByteArray("AAADAAcAAAAFAAAAAAAEAAcAAAAGAAAAAAAFAAcAAAAFAAEAAAAGAAcAAAAFAAEAAAAHAAcAAAAGAAEAAAAIAAgAAAAFAAAAAAAJAAgAAAAFAAAAAAAOAAgAAAABAAoAAAAPAAgAAAABAAoAAAAJAAkAAAAGAAAAAAAIAAkAAAAFAAAAAAAHAAkAAAAFAAAAAAAGAAkAAAAFAAAAAAAFAAkAAAAGAAEAAAAEAAgAAAAGAAEAAAADAAgAAAAGAAEAAAAIAAcAAAAFAAEAAAAJAAcAAAAGAAAAAAADAAkAAAAFAAAAAAAEAAkAAAAGAAEAAAAKAAkAAAAFAAAAAAAOAAkAAAABAAoAAAAGAAgAAAAFAAEAAAAFAAgAAAAFAAAAAAAHAAgAAAAGAAEAAAAPAAkAAAABAAoAAAAGAAYAAAAGAAAAAAAFAAYAAAAFAAAAAAAEAAYAAAAFAAEAAAADAAYAAAAFAAEAAAADAAUAAAAGAAEAAAAEAAUAAAAGAAEAAAAFAAUAAAAFAAAAAAAGAAUAAAAFAAAAAAAHAAUAAAAFAAEAAAAIAAUAAAAFAAEAAAAJAAUAAAAGAAAAAAAKAAUAAAAFAAAAAAAPAAYAAAABAAoAAAAJAAYAAAAFAAAAAAAIAAYAAAAFAAEAAAAHAAYAAAAGAAAAAAAPAAUAAAABAAoAAAAFAAQAAAAFAAEAAAAGAAQAAAABAAoAAAAHAAQAAAABAAoAAAAIAAQAAAABAAoAAAAJAAQAAAAFAAEAAAAKAAQAAAAFAAEAAAALAAQAAAAGAAEAAAAPAAQAAAABAAoAAAAJAAMAAAAKAAYAAAAKAAMAAAAKAAYAAAALAAMAAAALAAYAAAAPAAMAAAABAAoAAAAIAAMAAAAKAAYAAAAHAAMAAAAKAAYAAAAGAAMAAAAKAAYAAAAFAAMAAAAKAAYAAAAEAAMAAAAKAAYAAAADAAMAAAAKAAYAAAAGAAIAAAALAAYAAAAHAAIAAAALAAYAAAAIAAIAAAALAAYAAAAJAAIAAAALAAYAAAAKAAIAAAALAAYAAAALAAIAAAALAAYAAAAOAAIAAAABAAoAAAAPAAIAAAABAAoAAAAEAAIAAAALAAYAAAAFAAIAAAALAAYAAAALAAEAAAAKAAYAAAAKAAEAAAAKAAYAAAAJAAEAAAAKAAYAAAAIAAEAAAAKAAYAAAAHAAEAAAAKAAYAAAAGAAEAAAAKAAYAAAAFAAEAAAAKAAYAAAAEAAEAAAAKAAYAAAADAAEAAAALAAYAAAAOAAEAAAABAAoAAAAOAAAAAAABAAoAAAAPAAAAAAABAAoAAAALAAAAAAAKAAYAAAAKAAAAAAAKAAYAAAAJAAAAAAAKAAYAAAAIAAAAAAAKAAYAAAAHAAAAAAAKAAYAAAAGAAAAAAAKAAYAAAAFAAAAAAAKAAYAAAAEAAAAAAAKAAYAAAADAAAAAAAKAAYAAAAPAAEAAAABAAoAAAAPAAoAAAABAAoAAAAOAAoAAAABAAoAAAAPAAsAAAABAAoAAAAOAAsAAAABAAoAAAAPAAwAAAABAAoAAAAOAAwAAAABAAoAAAAOAA0AAAABAAoAAAAPAA0AAAABAAoAAAAOAAMAAAABAAoAAAAOAAQAAAABAAoAAAAMAAgAAAABAAoAAAAMAAcAAAABAAoAAAAMAAUAAAAGAAEAAAAKAAYAAAAFAAAAAAAKAAgAAAAGAAAAAAALAAUAAAAGAAEAAAAKAAcAAAASAA0AAAANAAUAAAAGAAEAAAADAAIAAAALAAYAAAAEAAQAAAABAAoAAAADAAQAAAABAAoAAAA=")
+unit_entries = Array[ExtResource("4_v74po")]([SubResource("Resource_v74po"), SubResource("Resource_f5bfg"), SubResource("Resource_4bd7c"), SubResource("Resource_oehpn"), SubResource("Resource_k77gb"), SubResource("Resource_3kvl8")])
+tile_data = PackedByteArray("AAADAAcAAAAFAAAAAAAEAAcAAAAGAAAAAAAFAAcAAAAFAAEAAAAGAAcAAAAFAAEAAAAHAAcAAAAGAAEAAAAIAAgAAAAFAAAAAAAJAAgAAAAFAAAAAAAKAAgAAAAGAAAAAAAMAAgAAAABAAoAAAAOAAgAAAABAAoAAAAPAAgAAAABAAoAAAAJAAkAAAAGAAAAAAAIAAkAAAAFAAAAAAAHAAkAAAAFAAAAAAAGAAkAAAAFAAAAAAAFAAkAAAAGAAEAAAAEAAgAAAAGAAEAAAADAAgAAAAGAAEAAAAIAAcAAAAFAAEAAAAJAAcAAAAGAAAAAAAKAAcAAAASAA0AAAAMAAcAAAABAAoAAAADAAkAAAAFAAAAAAAEAAkAAAAGAAEAAAAKAAkAAAAFAAAAAAAOAAkAAAABAAoAAAAGAAgAAAAFAAEAAAAFAAgAAAAFAAAAAAAHAAgAAAAGAAEAAAAPAAkAAAABAAoAAAAGAAYAAAAGAAAAAAAFAAYAAAAFAAAAAAAEAAYAAAAFAAEAAAADAAYAAAAFAAEAAAADAAUAAAAGAAEAAAAEAAUAAAAGAAEAAAAFAAUAAAAFAAAAAAAGAAUAAAAFAAAAAAAHAAUAAAAFAAEAAAAIAAUAAAAFAAEAAAAJAAUAAAAGAAAAAAAKAAUAAAAFAAAAAAALAAUAAAAGAAEAAAAPAAYAAAABAAoAAAAKAAYAAAAFAAAAAAAJAAYAAAAFAAAAAAAIAAYAAAAFAAEAAAAHAAYAAAAGAAAAAAAPAAUAAAABAAoAAAADAAQAAAABAAoAAAAEAAQAAAABAAoAAAAFAAQAAAAFAAEAAAAGAAQAAAABAAoAAAAHAAQAAAABAAoAAAAIAAQAAAABAAoAAAAJAAQAAAAFAAEAAAAKAAQAAAAFAAEAAAALAAQAAAAGAAEAAAAPAAQAAAABAAoAAAAJAAMAAAAKAAYAAAAKAAMAAAAKAAYAAAALAAMAAAALAAYAAAAPAAMAAAABAAoAAAAIAAMAAAAKAAYAAAAHAAMAAAAKAAYAAAAGAAMAAAAKAAYAAAAFAAMAAAAKAAYAAAAEAAMAAAAKAAYAAAADAAMAAAAKAAYAAAAGAAIAAAALAAYAAAAHAAIAAAALAAYAAAAIAAIAAAALAAYAAAAJAAIAAAALAAYAAAAKAAIAAAALAAYAAAALAAIAAAALAAYAAAAOAAIAAAABAAoAAAAPAAIAAAABAAoAAAADAAIAAAALAAYAAAAEAAIAAAALAAYAAAAFAAIAAAALAAYAAAALAAEAAAAKAAYAAAAKAAEAAAAKAAYAAAAJAAEAAAAKAAYAAAAIAAEAAAAKAAYAAAAHAAEAAAAKAAYAAAAGAAEAAAAKAAYAAAAFAAEAAAAKAAYAAAAEAAEAAAAKAAYAAAADAAEAAAALAAYAAAAOAAEAAAABAAoAAAAOAAAAAAABAAoAAAAPAAAAAAABAAoAAAALAAAAAAAKAAYAAAAKAAAAAAAKAAYAAAAJAAAAAAAKAAYAAAAIAAAAAAAKAAYAAAAHAAAAAAAKAAYAAAAGAAAAAAAKAAYAAAAFAAAAAAAKAAYAAAAEAAAAAAAKAAYAAAADAAAAAAAKAAYAAAAPAAEAAAABAAoAAAAPAAoAAAABAAoAAAAOAAoAAAABAAoAAAAPAAsAAAABAAoAAAAOAAsAAAABAAoAAAAPAAwAAAABAAoAAAAOAAwAAAABAAoAAAAOAA0AAAABAAoAAAAPAA0AAAABAAoAAAAOAAMAAAABAAoAAAAOAAQAAAABAAoAAAAMAAUAAAAGAAEAAAANAAUAAAAGAAEAAAA=")
 corner_heights = Dictionary[Vector2i, Vector4i]({
 Vector2i(3, 0): Vector4i(4, 4, 4, 4),
 Vector2i(3, 1): Vector4i(4, 4, 3, 3),
@@ -413,8 +419,10 @@ zones = {
 }
 objectives = Array[int]([0])
 look_preset = "Day"
-roster = "Company"
-deployment_cap = 4
+roster = "Terrace_Roster"
+deployment_cap = 3
+camera_start = SubResource("Resource_bqqqp")
 ai_factions = Array[int]([1])
+in_demo = true
 contested = true
 rounds_elapsed = 1

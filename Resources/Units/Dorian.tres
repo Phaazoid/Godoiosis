@@ -8,6 +8,7 @@
 [ext_resource type="Texture2D" uid="uid://bun6xqwudsavw" path="res://Art/Units/Portraits/hair_mcgee.png" id="4_0k3kp"]
 [ext_resource type="Script" uid="uid://jytv7xrjv6l1" path="res://Classes/items/Item.gd" id="7_0k3kp"]
 [ext_resource type="Resource" uid="uid://qm4wjlfxedbr" path="res://Resources/Weapons/MainVarieties/ChainSword.tres" id="8_0k3kp"]
+[ext_resource type="Resource" path="res://Resources/RuneVariants/Heal2.tres" id="9_k3g3d"]
 
 [resource]
 script = ExtResource("1_1705b")
@@ -29,5 +30,5 @@ base_aura = Dictionary[int, int]({
 7: 5
 })
 base_affinity = Array[int]([7])
-starting_inventory = Array[ExtResource("7_0k3kp")]([ExtResource("8_0k3kp")])
+starting_inventory = Array[ExtResource("7_0k3kp")]([ExtResource("8_0k3kp"), ExtResource("9_k3g3d")])
 metadata/_custom_type_script = "uid://cvvknuw621ar2"
