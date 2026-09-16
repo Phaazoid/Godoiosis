@@ -458,3 +458,80 @@ func test_a_restart_taken_mid_dialog_still_reports_that_the_briefing_will_play()
 	assert_bool(_director.pre_mission_started()).override_failure_message(
 		"a queued briefing was reported as nothing to say").is_true()
 	await _await_starts(2)
+
+
+# --- the #982 preview door ---
+
+func _timeline(text: String) -> DialogicTimeline:
+	var timeline := DialogicTimeline.new()
+	timeline.from_text(text)
+	return timeline
+
+
+func test_preview_plays_a_timeline_over_an_unarmed_board() -> void:
+	assert_bool(_director.preview(_timeline("torv: A previewed line."))).is_true()
+	await _await_starts(1)
+
+
+# The preview is for hearing a line, not for spending a beat: an author who previews the timeline
+# a MISSION_START beat names must still get that beat when the mission starts.
+func test_preview_does_not_spend_the_beat_that_shares_its_timeline() -> void:
+	var beat := _beat(DialogBeat.Trigger.MISSION_START, "torv: The briefing.")
+	_stub.scenario_manager.current_dialog_beats.append(beat)
+
+	assert_bool(_director.preview(beat.timeline)).is_true()
+	await _await_starts(1)
+	Dialogic.end_timeline(true)
+	await Dialogic.timeline_ended
+
+	_director.mission_started()
+	await _await_starts(2)
+
+
+# Refuses rather than queues -- see the door's own header.
+func test_preview_is_refused_while_something_is_already_talking() -> void:
+	assert_bool(_director.preview(_timeline("torv: First."))).is_true()
+	await _await_starts(1)
+
+	assert_bool(_director.preview(_timeline("torv: Second."))).is_false()
+	await get_tree().process_frame
+	await get_tree().process_frame
+	assert_int(_starts).is_equal(1)
+
+
+func test_preview_refuses_a_null_timeline() -> void:
+	assert_bool(_director.preview(null)).is_false()
+
+
+# The latch has to come back down, or the NEXT preview is refused forever and so is every beat.
+func test_a_finished_preview_goes_quiet_and_leaves_the_door_open() -> void:
+	_director.went_quiet.connect(_count_quiet)
+	assert_bool(_director.preview(_timeline("torv: A line."))).is_true()
+	await _await_starts(1)
+	Dialogic.end_timeline(true)
+	await Dialogic.timeline_ended
+	await get_tree().process_frame
+
+	assert_int(_quiets).is_equal(1)   # the same signal the pre-mission screen waits on
+	assert_bool(_director.preview(_timeline("torv: Another."))).is_true()
+	await _await_starts(2)
+
+
+# WHY preview sets _dialog_active rather than leaning on Dialogic.current_timeline: start() defers
+# to the layout's ready, so current_timeline is a frame late, and a beat triggered in the SAME
+# frame reads "nothing is talking".
+#
+# MEASURED, because the obvious guess is wrong: without the latch the beat does not play OVER the
+# preview -- Dialogic absorbs the second start -- it is marked fired and SILENTLY SWALLOWED, and
+# _pending stays empty. So the property is not "only one plays" (true either way, which is why a
+# case asserting that passes against the bug); it is that the beat is still there afterwards.
+func test_a_beat_triggered_in_the_same_frame_as_a_preview_queues_behind_it() -> void:
+	_stub.scenario_manager.current_dialog_beats.append(
+		_beat(DialogBeat.Trigger.MISSION_START, "torv: The briefing."))
+
+	assert_bool(_director.preview(_timeline("torv: A previewed line."))).is_true()
+	_director.mission_started()   # same frame, before the layout is ready
+
+	await _await_starts(1)        # the preview alone; the beat is queued behind it
+	Dialogic.end_timeline(true)
+	await _await_starts(2)        # ...and the beat plays when the preview ends
