@@ -7,7 +7,7 @@ its child [#49 Action Queue UX](https://github.com/Phaazoid/Godoiosis/issues/49)
 This is a *guidelines* doc, not a spec — it captures the principles we're holding the work to,
 plus the running order of the queue-UX checklist. Update it as items land.
 
-**Canon checked through #990 (2026-09-16).**
+**Canon checked through #992 (2026-09-16).**
 
 ## Principles
 
@@ -2032,6 +2032,17 @@ cannot be offset individually** — it is a lattice — so:
 
 **A sprite's CELL is still a board fact.** `UnitMirror` reads it *before* adding the offset —
 reading it off the displaced point would name a cell in the sky.
+
+**...and that seam places a prop's ROOT, which is not the same as placing its PARTS
+([#992](https://github.com/Phaazoid/Godoiosis/issues/992), 2026-09-16).** A tuft is the one prop
+whose plants each sit at their own point on the cell, so each carries a LOCAL lift measured against
+the cell's surface — and it read that surface through `surface_point`, i.e. through the tear-out.
+Root up 40, every plant down 40: the ground rode into the diorama and the grass stayed standing on
+the board, for the whole stage. **A delta under a displaced root must be asked entirely in the BOARD
+frame** (`BoardSpace.surface_point`, never `BoardMirror`'s), which is also the arithmetic #342 wrote
+before the tear-out existed — the comment on that line stayed true while its premise was falsified
+underneath it. The Burrow cover bumps are the same decomposition and were never wrong, because they
+leave their y at zero and let the root carry everything.
 
 **A MAIN ACTION is what tears the board open — movement never does** (dev, on playing it:
 *"there have to be main actions at play. Movement by itself doesn't do it."*). `BeatSheet.cells` is
