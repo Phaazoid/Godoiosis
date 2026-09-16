@@ -26,6 +26,12 @@ class_name PreMissionCard
 # HFlowContainer's minimum width is its widest child, so one long ability name would walk the whole
 # column out of the region -- the #685 failure, one surface over. Every content-bearing label is
 # clip_text with the full string on hover, so the card's minimum size is a constant.
+#
+# WHICH IS A CEILING, NOT A FIXED WIDTH (#989). A clip_text Label declares a minimum width of 1, and a
+# container hands a child exactly its minimum -- so a chip pinned at CHIP_MIN_W was pinned at 30px
+# whatever was written in it, and the law above was being kept by refusing to draw rather than by
+# bounding. A chip asks for its own text up to CHIP_MAX_W, which is the width this column already
+# demands for the job picker, so the constant this file's minimum size rests on has not moved.
 
 signal deploy_toggled(unit: Unit)
 # A row was clicked -- the item under the cursor, or null for an empty slot. The screen holds the
@@ -52,6 +58,10 @@ const ITEM_COLUMN := 128
 const SPRITE := 52
 const CHIP_MIN_W := 30
 const JOB_PICKER_MIN_W := 84
+# What a chip may grow to. NOT a taste value: the job picker one row up already demands
+# JOB_PICKER_MIN_W of this same column, so a chip inside that adds nothing to the card's minimum width
+# and this file's header law is satisfied by arithmetic rather than by a promise (#989).
+const CHIP_MAX_W := JOB_PICKER_MIN_W
 const NO_JOB_LABEL := "— none —"
 
 # The eight, in Stats.Stat declaration order, two columns of four. Read off the enum rather than
@@ -175,8 +185,8 @@ func _build_unit_half() -> Control:
 	# STAYS -- it is this file's header law, and what keeps the card's minimum size a constant -- but
 	# the box it clips against is now the unit half, which is five times the room and holds every
 	# name the game ships. Left-aligned so it grows rightwards into that room (dev, 2026-09-13:
-	# "cut off instead of continuing to the right"), and it still sits under the sprite, because
-	# `who` is as tall as the ring and this is the next row down.
+	# "cut off instead of continuing to the right"), and it still sits under the sprite, `who` being
+	# one row and this the next.
 	var name_label := Label.new()
 	name_label.text = unit.get_unit_name()
 	name_label.clip_text = true
@@ -556,14 +566,31 @@ func _rest_ink(label: Label) -> void:
 	label.add_theme_color_override("font_color", QueueStyle.ink(QueueStyle.Role.BODY_TEXT))
 
 
-# A bounded chip. custom_minimum_size plus clip_text is what stops a long name widening the card:
-# the minimum is a constant, and the full string is on hover.
+# A bounded chip, sized to its own text between two constants (#989).
+#
+# THE MINIMUM IS THE WIDTH IN HERE, and that is what the old bare CHIP_MIN_W got wrong: both rows are
+# HFlowContainers, a container lays a child out at its combined minimum, and a clip_text Label declares
+# a minimum width of 1 -- so every chip drew at 30px whatever was in it and none of them ever spent the
+# room the meta column has. "Iron Will" read as cut off beside an empty row, and the 30 was only ever
+# right for the caller it was sized at, the two-letter limb codes. The deployed strip met the same
+# mechanism at 46px in #944.
+#
+# The clip and the tooltip STAY -- the header law is that nothing may demand width from its content --
+# and the CAP is what keeps the card's minimum a constant instead.
 func _chip(text: String, tint: Color, tip: String) -> Label:
 	var chip := Label.new()
 	chip.text = text
 	chip.clip_text = true
-	chip.custom_minimum_size.x = CHIP_MIN_W
 	chip.add_theme_font_size_override("font_size", 10)
+	# Measured off the font the chip will actually draw with, so no pixel count is typed here and a
+	# theme change moves the chip with it. Exact before the card enters the tree, since UiTheme.tres
+	# overrides no font -- and a card is built and refreshed once before it is added to the grid.
+	var font: Font = chip.get_theme_font("font")
+	var ink := 0.0
+	if font != null:
+		ink = font.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1,
+			chip.get_theme_font_size("font_size")).x
+	chip.custom_minimum_size.x = clampf(ceilf(ink), CHIP_MIN_W, CHIP_MAX_W)
 	chip.add_theme_color_override("font_color", tint)
 	chip.tooltip_text = UiText.wrap(tip)
 	chip.mouse_filter = Control.MOUSE_FILTER_STOP

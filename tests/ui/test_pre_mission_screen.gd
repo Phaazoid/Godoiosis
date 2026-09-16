@@ -611,6 +611,15 @@ func _toggle_border(card: PreMissionCard) -> Color:
 # It also pins the PLACEMENT, which is a dev ruling rather than a detail: the ring rides the portrait
 # so the card's BODY stays free for a weapon-proficiency readout the day proficiency does something
 # (dev, 2026-09-12). A ring that drifted into the stat region would spend room that is spoken for.
+# WHERE THE CHARACTER ENDS UP ON SCREEN, read back out of the rect the ring will draw its sheet into.
+# The cell is not the art (#937), so the ink box is what has to be measured -- taking `_portrait_rect`
+# for the character would report the padding as well and pass against the bug this is here for.
+static func _drawn_ink(ring: AuraRing) -> Rect2:
+	var scale: float = ring._portrait_rect.size.x / float(MapSpriteInk.SHEET)
+	return Rect2(ring._portrait_rect.position + Vector2(MapSpriteInk.INK_RECT.position) * scale,
+		Vector2(MapSpriteInk.INK_RECT.size) * scale)
+
+
 func test_every_card_wears_its_units_aura_ring_around_the_portrait() -> void:
 	if not await _enter_phase():
 		return
@@ -631,12 +640,27 @@ func test_every_card_wears_its_units_aura_ring_around_the_portrait() -> void:
 		# sprite rather than under it, and it is why nothing else in the column holds one.
 		assert_object(ring.portrait).is_same(card.unit.unit_data.map_sprite)
 		assert_that(ring.ground).is_equal(AuraRing.Ground.SKINNED)
-		# It frames the CHARACTER, not the canvas: every map sprite draws its ink in the lower half of
-		# its sheet, so an ink-centred ring sits BELOW the box's middle and a box-centred one does not.
-		# Without this the difference is invisible to a headless suite -- a mutant proved it.
-		assert_float(ring._centre.y).override_failure_message(
-			"the ring is centred on the sprite's canvas, so it frames the empty half above the "
-			+ "character").is_greater(ring.size.x * 0.5)
+
+		# IT FRAMES THE CHARACTER, NOT THE CANVAS -- the same rule #930 pinned, restated for the way
+		# #990 makes it true. The old assertion was that the ring sits BELOW the box's middle, which was
+		# how an ink-centred ring proved itself while the sprite was fitted cell-and-all into the box;
+		# the sprite is zoomed into the ring now, so that number is the box's middle exactly and the
+		# property has to be read off the two together.
+		var ink := _drawn_ink(ring)
+		assert_float(ink.get_center().distance_to(ring._centre)).override_failure_message(
+			"%s is drawn off the middle of their own ring" % card.unit.get_unit_name()) \
+			.is_less_equal(1.0)
+		assert_float(ink.size.length() * 0.5).override_failure_message(
+			("%s's ink reaches %.1f px inside a ring whose band starts at %.1f -- the sprite is not "
+			+ "filling the ring") % [card.unit.get_unit_name(), ink.size.length() * 0.5, ring._inner]) \
+			.is_equal_approx(ring._inner - AuraRing.CLEARANCE, 0.5)
+		# ...and the player-visible half, in the one unit nothing here has to type: a 52px column must
+		# not draw the character SMALLER than the 24px deployed-strip disc does, which crops at 1:1.
+		# That is what the canvas fit was doing, and it is the whole of the report.
+		assert_float(ink.size.x).override_failure_message(
+			("%s is drawn %.1f px wide from a %d px ink box -- the column is spending itself on the "
+			+ "cell's padding") % [card.unit.get_unit_name(), ink.size.x,
+			MapSpriteInk.INK_RECT.size.x]).is_greater_equal(float(MapSpriteInk.INK_RECT.size.x))
 
 		# THE RESERVATION, as an assertion rather than a comment: the ring ends above the stat grid,
 		# so the card's bottom-left region is still empty for the proficiency readout to land in.
@@ -696,6 +720,44 @@ func test_every_roster_card_draws_its_units_name_in_full() -> void:
 			.is_greater(float(PreMissionCard.SPRITE))
 		assert_bool(_draws_in_full(label)).override_failure_message(
 			"%s's name is drawn in a box narrower than the name" % who).is_true()
+
+
+# THE CHIPS, the same rule at the third surface and the one a container answers rather than a box
+# (#989). A chip's `custom_minimum_size` IS its width inside an HFlowContainer -- a clip_text Label
+# declares a minimum of 1, and a container lays a child out at its combined minimum -- so a bare
+# CHIP_MIN_W drew every ability name at 30px however wide the column beside it was.
+#
+# Two assertions again, and the structural one is also the anti-vacuity guard: the roster has to hold
+# at least one chip whose own text needs more than the floor, or a run that found nothing to measure
+# would pass. Ross's innate Iron Will is that chip, and it is what reddens on main.
+func test_every_chip_on_a_card_draws_what_is_written_in_it() -> void:
+	if not await _enter_phase():
+		return
+	var cards := _cards()
+	assert_int(cards.size()).is_greater(0)
+
+	var cut: Array[String] = []
+	var grew := 0
+	for card in cards:
+		for row in _walk(card):
+			if not (row is HFlowContainer):
+				continue
+			for node in row.get_children():
+				var chip := node as Label
+				if chip == null or not chip.clip_text:
+					continue
+				if not _draws_in_full(chip):
+					cut.append("%s's \"%s\"" % [card.unit.get_unit_name(), chip.text])
+				if chip.size.x > float(PreMissionCard.CHIP_MIN_W):
+					grew += 1
+
+	assert_array(cut).override_failure_message(
+		("a chip is drawn in a box narrower than its own text: %s. In a flow container the minimum "
+		+ "size IS the width, so a chip has to ASK for its text.") % ", ".join(cut)).is_empty()
+	assert_int(grew).override_failure_message(
+		("no chip on any card is wider than the %d-px floor, so nothing here was actually measured "
+		+ "-- the roster needs a unit whose ability or limb chip needs more than that")
+		% PreMissionCard.CHIP_MIN_W).is_greater(0)
 
 
 # THE DEPLOYED STRIP, the same rule at the surface that answers it the other way round: these labels

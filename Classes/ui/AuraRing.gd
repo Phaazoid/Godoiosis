@@ -55,7 +55,7 @@ const SECTOR_PAD := deg_to_rad(5.0)     # the gap between one element's arc and 
 
 const BAND_RATIO := 0.16                # tick length, as a fraction of the outer radius
 const TICK_W_RATIO := 0.11              # tick thickness, as a fraction of the mid radius
-const CLEARANCE := 1.0                  # how far the band sits outside the portrait's ink box
+const CLEARANCE := 1.0                  # the gap between the portrait's ink box and the band
 # Inside this fraction of the outer radius is the PORTRAIT, not a sector: pointing at the character's
 # face is not pointing at an element. Outside it the whole 72-degree wedge is the target, because
 # hitting a four-pixel band with a mouse is not a thing to ask of anyone.
@@ -76,9 +76,9 @@ const HOVER_BORDER := 0.8               # how far the border wraps past each END
 # colours (the pre-mission card); AUTHORED is the dev's own element wheel (the inspect panel).
 enum Ground { AUTHORED, SKINNED }
 
-# What this ring is wrapped around: a map SPRITE, whose character sits in the lower half of its
-# canvas, or a PORTRAIT, which fills its own box. It decides where the centre is and nothing else.
-enum Fit { INK, BOX }
+# A `Fit` enum lived here until #990 and is deliberately gone rather than left inert: its whole job was
+# deciding the centre, and the card's branch now computes exactly what the panel's does. Whether a ring
+# DRAWS its own portrait is already answered by `portrait` being null or not.
 
 # One element's line in the readout. rows() is the model; everything below only draws it.
 class Row:
@@ -95,10 +95,12 @@ var portrait: Texture2D                 # drawn in the middle, card-side; the pa
 # headless case can assert -- _gui_input takes a synthetic motion event and this is the answer.
 var hovered: Elemental.Element = Elemental.Element.NONE
 
-var _fit: Fit = Fit.BOX
 var _centre := Vector2.ZERO
 var _outer := 0.0
 var _inner := 0.0
+# Where the portrait is DRAWN -- derived in _layout beside the radii rather than worked out in _draw,
+# so a headless case can read the geometry the frame would have used (#990).
+var _portrait_rect := Rect2()
 
 
 # --- the model -------------------------------------------------------------------------------------
@@ -152,20 +154,20 @@ static func readout(target: Unit) -> String:
 # --- building --------------------------------------------------------------------------------------
 
 # The card's ring: it FRAMES THE CHARACTER, not the canvas. Every map sprite draws its ink in the
-# lower half of its sheet (MapSpriteInk), so a ring centred on the 52px box would sit a third of the
-# box above the person inside it -- #560's finding, arriving at a second surface.
+# lower half of its sheet (MapSpriteInk), so the sprite is ZOOMED until the character fills the ring
+# rather than fitted cell-and-all into the box -- #937's law, arriving at the surface its own sweep
+# missed (#990). Until then 52px of column bought ~19px of character, and the ring, honestly framing
+# that ink, came out 32px across inside a 52px node with the top 28 of it blank canvas.
+#
+# SQUARE, because the ring is concentric with its node now. That is 8px SHORTER than the old box, and
+# the card's layout does not move: `who`'s height is set by the meta column beside this one either way.
 static func for_portrait(target: Unit, sprite: Texture2D, box_px: float) -> AuraRing:
 	var ring := AuraRing.new()
 	ring.unit = target
 	ring.portrait = sprite
 	ring.ground = Ground.SKINNED
-	ring._fit = Fit.INK
-	# Tall enough for the band below the ink; the ink sits low, so the ring never clears the top edge.
-	# The WIDTH is what the column gives us and everything else is derived from the live rect (see
-	# _layout), so this is the one place a number is stated.
-	var reach := MapSpriteInk.ink_reach(box_px) + CLEARANCE
-	ring.custom_minimum_size = Vector2(box_px,
-		ceilf(MapSpriteInk.ink_centre(box_px).y + reach / (1.0 - BAND_RATIO)))
+	# The one number stated anywhere; everything else is derived from the live rect (see _layout).
+	ring.custom_minimum_size = Vector2(box_px, box_px)
 	ring._ready_common()
 	return ring
 
@@ -182,7 +184,6 @@ static func over_portrait(target: Unit) -> AuraRing:
 	var ring := AuraRing.new()
 	ring.unit = target
 	ring.ground = Ground.AUTHORED
-	ring._fit = Fit.BOX
 	ring._ready_common()
 	return ring
 
@@ -205,19 +206,19 @@ func _ready_common() -> void:
 # here would be a second answer to "how big is the ring" that the scene silently overrules, and the
 # two would disagree the day either moved. Only the CARD states a number, because there its own
 # minimum is what makes the column that wide.
+#
+# ONE ANSWER FOR BOTH SURFACES since #990. The panel's portrait fills its own square and the card's is
+# zoomed until it does, so "where is the centre" stopped having two answers -- and the card is where
+# that matters, because a ring the sprite is drawn INTO frames the character by construction rather
+# than by agreeing with an offset (#560's finding, now structural).
 func _layout() -> void:
-	match _fit:
-		Fit.INK:
-			# The card: centred on the CHARACTER, not the canvas -- a 32x32 map sprite draws its ink
-			# in the lower half, so a box-centred ring misses by a third of the box (#560).
-			_centre = MapSpriteInk.ink_centre(size.x)
-			_inner = MapSpriteInk.ink_reach(size.x) + CLEARANCE
-			_outer = _inner / (1.0 - BAND_RATIO)
-		Fit.BOX:
-			# The panel: a portrait fills its own square, so the ring is concentric with it.
-			_centre = size * 0.5
-			_outer = minf(size.x, size.y) * 0.5
-			_inner = _outer * (1.0 - BAND_RATIO)
+	_centre = size * 0.5
+	_outer = minf(size.x, size.y) * 0.5
+	_inner = _outer * (1.0 - BAND_RATIO)
+	# CLEARANCE keeps its meaning and changes direction: the ink is drawn to just inside the band
+	# rather than the band pushed out past the ink.
+	if portrait != null:
+		_portrait_rect = MapSpriteInk.ink_fit_rect(_centre, _inner - CLEARANCE)
 	queue_redraw()
 
 
@@ -287,7 +288,7 @@ func _set_hovered(element: Elemental.Element) -> void:
 
 func _draw() -> void:
 	if portrait != null:
-		draw_texture_rect(portrait, Rect2(Vector2.ZERO, Vector2(size.x, size.x)), false)
+		draw_texture_rect(portrait, _portrait_rect, false)
 	var mid := (_inner + _outer) * 0.5
 	var width := maxf(2.0, mid * TICK_W_RATIO)
 	var model := rows(unit)
