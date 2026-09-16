@@ -1217,13 +1217,15 @@ static func _adopt(live: Resource, edited: Resource) -> void:
 	live.emit_changed()   # the hook a panel can redraw off; nothing listens yet
 
 
-# The uid= attributes a .tres carries, keyed by the reference id -- its own header under "_header",
-# plus every ext_resource line's uid under its id=. ResourceSaver.save() drops ALL of them at runtime,
-# so an overwrite must capture them here and put them back (restore_uids). Read from the FILE rather
-# than asked of ResourceLoader.get_resource_uid: that consults the uid CACHE, which a save without a
-# uid has already emptied for this path. Lifted from tools/lookdev/gen_lookdev_assets.gd and widened
-# to the ext_resource references (#481), so the generator and the single dev-tool writer share ONE
-# answer (Law #4).
+# The uid= attributes a .tres carries, keyed by what OWNS each one -- its own header under "_header",
+# plus every ext_resource line's uid under the target PATH it names. Never under the line's id=: an
+# id is a SLOT in this file, and Godot's saver hands a repointed slot the same id, so an id-keyed map
+# put terraces_intro's uid on the line that now named terraces_start (#996). ResourceSaver.save()
+# drops ALL of them at runtime, so an overwrite must capture them here and put them back
+# (restore_uids). Read from the FILE rather than asked of ResourceLoader.get_resource_uid: that
+# consults the uid CACHE, which a save without a uid has already emptied for this path. Lifted from
+# tools/lookdev/gen_lookdev_assets.gd and widened to the ext_resource references (#481), so the
+# generator and the single dev-tool writer share ONE answer (Law #4).
 static func uid_map_in_file(path: String) -> Dictionary:
 	var map := {}
 	var text := FileAccess.get_file_as_string(path)
@@ -1236,9 +1238,9 @@ static func uid_map_in_file(path: String) -> Dictionary:
 				map["_header"] = uid
 		elif line.begins_with("[ext_resource"):
 			var uid := _quoted_attr(line, "uid")
-			var id := _quoted_attr(line, "id")
-			if uid != "" and id != "":
-				map[id] = uid
+			var target := _quoted_attr(line, "path")
+			if uid != "" and target != "":
+				map[target] = uid
 	return map
 
 
@@ -1318,6 +1320,13 @@ static func _registered_uid(target_path: String) -> String:
 # VALUE, not just "is a uid= present", so a saver that mints a DIFFERENT uid (the fresh-resource
 # case) is corrected rather than trusted. Returns false only when the file it just wrote cannot be
 # read back or reopened.
+#
+# An ext_resource line's uid belongs to the file at its path=, so the TARGET answers first (its own
+# header, sidecar or .import, read from disk -- res:// only; the engine answers INVALID for a user://
+# file) and the prior file's uid for that same path is only the fallback for a target that cannot.
+# Replaying by slot was how a repointed beat kept the OLD
+# timeline's uid -- which Godot resolves BEFORE the path, so the beat played the old file while it
+# existed and turned the whole mission into a parse error once it was deleted (#996).
 static func restore_uids(path: String, prior: Dictionary) -> bool:
 	if prior.is_empty():
 		return true   # nothing authored a uid; nothing to preserve
@@ -1333,9 +1342,10 @@ static func restore_uids(path: String, prior: Dictionary) -> bool:
 		if line.begins_with("[gd_resource"):
 			want = prior.get("_header", "")
 		elif line.begins_with("[ext_resource"):
-			want = prior.get(_quoted_attr(line, "id"), "")
+			var target := _quoted_attr(line, "path")
+			want = _registered_uid(target)
 			if want == "":
-				want = _registered_uid(_quoted_attr(line, "path"))
+				want = prior.get(target, "")
 		else:
 			continue
 		if want == "" or _quoted_attr(line, "uid") == want:
