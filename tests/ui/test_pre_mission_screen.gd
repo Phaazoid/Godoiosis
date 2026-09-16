@@ -409,6 +409,67 @@ func test_every_list_that_can_grow_scrolls_inside_its_own_region() -> void:
 			% [named[0], node.size.x, scroll.size.x]).is_greater(scroll.size.x - SCROLLBAR_ALLOWANCE)
 
 
+# A REGION THAT SCROLLS MAY STILL CUT A ROW, and the case above cannot see it: it asks whether the
+# grid is bounded and how wide it came out, never where the clip lands (#977). Reported as "the
+# bottom row of character cards has the green underline when selected cutoff" -- the viewport was 2 px
+# short of two rows, which is exactly the width of a deployed card's outline, so the only thing lost
+# was the one mark that says the unit is coming.
+#
+# NO PIXEL AND NO CONSTANT IS PINNED HERE. CARD_HEIGHT, BAND_HEIGHT and the grid's separations are the
+# tuned numbers, and a case asserting any of them would pin the bug's own arithmetic. The property is
+# the CLIP: a card is wholly inside the scroller or wholly past it, never sliced. That is also why a
+# partly-visible row further down would fail this -- it would, and deliberately: the dev's answer on
+# 2026-09-16 was two clean rows rather than a revealed slice of the third.
+#
+# THE CUT CHECK ALONE IS BLIND TO THE REPORTED BUG, AND A MUTANT IS WHAT SAID SO. Put BAND_HEIGHT back
+# to the value that was reported and this run stays green, because a card here renders at exactly
+# CARD_HEIGHT and two rows come out flush against the clip to the pixel -- while the SAME build in the
+# report renders each card one px taller and loses its outline. CARD_HEIGHT is a MINIMUM, so a card is
+# as tall as its content makes it, and a headless run is not the arbiter of that. What survives the
+# difference is the MARGIN: the clip has to land in the far half of the gap the grid leaves between
+# rows, not sit on the edge of the row it just cleared. Half a separation is the one non-arbitrary
+# point in that interval -- nearer the next row than the last -- and it is read off the grid rather
+# than typed, so tuning the separation moves the bar with it.
+func test_the_roster_clip_lands_between_card_rows_rather_than_on_one() -> void:
+	if not await _enter_phase():
+		return
+	var screen := _screen()
+	var scroll := screen._grid.get_parent() as ScrollContainer
+	assert_object(scroll).override_failure_message(
+		"the card grid is not parented to a ScrollContainer any more").is_not_null()
+	await await_idle_frame()
+
+	# Every offender collected and reported together: a failing case truncates the rest of its own
+	# suite file in gdUnit4, so a clip that slices three rows must not take three runs to read.
+	var clip := scroll.get_global_rect()
+	var cut: Array[String] = []
+	var last_whole := clip.position.y
+	for card in _cards():
+		var box := card.get_global_rect()
+		var inside := box.position.y >= clip.position.y - 0.5 and box.end.y <= clip.end.y + 0.5
+		var past := box.position.y >= clip.end.y - 0.5 or box.end.y <= clip.position.y + 0.5
+		if inside:
+			last_whole = maxf(last_whole, box.end.y)
+			continue
+		if past:
+			continue
+		cut.append("%s loses %.0f px" % [card.unit.get_unit_name(),
+			maxf(clip.position.y - box.position.y, box.end.y - clip.end.y)])
+	assert_array(cut).override_failure_message(
+		("the roster viewport is %.0f px tall and a card row does not divide into it, so the clip "
+		+ "slices a card instead of landing in the gap between two: %s. A deployed card's outline is "
+		+ "the outermost 2 px of its box, so this is what eats it.")
+		% [clip.size.y, ", ".join(cut)]).is_empty()
+
+	var gap := float(screen._grid.get_theme_constant("v_separation"))
+	var margin := clip.end.y - last_whole
+	assert_float(margin).override_failure_message(
+		("the roster viewport ends %.0f px past the last whole card row, inside a %.0f px gap -- it is "
+		+ "resting on that row's own edge. A card renders at least CARD_HEIGHT and the reported build "
+		+ "renders it MORE, so there is nothing here for the difference to come out of and the outline "
+		+ "goes over the clip.") % [margin, gap]).is_greater_equal(gap * 0.5)
+
+
 # The outline his mockup had and the build did not: a unit that is coming with you is readable from
 # the grid rather than by checking six toggles. Both directions, because a state that cannot be left
 # is a state nobody can trust -- and the colour is asserted against QueueStyle rather than a literal,
@@ -444,6 +505,100 @@ func test_a_deployed_units_card_wears_the_friendly_outline_and_gives_it_back() -
 
 func _border_of(card: PreMissionCard) -> Color:
 	var box := card.get_theme_stylebox("panel") as StyleBoxFlat
+	return Color.MAGENTA if box == null else box.border_color
+
+
+# --- the toggle says which of the three it is, on its outline (#978) ---
+
+# Reported as "the deploy button needs to pop a bit more": it was a bare Button, and the engine
+# default's dark box is invisible on this card's dark ground, so the one control on the card read as
+# a caption. Three states, and the third is a REFUSAL rather than a choice -- which is why it is the
+# button's own `disabled` and therefore covers both of _deploy_block_reason's answers at once, the
+# full cap AND a full zone, without anyone asking a second question.
+#
+# It follows the toggle rather than reading build time, for test_a_deployed_units_card_wears_the
+# _friendly_outline_and_gives_it_back's reason one node up: a state that cannot be left is a state
+# nobody can trust, and deploying somebody changes ANOTHER card's answer through the cap.
+func test_the_deploy_toggle_wears_its_state_on_its_outline() -> void:
+	if not await _enter_phase(1):
+		return
+	var placed: PreMissionCard = null
+	var plain: PreMissionCard = null
+	for card in _cards():
+		if game.is_deployed(card.unit):
+			placed = card
+		else:
+			plain = card
+	assert_object(placed).override_failure_message("the draw placed nobody").is_not_null()
+	assert_object(plain).override_failure_message("nobody was left in reserve").is_not_null()
+
+	# Cap 1, and the draw filled it -- so the reserve card is refused, not merely unplaced.
+	assert_bool(plain._deploy_button.disabled).is_true()
+	assert_object(_toggle_border(placed)).is_equal(
+		QueueStyle.deploy_border(QueueStyle.Deployment.PLACED))
+	assert_object(_toggle_border(plain)).override_failure_message(
+		"a button nobody can press is wearing a colour that invites a press").is_equal(
+		QueueStyle.deploy_border(QueueStyle.Deployment.BLOCKED))
+
+	# Take the placed one off: the cap opens, and BOTH cards become a live offer.
+	placed.deploy_toggled.emit(placed.unit)
+	await await_idle_frame()
+	var benched := QueueStyle.deploy_border(QueueStyle.Deployment.BENCHED)
+	assert_object(_toggle_border(placed)).override_failure_message(
+		"a card kept its deployed outline after coming off the board").is_equal(benched)
+	assert_object(_toggle_border(plain)).override_failure_message(
+		"a reserve card stayed refused after the cap opened -- the cap is another card's business, "
+		+ "so this is the half a build-time read cannot get right").is_equal(benched)
+
+	# ...and putting the other one in flips both again, the opposite way.
+	plain.deploy_toggled.emit(plain.unit)
+	await await_idle_frame()
+	assert_object(_toggle_border(plain)).is_equal(
+		QueueStyle.deploy_border(QueueStyle.Deployment.PLACED))
+	assert_object(_toggle_border(placed)).is_equal(
+		QueueStyle.deploy_border(QueueStyle.Deployment.BLOCKED))
+
+
+# EVERY SLOT OR NONE, and the engine's leftovers are what this catches. Overriding `normal` alone
+# leaves Godot's own boxes under hover/pressed/disabled/focus, so the outline would vanish the moment
+# the pointer touched it -- and no assertion about `normal` can see that. The discriminator is the
+# transparent fill: this card's toggle is chrome-only by design and the engine's button box is not.
+#
+# The INK is checked on font_hover_color as well, because unset it falls through to a near-white that
+# parchment's cream card cannot carry. That is #814's exact bug, and test_pre_mission_contrast reads
+# that slot for the same reason.
+func test_the_deploy_toggle_is_styled_in_every_state_the_engine_would_otherwise_paint() -> void:
+	if not await _enter_phase(1):
+		return
+	var card := _cards()[0]
+	var button := card._deploy_button
+	for slot: String in ["normal", "hover", "pressed", "disabled", "focus"]:
+		var box := button.get_theme_stylebox(slot) as StyleBoxFlat
+		assert_object(box).override_failure_message(
+			"the toggle's '%s' box is not a StyleBoxFlat -- the engine's is still underneath" % slot
+			).is_not_null()
+		assert_float(box.bg_color.a).override_failure_message(
+			"the toggle's '%s' box paints a fill; the border carries the state, never the fill" % slot
+			).is_equal(0.0)
+
+	var resting := (button.get_theme_stylebox("normal") as StyleBoxFlat).border_color
+	var hovered := (button.get_theme_stylebox("hover") as StyleBoxFlat).border_color
+	assert_float(hovered.get_luminance()).override_failure_message(
+		"hover does not brighten the outline, so the button gives no feedback under the pointer"
+		).is_greater(resting.get_luminance())
+
+	var lit: Color = button.get_theme_color("font_color")
+	assert_object(button.get_theme_color("font_hover_color")).override_failure_message(
+		"the hover ink falls through to the engine's, which parchment's cream card cannot carry"
+		).is_equal(lit)
+	assert_object(button.get_theme_color("font_disabled_color")).override_failure_message(
+		"a disabled Button draws font_disabled_color and never font_color, so a blocked toggle with "
+		+ "no override here says nothing at all").is_equal(
+		QueueStyle.deploy_ink(QueueStyle.Deployment.BLOCKED))
+
+
+func _toggle_border(card: PreMissionCard) -> Color:
+	var box := card._deploy_button.get_theme_stylebox("normal") as StyleBoxFlat
 	return Color.MAGENTA if box == null else box.border_color
 
 
