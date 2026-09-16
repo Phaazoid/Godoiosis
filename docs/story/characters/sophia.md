@@ -3,7 +3,9 @@
 🟡 **Draft canon** · `Story/Characters/Playable/Sophia.docx`
 **Role:** alchemist · **Affinity:** earth
 
-A female **earth alchemist** — book-smart and philosophical. Her quiet manner belies **powerful earth alchemy** she's worked hard to master. She knows the **history of alchemy** and the legends of the Philosopher's Stone, but is **skeptical the Stone is real**. She's fascinated by [Isaac](isaac.md) and his anomalous alkahest affinity.
+A female **earth alchemist** — book-smart and philosophical. Her quiet manner belies **powerful earth alchemy** she's worked hard to master. She knows the **history of alchemy** and the legends of the Philosopher's Stone, but is **skeptical the Stone is real**. 
+
+She's fascinated by [Isaac](isaac.md) and his anomalous alkahest affinity.
 
 Sophia was a prodigious student at the **university in New Hermes**, but was **expelled for being too disruptive** — challenging her professor's assertions. Having lost her credibility and career, she joined [Torv](torv.md)'s group to keep practicing alchemy.
 
