@@ -508,3 +508,73 @@ In other words, are we really going to ensure that every aether/fire/air/water/e
 My suggestion is to strive for this as much as possible to see how far we can get as an experiment. And then, to the extent that this is technically infeasible or inhibits fun, compromise conservatively. The bounds of the map are a way to excuse the fact that the game board is not a fully closed system, and virtually infinite air and water can enter or leave the "world" through the edge of the map in three dimensions.
 
 I think it would be very cool, technically and thematically, to pull off an elemental magic system that actually obeys "equivalent exchange".
+
+---
+
+## Appendix — reviewer's notes (CLAUDE-AUTHORED)
+
+> **Provenance:** everything above the horizontal rule is 100% human-authored (c3potheds@). This appendix was written by Claude (Fable 5) on 2026-09-16 at the author's request, as prep material for the design review. It records verification results, canon collisions, and exploit classes. It proposes nothing and decides nothing.
+
+### The cost rule verifies against the whole library
+
+The author's rule (stated in review, not yet written into the doc above): **a transmutation's level = the total sigil count across its formula runes, minus one** — the −1 being the runestone's intrinsic alkahest, applied once per transmutation. Audited against every priced example: `Break(F,A)`=1, `Push(A2)`=1, `Pull(FA)`=1, `Bind(Q,Q)`=1, `Bind(A,AF)`=2, Flame launcher=2, calcium=2, the ruby-infusion defense=2, Fireball staff=3, Twister=3, Brimstone flame=3, the `Pull(AW)+Break(A,W)` precipitator=3, Long flame=5, Fireball=5, Greater fireball=7, leucosis/xanthosis/iosis=5/6/7, and the whole `Extract` family=0. All reproduce. Three places fail the audit:
+
+1. **Melanosis is off by one under the doc's own notation.** `Break(X, Y)` decomposes the substance `XY`, so lead (`QE5`) → `QE4` is `Break(QE4, E)`; as written, `Break(QE5, E)` takes `QE6` as input. Corrected, melanosis prices at **level 5**, and the "level 6 … melanosis" sentence moves with it.
+2. **The sodium–chlorine reaction doesn't balance:** `2F2A + 2F2E -> 8F2 + A2 + E2` has 8 F on the left and 16 on the right; `4F2` balances it. (A conservation proposal with unbalanced books in it is the best argument for the lint below.)
+3. **Oil prices as Break, not Extract.** Oil is written as a molecule (`FAWE`), so pulling one element out is `Break(F, AWE)` = level 3 — exactly the level the bullet assigns — but the verb it names is `Extract`, which prices at 0. Either oil is a compound (of what?) or the verb is Break.
+
+Notation nits from the same audit: `Break(W2)` appears once with one argument; sodium uses `Break(F, FE)` and `Break(FE, F)` interchangeably — is Break commutative, or does argument order choose the channel? (`Break(F2, E)` vs `Break(F, FE)` on the same substance genuinely ARE two different decomposition channels, a nice mechanic if declared); metal compositions are written both `QE*…` and `EQ*…`.
+
+### Convergences with existing canon (worth citing in the room)
+
+- **The −1 is already canon.** The shipped channeling model (anchor + wildcards, 2026-08-10) grants every rune a universal +1 of deficit coverage, attributed in-lore to the stone's own alkahest. Same mechanism, same lore justification, independently derived. The two systems disagree **only at one sigil** — which isolates the Rebecca fork exactly (below).
+- **Break/Bind ≈ Solve et Coagula ≈ Quickening/Stillness.** [transmutation-model-proposal.md](transmutation-model-proposal.md) declares Stillness/Quickening as the Solve-et-Coagula polarity, and Push already exists as a flourish. Break/Bind can be presented as the substance-level *semantics* of marks that already exist, rather than a rival verb set.
+- **The planetary metals table already exists** in [elemental-interactions.md](elemental-interactions.md) (mechanist side), with matching traits — lead shock-resistant, iron rusting. Two authors converged on one table; merge, don't fork.
+- **Ice/lightning as aether compounds vs derived tags:** shipped code derives ICE = Water+Stillness and SHOCK = Fire+Quickening (`Flourish.DERIVED`); this doc composes them as `QW`/`QF`. Two answers to one question — though note `QW` ("water fixed by the heavens") and Water+Stillness are nearly the same sentence, so unification is plausible IF Q-as-cold survives, which the doc itself flags as open. Canon Aether = life/spirit/the heavens is [LOCKED] in [alchemy-kit.md](alchemy-kit.md).
+
+### Ratified rulings this proposal touches (the repeal-record list)
+
+The project's culture runs on explicit repeal records; name these rather than contradicting them silently.
+
+1. **The materia law** (#693, [alchemy-kit.md](alchemy-kit.md), ratified 2026-08-29): *materia never gates function — it supercharges it.* The `Extract` family's "requires materia" is a reagent gate. Sanctioned doors: the exotic-reagent exception (#698), or the mechanist-device reframe below.
+2. **The anchor / Rebecca rule + the equip gate** (#157, shipped code): Level 0 as proposed relaxes it.
+3. **Rune sizing + cost doctrine** (#60): circle cap 3 / capacity 6 is the carvable ceiling, and Alkahest at 5 sigils is *deliberately* uncarvable story silhouette — the level 5–7 transmutations here exceed the ceiling. Cost-derived-from-recipe is canon and this doc's rule satisfies it; the **distribution rule** is the missing half (see spec gaps).
+4. **Effects-first, tools-first** (co-dev ratification 2026-07-11, Stop 5) and *"the fix is not emergence"* ([transmutation-model-proposal.md](transmutation-model-proposal.md)): a full theory of matter first is a decided question being reopened — argue it knowingly, or scope this doc as the authoring-side order *behind* the authored table.
+5. **The state layer owns "is this tile on fire"** (Law #4): BURNING/WET/FROZEN/CHILLED are shipped stores. A substance field answering the same questions must declare which representation is authoritative and which is derived.
+6. **Axiom 1 — no permanent deletion of player investment** ([elemental-interactions.md](elemental-interactions.md)): rusting weapons via slow reactions is the cut "melt the prosthetic" in slow motion; AMALGAMATED (temporary fouling, never destruction) is the sanctioned shape for metallurgy attacks on gear.
+7. **Law #1:** "breaking down randomly … speedrunners rejoice" cannot ship as written. Deterministic decay pathways deliver the same fun legally — and rescue the Bind question, since doctrine 2 ("every combination does something; no greyed-out slots") also rules out refusing unnamed outputs.
+8. **No leveling** ([progression.md](progression.md)): "level N" as aura-sum shorthand is fine but must be glossed early, or the word alone derails the session.
+
+### The Rebecca fork has a third option
+
+Level-0-for-everyone vs a hard-coded n=0 exception isn't the whole option space. The ratified class asymmetry is *machines burn, alchemists commune*, and the chemical spitter's flask injection (#97) is already the one sanctioned place where consuming materia loads shots. So: **level-0, materia-consuming transmutations are mechanist DEVICES, not channelings.** A spark staff with a ruby cartridge is item-use — no channel occurs, so the anchor is never asked, the Rebecca rule stays intact and exceptionless, and the sigils−1 rule stays universal *as the price of channeling* (the anchor being a precondition on the channeling verb, not a term in the price). One side effect to surface deliberately: Rebecca can pull a trigger. Whether her participating via gadgets is a story feature or breaks the point of her is the dev's call, not a mechanical one.
+
+### Exploit and degeneracy classes
+
+Equivalent exchange conserves atoms, not power; the exploit surface is loops and gradients.
+
+1. **Catalytic value loops.** Freeze (`2Q + W2 -> 2QW`) then melt (`2QW + F -> Q2 + F + W2`) nets `2Q -> Q2` — free aether into healing essence, with fire an unconsumed catalyst. The authored reaction set needs an audit for net-value-positive cycles, and that audit is mechanizable (lint note below).
+2. **The map-edge reservoir.** If edges are open, `Pull` at an edge tile is an infinite faucet of whatever the off-map holds. Rule needed: Pull cannot reach off-map, or off-map only equilibrates passively.
+3. **Concentrate-then-trigger stalling.** Pull for N turns, Break once: the optimal line on any clockless map becomes "stall and nuke." Wants a per-tile concentration cap or dispersal pressure (dispersal is conservation-legal).
+4. **Depletion warfare.** Conservation cuts both ways: a stripped tile stays stripped until something refills it. If absence has effects (suffocation), Pull-spam is a silent kill ignoring HP/DEF; if not, air is free ammo to hoard. Either way depletion is invisible on the board — a UI channel for substance presence/absence is a hard requirement, not polish.
+5. **Unnamed-substance batteries.** If unnamed Bind outputs are legal (doctrine 2 says they must be), any that lack an authored decay rule become stable compressed ammo. Every *reachable* substance needs a decay rule or an explicit stability declaration — and reachability is player-composable, so that's the whole formula space, not the named roster.
+6. **Cheap Push near hazards.** Shove-into-void is a removal and shove-into-deep-water a drowning under shipped rules, and canon deliberately gates mass-repositioning at ×3-Air / twin-Pull. Level-1 `Push(A2)` undercuts that ladder beside every cliff.
+7. **Inventory participation.** The metallurgy section says tile transmutations reach worn gear — do they reach carried items? If so, enemy `Break(F, E)` detonates the sulfur in your pack, and a flask-carrier is a walking powder keg. Declare whether inventories are inside the circle; either answer has teeth.
+8. **Ambient ammo vs the flask economy.** Salt "dissolves naturally in water" makes every water tile infinite `Extract(E)` ammo. The ratified materia model made ambient sources empowerment-only *specifically* to avoid ambient consumables; infinite projectile ammo at every shoreline reopens that.
+9. **Healing thermodynamics.** Q as both cold and essence makes every cold map a sustain map, and level-1 `Bind(Q, Q)` undercuts the authored healing ladder (Soul Dew is an M-rune pair in canon).
+10. **AI parity** (#117): every multi-turn setup verb here (Pull … Pull … Break) is invisible to the current one-step-lookahead AI, so the enemy plays none of it and playtest signal degrades. Not a reason not to build — a cost to price in.
+
+### The determinism spec this needs
+
+- The natural-reaction set is a **rewriting system over element multisets**. Determinism needs one of: (a) a total priority order over rules — previewable, but the priority list becomes hidden, load-bearing content players must learn; or (b) **confluence** — every mixture reaches the same normal form whatever the rule order. (b) is strictly better if achievable and is *checkable*: a lint over authored reactions for unresolvable critical pairs. Termination needs its own guard (evaporation/condensation must not oscillate forever at end of turn).
+- **Quantities should be integers.** "Approximately twice as much flame" implies continuous amounts; determinism plus rounding breeds threshold exploits. Integer unit counts are previewable and save-friendly.
+- **A balance lint.** The project already runs content lints in CI (`AttackLint`, `BoardLint`, `WeaponTemplateLint`). A ReactionLint that (1) refuses an unbalanced equation — it would have caught the sodium erratum above — (2) flags net-value-positive cycles, and (3) demands a decay rule for every reachable substance delivers "there is order to the world" mechanically, with or without a runtime simulation.
+- **Law #2 posture:** combat previews stay exact; discovery lives in the blank codex at inscription time (the shipped stance). End-of-turn slow reactions follow the telegraphed-cadence precedent (the weather subsystem in [elemental-interactions.md](elemental-interactions.md)), not queue preview.
+
+### Spec gaps to write down (the shared-understanding list)
+
+1. **Matching semantics** — confirmed to exist verbally, not on paper. Does `Break(F, A)` consume ALL `FA` on the tile? Does it reach `FA` inside compounds? Exact-formula vs substructure matching?
+2. **The aura distribution rule** — "3 fire, or 2 fire + 1 air" but never "1 fire + 2 air": which elements may the N points sit in, per component, and where may the −1 be spent?
+3. **Break's argument order** — commutative, or channel-choosing?
+4. **"Duration of the transmutation"** (Splash) — transmutations with durations are a new concept; define or cut.
+5. **Concentration caps / dispersal, edge rules, inventory participation** — one declared answer each, per the exploit list above.
