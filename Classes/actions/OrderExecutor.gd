@@ -221,6 +221,7 @@ func execute_orders(unit):
 	# (an absorbed hit). One redraw for both (#414).
 	game.refresh_guard_markers()
 	game.refresh_watch_markers()   # a watch that fired, or one that just armed (#413)
+	game.drop_threat_field()   # bodies moved, some fell (#710)
 	# The pass has settled: this is where a mission is won or lost (#96, fork E). Before the
 	# squad-validity guard below -- a squad that wiped itself must not skip the check.
 	game.mission_controller.check()

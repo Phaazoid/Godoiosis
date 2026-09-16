@@ -381,3 +381,28 @@ frame** rather than one dictionary lookup per cell per layer per frame; the push
 frame a height edit lands, and it is coarse (every fill layer) because a height edit is an authoring
 event, not a per-frame one. `version` is monotonic and `clear()` leaves it alone, so it does **not**
 weaken `DirtyCells`' ONE-CONSUMER rule — that rule is about the cell *list*, which `clear()` steals.
+
+## 2026-09-16 — the enemy threat field, and why the exact plan cannot ride a hover (#710)
+
+Measured at HEAD on Castle Assault (the one enemy squad, 5 members) with `tools/profile_ai_turn.gd`
+plus a scratch phase profiler, to decide the preview's cadence:
+
+| Piece | Cost |
+|---|---|
+| **Reach field** — every cell any of the 5 enemies could attack next turn (122 cells): `compute_move_range` × `Reach.get_all_attack_cells_from` | **~6 ms, whole board** |
+| `choose_engagement_target` + `best_attack_destination` | 22 ms |
+| `queue_group_move` (cohesion solve + 5 queued moves) | 69 ms |
+| `_queue_attacks_jointly`: ~4 rounds × (six `resolve_hypothetical` at 3 ms + one `queue_action` at **22 ms**) | 155 ms |
+| `queue_fallback_actions_for_squad` | 34 ms |
+| **One enemy squad's exact decision** | **~300 ms** (whole board 927 ms; #710's filed figure of 548 ms is stale) |
+
+**What it says.** The exact plan is a search — ~25 full plan resolutions, every player unit's
+projected cell an input to each — so no cache key survives a hover and no restructure gets it under
+a frame. That split the preview into a live REACH tier (`ThreatField`, cached on `game` and dropped
+only when the board moves) and an exact PLAN tier that recomputes on plan changes and a toggle.
+
+**What is still on the table, filed rather than built:** a silent planning path. `queue_action`
+costs 22 ms per call because it runs a preview-validate, re-validates the whole plan and redraws
+overlays, and the group move pays the same per member; a hypothetical queue that skips those
+round-trips is a real 2–3× (~300 → ~100–130 ms per squad), not a 30×. Threading is out while the AI
+plans through the real `SquadManager` on scene nodes (Law #3).

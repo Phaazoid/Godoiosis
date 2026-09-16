@@ -127,6 +127,8 @@ var height_debug_overlay: HeightDebugOverlay   # F5 readout, dev builds only; de
 var zone_manager: ZoneManager
 var main_action_menu: MainActionMenu
 var hover_presenter: HoverPresenter
+var threat_view_on := false   # the T toggle (#710): the whole enemy threat field and every sentry leash
+var _threat_field: ThreatField = null   # built lazily by threat_field(); dropped when the board moves
 var mission_controller: MissionController
 var order_executor: OrderExecutor
 var bug_reporter: BugReporter
@@ -263,6 +265,7 @@ func _wire_signals() -> void:
 
 	squad_manager.squad_action_cancelled.connect(_on_unit_action_cancelled)
 	squad_manager.squad_action_queued.connect(_on_unit_action_queued)
+	scenario_manager.board_loaded.connect(drop_threat_field)   # a new board is a new field (#710)
 	squad_manager.squad_became_active.connect(_on_squad_became_active)
 	squad_manager.squad_became_empty.connect(_on_squad_has_no_actions)
 
@@ -332,6 +335,10 @@ func _input(event: InputEvent) -> void:
 	# stands down under a 3D host, and this key has to work from both views.
 	if event.is_action_pressed("toggle_deployment_view") and not ModalLock.any_open(get_tree()):
 		mission_controller.toggle_deployment_menu()
+	# The enemy threat view (#710). Here beside the two above for the same reason: both views.
+	if event.is_action_pressed("toggle_threat_view") and not ModalLock.any_open(get_tree()) \
+			and not _board_locked_for_player():
+		toggle_threat_view()
 
 func _unhandled_input(event: InputEvent) -> void:
 	# A 3D host (#222) picks board cells itself and calls _on_left_click/_on_right_click
@@ -639,6 +646,7 @@ func _click_picking_target(cell: Vector2i) -> void:
 # ==============================================================================
 
 func _on_turn_started(faction: Team.Faction):
+	drop_threat_field()   # the other side moved (#710)
 	_run_turn_start_ticks(faction)
 	refresh_guard_markers()   # the ticks lapsed this faction's Guards -- pull their markers with them
 	refresh_watch_markers()   # ...and its untriggered watches (#413)
@@ -940,6 +948,7 @@ func exit_current_mode():
 	overlay_manager.clear_ring_pulse()
 	overlay_manager.set_pick_flash(false)   # #116's tile-pick flash; idempotent when none is running
 	overlay_manager.clear_sight_trace()
+	overlay_manager.clear_threat_lines()
 	overlay_manager.clear_hover_move_path()
 	last_clicked_cell = GridUtils.NO_CELL
 	selected_unit = null
@@ -1319,6 +1328,7 @@ func _on_squad_has_no_actions(squad: Squad):
 	overlay_manager.redraw_squad_unit_icons(squad)
 
 func _on_unit_action_queued(squad: Squad, action: BaseAction):
+	drop_threat_field()
 	var unit = action.actor
 
 	# Per-UNIT and cheap: every member needs this, batch or not.
@@ -1344,6 +1354,7 @@ func _repaint_squad_plan(squad: Squad) -> void:
 		overlay_manager.redraw_squad_unit_icons(squad)
 
 func _on_unit_action_cancelled(squad: Squad, unit: Unit, actiontype: BaseAction.ActionType):
+	drop_threat_field()
 	# Only a MOVE cancel may clear the unit's move visuals. Cancelling a main action
 	# (attack/rescue) must leave a still-queued move — arrow and projected ghost — untouched.
 	if actiontype == BaseAction.ActionType.MOVE:
@@ -1438,6 +1449,7 @@ func spawn_unit(data: UnitData, pos: Vector2i, is_body := false) -> Unit:
 	# no heights simply never breaks, which is what a flat board means anyway.
 	unit.movement.set_heights(board_heights)
 	squad_manager.create_squad(unit)
+	drop_threat_field()   # a newcomer may threaten something (#710)
 	return unit
 
 
@@ -1627,6 +1639,48 @@ func refresh_guard_markers() -> void:
 # "refresh standing reactions" would be one name for two redraws that happen to fire together today.
 func refresh_watch_markers(plan: ResolvedPlan = null) -> void:
 	overlay_manager.redraw_watch_marks(_all_units(), plan)
+
+# ==============================================================================
+#  Enemy threat (#710)
+# ==============================================================================
+
+# Every cell an enemy could attack next turn. Built once, read by every hover, dropped whenever
+# the roster or the board moves -- never rebuilt on a pointer sweep.
+func threat_field() -> ThreatField:
+	if _threat_field == null:
+		_threat_field = ThreatField.build(_board(), Team.Faction.PLAYER)
+	return _threat_field
+
+
+func drop_threat_field() -> void:
+	_threat_field = null
+	if threat_view_on:
+		_show_threat_view()
+
+
+func toggle_threat_view() -> void:
+	threat_view_on = not threat_view_on
+	if threat_view_on:
+		_show_threat_view()
+	else:
+		overlay_manager.clear_danger()
+		overlay_manager.clear_leash()
+	hover_presenter.refresh()
+
+
+# The whole field, and every enemy sentry's leash.
+func _show_threat_view() -> void:
+	var board := _board()
+	overlay_manager.show_danger(threat_field().all_cells())
+	var leash: Array[Vector2i] = []
+	for squad: Squad in squad_manager.squads:
+		var leader: Unit = squad.get_leader()
+		if leader == null or not Team.is_enemy(Team.Faction.PLAYER, leader.get_faction()):
+			continue
+		for cell: Vector2i in ThreatField.leash_of(squad, board):
+			if not leash.has(cell):
+				leash.append(cell)
+	overlay_manager.reveal_leash(leash)
 
 # ==============================================================================
 #  Board queries

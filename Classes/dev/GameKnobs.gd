@@ -365,9 +365,10 @@ const KNOBS: Array[Dictionary] = [
 # Which LAYERS entries appear here is measured, not chosen. `set_layer_modulate` REPLACES a layer's
 # albedo, so any layer something already drives per frame would take a knob that silently reverts --
 # the lying-slider class. Excluded for that reason: ATTACK's 3D side and AIM (OverlayMirror rewrites
-# both from the 2D every poll) and HOVER (battle3d._sync_bracket_tint). ZONE_PATROL/ZONE_HIGHLIGHT
-# are excluded as authoring-only -- invisible during real play, and they READ OverlayManager's
-# constants, so a knob would fork a value that is deliberately one (dev call).
+# both from the 2D every poll) and HOVER (battle3d._sync_bracket_tint). ZONE_PATROL is excluded as
+# authoring-only -- invisible during real play, and it READS OverlayManager's constant, so a knob
+# would fork a value that is deliberately one (dev call). ZONE_HIGHLIGHT left that list at #710,
+# when the leash reveal made it a play colour: it is a `static` row now, like DANGER beside it.
 #
 # `static` entries are the exception that proves it: ATTACK has no 3D-only colour to tune, because
 # the 3D mirrors the 2D's modulate rather than holding an answer. Tuning it moves BOTH stacks.
@@ -388,6 +389,7 @@ const ELEMENT_PALETTE_SCRIPT := "res://Classes/ui/ElementPalette.gd"
 const QUEUE_STYLE_SCRIPT := "res://Classes/ui/queue/QueueStyle.gd"
 const BOARD_SPACE_SCRIPT := "res://Classes/presentation/BoardSpace.gd"
 const SIGHT_TRACE_SCRIPT := "res://Classes/board/SightTrace2D.gd"
+const THREAT_LINES_SCRIPT := "res://Classes/board/ThreatLines2D.gd"
 const MUSIC_DIRECTOR_SCRIPT := "res://Classes/audio/MusicDirector.gd"
 const STAGING_DUST_SCRIPT := "res://Classes/presentation/StagingDust.gd"
 const ARC_LIGHTNING_SCRIPT := "res://Classes/presentation/ArcLightning.gd"
@@ -432,6 +434,15 @@ const CLASS_KNOBS: Array[Dictionary] = [
 	{"group": "Board markup colours", "label": "Blocked-reach dim (3D)", "static": "BLOCKED_REACH_DIM",
 		"min": 0.1, "max": 1.0, "step": 0.01,
 		"tip": "How much darker a reach cell past the attack's vertical tolerance draws in 3D, relative to the live reach colour. The 2D says the same thing with a hatched tile instead."},
+
+	# The enemy threat view (#710): what an enemy could reach next turn, the lines to a hovered
+	# destination, and a sentry's leash. All three sit against the reach fills.
+	{"group": "Board markup colours", "label": "Enemy threat fill (2D+3D)", "static": "DANGER_MODULATE",
+		"tip": "Every cell an enemy could attack next turn, drawn under the move fill while the threat view (T) is on, or for the one enemy under the pointer. Alpha is the dial: it can cover a lot of board."},
+	{"group": "Board markup colours", "label": "Threat line (2D+3D)", "static": "THREAT_LINE_COLOR", "script": THREAT_LINES_SCRIPT,
+		"tip": "The line from each enemy that could reach the destination you are hovering. Tune it against the sight beam, which it sits beside while aiming."},
+	{"group": "Board markup colours", "label": "Leash reveal (2D+3D)", "static": "ZONE_HIGHLIGHT_MODULATE",
+		"tip": "A sentry's patrol zone while you hover it or hold the threat view -- and the Tile Brush's picked zone, which is the same layer and the same colour."},
 
 	# The watched footprint (#413). It has to read as a THREAT while every range overlay is off, and
 	# it is on screen for both sides at once, so its loudness is the one dial that decides whether
@@ -1335,6 +1346,9 @@ static func read_static(name: String) -> Variant:
 		"HEAL_ATTACK_MODULATE": return OverlayManager.HEAL_ATTACK_MODULATE
 		"HOVER_MODULATE": return OverlayManager.HOVER_MODULATE
 		"BLOCKED_REACH_DIM": return OverlayManager.BLOCKED_REACH_DIM
+		"DANGER_MODULATE": return OverlayManager.DANGER_MODULATE
+		"ZONE_HIGHLIGHT_MODULATE": return OverlayManager.ZONE_HIGHLIGHT_MODULATE
+		"THREAT_LINE_COLOR": return ThreatLines2D.THREAT_LINE_COLOR
 		"SQUAD_RING_ALPHA": return OverlayManager.SQUAD_RING_ALPHA
 		"SQUAD_RING_PULSE_GAIN": return OverlayManager.SQUAD_RING_PULSE_GAIN
 		"KNOCKBACK_MODULATE": return OverlayManager.KNOCKBACK_MODULATE
@@ -1528,6 +1542,9 @@ static func write_static(host: Node3D, name: String, value: Variant) -> void:
 		"HEAL_ATTACK_MODULATE": OverlayManager.HEAL_ATTACK_MODULATE = value
 		"HOVER_MODULATE": OverlayManager.HOVER_MODULATE = value
 		"BLOCKED_REACH_DIM": OverlayManager.BLOCKED_REACH_DIM = value   # mirror reads it per frame; the refresh below is harmless
+		"DANGER_MODULATE": OverlayManager.DANGER_MODULATE = value
+		"ZONE_HIGHLIGHT_MODULATE": OverlayManager.ZONE_HIGHLIGHT_MODULATE = value
+		"THREAT_LINE_COLOR": ThreatLines2D.THREAT_LINE_COLOR = value
 		"SQUAD_RING_ALPHA": OverlayManager.SQUAD_RING_ALPHA = value
 		"SQUAD_RING_PULSE_GAIN": OverlayManager.SQUAD_RING_PULSE_GAIN = value
 		"KNOCKBACK_MODULATE": OverlayManager.KNOCKBACK_MODULATE = value
@@ -2083,6 +2100,11 @@ static func write_static(host: Node3D, name: String, value: Variant) -> void:
 		# Re-showing the standing trace is the re-apply: it repaints the flat line and bumps the
 		# version the mirror gates on, which is exactly what a fresh hover does (#506).
 		"CLEAR_COLOR", "BLOCKED_COLOR": manager.restyle_sight_trace()
+		# The threat view's three (#710): the two fills re-tint their 2D layer, which the mirror
+		# copies; the lines re-show the standing set, the sight trace's own re-apply.
+		"DANGER_MODULATE": manager.restyle_danger()
+		"ZONE_HIGHLIGHT_MODULATE": manager.restyle_leash()
+		"THREAT_LINE_COLOR": manager.restyle_threat_lines()
 		# No bespoke sweep for the three planned-move tints: redraw_planned_paths already tears
 		# every arrow down and rebuilds it through _arrow_modulate, so it IS the re-apply.
 		"MOVE_ARROW_MODULATE", "INVALID_ARROW_MODULATE", "TRAILING_ARROW_MODULATE":
