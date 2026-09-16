@@ -19,6 +19,10 @@ const TEMP_PATH := "user://__test_save_uid.tres"
 # WeaponAttackData.gd's own script uid (Classes/weapons/WeaponAttackData.gd.uid) -- a real committed
 # reference the staged file can point at, so load() resolves it the way a real attack does.
 const SCRIPT_UID := "uid://ddqeee7njjjq2"
+const SCRIPT_PATH := "res://Classes/weapons/WeaponAttackData.gd"
+# A second committed script a slot can be repointed AT (#996). Its uid is asked of the engine in the
+# case, never hardcoded, so a regenerated sidecar cannot red it.
+const OTHER_SCRIPT_PATH := "res://Classes/flow/ScenarioData.gd"
 
 var _staged_id: int = -1
 
@@ -128,3 +132,53 @@ func test_a_minted_uid_does_not_change_on_the_next_save() -> void:
 
 	assert_str(DevWidgets.uid_map_in_file(TEMP_PATH).get("_header", "")).is_equal(first)
 	assert_str(FileAccess.get_file_as_string(TEMP_PATH)).is_equal(text_after_first)   # byte-stable
+
+
+# #996. An ext_resource uid belongs to the file at path=, never to the line's id=. Godot's saver hands
+# a repointed slot the same id, so a restore keyed by id stamped terraces_intro's uid onto the line
+# that now named terraces_start -- and Godot resolves a known uid BEFORE the path: the beat kept
+# playing the old timeline, and deleting it turned Terraces.tres into a parse error. The prior map is
+# built by uid_map_in_file from the real prior text, the way save_over builds it. Two committed
+# scripts stand in for the two timelines: the engine answers a uid for res:// files only (a user://
+# target reads back INVALID), and nothing here writes under res://.
+func test_a_repointed_reference_takes_the_new_targets_uid_not_the_old_slots() -> void:
+	var other_id := ResourceLoader.get_resource_uid(OTHER_SCRIPT_PATH)
+	assert_int(other_id).is_not_equal(ResourceUID.INVALID_ID)   # precondition: the target can answer
+	var new_uid := ResourceUID.id_to_text(other_id)
+	_write(('[gd_resource type="Resource" format=3]\n\n'
+		+ '[ext_resource type="Script" uid="%s" path="%s" id="1_slot"]\n\n'
+		+ '[resource]\n') % [SCRIPT_UID, SCRIPT_PATH])
+	var prior := DevWidgets.uid_map_in_file(TEMP_PATH)
+	# What the runtime saver writes after the repoint: the same slot id, the new path, no uid.
+	_write(('[gd_resource type="Resource" format=3]\n\n'
+		+ '[ext_resource type="Script" path="%s" id="1_slot"]\n\n'
+		+ '[resource]\n') % OTHER_SCRIPT_PATH)
+
+	assert_bool(DevWidgets.restore_uids(TEMP_PATH, prior)).is_true()
+
+	var text := FileAccess.get_file_as_string(TEMP_PATH)
+	assert_str(text).contains('uid="%s" path="%s"' % [new_uid, OTHER_SCRIPT_PATH])
+	assert_str(text).not_contains(SCRIPT_UID)
+
+
+# The fallback half: when the target cannot answer for itself, the prior uid follows the PATH it was
+# written beside -- a same-path reference keeps it, a repointed one inherits nothing.
+func test_a_prior_uid_follows_its_path_when_the_target_cannot_answer() -> void:
+	var kept := ResourceUID.id_to_text(ResourceUID.create_id())
+	var old_uid := ResourceUID.id_to_text(ResourceUID.create_id())
+	_write(('[gd_resource type="Resource" format=3]\n\n'
+		+ '[ext_resource type="Resource" uid="%s" path="user://__gone_a.tres" id="1_a"]\n'
+		+ '[ext_resource type="Resource" uid="%s" path="user://__gone_b.tres" id="2_b"]\n\n'
+		+ '[resource]\n') % [kept, old_uid])
+	var prior := DevWidgets.uid_map_in_file(TEMP_PATH)
+	# Saved again: slot 1 still names gone_a, slot 2 was repointed to gone_c. No target exists.
+	_write('[gd_resource type="Resource" format=3]\n\n'
+		+ '[ext_resource type="Resource" path="user://__gone_a.tres" id="1_a"]\n'
+		+ '[ext_resource type="Resource" path="user://__gone_c.tres" id="2_b"]\n\n'
+		+ '[resource]\n')
+
+	assert_bool(DevWidgets.restore_uids(TEMP_PATH, prior)).is_true()
+
+	var text := FileAccess.get_file_as_string(TEMP_PATH)
+	assert_str(text).contains('uid="%s" path="user://__gone_a.tres"' % kept)
+	assert_str(text).not_contains(old_uid)
