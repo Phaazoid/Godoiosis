@@ -38,7 +38,7 @@ All substances are composed of these elements, which are expressible as formulae
 
 Write the formula for a substance as a string in the regular language `([QFAWE][0-9]*)+`. By convention, formulae will be written in _alchemical order_, `Q < F < A < W < E`. For now, assume there is no internal structure of molecules, besides the constituent parts.
 
-Some more complicated formulae can be written, rather than in alchemical order, as a `*`-separated composition of simpler formulae to clearly show the component parts. For example, a metal like silver is understood as metal + sulfur + mercury, and can be written as `QE * FE * WE` instead of the alchemical order `QFWE2`.
+Some more complicated formulae can be written, rather than in alchemical order, as a `*`-separated composition of simpler formulae to clearly show the component parts. For example, a metal like silver is understood as metal + sulfur + mercury, and can be written as `QE * FE * WE` instead of the alchemical order `QFWE3`.
 
 ### Theory of reactions
 
@@ -93,13 +93,13 @@ A simple example: `Break(F, A)` would induce the transmutation `FA -> F + A`, br
 
 `Bind` composes with two formula runes and, when triggered, artificially fuses the substances, if present in the area affected by the transmutation, into the composed formula.
 
-A simple example: `Bind(FW, FW)` would take steam (`FW`) which normally doesn't naturally react with itself, and fuse it into `F2W2`, an unstable substance that would naturally decompose into more stable substances like `F2` (flame), `FW` (back to steam), and `W2` (water). This transmutation would not be very useful; it would create a substance that would decay immediately back into steam, momentarily creating flame (which can inflict fire damage) and water (which would make objects it comes into contact with "wet"), but otherwise mostly up reconstituting as steam as the natural `F2 + W2 -> 2FW` reaction that turns fire and water into steam is applied. Many possible formulae are like this, creating unnatural substances that immediately break down, but this can be exploited by savvy players that figure out the alchemy system.
+A simple example: `Bind(FW, FW)` would take steam (`FW`) which normally doesn't naturally react with itself, and fuse it into `F2W2`, an unstable substance that would naturally decompose into more stable substances like `F2` (flame), `FW` (back to steam), and `W2` (water). This transmutation would not be very useful; it would create a substance that would decay immediately back into steam, momentarily creating flame (which can inflict fire damage) and water (which would make objects it comes into contact with "wet"), but otherwise mostly ending up reconstituting as steam as the natural `F2 + W2 -> 2FW` reaction that turns fire and water into steam is applied. Many possible formulae are like this, creating unnatural substances that immediately break down, but this can be exploited by savvy players that figure out the alchemy system.
 
 In addition to `Break` and `Bind` runes, alchemists can use `Push` and `Pull` runes to apply physical forces to substances. `Push` and `Pull` runes compose with one formula rune and exert a directional force on any substance matching that formula inside the transmutation circle.
 
-A common use of `Push` is `Push(A2)`, which moves all the air in the target tile away from the transmutaion circle. The moving air carries along sufficiently light units (based on unit weight and strength of the `Push` transmutation).
+A common use of `Push` is `Push(A2)`, which moves all the air in the target tile away from the transmutation circle. The moving air carries along sufficiently light units (based on unit weight and strength of the `Push` transmutation).
 
-A common use of `Pull` is to concentrate material in order to follow up with a `Break` or `Bind` to induce a stronger reaction. For example, not much vital air `FA` is converted if `Break(F, A)` is applied alone, but if first `FA` is also gathered from surrounding tiles into the aread of the circle with a `Pull(FA)` rune, there is more material available to convert into `F2` to produce the intended fire effects; if you also include a `Bind(F, F)` rune, you can induce complete combustion, converting all of the elemental `F` into `F2` rather than relying on natural reactions which would also create some `FA` or other byproducts.
+A common use of `Pull` is to concentrate material in order to follow up with a `Break` or `Bind` to induce a stronger reaction. For example, not much vital air `FA` is converted if `Break(F, A)` is applied alone, but if first `FA` is also gathered from surrounding tiles into the area of the circle with a `Pull(FA)` rune, there is more material available to convert into `F2` to produce the intended fire effects; if you also include a `Bind(F, F)` rune, you can induce complete combustion, converting all of the elemental `F` into `F2` rather than relying on natural reactions which would also create some `FA` or other byproducts.
 
 A progression to illustrate how more complex runes can get progressively more
 effective:
@@ -123,7 +123,7 @@ effective:
 
 A transmutation circle can be drawn on:
 - the ground and triggered by an alchemist on an adjacent tile
-- a staff that applies the a weaker form of the effect on an adjacent tile, but is more directed and easier to use
+- a staff that applies a weaker form of the effect on an adjacent tile, but is more directed and easier to use
 
 ### Compounds
 
@@ -139,7 +139,7 @@ Examples of dissolved substances that can be extracted with `Pull`:
 
 - Crystals as accessible "materia" for elements
   - A **ruby** is elemental fire (`F`) dissolved in corundum (`Q3AE`). Any alchemist can easily extract the fire from the "materia" of a ruby crystal with `Pull(F)`, which requires no affinity because of the intrinsic alkahest in the runestone "wildcard matching" the single element `F`. The natural `2F -> F2` reaction then produces flame (`F2`) as a side effect.
-  - An alchemist can also infuse corundum with elemental fire with a `Push` transmutation; if such a transmutation is parired with a `Break(F, F)` transmutation, the full transmutation, easily usable by any alchemist with two Fire aura points, can use a defensive action that negates an effect that would otherwise produce flame on their tile and instead infuse a ruby that can be later used as materia
+  - An alchemist can also infuse corundum with elemental fire with a `Push` transmutation; if such a transmutation is paired with a `Break(F, F)` transmutation, the full transmutation, easily usable by any alchemist with two Fire aura points, can use a defensive action that negates an effect that would otherwise produce flame on their tile and instead infuse a ruby that can be later used as materia
 - The atmosphere over a tile is typically composed primarily of inert air `A2`, vital air `FA`, and trace impurities from e.g. smoke (`AE`) or water vapor `AW`.
   - Alchemists can concentrate water vapor with `Pull(AW)`, then accelerate precipitation with `Break(A, W)` which induces natural reactions including `2W -> W2` to create liquid water. Such a transmutation would require at least a level 3 alchemist with 2 aura points in either water or air, and 1 aura point in the other; being able to precipitate water out of the air at decent concentrations is a skill limited to intermediate-level alchemists.
 - Alloys like **steel** might be composed of a metal like iron (`QF2E3`) and "ash" (carbon)
@@ -151,7 +151,6 @@ Unlike many simpler elemental magic systems, we stipulate in Iosis that atomic m
 - `Q2`: **Essence**
   - Unstable unless fused with another element; all crystal substances contain this
   - Alchemists can easily use transmutations to pick off `Q2` from crystals to temporarily create high concentrations
-  - 
   - Reacts with biological matter to accelerate healing
 - `QF`: **Lightning**.
   - Conducted by _conductive_ substances like water and metals
@@ -241,15 +240,15 @@ Seven planetary metals are composed of different mixtures of sulfur, mercury, sa
 Bonus: to transmute lead into gold, you'd need to add 1 `Q`, 1 `F`, 1 `W`, and remove 1 `E`.
 
 ```
-Melanosis: Break(QE5, E)  // blackening
+Melanosis: Break(QE4, E)  // blackening
 Leucosis: Bind(QE4, W)  // whitening
 Xanthosis: Bind(QWE4, Q)  // yellowing
 Iosis: Bind(Q2WE4, F)  // reddening
 ```
 
-It could be fun if this is used as a red herring in-game for a philospher's stone formula. But to cast that many complex transmutations requires many elite alchemists.
+It could be fun if this is used as a red herring in-game for a philosopher's stone formula. But to cast that many complex transmutations requires many elite alchemists.
 
-In-game and in-lore, such transmutations are hard or impossible to pull off, because the alchemist performing the transmutation must have enough elemental "aura" to match the full formulae for those metals (minus one "wildcard" matched by the runestone's intrinsic alkahest). It takes a "level 6" alchemist to perform the fake melanosis and xanthosis, a "level 5" for fake leucosis, and a "level 7" for fake iosis.
+In-game and in-lore, such transmutations are hard or impossible to pull off, because the alchemist performing the transmutation must have enough elemental "aura" to match the full formulae for those metals (minus one "wildcard" matched by the runestone's intrinsic alkahest). It takes a "level 5" alchemist to perform the fake melanosis and leucosis, a "level 6" for fake xanthosis, and a "level 7" for fake iosis.
 
 We could also suggest that the expenditure of runestone in order to perform the transmutation is not cost-effective for the amount of gold produced; the quest for the Philosopher's Stone is for a raw source of alkahest that would make the transmutations cost-effective.
 
@@ -296,14 +295,14 @@ Some miscellaneous substances that might be worth including, because they have s
   - powerful source of flame with `Break(F2, E)`, similar to sulfur
   - source of sulfur with `Break(FE, F)`
   - source of heat with `Break(F, FE)`
-  - reacts with chlorine (`F2A`) in natural reaction `2F2A + 2F2E -> 8F2 + A2 + E2`, with `8F2` being a particularly violent flame and `E2` being salt (lol)
+  - reacts with chlorine (`F2A`) in natural reaction `2F2A + 2F2E -> 4F2 + A2 + E2`, with `4F2` being a particularly violent flame and `E2` being salt (lol)
 - **chlorine** (`F2A` to make sodium + chlorine reaction balance?)
   - extremely caustic
   - possibly a war crime
   - possibly downgrades Fable to Opus at the mere mention
 - **oil** (`FAWE`?)
   - Burns exothermically, should balance to intuitive byproducts
-  - Level 3 alchemists could extract elemental `F`, `A`, `W`, or `E` from it easily with an `Extract` transmutation
+  - Level 3 alchemists could extract elemental `F`, `A`, `W`, or `E` from it easily with a `Break` transmutation (e.g. `Break(F, AWE)`)
   - Units covered in it are vulnerable to flame and resist "wet" effect
 
 ## Metallurgy
@@ -328,7 +327,7 @@ The runes that perform transmutations are attached to tools. The tool determines
 
 ### Example transmutations
 
-No names, effects, or formulae should be considered final, but I offer these as a source of inspiration for how the building blocks could compose into a progression of elporable, exploitable transmutations.
+No names, effects, or formulae should be considered final, but I offer these as a source of inspiration for how the building blocks could compose into a progression of explorable, exploitable transmutations.
 
 **Cooler**: `Extract(Q)`
 - Level 0 (no aura required)
@@ -479,7 +478,7 @@ We have a lot of knobs that we can tune to adjust game balance:
 
 ### Would there be really broken transmutations that apply directly to people/biological matter/weapons?
 
-My hand-wavey, ill-thought-out response is that most metals and biological substances would have formulae that are too complicated for most alchemists to attempt to `Break` without exceedingly many aura points. A human may be made of mostly carbon `AE` and water `W2`, but we could say that the actual biochemistry involves much more complicated substances; organic molecules are polymer chains and the like and are much too complicated to transmute; diatomic water likewise is turned into more complex molecules (unlike real life) so `Break(W2)` wouldn't boil you from the inside out.
+My hand-wavey, ill-thought-out response is that most metals and biological substances would have formulae that are too complicated for most alchemists to attempt to `Break` without exceedingly many aura points. A human may be made of mostly carbon `AE` and water `W2`, but we could say that the actual biochemistry involves much more complicated substances; organic molecules are polymer chains and the like and are much too complicated to transmute; diatomic water likewise is turned into more complex molecules (unlike real life) so `Break(W, W)` wouldn't boil you from the inside out.
 
 Alternatively, the more fantasy magic explanation could be that aura or some life force or whatever repels direct transmutation effects and so transmutations only work on non-living matter outside the skin.
 
@@ -517,13 +516,13 @@ I think it would be very cool, technically and thematically, to pull off an elem
 
 ### The cost rule verifies against the whole library
 
-The author's rule (stated in review, not yet written into the doc above): **a transmutation's level = the total sigil count across its formula runes, minus one** — the −1 being the runestone's intrinsic alkahest, applied once per transmutation. Audited against every priced example: `Break(F,A)`=1, `Push(A2)`=1, `Pull(FA)`=1, `Bind(Q,Q)`=1, `Bind(A,AF)`=2, Flame launcher=2, calcium=2, the ruby-infusion defense=2, Fireball staff=3, Twister=3, Brimstone flame=3, the `Pull(AW)+Break(A,W)` precipitator=3, Long flame=5, Fireball=5, Greater fireball=7, leucosis/xanthosis/iosis=5/6/7, and the whole `Extract` family=0. All reproduce. Three places fail the audit:
+The author's rule (stated in review, not yet written into the doc above): **a transmutation's level = the total sigil count across its formula runes, minus one** — the −1 being the runestone's intrinsic alkahest, applied once per transmutation. Audited against every priced example: `Break(F,A)`=1, `Push(A2)`=1, `Pull(FA)`=1, `Bind(Q,Q)`=1, `Bind(A,AF)`=2, Flame launcher=2, calcium=2, the ruby-infusion defense=2, Fireball staff=3, Twister=3, Brimstone flame=3, the `Pull(AW)+Break(A,W)` precipitator=3, Long flame=5, Fireball=5, Greater fireball=7, leucosis/xanthosis/iosis=5/6/7, and the whole `Extract` family=0. All reproduce. Three places failed the audit — all corrected in the cleanup commit that followed, kept on record here because each is exactly what the ReactionLint below would have caught:
 
-1. **Melanosis is off by one under the doc's own notation.** `Break(X, Y)` decomposes the substance `XY`, so lead (`QE5`) → `QE4` is `Break(QE4, E)`; as written, `Break(QE5, E)` takes `QE6` as input. Corrected, melanosis prices at **level 5**, and the "level 6 … melanosis" sentence moves with it.
-2. **The sodium–chlorine reaction doesn't balance:** `2F2A + 2F2E -> 8F2 + A2 + E2` has 8 F on the left and 16 on the right; `4F2` balances it. (A conservation proposal with unbalanced books in it is the best argument for the lint below.)
-3. **Oil prices as Break, not Extract.** Oil is written as a molecule (`FAWE`), so pulling one element out is `Break(F, AWE)` = level 3 — exactly the level the bullet assigns — but the verb it names is `Extract`, which prices at 0. Either oil is a compound (of what?) or the verb is Break.
+1. **Melanosis was off by one under the doc's own notation.** `Break(X, Y)` decomposes the substance `XY`, so lead (`QE5`) → `QE4` is `Break(QE4, E)`; the draft's `Break(QE5, E)` took `QE6` as input. Corrected, melanosis prices at **level 5**, and the "level 6 … melanosis" sentence moved with it.
+2. **The sodium–chlorine reaction didn't balance:** the draft's `2F2A + 2F2E -> 8F2 + A2 + E2` had 8 F on the left and 16 on the right; it now reads `4F2`. (A conservation proposal with unbalanced books in it is the best argument for the lint below.)
+3. **Oil priced as Break, not Extract.** Oil is written as a molecule (`FAWE`), so pulling one element out is `Break(F, AWE)` = level 3 — exactly the level the bullet assigns — but the verb it named was `Extract`, which prices at 0. The bullet now says Break; whether oil should instead be a *compound* (of what?) is still the author's call.
 
-Notation nits from the same audit: `Break(W2)` appears once with one argument; sodium uses `Break(F, FE)` and `Break(FE, F)` interchangeably — is Break commutative, or does argument order choose the channel? (`Break(F2, E)` vs `Break(F, FE)` on the same substance genuinely ARE two different decomposition channels, a nice mechanic if declared); metal compositions are written both `QE*…` and `EQ*…`.
+A fourth erratum surfaced in a later human editing pass and was fixed in the same cleanup: the silver worked example gave the alchemical order of `QE * FE * WE` as `QFWE2` — three E's in that composition, so `QFWE3`. Notation questions from the same audit, still open: sodium uses `Break(F, FE)` and `Break(FE, F)` interchangeably — is Break commutative, or does argument order choose the channel? (`Break(F2, E)` vs `Break(F, FE)` on the same substance genuinely ARE two different decomposition channels, a nice mechanic if declared); and metal compositions are written both `QE*…` and `EQ*…`.
 
 ### Convergences with existing canon (worth citing in the room)
 
