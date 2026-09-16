@@ -2,7 +2,7 @@
 
 **Status: ALL FOUR SLICES BUILT 2026-07-28 ([#96](https://github.com/Phaazoid/Godoiosis/issues/96)).** Filed 2026-07-27, when the project acquired a win condition for the first time. Before this, Iosis had ten interlocking systems and no way to finish a battle — which meant a design question could be answered *"is this coherent?"* but never *"does this improve play?"*
 
-**Canon checked through #978 (2026-09-16).**
+**Canon checked through #982 (2026-09-16).**
 
 ## What a mission is
 
@@ -103,6 +103,24 @@ end the phase while the card is up.
 **Both phase keys stand down while the briefing plays, and Enter is the load-bearing one:** it is both `commit_deployment` and Dialogic's own advance action (`dialogic_default_action` carries Enter, Space and left click), so without the guard the keypress that closes the last line opens the Begin Mission card behind a screen nobody has seen. Tab is guarded for the plainer reason that the screen is deliberately withheld.
 
 **`_briefing` is cleared in `_close_deployment_menu`**, the one door every exit takes — commit, `reset()` for F2 / a board swap / Load Game, and `abandon_mission`, which never reaches `reset()` at all.
+
+### Authoring a timeline ([#982](https://github.com/Phaazoid/Godoiosis/issues/982))
+
+A briefing is written on the **Dialog & Tutorial** page now, not in Dialogic's editor tab. The page owns the `speaker: line` shape every shipped timeline is; Dialogic's tab keeps everything richer, and a timeline holding a choice, a portrait, a conditional or a speaker no character answers to **opens read-only and says where to go**. That guard is what keeps this a shortcut into the common case rather than a second timeline editor, and it is why `BoardLint`'s empty-timeline check is gated on it: a read reports no lines for a timeline it merely cannot write back, so an ungated emptiness read calls every richly-authored timeline in the project silent.
+
+**A timeline is PROJECT scope; the beat that points at it is BOARD content.** Save writes the file and registers it at once, the way a roster saves; the beat still rides the header's Update. The cost is an unreferenced `.dtl` if you create one and never attach it, which is the same shape as an unused roster.
+
+**Registration is ours because Dialogic's is editor-only.** `DialogicResourceUtil.set_directory` writes `project.godot` only under `Engine.is_editor_hint()`, false in the running game, so `DialogicSource.register` writes three stores in one call — the committed file, the live `ProjectSettings` every picker reads, and the `Engine` meta Dialogic caches a directory in on first read. A writer that updated fewer would leave the picker stale for the rest of the session. It is **not optional**: `test_every_dialog_file_on_disk_is_registered` reds CI on an unregistered `.dtl`, which is also why the picker still cannot just scan the folder.
+
+**Entries APPEND rather than sort.** `plugin.gd._build()` runs `DialogicResourceUtil.update()` on every editor Play against the editor's own stale copy, finds the new file and appends it — so matching that order makes the editor's next save byte-identical, and a registration written while the editor was open self-heals the moment you press Play.
+
+**The beat holds the file-backed object, never a fresh one.** `DialogicTimeline.events` is not an `@export`, so an in-memory timeline embeds into the mission `.tres` and loads back silent — the [#177](https://github.com/Phaazoid/Godoiosis/issues/177) trap one resource along. A save updates the already-loaded object in place (`from_text` + `process`) so every beat holding it sees the edit without a restart.
+
+**Lines serialise through real `DialogicTextEvent`s, never `"%s: %s"`.** The parser's name group runs to the first unescaped colon, so a narration line reading *Look: the bridge* would come back as a speaker called `Look`, fabricate a nameless character at runtime and red the law suite.
+
+**A speaker is MINTED FROM THE CAST.** *New speaker from cast…* writes a `.dch` whose display name and portrait come off a `Resources/Units/` character, leaving colour as the one thing a speaker authors that the unit has no opinion on — so who a character is keeps one source and the `.dch` is a derived artifact. Noted rather than fixed: `Torv.tres` and `torv.dch` already disagree about which portrait Torv wears.
+
+**Delete refuses while anything still names it.** A timeline is an ext_resource *by path*, so deleting a referenced one makes that mission a hard parse error rather than a missing line. **Rename is deliberately absent** — repointing dependents is the editor's job and a runtime rename cannot do it — so renaming in the name field saves a second file.
 
 **A restart replays the briefing**, which is parity with `MISSION_START` rather than a decision of its own: both fresh-start doors funnel through `_open_deployment`. The Prolog keeps `MISSION_START` — it names no roster, so it has no phase to brief, and its lines are about the player's own four units rather than the map.
 

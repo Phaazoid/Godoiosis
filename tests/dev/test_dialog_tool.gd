@@ -66,3 +66,107 @@ func test_reorder_moves_the_authored_sequence() -> void:
 	tool_page.refresh()
 	tool_page._move_step(1, -1)
 	assert_str(game.scenario_manager.current_tutorial_steps[0].text).is_equal("second")
+
+
+# --- the #982 timeline editor ---
+#
+# NOTHING HERE WRITES res://. The page's Save does, which is exactly why these drive registration
+# against a user:// copy of project.godot instead: a dev-tool case that can create or delete real
+# Scenarios/dialog/ files is one mutant away from editing the dev's content.
+
+const SCRATCH_SETTINGS := "user://test_dialog_tool_project.godot"
+const SCRATCH_TIMELINE := "user://test_dialog_tool/scratch.dtl"
+
+var _dtl_before := {}
+var _dch_before := {}
+
+
+func _snapshot_registries() -> void:
+	_dtl_before = DialogicSource.directory("dtl").duplicate()
+	_dch_before = DialogicSource.directory("dch").duplicate()
+	var source := FileAccess.get_file_as_string("res://project.godot")
+	var file := FileAccess.open(SCRATCH_SETTINGS, FileAccess.WRITE)
+	file.store_string(source)
+	file.close()
+
+
+func _restore_registries() -> void:
+	ProjectSettings.set_setting("dialogic/directories/dtl_directory", _dtl_before)
+	ProjectSettings.set_setting("dialogic/directories/dch_directory", _dch_before)
+	for key: String in ["dtl_directory", "dch_directory"]:
+		if Engine.has_meta(key):
+			Engine.remove_meta(key)
+	for path: String in [SCRATCH_SETTINGS, SCRATCH_TIMELINE, SCRATCH_TIMELINE + ".uid"]:
+		if FileAccess.file_exists(path):
+			DirAccess.remove_absolute(path)
+
+
+func _beat_timeline_names() -> PackedStringArray:
+	game.scenario_manager.current_dialog_beats.append(DialogBeat.new())
+	tool_page.refresh()
+	var names := PackedStringArray()
+	for child in tool_page._beat_list.get_children():
+		if not child is HBoxContainer:
+			continue
+		for control in child.get_children():
+			if control is OptionButton:
+				var picker := control as OptionButton
+				for i in picker.item_count:
+					names.append(picker.get_item_text(i))
+	return names
+
+
+# THE WIRE: registering a timeline has to reach the picker in the SAME session. Dialogic caches a
+# directory in Engine meta on first read and the page reads ProjectSettings, so a writer that only
+# touched the committed file would leave both stale until relaunch.
+func test_a_registered_timeline_reaches_the_beat_rows_dropdown() -> void:
+	_snapshot_registries()
+	DialogicSource.register("dtl", "zz_probe", "res://Scenarios/dialog/zz_probe.dtl", SCRATCH_SETTINGS)
+
+	assert_str(", ".join(_beat_timeline_names())).contains("zz_probe")
+	_restore_registries()
+
+
+func test_a_registered_speaker_reaches_the_line_speaker_dropdown() -> void:
+	_snapshot_registries()
+	DialogicSource.register("dch", "zz_speaker", "res://Scenarios/dialog/characters/zz_speaker.dch",
+		SCRATCH_SETTINGS)
+	tool_page._on_add_line()
+
+	var found := false
+	for child in tool_page._line_list.get_children():
+		if not child is HBoxContainer:
+			continue
+		for control in child.get_children():
+			if control is OptionButton:
+				var picker := control as OptionButton
+				for i in picker.item_count:
+					if picker.get_item_text(i) == "zz_speaker":
+						found = true
+	assert_bool(found).is_true()
+	_restore_registries()
+
+
+# A timeline this page cannot round-trip opens READ-ONLY: no line rows to edit, and a reason
+# naming where to go instead. Saving one would flatten whatever it holds.
+func test_a_timeline_this_page_cannot_write_back_opens_read_only() -> void:
+	_snapshot_registries()
+	DialogicSource.write(SCRATCH_TIMELINE, "torv: A line.\nlabel somewhere")
+	DialogicSource.register("dtl", "zz_rich", SCRATCH_TIMELINE, SCRATCH_SETTINGS)
+	tool_page.refresh()
+	var index := -1
+	for i in tool_page._timeline_picker.item_count:
+		if tool_page._timeline_picker.get_item_text(i) == "zz_rich":
+			index = i
+	assert_int(index).is_greater(-1)
+
+	tool_page._on_timeline_picked(index)
+
+	assert_bool(tool_page._editable).is_false()
+	assert_str(tool_page._status.text).contains("Dialogic")
+	var rows := 0
+	for child in tool_page._line_list.get_children():
+		if child is HBoxContainer:
+			rows += 1
+	assert_int(rows).is_equal(0)
+	_restore_registries()

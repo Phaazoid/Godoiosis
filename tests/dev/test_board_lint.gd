@@ -432,6 +432,28 @@ func test_a_beat_with_no_timeline_degrades() -> void:
 	assert_bool(_mentions(BoardLint.Severity.DEGRADES, "no timeline")).is_false()
 
 
+# #982 made an empty timeline easy to author: New writes a file the moment you press Save.
+func test_a_beat_playing_a_timeline_with_no_lines_degrades() -> void:
+	var beat := DialogBeat.new()
+	beat.timeline = DialogicTimeline.new()
+	game.scenario_manager.current_dialog_beats.append(beat)
+	assert_bool(_mentions(BoardLint.Severity.DEGRADES, "no lines in it")).is_true()
+	# Non-vacuous twin: give it a line and the finding goes.
+	beat.timeline.from_text("torv: Something to say.")
+	assert_bool(_mentions(BoardLint.Severity.DEGRADES, "no lines in it")).is_false()
+
+
+# THE FALSE POSITIVE THIS CHECK NEARLY SHIPPED WITH: read_timeline reports no lines for a
+# timeline it merely cannot WRITE BACK, so an ungated emptiness read calls every richly-authored
+# timeline in the project silent.
+func test_a_richly_authored_timeline_is_not_called_empty() -> void:
+	var beat := DialogBeat.new()
+	beat.timeline = DialogicTimeline.new()
+	beat.timeline.from_text("torv: A line.\nlabel somewhere")
+	game.scenario_manager.current_dialog_beats.append(beat)
+	assert_bool(_mentions(BoardLint.Severity.DEGRADES, "no lines in it")).is_false()
+
+
 func test_a_step_naming_an_absent_unit_blocks() -> void:
 	var step := TutorialStep.new()
 	step.unit_name = "Torv"

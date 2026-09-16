@@ -297,6 +297,20 @@ static func _check_dialog(game, board: BoardContext, found: Array[Dictionary]) -
 			_add(found, Severity.DEGRADES,
 				"A dialog beat (%s) has no timeline -- it fires into nothing."
 					% DialogBeat.Trigger.keys()[beat.trigger])
+			continue
+		# An EMPTY timeline is the same fault one step along, and #982 made it easy to author:
+		# New writes a file the moment you press Save, so a timeline with every line removed is
+		# a beat that plays silence rather than one that fires into nothing.
+		#
+		# GATED ON `editable`, which is not belt and braces: read_timeline reports no lines for a
+		# timeline it merely cannot WRITE BACK, so reading the emptiness alone would flag every
+		# richly-authored timeline in the project as silent.
+		var read := DialogicSource.read_timeline(beat.timeline)
+		var lines: Array = read["lines"]
+		if bool(read["editable"]) and lines.is_empty():
+			_add(found, Severity.DEGRADES,
+				"A dialog beat (%s) plays a timeline with no lines in it."
+					% DialogBeat.Trigger.keys()[beat.trigger])
 
 	# The name check is authored-time advice: mid-battle, a named unit may legitimately be gone
 	# (dead, extracted), so past the opening turn of an ARMED battle it stays quiet (dev call,
