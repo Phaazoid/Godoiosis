@@ -44,3 +44,17 @@ static func ink_reach(box_px: float) -> float:
 # a half-pixel offset on a nearest-filtered sprite samples the wrong texel.
 static func window_offset(window_px: float) -> Vector2:
 	return (Vector2(window_px, window_px) * 0.5 - ink_centre(SHEET)).round()
+
+
+# The ZOOM answer, as against window_offset()'s 1:1 CROP: the destination rect for drawing a whole
+# sheet so that its INK ends up centred on `centre` and reaching `reach` px from it. Everything
+# outside the ink box is drawn too -- it is one texture -- so a caller wanting the overflow cut off
+# clips its own rect (#990).
+#
+# THE CELL IS NOT THE ART (#937). Fitting the sheet into a box is only correct while the character
+# fills its canvas: the pack's cell is 64 holding a ~23x20 character, so a 52px box spends two thirds
+# of itself on padding. ActionMenuController._draw_centre_sprite asks the same question the other way
+# round (fit the ink's LONGEST SIDE, feet on a seat) and keeps its own arithmetic for that reason.
+static func ink_fit_rect(centre: Vector2, reach: float) -> Rect2:
+	var scale := reach / ink_reach(SHEET)
+	return Rect2(centre - ink_centre(SHEET) * scale, Vector2(SHEET, SHEET) * scale)

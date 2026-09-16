@@ -238,11 +238,46 @@ func test_every_shipped_map_sprite_ends_its_ink_where_INK_RECT_says() -> void:
 
 
 # A ring centred on the sprite's BOX would sit a third of the box above the character, because every
-# map sprite draws its ink in the lower half. This is the arithmetic that says so.
+# map sprite draws its ink in the lower half. This is the arithmetic that says so -- and it still
+# describes the 1:1 CROP the deployed strip uses (window_offset), which is why #990 left it alone even
+# though the card no longer fits a cell into its box.
 func test_the_ink_centre_sits_well_below_the_canvas_centre() -> void:
 	var box := 52.0
 	assert_float(MapSpriteInk.ink_centre(box).y).is_greater(box * 0.5 + 8.0)
 	assert_float(MapSpriteInk.ink_centre(box).x).is_equal_approx(box * 0.5, 1.0)
+
+
+# THE CARD'S FACTORY, which nothing in this suite had ever built -- every case above uses the panel's.
+# Two properties, both read off the live rect rather than typed: the ring fills the column it is given,
+# and the sprite is drawn to FILL that ring rather than fitted into the box cell-and-all (#990).
+#
+# The texture is a placeholder on purpose: ink_fit_rect answers from MapSpriteInk.SHEET, never from the
+# texture handed in, so the geometry here is the same one every shipped sprite gets.
+func test_the_cards_ring_fills_its_column_and_the_sprite_fills_the_ring() -> void:
+	var celest := _alchemist([EARTH, FIRE], {EARTH: 1, FIRE: 2})
+	var box := float(PreMissionCard.SPRITE)
+	var ring: AuraRing = auto_free(AuraRing.for_portrait(celest, PlaceholderTexture2D.new(), box))
+	add_child(ring)
+	ring.size = Vector2(box, box)
+	await await_idle_frame()
+
+	assert_float(ring._outer * 2.0).override_failure_message(
+		"the ring is %.1f px across inside a %.0f px column" % [ring._outer * 2.0, box]) \
+		.is_equal_approx(box, 0.5)
+
+	var scale: float = ring._portrait_rect.size.x / float(MapSpriteInk.SHEET)
+	var ink := Rect2(ring._portrait_rect.position + Vector2(MapSpriteInk.INK_RECT.position) * scale,
+		Vector2(MapSpriteInk.INK_RECT.size) * scale)
+	assert_float(ink.get_center().distance_to(ring._centre)).override_failure_message(
+		"the character is drawn off the middle of its own ring").is_less_equal(1.0)
+	assert_float(ink.size.length() * 0.5).override_failure_message(
+		"the character's ink reaches %.1f px and the band starts at %.1f -- it is not filling the ring"
+		% [ink.size.length() * 0.5, ring._inner]).is_equal_approx(ring._inner - AuraRing.CLEARANCE, 0.5)
+	# The consequence a caller has to know about, stated rather than left to be discovered: filling the
+	# ring with the INK means the CELL is drawn larger than the node, so an outlier sprite's own
+	# overflow lands outside the column.
+	assert_float(ring._portrait_rect.size.x).override_failure_message(
+		"the drawn sheet fits inside the column, so the ink cannot be filling the ring").is_greater(box)
 
 
 # --- the wire ------------------------------------------------------------------------------------
