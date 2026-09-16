@@ -30,3 +30,4 @@ base_aura = Dictionary[int, int]({
 })
 base_affinity = Array[int]([6])
 starting_inventory = Array[ExtResource("7_tgyxx")]([ExtResource("8_fq6i1")])
+starting_equipped_index = 0

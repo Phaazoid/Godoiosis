@@ -7,13 +7,8 @@
 [ext_resource type="Texture2D" uid="uid://dvmd0ncpyryv7" path="res://Art/Units/Portraits/hair_mcgee_red.png" id="5_lddp7"]
 [ext_resource type="Script" uid="uid://cvvknuw621ar2" path="res://Classes/units/UnitData.gd" id="6_4prxo"]
 [ext_resource type="Script" uid="uid://jytv7xrjv6l1" path="res://Classes/items/Item.gd" id="7_t847d"]
-[ext_resource type="Script" uid="uid://p3jyhhtj7rtg" path="res://Classes/weapons/instances/ProstheticWeaponInstance.gd" id="8_gtlwd"]
 [ext_resource type="Resource" uid="uid://cx75h4chpy74e" path="res://Resources/Weapons/MainVarieties/Prosthetic.tres" id="9_7m3fw"]
 [ext_resource type="Resource" uid="uid://j6ier50surn8" path="res://Resources/RuneVariants/Water Rune.tres" id="10_x7a4n"]
-
-[sub_resource type="Resource" id="Resource_6kta4"]
-script = ExtResource("8_gtlwd")
-template = ExtResource("9_7m3fw")
 
 [resource]
 script = ExtResource("6_4prxo")
@@ -35,8 +30,8 @@ base_aura = Dictionary[int, int]({
 2: 1
 })
 base_affinity = Array[int]([2])
-starting_inventory = Array[ExtResource("7_t847d")]([SubResource("Resource_6kta4"), ExtResource("10_x7a4n")])
-starting_equipped_index = 0
+starting_inventory = Array[ExtResource("7_t847d")]([ExtResource("9_7m3fw"), ExtResource("10_x7a4n")])
+starting_equipped_index = 1
 starting_prosthetics = Dictionary[int, int]({
 0: 0
 })

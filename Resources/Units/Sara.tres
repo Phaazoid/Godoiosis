@@ -7,12 +7,7 @@
 [ext_resource type="Texture2D" uid="uid://bgvvkigtcobal" path="res://Art/Units/MapSprites/Archer.png" id="3_o3ygt"]
 [ext_resource type="Script" uid="uid://jytv7xrjv6l1" path="res://Classes/items/Item.gd" id="4_c0dk6"]
 [ext_resource type="Texture2D" uid="uid://cd51n0ptxrquf" path="res://Art/Units/MapSprites/Archer_Moving.png" id="4_eio8b"]
-[ext_resource type="Script" uid="uid://bncwoq0llmo08" path="res://Classes/weapons/instances/CarbineWeaponInstance.gd" id="5_o3ygt"]
 [ext_resource type="Resource" path="res://Resources/Weapons/MainVarieties/Carbine.tres" id="6_eio8b"]
-
-[sub_resource type="Resource" id="Resource_bv546"]
-script = ExtResource("5_o3ygt")
-template = ExtResource("6_eio8b")
 
 [resource]
 script = ExtResource("3_4m7id")
@@ -34,4 +29,5 @@ base_aura = Dictionary[int, int]({
 2: 1
 })
 base_affinity = Array[int]([2])
-starting_inventory = Array[ExtResource("4_c0dk6")]([SubResource("Resource_bv546")])
+starting_inventory = Array[ExtResource("4_c0dk6")]([ExtResource("6_eio8b")])
+starting_equipped_index = 0

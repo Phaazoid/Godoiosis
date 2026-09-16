@@ -1,11 +1,13 @@
-[gd_resource type="Resource" script_class="UnitData" format=3]
+[gd_resource type="Resource" script_class="UnitData" format=3 uid="uid://dmbjfwxb8u62b"]
 
-[ext_resource type="Texture2D" path="res://Art/Units/MapSprites/Soldier_Downed.png" id="1_ef1sp"]
-[ext_resource type="Script" path="res://Classes/units/UnitData.gd" id="1_v2kxy"]
-[ext_resource type="Texture2D" path="res://Art/Units/MapSprites/Soldier.png" id="2_nyms1"]
-[ext_resource type="Script" path="res://Classes/jobs/AbilityData.gd" id="2_t8aii"]
-[ext_resource type="Texture2D" path="res://Art/Units/MapSprites/Soldier_Moving.png" id="3_t8aii"]
-[ext_resource type="Texture2D" path="res://Art/Units/Portraits/hair_mcgee.png" id="4_1fjdo"]
+[ext_resource type="Texture2D" uid="uid://ea03rjhxnohw" path="res://Art/Units/MapSprites/Soldier_Downed.png" id="1_ef1sp"]
+[ext_resource type="Script" uid="uid://cvvknuw621ar2" path="res://Classes/units/UnitData.gd" id="1_v2kxy"]
+[ext_resource type="Texture2D" uid="uid://cxhdc55u1688e" path="res://Art/Units/MapSprites/Soldier.png" id="2_nyms1"]
+[ext_resource type="Script" uid="uid://7w7ajveltxx5" path="res://Classes/jobs/AbilityData.gd" id="2_t8aii"]
+[ext_resource type="Texture2D" uid="uid://d3w5utgjfoulc" path="res://Art/Units/MapSprites/Soldier_Moving.png" id="3_t8aii"]
+[ext_resource type="Texture2D" uid="uid://bun6xqwudsavw" path="res://Art/Units/Portraits/hair_mcgee.png" id="4_1fjdo"]
+[ext_resource type="Script" uid="uid://jytv7xrjv6l1" path="res://Classes/items/Item.gd" id="7_1fjdo"]
+[ext_resource type="Resource" uid="uid://fx3dcqyslgbe" path="res://Resources/Weapons/MainVarieties/Springspear.tres" id="8_ofudl"]
 
 [resource]
 script = ExtResource("1_v2kxy")
@@ -27,4 +29,5 @@ base_aura = Dictionary[int, int]({
 5: 2
 })
 base_affinity = Array[int]([5])
+starting_inventory = Array[ExtResource("7_1fjdo")]([ExtResource("8_ofudl")])
 metadata/_custom_type_script = "uid://cvvknuw621ar2"
