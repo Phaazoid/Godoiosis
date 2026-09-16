@@ -420,7 +420,17 @@ func test_every_list_that_can_grow_scrolls_inside_its_own_region() -> void:
 # the CLIP: a card is wholly inside the scroller or wholly past it, never sliced. That is also why a
 # partly-visible row further down would fail this -- it would, and deliberately: the dev's answer on
 # 2026-09-16 was two clean rows rather than a revealed slice of the third.
-func test_the_roster_clip_never_cuts_a_card_row() -> void:
+#
+# THE CUT CHECK ALONE IS BLIND TO THE REPORTED BUG, AND A MUTANT IS WHAT SAID SO. Put BAND_HEIGHT back
+# to the value that was reported and this run stays green, because a card here renders at exactly
+# CARD_HEIGHT and two rows come out flush against the clip to the pixel -- while the SAME build in the
+# report renders each card one px taller and loses its outline. CARD_HEIGHT is a MINIMUM, so a card is
+# as tall as its content makes it, and a headless run is not the arbiter of that. What survives the
+# difference is the MARGIN: the clip has to land in the far half of the gap the grid leaves between
+# rows, not sit on the edge of the row it just cleared. Half a separation is the one non-arbitrary
+# point in that interval -- nearer the next row than the last -- and it is read off the grid rather
+# than typed, so tuning the separation moves the bar with it.
+func test_the_roster_clip_lands_between_card_rows_rather_than_on_one() -> void:
 	if not await _enter_phase():
 		return
 	var screen := _screen()
@@ -433,11 +443,15 @@ func test_the_roster_clip_never_cuts_a_card_row() -> void:
 	# suite file in gdUnit4, so a clip that slices three rows must not take three runs to read.
 	var clip := scroll.get_global_rect()
 	var cut: Array[String] = []
+	var last_whole := clip.position.y
 	for card in _cards():
 		var box := card.get_global_rect()
 		var inside := box.position.y >= clip.position.y - 0.5 and box.end.y <= clip.end.y + 0.5
 		var past := box.position.y >= clip.end.y - 0.5 or box.end.y <= clip.position.y + 0.5
-		if inside or past:
+		if inside:
+			last_whole = maxf(last_whole, box.end.y)
+			continue
+		if past:
 			continue
 		cut.append("%s loses %.0f px" % [card.unit.get_unit_name(),
 			maxf(clip.position.y - box.position.y, box.end.y - clip.end.y)])
@@ -446,6 +460,14 @@ func test_the_roster_clip_never_cuts_a_card_row() -> void:
 		+ "slices a card instead of landing in the gap between two: %s. A deployed card's outline is "
 		+ "the outermost 2 px of its box, so this is what eats it.")
 		% [clip.size.y, ", ".join(cut)]).is_empty()
+
+	var gap := float(screen._grid.get_theme_constant("v_separation"))
+	var margin := clip.end.y - last_whole
+	assert_float(margin).override_failure_message(
+		("the roster viewport ends %.0f px past the last whole card row, inside a %.0f px gap -- it is "
+		+ "resting on that row's own edge. A card renders at least CARD_HEIGHT and the reported build "
+		+ "renders it MORE, so there is nothing here for the difference to come out of and the outline "
+		+ "goes over the clip.") % [margin, gap]).is_greater_equal(gap * 0.5)
 
 
 # The outline his mockup had and the build did not: a unit that is coming with you is readable from
