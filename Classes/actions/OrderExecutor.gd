@@ -153,7 +153,10 @@ func execute_orders(unit):
 	# fires at a crossing CELL, which the diorama's stage set does not hold -- lifting the ground
 	# first would play the shot over a hole. The board is where you move, and a watch shot is the
 	# tail of moving.
-	await _execute_move_phase(move_actions, plan, sheet, is_ai, beat)
+	# `squad as Squad` because execute_orders' own `squad` comes off the untyped `unit` and is a
+	# Variant; an Object cast degrades to null rather than throwing, and the phase treats null the
+	# way it treats a player pass.
+	await _execute_move_phase(move_actions, plan, sheet, is_ai, beat, squad as Squad)
 
 	# THE TEAR-OUT (#521): the ground the FIGHT happens on lifts off the board into a diorama, and
 	# thuds back at the end. The cell set is the sheet's own -- computed once from the plan, so there
@@ -277,7 +280,7 @@ func _invalid_plan_summary(squad: Squad) -> String:
 # short hop standing under its own ghost while a long one finished. A PARKED walk is not complete,
 # so its ghost and arrow correctly stay up through the interrupt.
 func _execute_move_phase(actions: Array, plan: ResolvedPlan, sheet: BeatSheet,
-		is_ai: bool, beat: float):
+		is_ai: bool, beat: float, squad: Squad):
 	# Framed across BOTH ENDS of the walk rather than centred on the walker (dev, scratchpad
 	# 2026-08-26: "instead of just centering on the unit, it should try to show both their start and
 	# end position in the initial shot"). Computed ONCE and returned to after every interrupt (#567,
@@ -288,11 +291,40 @@ func _execute_move_phase(actions: Array, plan: ResolvedPlan, sheet: BeatSheet,
 	var span: Array[Vector2i] = []
 	if walker != null:
 		span = [walker.movement.cell, walker.get_projected_destination()]
+	# ...and NO FALLBACK for a squad that does not walk (#987, forced by #931). Deleting
+	# AIController's pan_to left an AI squad with no move unframed, and the obvious repair was to
+	# orient on its leader through the degenerate span. That is precisely what #931 had just REMOVED
+	# one day earlier: an AI's rev must not move the view at all, because it is "flying to a unit
+	# standing perfectly still". An empty span therefore stays empty and _frame_the_walk returns on
+	# it, for a player pass and an AI pass alike -- a squad with something worth watching is framed
+	# by the thing that is worth watching (a beat's own pan, the tear-out's stage pan), never by a
+	# shot that says only "this one is up next".
 	# The walk's OWN profile (#647), so the rig knows a plain move from a fought-over one. A walk is
 	# not a combat beat, so COMBAT_ONLY plays it under BOARD -- which is what stops the camera swaying
 	# and leaning through somebody crossing the field.
 	var walk_profile := Pacing.profile_for(walk)
-	await _frame_the_walk(span, walk_profile)
+	# THE OPENING SHOT IS THE MOVE (#987, dev 2026-09-16). It used to be AIController's pan_to the
+	# leader, which ran BEFORE plan_squad -- so the shot that opened every AI squad was committed
+	# while the destination was still unchosen, and could only ever centre the unit's start cell.
+	# Worse, pan_to ends in follow(), which IS the trained subject, so the orientation pan solved to
+	# TRAINED and pushed in to Pacing.TRAINED_DISTANCE on a unit standing still. Moving it here is
+	# what keeps the span at ONE spelling: the pan is the walk's own framing, not a second answer to
+	# where the squad is.
+	#
+	# AI_SQUAD_PAN for that opening, PLAYBACK_PAN for the interrupt return below: this pan is now the
+	# squad-to-squad glide that knob was named for, and the two durations differ for the reason
+	# Pacing states -- one crosses the board, one comes back to a walk already on screen.
+	await _frame_the_walk(span, walk_profile,
+			Pacing.AI_SQUAD_PAN if is_ai else Pacing.PLAYBACK_PAN)
+	# ...and the plan is READ inside the shot that frames it (#118, re-homed by #987). It was a beat
+	# in AIController taken before the camera had arrived; here the squad's whole move is already in
+	# frame when the hold starts. Zero for a player pass -- they authored the plan and pressed
+	# Execute -- and zero for a squad with nothing to read, which is only_hold_actions' own question
+	# and stays SquadManager's to answer.
+	var plan_read := 0.0
+	if is_ai and squad != null and not game.squad_manager.only_hold_actions(squad):
+		plan_read = Pacing.AI_PLAN_READ
+	await Pacing.beat(self, plan_read)
 	if actions.is_empty():
 		return
 
@@ -338,7 +370,7 @@ func _execute_move_phase(actions: Array, plan: ResolvedPlan, sheet: BeatSheet,
 				# once nothing is left to watch, where the next phase's own pan takes over. It restores
 				# the walk's profile too, or the shot's cinematic would ride on through the rest of it.
 				if not all_complete:
-					await _frame_the_walk(span, walk_profile)
+					await _frame_the_walk(span, walk_profile, Pacing.PLAYBACK_PAN)
 				continue
 
 		if all_complete and pending.is_empty():
@@ -376,7 +408,12 @@ func _execute_move_phase(actions: Array, plan: ResolvedPlan, sheet: BeatSheet,
 #
 # One spelling, two call sites (#567) -- the top of the move phase, and again after each interrupt.
 # An EMPTY span is "nothing walks", which is a hold-position queue or none at all.
-func _frame_the_walk(span: Array[Vector2i], profile: Pacing.Profile) -> void:
+#
+# The DURATION is the caller's because the two call sites are different travel (#987): the opening
+# shot of an AI squad crosses the board from whoever acted last, and the interrupt return comes back
+# to a walk that is already on screen. Before #987 the opening pan was AIController's and this was
+# only ever the return, which is why the shorter of the two used to be hardcoded here.
+func _frame_the_walk(span: Array[Vector2i], profile: Pacing.Profile, duration: float) -> void:
 	if span.is_empty():
 		return
 	# A hold-position order has no span to frame; the midpoint below is then the walker's own cell,
@@ -395,7 +432,7 @@ func _frame_the_walk(span: Array[Vector2i], profile: Pacing.Profile) -> void:
 	var grid: TileMapLayer = game.grid
 	await game.camera_controller.pan_to_position(
 			(GridUtils.cell_world(grid, span[0]) + GridUtils.cell_world(grid, span[1])) * 0.5,
-			Pacing.PLAYBACK_PAN)
+			duration)
 
 
 # The pass's mid-walk interrupts, in the order the resolve fired them (#567): one entry per moment,
