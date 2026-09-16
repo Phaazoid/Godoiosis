@@ -148,7 +148,13 @@ func test_the_preview_names_the_piece_being_carried() -> void:
 		var label := node as Label
 		if label != null:
 			found = label.text
-	assert_str(found).is_equal(row.item.display_name)
+	# shown_name(), never the field -- the same door the plate itself reads, and the same door #945
+	# named as THE one answer for a name. This case asked the field, so it was an eighth reading of
+	# the kind that ticket went hunting, sitting in a test rather than on a surface. It went red on
+	# main the day a bare WeaponData template was authored into the stash: a template answers
+	# copy_for_grant with an INSTANCE (#835), and a derived generic carries no display_name of its
+	# own, so the plate said "Carbine" while the field said nothing at all.
+	assert_str(found).is_equal(row.item.shown_name())
 
 
 # An EMPTY slot drags nothing, so it must not offer a preview of nothing either.
