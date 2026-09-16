@@ -14,9 +14,12 @@ class_name UnitSprite3D
 
 signal walk_finished
 
-# false: the MapSprites face screen-LEFT natively (dev feel-check 2026-08-12 —
-# "all units look like they're moonwalking" with this set true).
-const ART_FACES_SCREEN_RIGHT := false
+# A FACT ABOUT THE ART PACK, not a tuning value: re-check it whenever the MapSprites are replaced
+# (#986). true since #937 swapped the Fire Emblem rips for Zerie's pack, which draws its characters
+# facing screen-RIGHT where the old set faced LEFT. The const outlived its subject by two days and
+# every unit walked backwards, which is the same "moonwalking" the dev's 2026-08-12 feel-check named
+# when this read the other way against the other art.
+const ART_FACES_SCREEN_RIGHT := true
 const FALLBACK_SPRITE := "res://Art/Units/MapSprites/Knight Templar.png"
 
 # Where an authored STILL hangs from, in texture pixels. `Sprite3D` puts the origin at row
