@@ -27,14 +27,13 @@ directories/dch_directory={
 }
 directories/dtl_directory={
 "causeway_intro": "res://Scenarios/dialog/causeway_intro.dtl",
-"dialog/terraces_intro": "res://Scenarios/dialog/terraces_intro.dtl",
 "ford_intro": "res://Scenarios/dialog/ford_intro.dtl",
 "prolog_intro": "res://Scenarios/dialog/prolog_intro.dtl",
 "prolog_step_complete": "res://Scenarios/dialog/prolog_step_complete.dtl",
 "prolog_step_first_join": "res://Scenarios/dialog/prolog_step_first_join.dtl",
 "prolog_step_selected": "res://Scenarios/dialog/prolog_step_selected.dtl",
 "quarry_intro": "res://Scenarios/dialog/quarry_intro.dtl",
-"terraces_intro": "res://Scenarios/dialog/missions/terraces_intro.dtl"
+"terraces_intro": "res://Scenarios/dialog/terraces_intro.dtl"
 }
 layout/style_directory={}
 

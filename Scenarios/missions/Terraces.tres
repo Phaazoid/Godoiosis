@@ -3,7 +3,7 @@
 [ext_resource type="Script" uid="uid://c3hntyytrjkko" path="res://Classes/presentation/CameraPose.gd" id="1_8udpg"]
 [ext_resource type="Script" uid="uid://b7i3qekbjuuca" path="res://Classes/flow/DialogBeat.gd" id="1_ncrpp"]
 [ext_resource type="Script" uid="uid://cw4xhmsnr71ao" path="res://Classes/flow/ScenarioData.gd" id="2_8udpg"]
-[ext_resource type="Resource" uid="uid://q67yrh73qel" path="res://Scenarios/dialog/missions/terraces_intro.dtl" id="3_8udpg"]
+[ext_resource type="Resource" uid="uid://bl7kedbm4sq3d" path="res://Scenarios/dialog/terraces_intro.dtl" id="3_8udpg"]
 [ext_resource type="Script" uid="uid://8ryqq4dv281h" path="res://Classes/flow/TutorialStep.gd" id="3_bqqqp"]
 [ext_resource type="Script" uid="uid://dbb0pgdet8qo0" path="res://Classes/flow/ScenarioUnitEntry.gd" id="4_v74po"]
 [ext_resource type="Script" uid="uid://jytv7xrjv6l1" path="res://Classes/items/Item.gd" id="5_pfw0o"]
