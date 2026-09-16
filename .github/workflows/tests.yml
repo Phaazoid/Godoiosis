@@ -85,6 +85,32 @@ jobs:
       - name: Ensure Godot is executable
         run: chmod +x godot-bin/godot
 
+      # THE CRASH LIVES IN THE REIMPORT PHASE, SO SKIP THE PHASE (#976). Four of the five import
+      # crashes we have logs for died on the FIRST FILE of `Executing pre-reimport operations...`,
+      # i.e. the instant Godot's import worker threads start; `.godot/imported` is not committed, so
+      # a fresh checkout reimports all 350 assets and every job walks through that window. Restoring
+      # the artifacts means `_test_for_reimport` finds each `.md5` matching and the phase never runs
+      # at all -- measured on a fresh worktree carrying nothing but this folder: zero `reimport`
+      # lines. It is not a speed fix (a warm scan still costs ~9 s of the cold ~14 s); it removes the
+      # exposure. Cold runs still happen, and the retry below is what covers them.
+      #
+      # THIS FOLDER ONLY. `uid_cache.bin` and `global_script_class_cache.cfg` are small and tempting
+      # and are exactly what the two-pass comment below, tests/law/test_resource_uid_references.gd
+      # and the sidecar guard all turn on -- caching them would put a guard's own input inside a
+      # cache. The artifacts are sufficient on their own, so nothing else goes in.
+      #
+      # `restore-keys` is earned, not assumed: a params-only edit to one `.import` with the old
+      # artifact present reimports exactly that one file (measured, 1 step), so an older cache is
+      # always safe -- Godot re-derives whatever actually changed. Bump `-v1` to drop stale artifacts
+      # if the chain ever grows; a long-lived cache accumulates them the way a dev's `.godot` does.
+      - name: Restore imported assets
+        id: cache-imported
+        uses: actions/cache/restore@v4
+        with:
+          path: .godot/imported
+          key: godot-import-4.7.1-v1-${{ hashFiles('**/*.import', 'project.godot') }}
+          restore-keys: godot-import-4.7.1-v1-
+
       # TWICE, and the second pass is not superstition. ONE pass leaves ResourceUID's registry
       # half-populated: the `.uid` sidecars beside Dialogic's `.dtl` timelines are committed and
       # correct, yet `ResourceUID.has_id` answers FALSE for them until a second import runs. That
@@ -95,17 +121,76 @@ jobs:
       # with no file changed. Cheap insurance -- the second pass has nothing left to do and exits
       # in seconds.
       # ONE IMPORT AT A TIME ON A SHARED MACHINE (2026-09-14). Three shards importing at once on the
-      # self-hosted VM crashed Godot's import three times in a day -- exit 134, a thread race in the
-      # filesystem scan ("caller thread can't call propagate_notification") -- and every crash was a
-      # first-wave job; each job on GitHub's image had a VM to itself and never hit it. flock serialises
-      # this phase across the jobs on one host and is a no-op where hosts are separate. The retry on
-      # the first pass covers the residue: the crash is transient, and a rerun of the same commit passes.
+      # self-hosted VM crashed Godot's import three times in a day -- a thread race in the filesystem
+      # scan ("caller thread can't call propagate_notification"), which is upstream
+      # godotengine/godot#96242: confirmed, open, and not fixed in 4.7.2 either. Each job on GitHub's
+      # image had a VM to itself and never hit it. flock serialises this phase across the jobs on one
+      # host and is a no-op where hosts are separate.
+      #
+      # THE LOCK IS NOT THE WHOLE CAUSE AND ONE RETRY IS NOT ENOUGH -- BOTH MEASURED (#976). On run
+      # 35106632135 the lock was acquired in 62 ms, so nothing else was importing, and it crashed
+      # anyway; the retry then died 8 s later at the identical file, which is what the old comment
+      # here ("the crash is transient, and a rerun of the same commit passes") got wrong. A rerun 35
+      # minutes later imported clean, so transience is real at the level of a whole JOB rather than
+      # one immediate retry -- hence three attempts 30 s apart, on both passes rather than only the
+      # first. The wait is a hedge, not a finding: the only mechanism it addresses is
+      # autoMemoryReclaim=gradual ballooning the VM back as a job starts.
+      #
+      # The lock is held PER INVOCATION, so the sleeps happen unlocked and a crashing shard does not
+      # stall everyone else's import while it waits. util-linux flock returns 128+signal for a
+      # signal-killed child, so the status test below sees 134/139 through it.
+      #
+      # ONLY A CRASH IS RETRIED. A signal death is the thing being survived; a deliberate non-zero
+      # exit is a real failed import, and waiting 60 s to report one three times would lie the other
+      # way. And both endings say WHICH thing died: a crash here reports under the SHARD's name
+      # though no test has run, which reads as "this PR broke ui-flow" and has already cost one full
+      # diagnosis of an innocent diff.
       - name: Import project
         run: |
-          flock /tmp/iosis-import.lock bash -ec '
-            godot-bin/godot --headless --path . --import || godot-bin/godot --headless --path . --import
-            godot-bin/godot --headless --path . --import
-          '
+          import_pass() {
+            local label="$1" attempt status
+            for attempt in 1 2 3; do
+              status=0
+              flock /tmp/iosis-import.lock godot-bin/godot --headless --path . --import || status=$?
+
+              if [ "$status" -eq 0 ]; then
+                if [ "$attempt" -gt 1 ]; then
+                  echo "::warning::Godot's importer crashed on $label and recovered on attempt $attempt of 3. Upstream godotengine/godot#96242, not this diff; no test was affected. Tracked in #976."
+                  echo "- import \`$label\`: recovered on attempt **$attempt**" >> "$GITHUB_STEP_SUMMARY"
+                fi
+                return 0
+              fi
+
+              if [ "$status" -lt 128 ]; then
+                echo "::error::Godot's importer exited $status on $label. That is a failed import, not a crash, and not #976 -- read the log above."
+                return 1
+              fi
+
+              echo "Godot's importer died on $label (exit $status = signal $((status - 128))), attempt $attempt of 3."
+              if [ "$attempt" -lt 3 ]; then sleep 30; fi
+            done
+
+            echo "::error::THE IMPORT CRASHED, NOT THE TESTS. Godot died three times importing the project before any test ran, so this job's name is where it stopped, not what broke. Upstream godotengine/godot#96242; see #976."
+            return 1
+          }
+
+          import_pass "pass 1"
+          import_pass "pass 2"
+
+      # SAVED HERE RATHER THAN AT JOB END, which is where the combined actions/cache action would put
+      # it. The runners take six shards in two waves, so a save that waits for this job's tests
+      # (3-4 min) lands long after wave 2 has already started cold; saving the moment the import
+      # succeeds lets wave 2 of the SAME cold run restore it. Opportunistic, not guaranteed. It also
+      # means a job whose import died three times saves nothing, which is right. continue-on-error
+      # because all six jobs race for one key on a cold run -- one wins, the rest warn, and that must
+      # never fail a job.
+      - name: Save imported assets
+        if: steps.cache-imported.outputs.cache-hit != 'true'
+        continue-on-error: true
+        uses: actions/cache/save@v4
+        with:
+          path: .godot/imported
+          key: ${{ steps.cache-imported.outputs.cache-primary-key }}
 
       # THE IMPORT MUST NOT REWRITE COMMITTED PROJECT SETTINGS (#447). It used to: Dialogic
       # mutated the Dictionary ProjectSettings handed it BY REFERENCE, pruning dch_directory
