@@ -291,17 +291,14 @@ func _execute_move_phase(actions: Array, plan: ResolvedPlan, sheet: BeatSheet,
 	var span: Array[Vector2i] = []
 	if walker != null:
 		span = [walker.movement.cell, walker.get_projected_destination()]
-	elif is_ai and squad != null and is_instance_valid(squad.leader):
-		# AN AI SQUAD WITH NO WALK STILL SAYS IT IS ACTING (#987). This was AIController's own
-		# pan_to before the ask below moved the opening shot here, and without it a squad that only
-		# revs or holds acts off screen. It rides the DEGENERATE span rather than a second call:
-		# span[0] == span[1] already means "the midpoint is the unit's own cell", and _frame_the_walk
-		# publishes no framed_span for one, so the rig widens to nothing and the shot stays WIDE.
-		#
-		# is_ai-gated, and that is a rule rather than caution: a PLAYER's empty pass must move the
-		# camera nowhere, which test_the_move_phase_frames_the_walk_across_both_its_ends asserts as
-		# its own control.
-		span = [squad.leader.movement.cell, squad.leader.movement.cell]
+	# ...and NO FALLBACK for a squad that does not walk (#987, forced by #931). Deleting
+	# AIController's pan_to left an AI squad with no move unframed, and the obvious repair was to
+	# orient on its leader through the degenerate span. That is precisely what #931 had just REMOVED
+	# one day earlier: an AI's rev must not move the view at all, because it is "flying to a unit
+	# standing perfectly still". An empty span therefore stays empty and _frame_the_walk returns on
+	# it, for a player pass and an AI pass alike -- a squad with something worth watching is framed
+	# by the thing that is worth watching (a beat's own pan, the tear-out's stage pan), never by a
+	# shot that says only "this one is up next".
 	# The walk's OWN profile (#647), so the rig knows a plain move from a fought-over one. A walk is
 	# not a combat beat, so COMBAT_ONLY plays it under BOARD -- which is what stops the camera swaying
 	# and leaning through somebody crossing the field.
