@@ -21,6 +21,8 @@ extends GdUnitTestSuite
 
 const SCENE_PATH := "res://Scenes/Battle3D/Battle3D.tscn"
 const PROLOG := "res://Scenarios/missions/Prolog.tres"
+# A board that authors VOID, which #968's same-tick case needs a hole tile off.
+const TERRACES := "res://Scenarios/missions/Terraces.tres"
 
 # ONE Battle3D for the whole suite (#622). The cases below are untouched: _scene and _game still
 # mean what they always did, they are just re-pointed at the shared scene each case instead of a
@@ -1488,6 +1490,133 @@ func test_lowering_a_cell_clears_the_column_it_used_to_fill() -> void:
 		assert_int(board.get_cell_item(BoardSpace.of_cell(cell, row))) \
 			.override_failure_message("row %d survived the cut" % row) \
 			.is_equal(GridMap.INVALID_CELL_ITEM)
+
+
+# The lowest row a cell's column occupies; 9999 when it holds nothing, which reads as a loud miss
+# against any real floor rather than colliding with a legitimate negative row.
+func _lowest_row_of(board: GridMap, cell: Vector2i) -> int:
+	var lowest := 9999
+	for c: Vector3i in board.get_used_cells():
+		if c.x == cell.x and c.z == cell.y:
+			lowest = mini(lowest, c.y)
+	return lowest
+
+
+func _rows_held(board: GridMap, cell: Vector2i) -> int:
+	var held := 0
+	for c: Vector3i in board.get_used_cells():
+		if c.x == cell.x and c.z == cell.y:
+			held += 1
+	return held
+
+
+func test_raising_the_floor_leaves_no_column_below_it() -> void:
+	# The twin of the case above, one axis over. That one cuts a cell DOWN and strands the rows above
+	# its new top; this raises the board FLOOR out from under rows that are already drawn. floor_row
+	# is board-WIDE, so sinking one cell deepens EVERY column and raising it back re-floors every
+	# column at once -- and #885 hangs each hole's shaft from the LIVE underside, so anything left
+	# below that is terrain for the shaft to run through and tear against (#968).
+	_scene.load_mission(PROLOG)
+	await _settle()
+	_game.game_state = _game.GameState.DEV_MODE
+	var board := _scene.get_node("Board") as GridMap
+	var mirror: BoardMirror = _scene._board_mirror
+	var heights: BoardHeights = _game.board_heights
+	var cells: Array[Vector2i] = _game.grid.get_used_cells()
+	assert_int(cells.size()).override_failure_message(
+			"the mission painted fewer than two tiles, so this walks over nothing").is_greater(1)
+
+	var sunk: Vector2i = cells[0]
+	var neighbour: Vector2i = cells[1]
+	var was: int = heights.elevation_at(sunk)
+	heights.set_cell(sunk, mirror.floor_row_of(heights) - 6, Terrain.RampRise.NONE)
+	await _settle()
+	heights.set_cell(sunk, was, Terrain.RampRise.NONE)
+	await _settle()
+
+	var floor_row: int = mirror.floor_row_of(heights)
+	# The cell that MOVED is the sharp one: sunk six units under the floor, its own column spanned
+	# only its two rows down there, so what it strands is separated from the risen floor by a GAP --
+	# the shape no "clear until the first gap" walk can reach from above.
+	assert_int(_lowest_row_of(board, sunk)).override_failure_message(
+			"the cell that was sunk and raised still holds rows beneath the floor") \
+		.is_equal(floor_row)
+	# ...and an untouched neighbour, whose stranded rows ARE contiguous with the floor.
+	assert_int(_lowest_row_of(board, neighbour)).override_failure_message(
+			"an untouched neighbour's column still reaches below the floor").is_equal(floor_row)
+	# The property, over the whole board and stated as a relationship, so retuning any authored
+	# height can never red it.
+	for c: Vector3i in board.get_used_cells():
+		assert_int(c.y).override_failure_message(
+				"%s is drawn at row %d, below the board's floor of %d" % [c, c.y, floor_row]) \
+			.is_greater_equal(floor_row)
+
+
+func test_a_cell_turned_void_as_the_floor_rises_holds_nothing() -> void:
+	# The same-tick race, and the one path the end-sweep's OTHER clause cannot answer: a PAINTED void
+	# still has a tile, so `live` holds it and only the floor test reaches its rows. Measured
+	# reachable before this was built (#968).
+	_scene.load_mission(TERRACES)
+	await _settle()
+	_game.game_state = _game.GameState.DEV_MODE
+	var board := _scene.get_node("Board") as GridMap
+	var mirror: BoardMirror = _scene._board_mirror
+	var heights: BoardHeights = _game.board_heights
+
+	# Found by SCANNING, never by coordinate -- the board is authored content.
+	var void_src := -1
+	var void_coords := Vector2i.ZERO
+	var ground: Array[Vector2i] = []
+	for cell: Vector2i in _game.grid.get_used_cells():
+		if GridUtils.is_void_at(_game.grid, cell):
+			if void_src == -1:
+				void_src = _game.grid.get_cell_source_id(cell)
+				void_coords = _game.grid.get_cell_atlas_coords(cell)
+		elif ground.size() < 2:
+			ground.append(cell)
+	assert_int(void_src).override_failure_message(
+			"this board authors no VOID tile, so there is nothing to repaint a cell into") \
+		.is_not_equal(-1)
+	assert_int(ground.size()).override_failure_message(
+			"this board has fewer than two ground cells to drive the race with").is_equal(2)
+
+	var low: Vector2i = ground[0]
+	var turning: Vector2i = ground[1]
+	var was: int = heights.elevation_at(low)
+	heights.set_cell(low, mirror.floor_row_of(heights) - 6, Terrain.RampRise.NONE)
+	await _settle()
+
+	# ONE frame, both edits: the floor rises AND the cell turns void, so it is reconciled down the
+	# void branch against a floor that has already moved.
+	heights.set_cell(low, was, Terrain.RampRise.NONE)
+	_game.grid.paint(turning, void_src, void_coords)
+	await _settle()
+
+	assert_int(_rows_held(board, turning)).override_failure_message(
+			"a cell that turned void as the floor rose still holds column rows").is_equal(0)
+
+
+func test_erasing_the_lowest_cell_is_already_clean() -> void:
+	# A CHARACTERIZATION, not a guard for the floor clause: an erased cell has no tile, so the
+	# end-sweep's `live` half already clears every row it owns at any depth, and this case passes
+	# with the floor test deleted. It is here because it is the brush gesture the dev actually makes.
+	_scene.load_mission(PROLOG)
+	await _settle()
+	_game.game_state = _game.GameState.DEV_MODE
+	var board := _scene.get_node("Board") as GridMap
+	var mirror: BoardMirror = _scene._board_mirror
+	var heights: BoardHeights = _game.board_heights
+	var cell: Vector2i = _game.grid.get_used_cells()[0]
+
+	heights.set_cell(cell, mirror.floor_row_of(heights) - 6, Terrain.RampRise.NONE)
+	await _settle()
+	# The brush's own pair: erase the tile, then prune the height that went with it (#245).
+	_game.grid.erase(cell)
+	heights.prune_groundless(func(c: Vector2i) -> bool: return GridUtils.has_ground(_game.grid, c))
+	await _settle()
+
+	assert_int(_rows_held(board, cell)).override_failure_message(
+			"the erased cell still holds column rows").is_equal(0)
 
 
 func test_a_ramp_puts_its_wedge_one_row_above_its_own_surface() -> void:
