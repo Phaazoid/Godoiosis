@@ -23,6 +23,8 @@ const H := preload("res://tests/support/squad_fixtures.gd")
 const PLAYER := Team.Faction.PLAYER
 const ENEMY := Team.Faction.ENEMY
 
+const HOLE_TILE := Vector2i(18, 2)   # the authored VOID tile ("hole") in TestTiles
+
 var _no_reactions: Array[ElementalReaction] = []
 
 
@@ -134,6 +136,41 @@ func test_a_one_level_slide_onto_a_matching_slope_never_falls() -> void:
 			"a clean slide-on fell -- the surfaces meet at that edge and nothing should drop") \
 			.is_equal(0.0)
 	assert_bool(victim.movement.cell == Vector2i(-1, 0)).is_true()
+
+
+# --- A tumble that runs off into a hole ENTERS it (#969) ---------------------------------------
+#
+# The rules half of this is pinned in tests/law/test_falls.gd; what is pinned HERE is that the slide
+# carries the body over the lip rather than stopping on it, because the resolver's path is the only
+# thing the playback is handed and a removal that never gets walked to is a unit dying in mid-air a
+# cell short of the pit.
+#
+# The path's last cell is a VOID, which the slide has walked since #259 -- but only ever as a FLIGHT
+# cell, where `airborne` holds the launch height. As a TUMBLE cell it is ground contact, and that is
+# the one genuinely new shape this ticket makes. What a headless suite CANNOT see is what the sprite
+# does vertically on that final leg: plummet() returns before recording any depth headless (stated at
+# MovementComponent.plummet), and a hole's authored corners are read as a surface nothing draws --
+# measured and filed as #970. The ENTRY is what this case owns.
+func test_a_tumble_into_a_hole_carries_the_body_over_the_lip() -> void:
+	var heights := BoardHeights.new()
+	heights.set_cell(Vector2i(1, 0), 6)
+	heights.set_cell(Vector2i(2, 0), 6)
+	heights.set_cell(Vector2i(3, 0), 4, Terrain.RampRise.WEST)
+	var s := _setup(heights, 1, Vector2i(1, 0), Vector2i(2, 0))
+	(s.grid as TileMapLayer).set_cell(Vector2i(4, 0), 0, HOLE_TILE)
+	var outcome := _resolve(s)
+	# The premise, asserted rather than assumed: the resolver really did hand the slide a path that
+	# ends in the hole, so a failure below is the playback's and not the rule's.
+	assert_bool(outcome.removed).override_failure_message(
+			"the board is not the one this case is about -- the tumble did not reach the hole") \
+			.is_true()
+
+	var victim: Unit = s.d
+	await _slide(victim, outcome)
+
+	assert_bool(victim.movement.cell == Vector2i(4, 0)).override_failure_message(
+			"the slide stopped on the lip -- the body would vanish a cell short of the pit") \
+			.is_true()
 
 
 # --- The seam itself --------------------------------------------------------------------------

@@ -6,7 +6,7 @@ grill-style. Every ruling below is his; the rationale is recorded because almost
 re-derivable from the code. Numbers (tolerances, drop damage, the 2D offset) are deliberately absent —
 they are feel values and get knobs, not guesses (`CLAUDE.md` → the tuning rule).
 
-**Canon checked through #881 (2026-09-10).**
+**Canon checked through #969 (2026-09-15).**
 
 The one-line version: **a cell has a height, height changes only via ramps, ramps are chokepoints
 rather than tolls, and what height buys you is REACH — not damage, not to-hit.**
@@ -714,7 +714,12 @@ So a shove is **one flight, one landing** (`PlanResolver._knockback_landing`):
   on the doc's original tumble entry (a connected descending ramp — its high edge meets the flight
   level) = a free tumble, no fall. **Ending on any other ramp tumbles too**, down the slope's OWN
   downhill — after paying the drop, and possibly bending the shove's path once, which is why
-  `ResolvedOutcome.knockback_path` now carries the full trail the preview draws.
+  `ResolvedOutcome.knockback_path` now carries the full trail the preview draws. **A tumble that
+  runs off into a hole is removed exactly as the flight is**
+  ([#969](https://github.com/Phaazoid/Godoiosis/issues/969), 2026-09-15) — one rule for what a hole
+  does to a moving body, whichever half of the shove is moving it — and it pays **no** fall for the
+  levels it fell on the way in, because the flight pays none either. See *The tumble rule* below,
+  consequence 3.
 - One visible consequence of airborne, worth knowing when authoring: a knockback-1 shove onto a
   descending ramp tumbles free, while a longer shove **flies over** the same ramp and pays fall
   damage where it comes down. Both canon examples below still reproduce verbatim (pinned in
@@ -994,6 +999,29 @@ Two consequences, both ruled the conservative way:
    dev: *"continue whatever descent awaits them."* One shove can therefore break its surface more
    than once, which is what the drop pointer's per-edge rule above exists to draw. Pinned by
    `test_the_tumble_plummets_past_a_lip` and `test_a_plummet_landing_on_a_ramp_tumbles_again`.
+3. ~~**A hole stops the tumble, like a wall.**~~ **REVERSED 2026-09-15
+   ([#969](https://github.com/Phaazoid/Godoiosis/issues/969)): the tumble RUNS OFF into a hole and
+   the unit is removed.** The quoted rule above never named a hole — the stop came in with
+   consequence 2's conservative package (*"a wall, a rise, an occupied cell, water, a hole or a lip
+   stops it"*), and it was the last member of that group still standing after the lip was reversed
+   above and water was reversed by [#116](https://github.com/Phaazoid/Godoiosis/issues/116). It made
+   the two halves of one shove disagree: the flight flies a hole over and **removes** on it, while
+   the tumble walled itself off at the lip — reported three times over on a ramp chain ending in a
+   painted `grass_hole`. *Two kinds of edge* above already settles it: **a void is a drop with no
+   floor**, and a plummet that "keeps whatever descent waits below" finds nothing below a hole. The
+   hole is asked **without comparing heights**, for #875's reason — nothing stands on a hole at any
+   elevation, so how high it sits is not a fact about whether it catches you — and **the fall taken
+   on the way in is discarded**, because the flight's own void branch reports no fall either and a
+   removal that also charged a fall would be the one path claiming both. Pinned by
+   `test_a_tumble_that_runs_off_the_end_of_a_ramp_falls_in`, its erased-ground twin, and
+   `test_a_hole_painted_above_the_ramps_foot_still_swallows`; the board's own edge still catches a
+   tumble as it always did (`test_a_tumble_stops_at_the_boards_edge_rather_than_falling_off`),
+   because past the used rect the map simply stops. **Declared residual, filed as
+   [#970](https://github.com/Phaazoid/Godoiosis/issues/970):** a hole's authored elevation is read
+   as a surface by `MovementComponent._edge_drop` and `UnitMirror.stand_height` even though nothing
+   draws one there, so a hole painted *above* the ramp's foot makes the sprite rise half a cell at
+   the lip before it plummets. Latent on the flight too, and reachable on no shipped board — every
+   authored hole sits below its neighbours.
 
 Structurally it landed close to the prediction: the knockback stage still publishes
 `knockback_from`/`knockback_to` and threads the hypo — but the landing had to be computed BEFORE
