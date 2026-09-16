@@ -235,8 +235,9 @@ func _on_mint_speaker() -> void:
 		_status.text = "Could not read '%s'." % chosen
 		return
 	var identifier := DialogicSource.identifier_for(unit_data.display_name)
-	if identifier == "":
-		_status.text = "'%s' has no display name to make an identifier from." % chosen
+	var blocked := DialogicSource.name_block_reason(identifier)
+	if blocked != "":
+		_status.text = "'%s' cannot be a speaker: %s" % [chosen, blocked]
 		return
 	if DialogicSource.directory("dch").has(identifier):
 		_status.text = "'%s' already speaks -- they are in the speaker list." % identifier
@@ -260,9 +261,12 @@ func _refresh_timeline_picker() -> void:
 	var names: Array = DialogicSource.directory("dtl").keys()
 	names.sort()
 	_timeline_picker.clear()
-	_timeline_picker.select(-1)   # add_item auto-selects the first entry; a stale name must not stick
 	for i in names.size():
 		_timeline_picker.add_item(String(names[i]), i)
+	# AFTER the adds, never before: the first add_item auto-selects entry 0, so a select(-1)
+	# ahead of the loop is undone at once and the picker shows the first name with nothing loaded.
+	_timeline_picker.select(-1)
+	for i in names.size():
 		if String(names[i]) == _loaded_name:
 			_timeline_picker.select(i)
 
@@ -363,7 +367,9 @@ func _suggested_name() -> String:
 	var path := String(game.scenario_manager.last_loaded_path)
 	if path == "":
 		return ""
-	return ScenarioManager.display_name(path).to_snake_case() + "_intro"
+	# The BASENAME, never display_name(): that keeps the folder ("missions/Terraces"), and a
+	# slash here made a subdirectory under Scenarios/dialog/ on the dev's first save.
+	return path.get_file().get_basename().to_snake_case() + "_intro"
 
 
 func _on_timeline_picked(item: int) -> void:
@@ -384,9 +390,10 @@ func _on_timeline_picked(item: int) -> void:
 
 
 func _on_save_timeline() -> void:
-	var name := _name_field.text.strip_edges()
-	if name == "":
-		_status.text = "Give the timeline a name first."
+	var name := _name_field.text
+	var blocked := DialogicSource.name_block_reason(name)
+	if blocked != "":
+		_status.text = blocked
 		return
 	if not _editable:
 		_status.text = "This timeline is not editable here, so saving would drop what it holds."
