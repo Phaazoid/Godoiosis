@@ -410,7 +410,8 @@ func _item_catalog() -> Dictionary:
 
 # The kit: what the character carries into any board, seeded through the gated doors at spawn
 # (#177). Slot picks stage the catalog FILE resource itself -- no copy -- so a save writes an
-# ExtResource reference and the spawn grants copy_for_grant() copies off it.
+# ExtResource reference and the spawn grants copy_for_grant() copies off it. _staged_form is what
+# keeps that true of the one row with no file of its own.
 func _add_kit_section() -> void:
 	DevWidgets.add_label(editor_container, "Starting inventory (no Equip checked = auto-equip decides)")
 	var catalog := _item_catalog()
@@ -434,10 +435,20 @@ func _add_kit_section() -> void:
 		picker.add_item("(empty)")
 		for k in keys:
 			picker.add_item(k)
+		# THROUGH _staged_form, never against the raw row. A derived generic is minted fresh on every
+		# _item_catalog() call, so the object a pick staged and the object this repaint lists are
+		# never the same one, and every default weapon read back as "(empty)" (#975).
+		#
+		# Identity is still the right test, and is the STRICTER one here: what a slot holds is what
+		# some row staged, so asking the rows what they stage is the same question asked once. The
+		# Unit Editor's _entry_matches is a DIFFERENT question -- its slots hold granted copies, which
+		# are identical to nothing, so it has to ask about indistinguishability. Borrowing it here
+		# would open a template slot on the first mod-less variant sharing that template (Smasher,
+		# Springy, TorvLeg are all one) rather than on the generic row that actually staged it.
 		var sel := 0
 		if slot_item != null:
 			for k_index in range(keys.size()):
-				if catalog[keys[k_index]] == slot_item:
+				if _staged_form(catalog[keys[k_index]]) == slot_item:
 					sel = k_index + 1
 					break
 		picker.select(sel)
@@ -448,7 +459,7 @@ func _add_kit_section() -> void:
 			# No catalog file backs this entry (a captured copy, or one inlined by hand) -- it
 			# embeds inside the character file on save. The Unit Editor's "holds:" honesty.
 			var held_label := Label.new()
-			held_label.text = "inline: %s" % slot_item.display_name
+			held_label.text = "inline: %s" % slot_item.shown_name()
 			row.add_child(held_label)
 
 		var is_armor := slot_item is ArmorData
@@ -470,15 +481,30 @@ func _add_kit_section() -> void:
 	for i in range(Unit.MAX_INVENTORY_SIZE, current.starting_inventory.size()):
 		var extra: Item = current.starting_inventory[i]
 		if extra != null:
-			DevWidgets.add_label(editor_container, "  overflow: %s -- past the %d-slot cap, drops at spawn" % [extra.display_name, Unit.MAX_INVENTORY_SIZE])
+			DevWidgets.add_label(editor_container, "  overflow: %s -- past the %d-slot cap, drops at spawn" % [extra.shown_name(), Unit.MAX_INVENTORY_SIZE])
 
+# What a picked row STAGES. Every catalog row but one already IS a file; a DERIVED generic (#835)
+# is minted fresh on every call and carries no resource_path, so staging it would embed a
+# sub_resource -- the very thing this section's rule exists to prevent.
+#
+# Its TEMPLATE is the file its identity already is (#812's rule, which is why generics() keys by
+# one), and WeaponData.copy_for_grant() hands the spawn door the same plain instance the row stood
+# for -- the door #835 built for the three Item-typed kit fields this is one of.
+static func _staged_form(entry: Item) -> Item:
+	if entry is WeaponInstance and entry.resource_path == "":
+		return entry.template
+	return entry
+
+# Item, not EquippableData: the catalog has carried VIALS since #697 and a vial is CARRIED, never
+# slotted, so the narrower type refused the very kind that widening was for -- and a template is
+# not equippable either, by the same rule that keeps one out of a unit's hands (#80).
 func _on_slot_picked(index: int, opt_index: int) -> void:
 	if current.starting_inventory.size() < Unit.MAX_INVENTORY_SIZE:
 		current.starting_inventory.resize(Unit.MAX_INVENTORY_SIZE)
-	var entry: EquippableData = null
+	var entry: Item = null
 	if opt_index > 0:
 		var catalog := _item_catalog()
-		entry = catalog[catalog.keys()[opt_index - 1]]
+		entry = _staged_form(catalog[catalog.keys()[opt_index - 1]])
 	current.starting_inventory[index] = entry
 	if current.starting_equipped_index == index:
 		current.starting_equipped_index = -1
@@ -507,12 +533,21 @@ func _on_worn_toggled(index: int, pressed: bool) -> void:
 func _add_prosthetics_section() -> void:
 	DevWidgets.add_label(editor_container, "Starting prosthetics")
 	var slot_names := UnitInstance.LimbSlot.keys()
+	# The form the SPAWN will grant, resolved once rather than per limb: a kit slot may hold a bare
+	# TEMPLATE since #975, and this gate asks about the INSTANCE that template becomes. Anything
+	# already an instance answers the class and limb_kind questions itself, so only a template needs
+	# the grant door.
+	var granted: Array[WeaponInstance] = []
+	for authored: Item in current.starting_inventory:
+		if authored is WeaponData:
+			granted.append(authored.copy_for_grant() as WeaponInstance)
+		else:
+			granted.append(authored as WeaponInstance)
 	for limb_slot in UnitInstance.LimbSlot.values():
 		var slot: UnitInstance.LimbSlot = limb_slot
 		var candidates: Array[int] = []
-		for i in range(current.starting_inventory.size()):
-			var item := current.starting_inventory[i] as WeaponInstance
-			if item != null and UnitInstance.can_install_as_prosthetic(slot, item):
+		for i in range(granted.size()):
+			if UnitInstance.can_install_as_prosthetic(slot, granted[i]):
 				candidates.append(i)
 
 		var row := HBoxContainer.new()
@@ -524,7 +559,7 @@ func _add_prosthetics_section() -> void:
 		var picker := OptionButton.new()
 		picker.add_item("(natural)")
 		for idx in candidates:
-			picker.add_item("Slot %d: %s" % [idx + 1, current.starting_inventory[idx].display_name])
+			picker.add_item("Slot %d: %s" % [idx + 1, current.starting_inventory[idx].shown_name()])
 		var chosen: int = current.starting_prosthetics.get(slot, -1)
 		picker.select(candidates.find(chosen) + 1)   # -1 / not-found both land on 0
 		picker.item_selected.connect(func(opt_index: int): _on_prosthetic_picked(slot, opt_index, candidates))
