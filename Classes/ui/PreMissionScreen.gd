@@ -26,7 +26,16 @@ class_name PreMissionScreen
 # list and the deployed force each scroll inside a fixed region rather than pushing the layout. The
 # contract's is the one he asked for by name -- a board may author any number of conditions.
 
-const BAND_HEIGHT := 210
+# THE BAND'S HEIGHT IS WHAT THE ROSTER DOES NOT GET, and that makes it the roster's row budget as
+# much as the band's own (#977). What is left after the screen's margins, this, and the region chrome
+# is the card grid's VIEWPORT, and a viewport that lands mid-card clips a row -- which at 210 cost
+# exactly the 2 px of a deployed card's outline, so the second row read as drawn wrong rather than as
+# scrolled past. The window is the gap between rows: the viewport has to seat two whole rows and stop
+# before the third starts, i.e. land in [2*pitch - sep, 3*pitch - sep) where a pitch is a card plus
+# the grid's v_separation. 202 puts it in the middle of that window rather than flush against an
+# edge, because CARD_HEIGHT is a MINIMUM the card's own content has already grown past once.
+# tests/ui/test_pre_mission_screen.gd is where that constraint is a law rather than this comment.
+const BAND_HEIGHT := 202
 const STASH_WIDTH := 260
 const CONTRACT_WIDTH := 296
 const GRID_COLUMNS := 3
