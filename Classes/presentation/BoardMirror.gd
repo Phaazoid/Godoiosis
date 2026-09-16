@@ -2420,6 +2420,9 @@ func _make_tuft(grid: TileMapLayer, cell: Vector2i, at: Vector3, heights: BoardH
 	# global setter below can re-derive rather than stomp an authored size. See OVERRIDE_META.
 	var authored := GridUtils.prop_override_of(grid.get_cell_tile_data(cell), "prop_tuft_scale")
 	root.set_meta(OVERRIDE_META, authored)
+	# The cell's surface in the BOARD frame: `at` is this same point PLUS the tear-out (#521), and
+	# the per-plant lift below is a LOCAL delta under a root that already carries it (#992).
+	var ground := BoardSpace.surface_point(cell, heights)
 	var keep := _keep_thresholds(clusters)
 	for i in clusters.size():
 		var rect: Rect2i = clusters[i]
@@ -2429,11 +2432,12 @@ func _make_tuft(grid: TileMapLayer, cell: Vector2i, at: Vector3, heights: BoardH
 		sprite.set_meta(TUFT_KEEP_META, keep[i])
 		sprite.visible = keep[i] < tuft_density
 		# Its own foot, not the root's: the sprite is already placed across the cell, so the lift is
-		# the surface under THAT point minus the surface under the centre, which `at.y` is. Exactly
-		# zero on a LEVEL cell — i.e. on almost every cell on any board — so this moves a plant only
-		# where the ground it grows on is not flat.
+		# the surface under THAT point minus the surface under the centre — both off `ground`, never
+		# off `at`, or a staged plant cancels out its own root's lift (#992). Exactly zero on a LEVEL
+		# cell — i.e. on almost every cell on any board — so this moves a plant only where the ground
+		# it grows on is not flat.
 		sprite.position.y = BoardSpace.surface_height_at(cell,
-				at.x + sprite.position.x, at.z + sprite.position.z, heights) - at.y
+				ground.x + sprite.position.x, ground.z + sprite.position.z, heights) - ground.y
 		root.add_child(sprite)
 	return root
 
