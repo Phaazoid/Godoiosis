@@ -36,6 +36,22 @@ static func directory(extension: String) -> Dictionary:
 	return ProjectSettings.get_setting("dialogic/directories/%s_directory" % extension, {})
 
 
+# Why a name may not be used, "" meaning it may. A registry key is a FILENAME as well as an
+# identifier, and this is what stops a path-shaped one: "missions/terraces_intro" made
+# Scenarios/dialog/missions/ on the dev's first try, and the empty twin in it then won the plain
+# name on the editor's next re-registration -- Dialogic's scan visits the subfolder first -- so
+# the real file sat registered under a mangled key and read as destroyed. A valid identifier is
+# the tightest rule that admits every shipped timeline and speaker.
+static func name_block_reason(name: String) -> String:
+	if name.strip_edges().is_empty():
+		return "Give it a name first."
+	if name != name.strip_edges():
+		return "A name cannot start or end with a space."
+	if not name.is_valid_identifier():
+		return "'%s' is not a plain name -- letters, digits and underscores only, no slashes." % name
+	return ""
+
+
 static func timeline_path(name: String) -> String:
 	return "%s/%s.dtl" % [TIMELINE_DIR, name]
 

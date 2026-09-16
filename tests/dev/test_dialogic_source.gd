@@ -217,3 +217,19 @@ func test_an_unreferenced_timeline_has_no_blockers() -> void:
 	_settings_copy()
 	DialogicSource.register("dtl", "aaa_probe", "res://Scenarios/dialog/aaa_probe.dtl", SETTINGS_COPY)
 	assert_int(DialogicSource.referencing_files("dtl", "aaa_probe").size()).is_equal(0)
+
+
+# --- names ---
+
+# A registry key is a filename too. "missions/terraces_intro" made a subdirectory on the dev's
+# first save, and the empty twin in it then won the plain name on Dialogic's next scan, so the
+# real file read as destroyed. A valid identifier is the tightest rule admitting every shipped name.
+func test_a_path_shaped_name_is_refused_and_a_plain_one_is_not() -> void:
+	assert_str(DialogicSource.name_block_reason("missions/terraces_intro")).is_not_equal("")
+	assert_str(DialogicSource.name_block_reason("..")).is_not_equal("")
+	assert_str(DialogicSource.name_block_reason("")).is_not_equal("")
+	assert_str(DialogicSource.name_block_reason(" terraces_intro")).is_not_equal("")
+	assert_str(DialogicSource.name_block_reason("terraces_intro")).is_equal("")
+	for shipped: String in DialogicSource.directory("dtl").keys():
+		assert_str(DialogicSource.name_block_reason(shipped)) \
+			.override_failure_message("shipped timeline '%s' would be refused" % shipped).is_equal("")

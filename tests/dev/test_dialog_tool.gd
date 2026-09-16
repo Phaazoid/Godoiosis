@@ -170,3 +170,31 @@ func test_a_timeline_this_page_cannot_write_back_opens_read_only() -> void:
 			rows += 1
 	assert_int(rows).is_equal(0)
 	_restore_registries()
+
+
+# --- names and the picker (the bugs the dev found in play) ---
+
+# The prefill used display_name(), which keeps the folder: "missions/Terraces" became a
+# subdirectory under Scenarios/dialog/ and an empty twin that later won the registry name.
+func test_the_suggested_name_carries_no_folder() -> void:
+	game.scenario_manager.last_loaded_path = "res://Scenarios/missions/Terraces.tres"
+	assert_str(tool_page._suggested_name()).is_equal("terraces_intro")
+
+
+# Refused BEFORE anything is written, so a path-shaped name can never make a folder again.
+func test_saving_under_a_path_shaped_name_is_refused_and_writes_nothing() -> void:
+	tool_page._on_new_timeline()
+	tool_page._name_field.text = "missions/zz_probe"
+	tool_page._on_save_timeline()
+	assert_str(tool_page._status.text).contains("slashes")
+	assert_bool(FileAccess.file_exists("res://Scenarios/dialog/missions/zz_probe.dtl")).is_false()
+	assert_bool(DirAccess.dir_exists_absolute("res://Scenarios/dialog/missions")).is_false()
+
+
+# add_item auto-selects entry 0, so a select(-1) placed BEFORE the add loop is undone at once and
+# the picker showed causeway_intro with nothing loaded.
+func test_the_picker_selects_nothing_while_nothing_is_loaded() -> void:
+	tool_page._loaded_name = ""
+	tool_page.refresh()
+	assert_int(tool_page._timeline_picker.item_count).is_greater(0)
+	assert_int(tool_page._timeline_picker.selected).is_equal(-1)
