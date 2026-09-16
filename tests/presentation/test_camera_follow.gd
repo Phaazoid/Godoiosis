@@ -152,7 +152,23 @@ func test_the_move_phase_frames_the_walk_across_both_its_ends() -> void:
 
 	# Control first: the same pass with nothing queued must move the camera nowhere, or the case
 	# below would pass on any pan at all rather than on the move's.
+	#
+	# PARKED DELIBERATELY OFF THE MOVER, because this control was VACUOUS and #987 measured it: by
+	# the time this case runs the camera is already sitting on the mover's own cell (56, -24 on this
+	# fixture), which is exactly where a wrongly-framed empty pass would pan it -- so the comparison
+	# could not fail however broken the phase was. A mutant dropping _execute_move_phase's is_ai gate
+	# on the no-walk fallback left all 51 cases in this suite green.
+	#
+	# The precondition is asserted rather than assumed, so the day the camera happens to rest three
+	# tiles east this says so instead of going quiet again. Offset from the mover's OWN cell, never a
+	# typed coordinate -- the content razor.
+	await _cam().pan_to_position(
+			GridUtils.cell_world(grid, mover.movement.cell) + Vector2(GridUtils.TILE_SIZE * 3, 0))
+	await _settle()
 	var parked: Vector2 = _cam().global_position
+	assert_bool(parked.distance_to(GridUtils.cell_world(grid, mover.movement.cell)) > 1.0) \
+		.override_failure_message("the control parked on the mover's own cell, so it proves nothing") \
+		.is_true()
 	await _game.order_executor.execute_orders(mover)
 	await _settle()
 	assert_vector(_cam().global_position).override_failure_message(
