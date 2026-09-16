@@ -355,6 +355,12 @@ func _build_foot() -> Control:
 	foot.add_child(_derived_label)
 
 	_deploy_button = Button.new()
+	_deploy_button.add_theme_font_size_override("font_size", 11)
+	# GODOT DRAWS font_disabled_color, NEVER font_color, ON A DISABLED BUTTON -- so the blocked
+	# state's ink has to land here or the grey is invisible. It is also the one of the three that
+	# cannot change while the card is up, which is why it is said once rather than every refresh.
+	_deploy_button.add_theme_color_override("font_disabled_color",
+			QueueStyle.deploy_ink(QueueStyle.Deployment.BLOCKED))
 	_deploy_button.pressed.connect(func() -> void: deploy_toggled.emit(unit))
 	foot.add_child(_deploy_button)
 	return foot
@@ -492,11 +498,33 @@ func _refresh_foot() -> void:
 
 	var deployed: bool = _controller.game.is_deployed(unit)   # game is untyped: no inference
 	_deploy_button.text = "✓ Deployed" if deployed else "Deploy"
-	_deploy_button.add_theme_font_size_override("font_size", 11)
 	var blocked := _deploy_block_reason() if not deployed else ""
 	_deploy_button.disabled = blocked != ""
 	_deploy_button.tooltip_text = UiText.wrap(blocked) if blocked != "" else (
 		"Take this unit back off the board." if deployed else "Place this unit on the deployment zone.")
+	_refresh_deploy_chrome(deployed, blocked != "")
+
+
+# The toggle wears its state on its OUTLINE (#978). It was a bare Button, and the engine default's
+# dark box is invisible against this card's dark ground -- the one control on the card read as a
+# caption. The BORDER carries it, never a fill: _refresh_frame's argument one node down.
+#
+# EVERY SLOT OR NONE. Overriding `normal` alone leaves the engine's boxes under hover/pressed/focus,
+# so the outline would vanish the moment the pointer touched it. font_hover_color is not optional
+# either: unset it falls through to a near-white that parchment's cream card cannot carry, which is
+# #814's own bug -- and test_pre_mission_contrast reads that slot for exactly this reason.
+func _refresh_deploy_chrome(deployed: bool, blocked: bool) -> void:
+	var state: QueueStyle.Deployment = QueueStyle.Deployment.BENCHED
+	if blocked:
+		state = QueueStyle.Deployment.BLOCKED
+	elif deployed:
+		state = QueueStyle.Deployment.PLACED
+	for slot: String in ["normal", "pressed", "disabled", "focus"]:
+		_deploy_button.add_theme_stylebox_override(slot, QueueStyle.deploy_box(state, false))
+	_deploy_button.add_theme_stylebox_override("hover", QueueStyle.deploy_box(state, true))
+	var tint := QueueStyle.deploy_ink(state)
+	for slot: String in ["font_color", "font_hover_color", "font_pressed_color"]:
+		_deploy_button.add_theme_color_override(slot, tint)
 
 
 # Why this unit cannot be placed right now -- "" when it can. Both halves are real and neither

@@ -67,6 +67,7 @@ enum Role {
 	EXECUTE_TEXT,
 	READOUT_ALLY,
 	READOUT_ENEMY,
+	READOUT_BENCHED,
 	EVENT_TINT,
 	RAIL_NEUTRAL,
 }
@@ -144,6 +145,14 @@ const EXECUTE_TEXT := Color(1, 0.93, 0.9)
 const READOUT_ALLY := Color(0.486, 0.878, 0.561)
 const READOUT_ENEMY := Color(1.0, 0.541, 0.478)
 
+# One of your own who is NOT coming (#978). A third readout rather than a borrowed red, because both
+# candidates already mean something else on the very card this lands on: READOUT_ENEMY is what
+# PreMissionCard paints a stat that gets WORSE under previewed gear, and ROW_REFUSED_BORDER means
+# refused -- which on the deploy toggle is the GREY state, so borrowing it would have grey and red
+# saying one word. Deeper and cooler than EXECUTE_BORDER's rim, which is one panel over on the same
+# screen and means commit.
+const READOUT_BENCHED := Color(0.831, 0.341, 0.290)
+
 # What the WORLD did, not what an element did -- "Fell 2!", "Drowning!", "Into the void!",
 # "Insulated!". These wore ElementPalette.NEUTRAL until the dev read them off the screen
 # (2026-09-03): that value is the RAIL's off state, a structural grey chosen to disappear, and text
@@ -200,6 +209,10 @@ const PALETTES := {
 		Role.EXECUTE_TEXT: Color(0.992, 0.941, 0.894),     # on crimson -- stays light
 		Role.READOUT_ALLY: Color(0.173, 0.435, 0.235),
 		Role.READOUT_ENEMY: Color(0.659, 0.204, 0.165),
+		# Kept a hair off READOUT_ENEMY rather than aliased to it: parchment has already collapsed
+		# three reds onto one value (enemy, refused, execute), and a fourth joining them would make
+		# the role unmovable on the palette the dev is most likely to tune it on.
+		Role.READOUT_BENCHED: Color(0.604, 0.180, 0.145),
 		# Slate's reasoning, pointed at a light ground: a COOL near-neutral, because every element
 		# ink on parchment is a saturated dark and a warm dull brown would sit beside Earth's ochre.
 		Role.EVENT_TINT: Color(0.247, 0.259, 0.282),
@@ -309,6 +322,7 @@ static func _authored(role: Role) -> Color:
 		Role.EXECUTE_TEXT: return EXECUTE_TEXT
 		Role.READOUT_ALLY: return READOUT_ALLY
 		Role.READOUT_ENEMY: return READOUT_ENEMY
+		Role.READOUT_BENCHED: return READOUT_BENCHED
 		Role.EVENT_TINT: return EVENT_TINT
 		Role.RAIL_NEUTRAL: return ElementPalette.NEUTRAL
 	push_error("QueueStyle: no authored colour for role %d" % role)
@@ -388,6 +402,46 @@ static func execute_box() -> StyleBoxFlat:
 static func execute_hover_box() -> StyleBoxFlat:
 	return _cached("execute_hover", func() -> StyleBoxFlat:
 		return _flat(ink(Role.EXECUTE_HOVER_BG), ink(Role.EXECUTE_BORDER), 1, 5))
+
+
+# The pre-mission deploy toggle's three states (#978). A unit is COMING, STAYING, or cannot be placed
+# at all -- and the third is the button's own `disabled`, so both of _deploy_block_reason's answers
+# reach it without anyone asking a second question.
+enum Deployment { PLACED, BENCHED, BLOCKED }
+
+
+# That toggle's outline. Border-only and transparent inside, for section_box's reason one node up: the
+# card's fill is the ground every number on it is read against, and a second filled shape would fight
+# them all at once. HOVER brightens the border rather than authoring three more colours -- the hue is
+# what carries the meaning and only its weight is the pointer's business, which is _adapt's argument
+# reused. row_box's geometry, not the card's: this is a control the size of a row.
+static func deploy_box(state: Deployment, hovered: bool) -> StyleBoxFlat:
+	return _cached("deploy_%d_%s" % [state, hovered], func() -> StyleBoxFlat:
+		var border := deploy_border(state)
+		var box := _flat(Color(0, 0, 0, 0), border.lightened(0.25) if hovered else border, 1, 4)
+		box.content_margin_left = 8.0
+		box.content_margin_right = 8.0
+		box.content_margin_top = 3.0
+		box.content_margin_bottom = 3.0
+		return box)
+
+
+static func deploy_border(state: Deployment) -> Color:
+	match state:
+		Deployment.PLACED: return ink(Role.READOUT_ALLY)
+		Deployment.BENCHED: return ink(Role.READOUT_BENCHED)
+	return ink(Role.ROW_BORDER)
+
+
+# The INK that goes with that outline, and for BLOCKED it is deliberately not the border's colour:
+# ROW_BORDER as text sits at a luma gap of 0.26 against the card, one hundredth over
+# test_pre_mission_contrast's floor. A border is chrome and an ink is read -- #814's split, one
+# control along.
+static func deploy_ink(state: Deployment) -> Color:
+	match state:
+		Deployment.PLACED: return ink(Role.READOUT_ALLY)
+		Deployment.BENCHED: return ink(Role.READOUT_BENCHED)
+	return ink(Role.HEADER_TEXT)
 
 
 # An element-tinted pill, for a state chip and for a fired reaction's word alike. NOT cached: the
