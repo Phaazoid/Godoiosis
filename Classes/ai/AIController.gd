@@ -95,16 +95,21 @@ func take_faction_turn(faction: Team.Faction) -> void:
 		if not is_squad_actable(squad, faction):
 			continue
 
-		await game.camera_controller.pan_to(squad.get_leader())
+		# NO CAMERA HERE (#987). This used to open with pan_to(squad.get_leader()) and then hold for
+		# AI_PLAN_READ, and both were in the wrong place: the pan ran BEFORE plan_squad, so the shot
+		# that opened every AI squad was committed while its destination was still unchosen and could
+		# only ever centre the unit's start cell -- against the dev's own ruling that the opening
+		# shot should show both ends of the move. (It also pushed IN, pan_to ending in follow(),
+		# which is what the shot table reads as a trained subject.)
+		#
+		# Both moved into OrderExecutor's move phase, which is where the walk's span is known, so the
+		# opening shot is the walk's own framing rather than a second answer to where the squad is.
+		# The plan is drawn by the queueing below and the camera arrives to it.
+		#
 		# board_source is the wired seam for "the board as it stands", the same Callable
 		# SquadManager's own validators resolve fresh per query.
 		var board: BoardContext = game.squad_manager.board_source.call()
 		plan_squad(squad, board, game.squad_manager)
-		# The plan is on screen now -- queueing repaints the queue panel, path arrows, ghosts and
-		# target markers synchronously -- so hold before resolving it (#118). Skipped when the squad
-		# only holds position: there is nothing to read, and dead air per squad is the complaint.
-		if not game.squad_manager.only_hold_actions(squad):
-			await Pacing.beat(self, Pacing.AI_PLAN_READ)
 		await game.order_executor.execute_orders(squad.get_leader())
 
 	if game.mission_controller.is_over():
