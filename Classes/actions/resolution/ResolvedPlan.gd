@@ -41,9 +41,10 @@ var watches: Array[Watch] = []
 var watch_shots: Array[AttackAction] = []
 
 
-# WHEN each of those shots plays (#567), answered once for the two surfaces that ask —
-# OrderExecutor, which plays them, and BeatSheet, which mirrors it. The two partitions are total:
-# every shot carries a moment, so every shot plays exactly once.
+# WHEN each of those shots plays (#567), answered once for the surfaces that ask — OrderExecutor,
+# which plays them, and BeatSheet, which mirrors it. The THREE partitions are total and disjoint:
+# every shot carries a moment, so every shot plays exactly once. #1003 added the third; keep that
+# property when adding a fourth, or a shot plays twice or not at all.
 
 # The shots a WALK walked into: each halts its mover mid-path while it plays.
 func mid_walk_shots() -> Array[AttackAction]:
@@ -52,6 +53,40 @@ func mid_walk_shots() -> Array[AttackAction]:
 		if shot.triggered_at_step >= 0:
 			shots.append(shot)
 	return shots
+
+
+# ...and the shots an order in the SIDE-CHANNEL TAIL set off (#1003) — today an Overwatch arming
+# onto a cell an enemy already occupies. They play in the tail, after the counters, because that is
+# where the order that fired them plays; splitting them out of attack_playback() is what keeps the
+# resolve order and the playback order the same order.
+func coda_shots() -> Array[AttackAction]:
+	var shots: Array[AttackAction] = []
+	for shot in watch_shots:
+		if shot.triggered_at_step < 0 and _plays_in_the_tail(shot):
+			shots.append(shot)
+	return shots
+
+
+# The shots ONE order set off, in trigger order — the one answer to that question, asked by the
+# executor (which interleaves them behind their order), BeatSheet (which gives each its beat) and
+# the queue panel (which indents a row under the order). Spelled three times it would be three
+# rules about what a shot belongs to.
+func shots_fired_during(order: BaseAction) -> Array[AttackAction]:
+	var shots: Array[AttackAction] = []
+	if order == null:
+		return shots
+	for shot in watch_shots:
+		if shot.triggered_during == order:
+			shots.append(shot)
+	return shots
+
+
+# The partition boundary, asked of the MOMENT rather than of the verb: a shot whose order executes
+# in the tail plays in the tail. Reading SIDE_CHANNEL_ORDER rather than naming OVERWATCH is what
+# makes a second tail verb that can fire one need no edit here.
+static func _plays_in_the_tail(shot: AttackAction) -> bool:
+	var during := shot.triggered_during
+	return during != null and BaseAction.SIDE_CHANNEL_ORDER.has(during.action_type)
 
 
 # ...and the attack phase's own playback: `attacks` with every remaining shot spliced in after the
@@ -65,7 +100,7 @@ func attack_playback() -> Array[AttackAction]:
 	var trailing: Array[AttackAction] = []
 	var following: Dictionary[AttackAction, Array] = {}
 	for shot in watch_shots:
-		if shot.triggered_at_step >= 0:
+		if shot.triggered_at_step >= 0 or _plays_in_the_tail(shot):
 			continue
 		var after := shot.triggered_during as AttackAction
 		if after == null or not attacks.has(after):

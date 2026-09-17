@@ -598,6 +598,12 @@ func execute() -> Dictionary:
 				continue
 			action.execute()
 			events.append(action.get_description())
+			# ...then the shots THIS order set off (#1003) -- MIRRORS execute_orders' own interleave,
+			# which is the third and last playback partition. An Overwatch armed onto a cell an
+			# enemy already occupies fires here, after the counters, because that is where the
+			# arming happens.
+			for shot in plan.shots_fired_during(action):
+				_apply_attack(shot, events)
 
 	# 5) eject units downed during the pass into solo squads (mirrors OrderExecutor._process_downed_pending)
 	_process_downed_pending()

@@ -55,12 +55,12 @@ static func build_for(squad: Squad, plan: ResolvedPlan) -> Array[ActionQueueDisp
 			side_channel[action.action_type].append(action)
 
 	_add_section(entries, "MOVE", move_actions, plan)
-	_add_section(entries, "ATTACK", plan.attacks)
+	_add_section(entries, "ATTACK", plan.attacks, plan)
 
 	# Side-channel sections in registry order — the header IS the enum name, so a newly
 	# registered type gets its section for free.
 	for type in BaseAction.SIDE_CHANNEL_ORDER:
-		_add_section(entries, BaseAction.ActionType.keys()[type], side_channel.get(type, []))
+		_add_section(entries, BaseAction.ActionType.keys()[type], side_channel.get(type, []), plan)
 
 	# Reactions last, in their own section — derived, not stored (Law #2). A skipped one (the
 	# reactor went down/dead this pass) is hidden. Headed REACTION rather than COUNTER since #148:
@@ -81,7 +81,7 @@ static func build_for(squad: Squad, plan: ResolvedPlan) -> Array[ActionQueueDisp
 # Appends a header plus its rows, preceded by a divider unless this is the first section on the
 # panel. An empty batch contributes nothing at all — no header, no divider.
 #
-# A MOVE row is followed by a row per watch shot the walk takes (#413/#592) — see _watch_shots_for.
+# A row is followed by a row per watch shot THAT order set off (#413/#592) — see _watch_shots_for.
 static func _add_section(entries: Array[ActionQueueDisplayEntry], title: String, batch: Array,
 		plan: ResolvedPlan = null) -> void:
 	if batch.is_empty():
@@ -95,9 +95,9 @@ static func _add_section(entries: Array[ActionQueueDisplayEntry], title: String,
 			entries.append(action_row(shot, 1))
 
 
-# What a queued walk WALKS INTO (#413), one row per hit, stacking when one route crosses several
-# watches. Read off the resolve like every other row — plan.watch_shots already holds the derived
-# shots with their outcomes, so nothing is recomputed here (R3/R8).
+# What an order SET OFF (#413), one row per hit, stacking when one route crosses several watches.
+# Read off the resolve like every other row — plan.watch_shots already holds the derived shots with
+# their outcomes, so nothing is recomputed here (R3/R8).
 #
 # They are ROWS rather than text (dev, 2026-08-27: "I'd like them to mirror the general action queue
 # setup by just being another action queue row with the firing unit, the weapon icon, and the unit
@@ -106,12 +106,19 @@ static func _add_section(entries: Array[ActionQueueDisplayEntry], title: String,
 # which is what the first attempt could not do: it appended text to `description_label`, hidden in
 # ActionQueueRow.tscn since the panel's first version, and a visible label of its own then clashed
 # with everything around it.
+#
+# WHICH ROW a shot hangs under is `triggered_during`, the moment the resolve stamped (#567) — one
+# question, one answer, whatever the verb. It matched the crossing MOVE by comparing `triggered_by`
+# against the row's ACTOR until #1003, which is the same answer for a walk and wrong twice over
+# elsewhere: an arm-fired shot's entrant is an enemy with no row at all, and a SHOVE-triggered
+# shot's was landing under the victim's own queued move if they happened to have one.
 static func _watch_shots_for(plan: ResolvedPlan, action: BaseAction) -> Array[AttackAction]:
 	var shots: Array[AttackAction] = []
-	if plan == null or action == null or action.action_type != BaseAction.ActionType.MOVE:
+	if plan == null:
 		return shots
-	for shot in plan.watch_shots:
-		if shot.triggered_by != action.actor or shot.resolved == null or shot.resolved.skipped:
+	for shot in plan.shots_fired_during(action):
+		# A shot the pass resolved into nothing draws no row -- the panel says what WILL happen.
+		if shot.resolved == null or shot.resolved.skipped:
 			continue
 		shots.append(shot)
 	return shots
