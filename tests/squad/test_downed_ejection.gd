@@ -220,3 +220,51 @@ func test_an_armed_squadmate_enters_crisis_mid_pass_and_keeps_its_squad() -> voi
 	assert_bool(leader.squad.get_members().has(victim)) \
 		.override_failure_message("a Crisis unit must keep its squad -- it never went down").is_true()
 	assert_int(game.order_executor._downed_pending.size()).is_equal(0)
+
+
+# THE REPORTED BUG, end to end through the real executor (#1005). The dev's words: "The overwatch
+# shot then downed the priest mid combat, and then while downed, the priest healed himself, thus
+# being down but with health."
+#
+# Driven as the real sequence rather than by downing the priest by hand, because the ORDERING is
+# the whole fault: the watch fires in the MOVE phase and the heal is resolved in the ATTACK phase,
+# so the only gate that can catch it is one reading the pass's own threaded lifecycle. The two
+# assertions are the dev's two sentences -- the body stays down, and it stays at the 1 HP a down
+# clings at. A heal on a downed unit is legal and will MEAN something (#1002); what is refused
+# here is the body ACTING.
+func test_a_priest_the_watch_downs_mid_pass_does_not_heal_itself() -> void:
+	var leader: Unit = game.spawn_unit(H.make_unit_data({Stats.Stat.LDR: 10}, Team.Faction.PLAYER), Vector2i(2, 0))
+	leader.equipped_weapon = H.make_weapon()
+	var priest := _spawn(Team.Faction.PLAYER, Vector2i(4, 0))
+	var watcher := _spawn(Team.Faction.ENEMY, Vector2i(7, 0))
+	await await_idle_frame()
+	game.squad_manager.join_squad(priest, leader.squad)
+
+	var mend: WeaponAttackData = (priest.equipped_weapon as WeaponInstance).template.main_attack
+	mend.heals = true
+	mend.hits_self = true
+
+	# The watch spans the cell the leader walks onto AND the one the priest is standing on, which
+	# is the board the report was made on -- the shot sweeps its whole footprint, so the bystander
+	# eats the shot somebody else set off.
+	var watched: Array[Vector2i] = [Vector2i(3, 0), Vector2i(4, 0)]
+	watcher.arm_watch(watcher.movement.cell, Vector2i(3, 0), watched,
+			(watcher.equipped_weapon as WeaponInstance).template.main_attack)
+
+	priest.take_damage(priest.get_current_hp() - 1)   # one hit from going down
+	var walk: Array[Vector2i] = [Vector2i(2, 0), Vector2i(3, 0)]
+	var move := MoveAction.new()
+	move.init(leader, walk, null)
+	assert_bool(game.squad_manager.queue_action(leader.squad, move)) \
+		.override_failure_message("fixture failed to queue the walk into the watch").is_true()
+	var heal := H.stamped_attack(priest, priest)
+	assert_bool(game.squad_manager.queue_action(leader.squad, heal)) \
+		.override_failure_message("fixture failed to queue the self-heal").is_true()
+
+	await game.order_executor.execute_orders(leader)
+
+	assert_bool(priest.is_downed()) \
+		.override_failure_message("fixture: the watch shot did not DOWN the priest").is_true()
+	assert_int(priest.get_current_hp()) \
+		.override_failure_message("the downed priest healed itself -- down, but with health (#1005)") \
+		.is_equal(1)
