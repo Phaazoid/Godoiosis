@@ -620,9 +620,16 @@ static func _try_burrow(unit: Unit, squad_manager: SquadManager) -> bool:
 
 # Overwatch (#751): AIM the attack instead of firing it, down the way an enemy would come.
 #
-# A PREPARATION, so it is a RULE and never a score term -- the shot lands on somebody else's turn,
-# which `_score_plan` structurally cannot reach (#726's doctrine, second application). It sits below
-# ATTACK for the same reason REV does: no preemption.
+# A PREPARATION, so it is a RULE and never a score term (#726's doctrine, second application). It
+# sits below ATTACK for the same reason REV does: no preemption.
+#
+# Its reason USED to be that the shot lands on somebody else's turn, which `_score_plan`
+# structurally cannot reach. #1003 made that false -- a watch armed onto a cell an enemy already
+# occupies fires in this pass -- and the rule stands anyway, on the doctrine's other half: a
+# preparation is a legible sentence, and the predictability contract prefers one to a score term.
+# What the change is worth knowing for is that `_watch_aim` floods FROM the enemy's own cell, so a
+# lane containing it scores zero hops and wins -- the AI already prefers aiming where the enemy is
+# standing, and that aim is now a shot. ATTACK sitting above this is what keeps it rare.
 #
 # THE AIM MUST BE ACTIVE-ONLY, and this is #720's pathology one door over. `nearest_enemy` ranks a
 # BODY as an ordinary target, but `PlanResolver._watch_triggered_by` refuses a non-ACTIVE entrant and

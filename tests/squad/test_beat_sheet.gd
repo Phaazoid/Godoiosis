@@ -961,3 +961,55 @@ func _break_shots(plan: ResolvedPlan) -> void:
 	var empty: Array[AttackAction] = []
 	for shot in plan.watch_shots:
 		shot.volley = empty
+
+
+
+# --- an arm-fired watch shot (#1003) -------------------------------------------------------------
+#
+# A watch armed onto a cell an enemy already occupies fires in the side-channel TAIL. The sheet
+# mirrors execute_orders, so the shot earns a beat of its own right behind the coda that fired it --
+# the arming and the shot are two moments -- and its ground needs staging for the same reason the
+# shove-triggered shot's does, one phase later: the tear-out is still up when the tail plays.
+
+# A watcher whose Overwatch is QUEUED rather than armed, aimed at the cell beside it. No pattern
+# means the footprint is that aimed cell alone, which is _watcher_over's own simplification.
+func _arming_watcher_over(cell: Vector2i, at := Vector2i(1, 0)) -> Unit:
+	var unit := H.spawn_solo(self, _sm, ENEMY, at, {Stats.Stat.STR: 4}, true, 5)
+	var watch := OverwatchAction.new()
+	watch.init(unit, cell, (unit.get_equipped_weapon() as WeaponInstance).template.main_attack)
+	unit.squad._queue_action(watch)
+	return unit
+
+
+func test_an_arm_fired_shot_is_a_volley_beat_behind_its_own_coda() -> void:
+	var watcher := _arming_watcher_over(Vector2i(2, 0))
+	var squatter := H.spawn_solo(self, _sm, PLAYER, Vector2i(2, 0), {Stats.Stat.MHP: 60}, false)
+
+	var plan := _sm.resolve_plan(watcher.squad, _board_with([watcher, squatter]))
+	assert_int(plan.watch_shots.size()).override_failure_message(
+			"the watch never arm-fired -- fixture, not mechanic").is_equal(1)
+	var sheet := BeatSheet.read(watcher.squad, plan)
+
+	var volleys := sheet.volleys(false)
+	assert_int(volleys.size()).override_failure_message(
+			"the arm-fired shot got no beat of its own, so it plays unheld and off-camera").is_equal(1)
+	assert_object(volleys[0].actions[0]).is_same(plan.watch_shots[0])
+	assert_int(_index_of_kind(sheet, BeatSheet.Kind.VOLLEY)).override_failure_message(
+			"the shot's beat does not follow the arming it answers") \
+		.is_greater(_index_of_kind(sheet, BeatSheet.Kind.CODA))
+	_break_shots(plan)
+
+
+func test_an_arm_fired_shot_puts_its_ground_on_stage() -> void:
+	var watcher := _arming_watcher_over(Vector2i(2, 0))
+	var squatter := H.spawn_solo(self, _sm, PLAYER, Vector2i(2, 0), {Stats.Stat.MHP: 60}, false)
+
+	var plan := _sm.resolve_plan(watcher.squad, _board_with([watcher, squatter]))
+	assert_int(plan.watch_shots.size()).override_failure_message(
+			"the watch never arm-fired -- fixture, not mechanic").is_equal(1)
+	var sheet := BeatSheet.read(watcher.squad, plan)
+
+	assert_array(sheet.cells).override_failure_message(
+			"the arm-fired shot's ground is not on stage, so it fires standing on a hole") \
+		.contains([watcher.movement.cell, squatter.movement.cell])
+	_break_shots(plan)

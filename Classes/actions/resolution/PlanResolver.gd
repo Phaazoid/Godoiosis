@@ -303,43 +303,93 @@ static func fire_watch_entries(entrants: Array, plan: ResolvedPlan, hypo: Dictio
 		var watch := _watch_triggered_by(entrant, plan, hypo)
 		if watch == null:
 			continue
-		watch.spent = true
-		var before := _positions_snapshot(board, hypo)
-		var group := _derive_watch_shot(watch, entrant, board, hypo)
-		for shot in group:
-			shot.triggered_during = during
-			shot.triggered_at_step = at_step
-		plan.watch_shots.append_array(group)
-		resolve_attack_group(group, plan, hypo, reactions, board, terrain_reactions)
-		# Whoever the shot MOVED has entered wherever they landed — including the crosser.
-		for unit: Unit in board.units:
-			if not is_instance_valid(unit):
-				continue
-			if before.get(unit, projected_position(unit, hypo)) != projected_position(unit, hypo):
-				pending.append(unit)
+		pending.append_array(_fire_one_watch(watch, entrant, plan, hypo, reactions, board,
+				terrain_reactions, during, at_step))
+
+
+# OCCUPANCY AT THE ARM MOMENT, the second trigger (#1003): a watch armed over cells an enemy is
+# ALREADY standing in fires then and there, instead of waiting for an entry a stationary target
+# never makes. Entry is untouched; this is the other door onto the same shot.
+#
+# SCOPED TO THIS WATCH, which is the whole reason it is not a fire_watch_entries call with the
+# occupants as entrants: _watch_triggered_by searches the WHOLE list in arm order, so an older
+# standing watch covering the same cell would eat the trigger and somebody else would take the shot
+# the player just spent a main action on. The CASCADE below is deliberately unscoped — a knock-on
+# is an ordinary entry and may reach any watch.
+#
+# One entrant is enough. The shot sweeps the frozen footprint (_derive_watch_shot gathers over the
+# cells, not over the entrant), so every other occupant is hit without spending a trigger of its
+# own, and the pick only decides `triggered_by` — who the camera frames. Footprint order is the
+# same cell-first walk the volley itself uses.
+static func fire_watch_on_arm(watch: Watch, plan: ResolvedPlan, hypo: Dictionary,
+		reactions: Array[ElementalReaction], board: BoardContext, terrain_reactions: Array[TerrainReaction],
+		during: BaseAction) -> void:
+	if board == null or watch == null:
+		return
+	for cell in watch.footprint:
+		var occupant := _unit_threaded_at(cell, board, hypo)
+		if occupant == null or not _watch_fires_on(watch, occupant, hypo):
+			continue
+		# at_step -1: an arm-fired shot interrupts no walk, the shove-triggered shape.
+		var moved := _fire_one_watch(watch, occupant, plan, hypo, reactions, board,
+				terrain_reactions, during, -1)
+		if not moved.is_empty():
+			fire_watch_entries(moved, plan, hypo, reactions, board, terrain_reactions, during, -1)
+		return
+
+
+# One watch firing on one entrant: spend it, derive the volley, stamp the playback moment, resolve.
+# Returns whoever the shot MOVED — they have entered wherever they landed, including the crosser —
+# which is the cascade's own input and the only thing either caller needs back.
+static func _fire_one_watch(watch: Watch, entrant: Unit, plan: ResolvedPlan, hypo: Dictionary,
+		reactions: Array[ElementalReaction], board: BoardContext, terrain_reactions: Array[TerrainReaction],
+		during: BaseAction, at_step: int) -> Array[Unit]:
+	watch.spent = true
+	var before := _positions_snapshot(board, hypo)
+	var group := _derive_watch_shot(watch, entrant, board, hypo)
+	for shot in group:
+		shot.triggered_during = during
+		shot.triggered_at_step = at_step
+	plan.watch_shots.append_array(group)
+	resolve_attack_group(group, plan, hypo, reactions, board, terrain_reactions)
+	var moved: Array[Unit] = []
+	for unit: Unit in board.units:
+		if not is_instance_valid(unit):
+			continue
+		if before.get(unit, projected_position(unit, hypo)) != projected_position(unit, hypo):
+			moved.append(unit)
+	return moved
 
 
 # The watch that fires on this entrant, or null. Arm order, so an older watch shoots first — the
 # same precedence rule stacked Guards use, and for the same reason.
 static func _watch_triggered_by(entrant: Unit, plan: ResolvedPlan, hypo: Dictionary) -> Watch:
+	for watch in plan.watches:
+		if _watch_fires_on(watch, entrant, hypo):
+			return watch
+	return null
+
+
+# THE trigger predicate, and the one spelling of it: would THIS watch fire on THIS unit, against
+# this pass's threaded positions? Split out of _watch_triggered_by by #1003, which needed the same
+# five clauses asked of one NAMED watch rather than searched for across the list — Watch.is_armed()'s
+# shape, one question up.
+static func _watch_fires_on(watch: Watch, entrant: Unit, hypo: Dictionary) -> bool:
+	if watch == null or entrant == null or not is_instance_valid(entrant):
+		return false
 	# A downed body does not trip a watch (the doc's accepted cut: you cannot spend a watch by
 	# throwing a corpse through it), and neither does the watcher's own side.
 	if projected_lifecycle(entrant, hypo) != Unit.LifecycleState.ACTIVE:
-		return null
-	var cell := projected_position(entrant, hypo)
-	for watch in plan.watches:
-		if not watch.is_armed() or not watch.covers(cell):
-			continue
-		if not Team.is_enemy(watch.watcher.get_faction(), entrant.get_faction()):
-			continue
-		if projected_lifecycle(watch.watcher, hypo) != Unit.LifecycleState.ACTIVE:
-			continue
-		# The ANCHOR rule: the footprint is geometry aimed from one cell, so a watcher shoved off it
-		# mid-pass has no watch left. Threaded, not live — the shove may be this very pass's.
-		if not watch.is_anchored(projected_position(watch.watcher, hypo)):
-			continue
-		return watch
-	return null
+		return false
+	if not watch.is_armed() or not watch.covers(projected_position(entrant, hypo)):
+		return false
+	if not Team.is_enemy(watch.watcher.get_faction(), entrant.get_faction()):
+		return false
+	if projected_lifecycle(watch.watcher, hypo) != Unit.LifecycleState.ACTIVE:
+		return false
+	# The ANCHOR rule: the footprint is geometry aimed from one cell, so a watcher shoved off it
+	# mid-pass has no watch left. Threaded, not live — the shove may be this very pass's.
+	return watch.is_anchored(projected_position(watch.watcher, hypo))
 
 
 

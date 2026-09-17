@@ -279,6 +279,10 @@ static func read(squad: Squad, plan: ResolvedPlan, is_ai: bool = false) -> BeatS
 			coda.actor = order.actor
 			coda.actions.append(order)
 			sheet.beats.append(coda)
+			# ...and the shots that order set off (#1003), each its own VOLLEY beat right behind it,
+			# mirroring the tail's own interleave. One blast is one moment, and the arming is a
+			# different moment from the shot, so they are two beats rather than one.
+			sheet.beats.append_array(_group(plan.shots_fired_during(order), false))
 
 	sheet._gather_cast(squad, plan)
 	sheet._gather_cells(plan)
@@ -342,7 +346,11 @@ func _enlist(squad: Squad, seen: Dictionary) -> void:
 # contributes nothing to the stage set by the dev's own rule.
 func _gather_cells(plan: ResolvedPlan) -> void:
 	var seen: Dictionary = {}
-	for list in [plan.attack_playback(), plan.counters]:
+	# coda_shots() is here for the reason attack_playback() is (#1003): an arm-fired shot plays in
+	# the TAIL, with the board still torn out, and a watcher's anchor cell is nobody's attacker
+	# origin -- unswept it fires standing on a hole. Its victims stand in the footprint, which the
+	# CODA sweep below cannot reach either, since an OverwatchAction aims at a cell and not a unit.
+	for list in [plan.attack_playback(), plan.coda_shots(), plan.counters]:
 		for action in list:
 			var attack := action as AttackAction
 			if attack == null:

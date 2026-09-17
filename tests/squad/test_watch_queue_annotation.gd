@@ -124,3 +124,51 @@ func test_the_shot_row_is_not_reorderable() -> void:
 	assert_bool(plan.watch_shots[0].is_reorderable()).override_failure_message(
 			"a watch shot is draggable -- it is derived, not an order anybody gave").is_false()
 	_break_volleys(plan)
+
+
+# ==============================================================================
+#  ...and an ARM-FIRED shot hangs off the OVERWATCH row (#1003)
+# ==============================================================================
+# The spent main action has to show something. Until #1003 this section matched a shot to a row by
+# comparing `triggered_by` against the row's ACTOR, which is the right answer for a walk and has no
+# answer at all here -- an arm-fired shot's entrant is an ENEMY, who has no row in this queue -- so
+# the row would have rendered nowhere. The rule is `triggered_during` now: the moment the resolve
+# stamped, which every shot carries whatever set it off.
+
+func _arming_watcher(at: Vector2i, aim: Vector2i) -> Unit:
+	var unit := H.spawn_solo(self, _sm, PLAYER, at, {Stats.Stat.STR: 4}, true, 6)
+	var watch := OverwatchAction.new()
+	watch.init(unit, aim, (unit.get_equipped_weapon() as WeaponInstance).template.main_attack)
+	unit.squad._queue_action(watch)
+	return unit
+
+
+func test_an_arm_fired_shot_gets_an_indented_row_under_the_overwatch() -> void:
+	var watcher := _arming_watcher(Vector2i(1, 0), Vector2i(2, 0))
+	var squatter := H.spawn_solo(self, _sm, ENEMY, Vector2i(2, 0), {Stats.Stat.MHP: 60}, false)
+
+	var plan := _sm.resolve_plan(watcher.squad, _board_with([watcher, squatter]))
+	assert_int(plan.watch_shots.size()).override_failure_message(
+			"the watch never arm-fired -- fixture, not mechanic").is_equal(1)
+	var entries := _entries(watcher.squad, plan)
+
+	var order: BaseAction = watcher.squad.action_queue[0]
+	var order_at := -1
+	var shot_at := -1
+	for i in entries.size():
+		var entry: ActionQueueDisplayEntry = entries[i]
+		if entry.entry_type != ActionQueueDisplayEntry.EntryType.ACTION:
+			continue
+		if entry.action == order:
+			order_at = i
+		elif entry.action == plan.watch_shots[0]:
+			shot_at = i
+			assert_int(entry.indent_level).override_failure_message(
+					"the shot is a DERIVED row and must be drawn indented and undraggable") \
+				.is_equal(1)
+	assert_int(shot_at).override_failure_message(
+			"the arm-fired shot reached no row at all, so a spent main action shows nothing") \
+		.is_greater(-1)
+	assert_int(shot_at).override_failure_message(
+			"the shot's row does not sit under the Overwatch that fired it").is_equal(order_at + 1)
+	_break_volleys(plan)
