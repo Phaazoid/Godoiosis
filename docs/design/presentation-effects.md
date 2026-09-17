@@ -613,7 +613,7 @@ Stage 4a shipped two declared cadences: the board mirrored on `board_loaded`, an
 Two rules this settled, both general:
 
 - **A repaint can add or erase a COLUMN**, which is what the picker table and the camera bounds derive from — refresh them with it, or the cell you just painted is unclickable. Bounds only, never a re-frame: painting a tile must not yank the camera, matching what `CameraController.refresh_bounds` has always done in 2D.
-- **Authoring scaffolding mirrors only while the 2D shows it.** `ZONE_PATROL` (the brush's default kind) and the picked-zone highlight had no 3D twin at all; giving them one means mirroring *cells and visibility*, because the 2D reveals those layers solely while the Tile Brush tab is up. Mirror the question — "should this be on screen" — never the field the cells happen to live in.
+- **Authoring scaffolding mirrors only while the 2D shows it.** `ZONE_PATROL` (the brush's default kind) and the picked-zone highlight had no 3D twin at all (since [#710](https://github.com/Phaazoid/Godoiosis/issues/710) the highlight is ALSO the play-time leash reveal, so its gate reads *authoring OR revealed* while `ZONE_PATROL`'s stays authoring alone); giving them one means mirroring *cells and visibility*, because the 2D reveals those layers solely while the Tile Brush tab is up. Mirror the question — "should this be on screen" — never the field the cells happen to live in.
 
 ### What mirrors for free, and what needs a channel ([#321](https://github.com/Phaazoid/Godoiosis/issues/321), 2026-08-16)
 

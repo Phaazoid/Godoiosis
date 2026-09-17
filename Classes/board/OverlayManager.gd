@@ -159,7 +159,10 @@ const ZONE_PATROL_MODULATE := Color(1, 0.5, 0, 0.35)
 # PATROL's orange, which is survivable because PATROL is authoring-only -- set_zone_visibility keeps
 # it off the board outside the Tile Brush tab, so the two never draw together in play.
 const ZONE_DEFEND_MODULATE := Color(1, 0.82, 0.25, 0.45)
-const ZONE_HIGHLIGHT_MODULATE := Color(1, 1, 1, 0.45)
+# A static var since #710: the leash reveal made it a play colour, so GameKnobs may write it.
+static var ZONE_HIGHLIGHT_MODULATE := Color(1, 1, 1, 0.45)
+# The enemy threat fill (#710 hover tier): every cell an enemy could reach next turn.
+static var DANGER_MODULATE := Color(1, 0.15, 0.1, 0.3)
 
 
 enum OverlayType {
@@ -335,6 +338,8 @@ var knockback_ghost_by_unit := {} # { Unit : Sprite2D }
 # own layer. Adding a kind is one line here.
 var zone_layer_map := {}
 var zone_highlight_overlay: TileMapLayer = null   # the Tile Brush's picked zone; built in _ready
+var danger_overlay: TileMapLayer = null   # the #710 threat fill; built in _ready
+var leash_revealed := false   # a play-time reveal is holding the highlight layer up (#710)
 # The two inputs to whether authoring zones draw -- see set_zone_visibility. The INTENT is what
 # a 3D mirror asks; `.visible` is the product and answers only "does the 2D draw this".
 var zones_authoring_visible := false
@@ -365,6 +370,11 @@ var _aiming_watch := false
 var sight_trace: Reach.SightTrace = null
 var sight_trace_version := 0
 var _sight_trace_2d: SightTrace2D
+# The hover tier's threat lines (#710), stored as DATA the way the sight trace is: ThreatLines2D
+# draws them flat, OverlayMirror lifts them; the version is the mirror's change signal.
+var threat_lines: Array[PackedVector3Array] = []
+var threat_lines_version := 0
+var _threat_lines_2d: ThreatLines2D
 
 
 
@@ -428,6 +438,18 @@ func _ready() -> void:
 	_sight_trace_2d.name = "SightTrace2D"
 	_sight_trace_2d.z_index = TERRAIN_Z_INDEX
 	add_child(_sight_trace_2d)
+	# The threat fill (#710): a duplicate of the move layer, tinted, and placed UNDER it in tree
+	# order so a move range still reads over a threatened cell.
+	if move_overlay is TileMapLayer:
+		danger_overlay = move_overlay.duplicate() as TileMapLayer
+		danger_overlay.name = "DangerOverlay"
+		danger_overlay.modulate = DANGER_MODULATE
+		add_child(danger_overlay)
+		move_child(danger_overlay, move_overlay.get_index())
+	_threat_lines_2d = ThreatLines2D.new()
+	_threat_lines_2d.name = "ThreatLines2D"
+	_threat_lines_2d.z_index = TERRAIN_Z_INDEX
+	add_child(_threat_lines_2d)
 
 
 func show_sight_trace(trace: Reach.SightTrace) -> void:
@@ -455,6 +477,46 @@ func restyle_sight_trace() -> void:
 	if sight_trace == null:
 		return
 	show_sight_trace(sight_trace)
+
+
+# The hover tier's lines (#710). Same shape as the sight trace: data here, drawn by both views.
+func show_threat_lines(segments: Array[PackedVector3Array]) -> void:
+	if segments.is_empty() and threat_lines.is_empty():
+		return   # idempotent -- the version only moves on real change
+	threat_lines = segments.duplicate()
+	threat_lines_version += 1
+	_threat_lines_2d.segments = threat_lines
+	_threat_lines_2d.queue_redraw()
+
+
+func clear_threat_lines() -> void:
+	var none: Array[PackedVector3Array] = []
+	show_threat_lines(none)
+
+
+func restyle_threat_lines() -> void:
+	if threat_lines.is_empty():
+		return
+	show_threat_lines(threat_lines)
+
+
+# The threat fill (#710): the cells an enemy could reach next turn -- the whole field, or one
+# enemy's while it is under the pointer.
+func show_danger(cells: Array[Vector2i]) -> void:
+	if danger_overlay == null:
+		return
+	danger_overlay.clear()
+	draw_cells(danger_overlay, cells, ATLAS_COORDS)
+
+
+func clear_danger() -> void:
+	var none: Array[Vector2i] = []
+	show_danger(none)
+
+
+func restyle_danger() -> void:
+	if danger_overlay != null:
+		danger_overlay.modulate = DANGER_MODULATE
 
 # What color the reach layer should paint with for this attack -- red for damage, green for a
 # heal. A null attack (bare fists) reads as the default/damage color. A WATCH aim paints its own
@@ -566,8 +628,9 @@ func set_board_rendering(shown: bool) -> void:
 func _apply_zone_visibility() -> void:
 	var shown: bool = zones_authoring_visible and board_rendering
 	zone_overlay.visible = shown
+	# The highlight is also the play-time leash reveal (#710), so either intent holds it up.
 	if zone_highlight_overlay != null:
-		zone_highlight_overlay.visible = shown
+		zone_highlight_overlay.visible = (zones_authoring_visible or leash_revealed) and board_rendering
 
 # The Tile Brush's picked zone, drawn as a lift over whatever kind layers hold the same cells.
 # Empty = no pick (clears the layer).
@@ -576,6 +639,30 @@ func redraw_zone_highlight(cells: Array[Vector2i]) -> void:
 		return
 	zone_highlight_overlay.clear()
 	draw_cells(zone_highlight_overlay, cells, ATLAS_COORDS)
+
+
+# A play-time reveal of one squad's leash (#710), on the highlight layer the brush's pick uses.
+# Stands down while the Tile Brush tab is up so the two writers never fight over the layer.
+func reveal_leash(cells: Array[Vector2i]) -> void:
+	if zones_authoring_visible:
+		return
+	leash_revealed = not cells.is_empty()
+	redraw_zone_highlight(cells)
+	_apply_zone_visibility()
+
+
+func clear_leash() -> void:
+	if not leash_revealed:
+		return
+	leash_revealed = false
+	var none: Array[Vector2i] = []
+	redraw_zone_highlight(none)
+	_apply_zone_visibility()
+
+
+func restyle_leash() -> void:
+	if zone_highlight_overlay != null:
+		zone_highlight_overlay.modulate = ZONE_HIGHLIGHT_MODULATE
 
 # One method for every zone kind: each zone draws into the layer registered for its kind, and a
 # kind with no layer simply isn't drawn. `hidden` drops zones that are done with (a captured

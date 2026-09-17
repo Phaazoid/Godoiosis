@@ -598,11 +598,11 @@ func test_terrain_state_sorts_under_the_plan_exactly_as_2d_orders_it() -> void:
 func test_the_zone_layers_copy_the_2d_zone_colors() -> void:
 	# Parallel stacks: a mirrored colour is COPIED from the 2D's own constant, never
 	# restated. Asserted against OverlayManager rather than against literals, so changing
-	# one side alone goes red instead of silently drifting (#231).
+	# one side alone goes red instead of silently drifting (#231). ZONE_HIGHLIGHT left this
+	# case at #710: its colour is a knob now, so the mirror copies the 2D layer's live modulate
+	# every poll (ATTACK's shape) -- test_overlay_mirror pins that wire.
 	assert_that(BoardOverlays.LAYERS[BoardOverlays.Layer.ZONE_PATROL]["color"]) \
 		.is_equal(OverlayManager.ZONE_PATROL_MODULATE)
-	assert_that(BoardOverlays.LAYERS[BoardOverlays.Layer.ZONE_HIGHLIGHT]["color"]) \
-		.is_equal(OverlayManager.ZONE_HIGHLIGHT_MODULATE)
 
 
 func test_the_picked_zone_highlight_sorts_above_the_zones_it_highlights() -> void:

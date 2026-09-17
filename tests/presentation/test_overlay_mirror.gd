@@ -1521,3 +1521,62 @@ func test_a_shoved_units_ghost_can_be_highlighted() -> void:
 
 	_om().set_projected_unit_highlighted(foe, false)
 	assert_that(ghost.modulate).is_equal(OverlayManager.PROJECTED_MODULATE)
+
+
+# --- The enemy threat view (#710) ------------------------------------------------------------
+
+# The hover tier's lines reach the diorama by the sight trace's own route: stored as data on the
+# 2D manager, gated on a version, lifted through BoardSpace.trace_point, cleared with the mode.
+func test_threat_lines_reach_the_diorama_and_clear_with_the_mode() -> void:
+	var mover := _spawn(PLAYER, Vector2i(2, 2))
+	var foe := _spawn(ENEMY, Vector2i(4, 3))
+	foe.equipped_weapon = H.make_weapon(3)
+	foe.squad.archetype = AIArchetype.Type.HOLD
+	game.enter_move_mode(mover)
+	game.selected_unit = mover
+	game.hover_presenter._hover_choosing_move(Vector2i(3, 3))   # adjacent to the foe
+	await _settle()
+	var stored: Array[PackedVector3Array] = _om().threat_lines
+	assert_int(stored.size()).is_equal(1)
+	var lifted := _overlays.lines_of(BoardOverlays.Layer.THREAT_LINES)
+	assert_int(lifted.size()).is_equal(1)
+	var first: Vector3 = stored[0][0]
+	assert_that(lifted[0][0]).is_equal(Vector3(
+		first.x * BoardSpace.CELL_SIZE,
+		BoardSpace.surface_y(BoardSpace.top_row_of(0)) + first.y * BoardSpace.ROW_HEIGHT,
+		first.z * BoardSpace.CELL_SIZE))
+	game.exit_current_mode()
+	await _settle()
+	assert_int(_overlays.lines_of(BoardOverlays.Layer.THREAT_LINES).size()).is_equal(0)
+
+
+# The threat fill and the leash reveal are 2D layers the mirror copies -- cells AND tint, since
+# both colours are knobs now -- and the leash rides the picked-zone highlight WITHOUT the
+# authoring gate, while the patrol layer itself stays authoring-only.
+func test_an_enemys_reach_and_leash_mirror_in_play_and_the_patrol_layer_does_not() -> void:
+	game.zone_manager.load_dict({
+		"post": {"kind": ZoneManager.Kind.PATROL, "cells": [Vector2i(4, 3), Vector2i(5, 3)]},
+	})
+	_om().redraw_zones(game.zone_manager)
+	var sentry := _spawn(ENEMY, Vector2i(4, 3))
+	sentry.equipped_weapon = H.make_weapon(3)
+	sentry.squad.archetype = AIArchetype.Type.SENTRY
+	sentry.squad.zone_name = "post"
+	sentry.squad.home_cell = sentry.movement.cell
+	_om().set_zone_visibility(false)
+	game.hover_presenter.update_hover_visuals(sentry.movement.cell)
+	await _settle()
+	assert_that(_sorted_3d(BoardOverlays.Layer.DANGER)).is_equal(_lifted(_om().danger_overlay))
+	assert_bool(_overlays.cells_of(BoardOverlays.Layer.DANGER).size() > 0).override_failure_message(
+			"the case proves nothing -- no reach was drawn").is_true()
+	assert_that(_overlays.layer_modulate(BoardOverlays.Layer.DANGER)).is_equal(OverlayManager.DANGER_MODULATE)
+	assert_that(_sorted_3d(BoardOverlays.Layer.ZONE_HIGHLIGHT)).is_equal(_lifted(_om().zone_highlight_overlay))
+	assert_bool(_overlays.cells_of(BoardOverlays.Layer.ZONE_HIGHLIGHT).size() > 0).override_failure_message(
+			"the leash never reached the diorama -- the highlight is still gated on authoring").is_true()
+	assert_that(_overlays.layer_modulate(BoardOverlays.Layer.ZONE_HIGHLIGHT)).is_equal(OverlayManager.ZONE_HIGHLIGHT_MODULATE)
+	assert_int(_overlays.cells_of(BoardOverlays.Layer.ZONE_PATROL).size()).override_failure_message(
+			"the patrol layer leaked into play alongside the leash").is_equal(0)
+	game.hover_presenter.update_hover_visuals(Vector2i(2, 2))
+	await _settle()
+	assert_int(_overlays.cells_of(BoardOverlays.Layer.DANGER).size()).is_equal(0)
+	assert_int(_overlays.cells_of(BoardOverlays.Layer.ZONE_HIGHLIGHT).size()).is_equal(0)

@@ -64,6 +64,7 @@ func refresh() -> void:
 	update_hover_visuals(last_hovered_cell)
 
 func update_hover_visuals(hovered_cell: Vector2i) -> void:
+	_clear_threat_markup()   # cleared on every cell change; the branch that wants it draws it back
 	if game.grid.get_cell_tile_data(hovered_cell) == null:
 		# Off the map -- every mode draws nothing out there. CLEARING is part of drawing nothing
 		# (#582): a bare return left the last card standing, so the readout went on describing a
@@ -139,6 +140,8 @@ func _hover_idle(cell: Vector2i) -> Dictionary:
 
 	game.overlay_manager.show_overlay(OverlayManager.OverlayType.MOVE, game.get_move_range(moverange, hovered), OverlayManager.ATLAS_COORDS)
 	_show_hover_panel(hovered, cell)
+	if Team.is_enemy(Team.Faction.PLAYER, hovered.get_faction()):
+		_show_enemy_threat(hovered)
 	game.overlay_manager.show_overlay(OverlayManager.OverlayType.INVALIDMOVE, moverange.squad_unreachable.keys(), OverlayManager.ATLAS_COORDS)
 
 	# Idle only: an active squad's own markers are already up, and a second set for whoever the
@@ -172,6 +175,7 @@ func _hover_choosing_group_move(cell: Vector2i) -> void:
 		and game.group_move_followable.has(cell)
 	if followable:
 		game.overlay_manager.show_hover_move_paths(GroupMoveSolver.plan(leader.squad, cell, game._board()))
+		_show_threat_lines_to(cell)
 	_set_cursor_for_preview(cell, followable)
 
 func _hover_attack_targeting(cell: Vector2i) -> void:
@@ -247,6 +251,7 @@ func _hover_choosing_move(cell: Vector2i) -> void:
 	game.overlay_manager.redraw_planned_paths()
 	game.overlay_manager.redraw_projected_units()
 	game.refresh_action_queue(squad)
+	_show_threat_lines_to(cell)
 	_set_cursor_for_preview(cell, true)
 
 # ==============================================================================
@@ -287,6 +292,39 @@ func _on_hovered_unit_changed(previous_unit: Unit, new_unit: Unit) -> void:
 
 	if new_unit != null and is_instance_valid(new_unit):
 		new_unit.visuals.set_hovered(true)
+
+# ==============================================================================
+#  Enemy threat (#710 hover tier)
+# ==============================================================================
+
+# The hover tier's own markup. The whole-field fill and the leashes belong to the T toggle, so
+# they stay up while it is on; a single enemy's reach and lines are per-hover.
+func _clear_threat_markup() -> void:
+	game.overlay_manager.clear_threat_lines()
+	var toggled: bool = game.threat_view_on
+	if not toggled:
+		game.overlay_manager.clear_danger()
+		game.overlay_manager.clear_leash()
+
+
+# A line from every enemy that could reach `cell` next turn.
+func _show_threat_lines_to(cell: Vector2i) -> void:
+	var board: BoardContext = game._board()
+	var field: ThreatField = game.threat_field()
+	var segments: Array[PackedVector3Array] = []
+	for enemy: Unit in field.attackers_of(cell):
+		segments.append(ThreatLines2D.segment(enemy.movement.cell, cell, board))
+	game.overlay_manager.show_threat_lines(segments)
+
+
+# An enemy under the pointer shows its own reach and, if it is a sentry, the leash it keeps to.
+func _show_enemy_threat(enemy: Unit) -> void:
+	var toggled: bool = game.threat_view_on
+	if toggled:
+		return   # the toggle already has the whole field and every leash up
+	var field: ThreatField = game.threat_field()
+	game.overlay_manager.show_danger(field.reach_of(enemy))
+	game.overlay_manager.reveal_leash(ThreatField.leash_of(enemy.squad, game._board()))
 
 # ==============================================================================
 #  Shared helpers

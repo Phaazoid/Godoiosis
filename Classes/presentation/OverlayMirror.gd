@@ -54,6 +54,7 @@ var _last_staging_version := -1
 var _staging_moved := false
 
 var _last_trace_version := -1   # OverlayManager.sight_trace_version -- the store's own signal (#308)
+var _last_threat_version := -1   # OverlayManager.threat_lines_version, the same shape (#710)
 
 # How far the drop pointer stands off the cliff face it hangs on (#431), in cells. A depth-buffer
 # epsilon, not a feel value: big enough that a coplanar wall cannot stipple through it, small
@@ -88,10 +89,18 @@ func _process(_delta: float) -> void:
 	# it is redraw_zones' `hidden` list once turn 1 begins, so the cells simply stop being there.
 	_fill(BoardOverlays.Layer.ZONE_DEPLOYMENT, om.deployment_overlay.get_used_cells())
 	_fill(BoardOverlays.Layer.ZONE_DEFEND, om.defend_overlay.get_used_cells())
-	# Authoring scaffolding: cells AND the authoring INTENT, or patrol zones leak into play.
+	# Authoring scaffolding: cells AND the authoring INTENT, or patrol zones leak into play. The
+	# highlight is ALSO the play-time leash reveal (#710), so its gate is either intent, and its
+	# tint is copied from the 2D like AIM's since the colour became a knob.
 	var authoring: bool = om.zones_authoring_visible
 	_fill_gated(BoardOverlays.Layer.ZONE_PATROL, om.zone_overlay, authoring)
-	_fill_gated(BoardOverlays.Layer.ZONE_HIGHLIGHT, om.zone_highlight_overlay, authoring)
+	_fill_gated(BoardOverlays.Layer.ZONE_HIGHLIGHT, om.zone_highlight_overlay, authoring or om.leash_revealed)
+	if om.zone_highlight_overlay != null:
+		overlays.set_layer_modulate(BoardOverlays.Layer.ZONE_HIGHLIGHT, om.zone_highlight_overlay.modulate)
+	# The threat fill (#710): cells and tint both copied from the 2D.
+	_fill_gated(BoardOverlays.Layer.DANGER, om.danger_overlay, true)
+	if om.danger_overlay != null:
+		overlays.set_layer_modulate(BoardOverlays.Layer.DANGER, om.danger_overlay.modulate)
 
 	# The aim footprint pulses by layer modulate in 2D — the animation rides the poll.
 	_fill(BoardOverlays.Layer.AIM, om.hover_overlay.get_used_cells())
@@ -99,6 +108,7 @@ func _process(_delta: float) -> void:
 
 	_attack(om)
 	_sight_trace(om)
+	_threat_lines(om)
 	_arrows(om)
 
 	var kb_trails: Array[Dictionary] = []
@@ -257,6 +267,20 @@ func _sight_trace(om: OverlayManager) -> void:
 			# trajectory, and two spellings of "where does a trace point sit" is Law #4.
 			points.append(BoardSpace.trace_point(p))
 	overlays.set_line(BoardOverlays.Layer.SIGHT_TRACE, points, tint)
+
+
+# The threat lines (#710), lifted the way the trace is; the colour is COPIED from the 2D renderer.
+func _threat_lines(om: OverlayManager) -> void:
+	if om.threat_lines_version == _last_threat_version:
+		return
+	_last_threat_version = om.threat_lines_version
+	var segments: Array[PackedVector3Array] = []
+	for seg: PackedVector3Array in om.threat_lines:
+		var points := PackedVector3Array()
+		for p: Vector3 in seg:
+			points.append(BoardSpace.trace_point(p))
+		segments.append(points)
+	overlays.set_lines(BoardOverlays.Layer.THREAT_LINES, segments, ThreatLines2D.THREAT_LINE_COLOR)
 
 
 func _target_pick_texture(om: OverlayManager) -> Texture2D:
