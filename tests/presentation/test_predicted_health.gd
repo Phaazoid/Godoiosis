@@ -424,3 +424,97 @@ func test_the_effect_pass_raises_a_readout_over_the_units_it_is_about_to_hit() -
 	await _settle()
 	assert_array(_shown_bars()).override_failure_message(
 			"the readout stayed up after the effect pass ended").is_empty()
+
+
+# --- What the ENEMY intends (#710 slice 3) ----------------------------------------------------
+#
+# The damage the preview used to float over the board as a number now rides the same span this
+# whole suite is about. That makes UnitMirror's prediction channel its FIRST with two writers, so
+# these cases ask the two questions a second writer raises: does it arrive at all, and do the two
+# COMPOSE rather than one silently winning.
+#
+# Written through the real wire, like everything above: a real enemy, the real preview, the real
+# per-frame poll. Nothing here sets threat_forecast by hand.
+func _threatened_bar_setup() -> Array:
+	game.ai_controller.set_faction_ai_enabled(ENEMY, true)
+	game.threat_view = game.ThreatView.EVERYTHING
+	var victim := _spawn(PLAYER, Vector2i(2, 2))
+	var foe := _spawn(ENEMY, Vector2i(3, 2))
+	game.refresh_threat_plan()
+	await _settle()
+	return [victim, foe]
+
+
+func test_a_unit_the_enemy_intends_to_hit_wears_the_prediction() -> void:
+	var cast: Array = await _threatened_bar_setup()
+	var victim: Unit = cast[0]
+	var forecast: Dictionary = game.threat_forecast()
+	assert_bool(forecast.has(victim.get_instance_id())).override_failure_message(
+			"the preview produced no intent against the victim, so this case proves nothing").is_true()
+	var bite := int(forecast[victim.get_instance_id()]["damage"])
+	assert_int(bite).is_greater(0)
+
+	var bar := _unit_mirror.bar_for(victim)
+	assert_bool(bar.visible).override_failure_message(
+			"nothing the enemy intends raised a readout -- the fifth reason never reached THE gate") \
+		.is_true()
+	# ThreatIntent.damage is already measured against the DISPLAYED hp, so plain subtraction lands
+	# on the rung. Derived from the forecast rather than typed, per this suite's own rule.
+	assert_int(_grid_predicts(bar, false)).override_failure_message(
+			"the bar does not show what the enemy is about to take off it") \
+		.is_equal(maxi(victim.get_current_hp() - bite, 0))
+
+
+func test_the_view_going_quiet_takes_the_prediction_with_it() -> void:
+	var cast: Array = await _threatened_bar_setup()
+	var victim: Unit = cast[0]
+	assert_bool(_unit_mirror.bar_for(victim).visible).is_true()   # precondition, not the claim
+	game.threat_view = game.ThreatView.INTENTS
+	await _settle()
+	assert_bool(_unit_mirror.bar_for(victim).visible).override_failure_message(
+			"the readout outlived the state that raised it -- which is the bug T was reported for") \
+		.is_false()
+
+
+func test_your_own_plan_and_their_intent_compose_on_one_bar() -> void:
+	# The real timeline: your plan resolves, then they act. A bar that showed only one of them
+	# would be honest about half a turn.
+	game.ai_controller.set_faction_ai_enabled(ENEMY, true)
+	game.threat_view = game.ThreatView.EVERYTHING
+	var healer := _spawn(PLAYER, Vector2i(1, 2))
+	# Ally-splash-capable, exactly as the heal case above: the targeting gate is what lets an aim
+	# find an ally at all, so a plain attack cannot reach the unit the enemy is also aiming at.
+	# Deliberately a WEAK heal against a nearly-full unit, so the composed answer is still a net
+	# LOSS: the cube reader below counts a loss, and a case whose net could go either way would be
+	# asking the wrong reader half the time.
+	var weapon := H.make_weapon(1)
+	weapon.template.main_attack.heals = true
+	weapon.template.main_attack.hits_allies = true
+	healer.equipped_weapon = weapon
+	var victim := _spawn(PLAYER, Vector2i(2, 2))
+	var foe := _spawn(ENEMY, Vector2i(3, 2))
+	assert_object(foe).is_not_null()
+	victim.set_current_hp(victim.get_max_hp() - 1)   # room for the heal to move the number
+	_aim_at(healer, victim.movement.cell)
+	game.refresh_threat_plan()
+	await _settle()
+
+	var forecast: Dictionary = game.threat_forecast()
+	assert_bool(forecast.has(victim.get_instance_id())).override_failure_message(
+			"no intent against the victim, so there is nothing to compose with").is_true()
+	var bite := int(forecast[victim.get_instance_id()]["damage"])
+	var healed := _predicted(victim)
+	var bar := _unit_mirror.bar_for(victim)
+	# Non-vacuity, both halves: the heal has to have moved the number, and the composed answer has
+	# to be a net loss (see the fixture note). Otherwise this reads as composition while proving
+	# only that one of the two arrived.
+	assert_int(healed).override_failure_message(
+			"the queued heal changed nothing, so composing it with the bite proves nothing") \
+		.is_greater(victim.get_current_hp())
+	assert_int(bite).override_failure_message(
+			"the composed answer is not a net loss, so the cube reader below is the wrong one") \
+		.is_greater(healed - victim.get_current_hp())
+	# The plan's own answer for this unit, then their bite off THAT -- not off live HP.
+	assert_int(_grid_predicts(bar, false)).override_failure_message(
+			"the bar took one forecast and dropped the other") \
+		.is_equal(maxi(healed - bite, 0))

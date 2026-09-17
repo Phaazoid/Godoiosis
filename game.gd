@@ -127,7 +127,17 @@ var height_debug_overlay: HeightDebugOverlay   # F5 readout, dev builds only; de
 var zone_manager: ZoneManager
 var main_action_menu: MainActionMenu
 var hover_presenter: HoverPresenter
-var threat_view_on := false   # the T toggle (#710): the whole enemy threat field and every sentry leash
+# What the T key shows, in the order it cycles (#710 slice 3). EVERYTHING means the intent lines
+# PLUS the damage each one predicts, drawn on its victim's own health bar; the enemy RANGES are
+# deliberately not in this cycle at all -- they answer what an enemy COULD do rather than what it
+# WILL, and live on V. STICKY across turns (dev): a player who turned it off does not want it back
+# every hand-over. Boot sits at INTENTS, so a stranger who never finds the key still sees the
+# feature the demo bar exists for.
+enum ThreatView { NONE, INTENTS, EVERYTHING }
+var threat_view := ThreatView.INTENTS
+var ranges_shown := false     # the V toggle (slice 3): every enemy's move + reach tones, FE-style
+# Which enemies stay drawn with V off, by instance id -- see toggle_enemy_pin.
+var pinned_enemies: Dictionary[int, bool] = {}
 var _threat_field: ThreatField = null   # built lazily by threat_field(); dropped when the board moves
 var _threat_plan_timer: Timer   # debounces the exact tier: a burst of orders costs ONE recompute
 var threat_plan_version := 0    # bumped on every recompute; the debounce's only observable
@@ -350,6 +360,11 @@ func _input(event: InputEvent) -> void:
 	if event.is_action_pressed("toggle_threat_view") and not ModalLock.any_open(get_tree()) \
 			and not _board_locked_for_player():
 		toggle_threat_view()
+	# ...and the FE range view beside it (slice 3), its own key because it answers a different
+	# question: what they COULD do, against what they INTEND to.
+	if event.is_action_pressed("toggle_enemy_ranges") and not ModalLock.any_open(get_tree()) \
+			and not _board_locked_for_player():
+		toggle_enemy_ranges()
 
 func _unhandled_input(event: InputEvent) -> void:
 	# A 3D host (#222) picks board cells itself and calls _on_left_click/_on_right_click
@@ -374,7 +389,7 @@ func _unhandled_input(event: InputEvent) -> void:
 	if event is InputEventMouseButton and event.pressed:
 		var clicked_cell: Vector2i = grid.local_to_map(grid.to_local(get_global_mouse_position()))
 		if event.button_index == MOUSE_BUTTON_LEFT:
-			_on_left_click(clicked_cell)
+			_on_left_click(clicked_cell, event.shift_pressed)
 		elif event.button_index == MOUSE_BUTTON_RIGHT and game_state != GameState.DEV_MODE:
 			_on_right_click()
 
@@ -482,8 +497,18 @@ func open_report_card(default_kind: BugReporter.Kind) -> void:
 
 # One handler per mode, mirroring HoverPresenter's branches. Each is responsible for leaving
 # the mode it handles (exit_current_mode), so the dispatcher stays a plain table.
-func _on_left_click(cell: Vector2i) -> void:
+func _on_left_click(cell: Vector2i, shift_held := false) -> void:
 	hover_presenter.update_hover_visuals(cell)
+
+	# Shift+click PINS an enemy's ranges, and CONSUMES the click (#710 slice 3). Above the state
+	# dispatch, because _click_idle on an enemy selects it and opens its action menu -- the hotseat
+	# allowance -- and pinning is not a selection. Only where a click means "look at that": the
+	# modes below own their click outright, so Shift is ignored inside an aim or a target pick.
+	if shift_held and (game_state == GameState.IDLE or game_state == GameState.PRE_MISSION):
+		var subject: Unit = unit_at_pointer(cell)
+		if subject != null and Team.is_enemy(Team.Faction.PLAYER, subject.get_faction()):
+			toggle_enemy_pin(subject)
+			return
 
 	match game_state:
 		GameState.IDLE:
@@ -964,7 +989,6 @@ func exit_current_mode():
 	overlay_manager.clear_ring_pulse()
 	overlay_manager.set_pick_flash(false)   # #116's tile-pick flash; idempotent when none is running
 	overlay_manager.clear_sight_trace()
-	overlay_manager.clear_threat_lines()
 	overlay_manager.clear_hover_move_path()
 	last_clicked_cell = GridUtils.NO_CELL
 	selected_unit = null
@@ -1543,6 +1567,7 @@ func _on_unit_died(unit: Unit):
 	# The selection is stored (#107) and die() frees the node -- release it or every reader dangles.
 	if unit == selected_unit:
 		selected_unit = null
+	drop_enemy_pin(unit)   # a pin outlives the pointer, so it has to be released here (#710)
 	overlay_manager.handle_unit_death(unit)
 	squad_manager.handle_unit_death(unit)
 	refresh_action_queue(squad_manager.active_squad)
@@ -1686,19 +1711,104 @@ func threat_field() -> ThreatField:
 
 func drop_threat_field() -> void:
 	_threat_field = null
-	if threat_view_on:
-		_show_threat_view()
+	# Unconditionally, because the standing set outlives the toggle: a pinned enemy is still drawn
+	# with the ranges key off, and repainting only when that key was on left a pin showing a field
+	# built before the order that just moved everybody.
+	_redraw_enemy_ranges(hover_presenter.hovered_enemy())
 
 
 func toggle_threat_view() -> void:
-	threat_view_on = not threat_view_on
-	if threat_view_on:
-		_show_threat_view()
-		refresh_threat_plan()   # the key asks for the answer NOW, not after the debounce
+	threat_view = ((threat_view + 1) % ThreatView.size()) as ThreatView
+	if threat_view == ThreatView.NONE:
+		_clear_threat_plan()
 	else:
-		overlay_manager.clear_danger()
-		overlay_manager.clear_leash()
+		refresh_threat_plan()   # the key asks for the answer NOW, not after the debounce
 	hover_presenter.refresh()
+
+
+# What the enemy intends, or nothing at all below EVERYTHING -- the gate lives here rather than in
+# OverlayManager because the view state is the game's, and the harvest is worth keeping either way
+# (the lines draw from it at INTENTS). Read by the 3D bars through battle3d.
+func threat_forecast() -> Dictionary[int, Dictionary]:
+	if threat_view != ThreatView.EVERYTHING:
+		return {}
+	return overlay_manager.threat_forecast
+
+
+func toggle_enemy_ranges() -> void:
+	ranges_shown = not ranges_shown
+	_redraw_enemy_ranges(hover_presenter.hovered_enemy())
+
+
+# Shift+click on an enemy keeps its ranges up after the pointer leaves. Keyed by instance id
+# because a pin outlives the body: Unit.die() queue_frees, so a held reference would be a freed
+# one by the next redraw.
+func toggle_enemy_pin(enemy: Unit) -> void:
+	if enemy == null or not is_instance_valid(enemy):
+		return
+	var id := enemy.get_instance_id()
+	if pinned_enemies.has(id):
+		pinned_enemies.erase(id)
+	else:
+		pinned_enemies[id] = true
+	_redraw_enemy_ranges(hover_presenter.hovered_enemy())
+
+
+func drop_enemy_pin(enemy: Unit) -> void:
+	if enemy != null and pinned_enemies.erase(enemy.get_instance_id()):
+		_redraw_enemy_ranges(hover_presenter.hovered_enemy())
+
+
+# THE one answer to what enemy markup is up: the STANDING set (every enemy while the ranges key is
+# on, else whoever is pinned) plus the TRANSIENT one under the pointer. Every path that can change
+# either calls this -- the pointer moving, the key, a pin, and the field being dropped -- because
+# show_danger replaces its layer wholesale, so anything that paints a subset on its own erases the
+# rest. An EMPTY subject list with the key on means "every enemy", which is ThreatField's own
+# convention for a union.
+func _redraw_enemy_ranges(hovered: Unit = null) -> void:
+	var subjects: Array[Unit] = []
+	if not ranges_shown:
+		for unit: Unit in _all_units():
+			if pinned_enemies.has(unit.get_instance_id()) and _is_previewable_enemy(unit):
+				subjects.append(unit)
+		if hovered != null and _is_previewable_enemy(hovered) and not subjects.has(hovered):
+			subjects.append(hovered)
+		if subjects.is_empty():
+			overlay_manager.clear_enemy_move()
+			overlay_manager.clear_danger()
+			overlay_manager.clear_leash()
+			return
+	var field := threat_field()
+	overlay_manager.show_danger(field.reach_cells_of(subjects))
+	overlay_manager.show_enemy_move(field.move_cells_of(subjects))
+	overlay_manager.reveal_leash(_leash_cells_of(subjects))
+
+
+func _is_previewable_enemy(unit: Unit) -> bool:
+	return is_instance_valid(unit) and unit.is_active() \
+			and Team.is_enemy(Team.Faction.PLAYER, unit.get_faction())
+
+
+# Every sentry leash among the subjects -- or among every enemy squad when the list is empty, the
+# same union convention the two fills use.
+func _leash_cells_of(subjects: Array[Unit]) -> Array[Vector2i]:
+	var board := _board()
+	var out: Array[Vector2i] = []
+	var squads: Array[Squad] = []
+	if subjects.is_empty():
+		for squad: Squad in squad_manager.squads:
+			var leader: Unit = squad.get_leader()
+			if leader != null and Team.is_enemy(Team.Faction.PLAYER, leader.get_faction()):
+				squads.append(squad)
+	else:
+		for unit: Unit in subjects:
+			if unit.squad != null and not squads.has(unit.squad):
+				squads.append(unit.squad)
+	for squad: Squad in squads:
+		for cell: Vector2i in ThreatField.leash_of(squad, board):
+			if not out.has(cell):
+				out.append(cell)
+	return out
 
 
 # ---- The exact tier (#710 slice 2): who the AI WILL attack, and for how much ------------------
@@ -1708,6 +1818,8 @@ func toggle_threat_view() -> void:
 func _restart_threat_plan() -> void:
 	if _threat_plan_timer == null or _board_locked_for_player():
 		return
+	if threat_view == ThreatView.NONE:
+		return   # NOTHING means nothing is computed either -- the preview is the expensive half
 	_threat_plan_timer.wait_time = maxf(Pacing.THREAT_PLAN_DELAY, 0.01)
 	_threat_plan_timer.start()
 
@@ -1722,26 +1834,13 @@ func _clear_threat_plan() -> void:
 func refresh_threat_plan() -> void:
 	if _threat_plan_timer != null:
 		_threat_plan_timer.stop()
-	if _board_locked_for_player():
+	if _board_locked_for_player() or threat_view == ThreatView.NONE:
 		return
 	threat_plan_version += 1
 	overlay_manager.show_threat_intents(
 			ai_controller.preview_faction_turn(Team.Faction.PLAYER), _board())
 
 
-# The whole field, and every enemy sentry's leash.
-func _show_threat_view() -> void:
-	var board := _board()
-	overlay_manager.show_danger(threat_field().all_cells())
-	var leash: Array[Vector2i] = []
-	for squad: Squad in squad_manager.squads:
-		var leader: Unit = squad.get_leader()
-		if leader == null or not Team.is_enemy(Team.Faction.PLAYER, leader.get_faction()):
-			continue
-		for cell: Vector2i in ThreatField.leash_of(squad, board):
-			if not leash.has(cell):
-				leash.append(cell)
-	overlay_manager.reveal_leash(leash)
 
 # ==============================================================================
 #  Board queries

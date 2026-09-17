@@ -163,6 +163,11 @@ const ZONE_DEFEND_MODULATE := Color(1, 0.82, 0.25, 0.45)
 static var ZONE_HIGHLIGHT_MODULATE := Color(1, 1, 1, 0.45)
 # The enemy threat fill (#710 hover tier): every cell an enemy could reach next turn.
 static var DANGER_MODULATE := Color(1, 0.15, 0.1, 0.3)
+# ...and where they could stand to use it (slice 3). BLUE against a board whose every other tone
+# is warm -- grass, dirt, your own yellow range, this layer's own red -- which a drawn mockup
+# settled: cool is the only thing on that palette that cannot be mistaken for terrain. It sits
+# near the cyan capture zone and the violet deployment zone, which is the risk the dev accepted.
+static var ENEMY_MOVE_MODULATE := Color(0.25, 0.45, 1, 0.45)
 
 
 enum OverlayType {
@@ -339,6 +344,11 @@ var knockback_ghost_by_unit := {} # { Unit : Sprite2D }
 var zone_layer_map := {}
 var zone_highlight_overlay: TileMapLayer = null   # the Tile Brush's picked zone; built in _ready
 var danger_overlay: TileMapLayer = null   # the #710 threat fill; built in _ready
+var enemy_move_overlay: TileMapLayer = null   # ...and where they could stand to use it (slice 3)
+# What the enemy intends, keyed by VICTIM instance id: {"damage": int, "fells": bool}. Rebuilt
+# with the intent lines and read by UnitMirror, which draws it as the predicted span on that
+# unit's own health bar -- the channel #313 already built for your own plan.
+var threat_forecast: Dictionary[int, Dictionary] = {}
 var leash_revealed := false   # a play-time reveal is holding the highlight layer up (#710)
 # The two inputs to whether authoring zones draw -- see set_zone_visibility. The INTENT is what
 # a 3D mirror asks; `.visible` is the product and answers only "does the 2D draw this".
@@ -370,17 +380,13 @@ var _aiming_watch := false
 var sight_trace: Reach.SightTrace = null
 var sight_trace_version := 0
 var _sight_trace_2d: SightTrace2D
-# The hover tier's threat lines (#710), stored as DATA the way the sight trace is: ThreatLines2D
-# draws them flat, OverlayMirror lifts them; the version is the mirror's change signal.
-var threat_lines: Array[PackedVector3Array] = []
-var threat_lines_version := 0
 var _threat_lines_2d: ThreatLines2D
-# The EXACT tier's own channel (#710 slice 2), beside the reach tier above rather than sharing it:
-# "who can reach this cell" and "who will attack whom" are different questions and may be on screen
-# together. Labels ride the same version -- they are the lines' own numbers, never a second store to
-# keep in step.
+# What the enemy will attack (#710 slice 2), stored as DATA the way the sight trace is:
+# ThreatLines2D draws it flat, OverlayMirror lifts it, and the version is the mirror's change
+# signal. `intent_fells` is paired BY INDEX and written in the same pass, so a silent intent
+# cannot shift a later line's lethal colour onto its neighbour.
 var intent_lines: Array[PackedVector3Array] = []
-var intent_labels: Array[Dictionary] = []   # {pos: Vector3 (trace space), text: String, fells: bool}
+var intent_fells: Array[bool] = []
 var intent_version := 0
 
 
@@ -446,13 +452,21 @@ func _ready() -> void:
 	_sight_trace_2d.z_index = TERRAIN_Z_INDEX
 	add_child(_sight_trace_2d)
 	# The threat fill (#710): a duplicate of the move layer, tinted, and placed UNDER it in tree
-	# order so a move range still reads over a threatened cell.
+	# order so a move range still reads over a threatened cell. The enemy's MOVE tone (slice 3)
+	# goes between the two -- over the reach because the dev ruled a body's standing room the
+	# louder fact, under your own range because the cell you are about to step on must still read.
+	# Tree order here is the 2D's answer to what the sort numbers say in 3D; the two must agree.
 	if move_overlay is TileMapLayer:
 		danger_overlay = move_overlay.duplicate() as TileMapLayer
 		danger_overlay.name = "DangerOverlay"
 		danger_overlay.modulate = DANGER_MODULATE
 		add_child(danger_overlay)
 		move_child(danger_overlay, move_overlay.get_index())
+		enemy_move_overlay = move_overlay.duplicate() as TileMapLayer
+		enemy_move_overlay.name = "EnemyMoveOverlay"
+		enemy_move_overlay.modulate = ENEMY_MOVE_MODULATE
+		add_child(enemy_move_overlay)
+		move_child(enemy_move_overlay, move_overlay.get_index())
 	_threat_lines_2d = ThreatLines2D.new()
 	_threat_lines_2d.name = "ThreatLines2D"
 	_threat_lines_2d.z_index = TERRAIN_Z_INDEX
@@ -486,48 +500,35 @@ func restyle_sight_trace() -> void:
 	show_sight_trace(sight_trace)
 
 
-# The hover tier's lines (#710). Same shape as the sight trace: data here, drawn by both views.
-func show_threat_lines(segments: Array[PackedVector3Array]) -> void:
-	if segments.is_empty() and threat_lines.is_empty():
-		return   # idempotent -- the version only moves on real change
-	threat_lines = segments.duplicate()
-	threat_lines_version += 1
-	_threat_lines_2d.segments = threat_lines
-	_threat_lines_2d.queue_redraw()
-
-
-func clear_threat_lines() -> void:
-	var none: Array[PackedVector3Array] = []
-	show_threat_lines(none)
-
-
-func restyle_threat_lines() -> void:
-	if threat_lines.is_empty():
-		return
-	show_threat_lines(threat_lines)
-
-
-# The exact tier (#710 slice 2). Takes the INTENTS rather than geometry: the line and its number
-# come from one row each, so a drawn number can never belong to a different line than it sits on.
+# The exact tier (#710 slice 2). Takes the INTENTS rather than geometry, so the line and what it
+# means come from one row each and can never be matched up wrongly.
 func show_threat_intents(intents: Array[ThreatIntent], board: BoardContext) -> void:
 	if intents.is_empty() and intent_lines.is_empty():
 		return   # idempotent, like the trace -- the version only moves on real change
 	var lines: Array[PackedVector3Array] = []
-	var labels: Array[Dictionary] = []
+	var fatal: Array[bool] = []
 	for intent: ThreatIntent in intents:
-		var seg := ThreatLines2D.segment(intent.from, intent.to, board)
-		lines.append(seg)
-		if intent.damage > 0 or intent.fells:
-			labels.append({
-				"pos": (seg[0] + seg[1]) * 0.5,
-				"text": str(intent.damage),
-				"fells": intent.fells,
-			})
+		lines.append(ThreatLines2D.segment(intent.from, intent.to, board))
+		fatal.append(intent.fells)
+	# ...and the same intents keyed by VICTIM, which is what the health bars read (#710 slice 3).
+	# SUMMED per target rather than kept per attacker: two enemies converging on one unit is one
+	# prediction as far as that unit's own readout is concerned, and a bar cannot draw two spans.
+	# Which attacker owns which part of the bite is #1012.
+	var forecast: Dictionary[int, Dictionary] = {}
+	for intent: ThreatIntent in intents:
+		if intent.target == null or not is_instance_valid(intent.target):
+			continue
+		var id := intent.target.get_instance_id()
+		var row: Dictionary = forecast.get(id, {"damage": 0, "fells": false})
+		row["damage"] = int(row["damage"]) + intent.damage
+		row["fells"] = bool(row["fells"]) or intent.fells
+		forecast[id] = row
+	threat_forecast = forecast
 	intent_lines = lines
-	intent_labels = labels
+	intent_fells = fatal
 	intent_version += 1
 	_threat_lines_2d.intents = intent_lines
-	_threat_lines_2d.labels = intent_labels
+	_threat_lines_2d.fells = intent_fells
 	_threat_lines_2d.queue_redraw()
 
 
@@ -560,6 +561,26 @@ func clear_danger() -> void:
 func restyle_danger() -> void:
 	if danger_overlay != null:
 		danger_overlay.modulate = DANGER_MODULATE
+
+
+# The enemy's move envelope (#710 slice 3) -- where a body could STAND, as against where it could
+# reach. Its own door rather than a second argument to show_danger: the two are drawn together by
+# one caller today, and will be cleared independently the moment a reason to show one alone exists.
+func show_enemy_move(cells: Array[Vector2i]) -> void:
+	if enemy_move_overlay == null:
+		return
+	enemy_move_overlay.clear()
+	draw_cells(enemy_move_overlay, cells, ATLAS_COORDS)
+
+
+func clear_enemy_move() -> void:
+	var none: Array[Vector2i] = []
+	show_enemy_move(none)
+
+
+func restyle_enemy_move() -> void:
+	if enemy_move_overlay != null:
+		enemy_move_overlay.modulate = ENEMY_MOVE_MODULATE
 
 # What color the reach layer should paint with for this attack -- red for damage, green for a
 # heal. A null attack (bare fists) reads as the default/damage color. A WATCH aim paints its own

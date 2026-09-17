@@ -54,7 +54,6 @@ var _last_staging_version := -1
 var _staging_moved := false
 
 var _last_trace_version := -1   # OverlayManager.sight_trace_version -- the store's own signal (#308)
-var _last_threat_version := -1   # OverlayManager.threat_lines_version, the same shape (#710)
 var _last_intent_version := -1   # ...and the exact tier's own (#710 slice 2)
 
 # How far the drop pointer stands off the cliff face it hangs on (#431), in cells. A depth-buffer
@@ -102,6 +101,11 @@ func _process(_delta: float) -> void:
 	_fill_gated(BoardOverlays.Layer.DANGER, om.danger_overlay, true)
 	if om.danger_overlay != null:
 		overlays.set_layer_modulate(BoardOverlays.Layer.DANGER, om.danger_overlay.modulate)
+	# ...and the move tone over it (slice 3). Its own layer rather than a second tint on DANGER,
+	# because a layer IS a plane and these two overlap on nearly every cell.
+	_fill_gated(BoardOverlays.Layer.ENEMY_MOVE, om.enemy_move_overlay, true)
+	if om.enemy_move_overlay != null:
+		overlays.set_layer_modulate(BoardOverlays.Layer.ENEMY_MOVE, om.enemy_move_overlay.modulate)
 
 	# The aim footprint pulses by layer modulate in 2D — the animation rides the poll.
 	_fill(BoardOverlays.Layer.AIM, om.hover_overlay.get_used_cells())
@@ -109,7 +113,6 @@ func _process(_delta: float) -> void:
 
 	_attack(om)
 	_sight_trace(om)
-	_threat_lines(om)
 	_threat_intents(om)
 	_arrows(om)
 
@@ -271,47 +274,30 @@ func _sight_trace(om: OverlayManager) -> void:
 	overlays.set_line(BoardOverlays.Layer.SIGHT_TRACE, points, tint)
 
 
-# The threat lines (#710), lifted the way the trace is; the colour is COPIED from the 2D renderer.
-func _threat_lines(om: OverlayManager) -> void:
-	if om.threat_lines_version == _last_threat_version:
-		return
-	_last_threat_version = om.threat_lines_version
-	var segments: Array[PackedVector3Array] = []
-	for seg: PackedVector3Array in om.threat_lines:
-		var points := PackedVector3Array()
-		for p: Vector3 in seg:
-			points.append(BoardSpace.trace_point(p))
-		segments.append(points)
-	overlays.set_lines(BoardOverlays.Layer.THREAT_LINES, segments, ThreatLines2D.THREAT_LINE_COLOR)
-
-
-# The exact tier (#710 slice 2): the lines AND their numbers, gated on one version because they are
-# one readout. Colours are COPIED from the 2D renderer, as the trace's are.
+# The exact tier (#710 slice 2), gated on one version. Colours are COPIED from the 2D renderer,
+# as the trace's are.
 #
-# A felling line wants its own colour and set_lines paints a whole layer, so the two tints cannot
-# share a layer's beam. They share it anyway and the LABEL carries the distinction instead: the
-# number goes red when the blow fells, which is the thing a player reads at a glance. Splitting the
-# beams would mean a second LINE layer whose only difference is a tint -- a duplicate seam for a
-# distinction the number already makes.
+# SPLIT BY LETHALITY across two layers, which slice 2 refused for a reason that has since expired:
+# set_lines paints a whole layer one colour, and back then the damage NUMBER carried the fatal
+# distinction, so a second layer differing only in tint would have been a duplicate seam. Slice 3
+# moved the number onto the victim's health bar, so the beam is the only thing left that can say
+# it -- and the dev kept that distinction deliberately ("a category, not a number").
 func _threat_intents(om: OverlayManager) -> void:
 	if om.intent_version == _last_intent_version:
 		return
 	_last_intent_version = om.intent_version
-	var segments: Array[PackedVector3Array] = []
-	for seg: PackedVector3Array in om.intent_lines:
+	var plain: Array[PackedVector3Array] = []
+	var fatal: Array[PackedVector3Array] = []
+	for i in om.intent_lines.size():
 		var points := PackedVector3Array()
-		for p: Vector3 in seg:
+		for p: Vector3 in om.intent_lines[i]:
 			points.append(BoardSpace.trace_point(p))
-		segments.append(points)
-	overlays.set_lines(BoardOverlays.Layer.INTENT_LINES, segments, ThreatLines2D.INTENT_LINE_COLOR)
-	var labels: Array[Dictionary] = []
-	for entry: Dictionary in om.intent_labels:
-		labels.append({
-			"pos": BoardSpace.trace_point(entry["pos"]),
-			"text": entry["text"],
-			"color": ThreatLines2D.INTENT_LABEL_COLOR if not entry["fells"] else ThreatLines2D.INTENT_FELL_COLOR,
-		})
-	overlays.set_labels(BoardOverlays.Layer.INTENT_LABELS, labels)
+		if i < om.intent_fells.size() and om.intent_fells[i]:
+			fatal.append(points)
+		else:
+			plain.append(points)
+	overlays.set_lines(BoardOverlays.Layer.INTENT_LINES, plain, ThreatLines2D.INTENT_LINE_COLOR)
+	overlays.set_lines(BoardOverlays.Layer.INTENT_LINES_FATAL, fatal, ThreatLines2D.INTENT_FELL_COLOR)
 
 
 func _target_pick_texture(om: OverlayManager) -> Texture2D:

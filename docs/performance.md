@@ -443,3 +443,29 @@ a special case would go.
 **A profiling note that cost an hour:** `Prolog.tres` cannot be profiled through a headless
 `--script` harness — its authored dialog beats never complete and the run hangs rather than
 failing. Use a board with no `dialog_beats`, or run the tool as a SCENE.
+
+## 2026-09-17 — the threat view's OFF state actually costs nothing (#710 slice 3)
+
+The entry above prices a recompute. Slice 3 adds the state in which none happens: `T` cycles
+`ThreatView {NONE, INTENTS, EVERYTHING}` and **both `_restart_threat_plan` and
+`refresh_threat_plan` return at `NONE`**, so the debounce never arms and no squad is planned. The
+saving is the whole 77 ms per engaged squad, on every plan change, for a player who does not want
+the preview.
+
+**That is worth writing down because it is the one optimisation here with no visible signature** —
+hiding the lines and not computing them look identical on screen. `AIController.previewed_squad_count`
+is the observable, and `test_nothing_means_nothing_is_computed` asserts it stays at zero rather
+than asserting the lines are absent. (An optimisation with no behavioural signature needs an
+observable, or a mutant deleting it passes.)
+
+**The enemy RANGE view on `V` is NOT this cost and never was.** It reads `ThreatField` only —
+1.5 ms to build, cached until the board moves, then dictionary reads — so the FE danger zone,
+the per-enemy hover and the Shift+click pins are all free at any cadence. The expensive tier is
+the intent one; keeping them on separate keys means the cheap answer is never priced like the
+dear one.
+
+**One cost slice 3 ADDED, and it is NOT re-measured:** `ThreatField.build` now keeps each unit's
+move envelope as well as its reach. The envelope was already computed and discarded (`_origins_of`
+feeds the reach walk), so the added work is one dictionary insert per origin cell rather than a
+second flood, and the 1.5 ms above should still hold. Reasoned, not profiled — if the hover tier
+ever feels slow, re-measure this before believing the reasoning.

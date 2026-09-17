@@ -1525,31 +1525,6 @@ func test_a_shoved_units_ghost_can_be_highlighted() -> void:
 
 # --- The enemy threat view (#710) ------------------------------------------------------------
 
-# The hover tier's lines reach the diorama by the sight trace's own route: stored as data on the
-# 2D manager, gated on a version, lifted through BoardSpace.trace_point, cleared with the mode.
-func test_threat_lines_reach_the_diorama_and_clear_with_the_mode() -> void:
-	var mover := _spawn(PLAYER, Vector2i(2, 2))
-	var foe := _spawn(ENEMY, Vector2i(4, 3))
-	foe.equipped_weapon = H.make_weapon(3)
-	foe.squad.archetype = AIArchetype.Type.HOLD
-	game.enter_move_mode(mover)
-	game.selected_unit = mover
-	game.hover_presenter._hover_choosing_move(Vector2i(3, 3))   # adjacent to the foe
-	await _settle()
-	var stored: Array[PackedVector3Array] = _om().threat_lines
-	assert_int(stored.size()).is_equal(1)
-	var lifted := _overlays.lines_of(BoardOverlays.Layer.THREAT_LINES)
-	assert_int(lifted.size()).is_equal(1)
-	var first: Vector3 = stored[0][0]
-	assert_that(lifted[0][0]).is_equal(Vector3(
-		first.x * BoardSpace.CELL_SIZE,
-		BoardSpace.surface_y(BoardSpace.top_row_of(0)) + first.y * BoardSpace.ROW_HEIGHT,
-		first.z * BoardSpace.CELL_SIZE))
-	game.exit_current_mode()
-	await _settle()
-	assert_int(_overlays.lines_of(BoardOverlays.Layer.THREAT_LINES).size()).is_equal(0)
-
-
 # The threat fill and the leash reveal are 2D layers the mirror copies -- cells AND tint, since
 # both colours are knobs now -- and the leash rides the picked-zone highlight WITHOUT the
 # authoring gate, while the patrol layer itself stays authoring-only.
@@ -1604,14 +1579,10 @@ func test_intent_lines_and_their_numbers_reach_the_diorama() -> void:
 		BoardSpace.surface_y(BoardSpace.top_row_of(0)) + first.y * BoardSpace.ROW_HEIGHT,
 		first.z * BoardSpace.CELL_SIZE))
 
-	var labels := _overlays.labels_of(BoardOverlays.Layer.INTENT_LABELS)
-	assert_int(labels.size()).is_equal(_om().intent_labels.size())
-	assert_str(str(labels[0]["text"])).is_equal(str(_om().intent_labels[0]["text"]))
-	assert_that(labels[0]["color"]).is_equal(ThreatLines2D.INTENT_LABEL_COLOR)
 	assert_object(mover).is_not_null()
 
 	game._clear_threat_plan()
 	await _settle()
 	assert_int(_overlays.lines_of(BoardOverlays.Layer.INTENT_LINES).size()).is_equal(0)
-	assert_int(_overlays.labels_of(BoardOverlays.Layer.INTENT_LABELS).size()).override_failure_message(
-			"the numbers outlived the lines they belong to").is_equal(0)
+	assert_int(_overlays.lines_of(BoardOverlays.Layer.INTENT_LINES_FATAL).size()).override_failure_message(
+			"a lethal line outlived the plain ones it was drawn beside").is_equal(0)

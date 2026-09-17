@@ -435,12 +435,13 @@ const CLASS_KNOBS: Array[Dictionary] = [
 		"min": 0.1, "max": 1.0, "step": 0.01,
 		"tip": "How much darker a reach cell past the attack's vertical tolerance draws in 3D, relative to the live reach colour. The 2D says the same thing with a hatched tile instead."},
 
-	# The enemy threat view (#710): what an enemy could reach next turn, the lines to a hovered
-	# destination, and a sentry's leash. All three sit against the reach fills.
-	{"group": "Board markup colours", "label": "Enemy threat fill (2D+3D)", "static": "DANGER_MODULATE",
-		"tip": "Every cell an enemy could attack next turn, drawn under the move fill while the threat view (T) is on, or for the one enemy under the pointer. Alpha is the dial: it can cover a lot of board."},
-	{"group": "Board markup colours", "label": "Threat line (2D+3D)", "static": "THREAT_LINE_COLOR", "script": THREAT_LINES_SCRIPT,
-		"tip": "The line from each enemy that could reach the destination you are hovering. Tune it against the sight beam, which it sits beside while aiming."},
+	# The enemy RANGE view (#710 slice 3, on V): two tones and a sentry leash, all sitting against
+	# the reach fills. Tune them as a PAIR -- the move tone draws over the reach, so the reach only
+	# ever shows as the halo past it, and a move alpha set too high erases that halo entirely.
+	{"group": "Board markup colours", "label": "Enemy reach fill (2D+3D)", "static": "DANGER_MODULATE",
+		"tip": "Every cell an enemy could attack next turn. Drawn UNDER the move tone and under your own move range, so alpha is the dial: it can cover a lot of board."},
+	{"group": "Board markup colours", "label": "Enemy move fill (2D+3D)", "static": "ENEMY_MOVE_MODULATE",
+		"tip": "Where an enemy could STAND, drawn over its reach. Blue because every other tone on the board is warm; its risky neighbours are the cyan capture zone and the violet deployment zone, so check it against a board carrying those."},
 	# The exact tier (#710 slice 2): what the AI WILL do, as opposed to what it COULD. It has to
 	# read as a promise rather than a possibility, so tune it AGAINST the threat line above -- and
 	# the felling colour against both, since it is the one that has to stop the player.
@@ -448,11 +449,6 @@ const CLASS_KNOBS: Array[Dictionary] = [
 		"tip": "The line from an enemy to the unit it will actually attack next turn. Distinct from the threat line, which only says an enemy COULD reach that cell."},
 	{"group": "Board markup colours", "label": "Intent, lethal (2D+3D)", "static": "INTENT_FELL_COLOR", "script": THREAT_LINES_SCRIPT,
 		"tip": "The number over an attack that would down or kill. The one readout on the board that is telling you not to stand there."},
-	{"group": "Board markup colours", "label": "Intent damage number", "static": "INTENT_LABEL_COLOR", "script": THREAT_LINES_SCRIPT,
-		"tip": "The damage number riding each intent line. It sits over the board between two units, so contrast against terrain matters more than against the line."},
-	{"group": "Board markup colours", "label": "Intent number size (2D)", "static": "INTENT_LABEL_SIZE", "script": THREAT_LINES_SCRIPT,
-		"min": 6, "max": 40, "step": 1,
-		"tip": "Point size of the damage number in the flat 2D view only. The 3D view sizes its own through BoardOverlays' label_pixel_size."},
 	{"group": "Board markup colours", "label": "Threat preview delay", "static": "THREAT_PLAN_DELAY", "script": PACING_SCRIPT,
 		"min": 0.0, "max": 1.0, "step": 0.05,
 		"tip": "How long your plan sits still before the intent lines recompute. It bounds how OFTEN the preview runs, never how long it takes -- raise it if queueing orders feels sticky, lower it if the lines lag behind your thinking."},
@@ -1362,12 +1358,10 @@ static func read_static(name: String) -> Variant:
 		"HOVER_MODULATE": return OverlayManager.HOVER_MODULATE
 		"BLOCKED_REACH_DIM": return OverlayManager.BLOCKED_REACH_DIM
 		"DANGER_MODULATE": return OverlayManager.DANGER_MODULATE
+		"ENEMY_MOVE_MODULATE": return OverlayManager.ENEMY_MOVE_MODULATE
 		"ZONE_HIGHLIGHT_MODULATE": return OverlayManager.ZONE_HIGHLIGHT_MODULATE
-		"THREAT_LINE_COLOR": return ThreatLines2D.THREAT_LINE_COLOR
 		"INTENT_LINE_COLOR": return ThreatLines2D.INTENT_LINE_COLOR
 		"INTENT_FELL_COLOR": return ThreatLines2D.INTENT_FELL_COLOR
-		"INTENT_LABEL_COLOR": return ThreatLines2D.INTENT_LABEL_COLOR
-		"INTENT_LABEL_SIZE": return ThreatLines2D.INTENT_LABEL_SIZE
 		"THREAT_PLAN_DELAY": return Pacing.THREAT_PLAN_DELAY
 		"SQUAD_RING_ALPHA": return OverlayManager.SQUAD_RING_ALPHA
 		"SQUAD_RING_PULSE_GAIN": return OverlayManager.SQUAD_RING_PULSE_GAIN
@@ -1563,12 +1557,10 @@ static func write_static(host: Node3D, name: String, value: Variant) -> void:
 		"HOVER_MODULATE": OverlayManager.HOVER_MODULATE = value
 		"BLOCKED_REACH_DIM": OverlayManager.BLOCKED_REACH_DIM = value   # mirror reads it per frame; the refresh below is harmless
 		"DANGER_MODULATE": OverlayManager.DANGER_MODULATE = value
+		"ENEMY_MOVE_MODULATE": OverlayManager.ENEMY_MOVE_MODULATE = value
 		"ZONE_HIGHLIGHT_MODULATE": OverlayManager.ZONE_HIGHLIGHT_MODULATE = value
-		"THREAT_LINE_COLOR": ThreatLines2D.THREAT_LINE_COLOR = value
 		"INTENT_LINE_COLOR": ThreatLines2D.INTENT_LINE_COLOR = value
 		"INTENT_FELL_COLOR": ThreatLines2D.INTENT_FELL_COLOR = value
-		"INTENT_LABEL_COLOR": ThreatLines2D.INTENT_LABEL_COLOR = value
-		"INTENT_LABEL_SIZE": ThreatLines2D.INTENT_LABEL_SIZE = int(value)
 		"THREAT_PLAN_DELAY":
 			Pacing.THREAT_PLAN_DELAY = value
 			return   # read when the debounce STARTS; there is no standing preview to re-apply it to
@@ -2130,9 +2122,9 @@ static func write_static(host: Node3D, name: String, value: Variant) -> void:
 		# The threat view's three (#710): the two fills re-tint their 2D layer, which the mirror
 		# copies; the lines re-show the standing set, the sight trace's own re-apply.
 		"DANGER_MODULATE": manager.restyle_danger()
+		"ENEMY_MOVE_MODULATE": manager.restyle_enemy_move()
 		"ZONE_HIGHLIGHT_MODULATE": manager.restyle_leash()
-		"THREAT_LINE_COLOR": manager.restyle_threat_lines()
-		"INTENT_LINE_COLOR", "INTENT_FELL_COLOR", "INTENT_LABEL_COLOR", "INTENT_LABEL_SIZE":
+		"INTENT_LINE_COLOR", "INTENT_FELL_COLOR":
 			manager.restyle_threat_intents()
 		# No bespoke sweep for the three planned-move tints: redraw_planned_paths already tears
 		# every arrow down and rebuilds it through _arrow_modulate, so it IS the re-apply.

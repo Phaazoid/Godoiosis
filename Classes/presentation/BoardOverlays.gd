@@ -33,9 +33,9 @@ enum Layer {
 	ZONE_PATROL, ZONE_HIGHLIGHT, GROUND_ICONS, ATTACK_BLOCKED, SIGHT_TRACE,
 	GUARD_ICONS, GUARD_LINK, WATCH_ICONS,
 	ZONE_DEPLOYMENT, ZONE_DEFEND,
-	DANGER, THREAT_LINES, INTENT_LINES, INTENT_LABELS,
+	DANGER, ENEMY_MOVE, INTENT_LINES, INTENT_LINES_FATAL,
 }
-enum Kind { FILL, BRACKET, SPRITE, BILLBOARD, LINE, LABEL }
+enum Kind { FILL, BRACKET, SPRITE, BILLBOARD, LINE }
 
 const WORLD_RENDER_LAYER := 1  # bit for layer index 0 — the board and props
 const UNIT_RENDER_LAYER := 2   # bit for layer index 1 — UnitSprite3D sets this
@@ -65,11 +65,6 @@ const EFFECT_RENDER_PRIORITY := 16
 # coplanar quads (outline, missing, fill, the predicted span, the notch) then the number's outline
 # and its glyphs.
 const UNIT_HUD_RENDER_PRIORITY := 48
-# The LABEL kind's glyph resolution and outline, in the same spirit as UnitHealthBar's: font_size
-# is texels of texture, scaled down by label_pixel_size, so a big number here is a SHARP number
-# rather than a big one.
-const LABEL_FONT_RESOLUTION := 64
-const LABEL_OUTLINE_SIZE := 12
 
 const LAYERS: Dictionary[Layer, Dictionary] = {
 	Layer.MOVE: {"color": Color(1, 1, 0, 0.5), "sort": 0, "kind": Kind.FILL},
@@ -79,36 +74,58 @@ const LAYERS: Dictionary[Layer, Dictionary] = {
 	# can never z-fight. Colour here is only the no-mirror fallback -- OverlayMirror drives it per
 	# frame as the live reach modulate x OverlayManager.BLOCKED_REACH_DIM (so no colour knob here).
 	Layer.ATTACK_BLOCKED: {"color": Color(0.45, 0, 0, 0.5), "sort": 1, "kind": Kind.FILL},
-	# The zone BAND sits at -3, with the picked-zone highlight alone at -2 above it. In 2D
+	# The zone BAND sits at -5, with the picked-zone highlight alone at -4 above it. In 2D
 	# the highlight wins by TREE ORDER (appended last); 3D has no such thing, so the sort
-	# number IS the relationship and a test pins it rather than the values (#231). -1 was
-	# unavailable: SQUAD/SQUAD_RANGE live there and would share the lift, i.e. z-fight.
-	Layer.ZONE_CAPTURE: {"color": Color(0.3, 0.9, 1, 0.5), "sort": -3, "kind": Kind.FILL},
-	Layer.ZONE_EXTRACTION: {"color": Color(0.4, 1, 0.5, 0.5), "sort": -3, "kind": Kind.FILL},
-	Layer.ZONE_PATROL: {"color": OverlayManager.ZONE_PATROL_MODULATE, "sort": -3, "kind": Kind.FILL},
+	# number IS the relationship and a test pins it rather than the values (#231).
+	#
+	# THE WHOLE NEGATIVE STACK MOVED DOWN TWO IN #710 slice 3, because the enemy's two range
+	# tones need two slots between SQUAD (-1 as it then was) and MOVE (0) and there are no
+	# integers there. Downward, not upward: the positive side is packed to 15 under the fire
+	# ceiling at 16, so lifting MOVE would cascade into it. Nothing here pins a VALUE -- the
+	# laws are relationships (highlight above zones, PATROL == CAPTURE) and they survive a
+	# uniform shift. What does NOT survive one is the FLOOR: _lift_of is fill_lift + sort *
+	# lift_step, so at the old fill_lift of 0.02 a sort of -5 landed at EXACTLY 0.0, coplanar
+	# with the tile's own opaque top face -- a real z-fight, unlike the transparent-vs-
+	# transparent case below. fill_lift moved to 0.03 with this, and the floor is now a law.
+	Layer.ZONE_CAPTURE: {"color": Color(0.3, 0.9, 1, 0.5), "sort": -5, "kind": Kind.FILL},
+	Layer.ZONE_EXTRACTION: {"color": Color(0.4, 1, 0.5, 0.5), "sort": -5, "kind": Kind.FILL},
+	Layer.ZONE_PATROL: {"color": OverlayManager.ZONE_PATROL_MODULATE, "sort": -5, "kind": Kind.FILL},
 	# #736. In the band with the others: it is markup lying on the tile face like every zone, and it
 	# is gone before any of them matter -- turn 1 stops it being drawn at all.
-	Layer.ZONE_DEPLOYMENT: {"color": Color(0.65, 0.5, 1, 0.45), "sort": -3, "kind": Kind.FILL},
+	Layer.ZONE_DEPLOYMENT: {"color": Color(0.65, 0.5, 1, 0.45), "sort": -5, "kind": Kind.FILL},
 	# #571, and in the band for ZONE_DEPLOYMENT's reason. Reads its colour off OverlayManager rather
 	# than restating it, the way ZONE_PATROL does -- the three literals above predate that rule.
-	Layer.ZONE_DEFEND: {"color": OverlayManager.ZONE_DEFEND_MODULATE, "sort": -3, "kind": Kind.FILL},
+	Layer.ZONE_DEFEND: {"color": OverlayManager.ZONE_DEFEND_MODULATE, "sort": -5, "kind": Kind.FILL},
 	# Three literals the mirror overwrites from the 2D every poll (#710), ATTACK's shape: the
 	# authored value is OverlayManager's static (or ThreatLines2D's), which a const table cannot name.
-	Layer.ZONE_HIGHLIGHT: {"color": Color(1, 1, 1, 0.45), "sort": -2, "kind": Kind.FILL},
-	Layer.DANGER: {"color": Color(1, 0.15, 0.1, 0.3), "sort": 0, "kind": Kind.FILL},
-	Layer.THREAT_LINES: {"color": Color(1.0, 0.35, 0.2, 0.9), "sort": 7, "kind": Kind.LINE},
+	Layer.ZONE_HIGHLIGHT: {"color": Color(1, 1, 1, 0.45), "sort": -4, "kind": Kind.FILL},
+	# The enemy's two tones (#710 slice 3), and their ORDER IS A DEV RULING: the move envelope
+	# draws OVER the reach, so "a body can stand here" is the louder fact and the reach survives
+	# as the halo past it. Two sorts rather than one because a sort IS a plane (_lift_of), and
+	# these two overlap on nearly every cell -- a melee enemy's reach is just its envelope
+	# dilated by one. They sat at DANGER's old 0 alongside MOVE, which is why nothing could
+	# express that order: equal render_priority and equal depth leaves the winner to pool
+	# allocation order. A test pins DANGER < ENEMY_MOVE < MOVE.
+	Layer.DANGER: {"color": Color(1, 0.15, 0.1, 0.3), "sort": -2, "kind": Kind.FILL},
+	Layer.ENEMY_MOVE: {"color": Color(0.25, 0.45, 1, 0.45), "sort": -1, "kind": Kind.FILL},
 	# Above the sight/threat beams at 7 -- an intent is the authoritative readout and must not
 	# z-fight the reach line it supersedes -- and clear of the guard channels at 8/9, which
 	# test_both_guard_channels_sorts_are_unshared caught this taking on its first draft.
 	Layer.INTENT_LINES: {"color": Color(1.0, 0.8, 0.2, 0.95), "sort": 11, "kind": Kind.LINE},
+	# A felling intent gets its OWN layer, which slice 2 deliberately refused: set_lines paints a
+	# whole layer one colour, so two tints need two layers, and the argument then was that the
+	# damage NUMBER already carried the distinction and a second layer differing only in hue would
+	# be a duplicate seam. The number is gone (slice 3 -- it rides the victim's health bar now), so
+	# that argument is void and the beam has to say it. Its own sort because two lines can cross,
+	# which is exactly the overlap the shared-sort rule forbids.
+	Layer.INTENT_LINES_FATAL: {"color": Color(1.0, 0.2, 0.15, 1.0), "sort": 12, "kind": Kind.LINE},
 	# Above its own line at 11 and under the lawful ceiling: EFFECT_RENDER_PRIORITY is 16 and
 	# ICONS holds 15, both pinned by laws in test_board_overlays. A number that drew over fire
 	# would erase the flame it sits beside, which is how #245 found this rule.
-	Layer.INTENT_LABELS: {"color": Color.WHITE, "sort": 14, "kind": Kind.LABEL},
 	Layer.HOVER: {"color": Color(1, 0.9, 0.3, 0.9), "sort": 2, "kind": Kind.BRACKET},
 	Layer.INVALID_MOVE: {"color": Color(0.5, 0.36, 0.4, 0.5), "sort": 0, "kind": Kind.FILL},
-	Layer.SQUAD: {"color": Color(1, 0.5, 0, 0.5), "sort": -1, "kind": Kind.FILL},
-	Layer.SQUAD_RANGE: {"color": Color(1, 0.5, 0, 0.5), "sort": -1, "kind": Kind.FILL},
+	Layer.SQUAD: {"color": Color(1, 0.5, 0, 0.5), "sort": -3, "kind": Kind.FILL},
+	Layer.SQUAD_RANGE: {"color": Color(1, 0.5, 0, 0.5), "sort": -3, "kind": Kind.FILL},
 	Layer.AIM: {"color": Color(1, 1, 0, 1), "sort": 4, "kind": Kind.FILL},
 	Layer.TARGET_PICK: {"color": Color.WHITE, "sort": 5, "kind": Kind.SPRITE},
 	Layer.PATH_ARROWS: {"color": Color.WHITE, "sort": 6, "kind": Kind.SPRITE},
@@ -190,13 +207,14 @@ enum SelectorDepth { LEVEL, HALF }
 # nothing until you nudged it -- a knob that appears to do nothing is the one failure that makes a
 # knob worthless (#324's rule, where every flame value rebuilds what is already standing).
 @export var selector_depth: SelectorDepth = SelectorDepth.LEVEL: set = _set_selector_depth
-@export var fill_lift := 0.02          # quad height above the top face — the z-fight gap
+# The stack's ZERO, not its bottom: the lowest sort is negative, so the real floor is
+# fill_lift + min_sort * lift_step and THAT is what must clear the tile's opaque top face.
+# Raised from 0.02 when the negative stack moved down two (#710 slice 3) -- at 0.02 the new
+# floor was exactly 0.0. Pinned by a law, since the next layer added below reds it.
+@export var fill_lift := 0.03          # quad height above the top face — the z-fight gap
 @export var lift_step := 0.004         # per-sort spacing so stacked layers never coincide
 @export var billboard_lift := 0.85     # icon height above the cell's top face
 @export var billboard_pixel_size := 1.0 / 32.0
-# How big a LABEL's glyphs draw in world units (#710). Paired with LABEL_FONT_RESOLUTION the way
-# billboard_pixel_size is with its art: resolution is sharpness, this is size.
-@export var label_pixel_size := 1.0 / 96.0
 # What the hover bracket turns when the pointer is over something the 2D calls INVALID (#245).
 # A knob because there is nothing to mirror here: 2D says "invalid" with a negative-icon TEXTURE,
 # and a bracket has no texture to swap, so the colour is a fresh aesthetic call.
@@ -244,7 +262,6 @@ var _markers: Dictionary[Layer, Array] = {}       # layer -> node pool (all kind
 var _cells: Dictionary[Layer, Array] = {}         # set_cells layers: the current cell list
 var _marker_data: Dictionary[Layer, Array] = {}   # set_markers layers: the current entries
 var _lines: Dictionary[Layer, Array] = {}   # LINE layers: the current segments (Array[PackedVector3Array])
-var _labels: Dictionary[Layer, Array] = {}  # LABEL layers: the current entries (Array[Dictionary])
 var _layer_colors: Dictionary[Layer, Color] = {}  # runtime fill colors (set_layer_modulate)
 var _bracket_mesh: ArrayMesh
 var _quad_mesh: PlaneMesh
@@ -467,44 +484,12 @@ func lines_of(layer: Layer) -> Array[PackedVector3Array]:
 	return out
 
 
-# Replaces a LABEL layer's text wholesale -- the pooled shape set_markers uses, with Label3D in
-# place of a quad. Each entry is {pos: Vector3 (world), text: String, color: Color}.
-func set_labels(layer: Layer, entries: Array[Dictionary]) -> void:
-	var spec: Dictionary = LAYERS[layer]
-	if spec["kind"] != Kind.LABEL:
-		push_error("set_labels on a %s layer" % Kind.keys()[spec["kind"]])
-		return
-	_labels[layer] = entries.duplicate()
-	var pool: Array = _pool_for(layer)
-	while pool.size() < entries.size():
-		pool.append(_make_marker(layer))
-	for i in pool.size():
-		var node := pool[i] as Label3D
-		if i >= entries.size():
-			node.visible = false
-			continue
-		var entry: Dictionary = entries[i]
-		node.visible = true
-		node.position = entry["pos"]
-		node.text = str(entry["text"])
-		node.modulate = entry.get("color", spec["color"])
-		node.pixel_size = label_pixel_size
-
-
-func labels_of(layer: Layer) -> Array[Dictionary]:
-	var out: Array[Dictionary] = []
-	out.assign(_labels.get(layer, []))
-	return out
-
-
 func clear(layer: Layer) -> void:
 	var spec: Dictionary = LAYERS[layer]
 	if spec["kind"] == Kind.SPRITE or spec["kind"] == Kind.BILLBOARD:
 		set_markers(layer, [])
 	elif spec["kind"] == Kind.LINE:
 		set_line(layer, PackedVector3Array(), LAYERS[layer]["color"])
-	elif spec["kind"] == Kind.LABEL:
-		set_labels(layer, [])
 	else:
 		set_cells(layer, [])
 
@@ -752,8 +737,6 @@ func _make_marker(layer: Layer) -> Node3D:
 			return _make_billboard(spec)
 		Kind.LINE:
 			return _make_line(spec)
-		Kind.LABEL:
-			return _make_text(spec)
 		Kind.SPRITE:
 			return _make_quad(spec, null, Color.WHITE)
 		_:
@@ -806,25 +789,6 @@ func _make_line(spec: Dictionary) -> MeshInstance3D:
 	_style_beam(material)
 	return instance
 
-
-# A world-space number (#710 plan tier). UnitHealthBar's Label3D recipe, billboarded so the digits
-# face the camera from any orbit -- the readout is the whole point, unlike the bar, which is part of
-# a group that yaws as one object.
-func _make_text(spec: Dictionary) -> Label3D:
-	var label := Label3D.new()
-	label.billboard = BaseMaterial3D.BILLBOARD_FIXED_Y
-	label.shaded = false
-	label.double_sided = true
-	label.font_size = LABEL_FONT_RESOLUTION
-	label.outline_size = LABEL_OUTLINE_SIZE
-	label.outline_modulate = Color.BLACK
-	label.no_depth_test = true   # a number behind a prop is a number you cannot read
-	label.render_priority = spec["sort"]
-	label.outline_render_priority = spec["sort"] - 1
-	label.layers = WORLD_RENDER_LAYER   # board markup, like every other marker this class builds
-	label.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-	add_child(label)
-	return label
 
 
 func _make_billboard(spec: Dictionary) -> Sprite3D:

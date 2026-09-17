@@ -63,6 +63,16 @@ func _process(_delta: float) -> void:
 func refresh() -> void:
 	update_hover_visuals(last_hovered_cell)
 
+
+# The enemy under the pointer, or null -- the TRANSIENT half of what the range view draws (#710
+# slice 3). Asked by game._redraw_enemy_ranges' callers, which can fire from a key or a pin rather
+# than from a pointer move and so have no hovered unit in hand.
+func hovered_enemy() -> Unit:
+	var unit: Unit = game.unit_at_pointer(last_hovered_cell)
+	if unit == null or not is_instance_valid(unit):
+		return null
+	return unit if Team.is_enemy(Team.Faction.PLAYER, unit.get_faction()) else null
+
 func update_hover_visuals(hovered_cell: Vector2i) -> void:
 	_clear_threat_markup()   # cleared on every cell change; the branch that wants it draws it back
 	if game.grid.get_cell_tile_data(hovered_cell) == null:
@@ -131,17 +141,29 @@ func _hover_idle(cell: Vector2i) -> Dictionary:
 			game.clear_selection_icons()
 		return {}
 
-	var moverange: Dictionary = game.compute_move_range(hovered)
 	if game.squad_manager.active_squad == null:
 		game.clear_selection_icons()
 
+	# AN ENEMY IS READ IN THE ENEMY'S OWN VOCABULARY (#710 slice 3, dev ruling: unify). Hovering
+	# one used to borrow THREE of your layers -- the yellow MOVE range, the orange SQUAD_RANGE
+	# cohesion bubble and the red INVALID_MOVE -- all of them RAW, so the board answered "where
+	# could this body physically walk" beside a threat fill answering "where will it". Worse, the
+	# cohesion bubble is a third picture of enemy movement that ThreatField deliberately ignores.
+	# The fork is the whole branch rather than one call, because every one of those three is the
+	# wrong question to ask about somebody you do not command.
+	if Team.is_enemy(Team.Faction.PLAYER, hovered.get_faction()):
+		_show_hover_panel(hovered, cell)
+		game._redraw_enemy_ranges(hovered)
+		if hovered.has_squad() and game.squad_manager.active_squad == null:
+			return game.get_squad_icons(hovered.squad)
+		return {}
+
+	var moverange: Dictionary = game.compute_move_range(hovered)
 	if hovered.has_squad():
 		game.draw_squad_leader_range(hovered.squad, hovered.squad.leader.get_projected_destination())
 
 	game.overlay_manager.show_overlay(OverlayManager.OverlayType.MOVE, game.get_move_range(moverange, hovered), OverlayManager.ATLAS_COORDS)
 	_show_hover_panel(hovered, cell)
-	if Team.is_enemy(Team.Faction.PLAYER, hovered.get_faction()):
-		_show_enemy_threat(hovered)
 	game.overlay_manager.show_overlay(OverlayManager.OverlayType.INVALIDMOVE, moverange.squad_unreachable.keys(), OverlayManager.ATLAS_COORDS)
 
 	# Idle only: an active squad's own markers are already up, and a second set for whoever the
@@ -175,7 +197,6 @@ func _hover_choosing_group_move(cell: Vector2i) -> void:
 		and game.group_move_followable.has(cell)
 	if followable:
 		game.overlay_manager.show_hover_move_paths(GroupMoveSolver.plan(leader.squad, cell, game._board()))
-		_show_threat_lines_to(cell)
 	_set_cursor_for_preview(cell, followable)
 
 func _hover_attack_targeting(cell: Vector2i) -> void:
@@ -251,7 +272,6 @@ func _hover_choosing_move(cell: Vector2i) -> void:
 	game.overlay_manager.redraw_planned_paths()
 	game.overlay_manager.redraw_projected_units()
 	game.refresh_action_queue(squad)
-	_show_threat_lines_to(cell)
 	_set_cursor_for_preview(cell, true)
 
 # ==============================================================================
@@ -297,34 +317,12 @@ func _on_hovered_unit_changed(previous_unit: Unit, new_unit: Unit) -> void:
 #  Enemy threat (#710 hover tier)
 # ==============================================================================
 
-# The hover tier's own markup. The whole-field fill and the leashes belong to the T toggle, so
-# they stay up while it is on; a single enemy's reach and lines are per-hover.
+# Cleared on every cell change; the branch that wants it draws it back. The RANGE fills are not
+# cleared here and must not be -- game._redraw_enemy_ranges owns them, and a pinned enemy has to
+# survive the pointer moving off it. Every arm of update_hover_visuals that does not draw them
+# calls that door with no hovered enemy, which is what puts the transient half down.
 func _clear_threat_markup() -> void:
-	game.overlay_manager.clear_threat_lines()
-	var toggled: bool = game.threat_view_on
-	if not toggled:
-		game.overlay_manager.clear_danger()
-		game.overlay_manager.clear_leash()
-
-
-# A line from every enemy that could reach `cell` next turn.
-func _show_threat_lines_to(cell: Vector2i) -> void:
-	var board: BoardContext = game._board()
-	var field: ThreatField = game.threat_field()
-	var segments: Array[PackedVector3Array] = []
-	for enemy: Unit in field.attackers_of(cell):
-		segments.append(ThreatLines2D.segment(enemy.movement.cell, cell, board))
-	game.overlay_manager.show_threat_lines(segments)
-
-
-# An enemy under the pointer shows its own reach and, if it is a sentry, the leash it keeps to.
-func _show_enemy_threat(enemy: Unit) -> void:
-	var toggled: bool = game.threat_view_on
-	if toggled:
-		return   # the toggle already has the whole field and every leash up
-	var field: ThreatField = game.threat_field()
-	game.overlay_manager.show_danger(field.reach_of(enemy))
-	game.overlay_manager.reveal_leash(ThreatField.leash_of(enemy.squad, game._board()))
+	game._redraw_enemy_ranges(null)
 
 # ==============================================================================
 #  Shared helpers

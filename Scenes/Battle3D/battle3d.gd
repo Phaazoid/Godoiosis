@@ -196,6 +196,7 @@ func _ready() -> void:
 	_unit_mirror.hovered_unit_source = _hovered_unit
 	_unit_mirror.plan_source = _previewed_plan
 	_unit_mirror.effect_subjects_source = _effect_pass_subjects
+	_unit_mirror.threat_source = _threat_forecast
 	# The impact wire (#520 diff 2b): the mirror sees the blow land, and this decides what it is
 	# worth. It bound straight to _rig.shake until 2c gave a killing blow a second consequence --
 	# the freeze -- which is not the rig's to do, so the decision moved here where both are reachable.
@@ -1160,7 +1161,7 @@ func _unhandled_input(event: InputEvent) -> void:
 		_handle_cancel_button(click)
 		return
 	if click.pressed and click.button_index == MOUSE_BUTTON_LEFT:
-		_click_pointer_cell()
+		_click_pointer_cell(click.shift_pressed)
 
 
 # Ctrl+wheel zooms while the elevation brush owns the plain wheel (#285). The rig cannot answer
@@ -1587,7 +1588,7 @@ func _update_pointer(screen_pos: Vector2) -> void:
 # _unhandled_input just derives a cell and calls them, and every test in the repo
 # drives them this way (tests/README.md). Delivering the picked cell directly is
 # both simpler and exact: no viewport-mouse round trip to get wrong.
-func _click_pointer_cell() -> void:
+func _click_pointer_cell(shift_held := false) -> void:
 	if _pointer_cell == BoardSpace.NO_CELL:
 		return
 	# The game refuses clicks while the board is locked (AI turn / mission over /
@@ -1597,7 +1598,7 @@ func _click_pointer_cell() -> void:
 	# cannot: Mission Select opts OUT of the modal lock, so the game is unfrozen.
 	if game._board_locked_for_player():
 		return
-	game._on_left_click(BoardSpace.flat(_pointer_cell))
+	game._on_left_click(BoardSpace.flat(_pointer_cell), shift_held)
 
 
 # Which unit the pointer resolves to, for UnitMirror's health readout (#229). Deliberately the
@@ -1638,6 +1639,16 @@ func _previewed_plan() -> ResolvedPlan:
 func _effect_pass_subjects() -> Dictionary[int, bool]:
 	var subjects: Dictionary[int, bool] = game.order_executor.effect_pass_subjects
 	return subjects
+
+
+# ...and what the enemy intends to do to each of them (#710 slice 3). Through game's own accessor,
+# never OverlayManager's store: the harvest is kept at INTENTS because the LINES draw from it, and
+# the view gate that decides whether the BARS also read it belongs to the game. Reading the store
+# directly here left the prediction up in a state that is meant to show lines alone -- which is the
+# bug T was reported for, reintroduced one layer down.
+func _threat_forecast() -> Dictionary[int, Dictionary]:
+	var forecast: Dictionary[int, Dictionary] = game.threat_forecast()
+	return forecast
 
 
 func _cancel() -> void:
