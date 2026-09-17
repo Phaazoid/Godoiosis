@@ -127,7 +127,14 @@ var height_debug_overlay: HeightDebugOverlay   # F5 readout, dev builds only; de
 var zone_manager: ZoneManager
 var main_action_menu: MainActionMenu
 var hover_presenter: HoverPresenter
-var threat_view_on := false   # the T toggle (#710): what the enemy INTENDS this turn
+# What the T key shows, in the order it cycles (#710 slice 3). EVERYTHING means the intent lines
+# PLUS the damage each one predicts, drawn on its victim's own health bar; the enemy RANGES are
+# deliberately not in this cycle at all -- they answer what an enemy COULD do rather than what it
+# WILL, and live on V. STICKY across turns (dev): a player who turned it off does not want it back
+# every hand-over. Boot sits at INTENTS, so a stranger who never finds the key still sees the
+# feature the demo bar exists for.
+enum ThreatView { NONE, INTENTS, EVERYTHING }
+var threat_view := ThreatView.INTENTS
 var ranges_shown := false     # the V toggle (slice 3): every enemy's move + reach tones, FE-style
 # Which enemies stay drawn with V off, by instance id -- see toggle_enemy_pin.
 var pinned_enemies: Dictionary[int, bool] = {}
@@ -1712,12 +1719,21 @@ func drop_threat_field() -> void:
 
 
 func toggle_threat_view() -> void:
-	threat_view_on = not threat_view_on
-	if threat_view_on:
-		refresh_threat_plan()   # the key asks for the answer NOW, not after the debounce
-	else:
+	threat_view = ((threat_view + 1) % ThreatView.size()) as ThreatView
+	if threat_view == ThreatView.NONE:
 		_clear_threat_plan()
+	else:
+		refresh_threat_plan()   # the key asks for the answer NOW, not after the debounce
 	hover_presenter.refresh()
+
+
+# What the enemy intends, or nothing at all below EVERYTHING -- the gate lives here rather than in
+# OverlayManager because the view state is the game's, and the harvest is worth keeping either way
+# (the lines draw from it at INTENTS). Read by the 3D bars through battle3d.
+func threat_forecast() -> Dictionary[int, Dictionary]:
+	if threat_view != ThreatView.EVERYTHING:
+		return {}
+	return overlay_manager.threat_forecast
 
 
 func toggle_enemy_ranges() -> void:
@@ -1803,6 +1819,8 @@ func _leash_cells_of(subjects: Array[Unit]) -> Array[Vector2i]:
 func _restart_threat_plan() -> void:
 	if _threat_plan_timer == null or _board_locked_for_player():
 		return
+	if threat_view == ThreatView.NONE:
+		return   # NOTHING means nothing is computed either -- the preview is the expensive half
 	_threat_plan_timer.wait_time = maxf(Pacing.THREAT_PLAN_DELAY, 0.01)
 	_threat_plan_timer.start()
 
@@ -1817,7 +1835,7 @@ func _clear_threat_plan() -> void:
 func refresh_threat_plan() -> void:
 	if _threat_plan_timer != null:
 		_threat_plan_timer.stop()
-	if _board_locked_for_player():
+	if _board_locked_for_player() or threat_view == ThreatView.NONE:
 		return
 	threat_plan_version += 1
 	overlay_manager.show_threat_intents(

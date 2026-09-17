@@ -263,6 +263,101 @@ func test_the_toggle_draws_intent_lines_with_their_numbers() -> void:
 			"the line does not end on the unit it names").is_equal(Vector2i(2, 2))
 
 
+func test_the_key_cycles_three_states_and_comes_back_round() -> void:
+	# The reported bug: T turned the numbers ON and had no way back. Three states, and the third
+	# tap has to reach NOTHING or the report stands.
+	assert_int(game.threat_view).override_failure_message(
+			"boot does not sit at INTENTS, so a stranger who never presses T sees no preview") \
+		.is_equal(game.ThreatView.INTENTS)
+	game.toggle_threat_view()
+	assert_int(game.threat_view).is_equal(game.ThreatView.EVERYTHING)
+	game.toggle_threat_view()
+	assert_int(game.threat_view).is_equal(game.ThreatView.NONE)
+	game.toggle_threat_view()
+	assert_int(game.threat_view).is_equal(game.ThreatView.INTENTS)
+
+
+func test_the_view_survives_a_turn_handover() -> void:
+	# Sticky, by the dev's call: a player who turned it off does not want it back every turn.
+	game.threat_view = game.ThreatView.NONE
+	game._on_turn_started(PLAYER)
+	assert_int(game.threat_view).override_failure_message(
+			"the hand-over reset the view -- turning it off buys you one turn of quiet").is_equal(game.ThreatView.NONE)
+
+
+func test_nothing_means_nothing_is_computed() -> void:
+	# The saving that makes the OFF state worth having: the preview runs a real AI turn per engaged
+	# squad, so NONE must not merely hide it. previewed_squad_count is the observable slice 2 added
+	# precisely because an optimisation with no behavioural signature cannot be tested.
+	_enable_enemy_ai()
+	var mover := _spawn(PLAYER, Vector2i(1, 1))
+	_spawn(ENEMY, Vector2i(3, 2))
+	game.threat_view = game.ThreatView.NONE
+	var version: int = game.threat_plan_version
+	AIController.previewed_squad_count = 0
+	game.enter_move_mode(mover)
+	game.selected_unit = mover
+	game._click_choosing_move(Vector2i(2, 2))
+	game.refresh_threat_plan()
+	assert_int(game.threat_plan_version).override_failure_message(
+			"a recompute ran with the view off").is_equal(version)
+	assert_int(AIController.previewed_squad_count).override_failure_message(
+			"the enemy squads were planned anyway -- the gate hides the answer without saving the work") \
+		.is_equal(0)
+	assert_array(_om().intent_lines).is_empty()
+
+
+func test_the_damage_reaches_the_bars_only_at_everything() -> void:
+	# The dev's own split: "showing who they intend to attack" and "showing everything" are two
+	# states, and the damage is what the second one adds. The lines are up in both.
+	_enable_enemy_ai()
+	var mover := _spawn(PLAYER, Vector2i(1, 1))
+	_spawn(ENEMY, Vector2i(3, 2))
+	game.enter_move_mode(mover)
+	game.selected_unit = mover
+	game._click_choosing_move(Vector2i(2, 2))
+	game.refresh_threat_plan()
+
+	assert_int(game.threat_view).is_equal(game.ThreatView.INTENTS)
+	assert_int(_om().intent_lines.size()).override_failure_message(
+			"no intent line, so neither half of this case proves anything").is_equal(1)
+	assert_bool(game.threat_forecast().is_empty()).override_failure_message(
+			"the bars are fed at INTENTS, so the two states show the same thing").is_true()
+
+	game.toggle_threat_view()
+	game.refresh_threat_plan()
+	var forecast: Dictionary = game.threat_forecast()
+	assert_bool(forecast.has(mover.get_instance_id())).override_failure_message(
+			"EVERYTHING does not name the unit the enemy intends to hit").is_true()
+	assert_int(int(forecast[mover.get_instance_id()]["damage"])).is_greater(0)
+
+
+func test_two_enemies_on_one_target_sum_into_one_forecast() -> void:
+	# A bar draws ONE span, so the readout has to be per victim rather than per attacker. Which
+	# attacker owns which part of the bite is a separate ticket, and this is the shape it edits.
+	_enable_enemy_ai()
+	var mover := _spawn(PLAYER, Vector2i(1, 1))
+	_spawn(ENEMY, Vector2i(3, 2))
+	_spawn(ENEMY, Vector2i(2, 3))
+	game.threat_view = game.ThreatView.EVERYTHING
+	game.enter_move_mode(mover)
+	game.selected_unit = mover
+	game._click_choosing_move(Vector2i(2, 2))
+	game.refresh_threat_plan()
+
+	assert_int(_om().intent_lines.size()).override_failure_message(
+			"both enemies did not intend an attack, so there is nothing to sum").is_equal(2)
+	var forecast: Dictionary = game.threat_forecast()
+	assert_int(forecast.size()).override_failure_message(
+			"two intents on one unit produced two forecast rows").is_equal(1)
+	var summed := int(forecast[mover.get_instance_id()]["damage"])
+	var single := 0
+	for label: Dictionary in _om().intent_labels:
+		single = maxi(single, int(str(label["text"])))
+	assert_int(summed).override_failure_message(
+			"the forecast took one attacker's damage rather than both").is_greater(single)
+
+
 func test_the_intent_channel_clears_on_board_load() -> void:
 	_enable_enemy_ai()
 	var mover := _spawn(PLAYER, Vector2i(1, 1))

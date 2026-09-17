@@ -345,6 +345,10 @@ var zone_layer_map := {}
 var zone_highlight_overlay: TileMapLayer = null   # the Tile Brush's picked zone; built in _ready
 var danger_overlay: TileMapLayer = null   # the #710 threat fill; built in _ready
 var enemy_move_overlay: TileMapLayer = null   # ...and where they could stand to use it (slice 3)
+# What the enemy intends, keyed by VICTIM instance id: {"damage": int, "fells": bool}. Rebuilt
+# with the intent lines and read by UnitMirror, which draws it as the predicted span on that
+# unit's own health bar -- the channel #313 already built for your own plan.
+var threat_forecast: Dictionary[int, Dictionary] = {}
 var leash_revealed := false   # a play-time reveal is holding the highlight layer up (#710)
 # The two inputs to whether authoring zones draw -- see set_zone_visibility. The INTENT is what
 # a 3D mirror asks; `.visible` is the product and answers only "does the 2D draw this".
@@ -537,6 +541,20 @@ func show_threat_intents(intents: Array[ThreatIntent], board: BoardContext) -> v
 				"text": str(intent.damage),
 				"fells": intent.fells,
 			})
+	# ...and the same intents keyed by VICTIM, which is what the health bars read (#710 slice 3).
+	# SUMMED per target rather than kept per attacker: two enemies converging on one unit is one
+	# prediction as far as that unit's own readout is concerned, and a bar cannot draw two spans.
+	# Seeing which attacker owns which part of the bite is filed separately.
+	var forecast: Dictionary[int, Dictionary] = {}
+	for intent: ThreatIntent in intents:
+		if intent.target == null or not is_instance_valid(intent.target):
+			continue
+		var id := intent.target.get_instance_id()
+		var row: Dictionary = forecast.get(id, {"damage": 0, "fells": false})
+		row["damage"] = int(row["damage"]) + intent.damage
+		row["fells"] = bool(row["fells"]) or intent.fells
+		forecast[id] = row
+	threat_forecast = forecast
 	intent_lines = lines
 	intent_labels = labels
 	intent_version += 1
