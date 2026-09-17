@@ -1580,3 +1580,38 @@ func test_an_enemys_reach_and_leash_mirror_in_play_and_the_patrol_layer_does_not
 	await _settle()
 	assert_int(_overlays.cells_of(BoardOverlays.Layer.DANGER).size()).is_equal(0)
 	assert_int(_overlays.cells_of(BoardOverlays.Layer.ZONE_HIGHLIGHT).size()).is_equal(0)
+
+
+# The exact tier's lines AND their numbers reach the diorama on one version (they are one readout),
+# the label text copied verbatim and its colour taken from the 2D renderer's own statics.
+func test_intent_lines_and_their_numbers_reach_the_diorama() -> void:
+	var mover := _spawn(PLAYER, Vector2i(2, 2))
+	var foe := _spawn(ENEMY, Vector2i(3, 2))
+	foe.equipped_weapon = H.make_weapon(3)
+	foe.squad.archetype = AIArchetype.Type.HOLD
+	game.ai_controller.set_faction_ai_enabled(ENEMY, true)
+	game.refresh_threat_plan()
+	await _settle()
+
+	var stored: Array[PackedVector3Array] = _om().intent_lines
+	assert_int(stored.size()).override_failure_message(
+			"nothing was previewed -- this case cannot see the wire").is_equal(1)
+	var lifted := _overlays.lines_of(BoardOverlays.Layer.INTENT_LINES)
+	assert_int(lifted.size()).is_equal(1)
+	var first: Vector3 = stored[0][0]
+	assert_that(lifted[0][0]).is_equal(Vector3(
+		first.x * BoardSpace.CELL_SIZE,
+		BoardSpace.surface_y(BoardSpace.top_row_of(0)) + first.y * BoardSpace.ROW_HEIGHT,
+		first.z * BoardSpace.CELL_SIZE))
+
+	var labels := _overlays.labels_of(BoardOverlays.Layer.INTENT_LABELS)
+	assert_int(labels.size()).is_equal(_om().intent_labels.size())
+	assert_str(str(labels[0]["text"])).is_equal(str(_om().intent_labels[0]["text"]))
+	assert_that(labels[0]["color"]).is_equal(ThreatLines2D.INTENT_LABEL_COLOR)
+	assert_object(mover).is_not_null()
+
+	game._clear_threat_plan()
+	await _settle()
+	assert_int(_overlays.lines_of(BoardOverlays.Layer.INTENT_LINES).size()).is_equal(0)
+	assert_int(_overlays.labels_of(BoardOverlays.Layer.INTENT_LABELS).size()).override_failure_message(
+			"the numbers outlived the lines they belong to").is_equal(0)

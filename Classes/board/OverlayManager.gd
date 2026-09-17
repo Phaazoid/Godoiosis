@@ -375,6 +375,13 @@ var _sight_trace_2d: SightTrace2D
 var threat_lines: Array[PackedVector3Array] = []
 var threat_lines_version := 0
 var _threat_lines_2d: ThreatLines2D
+# The EXACT tier's own channel (#710 slice 2), beside the reach tier above rather than sharing it:
+# "who can reach this cell" and "who will attack whom" are different questions and may be on screen
+# together. Labels ride the same version -- they are the lines' own numbers, never a second store to
+# keep in step.
+var intent_lines: Array[PackedVector3Array] = []
+var intent_labels: Array[Dictionary] = []   # {pos: Vector3 (trace space), text: String, fells: bool}
+var intent_version := 0
 
 
 
@@ -498,6 +505,42 @@ func restyle_threat_lines() -> void:
 	if threat_lines.is_empty():
 		return
 	show_threat_lines(threat_lines)
+
+
+# The exact tier (#710 slice 2). Takes the INTENTS rather than geometry: the line and its number
+# come from one row each, so a drawn number can never belong to a different line than it sits on.
+func show_threat_intents(intents: Array[ThreatIntent], board: BoardContext) -> void:
+	if intents.is_empty() and intent_lines.is_empty():
+		return   # idempotent, like the trace -- the version only moves on real change
+	var lines: Array[PackedVector3Array] = []
+	var labels: Array[Dictionary] = []
+	for intent: ThreatIntent in intents:
+		var seg := ThreatLines2D.segment(intent.from, intent.to, board)
+		lines.append(seg)
+		if intent.damage > 0 or intent.fells:
+			labels.append({
+				"pos": (seg[0] + seg[1]) * 0.5,
+				"text": str(intent.damage),
+				"fells": intent.fells,
+			})
+	intent_lines = lines
+	intent_labels = labels
+	intent_version += 1
+	_threat_lines_2d.intents = intent_lines
+	_threat_lines_2d.labels = intent_labels
+	_threat_lines_2d.queue_redraw()
+
+
+func clear_threat_intents() -> void:
+	var none: Array[ThreatIntent] = []
+	show_threat_intents(none, null)
+
+
+func restyle_threat_intents() -> void:
+	if intent_lines.is_empty():
+		return
+	intent_version += 1   # the geometry is unchanged; the mirror re-pushes for the new colour
+	_threat_lines_2d.queue_redraw()
 
 
 # The threat fill (#710): the cells an enemy could reach next turn -- the whole field, or one

@@ -129,6 +129,8 @@ var main_action_menu: MainActionMenu
 var hover_presenter: HoverPresenter
 var threat_view_on := false   # the T toggle (#710): the whole enemy threat field and every sentry leash
 var _threat_field: ThreatField = null   # built lazily by threat_field(); dropped when the board moves
+var _threat_plan_timer: Timer   # debounces the exact tier: a burst of orders costs ONE recompute
+var threat_plan_version := 0    # bumped on every recompute; the debounce's only observable
 var mission_controller: MissionController
 var order_executor: OrderExecutor
 var bug_reporter: BugReporter
@@ -186,6 +188,14 @@ func _build_collaborators() -> void:
 	ai_controller = AIController.new()
 	ai_controller.game = self
 	add_child(ai_controller)
+
+	# The threat preview's debounce (#710). One-shot: every plan change restarts it, so a burst of
+	# orders costs one recompute after the player stops rather than one per order.
+	_threat_plan_timer = Timer.new()
+	_threat_plan_timer.name = "ThreatPlanTimer"
+	_threat_plan_timer.one_shot = true
+	_threat_plan_timer.timeout.connect(refresh_threat_plan)
+	add_child(_threat_plan_timer)
 
 	scenario_director = ScenarioDirector.new()
 	scenario_director.game = self
@@ -266,6 +276,7 @@ func _wire_signals() -> void:
 	squad_manager.squad_action_cancelled.connect(_on_unit_action_cancelled)
 	squad_manager.squad_action_queued.connect(_on_unit_action_queued)
 	scenario_manager.board_loaded.connect(drop_threat_field)   # a new board is a new field (#710)
+	scenario_manager.board_loaded.connect(_clear_threat_plan)
 	squad_manager.squad_became_active.connect(_on_squad_became_active)
 	squad_manager.squad_became_empty.connect(_on_squad_has_no_actions)
 
@@ -647,6 +658,11 @@ func _click_picking_target(cell: Vector2i) -> void:
 
 func _on_turn_started(faction: Team.Faction):
 	drop_threat_field()   # the other side moved (#710)
+	# ...and only on a turn the PLAYER commands. _board_locked_for_player is not the guard here:
+	# it reads AI_TURN, which start_faction_turn sets a whole TURN_HANDOFF beat later, so a
+	# debounce armed now would fire mid-handoff and preview the enemy's turn as it begins.
+	if not ai_controller.is_ai_faction(faction):
+		_restart_threat_plan()   # the empty plan is a plan: what happens if I end turn right now
 	_run_turn_start_ticks(faction)
 	refresh_guard_markers()   # the ticks lapsed this faction's Guards -- pull their markers with them
 	refresh_watch_markers()   # ...and its untriggered watches (#413)
@@ -1064,6 +1080,7 @@ func queue_overwatch(watching_unit: Unit, cell: Vector2i) -> void:
 func _on_queue_execute_requested():
 	if _board_locked_for_player():
 		return
+	_clear_threat_plan()   # the plan is being SPENT; a pending recompute would describe a board that is moving
 	var squad := squad_manager.active_squad
 	if squad == null:
 		return
@@ -1312,6 +1329,8 @@ func joinable_squads(joining_unit: Unit) -> Array[Squad]:
 	return joinable
 
 func _on_squad_became_active(squad: Squad, action: BaseAction):
+	if squad_manager.previewing:
+		return
 	if squad.leader.has_squad():
 		var icons_to_draw = {}
 		draw_squad_leader_range(squad, squad.leader.get_projected_destination())
@@ -1323,12 +1342,17 @@ func _on_squad_became_active(squad: Squad, action: BaseAction):
 	refresh_action_queue(squad)
 
 func _on_squad_has_no_actions(squad: Squad):
+	if squad_manager.previewing:
+		return
 	overlay_manager.clear_squad_range()
 	refresh_action_queue(squad)
 	overlay_manager.redraw_squad_unit_icons(squad)
 
 func _on_unit_action_queued(squad: Squad, action: BaseAction):
+	if squad_manager.previewing:
+		return   # the threat preview queues and rolls back; it draws nothing and repaints nothing (#710)
 	drop_threat_field()
+	_restart_threat_plan()
 	var unit = action.actor
 
 	# Per-UNIT and cheap: every member needs this, batch or not.
@@ -1354,7 +1378,10 @@ func _repaint_squad_plan(squad: Squad) -> void:
 		overlay_manager.redraw_squad_unit_icons(squad)
 
 func _on_unit_action_cancelled(squad: Squad, unit: Unit, actiontype: BaseAction.ActionType):
+	if squad_manager.previewing:
+		return
 	drop_threat_field()
+	_restart_threat_plan()
 	# Only a MOVE cancel may clear the unit's move visuals. Cancelling a main action
 	# (attack/rescue) must leave a still-queued move — arrow and projected ghost — untouched.
 	if actiontype == BaseAction.ActionType.MOVE:
@@ -1662,10 +1689,39 @@ func toggle_threat_view() -> void:
 	threat_view_on = not threat_view_on
 	if threat_view_on:
 		_show_threat_view()
+		refresh_threat_plan()   # the key asks for the answer NOW, not after the debounce
 	else:
 		overlay_manager.clear_danger()
 		overlay_manager.clear_leash()
 	hover_presenter.refresh()
+
+
+# ---- The exact tier (#710 slice 2): who the AI WILL attack, and for how much ------------------
+
+# Debounced, because one recompute costs a real AI turn's worth of planning per engaged squad. The
+# delay bounds how OFTEN it runs; the early-out inside preview_faction_turn bounds how MUCH it does.
+func _restart_threat_plan() -> void:
+	if _threat_plan_timer == null or _board_locked_for_player():
+		return
+	_threat_plan_timer.wait_time = maxf(Pacing.THREAT_PLAN_DELAY, 0.01)
+	_threat_plan_timer.start()
+
+
+func _clear_threat_plan() -> void:
+	if _threat_plan_timer != null:
+		_threat_plan_timer.stop()
+	overlay_manager.clear_threat_intents()
+
+
+# Recompute now, skipping the wait. The T toggle and the tests take this door.
+func refresh_threat_plan() -> void:
+	if _threat_plan_timer != null:
+		_threat_plan_timer.stop()
+	if _board_locked_for_player():
+		return
+	threat_plan_version += 1
+	overlay_manager.show_threat_intents(
+			ai_controller.preview_faction_turn(Team.Faction.PLAYER), _board())
 
 
 # The whole field, and every enemy sentry's leash.
