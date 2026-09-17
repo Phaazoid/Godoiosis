@@ -43,6 +43,12 @@ func _draw() -> void:
 	for i in intents.size():
 		var fells: bool = i < labels.size() and bool(labels[i].get("fells", false))
 		_polyline(intents[i], intent_color(fells))
+	# NOTHING TO DRAW MEANS TOUCHING NOTHING. Reading ThemeDB.fallback_font instantiates it on
+	# first access, and on a plain boot of the exported pack this node is the project's first
+	# toucher -- the engine then reports "1 resource still in use at exit" and the export smoke
+	# test (#868) reds on an otherwise clean log. Intermittent, so it cost a CI round to find.
+	if labels.is_empty():
+		return
 	var font := ThemeDB.fallback_font
 	if font == null:
 		return

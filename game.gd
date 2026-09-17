@@ -658,7 +658,11 @@ func _click_picking_target(cell: Vector2i) -> void:
 
 func _on_turn_started(faction: Team.Faction):
 	drop_threat_field()   # the other side moved (#710)
-	_restart_threat_plan()   # the empty plan is a plan: what happens if I end turn right now
+	# ...and only on a turn the PLAYER commands. _board_locked_for_player is not the guard here:
+	# it reads AI_TURN, which start_faction_turn sets a whole TURN_HANDOFF beat later, so a
+	# debounce armed now would fire mid-handoff and preview the enemy's turn as it begins.
+	if not ai_controller.is_ai_faction(faction):
+		_restart_threat_plan()   # the empty plan is a plan: what happens if I end turn right now
 	_run_turn_start_ticks(faction)
 	refresh_guard_markers()   # the ticks lapsed this faction's Guards -- pull their markers with them
 	refresh_watch_markers()   # ...and its untriggered watches (#413)
