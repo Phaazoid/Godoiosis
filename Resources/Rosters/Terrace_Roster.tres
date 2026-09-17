@@ -4,7 +4,7 @@
 [ext_resource type="Script" uid="uid://dbb0pgdet8qo0" path="res://Classes/flow/ScenarioUnitEntry.gd" id="2_p0c6g"]
 [ext_resource type="Script" uid="uid://jytv7xrjv6l1" path="res://Classes/items/Item.gd" id="3_5etgc"]
 [ext_resource type="Script" uid="uid://6vu10nf3p58m" path="res://Classes/units/StatEffect.gd" id="4_orfb1"]
-[ext_resource type="Resource" path="res://Resources/Units/Isaac.tres" id="5_46xso"]
+[ext_resource type="Resource" uid="uid://dxhlknpfvr3sy" path="res://Resources/Units/Isaac.tres" id="5_46xso"]
 [ext_resource type="Resource" uid="uid://b56p2d58ri1hr" path="res://Resources/Units/Noemie.tres" id="6_c6e4t"]
 [ext_resource type="Resource" uid="uid://cuns07k40xaxv" path="res://Resources/Units/Sara.tres" id="7_i3cwj"]
 [ext_resource type="Resource" uid="uid://cvvsnph8bcjc8" path="res://Resources/Units/Torv.tres" id="8_oqlwu"]
@@ -13,32 +13,33 @@
 [ext_resource type="Resource" path="res://Resources/Weapons/MainVarieties/Carbine.tres" id="11_xhuej"]
 [ext_resource type="Resource" uid="uid://dxa7oypoypadt" path="res://Resources/RuneVariants/Air Rune.tres" id="12_p0c6g"]
 
-[sub_resource type="Resource" id="Resource_5etgc"]
+[sub_resource type="Resource" id="Resource_p0c6g"]
 script = ExtResource("2_p0c6g")
 unit_data = ExtResource("5_46xso")
 state_saved = false
 
-[sub_resource type="Resource" id="Resource_orfb1"]
+[sub_resource type="Resource" id="Resource_5etgc"]
 script = ExtResource("2_p0c6g")
 unit_data = ExtResource("6_c6e4t")
 state_saved = false
 
-[sub_resource type="Resource" id="Resource_46xso"]
+[sub_resource type="Resource" id="Resource_orfb1"]
 script = ExtResource("2_p0c6g")
 unit_data = ExtResource("7_i3cwj")
 state_saved = false
 
-[sub_resource type="Resource" id="Resource_c6e4t"]
+[sub_resource type="Resource" id="Resource_46xso"]
 script = ExtResource("2_p0c6g")
 unit_data = ExtResource("8_oqlwu")
 state_saved = false
 
-[sub_resource type="Resource" id="Resource_i3cwj"]
+[sub_resource type="Resource" id="Resource_c6e4t"]
 script = ExtResource("2_p0c6g")
 unit_data = ExtResource("9_3c13k")
 state_saved = false
 
 [resource]
 script = ExtResource("10_cs55e")
-entries = Array[ExtResource("2_p0c6g")]([SubResource("Resource_5etgc"), SubResource("Resource_orfb1"), SubResource("Resource_46xso"), SubResource("Resource_c6e4t"), SubResource("Resource_i3cwj")])
+entries = Array[ExtResource("2_p0c6g")]([SubResource("Resource_p0c6g"), SubResource("Resource_5etgc"), SubResource("Resource_orfb1"), SubResource("Resource_46xso"), SubResource("Resource_c6e4t")])
 stash = Array[ExtResource("3_5etgc")]([ExtResource("11_xhuej"), ExtResource("11_xhuej"), ExtResource("11_xhuej"), ExtResource("12_p0c6g"), ExtResource("12_p0c6g"), ExtResource("12_p0c6g")])
+offers_every_job = false
