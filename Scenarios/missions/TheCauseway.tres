@@ -43,7 +43,7 @@ starting_equipped_index = 0
 [sub_resource type="Resource" id="Resource_etgpp"]
 script = ExtResource("5_uvtdp")
 unit_data = SubResource("Resource_xx234")
-cell = Vector2i(5, 2)
+cell = Vector2i(6, 3)
 squad_id = 0
 is_leader = true
 squad_name = "Harriers"
@@ -140,7 +140,7 @@ starting_equipped_index = 0
 [sub_resource type="Resource" id="Resource_w7obt"]
 script = ExtResource("5_uvtdp")
 unit_data = SubResource("Resource_3yvyk")
-cell = Vector2i(5, 3)
+cell = Vector2i(6, 4)
 squad_id = 0
 stats = Dictionary[int, int]({
 0: 20,
@@ -193,7 +193,7 @@ is_leader = true
 squad_name = "Bridge Watch"
 squad_archetype = 2
 stats = Dictionary[int, int]({
-0: 20,
+0: 10,
 1: 5,
 2: 5,
 3: 5,
@@ -202,7 +202,7 @@ stats = Dictionary[int, int]({
 6: 5,
 7: 4
 })
-current_hp = 20
+current_hp = 10
 current_will = 5
 inventory = Array[ExtResource("6_d3i6q")]([SubResource("Resource_mfpgr")])
 equipped_index = 0
@@ -237,10 +237,10 @@ starting_equipped_index = 0
 [sub_resource type="Resource" id="Resource_wdkvl"]
 script = ExtResource("5_uvtdp")
 unit_data = SubResource("Resource_c6hyq")
-cell = Vector2i(13, 6)
+cell = Vector2i(14, 6)
 squad_id = 1
 stats = Dictionary[int, int]({
-0: 20,
+0: 10,
 1: 5,
 2: 5,
 3: 5,
@@ -249,7 +249,7 @@ stats = Dictionary[int, int]({
 6: 5,
 7: 4
 })
-current_hp = 20
+current_hp = 10
 current_will = 5
 inventory = Array[ExtResource("6_d3i6q")]([SubResource("Resource_a6ear")])
 equipped_index = 0
