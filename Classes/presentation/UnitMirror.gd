@@ -599,10 +599,12 @@ func _sync_bar(unit: Unit, sprite: UnitSprite3D, bar: UnitHealthBar, hovered: bo
 	# cubes stayed put.
 	#
 	# The preference is THREE-valued since #418 and still ONE term: which units it names is the only
-	# per-unit part, and DAMAGED is HP alone (dev call) — a body clings at 1 HP, so it qualifies and
-	# keeps #322's glyph and clock.
+	# per-unit part, and DAMAGED is HP alone (dev call). A BODY joins it outright since #1002 — the
+	# ruling's own reason was that a body clings at 1 HP and so qualifies already, and a healed one
+	# can sit at full while still being the thing #322's glyph exists to show.
+	var damaged_or_down := unit.is_downed() or unit.get_current_hp() < unit.get_max_hp()
 	var preferred := bars == PlayerSettings.HealthBars.EVERY \
-			or (bars == PlayerSettings.HealthBars.DAMAGED and unit.get_current_hp() < unit.get_max_hp())
+			or (bars == PlayerSettings.HealthBars.DAMAGED and damaged_or_down)
 	var shown := hovered or foretold or marked or preferred
 	bar.set_shown(shown)
 	if not shown:
@@ -622,14 +624,16 @@ func _sync_bar(unit: Unit, sprite: UnitSprite3D, bar: UnitHealthBar, hovered: bo
 	#
 	# #322 appends the DOWNED glyph to that same row, in the same order the hover card puts it —
 	# element states first, lifecycle after — because the HP the bar draws cannot tell a body from a
-	# unit clinging on at 1. ONE derived value drives the glyph and the count, or the two could
-	# disagree for a frame; the `> 0` clause is the hover card's own, since the clock emits 0 in the
-	# instant before the body is lost.
-	var downed_turns: int = unit.downed_turns_remaining if unit.is_downed() else -1
+	# unit clinging on at 1. The GLYPH and the COUNT are TWO claims since #1002 — a stabilised body
+	# is DOWNED with no clock, and one gate for both hid it entirely. Lifecycle drives the glyph;
+	# the count keeps the hover card's own `> 0`, since the clock emits 0 in the instant before the
+	# body is lost.
+	var downed := unit.is_downed()
+	var downed_turns: int = unit.downed_turns_remaining if downed else -1
 	var row: Array[Texture2D] = StateIcons.textures_for(unit.element_states)
-	if downed_turns > 0:
+	if downed:
 		row.append(StateIcons.DOWNED)
-	else:
+	if downed_turns <= 0:
 		downed_turns = -1
 	bar.set_state_icons(row, state_icon_texels, state_icon_gap_texels, state_icon_spacing_texels)
 	bar.set_downed_turns(downed_turns, downed_count_gap_texels)
