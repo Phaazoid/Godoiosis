@@ -2,17 +2,19 @@ extends VBoxContainer
 class_name RosterTool
 
 # WHAT A MISSION OFFERS, edited (#812): the units it fields, the loose gear its stash starts with,
-# and the weapon mods its fitting card lists. A `Roster` file, on the pool chrome every other
-# Project-scope editor wears -- Load / Update / Delete / New / name / Save As.
+# the weapon mods its fitting card lists, and since #964 the jobs its picker lists. A `Roster` file,
+# on the pool chrome every other Project-scope editor wears -- Load / Update / Delete / New / name /
+# Save As.
 #
 # It exists because #735 shipped the whole model and left the authoring in Godot's own inspector:
 # "rosters are hand-authored in the inspector until #731's deferred dev tab". This is that tab, and
 # it is RosterLint's first caller outside CI.
 #
-# THREE COLUMNS, EACH THE WHOLE CATALOGUE (dev, 2026-09-07: "I kind of want to see both what's
-# available and what's already there at the same time"). Chosen rows float above a rule, the rest
-# below, and ticking an unchosen row IS the add -- so there is no picker, no Add button, and no
-# second pane listing what you could have. Each column scrolls on its own, so the page never does.
+# FOUR COLUMNS, EACH THE WHOLE CATALOGUE (dev, 2026-09-07: "I kind of want to see both what's
+# available and what's already there at the same time"; three until #964 added jobs). Chosen rows
+# float above a rule, the rest below, and ticking an unchosen row IS the add -- so there is no picker,
+# no Add button, and no second pane listing what you could have. Each column scrolls on its own, so
+# the page never does.
 #
 # ENTRIES ARE DIRECT REFS, never copies -- the Attack Editor's `_populate_extras` rule, and here it
 # is load-bearing twice: a copy would serialize INLINE as a sub_resource instead of an ext_resource
@@ -176,6 +178,7 @@ func _rebuild() -> void:
 	_build_units()
 	_build_stash()
 	_build_mods()
+	_build_jobs()
 	_refresh_buttons()
 
 
@@ -365,6 +368,56 @@ func _mod_row(file: String, mod: WeaponModData, chosen: bool) -> HBoxContainer:
 	)
 	row.add_child(tick)
 	return row
+
+
+# What the pre-mission card's job picker offers (#964). The narrowest column: a roster stores job IDS,
+# which is what UnitData.starting_jobs stores and what the Character Editor's own tick list writes, so
+# there is no ref-to-file map to keep -- the tick state is the list itself.
+func _build_jobs() -> void:
+	var jobs := JobCatalog.get_jobs()
+	var ids: Array[String] = []
+	for id: String in jobs:
+		ids.append(id)
+	# Sorted by display name, the order the picker itself sorts in -- get_jobs() is a filesystem scan.
+	ids.sort_custom(func(a: String, b: String) -> bool:
+		return _job_label(jobs, a).naturalnocasecmp_to(_job_label(jobs, b)) < 0)
+
+	var list := _column("Jobs", "%d of %d" % [current.available_jobs.size(), ids.size()],
+			"Offer every job", current.offers_every_job,
+			func(on: bool): current.offers_every_job = on,
+			"a unit's own job is always offered to it")
+
+	for id: String in ids:
+		if current.available_jobs.has(id):
+			list.add_child(_job_row(jobs, id, true))
+	if not current.available_jobs.is_empty():
+		_rule(list)
+	for id: String in ids:
+		if not current.available_jobs.has(id):
+			list.add_child(_job_row(jobs, id, false))
+
+
+func _job_row(jobs: Dictionary, id: String, chosen: bool) -> HBoxContainer:
+	var row := HBoxContainer.new()
+	var tick := CheckBox.new()
+	tick.button_pressed = chosen
+	tick.text = _label_for(id, jobs[id])
+	tick.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	tick.toggled.connect(func(on: bool):
+		if on:
+			current.available_jobs.append(id)
+		else:
+			current.available_jobs.erase(id)
+		_mark_dirty()
+		_rebuild_deferred()
+	)
+	row.add_child(tick)
+	return row
+
+
+func _job_label(jobs: Dictionary, id: String) -> String:
+	var job: JobData = jobs[id]
+	return job.display_name if job != null and job.display_name != "" else id
 
 
 # An unchosen row in the units column: the same shape as a chosen one minus the ordinal, since

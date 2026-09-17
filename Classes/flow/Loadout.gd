@@ -35,11 +35,18 @@ var stash: Array[Item] = []
 # itself precisely so fitting cannot fork one (#732).
 var available_mods: Array[WeaponModData] = []
 
+# WHICH JOBS THIS MISSION OFFERS (#964) -- the pre-mission card's picker, before the union with what
+# the unit already holds. Here for the same reason the mods are: deploy_roster drops the Roster, and
+# a card is built after that.
+#
+# Ids, matching the roster field it is copied from.
+var available_jobs: Array[String] = []
+
 
 # Copies, never the authored array -- see the header. A null entry is authoring noise and is dropped
 # rather than carried as a hole, since the stash is a list the player reads, not a slot grid.
 #
-# Both lists come off the ROSTER'S accessors rather than its fields, so "or everything" is resolved
+# Every list comes off the ROSTER'S accessors rather than its fields, so "or everything" is resolved
 # once, where it is declared, instead of by every reader asking about a flag (#812).
 static func from_roster(roster: Roster) -> Loadout:
 	var made := Loadout.new()
@@ -59,6 +66,12 @@ static func from_roster(roster: Roster) -> Loadout:
 	for mod: WeaponModData in roster.offered_mods():
 		if mod != null:
 			made.available_mods.append(mod)
+	# APPENDED, never assigned. With its flag off that accessor hands back the resource's OWN array,
+	# and load() serves Godot's cache -- so an assignment would have the phase holding the authored
+	# file's list, which is the mutation this whole class exists to prevent.
+	for id: String in roster.offered_jobs():
+		if id != "":
+			made.available_jobs.append(id)
 	return made
 
 

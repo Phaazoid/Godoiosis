@@ -475,6 +475,11 @@ func _mission_start_fields() -> Dictionary:
 	for mod: WeaponModData in loadout.available_mods:
 		if mod != null:
 			mods.append(mod.display_name)
+	# The DENOMINATOR for every job question (#964): which jobs were on offer, beside which one each
+	# unit deployed under. Ids, the key the roster and UnitInstance both store.
+	var jobs: Array[String] = []
+	for id: String in loadout.available_jobs:
+		jobs.append(id)
 	return {
 		"run_id": _run_id,
 		"install_id": TelemetryStore.install_id(),
@@ -498,6 +503,7 @@ func _mission_start_fields() -> Dictionary:
 		"roster": roster,
 		"stash": stash,
 		"available_mods": mods,
+		"available_jobs": jobs,
 	}
 
 

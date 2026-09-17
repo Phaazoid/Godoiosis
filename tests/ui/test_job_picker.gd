@@ -7,9 +7,13 @@
 # is asserted below and catches the likeliest way this breaks -- the same declaration
 # test_gear_moves_on_screen.gd makes about drag and drop, for the same reason.
 #
-# THE PICKER IS NEVER REBUILT and the last case is what holds that: a rebuild would replace the control
-# the pick came out of, and node identity is the only assertion that can tell a refresh-in-place from a
-# rebuild that restores the same text (#745's lesson, arriving at a second surface).
+# THE PICKER IS NEVER REBUILT and the identity case is what holds that: a rebuild would replace the
+# control the pick came out of, and node identity is the only assertion that can tell a refresh-in-place
+# from a rebuild that restores the same text (#745's lesson, arriving at a second surface).
+#
+# WHAT IT MAY LIST is the last section (#964). Those cases doctor the phase's live Loadout and build
+# their own card, because the picker is built once and the offer has to be in place before it is --
+# and because a case reading the shipped rosters' own ticks would be pinning authored content.
 extends GdUnitTestSuite
 
 const MAIN_SCENE := "res://Scenes/Main.tscn"
@@ -222,3 +226,70 @@ func test_the_picker_is_refreshed_in_place_and_never_rebuilt_by_its_own_pick() -
 	assert_object(card._job_picker).override_failure_message(
 		"the refresh replaced the control the pick came out of").is_same(before)
 	assert_str(String(card._job_picker.get_item_metadata(card._job_picker.selected))).is_equal("tank")
+
+
+# --- what the mission offers (#964) ----------------------------------------------------------------
+
+# A FRESH card against a doctored Loadout, rather than the screen's own. The picker is built once, so
+# the offer has to be in place before the card is -- and going through the phase's live Loadout is what
+# keeps these cases off whichever jobs the shipped rosters happen to tick (tests/README.md rule 4).
+func _card_offering(ids: Array[String]) -> PreMissionCard:
+	mc.loadout().available_jobs = ids
+	return auto_free(PreMissionCard.build(mc.roster_units()[0], mc)) as PreMissionCard
+
+
+func _offered_ids(card: PreMissionCard) -> Array[String]:
+	var out: Array[String] = []
+	for i in card._job_picker.item_count:
+		out.append(String(card._job_picker.get_item_metadata(i)))
+	return out
+
+
+func test_the_picker_lists_what_the_mission_offers_and_nothing_else() -> void:
+	if not await _enter_phase():
+		return
+	var only_tank: Array[String] = ["tank"]
+	var card := _card_offering(only_tank)
+
+	# "" is the none row, which is a real choice and never an offer.
+	assert_array(_offered_ids(card)).override_failure_message(
+		"the picker is reading the catalogue rather than the mission's own list"
+		).contains_exactly_in_any_order(["", "tank"])
+
+
+# The union, and the hole it closes: a character authoring a starting_job or a state_saved entry can
+# arrive holding a job this mission does not offer. Without it that unit falls into the unknown-id
+# branch, draws the RAW id, and cannot pick the job back once it is dropped.
+func test_a_job_the_unit_already_holds_is_listed_even_when_the_mission_does_not_offer_it() -> void:
+	if not await _enter_phase():
+		return
+	var carrier: Unit = mc.roster_units()[0]
+	assert_str(carrier.set_sole_job("tank")).override_failure_message(
+		"the fixture could not put a job on the unit, so the case below proves nothing").is_empty()
+
+	var only_scout: Array[String] = ["scout"]
+	mc.loadout().available_jobs = only_scout
+	var card := auto_free(PreMissionCard.build(carrier, mc)) as PreMissionCard
+
+	assert_array(_offered_ids(card)).override_failure_message(
+		"the held job is missing from its own picker -- it draws as a raw id and cannot be re-picked"
+		).contains(["tank"])
+	# select(-1) is the raw-id branch: the control carries text with no row behind it.
+	assert_int(card._job_picker.selected).override_failure_message(
+		"the selection fell through to the raw-id branch instead of matching a listed row"
+		).is_greater_equal(0)
+	assert_str(String(card._job_picker.get_item_metadata(card._job_picker.selected))).is_equal("tank")
+
+
+# EMPTY MEANS NONE here too: a dropdown holding only "— none —" is a control that cannot do anything.
+func test_a_mission_offering_no_job_draws_no_picker_at_all() -> void:
+	if not await _enter_phase():
+		return
+	var nothing: Array[String] = []
+	var card := _card_offering(nothing)
+
+	assert_object(card._job_picker).override_failure_message(
+		"an offer of nothing still built a dropdown with only the none row in it").is_null()
+	# The rest of the card is untouched, and the refresh that follows every redraw does not throw.
+	card.refresh()
+	assert_array(card._abilities_row.get_children()).is_not_empty()

@@ -50,11 +50,22 @@ class_name Roster
 # save then writes INLINE rather than as an ExtResource.
 @export var available_mods: Array[WeaponModData] = []
 
+# Which jobs the pre-mission card's picker offers (#964). IDS, not JobData refs, and that is the one
+# type fork here: UnitData.starting_jobs is the precedent, UnitInstance.jobs persists the id and
+# JobCatalog keys on it -- so a ref array would be a second way to name a job AND would put this file
+# in the dangling-ext_resource blast radius (#596). The cost is that a typo is silent, which
+# RosterLint pays.
+#
+# The demo gate is authored HERE rather than coded into the card (dev, 2026-09-17): two of the four
+# jobs are unfinished content, and naming the finished ones is a tick rather than a flag somebody has
+# to remember to remove.
+@export var available_jobs: Array[String] = []
+
 # --- "or everything" (#812, dev 2026-09-07) ---
 #
-# EMPTY MEANS NONE on all three lists, so a mission that offers no mods yet is a different file from
+# EMPTY MEANS NONE on all four lists, so a mission that offers no mods yet is a different file from
 # one nobody has thought about -- the ai_factions ambiguity, which needed a lint precisely because a
-# chosen empty and a forgotten empty were the same bytes. These three say the other thing.
+# chosen empty and a forgotten empty were the same bytes. These four say the other thing.
 #
 # A STORED FLAG rather than a bulk tick-everything, and the difference is what happens tomorrow: a
 # flag includes content authored after the roster was, which is what lets a sandbox roster stay
@@ -63,9 +74,16 @@ class_name Roster
 # Each one is read in exactly ONE place -- the accessor below it -- so no caller ever asks the flag.
 # Ticking a flag does NOT clear the list underneath it: the tool greys the picks rather than
 # dropping them, so turning it on to test with everything and off again gives the curated list back.
+#
+# JOBS DEFAULT THE OTHER WAY, and the asymmetry is forced rather than chosen. The other three flags
+# default false because their lists were authored BEFORE the flag existed, so false preserved what
+# those files already said. No roster names a job, so false here would switch the picker off
+# everywhere the day this merges -- a behaviour change shipped by a plumbing diff. True is the value
+# that preserves what every roster does today; unticking one is the demo gate landing, deliberately.
 @export var offers_every_character := false
 @export var offers_every_item := false
 @export var offers_every_mod := false
+@export var offers_every_job := true
 
 
 # WHO this mission offers. The authored entries, or one reference entry per character on disk.
@@ -106,4 +124,15 @@ func offered_mods() -> Array[WeaponModData]:
 	var mods := WeaponModCatalog.get_mods()
 	for key in mods:
 		every.append(mods[key])
+	return every
+
+
+# The jobs the picker may offer, BEFORE the union with whatever the unit already holds -- which is a
+# rule about that unit rather than about the mission and stays on the card.
+func offered_jobs() -> Array[String]:
+	if not offers_every_job:
+		return available_jobs
+	var every: Array[String] = []
+	for id: String in JobCatalog.get_jobs():
+		every.append(id)
 	return every
