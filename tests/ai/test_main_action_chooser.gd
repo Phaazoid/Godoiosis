@@ -275,6 +275,28 @@ func test_rescue_picks_the_most_urgent_clock() -> void:
 	assert_object(rescue.target).is_same(urgent)
 
 
+func test_rescue_leaves_a_stabilised_body_for_the_one_still_on_a_clock() -> void:
+	# #1002: a healed body is on NO clock, stored as the -1 sentinel. Read as an ordinary number
+	# that is the most urgent value there is -- so the sort walks past an ally one turn from death
+	# to haul someone who is in no danger at all.
+	var rescuer: Unit = H.spawn_solo(self, _sm, ENEMY, Vector2i(1, 1))
+	var stabilised: Unit = H.spawn_solo(self, _sm, ENEMY, Vector2i(0, 1), { Stats.Stat.MHP: 20 })
+	var dying: Unit = H.spawn_solo(self, _sm, ENEMY, Vector2i(1, 0))
+	stabilised.force_down()
+	dying.force_down()
+	stabilised.heal(8)                   # stops the clock -- listed FIRST, and must still lose
+	dying.downed_turns_remaining = 1
+	assert_int(stabilised.downed_turns_remaining).override_failure_message(
+			"the heal left a clock running, so this is an ordinary urgency compare and proves nothing") \
+			.is_equal(-1)
+
+	var units: Array[Unit] = [rescuer, stabilised, dying]
+	assert_bool(AITactics.queue_main_action(rescuer, _board(units), _sm, [BaseAction.ActionType.RESCUE])).is_true()
+	var rescue: RescueAction = rescuer.squad.action_queue[0] as RescueAction
+	assert_object(rescue).is_not_null()
+	assert_object(rescue.target).is_same(dying)
+
+
 func test_intimidate_targets_the_lowest_positive_will() -> void:
 	var bully: Unit = H.spawn_solo(self, _sm, ENEMY, Vector2i(1, 1))
 	var pool: Array[AbilityData] = [_ability(Abilities.Id.INTIMIDATION)]

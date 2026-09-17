@@ -963,7 +963,7 @@ func extract_counts(board: BoardContext) -> Vector2i:
 # "Surviving" is not-DEAD, so a DOWNED unit inside the zone counts as extracted exactly like an
 # active one -- alive and in the zone means they get out. What blocks the objective is a living
 # unit OUTSIDE the zone, and a downed one out there cannot walk in on its own: someone has to
-# reach them with RescueAction, which revives to 1 HP and ACTIVE.
+# reach them with RescueAction, which revives to ACTIVE at whatever HP the body has.
 func _extract_progress(board: BoardContext) -> MissionRules.Progress:
 	# The zones-empty guard runs BEFORE the counts: an unpainted extraction with no player units
 	# would read 0 == 0 as MET, converting the broken map _capture_progress refuses to.

@@ -580,8 +580,10 @@ func choose_reaction_heal_target(healer: Unit, board: BoardContext, hypo: Dictio
 # May this healer's reaction land on that unit? Everything HP-shaped is read off the threaded
 # hypothetical, because the attacks have already resolved into it and not onto the board -- read
 # live, the healer would pick whoever was hurt BEFORE the swing and skip the squadmate who just
-# took it. A DOWNED ally is excluded outright (dev call, #148): a heal moves HP but never lifts
-# lifecycle_state, so healing a body would silently eat the squad's whole reaction.
+# took it. A DOWNED ally is excluded outright (dev call, #148), and since #1002 for ONE of the two
+# reasons it was given: a body at 1 HP wins every lowest-HP comparison, so it would eat the squad's
+# whole reaction. The other reason -- that healing a body accomplishes nothing -- is now FALSE (it
+# stops the death clock), and the rule stands on the surviving half.
 func can_reaction_heal(healer: Unit, candidate: Unit, board: BoardContext, hypo: Dictionary = {}) -> bool:
 	if healer == null or candidate == null:
 		return false

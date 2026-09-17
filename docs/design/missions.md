@@ -2,7 +2,7 @@
 
 **Status: ALL FOUR SLICES BUILT 2026-07-28 ([#96](https://github.com/Phaazoid/Godoiosis/issues/96)).** Filed 2026-07-27, when the project acquired a win condition for the first time. Before this, Iosis had ten interlocking systems and no way to finish a battle — which meant a design question could be answered *"is this coherent?"* but never *"does this improve play?"*
 
-**Canon checked through #990 (2026-09-16).**
+**Canon checked through #1002 (2026-09-17).**
 
 ## What a mission is
 
@@ -399,7 +399,7 @@ No id, no lookup, nothing to dangle. *Which person is this* is a real question a
 
 **Death is a LATCH, because a corpse cannot be asked.** `Unit.die()` calls `queue_free()`, so by the time any `check()` runs the unit is simply gone — and *gone* is indistinguishable from *never placed*. `game._on_unit_died` is the one door every death arrives through (both branches of `take_damage`, the downed countdown, the dev kill button; `die()` is idempotent and emits once), so the latch hangs there and is asked once per unit. It is battle-scoped and needs no saving: the mission ends on the very next `check()` after the death, and `check()` runs at the end of the pass the death resolved in, so no save can be taken while it is true.
 
-**Fork B was called DEATH ONLY.** `Unit.is_dead()` means *went down the permanent path this mission*; DOWNED is recoverable and `RescueAction` revives to 1 HP and ACTIVE. Losing on a down would also make the downed clock a second, invisible timer on the whole mission.
+**Fork B was called DEATH ONLY.** `Unit.is_dead()` means *went down the permanent path this mission*; DOWNED is recoverable and `RescueAction` revives to ACTIVE at whatever HP the body has. Losing on a down would also make the downed clock a second, invisible timer on the whole mission.
 
 **Fork C — "left behind" — is nothing to build.** An `EXTRACT` objective is already *every surviving player unit inside the zone* and refuses to be MET while one is outside. That is a win condition not being met, not a lose condition firing, and conflating the two would give one situation two answers.
 
@@ -508,7 +508,7 @@ The practical effect: **dev sandbox boards stay inert.** Spawn five enemies in t
 
 ### Extraction counts the DOWNED
 
-"Surviving" means **not dead**, so a downed unit *inside* an extraction zone is extracted exactly like an active one — alive and in the zone means they get out. What blocks the objective is a living unit *outside* the zone, and a downed one out there cannot walk in on its own: someone has to reach them with `RescueAction`, which revives to 1 HP and ACTIVE.
+"Surviving" means **not dead**, so a downed unit *inside* an extraction zone is extracted exactly like an active one — alive and in the zone means they get out. What blocks the objective is a living unit *outside* the zone, and a downed one out there cannot walk in on its own: someone has to reach them with `RescueAction`, which revives to ACTIVE at whatever HP the body has.
 
 **Zero surviving players reads PENDING, not MET (2026-08-12)** — the `counts.y == 0` twin of capture's unpainted-geometry guard. Without it `0 == 0` counted as everyone-extracted, which ticked Extract on the HUD during load (`set_objectives` refreshes the HUD before units spawn; `apply_scenario` now re-pushes the HUD once the board is fully built). For `evaluate()` the guard never decides anything — DEFEAT is checked first.
 

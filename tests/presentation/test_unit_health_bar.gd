@@ -868,3 +868,43 @@ func test_the_digits_preference_puts_numbers_on_an_unhovered_bar() -> void:
 			).is_true()
 	assert_bool(_unit_mirror.bar_for(pointed).number_shown()).override_failure_message(
 			"the hovered unit lost its digits").is_true()
+
+
+# --- a STABILISED body (#1002): downed, healed, and on no clock at all ---
+# The glyph says "this is a body" and the count says "and it has N turns". One gate answered both
+# until #1002, so stopping the clock took the mark off the board with it.
+
+func test_a_stabilised_body_keeps_its_glyph_and_drops_its_count() -> void:
+	var body := _downed(Vector2i(2, 2))
+	body.heal(8)   # #1002: raises HP, stops the clock, stands nobody up
+	_point_at(Vector2i(20, 20))
+	_set_bars(PlayerSettings.HealthBars.EVERY)
+	await _settle()
+	var bar: UnitHealthBar = _unit_mirror.bar_for(body)
+	assert_int(body.downed_turns_remaining).override_failure_message(
+			"the heal left a clock running -- this case is not about a stabilised body") \
+			.is_equal(-1)
+
+	assert_int(bar.state_icon_count()).override_failure_message(
+			"the stabilised body wears no DOWNED glyph -- it reads as an ordinary wounded unit") \
+			.is_equal(1)
+	assert_bool(bar.downed_count_shown()).override_failure_message(
+			"a body on no clock is still counting down to something") \
+			.is_false()
+
+
+func test_a_body_healed_to_full_still_wears_a_bar_in_the_damaged_mode() -> void:
+	# DAMAGED is HP below max (dev ruling, visual-clarity.md) and a body used to qualify for free by
+	# clinging at 1. A heal can now put one at full, which took its bar -- and #322's glyph with it.
+	var body := _downed(Vector2i(2, 2))
+	body.heal(body.get_max_hp())
+	_point_at(Vector2i(20, 20))
+	_set_bars(PlayerSettings.HealthBars.DAMAGED)
+	await _settle()
+	assert_int(body.get_current_hp()).override_failure_message(
+			"the body is not at full HP, so the DAMAGED rule reaches it the ordinary way") \
+			.is_equal(body.get_max_hp())
+
+	assert_array(_shown_bars()).override_failure_message(
+			"the full-HP body's readout went away, and its DOWNED glyph with it") \
+			.contains([body])

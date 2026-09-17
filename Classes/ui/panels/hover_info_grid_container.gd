@@ -62,9 +62,12 @@ func _refresh_status_icons():
 	if unit == null:
 		return
 	StateIcons.populate(states_row, unit.element_states)
-	if unit.is_downed() and unit.downed_turns_remaining > 0:
+	# The glyph says it is a body, the count says how long it has — two claims since #1002, because a
+	# heal stops the clock without standing anyone up.
+	if unit.is_downed():
 		_add_status_icon(StateIcons.DOWNED)
-		_add_status_count(unit.downed_turns_remaining)
+		if unit.downed_turns_remaining > 0:
+			_add_status_count(unit.downed_turns_remaining)
 	if unit.unit_instance.is_maimed():
 		_add_status_icon(_maim_icon())
 	if unit.in_crisis:
