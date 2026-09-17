@@ -647,6 +647,16 @@ func calculate_reactions_for_squad(attacking_squad: Squad, attacks: Array[Attack
 		if attack.actor == null or not RulesService.can_target(attack.actor, defender):
 			continue
 
+		# A swing that never happened provokes nothing (#1005). Until R7 liveness generalised past
+		# counters, `skipped` only ever sat on a counter and a counter is never counter-bait, so
+		# this list had never met one. Now an AUTHORED attack can carry it, and without this the
+		# defender retaliates against a blow its attacker was felled before throwing.
+		#
+		# ABOVE THE LEDGER for the friendly-hit clause's reason: a skipped attack must not spend
+		# the defending squad's one reaction, so a real hit later in the same plan still answers.
+		if attack.resolved != null and attack.resolved.skipped:
+			continue
+
 		var defender_squad = defender.squad
 
 		if defender_groups_that_countered.has(defender_squad):
@@ -780,6 +790,13 @@ func _resolve_actions(squad: Squad, actions: Array[BaseAction], board: BoardCont
 		if action.action_type == BaseAction.ActionType.GUARD:
 			var order := action as GuardAction
 			order.resolved_spent = false   # rewritten below; a re-resolve must not inherit last pass's verdict
+			# R7 liveness at the QUEUE SLOT (#1005): a bodyguard the move phase already felled never
+			# steps in front of anyone, so the ward is not appended and nothing downstream is
+			# offered a substitution it cannot make. The slot is only HALF the answer -- a Guard is
+			# ARMED in the side-channel tail, after counters, so the felled-by-a-counter case is
+			# caught by resolved_actor_felled below.
+			if not PlanResolver.actor_is_live(order.actor, hypo):
+				continue
 			if order.target != null and is_instance_valid(order.target):
 				var ward := GuardWard.make(order.actor, order.target, order.guard_range)
 				plan.guards.append(ward)
@@ -794,6 +811,13 @@ func _resolve_actions(squad: Squad, actions: Array[BaseAction], board: BoardCont
 			# None of the three may inherit last pass's answer: the footprint is re-derived from
 			# this pass's projected cell, and since #756 from this board's terrain as well.
 			watch_order.resolved_spent = false
+			# R7 liveness at the QUEUE SLOT (#1005), the Guard clause's twin. The EMPTY footprint is
+			# already Unit.arm_watch's "nothing to arm" sentinel, so clearing it is how a felled
+			# watcher is spelled -- no new door, and execution arms nothing even if it runs.
+			if not PlanResolver.actor_is_live(watch_order.actor, hypo):
+				watch_order.resolved_anchor = Vector2i.ZERO
+				watch_order.resolved_footprint = []
+				continue
 			var watch_origin := watch_order.actor.get_projected_destination()
 			var watched := watch_order.watched_cells_from(watch_origin, board)
 			watch_order.resolved_anchor = watch_origin
@@ -888,6 +912,18 @@ func _resolve_actions(squad: Squad, actions: Array[BaseAction], board: BoardCont
 	# Phase 2: counters, now built from post-shove positions.
 	PlanResolver.resolve_counters(plan, hypo, reactions, board, terrain_reactions)
 
+	# R7 liveness for the side-channel tail (#1005), and AFTER THE COUNTERS is the whole of why it
+	# is here rather than at each order's queue slot: the tail runs last, so the pass can still fell
+	# a rescuer with a COUNTER after every queue slot has gone by. Stamping at the slot would answer
+	# for the move phase and the attacks and miss the one phase that actually precedes the tail.
+	#
+	# Written for the whole tail in one walk -- every verb in it has an actor and none of them has a
+	# ResolvedOutcome, so there is one question and one answer. Assigned unconditionally so a
+	# re-resolve cannot inherit last pass's verdict (resolved_spent's rule, one block down).
+	for action in actions:
+		if BaseAction.SIDE_CHANNEL_ORDER.has(action.action_type):
+			action.resolved_actor_felled = not PlanResolver.actor_is_live(action.actor, hypo)
+
 	# Rescue hauls (#116): a body that cannot stand where it lies -- in deep water -- is dragged onto
 	# a cell beside its rescuer, and the board must DRAW it there rather than jump it on Execute
 	# (Law #2). Published here and not a line earlier: a reaction is derived from where the pass
@@ -907,6 +943,8 @@ func _resolve_actions(squad: Squad, actions: Array[BaseAction], board: BoardCont
 			var rescue := action as RescueAction
 			if rescue.target == null or not is_instance_valid(rescue.target):
 				continue
+			if rescue.resolved_actor_felled:
+				continue   # nobody is left to do the hauling (#1005) -- the body stays where it lies
 			if rescue.haul_to == rescue.target.get_projected_destination():
 				continue   # an ordinary rescue: the stamp is where the body already is
 			# Only a LEGAL stamp is drawn, and that is load-bearing rather than defensive. The board
@@ -924,6 +962,8 @@ func _resolve_actions(squad: Squad, actions: Array[BaseAction], board: BoardCont
 		for action in actions:
 			if action.action_type != BaseAction.ActionType.BURROW:
 				continue
+			if action.resolved_actor_felled:
+				continue   # a body digs no cover (#1005)
 			var cover := ResolvedCellEffect.new()
 			cover.cell = action.actor.get_projected_destination()
 			cover.states_added.append(Terrain.TileState.COVER)
@@ -1003,9 +1043,21 @@ func can_join_any_squad(joining_unit: Unit) -> bool:
 			return true
 	return false
 
-# Shared by both formation checks: in range of the leader, room in the squad, same faction, not
-# already a member, and neither side has spent its turn.
+# Shared by both formation checks: both sides STANDING, in range of the leader, room in the squad,
+# same faction, not already a member, and neither side has spent its turn.
+#
+# The lifecycle clause is FIRST and it is #1004: a downed unit is ejected into a fresh solo squad,
+# and _process_downed_pending only marks that squad spent when the unit is standing again (the
+# same-pass rescue case), so a body sat there order-free and un-acted -- which every other clause
+# below reads as "available". Asked HERE because this is the one gate every formation verb routes
+# through, in both directions; the alternative of marking the ejected squad has_acted hides a body
+# for one turn and hands it back on the next.
+#
+# is_active(), not is_downed(): a DEAD unit should never reach this (handle_unit_death detaches
+# without a replacement squad), but the predicate that means STANDING is the one to ask.
 func _formation_basics_ok(unit: Unit, squad: Squad) -> bool:
+	if not unit.is_active() or not squad.leader.is_active():
+		return false
 	if not SquadCohesion.in_range(squad, squad.leader.movement.cell, unit, unit.movement.cell, board_source.call()):
 		return false
 	if squad.members.size() >= squad.max_size():

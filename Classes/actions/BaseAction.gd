@@ -19,6 +19,23 @@ var execution_complete := false
 var is_valid := true
 var validation_errors: Array[String] = []
 
+# R7 liveness for the SIDE-CHANNEL TAIL (#1005): did this pass fell the actor before its order ran?
+# The resolver's verdict for THIS pass, rewritten every resolve -- GuardAction.resolved_spent's R8
+# shape ("write the outcome onto the action"), for the same reason it exists: a tail verb has no
+# ResolvedOutcome of its own, so `skipped` has nowhere to live.
+#
+# WHY A STAMP AND NOT A FILTER IN OrderExecutor: six surfaces ask whether a queued rescue will
+# happen -- the haul projection, PlanResolver._rescued_this_pass' end-of-turn forecast, the queue
+# row, the validator, execute_orders' tail, and play_session's hand-copied twin. A filter at the
+# executor answers one of them and leaves the preview lying and the Play API diverging, which is
+# the exact shape of the went_downed wire bug (will-and-death.md). It is also the BREAK repeal:
+# execution applies what the resolve decided, it does not re-derive it.
+#
+# NOT a validation error. The plan was legal when it was given; the pass's own consequences are
+# what stop it. Reddening the row would refuse Execute for a human and trip execute_orders' AI
+# concede branch -- the same trap as leaving a felled actor's volley unexpanded.
+var resolved_actor_felled := false
+
 enum ActionType {
 	MOVE,
 	ATTACK,
@@ -144,11 +161,24 @@ func get_actor_modulate() -> Color:
 func is_refused() -> bool:
 	return not is_valid
 
-func get_ui_modulate() -> Color:
-	if not is_refused():
-		return Color.WHITE
+# Will the pass simply not CARRY THIS OUT? (#1005) A different question from refused, and kept
+# apart from it on purpose: a refused order is one the player must fix before Execute will run,
+# while an inert one is legal, stays queued, and is only not going to happen because the pass's own
+# consequences felled its actor first. Folding the two would refuse Execute for a human and trip
+# execute_orders' AI concede branch over a squadmate somebody knocked down mid-walk.
+#
+# The row keeps its place and dims (the dev's call over the alternative, which was to drop it the
+# way a skipped counter is dropped -- right for a derived row nobody authored, wrong for an order
+# the player gave, which would vanish out from under them while they were still planning).
+func is_inert() -> bool:
+	return resolved_actor_felled
 
-	return Color(1, .25, .25, 1)
+func get_ui_modulate() -> Color:
+	if is_refused():
+		return Color(1, .25, .25, 1)
+	if is_inert():
+		return Color(1, 1, 1, .4)
+	return Color.WHITE
 	
 func begin_execution():
 	execution_complete = false

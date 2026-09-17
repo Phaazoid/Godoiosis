@@ -105,6 +105,13 @@ func execute_orders(unit):
 		if action.action_type == BaseAction.ActionType.MOVE:
 			move_actions.append(action)
 		elif BaseAction.SIDE_CHANNEL_ORDER.has(action.action_type):
+			# R7 liveness (#1005): the pass felled this order's actor before the tail runs, so the
+			# verb does not happen. Dropped at COLLECTION rather than inside the tail loop below so
+			# it never reaches the camera either -- a coda beat pans to the body a rescue lifts, and
+			# there is no lift to pan to. The verdict is the resolver's (resolved_actor_felled),
+			# read here and never re-derived: the preview and both execution twins share one answer.
+			if action.resolved_actor_felled:
+				continue
 			if not side_channel.has(action.action_type):
 				side_channel[action.action_type] = []
 			side_channel[action.action_type].append(action)

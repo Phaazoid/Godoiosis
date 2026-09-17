@@ -98,7 +98,12 @@ var removed: bool = false
 enum Lethality { NONE, DOWNED, KILLED, MAIMED, CRISIS }
 var lethality: Lethality = Lethality.NONE
 
-var skipped: bool = false                        # counter-er downed/killed earlier in the pass (R7) — no-op: don't play or preview
+# R7: the pass felled this action's actor before its turn to act came round. A no-op at execution
+# on both twins, and dropped from the BeatSheet so the camera never frames it. What it does to the
+# QUEUE is the SECTION's call, not this flag's (#1005): a derived counter row is dropped outright,
+# while an AUTHORED attack keeps its row and dims it, because the player gave that order and a row
+# vanishing mid-plan is worse than a row saying it will not land.
+var skipped: bool = false
 
 # The Iron Will cap actually BIT on this hit (#524): incoming damage exceeded the cap and was
 # clamped, so the target is standing because of the ability rather than in spite of the hit. A
