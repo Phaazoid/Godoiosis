@@ -33,9 +33,9 @@ enum Layer {
 	ZONE_PATROL, ZONE_HIGHLIGHT, GROUND_ICONS, ATTACK_BLOCKED, SIGHT_TRACE,
 	GUARD_ICONS, GUARD_LINK, WATCH_ICONS,
 	ZONE_DEPLOYMENT, ZONE_DEFEND,
-	DANGER, ENEMY_MOVE, THREAT_LINES, INTENT_LINES, INTENT_LABELS,
+	DANGER, ENEMY_MOVE, INTENT_LINES, INTENT_LINES_FATAL,
 }
-enum Kind { FILL, BRACKET, SPRITE, BILLBOARD, LINE, LABEL }
+enum Kind { FILL, BRACKET, SPRITE, BILLBOARD, LINE }
 
 const WORLD_RENDER_LAYER := 1  # bit for layer index 0 — the board and props
 const UNIT_RENDER_LAYER := 2   # bit for layer index 1 — UnitSprite3D sets this
@@ -65,11 +65,6 @@ const EFFECT_RENDER_PRIORITY := 16
 # coplanar quads (outline, missing, fill, the predicted span, the notch) then the number's outline
 # and its glyphs.
 const UNIT_HUD_RENDER_PRIORITY := 48
-# The LABEL kind's glyph resolution and outline, in the same spirit as UnitHealthBar's: font_size
-# is texels of texture, scaled down by label_pixel_size, so a big number here is a SHARP number
-# rather than a big one.
-const LABEL_FONT_RESOLUTION := 64
-const LABEL_OUTLINE_SIZE := 12
 
 const LAYERS: Dictionary[Layer, Dictionary] = {
 	Layer.MOVE: {"color": Color(1, 1, 0, 0.5), "sort": 0, "kind": Kind.FILL},
@@ -113,15 +108,20 @@ const LAYERS: Dictionary[Layer, Dictionary] = {
 	# allocation order. A test pins DANGER < ENEMY_MOVE < MOVE.
 	Layer.DANGER: {"color": Color(1, 0.15, 0.1, 0.3), "sort": -2, "kind": Kind.FILL},
 	Layer.ENEMY_MOVE: {"color": Color(0.25, 0.45, 1, 0.45), "sort": -1, "kind": Kind.FILL},
-	Layer.THREAT_LINES: {"color": Color(1.0, 0.35, 0.2, 0.9), "sort": 7, "kind": Kind.LINE},
 	# Above the sight/threat beams at 7 -- an intent is the authoritative readout and must not
 	# z-fight the reach line it supersedes -- and clear of the guard channels at 8/9, which
 	# test_both_guard_channels_sorts_are_unshared caught this taking on its first draft.
 	Layer.INTENT_LINES: {"color": Color(1.0, 0.8, 0.2, 0.95), "sort": 11, "kind": Kind.LINE},
+	# A felling intent gets its OWN layer, which slice 2 deliberately refused: set_lines paints a
+	# whole layer one colour, so two tints need two layers, and the argument then was that the
+	# damage NUMBER already carried the distinction and a second layer differing only in hue would
+	# be a duplicate seam. The number is gone (slice 3 -- it rides the victim's health bar now), so
+	# that argument is void and the beam has to say it. Its own sort because two lines can cross,
+	# which is exactly the overlap the shared-sort rule forbids.
+	Layer.INTENT_LINES_FATAL: {"color": Color(1.0, 0.2, 0.15, 1.0), "sort": 12, "kind": Kind.LINE},
 	# Above its own line at 11 and under the lawful ceiling: EFFECT_RENDER_PRIORITY is 16 and
 	# ICONS holds 15, both pinned by laws in test_board_overlays. A number that drew over fire
 	# would erase the flame it sits beside, which is how #245 found this rule.
-	Layer.INTENT_LABELS: {"color": Color.WHITE, "sort": 14, "kind": Kind.LABEL},
 	Layer.HOVER: {"color": Color(1, 0.9, 0.3, 0.9), "sort": 2, "kind": Kind.BRACKET},
 	Layer.INVALID_MOVE: {"color": Color(0.5, 0.36, 0.4, 0.5), "sort": 0, "kind": Kind.FILL},
 	Layer.SQUAD: {"color": Color(1, 0.5, 0, 0.5), "sort": -3, "kind": Kind.FILL},
@@ -215,9 +215,6 @@ enum SelectorDepth { LEVEL, HALF }
 @export var lift_step := 0.004         # per-sort spacing so stacked layers never coincide
 @export var billboard_lift := 0.85     # icon height above the cell's top face
 @export var billboard_pixel_size := 1.0 / 32.0
-# How big a LABEL's glyphs draw in world units (#710). Paired with LABEL_FONT_RESOLUTION the way
-# billboard_pixel_size is with its art: resolution is sharpness, this is size.
-@export var label_pixel_size := 1.0 / 96.0
 # What the hover bracket turns when the pointer is over something the 2D calls INVALID (#245).
 # A knob because there is nothing to mirror here: 2D says "invalid" with a negative-icon TEXTURE,
 # and a bracket has no texture to swap, so the colour is a fresh aesthetic call.
@@ -265,7 +262,6 @@ var _markers: Dictionary[Layer, Array] = {}       # layer -> node pool (all kind
 var _cells: Dictionary[Layer, Array] = {}         # set_cells layers: the current cell list
 var _marker_data: Dictionary[Layer, Array] = {}   # set_markers layers: the current entries
 var _lines: Dictionary[Layer, Array] = {}   # LINE layers: the current segments (Array[PackedVector3Array])
-var _labels: Dictionary[Layer, Array] = {}  # LABEL layers: the current entries (Array[Dictionary])
 var _layer_colors: Dictionary[Layer, Color] = {}  # runtime fill colors (set_layer_modulate)
 var _bracket_mesh: ArrayMesh
 var _quad_mesh: PlaneMesh
@@ -488,44 +484,12 @@ func lines_of(layer: Layer) -> Array[PackedVector3Array]:
 	return out
 
 
-# Replaces a LABEL layer's text wholesale -- the pooled shape set_markers uses, with Label3D in
-# place of a quad. Each entry is {pos: Vector3 (world), text: String, color: Color}.
-func set_labels(layer: Layer, entries: Array[Dictionary]) -> void:
-	var spec: Dictionary = LAYERS[layer]
-	if spec["kind"] != Kind.LABEL:
-		push_error("set_labels on a %s layer" % Kind.keys()[spec["kind"]])
-		return
-	_labels[layer] = entries.duplicate()
-	var pool: Array = _pool_for(layer)
-	while pool.size() < entries.size():
-		pool.append(_make_marker(layer))
-	for i in pool.size():
-		var node := pool[i] as Label3D
-		if i >= entries.size():
-			node.visible = false
-			continue
-		var entry: Dictionary = entries[i]
-		node.visible = true
-		node.position = entry["pos"]
-		node.text = str(entry["text"])
-		node.modulate = entry.get("color", spec["color"])
-		node.pixel_size = label_pixel_size
-
-
-func labels_of(layer: Layer) -> Array[Dictionary]:
-	var out: Array[Dictionary] = []
-	out.assign(_labels.get(layer, []))
-	return out
-
-
 func clear(layer: Layer) -> void:
 	var spec: Dictionary = LAYERS[layer]
 	if spec["kind"] == Kind.SPRITE or spec["kind"] == Kind.BILLBOARD:
 		set_markers(layer, [])
 	elif spec["kind"] == Kind.LINE:
 		set_line(layer, PackedVector3Array(), LAYERS[layer]["color"])
-	elif spec["kind"] == Kind.LABEL:
-		set_labels(layer, [])
 	else:
 		set_cells(layer, [])
 
@@ -773,8 +737,6 @@ func _make_marker(layer: Layer) -> Node3D:
 			return _make_billboard(spec)
 		Kind.LINE:
 			return _make_line(spec)
-		Kind.LABEL:
-			return _make_text(spec)
 		Kind.SPRITE:
 			return _make_quad(spec, null, Color.WHITE)
 		_:
@@ -827,25 +789,6 @@ func _make_line(spec: Dictionary) -> MeshInstance3D:
 	_style_beam(material)
 	return instance
 
-
-# A world-space number (#710 plan tier). UnitHealthBar's Label3D recipe, billboarded so the digits
-# face the camera from any orbit -- the readout is the whole point, unlike the bar, which is part of
-# a group that yaws as one object.
-func _make_text(spec: Dictionary) -> Label3D:
-	var label := Label3D.new()
-	label.billboard = BaseMaterial3D.BILLBOARD_FIXED_Y
-	label.shaded = false
-	label.double_sided = true
-	label.font_size = LABEL_FONT_RESOLUTION
-	label.outline_size = LABEL_OUTLINE_SIZE
-	label.outline_modulate = Color.BLACK
-	label.no_depth_test = true   # a number behind a prop is a number you cannot read
-	label.render_priority = spec["sort"]
-	label.outline_render_priority = spec["sort"] - 1
-	label.layers = WORLD_RENDER_LAYER   # board markup, like every other marker this class builds
-	label.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-	add_child(label)
-	return label
 
 
 func _make_billboard(spec: Dictionary) -> Sprite3D:

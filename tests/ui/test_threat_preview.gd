@@ -256,8 +256,8 @@ func test_the_toggle_draws_intent_lines_with_their_numbers() -> void:
 
 	assert_int(_om().intent_lines.size()).override_failure_message(
 			"no intent line for a unit standing next to an enemy").is_equal(1)
-	assert_int(_om().intent_labels.size()).is_equal(1)
-	assert_str(str(_om().intent_labels[0]["text"])).is_not_equal("0")
+	assert_int(_om().intent_fells.size()).override_failure_message(
+			"the lethal flags are not paired one-for-one with the lines").is_equal(1)
 	var seg: PackedVector3Array = _om().intent_lines[0]
 	assert_that(Vector2i(int(seg[1].x - 0.5), int(seg[1].z - 0.5))).override_failure_message(
 			"the line does not end on the unit it names").is_equal(Vector2i(2, 2))
@@ -350,12 +350,15 @@ func test_two_enemies_on_one_target_sum_into_one_forecast() -> void:
 	var forecast: Dictionary = game.threat_forecast()
 	assert_int(forecast.size()).override_failure_message(
 			"two intents on one unit produced two forecast rows").is_equal(1)
+	# Summed, not replaced: each attacker alone is a strict fraction of the total.
 	var summed := int(forecast[mover.get_instance_id()]["damage"])
-	var single := 0
-	for label: Dictionary in _om().intent_labels:
-		single = maxi(single, int(str(label["text"])))
+	var heaviest := 0
+	for intent: ThreatIntent in AIController.preview_turn(PLAYER, game.squad_manager, [ENEMY]):
+		heaviest = maxi(heaviest, intent.damage)
+	assert_int(heaviest).override_failure_message(
+			"neither enemy intends any damage, so there is nothing to sum").is_greater(0)
 	assert_int(summed).override_failure_message(
-			"the forecast took one attacker's damage rather than both").is_greater(single)
+			"the forecast took one attacker.s damage rather than both").is_greater(heaviest)
 
 
 func test_the_intent_channel_clears_on_board_load() -> void:
@@ -370,4 +373,4 @@ func test_the_intent_channel_clears_on_board_load() -> void:
 
 	game._clear_threat_plan()
 	assert_array(_om().intent_lines).is_empty()
-	assert_array(_om().intent_labels).is_empty()
+	assert_array(_om().intent_fells).is_empty()

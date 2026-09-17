@@ -380,17 +380,13 @@ var _aiming_watch := false
 var sight_trace: Reach.SightTrace = null
 var sight_trace_version := 0
 var _sight_trace_2d: SightTrace2D
-# The hover tier's threat lines (#710), stored as DATA the way the sight trace is: ThreatLines2D
-# draws them flat, OverlayMirror lifts them; the version is the mirror's change signal.
-var threat_lines: Array[PackedVector3Array] = []
-var threat_lines_version := 0
 var _threat_lines_2d: ThreatLines2D
-# The EXACT tier's own channel (#710 slice 2), beside the reach tier above rather than sharing it:
-# "who can reach this cell" and "who will attack whom" are different questions and may be on screen
-# together. Labels ride the same version -- they are the lines' own numbers, never a second store to
-# keep in step.
+# What the enemy will attack (#710 slice 2), stored as DATA the way the sight trace is:
+# ThreatLines2D draws it flat, OverlayMirror lifts it, and the version is the mirror's change
+# signal. `intent_fells` is paired BY INDEX and written in the same pass, so a silent intent
+# cannot shift a later line's lethal colour onto its neighbour.
 var intent_lines: Array[PackedVector3Array] = []
-var intent_labels: Array[Dictionary] = []   # {pos: Vector3 (trace space), text: String, fells: bool}
+var intent_fells: Array[bool] = []
 var intent_version := 0
 
 
@@ -504,47 +500,20 @@ func restyle_sight_trace() -> void:
 	show_sight_trace(sight_trace)
 
 
-# The hover tier's lines (#710). Same shape as the sight trace: data here, drawn by both views.
-func show_threat_lines(segments: Array[PackedVector3Array]) -> void:
-	if segments.is_empty() and threat_lines.is_empty():
-		return   # idempotent -- the version only moves on real change
-	threat_lines = segments.duplicate()
-	threat_lines_version += 1
-	_threat_lines_2d.segments = threat_lines
-	_threat_lines_2d.queue_redraw()
-
-
-func clear_threat_lines() -> void:
-	var none: Array[PackedVector3Array] = []
-	show_threat_lines(none)
-
-
-func restyle_threat_lines() -> void:
-	if threat_lines.is_empty():
-		return
-	show_threat_lines(threat_lines)
-
-
-# The exact tier (#710 slice 2). Takes the INTENTS rather than geometry: the line and its number
-# come from one row each, so a drawn number can never belong to a different line than it sits on.
+# The exact tier (#710 slice 2). Takes the INTENTS rather than geometry, so the line and what it
+# means come from one row each and can never be matched up wrongly.
 func show_threat_intents(intents: Array[ThreatIntent], board: BoardContext) -> void:
 	if intents.is_empty() and intent_lines.is_empty():
 		return   # idempotent, like the trace -- the version only moves on real change
 	var lines: Array[PackedVector3Array] = []
-	var labels: Array[Dictionary] = []
+	var fatal: Array[bool] = []
 	for intent: ThreatIntent in intents:
-		var seg := ThreatLines2D.segment(intent.from, intent.to, board)
-		lines.append(seg)
-		if intent.damage > 0 or intent.fells:
-			labels.append({
-				"pos": (seg[0] + seg[1]) * 0.5,
-				"text": str(intent.damage),
-				"fells": intent.fells,
-			})
+		lines.append(ThreatLines2D.segment(intent.from, intent.to, board))
+		fatal.append(intent.fells)
 	# ...and the same intents keyed by VICTIM, which is what the health bars read (#710 slice 3).
 	# SUMMED per target rather than kept per attacker: two enemies converging on one unit is one
 	# prediction as far as that unit's own readout is concerned, and a bar cannot draw two spans.
-	# Seeing which attacker owns which part of the bite is filed separately.
+	# Which attacker owns which part of the bite is #1012.
 	var forecast: Dictionary[int, Dictionary] = {}
 	for intent: ThreatIntent in intents:
 		if intent.target == null or not is_instance_valid(intent.target):
@@ -556,10 +525,10 @@ func show_threat_intents(intents: Array[ThreatIntent], board: BoardContext) -> v
 		forecast[id] = row
 	threat_forecast = forecast
 	intent_lines = lines
-	intent_labels = labels
+	intent_fells = fatal
 	intent_version += 1
 	_threat_lines_2d.intents = intent_lines
-	_threat_lines_2d.labels = intent_labels
+	_threat_lines_2d.fells = intent_fells
 	_threat_lines_2d.queue_redraw()
 
 

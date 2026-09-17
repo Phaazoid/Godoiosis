@@ -1,30 +1,33 @@
 class_name ThreatLines2D
 extends Node2D
 
-# The flat projection of the threat preview's lines (#710). Two channels: the REACH tier's
-# "who could reach this cell" (segments) and the PLAN tier's "who will attack whom", which carries
-# a damage number (intents + labels). Pure renderer -- OverlayManager owns both stores and
-# OverlayMirror lifts the same points into the diorama.
+# The flat projection of the threat preview's intent lines (#710): who the enemy will attack, and
+# whether that blow fells. Pure renderer -- OverlayManager owns the store and OverlayMirror lifts
+# the same points into the diorama.
+#
+# The REACH tier's lines are gone as of slice 3 (dev: "a bit too much"). What answers "who can
+# reach this cell" now is the two-tone range fill, which says it for the whole board at once
+# rather than as a beam per attacker. The damage NUMBER went with them in the same pass -- it is
+# drawn as the predicted span on the victim's own health bar instead.
 
 const LINE_WIDTH := 1.5
-# The one answer to "what colour is a threat line"; the 3D beam copies it. A static var so
-# GameKnobs' CLASS_KNOBS can write it.
-static var THREAT_LINE_COLOR := Color(1.0, 0.35, 0.2, 0.9)
-# The exact tier's own pair: a plain intention, and one that FELLS. Distinct from the reach colour
-# because "this enemy could hit here" and "this enemy is going to kill you" must not read alike.
+# A plain intention, and one that FELLS. The distinction rides the LINE rather than a number,
+# because "this enemy is going to attack you" and "this enemy is going to kill you" are different
+# warnings and the second must not have to be read to be noticed.
 static var INTENT_LINE_COLOR := Color(1.0, 0.8, 0.2, 0.95)
 static var INTENT_FELL_COLOR := Color(1.0, 0.2, 0.15, 1.0)
-static var INTENT_LABEL_COLOR := Color(1.0, 1.0, 1.0, 1.0)
-static var INTENT_LABEL_SIZE := 14
 
-var segments: Array[PackedVector3Array] = []
+# Paired BY INDEX with `intents`, and written in one pass by OverlayManager so they cannot get out
+# of step. They used to be `labels`, which was appended only for an intent worth a number while
+# the lines were appended for every intent -- so one silent intent shifted every later line's
+# lethal colour onto its neighbour.
 var intents: Array[PackedVector3Array] = []
-var labels: Array[Dictionary] = []
+var fells: Array[bool] = []
 
 
 # The colour an intent draws in -- one answer, read by this node and copied by the 3D beam.
-static func intent_color(fells: bool) -> Color:
-	return INTENT_FELL_COLOR if fells else INTENT_LINE_COLOR
+static func intent_color(is_fatal: bool) -> Color:
+	return INTENT_FELL_COLOR if is_fatal else INTENT_LINE_COLOR
 
 
 # A line between two cells in trace space (x, rule-height, y), the SightTrace convention, so both
@@ -38,24 +41,8 @@ static func segment(from_cell: Vector2i, to_cell: Vector2i, board: BoardContext)
 
 
 func _draw() -> void:
-	for seg in segments:
-		_polyline(seg, THREAT_LINE_COLOR)
 	for i in intents.size():
-		var fells: bool = i < labels.size() and bool(labels[i].get("fells", false))
-		_polyline(intents[i], intent_color(fells))
-	# NOTHING TO DRAW MEANS TOUCHING NOTHING. Reading ThemeDB.fallback_font instantiates it on
-	# first access, and on a plain boot of the exported pack this node is the project's first
-	# toucher -- the engine then reports "1 resource still in use at exit" and the export smoke
-	# test (#868) reds on an otherwise clean log. Intermittent, so it cost a CI round to find.
-	if labels.is_empty():
-		return
-	var font := ThemeDB.fallback_font
-	if font == null:
-		return
-	for entry: Dictionary in labels:
-		var pos: Vector3 = entry["pos"]
-		draw_string(font, _flat(pos), str(entry["text"]),
-				HORIZONTAL_ALIGNMENT_CENTER, -1, INTENT_LABEL_SIZE, INTENT_LABEL_COLOR)
+		_polyline(intents[i], intent_color(i < fells.size() and fells[i]))
 
 
 func _polyline(seg: PackedVector3Array, color: Color) -> void:
