@@ -274,3 +274,72 @@ func test_transmutation_carving_can_heal_too() -> void:
 
 	assert_int(attack.resolved.heal_amount).is_equal(8)   # power + 0 aura (no sigils inscribed)
 	assert_int(attack.resolved.damage).is_equal(0)
+
+
+# --- a heal on a BODY (#1002): "down with health" is a legal state ---
+# The dev's ruling, from the playtest that produced #1005: a heal on a downed unit "just raises
+# their health... A healed downed unit should lose their death clock, too." It stabilises a body;
+# it does not stand one up. Driven through a real resolve and the same Unit.heal call
+# AttackAction.execute makes, which is the idiom the Law #2 case above already uses.
+
+func test_healing_a_body_stops_its_clock_without_standing_it_up() -> void:
+	var healer := H.spawn_solo(self, _sm, PLAYER, Vector2i(0, 0), {Stats.Stat.STR: 4})
+	var body := H.spawn_solo(self, _sm, PLAYER, Vector2i(1, 0), {Stats.Stat.MHP: 20})
+	body.force_down()
+	assert_int(body.downed_turns_remaining).override_failure_message(
+			"the fixture body is on no clock, so there is nothing here for the heal to stop") \
+			.is_greater(0)
+
+	var attack := _heal_attack(healer, body, 6)
+	var plan := ResolvedPlan.new()
+	plan.attacks.append(attack)
+	PlanResolver.resolve(plan)
+	body.heal(attack.resolved.heal_amount)
+
+	assert_int(body.downed_turns_remaining).is_equal(-1)
+	assert_bool(body.is_downed()).override_failure_message(
+			"the heal stood the body up -- it stabilises, it never rescues") \
+			.is_true()
+	assert_int(body.get_current_hp()).override_failure_message(
+			"the body is still clinging at 1 -- the heal moved no HP at all") \
+			.is_greater(1)
+
+
+func test_a_stabilised_body_outlives_every_tick_that_was_left() -> void:
+	# THE falsification target for tick_downed_countdown's sentinel guard. Without it, -1 is read as
+	# an ordinary number, decrements to -2 and trips the `<= 0` death clause -- so the stop KILLS the
+	# body it was written to save, one tick later.
+	var healer := H.spawn_solo(self, _sm, PLAYER, Vector2i(0, 0), {Stats.Stat.STR: 4})
+	var body := H.spawn_solo(self, _sm, PLAYER, Vector2i(1, 0), {Stats.Stat.MHP: 20})
+	body.force_down()
+
+	var attack := _heal_attack(healer, body, 6)
+	var plan := ResolvedPlan.new()
+	plan.attacks.append(attack)
+	PlanResolver.resolve(plan)
+	body.heal(attack.resolved.heal_amount)
+
+	for _i in Unit.DOWNED_TURNS + 2:
+		body.tick_downed_countdown()
+
+	assert_bool(body.is_downed()).override_failure_message(
+			"the stabilised body died on the clock it no longer has") \
+			.is_true()
+	assert_int(body.downed_turns_remaining).is_equal(-1)
+
+
+func test_a_heal_the_cap_ate_leaves_the_body_on_its_clock() -> void:
+	# The fork the ruling left open, answered the way #126 answers a body's fate -- on the NUMBER,
+	# in the one door both sides hold. A heal that restored nothing bought nothing. Unit.heal is
+	# driven directly because it is where that rule lives; the full-resolve path is the case above.
+	var body := H.spawn_solo(self, _sm, PLAYER, Vector2i(1, 0), {Stats.Stat.MHP: 20})
+	body.force_down()
+	body.set_current_hp(body.get_max_hp())   # a body already at the cap: the heal has nowhere to go
+	var clock := body.downed_turns_remaining
+
+	body.heal(6)
+
+	assert_int(body.get_current_hp()).is_equal(body.get_max_hp())
+	assert_int(body.downed_turns_remaining).override_failure_message(
+			"a heal that moved no HP stopped the clock anyway") \
+			.is_equal(clock)
