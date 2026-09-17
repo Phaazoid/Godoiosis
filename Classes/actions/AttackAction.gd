@@ -229,6 +229,12 @@ func is_refused() -> bool:
 		return source_aim.is_refused()
 	return super()
 
+# An attack says "will not happen" through its OUTCOME, where a tail verb says it through the stamp
+# (#1005): `skipped` is where R7 has always written this, and the volley members carry it
+# individually because resolve_attack_group marks the whole group.
+func is_inert() -> bool:
+	return (resolved != null and resolved.skipped) or super()
+
 # Static since #419: a derived row that is NOT an attack shows the same rung triple, and two
 # spellings would let the queue disagree with itself about what a down looks like.
 static func lethality_icon(outcome: ResolvedOutcome) -> Texture2D:
@@ -326,7 +332,13 @@ static func create_volley(attacker: Unit, origin: Vector2i, aim_cell: Vector2i, 
 func get_outcome_summary() -> String:
 	if resolved == null or target == null:   # cell attack (#47) — no unit outcome to summarize
 		return ""
-		
+
+	# R7 liveness (#1005): the actor was felled before this swing. Said rather than shown as a
+	# damage number the pass will never deal — the row stays, so it has to stop claiming an outcome.
+	# PLACEHOLDER WORDING, for the dev to replace: player-facing prose is his.
+	if resolved.skipped:
+		return "(down)"
+
 	var parts: Array[String] = []
 
 	# A heal reports its own shape and stops -- lethality/popups/states are damage-only.

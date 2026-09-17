@@ -33,6 +33,21 @@ static func resolve_attacks(plan: ResolvedPlan, hypo: Dictionary, reactions: Arr
 # has resolved, so expanding every volley up front put all victim-gathering strictly before all
 # shoves — and no aim could ever see one.
 static func resolve_attack_group(group: Array[AttackAction], plan: ResolvedPlan, hypo: Dictionary, reactions: Array[ElementalReaction], board: BoardContext, terrain_reactions: Array[TerrainReaction]) -> void:
+	# R7 liveness (#1005): a felled actor's volley is EXPANDED and then marked skipped -- never
+	# left underived. The whiff clause (SquadPlanValidator._plan_found_a_target) looks for a
+	# derived attack carrying a target, so an unexpanded aim reddens the plan; a human would be
+	# left with a row they can only delete, and an AI squad hits execute_orders' concede branch
+	# and gives up its WHOLE turn over one member the pass knocked down mid-walk.
+	#
+	# ABOVE _apply_guards, or a bodyguard spends its one ward absorbing a blow that never lands --
+	# and above the cell-effect append below, or a skipped fireball still sets the ground alight.
+	# One volley shares one actor, so this is asked once for the group.
+	if not group.is_empty() and not actor_is_live(group[0].actor, hypo):
+		for atk in group:
+			var no_op := ResolvedOutcome.new()
+			no_op.skipped = true
+			atk.resolved = no_op
+		return
 	_apply_guards(group, plan, hypo)
 	for atk in group:
 		_resolve_one(atk, plan, reactions, hypo, board)
@@ -106,6 +121,8 @@ static func _rescued_this_pass(actions: Array[BaseAction], hypo: Dictionary) -> 
 	for action in actions:
 		if action.action_type != BaseAction.ActionType.RESCUE or not action.is_valid:
 			continue
+		if action.resolved_actor_felled:
+			continue   # no rescuer left standing, so nobody stands back up either (#1005)
 		var target: Unit = (action as RescueAction).target
 		if target != null and is_instance_valid(target) \
 				and projected_lifecycle(target, hypo) == Unit.LifecycleState.DOWNED:
@@ -205,6 +222,17 @@ static func resolve_move(action: MoveAction, plan: ResolvedPlan, hypo: Dictionar
 	var walk := action.path
 	# A hold crosses nothing and a one-cell path never leaves its origin: no entry either way.
 	if action.is_hold_position or walk.size() < 2:
+		_hypo_for(mover, hypo).position = mover.movement.cell
+		return
+
+	# R7 liveness (#1005): a body does not walk. Without this the loop below takes its first step
+	# before the post-step lifecycle check halts it, so a unit felled earlier in the move phase --
+	# by a squadmate's crossing setting off a watch that splashes it -- slid one cell. Stamped as a
+	# halt at index 0 rather than returned bare: walked_path() slices to the index, so 0 is "stays
+	# on path[0]", and get_destination()/Unit.projected_cell then read the halt the way they read
+	# any other, with no new concept for the preview or for either execution twin to learn.
+	if not actor_is_live(mover, hypo):
+		action.resolved_stop_index = 0
 		_hypo_for(mover, hypo).position = mover.movement.cell
 		return
 
@@ -920,17 +948,28 @@ static func _tumble(landing: _Landing, target: Unit, board: BoardContext, shove_
 		break   # a rise: stop where it stands
 	landing.cell = cell
 
+# R7 liveness, generalised past counters (#1005): a unit the pass has already felled is not an
+# AGENT in it. One spelling for every order — the authored attacks, the walk, the arming verbs and
+# the side-channel tail — because "may this unit still act" is one question.
+#
+# Read through projected_lifecycle rather than reaching into `hypo` directly, which is what the
+# counter-only version did. Two consequences, both wanted: a unit the pass has not touched falls
+# back to its LIVE lifecycle instead of being assumed live (a counter-er is always derived from a
+# standing unit a moment earlier, but an authored order can outlive its actor's down — reachable
+# through the Play API and a scenario-loaded plan, neither of which passes the queue_action gate),
+# and there is no second reader of the threaded dictionary to keep in step with R4.
+#
+# LIFECYCLE ALONE, where the counter version also asked hp > 0. The two agree in every reachable
+# state: predict() only returns NONE while damage < hp, so hp <= 0 always carries a rung, and every
+# rung but CRISIS leaves a non-ACTIVE lifecycle (CRISIS stands back up at CRISIS_REVIVE_HP). The
+# hp term existed for the VOID removal, where the drop deals no HP — and that threads KILLED, so
+# the lifecycle term was always the one doing the work.
+static func actor_is_live(actor: Unit, hypo: Dictionary) -> bool:
+	return actor != null and is_instance_valid(actor) \
+		and projected_lifecycle(actor, hypo) == Unit.LifecycleState.ACTIVE
+
 static func _counter_actor_live(action: AttackAction, hypo: Dictionary) -> bool:
-	# R7 liveness: a counter-er downed/killed earlier in the pass can't counter. The threaded
-	# HP carries every attack's (and prior counter's) damage; <= 0 means a fatal hit landed on
-	# this unit — downed or dead, either way no counter. A VOID removal is the one kill that
-	# leaves HP untouched (the drop deals no HP), so the lifecycle term below catches it: KILLED
-	# threads DEAD while hp stays > 0. The counter-er (action.actor) is only in `hypo` if it was
-	# personally hit this pass; an untouched squadmate isn't -> still live.
-	var counterer := action.actor
-	if counterer == null or not hypo.has(counterer):
-		return true
-	return hypo[counterer].hp > 0 and hypo[counterer].lifecycle == Unit.LifecycleState.ACTIVE
+	return actor_is_live(action.actor, hypo)
 
 # --- Reading the threaded hypothetical from outside the pass (R4) ---
 # A derivation that runs MID-pass -- SquadManager's reaction targeting, after the attacks have
