@@ -2234,7 +2234,9 @@ func test_every_plant_in_a_tuft_stands_on_the_TILTED_face_of_its_own_cell() -> v
 # the corner tool, which moves ground without touching a tile at all.
 #
 # Asserted on a BILLBOARD rather than a tuft, deliberately: the fix has to live in the reconcile, and
-# a tuft would also pass if the plants alone had been taught to re-derive.
+# a tuft would also pass if the plants alone had been taught to re-derive. The other side of that
+# choice is the case below (#992) — this one watches a prop's ROOT, and nothing here can see a plant
+# that disagrees with the root it hangs from.
 func test_a_standing_prop_follows_its_ground_when_only_the_HEIGHT_changes() -> void:
 	_scene.load_mission(PROLOG)
 	await _settle()
@@ -2268,6 +2270,66 @@ func test_a_standing_prop_follows_its_ground_when_only_the_HEIGHT_changes() -> v
 	# The control: without it this passes against a board whose surface never moved.
 	assert_bool(absf(surface - sown) > 0.001).override_failure_message(
 			"raising the cell did not move its surface, so the case asserts nothing").is_true()
+
+
+# ...and the half neither guard above can make (#992): a TUFT is the one prop whose PARTS carry
+# their own placement, so its root following the ground is not enough. Each plant's lift is a DELTA
+# against the cell's surface, and measuring it off the STAGED point cancels the tear-out exactly —
+# root up 40, every plant down 40, grass left standing on the board its own cell left.
+#
+# Asserted on a plant's WORLD height under a SETTLED tear-out, which is what makes it a different
+# question from #893's flight lag: nothing is moving here, and a rebuild has already run.
+# The #280/#342 tuft cases cannot see it — they run on a board that never stages, where the offset
+# is zero and the bug term vanishes with it.
+func test_every_plant_in_a_tuft_rides_the_tear_out_with_its_own_cell() -> void:
+	_scene.load_mission(PROLOG)
+	await _settle()
+	_game.game_state = _game.GameState.DEV_MODE
+	var mirror := _scene.get_node("BoardMirror") as BoardMirror
+	var richest := _richest_tuft_tile()
+	assert_bool(not richest.is_empty()).override_failure_message(
+			"no TUFT tile draws more than one plant; this case would watch one sprite").is_true()
+
+	var cell: Vector2i = _game.grid.get_used_cells()[0]
+	_game.grid.paint(cell, richest.source, richest.coords)
+	await _settle()
+	var sown := _plant_points(mirror.prop_at(cell))
+	assert_int(sown.size()).override_failure_message(
+			"the tuft stood nothing up, so there is nothing to lift").is_greater(0)
+
+	BoardSpace.stage([cell] as Array[Vector2i], BoardSpace.lift_offset())
+	await _settle()
+
+	# The REBUILT prop: _sync_staging drops the old node, so the root `sown` was read off is freed
+	# by now and holding it would be a freed-reference read rather than a stale one.
+	var lifted := _plant_points(mirror.prop_at(cell))
+	var offset := BoardSpace.stage_offset()
+	assert_float(offset.length()).override_failure_message(
+			"the lift is zero, so this case cannot fail").is_greater(0.1)
+	assert_int(lifted.size()).override_failure_message(
+			"the tear-out changed how many plants the tuft stands up").is_equal(sown.size())
+	for i in lifted.size():
+		assert_vector(lifted[i]).override_failure_message(
+				"plant %s sits at %s with its ground torn out to %s — it stayed on the board its own " \
+				% [i, lifted[i], sown[i] + offset] + "cell left").is_equal_approx(
+				sown[i] + offset, Vector3.ONE * 0.01)
+
+	# Put the board down with the case rather than leaving the next one a staged cell.
+	BoardSpace.clear_staging()
+	await _settle()
+
+
+# Where each of a tuft's plants stands, in world terms — the root's own point plus the plant's place
+# within the cell. Empty for a cell that stood nothing up.
+func _plant_points(root: Node3D) -> Array[Vector3]:
+	var points: Array[Vector3] = []
+	if root == null:
+		return points
+	for child in root.get_children():
+		var sprite := child as Sprite3D
+		if sprite != null:
+			points.append(root.position + sprite.position)
+	return points
 
 
 # The TUFT tile whose art draws the most separate plants, or {} if none draws more than one.

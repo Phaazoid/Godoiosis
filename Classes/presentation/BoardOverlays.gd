@@ -33,6 +33,7 @@ enum Layer {
 	ZONE_PATROL, ZONE_HIGHLIGHT, GROUND_ICONS, ATTACK_BLOCKED, SIGHT_TRACE,
 	GUARD_ICONS, GUARD_LINK, WATCH_ICONS,
 	ZONE_DEPLOYMENT, ZONE_DEFEND,
+	DANGER, THREAT_LINES,
 }
 enum Kind { FILL, BRACKET, SPRITE, BILLBOARD, LINE }
 
@@ -86,7 +87,11 @@ const LAYERS: Dictionary[Layer, Dictionary] = {
 	# #571, and in the band for ZONE_DEPLOYMENT's reason. Reads its colour off OverlayManager rather
 	# than restating it, the way ZONE_PATROL does -- the three literals above predate that rule.
 	Layer.ZONE_DEFEND: {"color": OverlayManager.ZONE_DEFEND_MODULATE, "sort": -3, "kind": Kind.FILL},
-	Layer.ZONE_HIGHLIGHT: {"color": OverlayManager.ZONE_HIGHLIGHT_MODULATE, "sort": -2, "kind": Kind.FILL},
+	# Three literals the mirror overwrites from the 2D every poll (#710), ATTACK's shape: the
+	# authored value is OverlayManager's static (or ThreatLines2D's), which a const table cannot name.
+	Layer.ZONE_HIGHLIGHT: {"color": Color(1, 1, 1, 0.45), "sort": -2, "kind": Kind.FILL},
+	Layer.DANGER: {"color": Color(1, 0.15, 0.1, 0.3), "sort": 0, "kind": Kind.FILL},
+	Layer.THREAT_LINES: {"color": Color(1.0, 0.35, 0.2, 0.9), "sort": 7, "kind": Kind.LINE},
 	Layer.HOVER: {"color": Color(1, 0.9, 0.3, 0.9), "sort": 2, "kind": Kind.BRACKET},
 	Layer.INVALID_MOVE: {"color": Color(0.5, 0.36, 0.4, 0.5), "sort": 0, "kind": Kind.FILL},
 	Layer.SQUAD: {"color": Color(1, 0.5, 0, 0.5), "sort": -1, "kind": Kind.FILL},
@@ -222,7 +227,7 @@ var fill_texture: Texture2D
 var _markers: Dictionary[Layer, Array] = {}       # layer -> node pool (all kinds)
 var _cells: Dictionary[Layer, Array] = {}         # set_cells layers: the current cell list
 var _marker_data: Dictionary[Layer, Array] = {}   # set_markers layers: the current entries
-var _lines: Dictionary[Layer, PackedVector3Array] = {}   # set_line layers: the current polyline
+var _lines: Dictionary[Layer, Array] = {}   # LINE layers: the current segments (Array[PackedVector3Array])
 var _layer_colors: Dictionary[Layer, Color] = {}  # runtime fill colors (set_layer_modulate)
 var _bracket_mesh: ArrayMesh
 var _quad_mesh: PlaneMesh
@@ -320,18 +325,30 @@ func set_layer_modulate(layer: Layer, color: Color) -> void:
 # 2N vertices, and what it stores is still just the centreline: `line_of` and every caller upstream
 # are unchanged, which is what let the ribbon land without touching Reach or OverlayMirror.
 func set_line(layer: Layer, points: PackedVector3Array, color: Color) -> void:
+	var segments: Array[PackedVector3Array] = []
+	if points.size() >= 2:
+		segments.append(points)
+	set_lines(layer, segments, color)
+
+
+# The same layer carrying SEVERAL polylines (#710's threat lines): one pooled mesh, one surface
+# per segment.
+func set_lines(layer: Layer, segments: Array[PackedVector3Array], color: Color) -> void:
 	var spec: Dictionary = LAYERS[layer]
 	if spec["kind"] != Kind.LINE:
-		push_error("set_line on a %s layer" % Kind.keys()[spec["kind"]])
+		push_error("set_lines on a %s layer" % Kind.keys()[spec["kind"]])
 		return
-	_lines[layer] = points.duplicate()
+	_lines[layer] = segments.duplicate()
 	var pool: Array = _pool_for(layer)
 	if pool.is_empty():
 		pool.append(_make_marker(layer))
 	var node := pool[0] as MeshInstance3D
 	var mesh := node.mesh as ImmediateMesh
 	mesh.clear_surfaces()
-	node.visible = add_beam_strip(mesh, points)
+	var drawn := false
+	for points in segments:
+		drawn = add_beam_strip(mesh, points) or drawn
+	node.visible = drawn
 	(node.material_override as ShaderMaterial).set_shader_parameter("beam_color", color)
 
 
@@ -421,7 +438,16 @@ func _style_beam(material: ShaderMaterial) -> void:
 
 
 func line_of(layer: Layer) -> PackedVector3Array:
-	return _lines.get(layer, PackedVector3Array()).duplicate()
+	var segments: Array = _lines.get(layer, [])
+	if segments.is_empty():
+		return PackedVector3Array()
+	return (segments[0] as PackedVector3Array).duplicate()
+
+
+func lines_of(layer: Layer) -> Array[PackedVector3Array]:
+	var out: Array[PackedVector3Array] = []
+	out.assign(_lines.get(layer, []))
+	return out
 
 
 func clear(layer: Layer) -> void:
