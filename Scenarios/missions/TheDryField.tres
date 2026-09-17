@@ -2,6 +2,7 @@
 
 [ext_resource type="Script" uid="uid://b7i3qekbjuuca" path="res://Classes/flow/DialogBeat.gd" id="1_pkptp"]
 [ext_resource type="Script" uid="uid://cw4xhmsnr71ao" path="res://Classes/flow/ScenarioData.gd" id="2_ewwln"]
+[ext_resource type="Resource" uid="uid://clyojbhy8m6l" path="res://Scenarios/dialog/DryFieldIntro.dtl" id="2_qeafl"]
 [ext_resource type="Script" uid="uid://8ryqq4dv281h" path="res://Classes/flow/TutorialStep.gd" id="3_qeafl"]
 [ext_resource type="Script" uid="uid://dbb0pgdet8qo0" path="res://Classes/flow/ScenarioUnitEntry.gd" id="4_golmo"]
 [ext_resource type="Script" uid="uid://jytv7xrjv6l1" path="res://Classes/items/Item.gd" id="5_6wroh"]
@@ -25,11 +26,16 @@
 [ext_resource type="Script" uid="uid://bncwoq0llmo08" path="res://Classes/weapons/instances/CarbineWeaponInstance.gd" id="23_rdfi3"]
 [ext_resource type="Resource" path="res://Resources/Weapons/MainVarieties/Carbine.tres" id="24_twq6n"]
 
-[sub_resource type="Resource" id="Resource_pkptp"]
+[sub_resource type="Resource" id="Resource_golmo"]
+script = ExtResource("1_pkptp")
+trigger = 6
+timeline = ExtResource("2_qeafl")
+
+[sub_resource type="Resource" id="Resource_ewwln"]
 script = ExtResource("6_krd68")
 template = ExtResource("7_emg0v")
 
-[sub_resource type="Resource" id="Resource_ewwln"]
+[sub_resource type="Resource" id="Resource_qeafl"]
 script = ExtResource("10_1huae")
 flat_def = 2
 covered_kinds = Array[int]([3])
@@ -38,7 +44,7 @@ display_name = "Asbestos Shroud"
 description = "Loomed mineral fibre, stiff as sailcloth and just as dead to a blade. Flame finds nothing in it to take hold of: embers land and go out, and the ground underfoot can burn all it likes."
 metadata/_custom_type_script = "uid://dj0617uewvdny"
 
-[sub_resource type="Resource" id="Resource_qeafl"]
+[sub_resource type="Resource" id="Resource_6wroh"]
 script = ExtResource("16_khbsf")
 display_name = "Ash Runner"
 portrait = ExtResource("15_gem78")
@@ -60,9 +66,9 @@ starting_inventory = Array[ExtResource("5_6wroh")]([ExtResource("7_emg0v"), ExtR
 starting_equipped_index = 0
 starting_worn_index = 1
 
-[sub_resource type="Resource" id="Resource_golmo"]
+[sub_resource type="Resource" id="Resource_krd68"]
 script = ExtResource("4_golmo")
-unit_data = SubResource("Resource_qeafl")
+unit_data = SubResource("Resource_6wroh")
 cell = Vector2i(9, 1)
 squad_id = 0
 stats = Dictionary[int, int]({
@@ -77,7 +83,7 @@ stats = Dictionary[int, int]({
 })
 current_hp = 20
 current_will = 4
-inventory = Array[ExtResource("5_6wroh")]([SubResource("Resource_pkptp"), SubResource("Resource_ewwln")])
+inventory = Array[ExtResource("5_6wroh")]([SubResource("Resource_ewwln"), SubResource("Resource_qeafl")])
 equipped_index = 0
 worn_armor_index = 1
 affinity_saved = true
@@ -93,11 +99,11 @@ weapon_battle_states = Dictionary[int, Dictionary]({
 }
 })
 
-[sub_resource type="Resource" id="Resource_6wroh"]
+[sub_resource type="Resource" id="Resource_emg0v"]
 script = ExtResource("6_krd68")
 template = ExtResource("7_emg0v")
 
-[sub_resource type="Resource" id="Resource_krd68"]
+[sub_resource type="Resource" id="Resource_4g15e"]
 script = ExtResource("10_1huae")
 flat_def = 2
 covered_kinds = Array[int]([3])
@@ -106,7 +112,7 @@ display_name = "Asbestos Shroud"
 description = "Loomed mineral fibre, stiff as sailcloth and just as dead to a blade. Flame finds nothing in it to take hold of: embers land and go out, and the ground underfoot can burn all it likes."
 metadata/_custom_type_script = "uid://dj0617uewvdny"
 
-[sub_resource type="Resource" id="Resource_emg0v"]
+[sub_resource type="Resource" id="Resource_u1883"]
 script = ExtResource("16_khbsf")
 display_name = "Ash Runner"
 portrait = ExtResource("15_gem78")
@@ -128,9 +134,9 @@ starting_inventory = Array[ExtResource("5_6wroh")]([ExtResource("7_emg0v"), ExtR
 starting_equipped_index = 0
 starting_worn_index = 1
 
-[sub_resource type="Resource" id="Resource_4g15e"]
+[sub_resource type="Resource" id="Resource_1huae"]
 script = ExtResource("4_golmo")
-unit_data = SubResource("Resource_emg0v")
+unit_data = SubResource("Resource_u1883")
 cell = Vector2i(10, 1)
 squad_id = 0
 stats = Dictionary[int, int]({
@@ -145,7 +151,7 @@ stats = Dictionary[int, int]({
 })
 current_hp = 20
 current_will = 4
-inventory = Array[ExtResource("5_6wroh")]([SubResource("Resource_6wroh"), SubResource("Resource_krd68")])
+inventory = Array[ExtResource("5_6wroh")]([SubResource("Resource_emg0v"), SubResource("Resource_4g15e")])
 equipped_index = 0
 worn_armor_index = 1
 affinity_saved = true
@@ -161,11 +167,11 @@ weapon_battle_states = Dictionary[int, Dictionary]({
 }
 })
 
-[sub_resource type="Resource" id="Resource_u1883"]
+[sub_resource type="Resource" id="Resource_kuxfe"]
 script = ExtResource("6_krd68")
 template = ExtResource("7_emg0v")
 
-[sub_resource type="Resource" id="Resource_1huae"]
+[sub_resource type="Resource" id="Resource_4gknw"]
 script = ExtResource("10_1huae")
 flat_def = 2
 covered_kinds = Array[int]([3])
@@ -174,7 +180,7 @@ display_name = "Asbestos Shroud"
 description = "Loomed mineral fibre, stiff as sailcloth and just as dead to a blade. Flame finds nothing in it to take hold of: embers land and go out, and the ground underfoot can burn all it likes."
 metadata/_custom_type_script = "uid://dj0617uewvdny"
 
-[sub_resource type="Resource" id="Resource_kuxfe"]
+[sub_resource type="Resource" id="Resource_n31xq"]
 script = ExtResource("16_khbsf")
 display_name = "Ash Runner"
 portrait = ExtResource("15_gem78")
@@ -196,9 +202,9 @@ starting_inventory = Array[ExtResource("5_6wroh")]([ExtResource("7_emg0v"), ExtR
 starting_equipped_index = 0
 starting_worn_index = 1
 
-[sub_resource type="Resource" id="Resource_4gknw"]
+[sub_resource type="Resource" id="Resource_pq3r2"]
 script = ExtResource("4_golmo")
-unit_data = SubResource("Resource_kuxfe")
+unit_data = SubResource("Resource_n31xq")
 cell = Vector2i(9, 2)
 squad_id = 0
 stats = Dictionary[int, int]({
@@ -213,7 +219,7 @@ stats = Dictionary[int, int]({
 })
 current_hp = 20
 current_will = 4
-inventory = Array[ExtResource("5_6wroh")]([SubResource("Resource_u1883"), SubResource("Resource_1huae")])
+inventory = Array[ExtResource("5_6wroh")]([SubResource("Resource_kuxfe"), SubResource("Resource_4gknw")])
 equipped_index = 0
 worn_armor_index = 1
 affinity_saved = true
@@ -229,11 +235,11 @@ weapon_battle_states = Dictionary[int, Dictionary]({
 }
 })
 
-[sub_resource type="Resource" id="Resource_n31xq"]
+[sub_resource type="Resource" id="Resource_gem78"]
 script = ExtResource("6_krd68")
 template = ExtResource("7_emg0v")
 
-[sub_resource type="Resource" id="Resource_pq3r2"]
+[sub_resource type="Resource" id="Resource_khbsf"]
 script = ExtResource("10_1huae")
 flat_def = 2
 covered_kinds = Array[int]([3])
@@ -242,7 +248,7 @@ display_name = "Asbestos Shroud"
 description = "Loomed mineral fibre, stiff as sailcloth and just as dead to a blade. Flame finds nothing in it to take hold of: embers land and go out, and the ground underfoot can burn all it likes."
 metadata/_custom_type_script = "uid://dj0617uewvdny"
 
-[sub_resource type="Resource" id="Resource_gem78"]
+[sub_resource type="Resource" id="Resource_2ljva"]
 script = ExtResource("16_khbsf")
 display_name = "Ash Captain"
 portrait = ExtResource("15_gem78")
@@ -264,9 +270,9 @@ starting_inventory = Array[ExtResource("5_6wroh")]([ExtResource("7_emg0v"), ExtR
 starting_equipped_index = 0
 starting_worn_index = 1
 
-[sub_resource type="Resource" id="Resource_khbsf"]
+[sub_resource type="Resource" id="Resource_vnqxw"]
 script = ExtResource("4_golmo")
-unit_data = SubResource("Resource_gem78")
+unit_data = SubResource("Resource_2ljva")
 cell = Vector2i(10, 2)
 squad_id = 0
 is_leader = true
@@ -284,7 +290,7 @@ stats = Dictionary[int, int]({
 })
 current_hp = 22
 current_will = 5
-inventory = Array[ExtResource("5_6wroh")]([SubResource("Resource_n31xq"), SubResource("Resource_pq3r2")])
+inventory = Array[ExtResource("5_6wroh")]([SubResource("Resource_gem78"), SubResource("Resource_khbsf")])
 equipped_index = 0
 worn_armor_index = 1
 affinity_saved = true
@@ -300,11 +306,11 @@ weapon_battle_states = Dictionary[int, Dictionary]({
 }
 })
 
-[sub_resource type="Resource" id="Resource_2ljva"]
+[sub_resource type="Resource" id="Resource_l7cbb"]
 script = ExtResource("6_krd68")
 template = ExtResource("7_emg0v")
 
-[sub_resource type="Resource" id="Resource_vnqxw"]
+[sub_resource type="Resource" id="Resource_tbmit"]
 script = ExtResource("10_1huae")
 flat_def = 2
 covered_kinds = Array[int]([3])
@@ -313,7 +319,7 @@ display_name = "Asbestos Shroud"
 description = "Loomed mineral fibre, stiff as sailcloth and just as dead to a blade. Flame finds nothing in it to take hold of: embers land and go out, and the ground underfoot can burn all it likes."
 metadata/_custom_type_script = "uid://dj0617uewvdny"
 
-[sub_resource type="Resource" id="Resource_l7cbb"]
+[sub_resource type="Resource" id="Resource_un4od"]
 script = ExtResource("16_khbsf")
 display_name = "Ash Runner"
 portrait = ExtResource("15_gem78")
@@ -335,9 +341,9 @@ starting_inventory = Array[ExtResource("5_6wroh")]([ExtResource("7_emg0v"), ExtR
 starting_equipped_index = 0
 starting_worn_index = 1
 
-[sub_resource type="Resource" id="Resource_tbmit"]
+[sub_resource type="Resource" id="Resource_k7nrn"]
 script = ExtResource("4_golmo")
-unit_data = SubResource("Resource_l7cbb")
+unit_data = SubResource("Resource_un4od")
 cell = Vector2i(11, 2)
 squad_id = 0
 stats = Dictionary[int, int]({
@@ -352,7 +358,7 @@ stats = Dictionary[int, int]({
 })
 current_hp = 20
 current_will = 4
-inventory = Array[ExtResource("5_6wroh")]([SubResource("Resource_2ljva"), SubResource("Resource_vnqxw")])
+inventory = Array[ExtResource("5_6wroh")]([SubResource("Resource_l7cbb"), SubResource("Resource_tbmit")])
 equipped_index = 0
 worn_armor_index = 1
 affinity_saved = true
@@ -368,7 +374,7 @@ weapon_battle_states = Dictionary[int, Dictionary]({
 }
 })
 
-[sub_resource type="Resource" id="Resource_un4od"]
+[sub_resource type="Resource" id="Resource_rdfi3"]
 script = ExtResource("18_vnqxw")
 sigils = Array[int]([1])
 popup = "Fireball!"
@@ -384,15 +390,15 @@ up_tolerance = 6
 arc_clearance = 6
 metadata/_custom_type_script = "uid://bgbidu2bbf33l"
 
-[sub_resource type="Resource" id="Resource_k7nrn"]
+[sub_resource type="Resource" id="Resource_twq6n"]
 script = ExtResource("21_un4od")
 size = 1
-inscriptions = Array[ExtResource("18_vnqxw")]([SubResource("Resource_un4od")])
+inscriptions = Array[ExtResource("18_vnqxw")]([SubResource("Resource_rdfi3")])
 temper = 1
 display_name = "Fire Rune"
 metadata/_custom_type_script = "uid://ckrp1phgirys0"
 
-[sub_resource type="Resource" id="Resource_rdfi3"]
+[sub_resource type="Resource" id="Resource_w65ut"]
 script = ExtResource("10_1huae")
 flat_def = 2
 covered_kinds = Array[int]([3])
@@ -401,7 +407,7 @@ display_name = "Asbestos Shroud"
 description = "Loomed mineral fibre, stiff as sailcloth and just as dead to a blade. Flame finds nothing in it to take hold of: embers land and go out, and the ground underfoot can burn all it likes."
 metadata/_custom_type_script = "uid://dj0617uewvdny"
 
-[sub_resource type="Resource" id="Resource_twq6n"]
+[sub_resource type="Resource" id="Resource_kjqhg"]
 script = ExtResource("16_khbsf")
 display_name = "Ashwright"
 portrait = ExtResource("15_gem78")
@@ -427,9 +433,9 @@ starting_inventory = Array[ExtResource("5_6wroh")]([ExtResource("22_k7nrn"), Ext
 starting_equipped_index = 0
 starting_worn_index = 1
 
-[sub_resource type="Resource" id="Resource_w65ut"]
+[sub_resource type="Resource" id="Resource_3gdiw"]
 script = ExtResource("4_golmo")
-unit_data = SubResource("Resource_twq6n")
+unit_data = SubResource("Resource_kjqhg")
 cell = Vector2i(16, 5)
 squad_id = 1
 is_leader = true
@@ -447,7 +453,7 @@ stats = Dictionary[int, int]({
 })
 current_hp = 18
 current_will = 6
-inventory = Array[ExtResource("5_6wroh")]([SubResource("Resource_k7nrn"), SubResource("Resource_rdfi3")])
+inventory = Array[ExtResource("5_6wroh")]([SubResource("Resource_twq6n"), SubResource("Resource_w65ut")])
 equipped_index = 0
 worn_armor_index = 1
 aura = Dictionary[int, int]({
@@ -462,11 +468,11 @@ limb_states = Dictionary[int, int]({
 3: 0
 })
 
-[sub_resource type="Resource" id="Resource_kjqhg"]
+[sub_resource type="Resource" id="Resource_ov2o0"]
 script = ExtResource("23_rdfi3")
 template = ExtResource("24_twq6n")
 
-[sub_resource type="Resource" id="Resource_3gdiw"]
+[sub_resource type="Resource" id="Resource_pj7se"]
 script = ExtResource("10_1huae")
 flat_def = 2
 covered_kinds = Array[int]([3])
@@ -475,7 +481,7 @@ display_name = "Asbestos Shroud"
 description = "Loomed mineral fibre, stiff as sailcloth and just as dead to a blade. Flame finds nothing in it to take hold of: embers land and go out, and the ground underfoot can burn all it likes."
 metadata/_custom_type_script = "uid://dj0617uewvdny"
 
-[sub_resource type="Resource" id="Resource_ov2o0"]
+[sub_resource type="Resource" id="Resource_u7qn7"]
 script = ExtResource("16_khbsf")
 display_name = "Kiln Guard"
 portrait = ExtResource("15_gem78")
@@ -497,9 +503,9 @@ starting_inventory = Array[ExtResource("5_6wroh")]([ExtResource("24_twq6n"), Ext
 starting_equipped_index = 0
 starting_worn_index = 1
 
-[sub_resource type="Resource" id="Resource_pj7se"]
+[sub_resource type="Resource" id="Resource_akucj"]
 script = ExtResource("4_golmo")
-unit_data = SubResource("Resource_ov2o0")
+unit_data = SubResource("Resource_u7qn7")
 cell = Vector2i(17, 5)
 squad_id = 1
 stats = Dictionary[int, int]({
@@ -514,7 +520,7 @@ stats = Dictionary[int, int]({
 })
 current_hp = 20
 current_will = 4
-inventory = Array[ExtResource("5_6wroh")]([SubResource("Resource_kjqhg"), SubResource("Resource_3gdiw")])
+inventory = Array[ExtResource("5_6wroh")]([SubResource("Resource_ov2o0"), SubResource("Resource_pj7se")])
 equipped_index = 0
 worn_armor_index = 1
 affinity_saved = true
@@ -533,7 +539,7 @@ weapon_battle_states = Dictionary[int, Dictionary]({
 [resource]
 script = ExtResource("2_ewwln")
 scenario_name = "missions/TheDryField"
-unit_entries = Array[ExtResource("4_golmo")]([SubResource("Resource_golmo"), SubResource("Resource_4g15e"), SubResource("Resource_4gknw"), SubResource("Resource_khbsf"), SubResource("Resource_tbmit"), SubResource("Resource_w65ut"), SubResource("Resource_pj7se")])
+unit_entries = Array[ExtResource("4_golmo")]([SubResource("Resource_krd68"), SubResource("Resource_1huae"), SubResource("Resource_pq3r2"), SubResource("Resource_vnqxw"), SubResource("Resource_k7nrn"), SubResource("Resource_3gdiw"), SubResource("Resource_akucj")])
 tile_data = PackedByteArray("AAAQAAAAAQAAAAAAAAARAAAAAQAAAAAAAAAAAAcAAAAKAAYAAAABAAcAAAAKAAYAAAACAAcAAQAAAAAAAAADAAcAAQAAAAAAAAAEAAcAAQAAAAAAAAAFAAcAAQAAAAAAAAAGAAcAAQAAAAAAAAAHAAcAAQAAAAAAAAAIAAgAAAAFAAMAAAAJAAgAAAAFAAMAAAAKAAgAAAAFAAMAAAALAAgAAAAFAAMAAAAMAAgAAAAFAAMAAAANAAgAAAAFAAMAAAAOAAgAAQAAAAAAAAAPAAgAAQAAAAAAAAAQAAkAAQAAAAAAAAARAAkAAQAAAAAAAAAJAAkAAQAAAAAAAAAIAAkAAQAAAAAAAAAHAAkAAQAAAAAAAAAGAAkAAQAAAAAAAAAFAAkAAQAAAAAAAAAEAAgAAQAAAAAAAAADAAgAAQAAAAAAAAACAAgAAQAAAAAAAAABAAgAAAAKAAYAAAAAAAgAAAAKAAYAAAAIAAcAAQAAAAAAAAAJAAcAAQAAAAAAAAAKAAcAAQAAAAAAAAALAAcAAQAAAAAAAAAMAAcAAQAAAAAAAAANAAcAAQAAAAAAAAAQAAgAAQAAAAAAAAARAAgAAQAAAAAAAAACAAkAAQAAAAAAAAADAAkAAQAAAAAAAAAEAAkAAQAAAAAAAAAKAAkAAQAAAAAAAAABAAkAAAAKAAYAAAAAAAkAAAAKAAYAAAAOAAkAAQAAAAAAAAANAAkAAQAAAAAAAAAMAAkAAQAAAAAAAAALAAkAAQAAAAAAAAAGAAgAAAAFAAMAAAAFAAgAAAAFAAMAAAAHAAgAAAAFAAMAAAAPAAkAAQAAAAAAAAAOAAcAAQAAAAAAAAAPAAcAAQAAAAAAAAAQAAcAAQAAAAAAAAARAAcAAQAAAAAAAAAGAAYAAQAAAAAAAAAFAAYAAQAAAAAAAAAEAAYAAQAAAAAAAAADAAYAAQAAAAAAAAACAAYAAQAAAAAAAAABAAYAAAAKAAYAAAAAAAYAAAAKAAYAAAAAAAUAAAAKAAYAAAABAAUAAAAKAAYAAAACAAUAAQAAAAAAAAADAAUAAQAAAAAAAAAEAAUAAQAAAAAAAAAFAAUAAQAAAAAAAAAGAAUAAQAAAAAAAAAHAAUAAQAAAAAAAAAIAAUAAQAAAAAAAAAJAAUAAQAAAAAAAAAKAAUAAQAAAAAAAAALAAUAAQAAAAAAAAANAAYAAQAAAAAAAAAOAAYAAQAAAAAAAAAPAAYAAQAAAAAAAAAQAAYAAQAAAAAAAAARAAYAAQAAAAAAAAAMAAYAAQAAAAAAAAALAAYAAQAAAAAAAAAKAAYAAQAAAAAAAAAJAAYAAQAAAAAAAAAIAAYAAQAAAAAAAAAHAAYAAQAAAAAAAAAPAAUAAQAAAAAAAAAQAAUAAQAAAAAAAAARAAUAAQAAAAAAAAADAAQAAQAAAAAAAAAEAAQAAQAAAAAAAAAFAAQAAQAAAAAAAAAGAAQAAQAAAAAAAAAHAAQAAQAAAAAAAAAIAAQAAQAAAAAAAAAJAAQAAQAAAAAAAAAKAAQAAQAAAAAAAAALAAQAAQAAAAAAAAANAAQAAQAAAAAAAAAPAAQAAQAAAAAAAAAJAAMAAAAFAAMAAAAKAAMAAAAFAAMAAAALAAMAAAAFAAMAAAAPAAMAAQAAAAAAAAAQAAMAAQAAAAAAAAARAAMAAQAAAAAAAAAIAAMAAAAFAAMAAAAHAAMAAAAFAAMAAAAGAAMAAAAFAAMAAAAFAAMAAAAFAAMAAAAEAAMAAQAAAAAAAAADAAMAAQAAAAAAAAACAAMAAQAAAAAAAAAGAAIAAQAAAAAAAAAHAAIAAQAAAAAAAAAIAAIAAQAAAAAAAAAJAAIAAQAAAAAAAAAKAAIAAQAAAAAAAAALAAIAAQAAAAAAAAAMAAIAAQAAAAAAAAANAAIAAQAAAAAAAAAOAAIAAQAAAAAAAAAPAAIAAQAAAAAAAAAQAAIAAQAAAAAAAAARAAIAAQAAAAAAAAAQAAQAAQAAAAAAAAARAAQAAQAAAAAAAAACAAQAAQAAAAAAAAAAAAMAAAAKAAYAAAABAAMAAAAKAAYAAAABAAQAAAAKAAYAAAAAAAQAAAAKAAYAAAAAAAIAAAAKAAYAAAABAAIAAAAKAAYAAAACAAIAAQAAAAAAAAADAAIAAQAAAAAAAAAEAAIAAQAAAAAAAAAAAAEAAAAKAAYAAAABAAEAAAAKAAYAAAAFAAIAAQAAAAAAAAAMAAEAAQAAAAAAAAALAAEAAQAAAAAAAAAKAAEAAQAAAAAAAAAJAAEAAQAAAAAAAAAIAAEAAQAAAAAAAAAHAAEAAQAAAAAAAAAGAAEAAQAAAAAAAAAFAAEAAQAAAAAAAAAEAAEAAQAAAAAAAAADAAEAAQAAAAAAAAACAAEAAQAAAAAAAAANAAEAAQAAAAAAAAAOAAEAAQAAAAAAAAAOAAAAAQAAAAAAAAAPAAAAAQAAAAAAAAANAAAAAQAAAAAAAAAMAAAAAQAAAAAAAAALAAAAAQAAAAAAAAAKAAAAAQAAAAAAAAAJAAAAAQAAAAAAAAAIAAAAAQAAAAAAAAAHAAAAAQAAAAAAAAAGAAAAAQAAAAAAAAAFAAAAAQAAAAAAAAAEAAAAAQAAAAAAAAADAAAAAQAAAAAAAAACAAAAAQAAAAAAAAABAAAAAAAKAAYAAAAAAAAAAAAKAAYAAAAPAAEAAQAAAAAAAAAQAAEAAQAAAAAAAAARAAEAAQAAAAAAAAASAAkAAAAKAAYAAAASAAgAAAAKAAYAAAASAAcAAAAKAAYAAAASAAYAAAAKAAYAAAASAAUAAAAKAAYAAAASAAQAAAAKAAYAAAASAAMAAAAKAAYAAAASAAIAAAAKAAYAAAASAAEAAAAKAAYAAAASAAAAAAAKAAYAAAATAAAAAAAKAAYAAAATAAEAAAAKAAYAAAATAAIAAAAKAAYAAAATAAMAAAAKAAYAAAATAAQAAAAKAAYAAAATAAUAAAAKAAYAAAATAAYAAAAKAAYAAAATAAcAAAAKAAYAAAATAAgAAAAKAAYAAAATAAkAAAAKAAYAAAATAAoAAAAKAAYAAAASAAoAAAAKAAYAAAARAAoAAQAAAAAAAAAQAAoAAQAAAAAAAAAPAAoAAQAAAAAAAAAOAAoAAQAAAAAAAAANAAoAAQAAAAAAAAAMAAoAAQAAAAAAAAALAAoAAQAAAAAAAAAKAAoAAQAAAAAAAAAJAAoAAQAAAAAAAAAIAAoAAQAAAAAAAAAHAAoAAQAAAAAAAAAGAAoAAQAAAAAAAAAFAAoAAQAAAAAAAAAEAAoAAQAAAAAAAAADAAoAAQAAAAAAAAACAAoAAQAAAAAAAAABAAoAAAAKAAYAAAAAAAoAAAAKAAYAAAATAAsAAAAKAAYAAAASAAsAAAAKAAYAAAARAAsAAQAAAAAAAAAQAAsAAQAAAAAAAAAPAAsAAQAAAAAAAAAOAAsAAQAAAAAAAAANAAsAAQAAAAAAAAAMAAsAAQAAAAAAAAALAAsAAQAAAAAAAAAKAAsAAQAAAAAAAAAJAAsAAQAAAAAAAAAIAAsAAQAAAAAAAAAHAAsAAQAAAAAAAAAGAAsAAQAAAAAAAAAFAAsAAQAAAAAAAAAEAAsAAQAAAAAAAAADAAsAAQAAAAAAAAACAAsAAQAAAAAAAAABAAsAAAAKAAYAAAAAAAsAAAAKAAYAAAAMAAMAAAAFAAMAAAANAAMAAAAFAAMAAAAOAAMAAQAAAAAAAAAMAAQAAQAAAAAAAAAOAAQAAQAAAAAAAAAMAAUAAQAAAAAAAAANAAUAAQAAAAAAAAAOAAUAAQAAAAAAAAA=")
 terrain_states = {
 Vector2i(7, 5): Array[int]([1]),
@@ -586,3 +592,5 @@ look_preset = "Forest Fire"
 roster = "Basics"
 deployment_cap = 4
 ai_factions = Array[int]([1])
+in_demo = true
+dialog_beats = Array[ExtResource("1_pkptp")]([SubResource("Resource_golmo")])

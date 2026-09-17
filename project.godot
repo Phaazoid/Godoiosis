@@ -26,6 +26,7 @@ directories/dch_directory={
 "torv": "res://Scenarios/dialog/characters/torv.dch"
 }
 directories/dtl_directory={
+"DryFieldIntro": "res://Scenarios/dialog/DryFieldIntro.dtl",
 "causeway_intro": "res://Scenarios/dialog/causeway_intro.dtl",
 "ford_intro": "res://Scenarios/dialog/ford_intro.dtl",
 "prolog_intro": "res://Scenarios/dialog/prolog_intro.dtl",
