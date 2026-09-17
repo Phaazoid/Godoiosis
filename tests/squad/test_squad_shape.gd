@@ -131,3 +131,49 @@ func test_leader_departure_overflow_detaches_newest_first() -> void:
 	assert_bool(squad.members.has(middle)).is_true() # older bond survives
 	assert_bool(newest.squad != squad).is_true()     # newest detached into a solo squad
 	assert_bool(newest.squad.members.has(newest)).is_true()
+
+# #1004: a downed body is not a recruit. _formation_basics_ok is the ONE gate every formation verb
+# routes through, so all four predicates are asked here -- the point of the clause living there is
+# that no verb can be fixed and another left behind.
+#
+# force_down() rather than take_damage(): #156's dev bypass enters DOWNED with none of the ladder's
+# consequences, so the case pins the LIFECYCLE rule and cannot be moved by a retune of damage, Will
+# or the maim slots (which take_damage would drag in).
+func test_a_downed_body_is_not_a_squad_recruit() -> void:
+	var leader := _leader_with_ldr(4 * Squad.MEMBER_LDR_COST, Vector2i(0, 0))
+	var body := H.spawn_solo(self, _sm, ENEMY, Vector2i(1, 0))
+	var standing := H.spawn_solo(self, _sm, ENEMY, Vector2i(0, 1))
+
+	assert_bool(_sm.can_squad_up(body, leader.squad)) \
+		.override_failure_message("a body was offered as a Squad Up candidate before it went down") \
+		.is_true()
+
+	body.force_down()
+
+	assert_bool(_sm.can_squad_up(body, leader.squad)) \
+		.override_failure_message("Squad Up still recruits a downed body (#1004)").is_false()
+	# ...and the live recruit beside it is untouched, so the clause refuses the BODY rather than
+	# the squad: a gate that reddened everything would pass the assert above for the wrong reason.
+	assert_bool(_sm.can_squad_up(standing, leader.squad)).is_true()
+	assert_bool(_sm.can_create_any_squad(leader)).is_true()
+
+func test_a_downed_leader_cannot_be_joined_and_a_body_cannot_join() -> void:
+	# The JOIN half, both directions. A formed squad is needed on the far side because can_join_squad
+	# additionally wants leader.has_squad() -- so this also proves the refusal is the lifecycle
+	# clause and not that missing-squadmates gate firing by accident.
+	var leader := _leader_with_ldr(4 * Squad.MEMBER_LDR_COST, Vector2i(0, 0))
+	var member := H.spawn_solo(self, _sm, ENEMY, Vector2i(1, 0))
+	_sm.join_squad(member, leader.squad)
+	var joiner := H.spawn_solo(self, _sm, ENEMY, Vector2i(0, 1))
+	assert_bool(_sm.can_join_squad(joiner, leader.squad)) \
+		.override_failure_message("fixture: the join was refused before anyone went down").is_true()
+
+	joiner.force_down()
+	assert_bool(_sm.can_join_squad(joiner, leader.squad)) \
+		.override_failure_message("a body can still JOIN a squad (#1004)").is_false()
+	assert_bool(_sm.can_join_any_squad(joiner)).is_false()
+
+	joiner.revive()
+	leader.force_down()
+	assert_bool(_sm.can_join_squad(joiner, leader.squad)) \
+		.override_failure_message("a squad led by a body is still joinable (#1004)").is_false()
