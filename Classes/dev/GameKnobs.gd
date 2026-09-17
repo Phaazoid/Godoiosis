@@ -441,6 +441,21 @@ const CLASS_KNOBS: Array[Dictionary] = [
 		"tip": "Every cell an enemy could attack next turn, drawn under the move fill while the threat view (T) is on, or for the one enemy under the pointer. Alpha is the dial: it can cover a lot of board."},
 	{"group": "Board markup colours", "label": "Threat line (2D+3D)", "static": "THREAT_LINE_COLOR", "script": THREAT_LINES_SCRIPT,
 		"tip": "The line from each enemy that could reach the destination you are hovering. Tune it against the sight beam, which it sits beside while aiming."},
+	# The exact tier (#710 slice 2): what the AI WILL do, as opposed to what it COULD. It has to
+	# read as a promise rather than a possibility, so tune it AGAINST the threat line above -- and
+	# the felling colour against both, since it is the one that has to stop the player.
+	{"group": "Board markup colours", "label": "Intent line (2D+3D)", "static": "INTENT_LINE_COLOR", "script": THREAT_LINES_SCRIPT,
+		"tip": "The line from an enemy to the unit it will actually attack next turn. Distinct from the threat line, which only says an enemy COULD reach that cell."},
+	{"group": "Board markup colours", "label": "Intent, lethal (2D+3D)", "static": "INTENT_FELL_COLOR", "script": THREAT_LINES_SCRIPT,
+		"tip": "The number over an attack that would down or kill. The one readout on the board that is telling you not to stand there."},
+	{"group": "Board markup colours", "label": "Intent damage number", "static": "INTENT_LABEL_COLOR", "script": THREAT_LINES_SCRIPT,
+		"tip": "The damage number riding each intent line. It sits over the board between two units, so contrast against terrain matters more than against the line."},
+	{"group": "Board markup colours", "label": "Intent number size (2D)", "static": "INTENT_LABEL_SIZE", "script": THREAT_LINES_SCRIPT,
+		"min": 6, "max": 40, "step": 1,
+		"tip": "Point size of the damage number in the flat 2D view only. The 3D view sizes its own through BoardOverlays' label_pixel_size."},
+	{"group": "Board markup colours", "label": "Threat preview delay", "static": "THREAT_PLAN_DELAY", "script": PACING_SCRIPT,
+		"min": 0.0, "max": 1.0, "step": 0.05,
+		"tip": "How long your plan sits still before the intent lines recompute. It bounds how OFTEN the preview runs, never how long it takes -- raise it if queueing orders feels sticky, lower it if the lines lag behind your thinking."},
 	{"group": "Board markup colours", "label": "Leash reveal (2D+3D)", "static": "ZONE_HIGHLIGHT_MODULATE",
 		"tip": "A sentry's patrol zone while you hover it or hold the threat view -- and the Tile Brush's picked zone, which is the same layer and the same colour."},
 
@@ -1349,6 +1364,11 @@ static func read_static(name: String) -> Variant:
 		"DANGER_MODULATE": return OverlayManager.DANGER_MODULATE
 		"ZONE_HIGHLIGHT_MODULATE": return OverlayManager.ZONE_HIGHLIGHT_MODULATE
 		"THREAT_LINE_COLOR": return ThreatLines2D.THREAT_LINE_COLOR
+		"INTENT_LINE_COLOR": return ThreatLines2D.INTENT_LINE_COLOR
+		"INTENT_FELL_COLOR": return ThreatLines2D.INTENT_FELL_COLOR
+		"INTENT_LABEL_COLOR": return ThreatLines2D.INTENT_LABEL_COLOR
+		"INTENT_LABEL_SIZE": return ThreatLines2D.INTENT_LABEL_SIZE
+		"THREAT_PLAN_DELAY": return Pacing.THREAT_PLAN_DELAY
 		"SQUAD_RING_ALPHA": return OverlayManager.SQUAD_RING_ALPHA
 		"SQUAD_RING_PULSE_GAIN": return OverlayManager.SQUAD_RING_PULSE_GAIN
 		"KNOCKBACK_MODULATE": return OverlayManager.KNOCKBACK_MODULATE
@@ -1545,6 +1565,13 @@ static func write_static(host: Node3D, name: String, value: Variant) -> void:
 		"DANGER_MODULATE": OverlayManager.DANGER_MODULATE = value
 		"ZONE_HIGHLIGHT_MODULATE": OverlayManager.ZONE_HIGHLIGHT_MODULATE = value
 		"THREAT_LINE_COLOR": ThreatLines2D.THREAT_LINE_COLOR = value
+		"INTENT_LINE_COLOR": ThreatLines2D.INTENT_LINE_COLOR = value
+		"INTENT_FELL_COLOR": ThreatLines2D.INTENT_FELL_COLOR = value
+		"INTENT_LABEL_COLOR": ThreatLines2D.INTENT_LABEL_COLOR = value
+		"INTENT_LABEL_SIZE": ThreatLines2D.INTENT_LABEL_SIZE = int(value)
+		"THREAT_PLAN_DELAY":
+			Pacing.THREAT_PLAN_DELAY = value
+			return   # read when the debounce STARTS; there is no standing preview to re-apply it to
 		"SQUAD_RING_ALPHA": OverlayManager.SQUAD_RING_ALPHA = value
 		"SQUAD_RING_PULSE_GAIN": OverlayManager.SQUAD_RING_PULSE_GAIN = value
 		"KNOCKBACK_MODULATE": OverlayManager.KNOCKBACK_MODULATE = value
@@ -2105,6 +2132,8 @@ static func write_static(host: Node3D, name: String, value: Variant) -> void:
 		"DANGER_MODULATE": manager.restyle_danger()
 		"ZONE_HIGHLIGHT_MODULATE": manager.restyle_leash()
 		"THREAT_LINE_COLOR": manager.restyle_threat_lines()
+		"INTENT_LINE_COLOR", "INTENT_FELL_COLOR", "INTENT_LABEL_COLOR", "INTENT_LABEL_SIZE":
+			manager.restyle_threat_intents()
 		# No bespoke sweep for the three planned-move tints: redraw_planned_paths already tears
 		# every arrow down and rebuilds it through _arrow_modulate, so it IS the re-apply.
 		"MOVE_ARROW_MODULATE", "INVALID_ARROW_MODULATE", "TRAILING_ARROW_MODULATE":

@@ -55,6 +55,7 @@ var _staging_moved := false
 
 var _last_trace_version := -1   # OverlayManager.sight_trace_version -- the store's own signal (#308)
 var _last_threat_version := -1   # OverlayManager.threat_lines_version, the same shape (#710)
+var _last_intent_version := -1   # ...and the exact tier's own (#710 slice 2)
 
 # How far the drop pointer stands off the cliff face it hangs on (#431), in cells. A depth-buffer
 # epsilon, not a feel value: big enough that a coplanar wall cannot stipple through it, small
@@ -109,6 +110,7 @@ func _process(_delta: float) -> void:
 	_attack(om)
 	_sight_trace(om)
 	_threat_lines(om)
+	_threat_intents(om)
 	_arrows(om)
 
 	var kb_trails: Array[Dictionary] = []
@@ -281,6 +283,35 @@ func _threat_lines(om: OverlayManager) -> void:
 			points.append(BoardSpace.trace_point(p))
 		segments.append(points)
 	overlays.set_lines(BoardOverlays.Layer.THREAT_LINES, segments, ThreatLines2D.THREAT_LINE_COLOR)
+
+
+# The exact tier (#710 slice 2): the lines AND their numbers, gated on one version because they are
+# one readout. Colours are COPIED from the 2D renderer, as the trace's are.
+#
+# A felling line wants its own colour and set_lines paints a whole layer, so the two tints cannot
+# share a layer's beam. They share it anyway and the LABEL carries the distinction instead: the
+# number goes red when the blow fells, which is the thing a player reads at a glance. Splitting the
+# beams would mean a second LINE layer whose only difference is a tint -- a duplicate seam for a
+# distinction the number already makes.
+func _threat_intents(om: OverlayManager) -> void:
+	if om.intent_version == _last_intent_version:
+		return
+	_last_intent_version = om.intent_version
+	var segments: Array[PackedVector3Array] = []
+	for seg: PackedVector3Array in om.intent_lines:
+		var points := PackedVector3Array()
+		for p: Vector3 in seg:
+			points.append(BoardSpace.trace_point(p))
+		segments.append(points)
+	overlays.set_lines(BoardOverlays.Layer.INTENT_LINES, segments, ThreatLines2D.INTENT_LINE_COLOR)
+	var labels: Array[Dictionary] = []
+	for entry: Dictionary in om.intent_labels:
+		labels.append({
+			"pos": BoardSpace.trace_point(entry["pos"]),
+			"text": entry["text"],
+			"color": ThreatLines2D.INTENT_LABEL_COLOR if not entry["fells"] else ThreatLines2D.INTENT_FELL_COLOR,
+		})
+	overlays.set_labels(BoardOverlays.Layer.INTENT_LABELS, labels)
 
 
 func _target_pick_texture(om: OverlayManager) -> Texture2D:

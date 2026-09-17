@@ -3311,4 +3311,34 @@ Two things about the SHAPE of that fix worth keeping. The old case pinned *the r
 
 **Knobs (all three are `static var`s with `CLASS_KNOBS` rows, and each has a re-apply so a standing preview repaints under the slider):** `OverlayManager.DANGER_MODULATE`, `OverlayManager.ZONE_HIGHLIGHT_MODULATE` (a const until now -- becoming a play colour made it his), `ThreatLines2D.THREAT_LINE_COLOR` (the 3D beam copies it, `SightTrace2D.CLEAR_COLOR`'s shape). `GameKnobs`' "excluded as authoring-only" note lost `ZONE_HIGHLIGHT` for the same reason.
 
-**Open: the plan tier.** Enemy -> victim lines carrying predicted damage and a kill/down mark, the ghost bars (#313) already carrying the resulting HP, recomputed on every plan change and on T. It runs the AI against the player's PENDING plan, which is the mechanism fork [ai-tactics.md](ai-tactics.md)'s movement-layer note records: `aim_finds_a_target` positions a foreign unit through the ACTING squad's queue, and every `_resolve_actions` clears all published knockback -- so either the projection reads learn a foreign squad's queue, or the player's plan is snapshotted into the AI pass. #362 (enemy plans previewed during an AI turn) was closed as a feature on the same ruling.
+**The plan tier landed 2026-09-17 -- see the next section.** #362 (enemy plans previewed during an AI turn) was closed as a feature on the same ruling.
+
+## ...and what they will ACTUALLY do ([#710](https://github.com/Phaazoid/Godoiosis/issues/710) slice 2, BUILT 2026-09-17)
+
+The other half of the ask: not *who could reach this cell* but **who will attack whom, and for how much**. Each hostile squad's real decision is run against the board the player's pending plan will leave, and what it intends is drawn as a line from the enemy to its target with the damage on it. The always-attack ruling is what makes an absent line mean something: an enemy with no line is not coming for you this turn.
+
+### The mechanism is a POSITIONAL SNAPSHOT, and that is the whole design
+
+The preview has to answer *where will everyone be*, and the first draft answered it three times: fix the whiff gate so a foreign unit is positioned by its own queue, give published knockback an owner so a resolve stops wiping the player's shoves, and swap the AI's own live-cell reads. Fable's review killed it — each was a third of the problem. `AITactics` chooses targets and routes from `movement.cell` in eight places, `RulesService.compute_move_range` starts a shoved unit from where it stood, and the whiff gate is only the last gate of several.
+
+**So the preview moves the units instead.** `AIController.preview_turn` stands every unit on its `get_projected_destination()` for the duration, plans, and puts them back. Every read — movement, target choice, candidate geometry, the whiff gate — sees the post-plan board at once, and **no rules code is edited at all**. Three facts make it safe, and all three were checked rather than assumed: planning is wholly synchronous (the only `await`s in `AIController` are in `take_faction_turn`), `UnitMirror` reads `unit.position` in `_process` so no frame renders mid-preview, and `MovementComponent.set_cell` is already the teleport door a rescue haul and the deployment swap take.
+
+The generalisable shape: **when several readers disagree about a fact, moving the fact beats fixing the readers.** The read-swap version touched four surfaces and needed a "this cannot change a real turn" argument at each; the snapshot touches none and needs the argument nowhere, because it exists only inside the preview.
+
+### What it costs, and the early-out slice 1 paid for
+
+A recompute skips any squad whose slice-1 reach envelope holds no hostile unit — exact, because that field is a superset of what the squad's own builder could aim at (`test_every_attack_the_ai_queues_lands_inside_the_field` is the proof). Measured: **1.7 ms** when nobody is in reach, **77 ms** per engaged squad, against the ~300 ms slice 1 budgeted. A one-shot `Timer` debounces it (`Pacing.THREAT_PLAN_DELAY`, a knob), so a burst of orders costs one recompute rather than one each; **T** asks immediately, Execute cancels a pending one. Numbers and the scaling caveat: [performance.md](../performance.md).
+
+**`is_squad_actable` split for this.** It refuses a squad whose `has_acted` is true, and that flag is cleared only for the *incoming* faction at its own turn start — so during the player's turn every enemy squad still carries last turn's `true`, and asking it would have returned an empty preview from turn 2 onward. An empty preview reads as *nobody is attacking you*. `is_squad_previewable` is the same predicate without that clause, and `is_squad_actable` is now defined in terms of it: one rule, two questions. **The general form: a flag about the turn that FINISHED is the wrong input to a question about the turn that is COMING** — and a feature whose failure mode is a legal-looking readout needs a case for that failure specifically (`test_a_spent_enemy_squad_still_previews`).
+
+### Drawing it
+
+Lines get their own channel and colour beside the reach tier's — the two answer different questions and may be up together — plus a new `BoardOverlays.Kind.LABEL` (a pooled `Label3D`, `UnitHealthBar`'s recipe) for the damage number, and `draw_string` in `ThreatLines2D` for the flat view. The number goes red when the blow would fell. **The number, not a second beam, carries the lethal distinction**: `set_lines` paints a whole layer one colour, so two tints would mean a second LINE layer differing only in hue — a duplicate seam for something the number already says. Two existing laws caught the sort numbers on the way in (`INTENT_LINES` had taken `GUARD_ICONS`' slot; `INTENT_LABELS` sat at the fire ceiling), which is what those laws are for.
+
+**Damage is per line, not a merged bar** (dev's call). The #313 ghost bars take ONE plan and the preview produces one per squad; merging them would mint hypo arithmetic that does not exist, and a per-line number answers the more useful question anyway — *what does that one do to me*. The subtraction is `ActionQueueRow`'s own, off the same outcome, so the board and the queue panel can never disagree.
+
+### Declared limits
+
+- **Kills are not applied.** The snapshot moves bodies, not HP: an enemy your plan fells still previews its attack. It over-warns, which is the safe direction; applying the player's resolved hypo means a second executor and is its own ticket.
+- **A void-removed enemy** publishes no landing and previews from where it stands. Same direction.
+- **Only factions the AI drives are previewed** — an unmanaged faction is nobody's to predict.

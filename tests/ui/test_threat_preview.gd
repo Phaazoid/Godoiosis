@@ -152,3 +152,77 @@ func test_a_queued_order_drops_the_cached_field() -> void:
 	game._click_choosing_move(Vector2i(1, 2))
 	assert_int(mover.squad.action_queue.size()).is_greater(0)   # the order really queued
 	assert_object(game.threat_field()).is_not_same(before)
+
+
+# --- The exact tier's cadence (#710 slice 2) ---------------------------------------------------
+
+# The preview only speaks for factions the AI actually DRIVES -- an unmanaged faction is nobody's
+# to predict. clear_board() empties that set, so every case below has to put the enemy back.
+func _enable_enemy_ai() -> void:
+	game.ai_controller.set_faction_ai_enabled(ENEMY, true)
+
+# The debounce's whole job: a burst of orders costs ONE recompute. threat_plan_version is the only
+# observable -- the intents themselves are identical either way, so counting is the test.
+func test_a_burst_of_orders_costs_one_recompute() -> void:
+	var mover := _spawn(PLAYER, Vector2i(1, 1))
+	_spawn(ENEMY, Vector2i(4, 1))
+	var before: int = game.threat_plan_version
+
+	game._restart_threat_plan()
+	game._restart_threat_plan()
+	game._restart_threat_plan()
+	assert_int(game.threat_plan_version).override_failure_message(
+			"the preview ran while the timer was still counting -- the debounce is not debouncing").is_equal(before)
+	assert_bool(game._threat_plan_timer.is_stopped()).is_false()
+
+	game.refresh_threat_plan()   # what the timeout does
+	assert_int(game.threat_plan_version).is_equal(before + 1)
+	assert_bool(game._threat_plan_timer.is_stopped()).override_failure_message(
+			"a recompute left the timer running -- it would fire a second time").is_true()
+	assert_object(mover).is_not_null()
+
+
+func test_execute_stops_a_pending_recompute() -> void:
+	_spawn(PLAYER, Vector2i(1, 1))
+	_spawn(ENEMY, Vector2i(4, 1))
+	game._restart_threat_plan()
+	assert_bool(game._threat_plan_timer.is_stopped()).is_false()
+
+	game._on_queue_execute_requested()   # no active squad, so it returns early -- after stopping the timer
+	assert_bool(game._threat_plan_timer.is_stopped()).override_failure_message(
+			"a recompute was still pending over a board that is about to move").is_true()
+
+
+# The exact tier draws a line per intent and a number on it, and the toggle asks for it immediately
+# rather than after the debounce.
+func test_the_toggle_draws_intent_lines_with_their_numbers() -> void:
+	_enable_enemy_ai()
+	var mover := _spawn(PLAYER, Vector2i(1, 1))
+	_spawn(ENEMY, Vector2i(3, 2))
+	game.enter_move_mode(mover)
+	game.selected_unit = mover
+	game._click_choosing_move(Vector2i(2, 2))   # walk into reach, for real
+	game.refresh_threat_plan()
+
+	assert_int(_om().intent_lines.size()).override_failure_message(
+			"no intent line for a unit standing next to an enemy").is_equal(1)
+	assert_int(_om().intent_labels.size()).is_equal(1)
+	assert_str(str(_om().intent_labels[0]["text"])).is_not_equal("0")
+	var seg: PackedVector3Array = _om().intent_lines[0]
+	assert_that(Vector2i(int(seg[1].x - 0.5), int(seg[1].z - 0.5))).override_failure_message(
+			"the line does not end on the unit it names").is_equal(Vector2i(2, 2))
+
+
+func test_the_intent_channel_clears_on_board_load() -> void:
+	_enable_enemy_ai()
+	var mover := _spawn(PLAYER, Vector2i(1, 1))
+	_spawn(ENEMY, Vector2i(3, 2))
+	game.enter_move_mode(mover)
+	game.selected_unit = mover
+	game._click_choosing_move(Vector2i(2, 2))
+	game.refresh_threat_plan()
+	assert_bool(_om().intent_lines.size() > 0).is_true()
+
+	game._clear_threat_plan()
+	assert_array(_om().intent_lines).is_empty()
+	assert_array(_om().intent_labels).is_empty()

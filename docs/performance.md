@@ -396,6 +396,8 @@ plus a scratch phase profiler, to decide the preview's cadence:
 | `queue_fallback_actions_for_squad` | 34 ms |
 | **One enemy squad's exact decision** | **~300 ms** (whole board 927 ms; #710's filed figure of 548 ms is stale) |
 
+**SUPERSEDED for the shipped preview, 2026-09-17 -- see the next section.** This 300 ms is a squad planning a walk ACROSS the board, and the plan tier turned out to cost ~77 ms per ENGAGED squad. The conclusion this table was measured to reach still stands: the exact plan cannot ride a hover.
+
 **What it says.** The exact plan is a search — ~25 full plan resolutions, every player unit's
 projected cell an input to each — so no cache key survives a hover and no restructure gets it under
 a frame. That split the preview into a live REACH tier (`ThreatField`, cached on `game` and dropped
@@ -406,3 +408,38 @@ costs 22 ms per call because it runs a preview-validate, re-validates the whole 
 overlays, and the group move pays the same per member; a hypothetical queue that skips those
 round-trips is a real 2–3× (~300 → ~100–130 ms per squad), not a 30×. Threading is out while the AI
 plans through the real `SquadManager` on scene nodes (Law #3).
+
+## 2026-09-17 — what a threat-plan recompute really costs (#710 slice 2)
+
+The plan tier runs each hostile squad's REAL decision against the board the player's pending plan
+will leave. Slice 1's table put one squad's decision at ~300 ms and the cadence was budgeted
+against that. Measured at HEAD on Castle Assault, three passes each:
+
+| State | Cost |
+|---|---|
+| `ThreatField.build` (slice 1's reach field, on the projected board) | **1.5 ms** |
+| A recompute with **no squad in reach** of anyone — the early-out skips them all | **1.7 ms** |
+| A recompute with **one squad engaged** (a player unit walked into contact) | **77 ms** |
+
+**Two things made it 4x cheaper than budgeted.** The 300 ms figure was a squad planning a walk
+across the whole board (`queue_group_move` alone was 69 ms of it); a squad already in contact
+decides far less. And `SquadManager.previewing` — added so the preview cannot draw — also skips
+`queue_action`'s and `queue_batch`'s own `redraw_planned_paths` / `redraw_projected_units`, which
+is a slice of what #999's silent planning path was filed to remove. #999 still stands for the
+validator round-trips it does not touch.
+
+**Scaling is linear in ENGAGED squads, not in squads.** `AIController.previewed_squad_count`
+reports how many the last recompute actually planned, which is the number to quote. The arithmetic
+bound on a six-squad board with every squad in contact is ~460 ms; it has not been observed,
+because a squad that can reach nobody is skipped for free.
+
+**THE EARLY-OUT'S BITE SHRINKS AS WEAPON RANGES GROW** (dev, 2026-09-17: *"we might have to work in
+special exceptions later down the line if/when we include super long range things"*). It skips a
+squad whose whole reach envelope holds no hostile unit; a weapon that reaches half the board makes
+that envelope almost always non-empty, and the skip stops paying. That is the honest behaviour of
+an exact test, not a defect — but it is the thing to re-measure when artillery lands, and the place
+a special case would go.
+
+**A profiling note that cost an hour:** `Prolog.tres` cannot be profiled through a headless
+`--script` harness — its authored dialog beats never complete and the run hangs rather than
+failing. Use a board with no `dialog_beats`, or run the tool as a SCENE.

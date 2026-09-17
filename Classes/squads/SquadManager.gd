@@ -23,6 +23,10 @@ var active_squad: Squad = null
 # fan-out runs once at the end instead. Every order still passes queue_action's gates (Law #3).
 # ONLY safe while a batch stays synchronous — docs/performance.md has the invariants.
 var batching := false
+# The threat preview runs the REAL archetypes and rolls their orders back (#710 plan tier), so for
+# its duration the queue doors must not DRAW and game.gd's squad handlers must not repaint. Set and
+# cleared only by AIController.preview_faction_turn. Nothing is drawn, so nothing needs cleaning up.
+var previewing := false
 
 # Allocates BaseAction.batch_id -- the durable half of `batching`, so a LIFO undo (#228) can tell
 # a five-member formation from five separate orders. Pre-incremented, so 0 stays "unstamped".
@@ -344,7 +348,8 @@ func queue_action(squad: Squad, action: BaseAction) -> bool:
 	if batching:
 		return true   # the batch re-validates and redraws once, after the last order
 	validate_squad_plan(squad)
-	overlay_manager.redraw_planned_paths()
+	if not previewing:
+		overlay_manager.redraw_planned_paths()
 
 	return true
 
@@ -465,7 +470,8 @@ func remove_action(squad: Squad, action: BaseAction):
 		active_squad = null
 		return
 	validate_squad_plan(squad)
-	overlay_manager.redraw_planned_paths()
+	if not previewing:
+		overlay_manager.redraw_planned_paths()
 
 # What one right-click undoes (#228): the most recent player GESTURE — a lone order normally, a
 # whole formation for a group move, since that is one decision. Hold-position fillers can never
@@ -1099,11 +1105,12 @@ func queue_batch(squad: Squad, moves: Array[MoveAction]) -> bool:
 		cancel_squad_moves(squad)
 		return false
 
-	for move in queued:
-		overlay_manager.show_planned_path(move.actor, move)
-		overlay_manager.show_projected_unit(move.actor, move.destination)
-	overlay_manager.redraw_planned_paths()
-	overlay_manager.redraw_projected_units()
+	if not previewing:
+		for move in queued:
+			overlay_manager.show_planned_path(move.actor, move)
+			overlay_manager.show_projected_unit(move.actor, move.destination)
+		overlay_manager.redraw_planned_paths()
+		overlay_manager.redraw_projected_units()
 	# Re-emit for the last order so listeners do their squad-level repaint exactly once. Reusing
 	# the existing signal keeps the batch invisible to everyone downstream.
 	if not queued.is_empty():
