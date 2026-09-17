@@ -1160,7 +1160,7 @@ func _unhandled_input(event: InputEvent) -> void:
 		_handle_cancel_button(click)
 		return
 	if click.pressed and click.button_index == MOUSE_BUTTON_LEFT:
-		_click_pointer_cell()
+		_click_pointer_cell(click.shift_pressed)
 
 
 # Ctrl+wheel zooms while the elevation brush owns the plain wheel (#285). The rig cannot answer
@@ -1587,7 +1587,7 @@ func _update_pointer(screen_pos: Vector2) -> void:
 # _unhandled_input just derives a cell and calls them, and every test in the repo
 # drives them this way (tests/README.md). Delivering the picked cell directly is
 # both simpler and exact: no viewport-mouse round trip to get wrong.
-func _click_pointer_cell() -> void:
+func _click_pointer_cell(shift_held := false) -> void:
 	if _pointer_cell == BoardSpace.NO_CELL:
 		return
 	# The game refuses clicks while the board is locked (AI turn / mission over /
@@ -1597,7 +1597,7 @@ func _click_pointer_cell() -> void:
 	# cannot: Mission Select opts OUT of the modal lock, so the game is unfrozen.
 	if game._board_locked_for_player():
 		return
-	game._on_left_click(BoardSpace.flat(_pointer_cell))
+	game._on_left_click(BoardSpace.flat(_pointer_cell), shift_held)
 
 
 # Which unit the pointer resolves to, for UnitMirror's health readout (#229). Deliberately the

@@ -8,6 +8,12 @@ class_name ThreatField
 
 var cells: Dictionary = {}     # Vector2i -> Array[Unit] that can attack it
 var by_unit: Dictionary = {}   # Unit -> Dictionary[Vector2i, true]
+# ...and where each could STAND to do it -- the archetype's own envelope, which is the FE danger
+# zone's other tone (#710 slice 3). It was always computed and thrown away; keeping it is what
+# lets the board say "a body can be here" beside "a body can hit here", and it is honest by
+# construction rather than by a second rule: a Hold unit yields its own cell because that is
+# where its archetype fires from.
+var move_by_unit: Dictionary = {}   # Unit -> Dictionary[Vector2i, true]
 
 
 # Every unit hostile to `viewer`, so an ally's board reads the same field the player's does.
@@ -18,7 +24,18 @@ static func build(board: BoardContext, viewer: Team.Faction) -> ThreatField:
 			continue
 		if not Team.is_enemy(viewer, unit.get_faction()):
 			continue
-		var reach := _reach_of(unit, board)
+		var zone: Dictionary = {}
+		if _archetype_of(unit.squad) == AIArchetype.Type.SENTRY:
+			zone = SentryArchetype._zone_set(unit.squad, board)
+		# Origins are computed ONCE and passed down rather than re-derived inside the reach walk:
+		# they are the move tone as well as the reach's input, and two derivations of one envelope
+		# is the duplicate the board would eventually disagree with itself about.
+		var origins := _origins_of(unit, board, zone)
+		var moves := {}
+		for cell in origins:
+			moves[cell] = true
+		field.move_by_unit[unit] = moves
+		var reach := _reach_of(unit, board, origins, zone)
 		field.by_unit[unit] = reach
 		for cell in reach:
 			if not field.cells.has(cell):
@@ -39,9 +56,36 @@ func reach_of(unit: Unit) -> Array[Vector2i]:
 	return out
 
 
+func move_of(unit: Unit) -> Array[Vector2i]:
+	var out: Array[Vector2i] = []
+	out.assign(move_by_unit.get(unit, {}).keys())
+	return out
+
+
 func all_cells() -> Array[Vector2i]:
 	var out: Array[Vector2i] = []
 	out.assign(cells.keys())
+	return out
+
+
+# The union over the units named, or over EVERY enemy when the list is empty -- one function for
+# the toggle's whole-board answer and the pinned/hovered subset, so the two cannot drift.
+func move_cells_of(units: Array[Unit]) -> Array[Vector2i]:
+	return _union(move_by_unit, units)
+
+
+func reach_cells_of(units: Array[Unit]) -> Array[Vector2i]:
+	return _union(by_unit, units)
+
+
+func _union(store: Dictionary, units: Array[Unit]) -> Array[Vector2i]:
+	var seen := {}
+	var subjects: Array = units if not units.is_empty() else store.keys()
+	for unit: Unit in subjects:
+		for cell in store.get(unit, {}):
+			seen[cell] = true
+	var out: Array[Vector2i] = []
+	out.assign(seen.keys())
 	return out
 
 
@@ -82,15 +126,14 @@ static func _origins_of(unit: Unit, board: BoardContext, zone: Dictionary) -> Ar
 
 # Every cell any fireable attack reaches from any origin, under the same two filters the AI's own
 # candidate builder applies (AITactics._attack_candidates): fireable, and vertically aimable.
-static func _reach_of(unit: Unit, board: BoardContext) -> Dictionary:
+# Origins and zone arrive as parameters because build() already holds both -- looking them up
+# again here would be a second derivation of the envelope the move tone draws.
+static func _reach_of(unit: Unit, board: BoardContext, origins: Array[Vector2i], zone: Dictionary) -> Dictionary:
 	var out := {}
-	var zone: Dictionary = {}
-	if _archetype_of(unit.squad) == AIArchetype.Type.SENTRY:
-		zone = SentryArchetype._zone_set(unit.squad, board)
 	var attacks: Array[AttackData] = unit.get_selectable_attacks()
 	if attacks.is_empty():
 		attacks = [null]   # unarmed: bare-fist Manhattan-1, Reach's own fallback
-	for origin in _origins_of(unit, board, zone):
+	for origin in origins:
 		for attack in attacks:
 			if not unit.is_attack_fireable(attack):
 				continue

@@ -1,7 +1,8 @@
-# The hover tier of the enemy-intent preview (#710), through the REAL triggers: a hovered
-# destination in CHOOSING_MOVE draws one line per enemy that could reach it, an enemy under the
-# pointer shows its reach and its leash, the T toggle fills the whole field and reveals every
-# sentry's zone, and a queued order drops the cached field. Fixture is #114's -- the instanced
+# The enemy range and intent views (#710), through the REAL triggers: an enemy under the pointer
+# shows BOTH tones and its leash and none of your own movement layers, V fills every enemy,
+# Shift+click pins one past the pointer and past the key, and a queued order drops the cached
+# field. The reach LINES this suite used to pin are GONE (slice 3, dev: "a bit too much") -- the
+# two-tone fill is what answers "who can reach here" now. Fixture is #114's -- the instanced
 # root MUST be named "Main" under /root.
 extends GdUnitTestSuite
 
@@ -60,46 +61,14 @@ func _sorted(cells: Array[Vector2i]) -> Array[Vector2i]:
 	return out
 
 
-func _hover_destination(mover: Unit, cell: Vector2i) -> void:
-	game.enter_move_mode(mover)
-	game.selected_unit = mover
-	game.hover_presenter._hover_choosing_move(cell)
-
-
-func test_hovering_a_threatened_destination_draws_one_line_per_enemy_that_can_reach_it() -> void:
-	var mover := _spawn(PLAYER, Vector2i(1, 1))
-	var east := _spawn(ENEMY, Vector2i(3, 2))    # reaches (2, 2)
-	var south := _spawn(ENEMY, Vector2i(2, 3))   # reaches (2, 2)
-	_hover_destination(mover, Vector2i(2, 2))
-	var lines: Array[PackedVector3Array] = _om().threat_lines
-	assert_int(lines.size()).is_equal(2)
-	# Every line ENDS on the hovered cell, in trace space: cell centre, eye height.
-	var end := Vector3(2.5, Reach.EYE_HEIGHT, 2.5)
-	var starts: Array[Vector3] = []
-	for line in lines:
-		assert_that(line[line.size() - 1]).is_equal(end)
-		starts.append(line[0])
-	assert_bool(starts.has(Vector3(3.5, Reach.EYE_HEIGHT, 2.5))).override_failure_message(
-			"no line from %s" % east.movement.cell).is_true()
-	assert_bool(starts.has(Vector3(2.5, Reach.EYE_HEIGHT, 3.5))).override_failure_message(
-			"no line from %s" % south.movement.cell).is_true()
-	game.exit_current_mode()
-	assert_array(_om().threat_lines).is_empty()
-
-
-func test_hovering_a_safe_destination_draws_nothing() -> void:
-	var mover := _spawn(PLAYER, Vector2i(1, 1))
-	_spawn(ENEMY, Vector2i(3, 3))   # a Hold unit two steps away from (1, 2)
-	_hover_destination(mover, Vector2i(1, 2))
-	assert_array(_om().threat_lines).is_empty()
-
-
-func test_hovering_an_enemy_shows_its_reach_and_its_leash_and_leaving_clears_both() -> void:
+func test_hovering_an_enemy_shows_both_tones_and_its_leash_and_leaving_clears_them() -> void:
 	var sentry := _spawn_sentry(Vector2i(3, 2))
 	game.hover_presenter.update_hover_visuals(sentry.movement.cell)
 	var field: ThreatField = game.threat_field()
 	assert_that(_sorted(_om().danger_overlay.get_used_cells())).is_equal(_sorted(field.reach_of(sentry)))
 	assert_bool(_om().danger_overlay.get_used_cells().size() > 0).is_true()
+	assert_that(_sorted(_om().enemy_move_overlay.get_used_cells())).override_failure_message(
+			"the move tone is not the archetype's own envelope").is_equal(_sorted(field.move_of(sentry)))
 	assert_that(_sorted(_om().zone_highlight_overlay.get_used_cells())) \
 		.is_equal(_sorted(game.zone_manager.cells_in(ZONE)))
 	assert_bool(_om().zone_highlight_overlay.visible).override_failure_message(
@@ -108,37 +77,118 @@ func test_hovering_an_enemy_shows_its_reach_and_its_leash_and_leaving_clears_bot
 			"the patrol layer itself leaked into play; only the ONE leash is revealed").is_false()
 	game.hover_presenter.update_hover_visuals(Vector2i(0, 0))
 	assert_array(_om().danger_overlay.get_used_cells()).is_empty()
+	assert_array(_om().enemy_move_overlay.get_used_cells()).is_empty()
 	assert_array(_om().zone_highlight_overlay.get_used_cells()).is_empty()
 	assert_bool(_om().zone_highlight_overlay.visible).is_false()
 
 
-func test_the_toggle_fills_the_whole_field_and_reveals_every_leash() -> void:
+func test_hovering_an_enemy_never_borrows_your_own_movement_layers() -> void:
+	# #710 slice 3's unify ruling. All three used to paint for ANY hovered unit, and all three
+	# answer the RAW question -- where could this body physically walk -- which is not what the
+	# enemy tones say. The squad-range one is the sharpest: it is a third picture of enemy
+	# movement, and the one ThreatField deliberately ignores.
+	var enemy := _spawn(ENEMY, Vector2i(3, 2), AIArchetype.Type.HOLD)
+	game.hover_presenter.update_hover_visuals(enemy.movement.cell)
+	assert_array(_om().move_overlay.get_used_cells()).override_failure_message(
+			"hovering an enemy painted YOUR yellow move range").is_empty()
+	assert_array(_om().squadrange_overlay.get_used_cells()).override_failure_message(
+			"hovering an enemy painted the orange cohesion bubble").is_empty()
+	assert_array(_om().invalidmove_overlay.get_used_cells()).override_failure_message(
+			"hovering an enemy painted the red unreachable fill").is_empty()
+	# ...and it is not simply drawing nothing: the enemy's own tones ARE up.
+	assert_bool(_om().danger_overlay.get_used_cells().size() > 0).is_true()
+	assert_bool(_om().enemy_move_overlay.get_used_cells().size() > 0).is_true()
+
+
+func test_a_hold_enemy_casts_no_move_tone_at_all() -> void:
+	# The archetype-honest ruling, at the one archetype where it is visible: a Hold unit fires
+	# from where it stands, so the only cell it can be on is its own. Under a raw move range it
+	# would paint its whole MOV and read as a charge that is never coming.
+	var holder := _spawn(ENEMY, Vector2i(3, 2), AIArchetype.Type.HOLD)
+	game.toggle_enemy_ranges()
+	assert_that(_om().enemy_move_overlay.get_used_cells()).is_equal([holder.movement.cell])
+	assert_bool(_om().danger_overlay.get_used_cells().size() > 1).override_failure_message(
+			"the reach tone collapsed too -- this case would then prove nothing").is_true()
+
+
+func test_the_ranges_key_fills_every_enemy_and_reveals_every_leash() -> void:
 	_spawn_sentry(Vector2i(3, 2))
 	_spawn(ENEMY, Vector2i(2, 3))   # a second, unleashed enemy inside the boot board
-	game.toggle_threat_view()
-	assert_bool(game.threat_view_on).is_true()
+	game.toggle_enemy_ranges()
+	assert_bool(game.ranges_shown).is_true()
 	var field: ThreatField = game.threat_field()
 	assert_that(_sorted(_om().danger_overlay.get_used_cells())).is_equal(_sorted(field.all_cells()))
 	assert_int(_om().danger_overlay.get_used_cells().size()).is_greater(4)   # both enemies, not one
 	assert_that(_sorted(_om().zone_highlight_overlay.get_used_cells())) \
 		.is_equal(_sorted(game.zone_manager.cells_in(ZONE)))
 	assert_bool(_om().zone_highlight_overlay.visible).is_true()
-	# Hovering elsewhere does not tear the toggled view down -- it belongs to the key, not the pointer.
+	# Hovering elsewhere does not tear the view down -- it belongs to the key, not the pointer.
 	game.hover_presenter.update_hover_visuals(Vector2i(0, 0))
 	assert_bool(_om().danger_overlay.get_used_cells().size() > 0).is_true()
-	game.toggle_threat_view()
-	assert_bool(game.threat_view_on).is_false()
+	game.toggle_enemy_ranges()
+	assert_bool(game.ranges_shown).is_false()
 	assert_array(_om().danger_overlay.get_used_cells()).is_empty()
+	assert_array(_om().enemy_move_overlay.get_used_cells()).is_empty()
 	assert_array(_om().zone_highlight_overlay.get_used_cells()).is_empty()
 
 
-func test_the_toggle_stands_down_for_the_tile_brush() -> void:
+func test_a_pinned_enemy_survives_the_key_being_turned_on_and_off_again() -> void:
+	# The dev's own wording: a pin OVERRIDES the toggle. The standing set is what the door draws
+	# when the key is off, so the key cannot clear it on its way down.
+	var pinned := _spawn(ENEMY, Vector2i(3, 2))
+	var other := _spawn(ENEMY, Vector2i(1, 4))
+	game.toggle_enemy_pin(pinned)
+	var field: ThreatField = game.threat_field()
+	assert_that(_sorted(_om().enemy_move_overlay.get_used_cells())).is_equal(_sorted(field.move_of(pinned)))
+	game.toggle_enemy_ranges()
+	game.toggle_enemy_ranges()
+	assert_bool(game.ranges_shown).is_false()
+	assert_that(_sorted(_om().enemy_move_overlay.get_used_cells())).override_failure_message(
+			"the key's OFF wiped the pinned enemy along with everything else") \
+		.is_equal(_sorted(field.move_of(pinned)))
+	assert_bool(_om().enemy_move_overlay.get_used_cells().has(other.movement.cell)).override_failure_message(
+			"the unpinned enemy is still drawn").is_false()
+	game.toggle_enemy_pin(pinned)
+	assert_array(_om().enemy_move_overlay.get_used_cells()).is_empty()
+
+
+func test_a_pinned_enemy_survives_the_pointer_leaving_it_and_an_order_being_queued() -> void:
+	# The second half is the hole the door closed: drop_threat_field used to repaint only while
+	# the toggle was on, so a queued order left a pin showing a field built before the board moved.
+	var mover := _spawn(PLAYER, Vector2i(1, 1))
+	var pinned := _spawn(ENEMY, Vector2i(4, 1))
+	game.toggle_enemy_pin(pinned)
+	game.hover_presenter.update_hover_visuals(Vector2i(0, 0))
+	assert_bool(_om().enemy_move_overlay.get_used_cells().size() > 0).override_failure_message(
+			"the pointer moving off the pinned enemy tore its ranges down").is_true()
+	game.enter_move_mode(mover)
+	game.selected_unit = mover
+	game._click_choosing_move(Vector2i(1, 2))
+	assert_bool(_om().enemy_move_overlay.get_used_cells().size() > 0).override_failure_message(
+			"a queued order cleared the pinned enemy's ranges and never put them back").is_true()
+
+
+func test_shift_clicking_an_enemy_pins_it_and_opens_no_menu() -> void:
+	# Shift CONSUMES the click, because the ordinary one selects an enemy and opens its ring
+	# (the hotseat allowance) -- and pinning is not a selection.
+	var enemy := _spawn(ENEMY, Vector2i(3, 2))
+	game._on_left_click(enemy.movement.cell, true)
+	assert_bool(game.pinned_enemies.has(enemy.get_instance_id())).is_true()
+	assert_object(game.selected_unit).override_failure_message(
+			"shift+click selected the enemy as well as pinning it").is_null()
+	assert_int(game.game_state).is_equal(game.GameState.IDLE)
+	game._on_left_click(enemy.movement.cell, true)
+	assert_bool(game.pinned_enemies.has(enemy.get_instance_id())).override_failure_message(
+			"shift+click does not toggle back off").is_false()
+
+
+func test_the_ranges_key_stands_down_for_the_tile_brush() -> void:
 	# The highlight layer has two writers; the brush's pick wins while its tab is up.
 	_spawn_sentry(Vector2i(3, 2))
 	_om().set_zone_visibility(true)
-	game.toggle_threat_view()
+	game.toggle_enemy_ranges()
 	assert_array(_om().zone_highlight_overlay.get_used_cells()).is_empty()
-	game.toggle_threat_view()
+	game.toggle_enemy_ranges()
 	_om().set_zone_visibility(false)
 
 

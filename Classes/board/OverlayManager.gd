@@ -163,6 +163,11 @@ const ZONE_DEFEND_MODULATE := Color(1, 0.82, 0.25, 0.45)
 static var ZONE_HIGHLIGHT_MODULATE := Color(1, 1, 1, 0.45)
 # The enemy threat fill (#710 hover tier): every cell an enemy could reach next turn.
 static var DANGER_MODULATE := Color(1, 0.15, 0.1, 0.3)
+# ...and where they could stand to use it (slice 3). BLUE against a board whose every other tone
+# is warm -- grass, dirt, your own yellow range, this layer's own red -- which a drawn mockup
+# settled: cool is the only thing on that palette that cannot be mistaken for terrain. It sits
+# near the cyan capture zone and the violet deployment zone, which is the risk the dev accepted.
+static var ENEMY_MOVE_MODULATE := Color(0.25, 0.45, 1, 0.45)
 
 
 enum OverlayType {
@@ -339,6 +344,7 @@ var knockback_ghost_by_unit := {} # { Unit : Sprite2D }
 var zone_layer_map := {}
 var zone_highlight_overlay: TileMapLayer = null   # the Tile Brush's picked zone; built in _ready
 var danger_overlay: TileMapLayer = null   # the #710 threat fill; built in _ready
+var enemy_move_overlay: TileMapLayer = null   # ...and where they could stand to use it (slice 3)
 var leash_revealed := false   # a play-time reveal is holding the highlight layer up (#710)
 # The two inputs to whether authoring zones draw -- see set_zone_visibility. The INTENT is what
 # a 3D mirror asks; `.visible` is the product and answers only "does the 2D draw this".
@@ -446,13 +452,21 @@ func _ready() -> void:
 	_sight_trace_2d.z_index = TERRAIN_Z_INDEX
 	add_child(_sight_trace_2d)
 	# The threat fill (#710): a duplicate of the move layer, tinted, and placed UNDER it in tree
-	# order so a move range still reads over a threatened cell.
+	# order so a move range still reads over a threatened cell. The enemy's MOVE tone (slice 3)
+	# goes between the two -- over the reach because the dev ruled a body's standing room the
+	# louder fact, under your own range because the cell you are about to step on must still read.
+	# Tree order here is the 2D's answer to what the sort numbers say in 3D; the two must agree.
 	if move_overlay is TileMapLayer:
 		danger_overlay = move_overlay.duplicate() as TileMapLayer
 		danger_overlay.name = "DangerOverlay"
 		danger_overlay.modulate = DANGER_MODULATE
 		add_child(danger_overlay)
 		move_child(danger_overlay, move_overlay.get_index())
+		enemy_move_overlay = move_overlay.duplicate() as TileMapLayer
+		enemy_move_overlay.name = "EnemyMoveOverlay"
+		enemy_move_overlay.modulate = ENEMY_MOVE_MODULATE
+		add_child(enemy_move_overlay)
+		move_child(enemy_move_overlay, move_overlay.get_index())
 	_threat_lines_2d = ThreatLines2D.new()
 	_threat_lines_2d.name = "ThreatLines2D"
 	_threat_lines_2d.z_index = TERRAIN_Z_INDEX
@@ -560,6 +574,26 @@ func clear_danger() -> void:
 func restyle_danger() -> void:
 	if danger_overlay != null:
 		danger_overlay.modulate = DANGER_MODULATE
+
+
+# The enemy's move envelope (#710 slice 3) -- where a body could STAND, as against where it could
+# reach. Its own door rather than a second argument to show_danger: the two are drawn together by
+# one caller today, and will be cleared independently the moment a reason to show one alone exists.
+func show_enemy_move(cells: Array[Vector2i]) -> void:
+	if enemy_move_overlay == null:
+		return
+	enemy_move_overlay.clear()
+	draw_cells(enemy_move_overlay, cells, ATLAS_COORDS)
+
+
+func clear_enemy_move() -> void:
+	var none: Array[Vector2i] = []
+	show_enemy_move(none)
+
+
+func restyle_enemy_move() -> void:
+	if enemy_move_overlay != null:
+		enemy_move_overlay.modulate = ENEMY_MOVE_MODULATE
 
 # What color the reach layer should paint with for this attack -- red for damage, green for a
 # heal. A null attack (bare fists) reads as the default/damage color. A WATCH aim paints its own

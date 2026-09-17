@@ -102,6 +102,11 @@ func _process(_delta: float) -> void:
 	_fill_gated(BoardOverlays.Layer.DANGER, om.danger_overlay, true)
 	if om.danger_overlay != null:
 		overlays.set_layer_modulate(BoardOverlays.Layer.DANGER, om.danger_overlay.modulate)
+	# ...and the move tone over it (slice 3). Its own layer rather than a second tint on DANGER,
+	# because a layer IS a plane and these two overlap on nearly every cell.
+	_fill_gated(BoardOverlays.Layer.ENEMY_MOVE, om.enemy_move_overlay, true)
+	if om.enemy_move_overlay != null:
+		overlays.set_layer_modulate(BoardOverlays.Layer.ENEMY_MOVE, om.enemy_move_overlay.modulate)
 
 	# The aim footprint pulses by layer modulate in 2D — the animation rides the poll.
 	_fill(BoardOverlays.Layer.AIM, om.hover_overlay.get_used_cells())
