@@ -30,8 +30,13 @@ class_name PreMissionCard
 # WHICH IS A CEILING, NOT A FIXED WIDTH (#989). A clip_text Label declares a minimum width of 1, and a
 # container hands a child exactly its minimum -- so a chip pinned at CHIP_MIN_W was pinned at 30px
 # whatever was written in it, and the law above was being kept by refusing to draw rather than by
-# bounding. A chip asks for its own text up to CHIP_MAX_W, which is the width this column already
-# demands for the job picker, so the constant this file's minimum size rests on has not moved.
+# bounding. A chip asks for its own text up to CHIP_MAX_W, the same constant the job picker demands of
+# that column, so the constant this file's minimum size rests on has not moved.
+#
+# THE JOB ROW MAY BE ABSENT (#964). A mission names which jobs it offers, and one that offers none to a
+# unit holding none draws no picker -- so this column's minimum can fall BELOW that constant, which is
+# a bound the law does not care about, and nothing else in here reads the picker's existence except
+# _refresh_job's early-out.
 
 signal deploy_toggled(unit: Unit)
 # A row was clicked -- the item under the cursor, or null for an empty slot. The screen holds the
@@ -58,9 +63,11 @@ const ITEM_COLUMN := 128
 const SPRITE := 52
 const CHIP_MIN_W := 30
 const JOB_PICKER_MIN_W := 84
-# What a chip may grow to. NOT a taste value: the job picker one row up already demands
-# JOB_PICKER_MIN_W of this same column, so a chip inside that adds nothing to the card's minimum width
-# and this file's header law is satisfied by arithmetic rather than by a promise (#989).
+# What a chip may grow to. NOT a taste value: it is the SAME constant the job picker demands of this
+# column, so a chip can never be the widest thing in it and this file's header law is satisfied by
+# arithmetic rather than by a promise (#989). Stated as a ceiling rather than as "the picker already
+# demands it", because since #964 the picker may not be built at all -- and a column with no picker is
+# narrower than one with it, never wider, so the bound holds either way.
 const CHIP_MAX_W := JOB_PICKER_MIN_W
 const NO_JOB_LABEL := "— none —"
 
@@ -171,7 +178,11 @@ func _build_unit_half() -> Control:
 	_limbs_row.add_theme_constant_override("v_separation", 2)
 	meta.add_child(_limbs_row)
 
-	meta.add_child(_build_job_picker())
+	# A mission that offers no job draws no row at all (#964), so this is the one meta child that may
+	# be absent.
+	var picker := _build_job_picker()
+	if picker != null:
+		meta.add_child(picker)
 
 	_abilities_row = HFlowContainer.new()
 	_abilities_row.add_theme_constant_override("h_separation", 3)
@@ -210,13 +221,38 @@ func _build_unit_half() -> Control:
 
 # --- the job picker (#742) ------------------------------------------------------------------------
 
+# WHAT THIS CARD MAY OFFER: the mission's own list (#964), plus whatever this unit already holds.
+#
+# The union is not politeness. A character authoring a starting_job, or a state_saved roster entry,
+# can arrive holding a job the mission does not offer — and without it that unit falls into the
+# unknown-id branch of _refresh_job below, which prints the raw id and leaves the job un-re-pickable
+# once dropped. Offered ∪ held reads right and stays reversible.
+func _offered_job_ids() -> Array[String]:
+	var ids: Array[String] = []
+	for id: String in _controller.loadout().available_jobs:
+		if id != "" and not ids.has(id):
+			ids.append(id)
+	for id: String in unit.unit_instance.jobs:
+		if id != "" and not ids.has(id):
+			ids.append(id)
+	return ids
+
+
 # BUILT ONCE AND NEVER REBUILT. _refresh_job below only moves the selection, because the refresh that
 # follows a pick would otherwise replace the very control the pick came out of.
+#
+# NULL WHEN THERE IS NOTHING TO OFFER (#964) — a dropdown holding only "— none —" is a control that
+# cannot do anything, and an absent row reads as a mission that has no jobs rather than as a card that
+# failed to draw. Every later reader guards on _job_picker being null.
 #
 # fit_to_longest_item is the knob that matters here, not clip_text: it defaults TRUE, which makes an
 # OptionButton's minimum width its widest ITEM — one long job name and the card's column walks out of
 # the region, which is the law in this file's header and the #685 failure one surface over.
 func _build_job_picker() -> Control:
+	var ids := _offered_job_ids()
+	if ids.is_empty():
+		return null
+
 	_job_picker = OptionButton.new()
 	_job_picker.flat = true            # it is the job ROW with a caret, not a widget dropped on the card
 	_job_picker.clip_text = true
@@ -234,14 +270,12 @@ func _build_job_picker() -> Control:
 	_job_picker.add_theme_color_override("font_disabled_color",
 		QueueStyle.ink(QueueStyle.Role.HEADER_TEXT))
 
-	# Sorted by display name: get_jobs() is a filesystem scan, so an unsorted list would order itself
-	# differently on a different machine. "None" leads, and it is a real choice — every roster
-	# character today authors no starting job, so it is the state the control opens in.
+	# Sorted by display name: the roster's own list is authored in tick order and get_jobs() is a
+	# filesystem scan, so an unsorted list would order itself differently on a different machine.
+	# "None" leads, and it is a real choice — every roster character today authors no starting job, so
+	# it is the state the control opens in.
 	_job_picker.add_item(NO_JOB_LABEL)
 	_job_picker.set_item_metadata(0, "")
-	var ids: Array[String] = []
-	for id: String in JobCatalog.get_jobs():
-		ids.append(id)
 	ids.sort_custom(func(a: String, b: String) -> bool:
 		return _job_name(a).naturalnocasecmp_to(_job_name(b)) < 0)
 	for id: String in ids:
@@ -417,6 +451,8 @@ func _refresh_limbs() -> void:
 
 # MOVES THE SELECTION, BUILDS NOTHING. See _build_job_picker.
 func _refresh_job() -> void:
+	if _job_picker == null:
+		return   # this mission offers no job and this unit holds none -- there is no row (#964)
 	var jobs: Array[String] = unit.unit_instance.jobs
 	var refusal := unit.job_change_block_reason("")
 	_job_picker.disabled = refusal != ""
@@ -441,9 +477,10 @@ func _refresh_job() -> void:
 			matched = true
 			break
 	if not matched:
-		# A job id no catalogue file answers -- apply_unit_state assigns jobs directly, so a save or a
-		# roster entry can carry one. Show the raw id rather than claiming "none"; picking replaces it,
-		# which is the repair.
+		# A BACKSTOP since #964, no longer the ordinary path: a held job is in the list by construction
+		# now (_offered_job_ids unions it in), including one no catalogue file answers, which lists under
+		# its raw id. This survives for a job assigned after the picker was built -- nothing does that
+		# today -- and says the raw id rather than claiming "none".
 		_job_picker.select(-1)
 		_job_picker.text = held
 	_job_picker.tooltip_text = UiText.wrap(

@@ -1,5 +1,5 @@
 # The roster editor (#812): what a mission OFFERS, edited rather than hand-authored in Godot's
-# inspector. Three columns, each the whole catalogue with the chosen floated above a rule.
+# inspector. Four columns since #964, each the whole catalogue with the chosen floated above a rule.
 #
 # The cases drive the TOOL -- a real instance, its own rows' toggles -- rather than the model
 # underneath, because the model half was already shipped by #735 and what this ticket adds is the
@@ -11,6 +11,7 @@ extends GdUnitTestSuite
 
 const OVERLAY := "res://Scenes/DevOverlay.tscn"
 const SCRATCH_DIR := "user://__roster_tool_812/"
+const JOBS_COLUMN := 3
 
 var _overlay: Window
 var tool_page: RosterTool
@@ -300,6 +301,36 @@ func test_the_pool_filters_the_offer_and_an_empty_pool_means_the_catalogue() -> 
 	assert_int(WeaponModCatalog.offerable_for(family, [] as Array[WeaponModData]).size()) \
 		.override_failure_message("an empty pool stopped meaning the whole catalogue"
 		).is_equal(everything.size())
+
+# --- jobs (#964) ---
+
+# The narrowest column, and the only one whose ticks are IDS rather than refs -- which is what
+# UnitData.starting_jobs stores and what the Character Editor's own tick list writes, so a roster
+# naming a job the second way would have been a second answer to "which job is this".
+func test_ticking_a_job_writes_its_id() -> void:
+	var jobs := JobCatalog.get_jobs()
+	if jobs.is_empty():
+		push_warning("no jobs are authored, so the column has nothing to tick")
+		return
+	var id := String(jobs.keys()[0])
+	tool_page._on_new_pressed()
+	await await_idle_frame()
+
+	assert_object(_toggle_of(JOBS_COLUMN)).override_failure_message(
+		"the jobs column has no 'offer everything' toggle -- it may not be built at all").is_not_null()
+	var row := _row_for(JOBS_COLUMN, id) as CheckBox
+	assert_object(row).override_failure_message(
+		"no row in the jobs column names '%s'" % id).is_not_null()
+
+	row.button_pressed = true   # emits toggled, which is the tool's own door
+	await await_idle_frame()
+
+	assert_array(tool_page.current.available_jobs).override_failure_message(
+		"ticking the row stored something other than the job's own id").contains_exactly([id])
+	# And the picker reads it: the tool writes the field the accessor answers from.
+	tool_page.current.offers_every_job = false
+	assert_array(tool_page.current.offered_jobs()).contains_exactly([id])
+
 
 # THE MARKER IS A STATE, NOT AN EVENT (found in play, 2026-09-07: "every time I change something,
 # the 'Update' line gets another asterisk next to it").

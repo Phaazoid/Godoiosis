@@ -1,4 +1,4 @@
-# RosterLint's teeth (#735), plus the sweep over every shipped roster.
+# RosterLint's teeth (#735, and #964's offered-jobs rule), plus the sweep over every shipped roster.
 #
 # Nothing here pins authored content (tests/README.md #9): the sweep asserts a PROPERTY every
 # roster must hold, and the fixture cases build their own rosters in memory so a rule's teeth do
@@ -121,6 +121,42 @@ func test_an_empty_entry_is_found_rather_than_crashing() -> void:
 	var findings := RosterLint.check(roster)
 	assert_int(findings.size()).is_equal(1)
 	assert_str(findings[0]["text"]).contains("empty")
+
+
+# --- The jobs a roster offers (#964) ---
+
+# The price of storing the offer as ids. The tool draws one row per CATALOGUED job, so an id matching
+# none of them draws no row at all -- there is no greyed tick to notice and this is the only reader.
+func test_a_ticked_job_that_no_file_answers_to_is_found() -> void:
+	var roster := Roster.new()
+	roster.available_jobs = ["no_such_job"]
+	var findings := RosterLint.check(roster)
+
+	assert_int(findings.size()).is_equal(1)
+	assert_int(findings[0]["severity"]).is_equal(RosterLint.Severity.DEGRADES)
+	assert_str(findings[0]["text"]).contains("no_such_job")
+
+
+# The stored list, not the resolved offer: the tool keeps the picks under a ticked flag on purpose,
+# so a stale name is a fault waiting for the day it is unticked rather than one that has gone away.
+func test_a_ticked_job_that_does_not_exist_is_found_under_the_flag_too() -> void:
+	var roster := Roster.new()
+	roster.available_jobs = ["no_such_job"]
+	roster.offers_every_job = true
+	assert_int(RosterLint.check(roster).size()).override_failure_message(
+		"a stale tick went silent because the flag happens to be on -- it returns on the untick"
+		).is_equal(1)
+
+
+# A precondition read of the catalogue, never an assertion about it (the razor).
+func test_a_job_that_exists_is_clean() -> void:
+	var catalogued := JobCatalog.get_jobs().keys()
+	if catalogued.is_empty():
+		push_warning("no jobs are authored, so a clean offer cannot be exercised")
+		return
+	var roster := Roster.new()
+	roster.available_jobs = [String(catalogued[0])]
+	assert_array(RosterLint.check(roster)).is_empty()
 
 
 # --- The sweep over what actually ships ---

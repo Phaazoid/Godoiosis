@@ -12,6 +12,9 @@ class_name RosterLint
 #
 # Every fault here is an AUTHORING mistake and every one of them is SILENT in play, which is the
 # only reason a lint is the right tool. Its CI caller is tests/dev/test_roster_lint.gd.
+#
+# Most of it asks about the ENTRIES; #964's offered-jobs check asks about a field of the roster
+# itself. Same kind of fault -- authored, and invisible until somebody counts the rows in a dropdown.
 
 # Same two tiers as BoardLint, same meanings, and no third: BLOCKS = the roster is not the roster
 # you authored; DEGRADES = it loads and offers units, but one of them is not what you meant.
@@ -34,7 +37,23 @@ static func check(roster: Roster) -> Array[Dictionary]:
 		_check_one_job(entry, i, found)
 		_check_hollow_snapshot(entry, i, found)
 		_check_battle_state(entry, i, found)
+	_check_offered_jobs(roster, found)
 	return found
+
+
+# The price of storing the offer as IDS (#964): a name no job answers to offers nothing, and there is
+# no surface that can show you. RosterTool draws one row per CATALOGUED job, so an id matching none of
+# them draws no row at all -- it is not even a greyed tick to notice. This lint is the only reader.
+#
+# The stored list, NOT offered_jobs(), so a stale name is named while the flag is on too: the tool
+# keeps the picks under a ticked flag on purpose, and this is the fault that waits to appear the day
+# it is unticked. The only roster-level finding here, so it takes _add's default index.
+static func _check_offered_jobs(roster: Roster, found: Array[Dictionary]) -> void:
+	for id: String in roster.available_jobs:
+		if JobCatalog.get_job(id) == null:
+			_add(found, Severity.DEGRADES,
+				"This roster ticks a job called '%s', which no file under %s answers to -- it offers nothing."
+					% [id, JobCatalog.JOB_DIR])
 
 
 # #731 ruling 10: one job at a time binds at the ROSTER, not at UnitInstance.jobs (capping the
