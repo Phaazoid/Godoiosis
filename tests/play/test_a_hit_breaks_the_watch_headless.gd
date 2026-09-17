@@ -96,3 +96,25 @@ func test_the_play_api_refuses_a_dry_carbines_watch() -> void:
 	(hero.get_equipped_weapon() as CarbineWeaponInstance).shots_remaining = 0
 	var dry: Dictionary = sess.overwatch(sess.handle_for(hero), Vector2i(1, 0))
 	assert_bool(dry.ok).is_false()           # ...a dry one may not
+
+
+# THE OTHER TWIN (#1003). An Overwatch armed onto a cell an enemy already occupies fires in the
+# side-channel tail, and play_session.execute is the hand-copied mirror of that phase. A partition
+# added to the executor and not to the twin is a shot the Play API resolves and never applies --
+# the AI drives this surface (Law #3), so it would plan against damage that never lands.
+func test_the_headless_executor_plays_an_arm_fired_shot_too() -> void:
+	var s := _board()
+	var sess = s.sess
+	var hero: Unit = s.hero
+	var foe: Unit = s.foe
+	var before := foe.get_current_hp()
+
+	# The foe is standing on the aimed cell already, so there is no entry coming.
+	assert_bool(sess.overwatch(sess.handle_for(hero), foe.movement.cell).ok).is_true()
+	var result: Dictionary = sess.execute()
+
+	assert_bool(result.ok).is_true()
+	assert_int(foe.get_current_hp()).override_failure_message(
+			"the headless twin resolved the arm-fired shot and never applied it").is_less(before)
+	assert_bool(hero.watch.spent).override_failure_message(
+			"the twin armed a live watch the pass had already fired").is_true()
