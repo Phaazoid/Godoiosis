@@ -583,3 +583,30 @@ func test_a_counter_breaks_the_watch_before_the_arm_fire_can_happen() -> void:
 			+ "resolving after the counters") \
 		.is_empty()
 	_break_volleys(plan)
+
+
+# The tail is now the FIRST phase that can fell somebody, and GUARD is the one verb that executes
+# after Overwatch -- so its liveness stamp has to be re-taken after the arm-fire (#1005's rule,
+# reached by a phase that did not exist when it was written). Without this a bodyguard the arm shot
+# killed still steps in front of somebody at execution.
+func test_an_arm_fired_shot_that_fells_a_guard_restamps_its_liveness() -> void:
+	var watcher := _line_watcher(Vector2i(0, 0), PLAYER)
+	_main_of(watcher).hits_allies = true   # the shot IS the attack, splash included
+	var guard_unit := H.spawn_solo(self, _sm, PLAYER, Vector2i(1, 0), {Stats.Stat.MHP: 1}, false)
+	_sm.join_squad(guard_unit, watcher.squad)
+	var ward := GuardAction.new()
+	ward.init(guard_unit, watcher)
+	watcher.squad._queue_action(ward)
+	var squatter := H.spawn_solo(self, _sm, ENEMY, Vector2i(2, 0), {Stats.Stat.MHP: 60}, false)
+
+	var plan := _sm.resolve_plan(watcher.squad, _board_with([watcher, guard_unit, squatter]))
+
+	assert_int(plan.watch_shots.size()).override_failure_message(
+			"the watch never arm-fired -- fixture, not mechanic").is_greater(0)
+	assert_int(PlanResolver.projected_lifecycle(guard_unit, plan.hypo)).override_failure_message(
+			"the splash did not fell the bodyguard -- fixture, not mechanic") \
+		.is_not_equal(Unit.LifecycleState.ACTIVE)
+	assert_bool(ward.resolved_actor_felled).override_failure_message(
+			"a bodyguard the arm-fired shot killed is still stamped live, so execution arms its ward") \
+		.is_true()
+	_break_volleys(plan)
