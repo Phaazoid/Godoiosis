@@ -33,7 +33,7 @@ enum Layer {
 	ZONE_PATROL, ZONE_HIGHLIGHT, GROUND_ICONS, ATTACK_BLOCKED, SIGHT_TRACE,
 	GUARD_ICONS, GUARD_LINK, WATCH_ICONS,
 	ZONE_DEPLOYMENT, ZONE_DEFEND,
-	DANGER, THREAT_LINES, INTENT_LINES, INTENT_LABELS,
+	DANGER, ENEMY_MOVE, THREAT_LINES, INTENT_LINES, INTENT_LABELS,
 }
 enum Kind { FILL, BRACKET, SPRITE, BILLBOARD, LINE, LABEL }
 
@@ -79,23 +79,40 @@ const LAYERS: Dictionary[Layer, Dictionary] = {
 	# can never z-fight. Colour here is only the no-mirror fallback -- OverlayMirror drives it per
 	# frame as the live reach modulate x OverlayManager.BLOCKED_REACH_DIM (so no colour knob here).
 	Layer.ATTACK_BLOCKED: {"color": Color(0.45, 0, 0, 0.5), "sort": 1, "kind": Kind.FILL},
-	# The zone BAND sits at -3, with the picked-zone highlight alone at -2 above it. In 2D
+	# The zone BAND sits at -5, with the picked-zone highlight alone at -4 above it. In 2D
 	# the highlight wins by TREE ORDER (appended last); 3D has no such thing, so the sort
-	# number IS the relationship and a test pins it rather than the values (#231). -1 was
-	# unavailable: SQUAD/SQUAD_RANGE live there and would share the lift, i.e. z-fight.
-	Layer.ZONE_CAPTURE: {"color": Color(0.3, 0.9, 1, 0.5), "sort": -3, "kind": Kind.FILL},
-	Layer.ZONE_EXTRACTION: {"color": Color(0.4, 1, 0.5, 0.5), "sort": -3, "kind": Kind.FILL},
-	Layer.ZONE_PATROL: {"color": OverlayManager.ZONE_PATROL_MODULATE, "sort": -3, "kind": Kind.FILL},
+	# number IS the relationship and a test pins it rather than the values (#231).
+	#
+	# THE WHOLE NEGATIVE STACK MOVED DOWN TWO IN #710 slice 3, because the enemy's two range
+	# tones need two slots between SQUAD (-1 as it then was) and MOVE (0) and there are no
+	# integers there. Downward, not upward: the positive side is packed to 15 under the fire
+	# ceiling at 16, so lifting MOVE would cascade into it. Nothing here pins a VALUE -- the
+	# laws are relationships (highlight above zones, PATROL == CAPTURE) and they survive a
+	# uniform shift. What does NOT survive one is the FLOOR: _lift_of is fill_lift + sort *
+	# lift_step, so at the old fill_lift of 0.02 a sort of -5 landed at EXACTLY 0.0, coplanar
+	# with the tile's own opaque top face -- a real z-fight, unlike the transparent-vs-
+	# transparent case below. fill_lift moved to 0.03 with this, and the floor is now a law.
+	Layer.ZONE_CAPTURE: {"color": Color(0.3, 0.9, 1, 0.5), "sort": -5, "kind": Kind.FILL},
+	Layer.ZONE_EXTRACTION: {"color": Color(0.4, 1, 0.5, 0.5), "sort": -5, "kind": Kind.FILL},
+	Layer.ZONE_PATROL: {"color": OverlayManager.ZONE_PATROL_MODULATE, "sort": -5, "kind": Kind.FILL},
 	# #736. In the band with the others: it is markup lying on the tile face like every zone, and it
 	# is gone before any of them matter -- turn 1 stops it being drawn at all.
-	Layer.ZONE_DEPLOYMENT: {"color": Color(0.65, 0.5, 1, 0.45), "sort": -3, "kind": Kind.FILL},
+	Layer.ZONE_DEPLOYMENT: {"color": Color(0.65, 0.5, 1, 0.45), "sort": -5, "kind": Kind.FILL},
 	# #571, and in the band for ZONE_DEPLOYMENT's reason. Reads its colour off OverlayManager rather
 	# than restating it, the way ZONE_PATROL does -- the three literals above predate that rule.
-	Layer.ZONE_DEFEND: {"color": OverlayManager.ZONE_DEFEND_MODULATE, "sort": -3, "kind": Kind.FILL},
+	Layer.ZONE_DEFEND: {"color": OverlayManager.ZONE_DEFEND_MODULATE, "sort": -5, "kind": Kind.FILL},
 	# Three literals the mirror overwrites from the 2D every poll (#710), ATTACK's shape: the
 	# authored value is OverlayManager's static (or ThreatLines2D's), which a const table cannot name.
-	Layer.ZONE_HIGHLIGHT: {"color": Color(1, 1, 1, 0.45), "sort": -2, "kind": Kind.FILL},
-	Layer.DANGER: {"color": Color(1, 0.15, 0.1, 0.3), "sort": 0, "kind": Kind.FILL},
+	Layer.ZONE_HIGHLIGHT: {"color": Color(1, 1, 1, 0.45), "sort": -4, "kind": Kind.FILL},
+	# The enemy's two tones (#710 slice 3), and their ORDER IS A DEV RULING: the move envelope
+	# draws OVER the reach, so "a body can stand here" is the louder fact and the reach survives
+	# as the halo past it. Two sorts rather than one because a sort IS a plane (_lift_of), and
+	# these two overlap on nearly every cell -- a melee enemy's reach is just its envelope
+	# dilated by one. They sat at DANGER's old 0 alongside MOVE, which is why nothing could
+	# express that order: equal render_priority and equal depth leaves the winner to pool
+	# allocation order. A test pins DANGER < ENEMY_MOVE < MOVE.
+	Layer.DANGER: {"color": Color(1, 0.15, 0.1, 0.3), "sort": -2, "kind": Kind.FILL},
+	Layer.ENEMY_MOVE: {"color": Color(0.25, 0.45, 1, 0.45), "sort": -1, "kind": Kind.FILL},
 	Layer.THREAT_LINES: {"color": Color(1.0, 0.35, 0.2, 0.9), "sort": 7, "kind": Kind.LINE},
 	# Above the sight/threat beams at 7 -- an intent is the authoritative readout and must not
 	# z-fight the reach line it supersedes -- and clear of the guard channels at 8/9, which
@@ -107,8 +124,8 @@ const LAYERS: Dictionary[Layer, Dictionary] = {
 	Layer.INTENT_LABELS: {"color": Color.WHITE, "sort": 14, "kind": Kind.LABEL},
 	Layer.HOVER: {"color": Color(1, 0.9, 0.3, 0.9), "sort": 2, "kind": Kind.BRACKET},
 	Layer.INVALID_MOVE: {"color": Color(0.5, 0.36, 0.4, 0.5), "sort": 0, "kind": Kind.FILL},
-	Layer.SQUAD: {"color": Color(1, 0.5, 0, 0.5), "sort": -1, "kind": Kind.FILL},
-	Layer.SQUAD_RANGE: {"color": Color(1, 0.5, 0, 0.5), "sort": -1, "kind": Kind.FILL},
+	Layer.SQUAD: {"color": Color(1, 0.5, 0, 0.5), "sort": -3, "kind": Kind.FILL},
+	Layer.SQUAD_RANGE: {"color": Color(1, 0.5, 0, 0.5), "sort": -3, "kind": Kind.FILL},
 	Layer.AIM: {"color": Color(1, 1, 0, 1), "sort": 4, "kind": Kind.FILL},
 	Layer.TARGET_PICK: {"color": Color.WHITE, "sort": 5, "kind": Kind.SPRITE},
 	Layer.PATH_ARROWS: {"color": Color.WHITE, "sort": 6, "kind": Kind.SPRITE},
@@ -190,7 +207,11 @@ enum SelectorDepth { LEVEL, HALF }
 # nothing until you nudged it -- a knob that appears to do nothing is the one failure that makes a
 # knob worthless (#324's rule, where every flame value rebuilds what is already standing).
 @export var selector_depth: SelectorDepth = SelectorDepth.LEVEL: set = _set_selector_depth
-@export var fill_lift := 0.02          # quad height above the top face — the z-fight gap
+# The stack's ZERO, not its bottom: the lowest sort is negative, so the real floor is
+# fill_lift + min_sort * lift_step and THAT is what must clear the tile's opaque top face.
+# Raised from 0.02 when the negative stack moved down two (#710 slice 3) -- at 0.02 the new
+# floor was exactly 0.0. Pinned by a law, since the next layer added below reds it.
+@export var fill_lift := 0.03          # quad height above the top face — the z-fight gap
 @export var lift_step := 0.004         # per-sort spacing so stacked layers never coincide
 @export var billboard_lift := 0.85     # icon height above the cell's top face
 @export var billboard_pixel_size := 1.0 / 32.0

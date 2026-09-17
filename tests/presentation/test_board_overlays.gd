@@ -649,6 +649,43 @@ func test_no_overlay_layer_can_sort_over_the_flame() -> void:
 			.is_less(BoardOverlays.UNIT_RENDER_PRIORITY)
 
 
+func test_the_enemys_move_tone_draws_over_its_reach_and_under_your_own_range() -> void:
+	# A DEV RULING made structural (#710 slice 3): "a body can stand here" is the louder fact, so
+	# the move envelope draws over the reach -- and your own move range still draws over both, or
+	# the cell you are about to step on stops reading. Before this the two enemy tones shared
+	# MOVE's sort 0, where the order was unexpressible: equal render_priority and equal depth (a
+	# transparent quad writes none) leaves the winner to pool allocation order, not to the table.
+	var danger: int = BoardOverlays.LAYERS[BoardOverlays.Layer.DANGER]["sort"]
+	var envelope: int = BoardOverlays.LAYERS[BoardOverlays.Layer.ENEMY_MOVE]["sort"]
+	var own: int = BoardOverlays.LAYERS[BoardOverlays.Layer.MOVE]["sort"]
+	assert_int(danger).override_failure_message(
+			"the enemy's reach sorts at %d and its move envelope at %d -- the reach would draw over the envelope" \
+			% [danger, envelope]).is_less(envelope)
+	assert_int(envelope).override_failure_message(
+			"the enemy's move envelope sorts at %d and your own move range at %d -- the enemy tone would swallow your range" \
+			% [envelope, own]).is_less(own)
+
+
+func test_the_lowest_markup_plane_still_clears_the_tile_it_lies_on() -> void:
+	# THE FLOOR, not the gap (#710 slice 3). _lift_of is fill_lift + sort * lift_step and the
+	# lowest sort is NEGATIVE, so fill_lift is the stack's zero rather than its bottom. Pushing
+	# the negative stack down two put the zone band at exactly 0.0 against the old fill_lift --
+	# coplanar with the tile's OPAQUE top face, which does write depth, so unlike the
+	# transparent-on-transparent case this one really is a z-fight, on every zone on every board.
+	# The next layer added below the zones reds here instead of shipping as speckle.
+	var overlays := _overlays()
+	var lowest := 9999
+	for layer: BoardOverlays.Layer in BoardOverlays.LAYERS:
+		lowest = mini(lowest, BoardOverlays.LAYERS[layer]["sort"])
+	# Non-vacuity: a non-negative floor would make the assert below trivially true.
+	assert_int(lowest).override_failure_message(
+			"no layer sorts below zero, so this case proves nothing").is_less(0)
+	var floor_lift: float = overlays.fill_lift + lowest * overlays.lift_step
+	assert_float(floor_lift).override_failure_message(
+			"the lowest markup plane (sort %d) sits %f above the tile face -- it is coplanar with the terrain it lies on" \
+			% [lowest, floor_lift]).is_greater(0.0)
+
+
 func test_markup_that_hangs_in_the_air_sorts_above_markup_that_lies_on_the_floor() -> void:
 	# A RELATIONSHIP, not a value (#325 follow-up, found in play: the crown drew under the
 	# squad rings). Every FILL/SPRITE layer is markup lying on the board face; a BILLBOARD
