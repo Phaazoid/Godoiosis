@@ -547,12 +547,21 @@ static func _beats(a: Vector3i, b: Vector3i) -> bool:
 # Fallback builders -- each mirrors MainActionMenu's gate for its verb, then picks a
 # deterministic target (Law #1: explicit tie-break, first-in-order wins).
 
+# How soon a body is lost, lowest first. A body a heal STABILISED has no clock (#1002), and the
+# stored -1 read as a number is the most urgent value there is — so it sorts past every real clock
+# instead of ahead of an ally two turns from death.
+static func _rescue_urgency(body: Unit) -> int:
+	if body.downed_turns_remaining < 0:
+		return Unit.DOWNED_TURNS + 1
+	return body.downed_turns_remaining
+
+
 static func _try_rescue(unit: Unit, board: BoardContext, squad_manager: SquadManager) -> bool:
 	if not unit.can_rescue_carry():
 		return false
 	var target: Unit = null
 	for ally in RulesService.adjacent_downed_allies(unit, board):
-		if target == null or ally.downed_turns_remaining < target.downed_turns_remaining:
+		if target == null or _rescue_urgency(ally) < _rescue_urgency(target):
 			target = ally   # most urgent clock first; ties keep the earliest
 	if target == null:
 		return false

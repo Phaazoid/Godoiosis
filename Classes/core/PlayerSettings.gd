@@ -69,7 +69,7 @@ enum Scale {
 ## AUTHORITATIVE — the list is labels for it, never a second vocabulary.
 enum HealthBars {
 	HOVERED,   # #229's behaviour, and still what a player who never opens the menu gets
-	DAMAGED,   # every unit below full HP; a body clings at 1 HP, so it qualifies
+	DAMAGED,   # every unit below full HP, plus any body -- a healed one can sit at full (#1002)
 	EVERY,     # #350's behaviour
 }
 

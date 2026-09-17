@@ -69,8 +69,9 @@ class_name UnitHealthBar
 # by construction, which is what #350's one-gate ruling asks for.
 #
 # Since #322 that row also carries the DOWNED glyph and the rescue clock beside it. The HP number
-# cannot separate a body from a living unit clinging on -- a downed unit sits at exactly 1 HP
-# because _go_downed puts it there, so `1/20` is two completely different board states -- and the
+# cannot separate a body from a living unit clinging on -- _go_downed puts a body at exactly 1 HP,
+# so `1/20` is two completely different board states, and since #1002 a HEALED body reads as any
+# ordinary wounded unit, which is the same collision with the numbers further apart -- and the
 # fix is the row saying what the number cannot, in the same icon-then-count shape the hover card
 # already uses. It rides the readout's own visibility for the same structural reason the state icons
 # do; the fact that a unit is down is carried unconditionally by its downed ART, so this

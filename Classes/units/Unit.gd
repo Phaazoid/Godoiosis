@@ -894,7 +894,14 @@ func take_damage(damage: int):
 
 func heal(amount: int) -> void:
 	# take_damage's sibling: same HP door, no lethality check, clamp handles overheal.
-	set_current_hp(get_current_hp() + amount)
+	var before := get_current_hp()
+	set_current_hp(before + amount)
+	# The body is STABILISED, never stood up (#1002): health stops the clock and nothing else.
+	# Keyed on the HP actually moving, the way the ladder keys a body's fate on the damage NUMBER
+	# (#126) — a heal the cap ate bought nothing. -1 is the field's own "not counting" sentinel.
+	if is_downed() and get_current_hp() > before:
+		downed_turns_remaining = -1
+		downed_countdown_changed.emit(downed_turns_remaining)
 
 # The downed STATE. Its PRICE is the one opt-out: spend_will_for_down is the only source of a
 # maim-on-down, so skipping it is the whole of what a costless down means.
@@ -920,6 +927,8 @@ func force_down() -> void:
 func tick_downed_countdown():
 	if lifecycle_state != LifecycleState.DOWNED:
 		return
+	if downed_turns_remaining < 0:
+		return   # stopped by a heal (#1002) — the sentinel the field declares, finally honoured here
 	downed_turns_remaining -= 1
 	downed_countdown_changed.emit(downed_turns_remaining)
 	if downed_turns_remaining <= 0:
@@ -1140,8 +1149,9 @@ func remove_armor():
 	_settle_stat_change()
 
 func revive():
-	# Rescue brings a downed unit back up — ACTIVE again, still at 1 HP (no heal). It stays in
-	# its solo squad; rescue does NOT auto-rejoin the old one (per design).
+	# Rescue brings a downed unit back up — ACTIVE again, at whatever HP the body has: a heal
+	# taken while down is kept (#1002), and an untouched body is still the 1 HP it clung at. It
+	# stays in its solo squad; rescue does NOT auto-rejoin the old one (per design).
 	if lifecycle_state != LifecycleState.DOWNED:
 		return
 	lifecycle_state = LifecycleState.ACTIVE

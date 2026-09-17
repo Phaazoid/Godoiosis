@@ -289,7 +289,7 @@ func populate_unit_editor(unit):
 
 	var revive_button := Button.new()
 	revive_button.text = "Revive Unit"
-	revive_button.tooltip_text = "Stand a downed unit back up at 1 HP — the same call a rescue makes"
+	revive_button.tooltip_text = "Stand a downed unit back up at the HP it has — the same call a rescue makes"
 	revive_button.disabled = not unit.is_downed()
 	revive_button.pressed.connect(func(): _revive_unit(unit))
 	unit_editor_container.add_child(revive_button)

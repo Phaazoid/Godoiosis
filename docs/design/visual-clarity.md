@@ -7,7 +7,7 @@ its child [#49 Action Queue UX](https://github.com/Phaazoid/Godoiosis/issues/49)
 This is a *guidelines* doc, not a spec — it captures the principles we're holding the work to,
 plus the running order of the queue-UX checklist. Update it as items land.
 
-**Canon checked through #992 (2026-09-16).**
+**Canon checked through #1002 (2026-09-17).**
 
 ## Principles
 
@@ -476,9 +476,15 @@ The rulings, all dev calls, all made before building:
   HP loss *or* a held element state — because #357's row rides the bar's gate, so a full-HP unit
   that is SOAKED wears no icons in this mode until you hover it. Reachable (heal a burned unit to
   full and it keeps the state), and ruled acceptable: the mode's job is to thin the board out.
-- **A body needs no clause of its own.** `_go_downed` clings the unit at 1 HP, so it is damaged by
-  the ordinary rule and #322's DOWNED glyph and rescue clock stay up. Worth stating because the
-  obvious reading of "damaged" would have added a lifecycle term nothing needs.
+- ~~**A body needs no clause of its own.**~~ `_go_downed` clings the unit at 1 HP, so it was damaged
+  by the ordinary rule and #322's DOWNED glyph and rescue clock stayed up — the lifecycle term the
+  obvious reading of "damaged" would have added was genuinely unnecessary. **REVERSED by
+  [#1002](https://github.com/Phaazoid/Godoiosis/issues/1002) (2026-09-17), and the DAMAGED ruling
+  above is untouched:** a heal on a body raises real HP now, so a body healed to full stopped
+  qualifying and took its own glyph off the board with it. The ruling's stated ground was that a
+  body already qualifies; that ground is gone, so `UnitMirror` asks `is_downed()` beside the HP
+  compare. A worked example of a justification going stale while the rule it defends stays right —
+  the term was added where the reason was, not where the ruling was.
 - **`foretold` is untouched, and gets its own case under the new mode.** The clause the ticket said
   it may not touch. It has its own test rather than resting on the always-on cases, which cannot
   see it: with EVERY set, every bar is up for the preference anyway.

@@ -82,9 +82,14 @@ func _refresh_limbs():
 		at_risk = inst.next_maim_slot()
 	for slot in UnitInstance.LimbSlot.values():
 		limbs_row.add_child(_limb_chip(inst, slot, at_risk))
-	if unit.is_downed() and unit.downed_turns_remaining > 0:
-		limbs_row.add_child(_badge("DOWN %d" % unit.downed_turns_remaining, EMPTY_COLOR,
-			"Dies in %d turn(s) without rescue" % unit.downed_turns_remaining))
+	# A body wears the badge either way since #1002; only the clock is conditional.
+	if unit.is_downed():
+		if unit.downed_turns_remaining > 0:
+			limbs_row.add_child(_badge("DOWN %d" % unit.downed_turns_remaining, EMPTY_COLOR,
+				"Dies in %d turn(s) without rescue" % unit.downed_turns_remaining))
+		else:
+			limbs_row.add_child(_badge("DOWN", EMPTY_COLOR,
+				"Healed while down — no death clock, still needs a rescue"))
 	if unit.in_crisis:
 		limbs_row.add_child(_badge("CRISIS", CRISIS_COLOR,
 			"Will locked at 0 — another down this battle is death"))
