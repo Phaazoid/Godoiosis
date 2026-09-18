@@ -482,3 +482,176 @@ func test_the_screen_hands_the_card_the_missions_mod_pool() -> void:
 	assert_int(_library_rows(card).size()).override_failure_message(
 		"the card offered the whole catalogue -- the mission's pool never reached it"
 		).is_equal(1)
+
+
+# --- the readout's channels (#1017) ---------------------------------------------------------------
+
+# Every line the readout carries ABOUT THE ATTACK, joined -- the picture a player reads, rather than
+# the variable behind it. The wire cases below compare this ACROSS a pick, which is the assertion
+# this file was missing: `card._attack` moving proved a variable changed and said nothing about
+# whether one pixel differed.
+static func _readout_text(card: ModFittingCard) -> String:
+	var parts: Array[String] = [card._damage.text, card._range.text]
+	for child in card._channels.get_children():
+		parts.append((child as Label).text)
+	return "\n".join(parts)
+
+
+# THE TICKET ITSELF. Two attacks differing in exactly ONE field the old readout had no line for --
+# the Kinetic Mace's Smash and Blowback, reduced to their difference -- must not render identically.
+#
+# The second attack is a CLONE of the weapon's own main with one field moved, deliberately: picking
+# two unrelated shipped attacks would pass on a readout that still could not tell a shove from a
+# swing, because they would differ in power or reach as well.
+func test_picking_an_attack_that_differs_only_in_knockback_changes_the_readout() -> void:
+	if not await _enter_phase():
+		return
+	var weapon := _weapon()
+	if weapon == null:
+		return
+	var main := weapon.effective_main(null)
+	if main == null:
+		push_warning("this weapon has no main attack to clone")
+		return
+	var shover := main.duplicate(true) as WeaponAttackData
+	shover.display_name = "Probe Shove"
+	shover.knockback = main.knockback + 2
+	var granted: Array[WeaponAttackData] = [shover]
+	var grant := WeaponModData.new()
+	grant.display_name = "Probe Granter"
+	grant.granted_attacks = granted
+
+	var index := -1
+	for i in range(weapon.space_count()):
+		if weapon.can_fit(i, grant):
+			index = i
+			break
+	if index == -1:
+		push_warning("every space on this weapon is full, so the grant cannot be fitted")
+		return
+
+	var card := await _open(weapon)
+	card._perform_fit(grant, null, weapon, index)
+	await await_idle_frame()
+
+	var main_index := -1
+	var shove_index := -1
+	for i in range(card._picker.item_count):
+		var at: AttackData = card._picker.get_item_metadata(i)
+		if at == main:
+			main_index = i
+		elif at == shover:
+			shove_index = i
+	assert_int(shove_index).override_failure_message(
+		"the granted attack never reached the picker").is_greater(-1)
+	assert_int(main_index).override_failure_message("the main left the picker").is_greater(-1)
+
+	card._on_attack_picked(main_index)
+	var before := _readout_text(card)
+	card._on_attack_picked(shove_index)
+	var after := _readout_text(card)
+	assert_str(after).override_failure_message(
+		"two attacks differing only in knockback rendered the same readout -- #1017"
+		).is_not_equal(before)
+	assert_str(after).contains("Shoves")
+	card.free()
+
+
+# The other half of the same rule: a line appears only when it has something to say, so a plain
+# attack's readout stays exactly as short as it was before this ticket.
+func test_an_attack_with_nothing_unusual_adds_no_channel_lines() -> void:
+	if not await _enter_phase():
+		return
+	var weapon := _weapon()
+	if weapon == null:
+		return
+	var card := await _open(weapon)
+	card._attack = WeaponAttackData.new()   # every default: ranged, no shove, no flags, no element
+	card._refresh_channels()
+	assert_int(card._channels.get_child_count()).override_failure_message(
+		"a bare attack grew a channel line, so an ordinary weapon's readout is now noise"
+		).is_equal(0)
+	card.free()
+
+
+# A readiness line NAMES what the family calls the thing, and states the RULE rather than the live
+# counter. The mace is freshly reset at pre-mission, so a live line would read "Charge 0/3 --
+# Blowback unavailable" every single time and call a working weapon broken on the screen where you
+# pick one -- which is why no digits may appear here.
+func test_a_readiness_line_names_the_family_and_states_the_rule() -> void:
+	if not await _enter_phase():
+		return
+	var weapon := _weapon()
+	if weapon == null:
+		return
+	var card := await _open(weapon)
+
+	var template := WeaponData.new()
+	template.weapon_type = WeaponData.WeaponType.KINETIC_MACE
+	var mace := WeaponInstance.make(template)
+	assert_object(mace).is_not_null()
+	var blow := WeaponAttackData.new()
+	blow.requires_readiness = true
+	blow.consumes_readiness = true
+
+	card._weapon = mace
+	card._attack = blow
+	var lines := card._channel_lines()
+	assert_array(lines).contains(["Needs a charge"])
+	assert_array(lines).contains(["Spends a charge"])
+	for line: String in lines:
+		assert_bool(line.contains("/")).override_failure_message(
+			"a live counter reached the pre-mission readout: %s" % line).is_false()
+	card.free()
+
+
+# Each family spells its own noun, and a family with no readiness economy keeps the base word. The
+# Chemical Spitter is deliberately absent: its tank is a supercharge, not a gate.
+func test_every_readiness_family_names_its_own_noun() -> void:
+	var nouns := {
+		WeaponData.WeaponType.KINETIC_MACE: "charge",
+		WeaponData.WeaponType.SPRINGSPEAR: "spring",
+		WeaponData.WeaponType.CARBINE: "round",
+	}
+	for family: WeaponData.WeaponType in nouns:
+		var template := WeaponData.new()
+		template.weapon_type = family
+		var made := WeaponInstance.make(template)
+		assert_object(made).is_not_null()
+		assert_str(made.readiness_noun()).is_equal(nouns[family])
+
+	var plain := WeaponData.new()
+	plain.weapon_type = WeaponData.WeaponType.CHAINSWORD
+	assert_str(WeaponInstance.make(plain).readiness_noun()).is_equal("readiness")
+
+
+# The legend's "can aim" swatch is the ATTACK's colour, and the row is built once when _attack is
+# still null -- so a heal used to repaint the plate's cells green and leave this chip red, a legend
+# lying about the picture beside it.
+func test_the_legend_chip_follows_the_picked_attack() -> void:
+	if not await _enter_phase():
+		return
+	var weapon := _weapon()
+	if weapon == null:
+		return
+	var card := await _open(weapon)
+
+	# Driven through _refresh_readout, NOT the repaint itself: what is at risk is the WIRE, and a
+	# case calling the painter directly passes on a readout that never calls it -- which is the
+	# state this card shipped in.
+	var swing := WeaponAttackData.new()
+	card._attack = swing
+	card._refresh_readout()
+	var damaging: Color = (card._reach_chip.get_theme_stylebox("panel") as StyleBoxFlat).bg_color
+
+	var mend := WeaponAttackData.new()
+	mend.heals = true
+	card._attack = mend
+	card._refresh_readout()
+	var healing: Color = (card._reach_chip.get_theme_stylebox("panel") as StyleBoxFlat).bg_color
+
+	assert_bool(healing == damaging).override_failure_message(
+		"the legend chip kept the attack colour for a heal -- it is built once and never repainted"
+		).is_false()
+	assert_object(healing).is_equal(OverlayManager.attack_reach_color(mend))
+	card.free()

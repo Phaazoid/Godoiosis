@@ -35,6 +35,9 @@ func status_text() -> String:
 		return "Ammo 0/%d — needs Reload" % MAGAZINE_SIZE
 	return "Ammo %d/%d" % [shots_remaining, MAGAZINE_SIZE]
 
+func readiness_noun() -> String:
+	return "round"
+
 # Battle-state seam (#87). Clamped on the way back in: a save written before MAGAZINE_SIZE was
 # retuned downward must not hand back a magazine deeper than the family allows.
 func capture_battle_state() -> Dictionary:
