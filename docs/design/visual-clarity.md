@@ -7,7 +7,7 @@ its child [#49 Action Queue UX](https://github.com/Phaazoid/Godoiosis/issues/49)
 This is a *guidelines* doc, not a spec — it captures the principles we're holding the work to,
 plus the running order of the queue-UX checklist. Update it as items land.
 
-**Canon checked through #1022 (2026-09-18).**
+**Canon checked through #1024 (2026-09-18).**
 
 ## Principles
 
@@ -2125,9 +2125,36 @@ places, where the failure would have been a tile drawn twice.
 
 **The version bumps on LANDINGS only.** `OverlayMirror` rebuilds every standing prop when
 `staging_version` moves, so bumping per frame would rebuild the board on every frame of the
-transition. Landings are discrete and travel is not — so a tile flies **bare** and is dressed the
-instant it is home. Units ride, because they are per-frame reconciles and read the offset already,
-and fighters arriving standing on their own ground is the shot.
+transition. Landings are discrete and travel is not. Units ride, because they are per-frame
+reconciles and read the offset already, and fighters arriving standing on their own ground is the
+shot.
+
+> **...and a tile no longer flies BARE ([#893](https://github.com/Phaazoid/Godoiosis/issues/893),
+> 2026-09-18). The version rule above is untouched; what changed is that it was never the whole
+> answer.** This paragraph used to end *"so a tile flies bare and is dressed the instant it is
+> home"*, and that was a real cost the dev reported twice — first a burning tile's flame, then *"tall
+> grass and fire on tiles don't follow platforms up and down… when the platforms fall, these objects
+> stay in middair."* **The mistake was treating REBUILDING and PLACING as one act.** What #521
+> measured and rejected was the full-board rebuild (drop the node, `_make_prop` it again); a
+> `position` write is not that, and `BoardSpace.staged_offset` was already live every frame of the
+> flight — nobody was asking it. `BoardMirror.reseat_cell` is that ask, called from
+> `_sync_flight_maps`, the loop that already moves the ground: **one line answers "where is this
+> column right now" for the column and for everything standing on it**, so a flame cannot end up on
+> a different schedule from its own tile. It touches no version and drops nothing.
+>
+> One line was enough only because of [#992](https://github.com/Phaazoid/Godoiosis/issues/992): every
+> standing node's parts are LOCAL deltas under a root carrying the whole of `surface_point`, so the
+> root IS the answer and a tuft needs no case of its own. **The generalizable form: "invalidate more
+> often" and "re-read the number" are different prices, and a gate written against the expensive one
+> silently forbids the cheap one too.** #893 itself ranked parenting the flame to the flying column
+> first and that was the wrong order — `_flight_drawn[cell]`'s GridMap is freed the moment the cell
+> lands, so it cannot own a prop that outlives the flight.
+>
+> **Still true and still declared: a FILL layer carries no staged offset at all.**
+> `BoardOverlays.set_cells` → `_marker_transform` never adds it, so a move/reach/aim fill on a staged
+> cell draws on the board forty units under the diorama, staged *or* flying. Invisible because
+> playback clears the overlays before the tear-out, which is why nothing has reported it; markers are
+> fine, reading the offset live through `_anchor`.
 
 **The camera's height became its own published fact.** `camera_lift()` equals the diorama at rest and
 differs during exactly one window — the one that needs them apart, since the cut treatment puts the
@@ -3329,6 +3356,10 @@ Two things about the SHAPE of that fix worth keeping. The old case pinned *the r
 **BLUE for the move tone, settled against a drawn mockup rather than in prose.** Every other tone on that board is warm -- grass, dirt, your yellow range, the red reach -- so a cool hue is the only candidate that cannot be mistaken for terrain. Its risky neighbours are the cyan capture zone and the violet deployment zone. Noted for the day your own move range turns blue: the ENEMY hue moves, not yours.
 
 **Three ways to ask, and they compose into ONE standing set.** `game._redraw_enemy_ranges` is the only writer: *drawn = standing UNION transient*, where standing is every enemy while **V** is on else the pinned set, and transient is whoever is under the pointer. It has to be one door because `show_danger` replaces its layer wholesale, so any path painting a subset on its own erases the rest -- which is also why `drop_threat_field` repaints unconditionally rather than only while a toggle is on. **That repaint is SYNCHRONOUS and has to be:** slice 4 briefly deferred it to idle and the sweep re-derived its subject from `hovered_enemy()`, which reads `last_hovered_cell` -- written by the hover `_process` and NOT by `update_hover_visuals` -- so any path drawing markup directly lost it a frame later to a repaint that disagreed about what the pointer was on. The staleness that deferral was written for does not exist: a queued shove is already published when the drop runs, because `queue_action`'s candidate gate resolves the plan WITH the candidate before `Squad._queue_action` emits.
+
+**The KEY'S OFF now clears the pinned set, reversing the dev's own earlier ruling (2026-09-18).** Slice 4 shipped *"a pin OVERRIDES the toggle"* — the standing set being what the door draws while the key is off, so the key could not clear it on its way down — and he changed his mind reading it back in play: *"when V is pressed to cycle enemy targeting off, I'd like it to turn off even shift clicked enemy targets."* The reason is that a pinned set had **no way back**: the pointer cannot clear one by design, an order deliberately must not, and the only remaining door was shift+clicking each enemy again. So V's OFF is the clean-board gesture, and the cost — from pins-up-with-the-key-off it takes two presses, on then off — is accepted, the intermediate frame being momentary.
+
+**What deliberately did NOT come with it is the distinction to protect:** a pin still outlives the pointer leaving the enemy *and* an order being queued. Those are the two properties `drop_threat_field`'s unconditional repaint exists for, its comment still describes them correctly, and only the KEY moving may drop a pin. **The test's NAME was the thing carrying the old rule** (`test_a_pinned_enemy_survives_the_key_being_turned_on_and_off_again`), so it was rewritten rather than patched, into `test_the_ranges_key_going_off_drops_every_pin`, with the reversal and its date in the case itself — a renamed case is where the next reader looks for a ruling that flipped.
 
 - **V** (`toggle_enemy_ranges`) -- every enemy at once, FE's danger zone.
 - **Hovering an enemy** -- that one enemy, transiently.

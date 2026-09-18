@@ -234,24 +234,36 @@ func test_the_crowds_tone_follows_the_tone_it_dims() -> void:
 	_om().restyle_dim_ranges()
 
 
-func test_a_pinned_enemy_survives_the_key_being_turned_on_and_off_again() -> void:
-	# The dev's own wording: a pin OVERRIDES the toggle. The standing set is what the door draws
-	# when the key is off, so the key cannot clear it on its way down.
+func test_the_ranges_key_going_off_drops_every_pin() -> void:
+	# REVERSED 2026-09-18 on the dev's own call, and this case is the record of it: it used to be
+	# named ..._survives_the_key_being_turned_on_and_off_again and asserted the opposite, on his
+	# earlier "a pin OVERRIDES the toggle". The key's OFF is now the one way back to a clean board --
+	# nothing else clears a pinned set except shift+clicking each enemy again. What must NOT have
+	# come with it is a pin lapsing on the pointer or on a queued order; the case below pins that.
 	var pinned := _spawn(ENEMY, Vector2i(3, 2))
 	var other := _spawn(ENEMY, Vector2i(1, 4))
 	game.toggle_enemy_pin(pinned)
 	var field: ThreatField = game.threat_field()
 	assert_that(_sorted(_om().enemy_move_overlay.get_used_cells())).is_equal(_sorted(field.move_of(pinned)))
+
+	# ON first: the pin is still up here, which is what makes the press below an OFF rather than the
+	# first half of a round trip. Both enemies draw, so the state being cleared is non-empty.
 	game.toggle_enemy_ranges()
+	assert_bool(game.ranges_shown).is_true()
+	assert_bool(_om().enemy_move_overlay.get_used_cells().has(other.movement.cell)).override_failure_message(
+			"the key's ON did not draw the unpinned enemy, so this case starts from the wrong state"
+			).is_true()
+	assert_bool(game.pinned_enemies.has(pinned.get_instance_id())).override_failure_message(
+			"the key's ON dropped the pin; only its OFF may").is_true()
+
 	game.toggle_enemy_ranges()
 	assert_bool(game.ranges_shown).is_false()
-	assert_that(_sorted(_om().enemy_move_overlay.get_used_cells())).override_failure_message(
-			"the key's OFF wiped the pinned enemy along with everything else") \
-		.is_equal(_sorted(field.move_of(pinned)))
-	assert_bool(_om().enemy_move_overlay.get_used_cells().has(other.movement.cell)).override_failure_message(
-			"the unpinned enemy is still drawn").is_false()
-	game.toggle_enemy_pin(pinned)
-	assert_array(_om().enemy_move_overlay.get_used_cells()).is_empty()
+	assert_bool(game.pinned_enemies.is_empty()).override_failure_message(
+			"the key's OFF left the pin standing -- the board cannot be cleared").is_true()
+	assert_array(_om().enemy_move_overlay.get_used_cells()).override_failure_message(
+			"the key is off and every pin is dropped, so nothing should be drawn").is_empty()
+	assert_array(_om().danger_overlay.get_used_cells()).override_failure_message(
+			"the reach tone outlived the pin its move tone was cleared with").is_empty()
 
 
 func test_a_pinned_enemy_survives_the_pointer_leaving_it_and_an_order_being_queued() -> void:

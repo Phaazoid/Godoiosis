@@ -136,7 +136,8 @@ var hover_presenter: HoverPresenter
 enum ThreatView { NONE, INTENTS, EVERYTHING }
 var threat_view := ThreatView.INTENTS
 var ranges_shown := false     # the V toggle (slice 3): every enemy's move + reach tones, FE-style
-# Which enemies stay drawn with V off, by instance id -- see toggle_enemy_pin.
+# Which enemies stay drawn once the pointer leaves them, by instance id -- see toggle_enemy_pin.
+# They outlive the pointer and a queued order, but NOT the V key going off (2026-09-18).
 var pinned_enemies: Dictionary[int, bool] = {}
 var _threat_field: ThreatField = null   # built lazily by threat_field(); dropped when the plan moves
 var _threat_plan_timer: Timer   # debounces the exact tier: a burst of orders costs ONE recompute
@@ -1727,9 +1728,10 @@ func threat_field() -> ThreatField:
 # _process and NOT by update_hover_visuals. Any path that draws markup directly then loses it a
 # frame later to a repaint that disagrees about what the pointer is on.
 #
-# Unconditional, because the standing set outlives the toggle: a pinned enemy is still drawn with
-# the ranges key off, and repainting only when that key was on left a pin showing a field built
-# before the order that just moved everybody.
+# Unconditional, because a pin outlives the ORDER: it is drawn with the ranges key off, and
+# repainting only when that key was on left a pin showing a field built before the order that just
+# moved everybody. Note the key's own OFF does now clear pins (2026-09-18) -- that is what a pin no
+# longer outlives, and it is a different event from this one.
 func drop_threat_field() -> void:
 	_threat_field = null
 	_redraw_enemy_ranges(hover_presenter.hovered_enemy())
@@ -1755,6 +1757,11 @@ func threat_forecast() -> Dictionary[int, Dictionary]:
 
 func toggle_enemy_ranges() -> void:
 	ranges_shown = not ranges_shown
+	# The key's OFF means a CLEAN BOARD, pins included (dev, 2026-09-18, reversing his own earlier
+	# "a pin overrides the toggle"). It is the only way back from a pinned set short of shift+
+	# clicking each one again -- the pointer cannot do it, and an order deliberately must not.
+	if not ranges_shown:
+		pinned_enemies.clear()
 	_redraw_enemy_ranges(hover_presenter.hovered_enemy())
 
 

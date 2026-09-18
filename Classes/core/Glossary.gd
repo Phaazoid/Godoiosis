@@ -205,11 +205,9 @@ static func _build_entries() -> Dictionary:
 	# Squads
 	e[Term.SQUAD] = {"category": Category.SQUADS, "title": "Squad",
 		"short": "Units fight as squads: queue orders for the members, then execute the plan together.",
-		"long": "Every unit belongs to exactly one squad, even when alone. A squad activates as a "
-			+ "group — queue orders for its members, then Execute Orders runs the whole plan. Once a "
-			+ "squad has acted it is spent for the turn. Members must stay within the leader's "
-			+ "cohesion range, and a squad outnumbered unit-for-unit can still win: a squad's turn "
-			+ "moves everyone."}
+		"long": "Every unit belongs to exactly one squad, even when alone. Queue orders for its "
+			+ "members, then Execute Orders runs the whole plan. Once a squad has acted it is "
+			+ "spent for the turn."}
 	e[Term.LEADER] = {"category": Category.SQUADS, "title": "Leader",
 		"short": "The unit a squad forms around: capacity comes from its LDR, and the cohesion leash anchors to it.",
 		"long": "The squad's anchor. Capacity comes from the leader's effective LDR (%d effective "
@@ -219,10 +217,8 @@ static func _build_entries() -> Dictionary:
 	e[Term.COHESION] = {"category": Category.SQUADS, "title": "Cohesion",
 		"short": "The leash: squadmates must stay in the leader's COH range, counted by walkable path, not straight line.",
 		"long": "How far a squadmate may stand from its leader, measured in movement steps over "
-			+ "terrain the member can actually cross — a wall between you breaks cohesion even when "
-			+ "you are close. Orders that would break the leash are refused before they queue, and a "
-			+ "member cut off after the fact (shoved away, ice melting under it) falls out of the "
-			+ "squad into a squad of its own."}
+			+ "terrain the member can actually cross. A wall between you breaks cohesion even when "
+			+ "you are close. Orders that would break the leash are refused before they queue."}
 	e[Term.SQUAD_SIZE] = {"category": Category.SQUADS, "title": "Squad Size (SQD)",
 		"short": "Members over capacity. Capacity is 1 plus the leader's effective LDR, %d per member."
 			% Squad.MEMBER_LDR_COST,
@@ -233,7 +229,7 @@ static func _build_entries() -> Dictionary:
 	# Stats
 	e[Term.MHP] = {"category": Category.STATS, "title": "Max HP (MHP)",
 		"short": "The health pool. CON's band shifts the ceiling.",
-		"long": "Hit points. Reaching 0 does not simply kill — what actually happens is decided by "
+		"long": "Hit points. Reaching 0 does not simply kill. What actually happens is decided by "
 			+ "the stakes ladder: see Downed, Crisis and Maim under Will & Lifecycle."}
 	e[Term.STR] = {"category": Category.STATS, "title": "Strength (STR)",
 		"short": "Raw power. Weapon damage draws on it through each weapon's scaling blend.",
@@ -248,20 +244,17 @@ static func _build_entries() -> Dictionary:
 		"short": "The survival pool: a down costs %d Will; a full pool can arm Crisis."
 			% UnitInstance.DOWN_WILL_COST,
 		"long": "Will is what stands between a felled unit and permanent harm. Surviving a down "
-			+ "spends %d Will; when the pool can't pay, the unit is maimed instead. Rally restores "
+			+ "spends %d Will; when the pool can't pay, the unit is maimed instead. A full pool "
 			% UnitInstance.DOWN_WILL_COST
-			+ "your own Will (%d the first time, %d less each rally after), Intimidate drains an "
-			% [Unit.RALLY_BASE, Unit.RALLY_FALLOFF]
-			+ "enemy's, and a full pool (%d) plus the Crisis ability turns a would-be down into a "
-			% UnitInstance.MAX_WILL
-			+ "last stand."}
+			+ "(%d) plus the Crisis ability turns a would-be down into a last stand."
+			% UnitInstance.MAX_WILL}
 	e[Term.DEX] = {"category": Category.STATS, "title": "Dexterity (DEX)",
 		"short": "Agility. Its band adds or removes MOV, and weapon blends draw on it.",
-		"long": "Feeds weapon scaling blends, and its band shifts movement range — a point or two "
+		"long": "Feeds weapon scaling blends, and its band shifts movement range. A point or two "
 			+ "of DEX is the cheapest way to move further."}
 	e[Term.PER] = {"category": Category.STATS, "title": "Perception (PER)",
 		"short": "Awareness. Nudges effective LDR, and weapon blends draw on it.",
-		"long": "Feeds weapon scaling blends, and its band nudges effective Leadership — a sharp-eyed "
+		"long": "Feeds weapon scaling blends, and its band nudges effective Leadership. A sharp-eyed "
 			+ "leader runs a slightly bigger squad."}
 	e[Term.CON] = {"category": Category.STATS, "title": "Constitution (CON)",
 		"short": "Toughness: shifts max HP and multiplies worn armor into DEF.",
@@ -269,7 +262,7 @@ static func _build_entries() -> Dictionary:
 			+ "protects a tough unit more), and weapon blends draw on it."}
 	e[Term.COH] = {"category": Category.STATS, "title": "Cohesion (COH)",
 		"short": "Leash length as a leader: how far squadmates may stand, in path distance.",
-		"long": "Read off the leader only — see Cohesion under Squads for how the leash works."}
+		"long": "Read off the leader only. See Cohesion under Squads for how the leash works."}
 	e[Term.MOV] = {"category": Category.STATS, "title": "Movement (MOV)",
 		"short": "Tiles per move: base %d shifted by DEX's band." % UnitInstance.JOBLESS_MOV_BASE,
 		"long": "How far a unit walks in one move order. Base %d, shifted by DEX's band. Losing a "
@@ -283,28 +276,24 @@ static func _build_entries() -> Dictionary:
 		"short": "Subtracted from incoming damage: armor scaled by CON, plus terrain cover.",
 		"long": "Damage mitigation. Worn armor contributes its power scaled by CON, dug-in Cover "
 			+ "adds +%d, and the total comes straight off every incoming hit. " % Terrain.COVER_DEF
-			+ "Armor only answers the damage KINDS it covers -- plate stops a blade and lets a fireball "
-			+ "through; Cover stops everything."}
+			+ "Armor only answers the damage KINDS it covers; Cover stops everything."}
 	e[Term.DAMAGE_KIND] = {"category": Category.STATS, "title": "Damage kinds",
 		"short": "How a hit arrives: blunt, slash, pierce, fire, shock, cold or corrosion. Armor covers some kinds and not others.",
-		"long": "Every damaging attack delivers ONE kind. Pierce is a point (spear, bullet, ice spear), "
-			+ "slash a line (blade), blunt a plane (hammer, fist, a jet of water); fire, shock, cold and "
-			+ "corrosion are not physical at all. A piece of armor lists the kinds its DEF applies to, and a "
-			+ "kind it does not list goes straight through. Separate from the element a hit carries: a "
-			+ "fireball is fire-kind damage AND applies the fire effect, an ice spear is pierce AND applies "
-			+ "the ice effect -- insulation stops the effect, only DEF stops the damage."}
+		"long": "Every damaging attack delivers ONE kind. Pierce is a point (spear, bullet), slash a "
+			+ "line (blade), blunt a plane (hammer, fist); fire, shock, cold and corrosion are not "
+			+ "physical at all. Armor lists the kinds its DEF applies to, and a kind it does not "
+			+ "list goes straight through."}
 
 	# Actions — the short line doubles as the action menu's hover tooltip.
 	e[Term.EXECUTE_ORDERS] = {"category": Category.ACTIONS, "title": "Execute Orders",
 		"short": "Run the squad's queued plan: moves together, then attacks, then reactions, then rescues and the rest.",
 		"long": "Runs everything the squad has queued, in fixed phases: all moves land at once, then "
-			+ "attacks resolve one by one, then reactions (counters and reactive heals), then the "
-			+ "side actions — rescues, rallies and the like. The queue panel previews exactly what "
+			+ "attacks, then reactions, then the side actions. The queue panel previews exactly what "
 			+ "will happen; execution never deviates from it."}
 	e[Term.MOVE] = {"category": Category.ACTIONS, "title": "Move",
 		"short": "Walk this unit. Moving must be ordered before its main action, never after.",
 		"long": "Queues a walk within the unit's MOV range. A unit that has already queued its main "
-			+ "action for the turn can no longer add a move — plan the approach first."}
+			+ "action for the turn can no longer add a move. Plan the approach first."}
 	e[Term.GROUP_MOVE] = {"category": Category.ACTIONS, "title": "Group Move",
 		"short": "Move the whole squad as a formation around the leader's destination.",
 		"long": "Pick a destination for the leader and the squad plans itself around it, everyone "
@@ -312,35 +301,32 @@ static func _build_entries() -> Dictionary:
 	e[Term.ATTACK] = {"category": Category.ACTIONS, "title": "Attack",
 		"short": "Fire the equipped weapon's main attack.",
 		"long": "Aims and queues the equipped weapon's main attack. Each unit gets one main action "
-			+ "per turn — attack, rescue, rally and the other mains are exclusive."}
+			+ "per turn, so attack, rescue, rally and the other mains are exclusive."}
 	e[Term.ATTACK_TARGETING] = {"category": Category.ACTIONS, "title": "Attack Targeting",
-		"short": "Every attack strikes units, tiles, or both — its readout says which in parentheses.",
+		"short": "Every attack strikes units, tiles, or both. Its readout says which in parentheses.",
 		"long": "Every attack's hover readout ends with its targeting channel. (unit): hits whoever "
-			+ "stands in the affected cells — the ground is untouched. (tile): changes the ground "
-			+ "itself (setting it burning, freezing water) and never touches units directly. "
-			+ "(unit/tile): does both at once. Tile-targeting is how attacks and the terrain "
-			+ "interact — see the Terrain and Elemental pages."}
+			+ "stands in the affected cells, leaving the ground untouched. (tile): changes the "
+			+ "ground itself and never touches units directly. (unit/tile): does both at once."}
 	# The action ring names this slice after the equipped WEAPON rather than after attacking (#467
 	# round 3), because reloading and burrowing are not attacks and a slice called Attack would be
 	# lying about half its contents. Term.RUNE below is its opposite number.
 	e[Term.WEAPON_ACTION] = {"category": Category.ACTIONS, "title": "Weapon",
 		"short": "Everything the equipped weapon can do: its attacks, and its own verbs like reload, rev, burrow.",
-		"long": "One slice for the weapon in hand — its main attack, any alternative attacks, and "
+		"long": "One slice for the weapon in hand. Its main attack, any alternative attacks, and "
 			+ "the verbs the weapon itself has: reloading a magazine, revving a motor, digging in. "
 			+ "Greyed entries say what they are missing."}
 	e[Term.RUNE] = {"category": Category.ACTIONS, "title": "Rune",
 		"short": "Everything the equipped rune can do: the carvings inscribed on it, paid for with aura.",
 		"long": "The weapon slice's opposite number, for an alchemist. A rune carries inscribed "
-			+ "carvings and firing one channels the wielder's elemental aura; many carvings are not "
-			+ "attacks at all, which is why this slice is named for the rune rather than for "
-			+ "swinging. A carving the wielder cannot pay for is listed greyed, with the reason."}
+			+ "carvings, and firing one channels the wielder's elemental aura. A carving the "
+			+ "wielder cannot pay for is listed greyed, with the reason."}
 	e[Term.TRANSMUTATION] = {"category": Category.ACTIONS, "title": "Transmutation",
 		"short": "Fire a carving inscribed on the equipped rune, paid for with elemental aura.",
 		"long": "A rune carries inscribed carvings; firing one channels the wielder's elemental "
 			+ "aura. A carving the wielder cannot pay for is listed greyed, with the reason."}
 	e[Term.ABILITY_ACTION] = {"category": Category.ACTIONS, "title": "Ability Action",
 		"short": "Verbs granted by a unit's abilities, like Intimidate.",
-		"long": "Actions a unit's abilities unlock. Intimidate — draining an adjacent enemy's Will — "
+		"long": "Actions a unit's abilities unlock. Intimidate, draining an adjacent enemy's Will, "
 			+ "is the first; more arrive with new abilities."}
 	# The action ring's two invented categories (#467). Move, Attack and Inspect reuse the verb
 	# terms of the same name; these two name a grouping the game had no word for before the ring.
@@ -348,9 +334,7 @@ static func _build_entries() -> Dictionary:
 	e[Term.ACTION] = {"category": Category.ACTIONS, "title": "Action",
 		"short": "Spending the turn on something other than an attack: guard, rescue, rally, capture, wait.",
 		"long": "A unit spends its turn on one main action. Act gathers the ones that are not "
-			+ "swinging a weapon — standing in front of an ally, carrying a downed one to safety, "
-			+ "steadying a shaken squad, taking a zone, or an ability's own verb — and Wait, which "
-			+ "spends the squad's turn on nothing at all."}
+			+ "swinging a weapon, plus Wait, which spends the squad's turn on nothing at all."}
 	e[Term.SQUAD_ACTIONS] = {"category": Category.ACTIONS, "title": "Squad",
 		"short": "Forming and breaking squads: squad up, join, leave, disband.",
 		"long": "Changing who marches with whom. A squad's shape is fixed once it has orders "
@@ -361,38 +345,28 @@ static func _build_entries() -> Dictionary:
 		"short": "Bodyguard a nearby ally: the next hit that would land on them lands on you instead.",
 		"long": "Guard is an ACTION, not the DEF stat. Pick an ally within %d, and you become their "
 			% Abilities.GUARD_BASE_RANGE
-			+ "bodyguard: the next damaging hit aimed at them — from anyone, including your own "
-			+ "squad — resolves against YOU instead, from your cell, against your DEF and armor. "
-			+ "They take nothing. It catches exactly one hit, and lapses when your next turn "
-			+ "begins. It arms at its place in the queue, so an attack you queued first is not "
-			+ "blocked. Kit can add a brace bonus (+%d DEF) to the hit you absorb; bare Guard "
-			% Abilities.BRACE_DEF_BONUS
-			+ "absorbs at full price. Counterplay: pierce it, shove either of you apart, or catch "
-			+ "the pair in one blast — a bodyguard caught beside their ward is billed twice."}
+			+ "bodyguard: the next damaging hit aimed at them resolves against YOU instead, against "
+			+ "your DEF and armor. They take nothing. It catches exactly one hit, and lapses when "
+			+ "your next turn begins."}
 	# Guard's other half (#413): a reactive ATTACK where Guard is a reactive defense. The two share
 	# a lifetime sentence on purpose, so learning one teaches the other.
 	e[Term.OVERWATCH] = {"category": Category.ACTIONS, "title": "Overwatch",
 		"short": "Aim now, fire later: the first enemy who walks into the aimed cells takes the shot.",
 		"long": "Aim an attack the ordinary way, but hold your fire. The cells you aimed at stay "
 			+ "watched, marked on the board for both sides, and the first ACTIVE enemy who ENTERS "
-			+ "one — walking, or shoved into it — takes that attack where they stand. Standing "
-			+ "there already is not entering; moving from one watched cell to another is. It fires "
-			+ "exactly once and is then spent, and lapses when your next turn begins. Leaving the "
-			+ "cell you aimed from drops it, however that happens. A triggered shot draws no "
-			+ "counter, and it does not stop the walk unless it puts the crosser down. Which of "
-			+ "your units crosses FIRST is the queue order you set, so a watch is something you "
-			+ "plan around as well as something you plan."}
+			+ "one takes that attack where they stand. It fires exactly once and is then spent, and "
+			+ "lapses when your next turn begins. Leaving the cell you aimed from drops it."}
 	e[Term.RESCUE] = {"category": Category.ACTIONS, "title": "Rescue",
 		"short": "Stand an adjacent downed ally back up.",
 		"long": "Revives an adjacent downed ally before their clock runs out, at whatever health "
-			+ "they have. The rescued unit is out of formation and spent for the turn — but alive."}
+			+ "they have. The rescued unit is out of formation and spent for the turn, but alive."}
 	e[Term.RALLY] = {"category": Category.ACTIONS, "title": "Rally",
 		"short": "Steel yourself: restore %d Will, less each rally after the first." % Unit.RALLY_BASE,
-		"long": "Restores the rallying unit's own Will — %d the first time this battle, %d less "
+		"long": "Restores the rallying unit's own Will. %d the first time this battle, %d less "
 			% [Unit.RALLY_BASE, Unit.RALLY_FALLOFF]
 			+ "with each repetition. It stops being offered once the returns run out."}
 	e[Term.CAPTURE] = {"category": Category.ACTIONS, "title": "Capture Point",
-		"short": "Claim the capture zone this unit stands on — or will stand on after its move.",
+		"short": "Claim the capture zone this unit stands on, or will stand on after its move.",
 		"long": "Claims the objective zone at the unit's destination. Only available when the "
 			+ "mission declares a capture objective there."}
 	e[Term.SQUAD_UP] = {"category": Category.ACTIONS, "title": "Squad Up",
@@ -410,18 +384,13 @@ static func _build_entries() -> Dictionary:
 	e[Term.UNDEPLOY] = {"category": Category.ACTIONS, "title": "Undeploy",
 		"short": "Take this unit back off the board before the mission starts.",
 		"long": "Only during the pre-mission phase, and only for units drawn from the mission's "
-			+ "roster -- an authored unit belongs to the board rather than to you. The unit goes "
-			+ "back among those the roster offers, its cell frees up, and it stops counting "
-			+ "against the deployment cap. Nothing about the unit changes: gear, jobs and "
-			+ "condition are all still there when you place it again."}
+			+ "roster. The unit goes back among those the roster offers, its cell frees up, and it "
+			+ "stops counting against the deployment cap."}
 	e[Term.REPOSITION] = {"category": Category.ACTIONS, "title": "Reposition",
 		"short": "Move this unit to another cell in the deployment zone.",
 		"long": "Only during the pre-mission phase. The zone lights up and the unit goes wherever "
 			+ "you click: an empty cell, or one another of your placed units holds, in which case "
-			+ "the two trade places. This is not a MOVE -- no turn has started and nothing is "
-			+ "spent; it is where the unit was standing when the battle began. If it leaves its "
-			+ "leader's cohesion range the squad breaks immediately, on the spot, rather than "
-			+ "quietly on the first turn."}
+			+ "the two trade places. This is not a MOVE; no turn has started and nothing is spent."}
 	e[Term.PLACEMENT] = {"category": Category.ACTIONS, "title": "Placement",
 		"short": "Where this unit stands before the battle, and whether it comes at all.",
 		"long": "The pre-mission phase's own slice of the ring: move the unit inside the "
@@ -439,7 +408,7 @@ static func _build_entries() -> Dictionary:
 			+ "stays put."}
 	e[Term.INSPECT] = {"category": Category.ACTIONS, "title": "Inspect",
 		"short": "Open the full readout: stats, limbs, abilities, inventory.",
-		"long": "Docks the full panel for this unit — stats with their breakdowns, limb state, "
+		"long": "Docks the full panel for this unit: stats with their breakdowns, limb state, "
 			+ "abilities and carried gear. Works on any unit, friend or foe."}
 	e[Term.END_TURN] = {"category": Category.ACTIONS, "title": "End Turn",
 		"short": "Pass play to the next faction.",
@@ -449,73 +418,62 @@ static func _build_entries() -> Dictionary:
 	e[Term.ELEMENTS] = {"category": Category.ELEMENTAL, "title": "Elements",
 		"short": "Attacks can carry an element; on impact it reacts with what the target already holds.",
 		"long": "The elements: %s. An attack tagged with one deposits it on impact, " % _element_roster()
-			+ "where it reacts with whatever state the target already holds — see Reactions. Fire, "
+			+ "where it reacts with whatever state the target already holds. See Reactions. Fire, "
 			+ "Water, Earth, Air and Aether are the five base sigils; the rest arise from "
 			+ "combinations."}
 	e[Term.AFFINITY] = {"category": Category.ELEMENTAL, "title": "Affinity",
-		"short": "Which elements a unit can ever channel — inherited, fixed for life, and not the "
+		"short": "Which elements a unit can ever channel. Inherited, fixed for life, and not the "
 			+ "same thing as how deep they run.",
 		"long": "Alchemy runs in the blood: an affinity is the right to grow aura in an element, and "
 			+ "it is set at birth. Most alchemists carry one, a few carry several, and the set is "
-			+ "ORDERED — the first is their primary. Someone with no affinity at all can carry a "
-			+ "rune but never wield one; it is inert rock in their hands. Affinity is tracked apart "
-			+ "from aura on purpose, because losing a limb can empty a pool without costing the "
-			+ "right to fill it again — see Aura."}
+			+ "ORDERED. Someone with no affinity at all can carry a rune but never wield one."}
 	e[Term.AURA] = {"category": Category.ELEMENTAL, "title": "Aura",
-		"short": "How deep a unit's pull on an element runs — it scales every transmutation they "
+		"short": "How deep a unit's pull on an element runs. It scales every transmutation they "
 			+ "channel through it.",
-		"long": "A pool per element, seeded at birth and grown rarely: each point is an achievement, "
-			+ "not a level. A carving's damage scales off the sum of the wielder's aura across the "
-			+ "elements it is made of, and a pool must hold at least 1 for them to channel that "
-			+ "element at all — so a pool emptied to 0 silences those carvings while the affinity "
-			+ "behind it survives. Every lost limb docks a point off the deepest pool: aura rides "
-			+ "living flesh, and specialists bleed depth first."}
+		"long": "A pool per element, seeded at birth and grown rarely. A carving's damage scales off "
+			+ "the sum of the wielder's aura across the elements it is made of, and a pool must hold "
+			+ "at least 1 to channel that element at all. Every lost limb docks a point off the "
+			+ "deepest pool."}
 	e[Term.WET] = {"category": Category.ELEMENTAL, "title": "Wet",
-		"short": "Soaked through — and a conductor. Some elements react hard with a wet target.",
-		"long": "The soaked condition, left by a water attack or simply by being in water: wading "
-			+ "through the shallows or being thrown into a lake both soak you. Harmless on its own "
-			+ "— the danger is what reacts with it, and that a wet body CONDUCTS. Electricity that "
-			+ "touches water or a soaked unit travels through every water tile and every wet unit "
-			+ "beside it, catching everyone it reaches, your own squad included. Frozen water "
-			+ "neither soaks nor conducts. The interaction list below is the authored truth."}
+		"short": "Soaked through, and a conductor. Some elements react hard with a wet target.",
+		"long": "The soaked condition, left by a water attack or by being in water. Harmless on its "
+			+ "own; the danger is what reacts with it, and that a wet body CONDUCTS. Electricity "
+			+ "touching water or a soaked unit travels through every water tile and wet unit beside "
+			+ "it, your own squad included."}
 	e[Term.CHILLED] = {"category": Category.ELEMENTAL, "title": "Chilled",
 		"short": "Cold-slowed: %+d DEX until it thaws after the unit's next turn."
 			% Elemental.CHILL_STAT_MODS[Stats.Stat.DEX],
-		"long": "The cold-slowed condition, left by ice. %+d DEX while it lasts — normally through "
+		"long": "The cold-slowed condition, left by ice. %+d DEX while it lasts, normally through "
 			% Elemental.CHILL_STAT_MODS[Stats.Stat.DEX]
 			+ "the unit's next activation, twice that when the ice caught it soaked. Fire ends the "
 			+ "chill early, painfully: the sudden swing from cold to heat is its own reaction."}
 	e[Term.REACTIONS] = {"category": Category.ELEMENTAL, "title": "Reactions",
 		"short": "Element meets state, always the same way: reactions are fixed rules, never chance.",
 		"long": "When an attack's element meets a state the target holds, the reaction changes "
-			+ "damage and states by fixed, deterministic rules — no dice anywhere. The current "
+			+ "damage and states by fixed, deterministic rules, with no dice anywhere. The current "
 			+ "authored reactions are listed below, straight from the data the resolver itself "
 			+ "reads."}
 
 	# Terrain
 	e[Term.TERRAIN_KINDS] = {"category": Category.TERRAIN, "title": "Terrain",
 		"short": "Ground types set movement cost and rules. Hover any unusual tile for its effect.",
-		"long": "Every tile has a ground type — grass, dirt, mud, rock, tree, water — setting its "
-			+ "movement cost and rules. Attacks can also change tiles: fire leaves grass burning "
-			+ "(bare dirt won't catch), ice freezes water. Hovering a tile that is anything other "
-			+ "than ordinary shows what it does."}
+		"long": "Every tile has a ground type (grass, dirt, mud, rock, tree, water) setting its "
+			+ "movement cost and rules. Attacks can also change tiles: fire leaves grass burning, "
+			+ "ice freezes water. Hovering a tile that is anything other than ordinary shows what "
+			+ "it does."}
 	e[Term.WATER_TILE] = {"category": Category.TERRAIN, "title": "Deep water",
-		"short": "Too deep to stand in. Shoved in, a unit goes under — %d turns to be pulled out."
+		"short": "Too deep to stand in. Shoved in, a unit goes under, with %d turns to be pulled out."
 			% Unit.DOWNED_TURNS,
 		"long": "Nothing walks into deep water, but a unit SHOVED in goes under: the water takes "
 			+ "whatever health the blow left, and the unit is down with the usual %d turns to be "
 			% Unit.DOWNED_TURNS
 			+ "rescued before it drowns. A rescuer beside the water drags the body out onto dry "
-			+ "ground next to them, so a body nobody can reach is a body nobody can save. A unit "
-			+ "with Waterwalk stands on the surface instead, and frozen water is solid ground for "
-			+ "everyone — permanently, unless burned away. A body in the water is WET like anyone "
-			+ "else, so a shock into the lake reaches it."}
+			+ "ground next to them."}
 	e[Term.SHALLOW_WATER] = {"category": Category.TERRAIN, "title": "Shallow water",
-		"short": "Wadeable, but slow going — and you come out WET.",
+		"short": "Wadeable, but slow going, and you come out WET.",
 		"long": "Shallow water is waded at the same cost as mud, and anyone who crosses it or is "
-			+ "shoved into it comes out WET. It is deep water, not this, that drowns — so the cost "
-			+ "of being shoved in here is position and a soaking. Waterwalk keeps you dry, and so "
-			+ "does crossing it once it is frozen."}
+			+ "shoved into it comes out WET. It is deep water, not this, that drowns. Waterwalk "
+			+ "keeps you dry, and so does crossing it once it is frozen."}
 	# No fixed duration in this text since #890: a fire lasts as long as its FUEL, so how long it
 	# burns is a property of the ground and differs from one to the next. The tile hover reads the
 	# live clock and is where a player learns the number for the ground actually under the cursor.
@@ -524,22 +482,21 @@ static func _build_entries() -> Dictionary:
 			% Terrain.BURNING_TILE_DAMAGE,
 		"long": "This ground is on fire: anyone standing on it takes %d damage at the end of the "
 			% Terrain.BURNING_TILE_DAMAGE
-			+ "turn — unless they are insulated against fire, which nothing else protects against. "
-			+ "Fire burns for as long as the ground under it has fuel — grass goes out on "
-			+ "its own, and a fire on bare stone is consuming nothing, so it burns until something "
-			+ "puts it out. Fire spreads to whatever it can burn beside it, one tile a round."}
+			+ "turn, unless insulated against fire. Fire burns as long as its ground has fuel, so "
+			+ "grass goes out on its own and a fire on bare stone does not. It spreads to whatever "
+			+ "it can burn beside it, one tile a round."}
 	e[Term.SCORCHED] = {"category": Category.TERRAIN, "title": "Scorched",
 		"short": "Burnt out. Safe to stand on, and it will not catch again.",
 		"long": "This ground has already burned. Nothing here is left to burn, so fire cannot take "
-			+ "it a second time from any direction — which makes the ground a fire has crossed the "
+			+ "it a second time from any direction. That makes the ground a fire has crossed the "
 			+ "safest place on a burning field, and the only firebreak that makes itself."}
 	e[Term.FROZEN] = {"category": Category.TERRAIN, "title": "Frozen",
 		"short": "Frozen solid. Frozen water can be walked on, and nothing melts it but fire.",
-		"long": "Ice. Frozen water is walkable ground for any unit — permanently, unless burned away."}
+		"long": "Ice. Frozen water is walkable ground for any unit, permanently, unless burned away."}
 	e[Term.COVER] = {"category": Category.TERRAIN, "title": "Cover",
 		"short": "Dug-in ground: +%d DEF to the occupant. Destroyed by attacks, never by time."
 			% Terrain.COVER_DEF,
-		"long": "Entrenchment — dug by a burrowing weapon. Whoever stands here gains +%d DEF. It "
+		"long": "Entrenchment, dug by a burrowing weapon. Whoever stands here gains +%d DEF. It "
 			% Terrain.COVER_DEF
 			+ "never expires, but a destructive hit removes it."}
 
@@ -551,26 +508,23 @@ static func _build_entries() -> Dictionary:
 			% UnitInstance.DOWN_WILL_COST
 			+ "downed unit is helpless: it dies when its %d-turn clock runs out, and a hit that "
 			% Unit.DOWNED_TURNS
-			+ "meets the health it has left finishes it early. Rescue stands it back up. Massive "
-			+ "overkill — more than %d past remaining HP — skips down entirely and kills outright."
-			% LethalityRules.OVERKILL_CEILING}
+			+ "meets the health it has left finishes it early. Rescue stands it back up."}
 	e[Term.CRISIS] = {"category": Category.LIFECYCLE, "title": "Crisis",
-		"short": "Full Will plus the Crisis ability turns a would-be down into a last stand — up at %d HP, surged."
+		"short": "Full Will plus the Crisis ability turns a would-be down into a last stand, up at %d HP and surged."
 			% Abilities.CRISIS_REVIVE_HP,
 		"long": "A unit holding the Crisis ability at full Will refuses its down: it stands back up "
-			+ "at %d HP with +%d STR/DEX/PER for %d turns. The price is everything — Will locks at "
+			+ "at %d HP with +%d STR/DEX/PER for %d turns. The price is everything. Will locks at "
 			% [Abilities.CRISIS_REVIVE_HP, Abilities.CRISIS_SURGE, Abilities.CRISIS_SURGE_TURNS]
-			+ "0 for the rest of the battle, and the next would-be down is death, no ladder, no "
-			+ "rescue."}
+			+ "0 for the rest of the battle, and the next would-be down is death."}
 	e[Term.MAIM] = {"category": Category.LIFECYCLE, "title": "Maim",
 		"short": "When Will can't pay for a down, a limb is lost instead. Permanently.",
-		"long": "A down the Will pool cannot cover (%d Will) takes a limb instead — permanently. "
+		"long": "A down the Will pool cannot cover (%d Will) takes a limb instead, permanently. "
 			% UnitInstance.DOWN_WILL_COST
 			+ "Lost arms cost stats; one lost leg halves MOV, both pin it to 1. The inspect panel "
 			+ "marks the limb next at risk."}
 	e[Term.PROSTHETIC] = {"category": Category.LIFECYCLE, "title": "Prosthetic",
 		"short": "A built replacement for a lost limb, with its own stat value.",
-		"long": "A crafted limb installed in place of a lost one, carrying its own stat value — "
+		"long": "A crafted limb installed in place of a lost one, carrying its own stat value, "
 			+ "usually weaker than what it replaces, occasionally not."}
 
 	return e

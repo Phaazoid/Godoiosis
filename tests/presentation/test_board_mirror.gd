@@ -2319,6 +2319,74 @@ func test_every_plant_in_a_tuft_rides_the_tear_out_with_its_own_cell() -> void:
 	await _settle()
 
 
+# ...and the half the case above states it cannot make (#893): the plants ride the tile WHILE IT IS
+# STILL IN THE AIR. Its own header calls this "a different question -- nothing is moving here, and a
+# rebuild has already run", and that is exactly the blindness: staging BUMPS the version, the bump
+# rebuilds the prop, and the rebuild puts it in the right place. The lag lives between two bumps,
+# where the version deliberately holds still (#521 rejected the per-frame rebuild) so nothing asked
+# staged_offset for an answer it was already giving.
+#
+# The dev's report was "tall grass", so this watches EVERY PLANT rather than the root -- the root is
+# what moves, but a tuft is the prop that can have a correct root and wrong plants, which is the
+# whole of #992. Frames are driven by hand: an `await` would let _process advance the flight by a
+# real delta under the assertion, and _drive_transition is the door that owns the call, so reaching
+# past it to _sync_flight_maps would pin the helper rather than the wire.
+func test_every_plant_in_a_tuft_rides_its_tile_MID_FLIGHT() -> void:
+	_scene.load_mission(PROLOG)
+	await _settle()
+	_game.game_state = _game.GameState.DEV_MODE
+	var mirror := _scene.get_node("BoardMirror") as BoardMirror
+	var richest := _richest_tuft_tile()
+	assert_bool(not richest.is_empty()).override_failure_message(
+			"no TUFT tile draws more than one plant; this case would watch one sprite").is_true()
+
+	var cell: Vector2i = _game.grid.get_used_cells()[0]
+	_game.grid.paint(cell, richest.source, richest.coords)
+	await _settle()
+
+	var lift := BoardSpace.lift_offset()
+	BoardSpace.stage([cell] as Array[Vector2i], lift)
+	await _settle()   # settled at the diorama, which is the state #992 pinned
+	var settled := _plant_points(mirror.prop_at(cell))
+	assert_int(settled.size()).override_failure_message(
+			"the tuft stood nothing up, so there is nothing to fly").is_greater(0)
+
+	# Airborne from here, and no frame runs until the assertions are done.
+	var plan := StagingFlight.schedule([cell] as Array[Vector2i])
+	BoardSpace.begin_flight(plan, -lift, Vector3.ZERO, true)
+	BoardSpace.advance_flight(StagingFlight.total(plan) * 0.5)
+	_scene._drive_transition(0.0)
+
+	# The guards WITHOUT WHICH THE OLD CODE PASSES: begin_flight seats every cell at `from`, which on
+	# an entry is -lift and makes staged_offset exactly ZERO -- board level, where the unfixed
+	# placement is already correct. Airborne has to be proved before position means anything.
+	var in_air := BoardSpace.flight_offset(cell)
+	assert_bool(BoardSpace.in_flight(cell)).override_failure_message(
+			"the tile is not in flight, so this case is asking about a settled board").is_true()
+	assert_float(in_air.length()).override_failure_message(
+			"the tile has already landed -- the rebuild would have re-placed the plants anyway"
+			).is_greater(0.1)
+	assert_float((in_air - (-lift)).length()).override_failure_message(
+			"the tile has not left its socket, where the unstaged placement is already right"
+			).is_greater(0.1)
+
+	# The prop is NOT rebuilt here, on purpose -- no frame ran, so _sync_staging never dropped it.
+	# That is the property: a standing node follows its ground without being remade.
+	var flying := _plant_points(mirror.prop_at(cell))
+	var travelled := BoardSpace.staged_offset(cell) - lift   # from the settled diorama to right now
+	assert_int(flying.size()).override_failure_message(
+			"the flight changed how many plants the tuft stands up").is_equal(settled.size())
+	for i in flying.size():
+		assert_vector(flying[i]).override_failure_message(
+				"plant %s is at %s with its tile mid-flight; it should have travelled to %s -- it " \
+				% [i, flying[i], settled[i] + travelled] + "stayed where the tile last LANDED"
+				).is_equal_approx(settled[i] + travelled, Vector3.ONE * 0.01)
+
+	BoardSpace.end_flight_now()
+	BoardSpace.clear_staging()
+	await _settle()
+
+
 # Where each of a tuft's plants stands, in world terms — the root's own point plus the plant's place
 # within the cell. Empty for a cell that stood nothing up.
 func _plant_points(root: Node3D) -> Array[Vector3]:
@@ -3125,6 +3193,60 @@ func test_a_shaft_is_floored_so_the_sky_does_not_show_through_it() -> void:
 		assert_float((wound[Mesh.ARRAY_NORMAL] as PackedVector3Array)[0].dot(Vector3.UP)) 				.override_failure_message(
 				"the shaft floor winds downward; culling drops it and the sky shows through"
 				).is_greater(0.9)
+
+
+# ...and a shaft rides its own cell through a tear-out FLIGHT (#893). A lip is keyed on the HOLE's
+# cell, not on the ground around it, so this needs the hole itself staged -- which a cell attack
+# aimed into a chasm does. The mid-flight window is the same one #893 is about: the version bumps on
+# landings only, so nothing re-placed what was already standing.
+#
+# It is here rather than beside the prop and flame cases because the LIP IS THE ONE PER-CELL NODE IN
+# BoardMirror NOT PLACED BY surface_point -- it is built in world vertices spanning shared edges and
+# takes the bare offset -- so it is the one arm of the re-seat that a prop case structurally cannot
+# cover. ADDED AFTER a mutant deleting exactly that arm survived all 122 cases in both suites.
+func test_a_hole_shaft_rides_its_own_cell_mid_flight() -> void:
+	_scene.load_mission(PROLOG)
+	await _settle()
+	_game.game_state = _game.GameState.DEV_MODE
+	var cell := _an_inland_cell()
+	assert_bool(cell != GridUtils.NO_CELL).override_failure_message(
+			"no cell on this board has ground on all four sides; the case is vacuous").is_true()
+	_game.grid.erase(cell)
+	await _settle()
+	assert_int(_walls_at(cell)).override_failure_message(
+			"the hole grew no walls, so there is no shaft to fly").is_equal(4)
+
+	var lift := BoardSpace.lift_offset()
+	BoardSpace.stage([cell] as Array[Vector2i], lift)
+	await _settle()
+	assert_vector(_mirror().lip_at(cell).position).override_failure_message(
+			"the settled shaft is not at the diorama, so this case starts from the wrong place"
+			).is_equal_approx(lift, Vector3.ONE * 0.01)
+
+	# Airborne, by hand -- a frame would let _process move the flight under the assertion.
+	var plan := StagingFlight.schedule([cell] as Array[Vector2i])
+	BoardSpace.begin_flight(plan, -lift, Vector3.ZERO, true)
+	BoardSpace.advance_flight(StagingFlight.total(plan) * 0.5)
+	_scene._drive_transition(0.0)
+
+	var in_air := BoardSpace.flight_offset(cell)
+	assert_bool(BoardSpace.in_flight(cell)).override_failure_message(
+			"the tile is not in flight, so this case is asking about a settled board").is_true()
+	assert_float(in_air.length()).override_failure_message(
+			"the tile has already landed -- the rebuild would have re-seated the shaft anyway"
+			).is_greater(0.1)
+	assert_float((in_air - (-lift)).length()).override_failure_message(
+			"the tile has not left its socket, where the unstaged placement is already right"
+			).is_greater(0.1)
+
+	assert_vector(_mirror().lip_at(cell).position).override_failure_message(
+			"the shaft hung behind the cell it belongs to: it is at %s and its cell is at %s" \
+			% [_mirror().lip_at(cell).position, BoardSpace.staged_offset(cell)]
+			).is_equal_approx(BoardSpace.staged_offset(cell), Vector3.ONE * 0.01)
+
+	BoardSpace.end_flight_now()
+	BoardSpace.clear_staging()
+	await _settle()
 
 
 # --- The rim (#876 slice 2) ----------------------------------------------------------------------

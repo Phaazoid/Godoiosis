@@ -160,6 +160,65 @@ func test_what_stands_on_torn_out_ground_goes_up_with_it() -> void:
 		.is_equal_approx(home + offset, Vector3.ONE * 0.01)
 
 
+# ...and it rides the tile WHILE IT IS STILL IN THE AIR (#893). The case above cannot see this and
+# never could: it stages, which BUMPS the version, and the rebuild that bump triggers re-places the
+# flame correctly -- so it only ever asks about a SETTLED diorama. The lag lives in the window
+# BETWEEN version bumps, where staging_version deliberately does not move (#521 measured the
+# per-frame rebuild and rejected it) and nothing was asking staged_offset for an answer that was
+# live all along.
+#
+# THE FRAMES ARE DRIVEN BY HAND, and that is load-bearing twice over. `await` would let _process
+# advance the flight by a real delta underneath the assertion, so the instant being measured would
+# not be the instant asserted; and _drive_transition is the door that OWNS the call, so reaching
+# past it to _sync_flight_maps would pin the helper instead of the wire (#103).
+func test_a_flame_rides_its_tile_mid_flight_and_not_just_where_it_lands() -> void:
+	var cell := _painted_cells()[0]
+	var effect := ResolvedCellEffect.new()
+	effect.cell = cell
+	effect.states_added.assign([Terrain.TileState.BURNING])
+	_game.terrain_states.apply(effect)
+	await _settle()
+
+	var mirror := _scene.get_node("BoardMirror") as BoardMirror
+	assert_object(mirror.fire_marker_at(cell)).override_failure_message(
+			"no flame was ever stood up -- this case cannot see the lag").is_not_null()
+
+	var lift := BoardSpace.lift_offset()
+	BoardSpace.stage([cell] as Array[Vector2i], lift)
+	await _settle()   # the SETTLED state: props and flames rebuilt at the diorama
+
+	# Airborne from here on, and no frame runs until the assertions are done.
+	var plan := StagingFlight.schedule([cell] as Array[Vector2i])
+	BoardSpace.begin_flight(plan, -lift, Vector3.ZERO, true)
+	BoardSpace.advance_flight(StagingFlight.total(plan) * 0.5)
+	_scene._drive_transition(0.0)
+
+	# Three guards, because WITHOUT THEM THE OLD CODE PASSES. begin_flight seats every cell at
+	# `from`, which for an entry is -lift and makes staged_offset exactly ZERO -- board level, where
+	# the unfixed placement is CORRECT (test_a_flight_holds_its_tiles_short... asserts that very
+	# fact). So the instant has to be proved airborne before its position means anything.
+	var in_air := BoardSpace.flight_offset(cell)
+	assert_bool(BoardSpace.in_flight(cell)).override_failure_message(
+			"the tile is not in flight, so this case is asking about a settled board").is_true()
+	assert_float(in_air.length()).override_failure_message(
+			"the tile has already landed -- the rebuild would have fixed the flame anyway").is_greater(0.1)
+	assert_float((in_air - (-lift)).length()).override_failure_message(
+			"the tile has not left its socket yet, where the unstaged placement is already right"
+			).is_greater(0.1)
+
+	assert_vector(mirror.fire_marker_at(cell).position).override_failure_message(
+			"the flame hung behind the tile it stands on: it is at %s and its ground is at %s" \
+			% [mirror.fire_marker_at(cell).position,
+				BoardSpace.surface_point(cell, _game.board_heights) + BoardSpace.staged_offset(cell)]
+			).is_equal_approx(
+			BoardSpace.surface_point(cell, _game.board_heights) + BoardSpace.staged_offset(cell),
+			Vector3.ONE * 0.01)
+
+	BoardSpace.end_flight_now()
+	BoardSpace.clear_staging()
+	await _settle()
+
+
 # ...and so does the MARKUP on it. Asked of OverlayMirror._anchor directly rather than of a drawn
 # marker: every channel that reads it is torn down by the time a pass ends, so there is nothing left
 # on screen to look at -- and this is the decision, one answer for every marker in that file.

@@ -14,6 +14,22 @@
 # WHAT IT MAY LIST is the last section (#964). Those cases doctor the phase's live Loadout and build
 # their own card, because the picker is built once and the offer has to be in place before it is --
 # and because a case reading the shipped rosters' own ticks would be pinning authored content.
+#
+# THAT LAST CLAUSE WAS TRUE OF THREE CASES AND FALSE OF THE OTHER FOUR, WHICH IS HOW THIS SUITE DIED
+# (#1026, 2026-09-18). #964 wrote the razor down for the cases it was adding and left the older ones
+# reaching into the live screen for whatever card was there -- inheriting the first catalog roster's
+# own ticks. It stayed green only because `offers_every_job` defaults TRUE. The day the dev authored
+# FALSE on all four shipped rosters -- which is what that flag is FOR, two of the four jobs being
+# unfinished content -- every offer went empty, PreMissionCard correctly drew no picker, and four
+# cases died on a null control with nothing about the picker broken. His ruling: *"Why give an option
+# if selecting it can break a test?"*
+#
+# `_enter_phase` therefore AUTHORS the offer it needs, and no case reads a shipped roster's ticks.
+# It is doctored there rather than at each case because the screen's card is what three of the four
+# actually test (the card only EMITS `job_picked`; the SCREEN applies the job and redraws), and
+# `_build_job_picker` reads the offer once at build time -- so the offer has to exist before
+# `begin_mission` opens the screen. **A suite is only as content-independent as its weakest fixture,
+# and half a file obeying the razor reads exactly like all of it obeying the razor.**
 extends GdUnitTestSuite
 
 const MAIN_SCENE := "res://Scenes/Main.tscn"
@@ -31,6 +47,11 @@ var sm: ScenarioManager
 var mc: MissionController
 var _tank: JobData
 var _tank_snap: Dictionary
+# The roster the phase draws from, and its job offer as found. Doctored per case and put back in
+# after_test -- RosterCatalog.resolve hands out the resource CACHE, so an edit left in place would
+# reach every later suite. Same borrow-mutate-restore idiom job_fixtures.gd states for JobData.
+var _roster: Roster
+var _roster_snap: Dictionary
 
 
 func before_test() -> void:
@@ -51,6 +72,10 @@ func before_test() -> void:
 
 func after_test() -> void:
 	F.restore(_tank, _tank_snap)
+	if _roster != null:
+		_roster.offers_every_job = _roster_snap["every"]
+		_roster.available_jobs = _roster_snap["jobs"]
+		_roster = null
 	await DialogFixtures.end_all_dialog(self)
 	sm.clear_board()
 	await await_idle_frame()
@@ -70,6 +95,22 @@ func _enter_phase(cap := 2) -> bool:
 	for x in range(ZONE_CELLS):
 		game.zone_manager.paint_cell("landing", ZoneManager.Kind.DEPLOYMENT, Vector2i(x, 0))
 	sm.current_roster = names[0]
+	# THE OFFER IS AUTHORED HERE, NEVER INHERITED (#1026). Every case below needs a picker on the
+	# screen's own card, and _build_job_picker reads the offer once at build time -- so it has to be in
+	# place before begin_mission opens the screen, and _refresh_cards rebuilds a card only when the
+	# ROSTER changes, which is exactly the refresh-in-place rule the identity case pins. Reading
+	# whatever the shipped roster ticks is what broke this suite: see the header.
+	_roster = RosterCatalog.resolve(names[0])
+	assert_object(_roster).override_failure_message(
+			"the roster named by the scenario does not resolve; the phase cannot be exercised").is_not_null()
+	_roster_snap = {"every": _roster.offers_every_job, "jobs": _roster.available_jobs.duplicate()}
+	# The list is what carries the offer -- deleting it reproduces main's failure exactly (7 cases,
+	# 6 errors, 0 failures). The flag makes the offer EXACT rather than merely sufficient: with it
+	# left true, offered_jobs() answers with the whole catalogue, "tank" is still in there and every
+	# case below still passes, so a case would silently start depending on what else is authored.
+	var offered: Array[String] = ["tank"]
+	_roster.available_jobs = offered
+	_roster.offers_every_job = false
 	sm.current_deployment_cap = cap
 	var objectives: Array[MissionRules.Objective] = [MissionRules.Objective.ROUT]
 	mc.set_objectives(objectives)
