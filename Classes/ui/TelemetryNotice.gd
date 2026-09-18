@@ -18,7 +18,7 @@ class_name TelemetryNotice
 # MissionEndBanner and MissionSelectScreen. The button is the only door, which is the point of a
 # notice somebody is meant to read.
 
-const TITLE := "Thanks for trying out this little demo!."
+const TITLE := "Thanks for trying out this little demo!"
 const BODY := """This is a very early build of the game.  Please give feedback, or report bugs, through the feedback options in the menu!
 
 There are a couple of short levels to try. 
