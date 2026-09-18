@@ -136,7 +136,8 @@ var hover_presenter: HoverPresenter
 enum ThreatView { NONE, INTENTS, EVERYTHING }
 var threat_view := ThreatView.INTENTS
 var ranges_shown := false     # the V toggle (slice 3): every enemy's move + reach tones, FE-style
-# Which enemies stay drawn with V off, by instance id -- see toggle_enemy_pin.
+# Which enemies stay drawn once the pointer leaves them, by instance id -- see toggle_enemy_pin.
+# They outlive the pointer and a queued order, but NOT the V key going off (2026-09-18).
 var pinned_enemies: Dictionary[int, bool] = {}
 var _threat_field: ThreatField = null   # built lazily by threat_field(); dropped when the plan moves
 var _threat_plan_timer: Timer   # debounces the exact tier: a burst of orders costs ONE recompute
@@ -1755,6 +1756,11 @@ func threat_forecast() -> Dictionary[int, Dictionary]:
 
 func toggle_enemy_ranges() -> void:
 	ranges_shown = not ranges_shown
+	# The key's OFF means a CLEAN BOARD, pins included (dev, 2026-09-18, reversing his own earlier
+	# "a pin overrides the toggle"). It is the only way back from a pinned set short of shift+
+	# clicking each one again -- the pointer cannot do it, and an order deliberately must not.
+	if not ranges_shown:
+		pinned_enemies.clear()
 	_redraw_enemy_ranges(hover_presenter.hovered_enemy())
 
 
