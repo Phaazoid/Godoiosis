@@ -480,11 +480,19 @@ static func _flat(text: String) -> String:
 
 # A HALO MAY NOT FUSE ITS SECTOR INTO ONE ARC -- the failure #930 already paid for once with the hover
 # border, where a value that read correctly on the panel's 108px ring drew a solid ribbon on the
-# card's 52px one. Asserted as the PROPERTY, never as the constant: ticks sit a fixed fraction of the
-# mid radius apart, so a haloed bar must stay inside that pitch at every size a surface builds, and
-# the ratio stays free to be re-tuned without reddening this.
-func test_a_halo_stays_inside_its_own_tick_pitch_at_every_ring_size() -> void:
-	for box: float in [52.0, 108.0, ShapePlate.BOX_PX as float, 160.0]:
+# card's 52px one.
+#
+# WHAT IS ASSERTED IS A DRAWABLE GAP, not a margin anybody chose. The first version of this case asked
+# only that a haloed bar stay INSIDE the pitch, and the fuse ratio SURVIVED it: at 0.053 two halos
+# stop 0.02px apart, which passes an overlap test and renders as one arc, because a gap thinner than a
+# pixel is not a gap. One pixel is a fact about rasterising rather than a taste threshold, and it
+# leaves the ratio a wide band to be re-tuned in -- which is the razor's own point.
+#
+# ONLY THE SIZES A DEMAND IS ACTUALLY DRAWN AT. The 52px pre-mission ring shows no carving and so
+# draws no halo; if a hover tip ever adopts the demand at that size, this list is where it gets asked.
+func test_a_halo_leaves_a_drawable_gap_at_every_size_that_shows_one() -> void:
+	var sizes: Array[float] = [RuneDetailCard.RING_PX as float]
+	for box: float in sizes:
 		var outer := box * 0.5
 		var inner := outer * (1.0 - AuraRing.BAND_RATIO)
 		var mid := (inner + outer) * 0.5
@@ -492,9 +500,9 @@ func test_a_halo_stays_inside_its_own_tick_pitch_at_every_ring_size() -> void:
 		var haloed := width + mid * AuraRing.HALO_SPREAD_RATIO * 2.0
 		# The arc distance between two neighbouring ticks, measured where the bars actually sit.
 		var pitch := mid * (AuraRing.SECTOR - AuraRing.SECTOR_PAD * 2.0) / float(AuraRing.MAX_TICKS)
-		assert_float(haloed).override_failure_message(
-			"a halo on a %.0fpx ring is %.2fpx wide inside a %.2fpx pitch -- the sector fuses"
-			% [box, haloed, pitch]).is_less(pitch)
+		assert_float(pitch - haloed).override_failure_message(
+			"two halos on a %.0fpx ring stop %.2fpx apart -- under a pixel, so the sector reads as "
+			% [box, pitch - haloed] + "one arc").is_greater_equal(1.0)
 
 
 # The off-recipe knock-back may NOT land on alpha: DIM_ALPHA and FAINT_ALPHA already spend that
