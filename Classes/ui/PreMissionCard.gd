@@ -619,20 +619,16 @@ func _rest_ink(label: Label) -> void:
 #
 # The clip and the tooltip STAY -- the header law is that nothing may demand width from its content --
 # and the CAP is what keeps the card's minimum a constant instead.
+#
+# The MEASURING is UiText.fit_width since #1024, where the same mechanism bit a card that could not
+# reach this function. The two constants stay here: what this column can spare is this card's own
+# fact, and a shared helper's constant is a fact about whichever caller it was measured at.
 func _chip(text: String, tint: Color, tip: String) -> Label:
 	var chip := Label.new()
 	chip.text = text
 	chip.clip_text = true
 	chip.add_theme_font_size_override("font_size", 10)
-	# Measured off the font the chip will actually draw with, so no pixel count is typed here and a
-	# theme change moves the chip with it. Exact before the card enters the tree, since UiTheme.tres
-	# overrides no font -- and a card is built and refreshed once before it is added to the grid.
-	var font: Font = chip.get_theme_font("font")
-	var ink := 0.0
-	if font != null:
-		ink = font.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1,
-			chip.get_theme_font_size("font_size")).x
-	chip.custom_minimum_size.x = clampf(ceilf(ink), CHIP_MIN_W, CHIP_MAX_W)
+	UiText.fit_width(chip, CHIP_MIN_W, CHIP_MAX_W)
 	chip.add_theme_color_override("font_color", tint)
 	chip.tooltip_text = UiText.wrap(tip)
 	chip.mouse_filter = Control.MOUSE_FILTER_STOP
