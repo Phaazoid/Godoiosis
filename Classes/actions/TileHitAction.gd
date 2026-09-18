@@ -21,8 +21,11 @@ static func make(unit: Unit, tile_state: Terrain.TileState, damage: int,
 	outcome.base_damage = damage
 	outcome.damage = damage
 	outcome.hp_before = situation.hp
-	outcome.target_hp_after = situation.hp - damage
+	# The rung FIRST: what a burn leaves behind is the rung's answer, not a subtraction (#1002).
+	# Spelling it here is how a burn that downed a unit previewed 3->0 where the attack path said 1,
+	# and how one that triggered Crisis previewed 0 against an execution that stands them up at 5.
 	outcome.lethality = LethalityRules.predict(situation, damage)
+	outcome.target_hp_after = LethalityRules.hp_after(outcome.lethality, situation.hp, damage)
 	hit.resolved = outcome
 	return hit
 

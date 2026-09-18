@@ -98,10 +98,11 @@ static func resolve_tile_hits(plan: ResolvedPlan, squad: Squad, actions: Array[B
 			continue
 		var situation := projected_situation(unit, hypo)
 		if revived.has(unit):
-			# A queued Rescue revives its target ACTIVE at 1 HP, and the tail runs after everything
-			# the hypo threads — without this the forecast reads a DOWNED unit and predicts KILLED.
+			# A queued Rescue stands its target ACTIVE, and the tail runs after everything the hypo
+			# threads — without this the forecast reads a DOWNED unit and predicts KILLED. The HP is
+			# whatever the body holds: the hypo already threads the cling (LethalityRules.hp_after),
+			# so the floor this used to carry was a third spelling of it (#1002).
 			situation.lifecycle = Unit.LifecycleState.ACTIVE
-			situation.hp = maxi(situation.hp, 1)
 		if situation.lifecycle == Unit.LifecycleState.DEAD:
 			continue
 		var states := board.terrain_states.projected_states_at(
@@ -638,7 +639,8 @@ static func _resolve_one(action: AttackAction, plan: ResolvedPlan, reactions: Ar
 		outcome.removed = true
 		outcome.popups.append(VOID_POPUP)
 	# The lifecycle a rung leaves behind is ONE map (#313) — a preview holding only an outcome reads
-	# the same one. What a rung SPENDS stays here: it differs per rung and it is spent from the hypo.
+	# the same one, and since #1002 the HP it leaves behind is its sibling. What a rung SPENDS stays
+	# here: it differs per rung and it is spent from the hypo.
 	target_hypo.lifecycle = LethalityRules.lifecycle_for(outcome.lethality, target_hypo.lifecycle)
 	if outcome.lethality == ResolvedOutcome.Lethality.DOWNED:
 		target_hypo.will -= UnitInstance.DOWN_WILL_COST
@@ -648,9 +650,7 @@ static func _resolve_one(action: AttackAction, plan: ResolvedPlan, reactions: Ar
 		target_hypo.in_crisis = true                          # the gambit: no safety net from here on
 		target_hypo.will = 0
 
-	target_hypo.hp -= outcome.damage
-	if outcome.lethality == ResolvedOutcome.Lethality.CRISIS:
-		target_hypo.hp = Abilities.CRISIS_REVIVE_HP           # stood back up mid-pass (enter_crisis)
+	target_hypo.hp = LethalityRules.hp_after(outcome.lethality, target_hypo.hp, outcome.damage)
 	outcome.target_hp_after = target_hypo.hp
 
 	# Displacement stage (#84/#259): apply the landing computed above -- position threaded into

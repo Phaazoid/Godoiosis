@@ -11,8 +11,8 @@ class_name MissionSummary
 # The RECONCILIATION block is the point of the first query. `net_hp_loss` is what the turn_start
 # snapshots say a faction lost; `attributed_damage` - `attributed_heal` is what the pass and
 # turn_effects lines account for; `unattributed` is the gap. A gap is a damage channel the log does
-# not carry (a downed clock expiring kills at 1 HP outside any hit), or a bug -- either way it is
-# the number to read before trusting anything else in here.
+# not carry (a downed clock expiring kills outside any hit, at whatever HP the body held), or a
+# bug -- either way it is the number to read before trusting anything else in here.
 
 const PLAYER := "PLAYER"
 const ACTIVE := "ACTIVE"

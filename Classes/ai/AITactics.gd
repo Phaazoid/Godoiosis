@@ -462,10 +462,11 @@ static func _attack_candidates(unit: Unit, board: BoardContext, origin: Vector2i
 # THIS IS NOW THE WHOLE OF THAT PRIORITY, and the justification #716 shipped with is not -- it read
 # "_attack_candidates already refuses to AIM at a body while anyone is standing, and that is the
 # whole rule", which #720 deleted a day later. The rule survives its reason: what keeps a body from
-# outranking somebody upright is the arithmetic below rather than a gate above it. A downed unit
-# clings at 1 HP (Unit._go_downed), so the overkill clamp values finishing one at exactly +1 damage
-# -- enough to break a tie, never enough to outrank a real swing -- and _plan_removes answers false
-# for a body, so it cannot earn a removal either.
+# outranking somebody upright is the arithmetic below rather than a gate above it: the overkill
+# clamp values finishing a body at exactly +1 damage -- enough to break a tie, never enough to
+# outrank a real swing -- and _plan_removes answers false for a body, so it cannot earn a removal
+# either. That +1 came from the body CLINGING at 1 HP until #1002 let a heal raise one, and the
+# clamp now caps a body at 1 outright so the ruling survives the state that would have broken it.
 static func _score_plan(faction: Team.Faction, plan: ResolvedPlan) -> Vector3i:
 	var dealt := {}   # Unit -> damage this plan lands on them, before the overkill clamp
 	for a in plan.attacks:
@@ -494,9 +495,16 @@ static func _score_plan(faction: Team.Faction, plan: ResolvedPlan) -> Vector3i:
 	# the first already downed still banked full damage, which ties exactly with hitting an
 	# untouched enemy for the same number, leaving focus-fire to be decided by board order. The cap
 	# binds only on overkill, so chipping a healthy unit is unaffected. Live HP is plan-start HP.
+	#
+	# A BODY IS CAPPED AT 1 WHATEVER IT HOLDS (#1002, keeping #720's ruling literal). That "+1" was
+	# never a constant -- it is this clamp, worth 1 only because a body clung at 1 HP -- so once a
+	# heal can leave one at 15 the same arithmetic prices finishing it above chipping a standing
+	# enemy, which is exactly the head-to-head the dev ruled a body must lose. Asked of the LIVE
+	# board like the clamp it belongs to: a body the PLAN fells is a removal, not this.
 	var net := 0
 	for victim: Unit in dealt:
-		var counted: int = mini(int(dealt[victim]), maxi(victim.get_current_hp(), 0))
+		var cap: int = 1 if victim.is_downed() else maxi(victim.get_current_hp(), 0)
+		var counted: int = mini(int(dealt[victim]), cap)
 		net += counted if Team.is_enemy(faction, victim.get_faction()) else -counted
 
 	# A REMOVAL IS PER VICTIM, NOT PER HIT, and that is the whole of squad focus-fire. Counting the

@@ -850,9 +850,11 @@ func _apply_cell_effects(cell_effects: Array[ResolvedCellEffect]) -> void:
 
 # End-of-phase burn: a unit standing in fire when ITS faction's turn ends takes damage. Routed
 # through take_damage so downs/kills/Crisis apply, then the same ejection sweep the attack pass
-# uses. No is_active() filter (#191): LethalityRules.predict already rules DOWNED-plus-any-damage
-# as KILLED (Fork 3, #33) -- burn is a damage source like any other and take_damage no-ops safely
-# on an already-DEAD unit, so nothing upstream needs to ask the question again.
+# uses. No is_active() filter (#191): burn is a damage source like any other, so the ladder names
+# its rung exactly as it names a blow's, and take_damage no-ops safely on an already-DEAD unit --
+# nothing upstream needs to ask the question again. #191's own wording said the ladder rules
+# DOWNED-plus-any-damage KILLED, which #1002 repealed: a body burns for real damage now and dies
+# when its HP runs out, which for an unhealed one at 1 HP is still the first tick.
 #
 # SHOWN rather than settled in one frame (#534, dev 2026-08-26: "a quick post turn effect zoom to
 # show all post turn effects... double speed camera zoom to an unit, unit takes fire damage, next").

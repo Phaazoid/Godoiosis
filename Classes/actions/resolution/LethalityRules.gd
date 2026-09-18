@@ -99,7 +99,15 @@ static func predict(s: Situation, damage: int) -> ResolvedOutcome.Lethality:
 		# — states, deposits and on-hit effects all still fire — it just no longer finishes.
 		# Keyed on the damage number, not on the attack, because both callers already hold it and
 		# neither holds the attack: Unit.take_damage(0) reaches the same answer with no new argument.
-		return ResolvedOutcome.Lethality.KILLED if damage > 0 else ResolvedOutcome.Lethality.NONE
+		#
+		# HP-BASED since #1002 — a body holds real health once something heals it, and the dev's
+		# ruling is that it is then "not necessarily dead in one hit anymore". `>=` is the ACTIVE
+		# rung's own spelling four lines down, so there is one threshold in this file rather than
+		# two; a body at 1 HP (every body nothing has healed) is unchanged by construction. No Will,
+		# Crisis or maim branch: a body already paid those going down.
+		if damage <= 0:
+			return ResolvedOutcome.Lethality.NONE
+		return ResolvedOutcome.Lethality.KILLED if damage >= s.hp else ResolvedOutcome.Lethality.NONE
 	if damage < s.hp:
 		return ResolvedOutcome.Lethality.NONE
 	if damage - s.hp > OVERKILL_CEILING:
@@ -122,20 +130,38 @@ static func lifecycle_for(rung: ResolvedOutcome.Lethality,
 			return Unit.LifecycleState.DEAD
 	return current
 
-# What a PREVIEW shows for HP the ladder has already sentenced. The threaded number goes NEGATIVE
-# on a fatal hit — that is the ladder's arithmetic, not a readout — so every surface drawing a
-# predicted HP asks here. One answer on purpose: the queue panel and the board readout showing
-# different numbers for one plan is Law #2 broken at the point it is being rendered.
+# What HP a rung LEAVES its target at — lifecycle_for's sibling, answering the other half of "what
+# does this rung do". Every writer of ResolvedOutcome.target_hp_after calls it (#1002), which is
+# what makes the threaded number mean what execution will land on rather than the ladder's raw
+# arithmetic. KILLED deliberately keeps the subtraction: it goes negative, nothing reads it as a
+# quantity, and displayed_hp still clamps DEAD to 0 for the surfaces that draw it.
 #
-# It mirrors execution rather than inventing a convention — _go_downed clings at 1, a kill leaves
-# the board. #313 read that convergence as a free teardown and #354 found it was a trap: the clamp
-# flattens a sentenced unit's prediction ONTO the HP it already has, so a readout gated on "predicted
-# differs from current" both put itself away mid-pass and never appeared for a unit at exactly 1 HP.
+# It existed as a display clamp until #1002 and could not stay one: a body holds real HP now, so
+# "DOWNED means 1" is true of the TRANSITION and false of the STATE, and only the rung knows which
+# of those a number is. Two divergences closed with the move, neither about healing — a tile burn
+# that triggers Crisis (TileHitAction threaded its own subtraction and previewed 0 against an
+# execution that stands the unit up), and a heal on an ally felled earlier in the same pass
+# (threading from a negative, so the queue read -5->1 while execution healed the clinging body).
+static func hp_after(rung: ResolvedOutcome.Lethality, hp: int, damage: int) -> int:
+	match rung:
+		ResolvedOutcome.Lethality.DOWNED, ResolvedOutcome.Lethality.MAIMED:
+			return 1                             # _go_downed clings here; a maim is a down
+		ResolvedOutcome.Lethality.CRISIS:
+			return Abilities.CRISIS_REVIVE_HP    # the gambit stands back up (enter_crisis)
+	return hp - damage
+
+# What a PREVIEW shows for HP the ladder has already sentenced. Since #1002 the threaded number is
+# already what execution lands on (hp_after above), so the only clamp left is the dead: a kill
+# threads NEGATIVE — the ladder's arithmetic, not a readout — and every surface drawing it asks
+# here. One answer on purpose: the queue panel and the board readout showing different numbers for
+# one plan is Law #2 broken at the point it is being rendered.
+#
+# #313 read the old DOWNED clamp as a free teardown and #354 found it was a trap: it flattened a
+# sentenced unit's prediction ONTO the HP it already has, so a readout gated on "predicted differs
+# from current" both put itself away mid-pass and never appeared for a unit at exactly 1 HP. That
+# collision survives the move (the hypo now threads the 1 instead), which is why the rule stands:
 # DRAW with this number; never decide with it — PlanResolver.plan_changes is the membership answer.
 static func displayed_hp(raw_hp: int, lifecycle: Unit.LifecycleState) -> int:
-	match lifecycle:
-		Unit.LifecycleState.DEAD:
-			return 0
-		Unit.LifecycleState.DOWNED:
-			return 1
+	if lifecycle == Unit.LifecycleState.DEAD:
+		return 0
 	return maxi(raw_hp, 0)
