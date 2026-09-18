@@ -7,7 +7,7 @@ its child [#49 Action Queue UX](https://github.com/Phaazoid/Godoiosis/issues/49)
 This is a *guidelines* doc, not a spec — it captures the principles we're holding the work to,
 plus the running order of the queue-UX checklist. Update it as items land.
 
-**Canon checked through #1015 (2026-09-17).**
+**Canon checked through #1022 (2026-09-18).**
 
 ## Principles
 
@@ -1031,7 +1031,10 @@ downed as *icon then turns-remaining*, and `info_panel` as a `DOWN 3` badge tipp
 without rescue" — so the ticket's three candidate forms (grey the bar / a state icon / show the
 clock) were not really open: the game had picked icon-**and**-clock, and a board band inventing a
 fourth spelling would have been a second answer to a question already answered. The clock is also
-the number that drives the decision, which is what made it the interesting candidate.
+the number that drives the decision, which is what made it the interesting candidate. **Since
+[#1002](https://github.com/Phaazoid/Godoiosis/issues/1002) the MARK is unconditional and the COUNT
+is not** — a body whose clock has stopped wears the glyph with no number beside it, and the info
+panel's badge drops to a bare `DOWN`.
 
 **The glyph got a home on the way through.** `Down.png` was preloaded independently by the hover
 card and by `AttackAction`; a third surface is where that stops being tolerable, so `StateIcons`

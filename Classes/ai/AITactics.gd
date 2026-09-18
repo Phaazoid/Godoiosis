@@ -343,9 +343,10 @@ static func _candidates_by_member(members: Array[Unit], board: BoardContext, bas
 #
 # ONE LIST, standing and downed alike (#720, dev 2026-09-03). It was two passes, a body offered only
 # once nothing upright had produced a candidate -- #57's precedence as a hard gate. The score already
-# says everything that rule was protecting: a downed unit clings at 1 HP (Unit._go_downed), so the
-# overkill clamp prices finishing one at exactly +1, which loses to any real swing and wins only when
-# nothing else is there. The gate on top of that was what made a body an ABSOLUTE last resort.
+# says everything that rule was protecting: the overkill clamp prices finishing a body at exactly
+# +1, which loses to any real swing and wins only when nothing else is there. That +1 was the cling
+# at 1 HP until #1002 let a heal raise a body, and the clamp caps one at 1 outright now. The gate on
+# top of that was what made a body an ABSOLUTE last resort.
 #
 # WHAT THE PLAN HAS ALREADY KILLED IS NOT A TARGET (#719). Planning does not execute, so a unit a
 # squadmate felled THIS round is still standing on the live board -- the base plan's hypo is the only
@@ -508,10 +509,10 @@ static func _score_plan(faction: Team.Faction, plan: ResolvedPlan) -> Vector3i:
 		net += counted if Team.is_enemy(faction, victim.get_faction()) else -counted
 
 	# A REMOVAL IS PER VICTIM, NOT PER HIT, and that is the whole of squad focus-fire. Counting the
-	# lethality rung of each row instead double-pays: the ladder answers KILLED for any damaging hit
-	# on an already-downed body (LethalityRules.predict), so a second member swinging at someone the
-	# first already downed scored a fresh removal and the two happily overkilled one target while a
-	# second enemy went untouched. Asked as a CHANGE OF STANDING -- on its feet before the plan,
+	# lethality rung of each row instead double-pays: the ladder answers KILLED on a body once the
+	# damage MEETS its HP (LethalityRules.predict), and a body the plan just felled clings at 1, so a
+	# second member swinging at someone the first already downed scored a fresh removal and the two
+	# happily overkilled one target while a second enemy went untouched. Asked as a CHANGE OF STANDING -- on its feet before the plan,
 	# off them after -- so it is the plan's effect on a person, which is what a removal means.
 	var removals := 0
 	for victim: Unit in dealt:
@@ -948,8 +949,9 @@ class _Scored:
 # prioritization as other attacks, it just loses to other attacks in the head to head"). This was
 # two, falling through to bodies only when nothing upright produced a candidate -- #57's
 # deprioritization as a HARD PRECEDENCE. What replaces it is the score, which was already saying the
-# same thing more precisely: a body clings at 1 HP, so finishing one is worth +1 and earns no
-# removal, and any swing at somebody on their feet outranks it. (This SUPERSEDES "felling someone
+# same thing more precisely: the overkill clamp caps a body at 1 -- the cling at 1 HP until #1002
+# let a heal raise one -- so finishing a body is worth +1 and earns no removal, and any swing at
+# somebody on their feet outranks it. (This SUPERSEDES "felling someone
 # standing always beats finishing a body", dev 2026-09-02 -- kept as a ranking, dropped as a gate.)
 #
 # The one corner where the two rulings disagree is a body in reach beside a standing target whose

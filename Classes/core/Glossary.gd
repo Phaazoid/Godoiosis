@@ -383,9 +383,9 @@ static func _build_entries() -> Dictionary:
 			+ "your units crosses FIRST is the queue order you set, so a watch is something you "
 			+ "plan around as well as something you plan."}
 	e[Term.RESCUE] = {"category": Category.ACTIONS, "title": "Rescue",
-		"short": "Stand an adjacent downed ally back up at 1 HP.",
-		"long": "Revives an adjacent downed ally at 1 HP before their clock runs out. The rescued "
-			+ "unit is out of formation and spent for the turn — but alive."}
+		"short": "Stand an adjacent downed ally back up.",
+		"long": "Revives an adjacent downed ally before their clock runs out, at whatever health "
+			+ "they have. The rescued unit is out of formation and spent for the turn — but alive."}
 	e[Term.RALLY] = {"category": Category.ACTIONS, "title": "Rally",
 		"short": "Steel yourself: restore %d Will, less each rally after the first." % Unit.RALLY_BASE,
 		"long": "Restores the rallying unit's own Will — %d the first time this battle, %d less "
@@ -545,14 +545,14 @@ static func _build_entries() -> Dictionary:
 
 	# Will & lifecycle
 	e[Term.DOWNED] = {"category": Category.LIFECYCLE, "title": "Downed",
-		"short": "Felled, not dead: %d turns to be rescued before dying. Any hit while down kills."
+		"short": "Felled, not dead: %d turns to be rescued before dying. A hit that meets their health kills."
 			% Unit.DOWNED_TURNS,
 		"long": "A hit that would fell a unit downs it instead when its Will can pay (%d Will). A "
 			% UnitInstance.DOWN_WILL_COST
-			+ "downed unit is helpless: it dies when its %d-turn clock runs out, and any damaging "
+			+ "downed unit is helpless: it dies when its %d-turn clock runs out, and a hit that "
 			% Unit.DOWNED_TURNS
-			+ "hit finishes it early. Rescue stands it back up at 1 HP. Massive overkill — more "
-			+ "than %d past remaining HP — skips down entirely and kills outright."
+			+ "meets the health it has left finishes it early. Rescue stands it back up. Massive "
+			+ "overkill — more than %d past remaining HP — skips down entirely and kills outright."
 			% LethalityRules.OVERKILL_CEILING}
 	e[Term.CRISIS] = {"category": Category.LIFECYCLE, "title": "Crisis",
 		"short": "Full Will plus the Crisis ability turns a would-be down into a last stand — up at %d HP, surged."
