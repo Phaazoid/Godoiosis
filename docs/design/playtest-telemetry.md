@@ -2,7 +2,7 @@
 
 **Status: THE ARC IS COMPLETE ([#53](https://github.com/Phaazoid/Godoiosis/issues/53), closed 2026-09-09).** Five slices, all merged: the recorder + replay-grade capture (#831), the notice (#840), the replay viewer (#843), the quit record (#845), and transport + storage (#848, with #849 and #850 behind it). Filed 2026-07-14, parked, and unparked by the dev 2026-09-07 with *"now that we've started to close the loop of a player playing a mission, we can start on it."* The polish it deliberately left is [#856](https://github.com/Phaazoid/Godoiosis/issues/856).
 
-**Canon checked through #925 (2026-09-12).**
+**Canon checked through #1027 (2026-09-18).**
 
 **Not to be confused with [`playtest-experiments.md`](../playtest-experiments.md)**, whose name is one word away and whose subject is different: that one is how to drive an AI agent through the headless bridge and get a measurement you can believe. This one is the record a HUMAN's played mission leaves behind. Neither reads the other's data.
 
@@ -73,6 +73,8 @@ The law above has exactly one exception and it is drawn where **there is nothing
 ## What is recorded, and what is deliberately not
 
 Recorded: the mission's start (roster, scenario, build, install and session ids), every turn's pre-tick vitals, every resolution pass with its committed queue and its per-hit outcomes, the four decision channels a replay needs (a rescue's chosen `haul_to`, the squad verbs, mid-battle gear changes, a `dev_touched` flag), the lifecycle events, and the ending.
+
+**`build` is a version string, and it resolves to a commit and to a kept binary only because the build was tagged** ([#1027](https://github.com/Phaazoid/Godoiosis/issues/1027)). It is the whole of what identifies the code a run came from — `Checkout.describe()`'s `branch @ sha` is dev-only by construction, so a stranger's run carries `v0.188.3` and nothing more. `tools/archive-build.ps1` is what makes a handed-out build: it tags `v<version>` at the commit it exported from and keeps the zip, which is what lets a run recorded weeks ago be replayed against the rules that actually produced it rather than against today's.
 
 **Not recorded, on purpose:**
 
