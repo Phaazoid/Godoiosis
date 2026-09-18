@@ -61,6 +61,8 @@ enum Role {
 	ROW_REFUSED_BG,
 	ROW_REFUSED_BORDER,
 	ROW_REFUSED_HOVER_BORDER,
+	ROW_CAUTION_BG,
+	ROW_CAUTION_BORDER,
 	EXECUTE_BG,
 	EXECUTE_BORDER,
 	EXECUTE_HOVER_BG,
@@ -131,6 +133,17 @@ const ROW_HOVER_BORDER := Color(0.48, 0.48, 0.55)
 const ROW_REFUSED_BG := Color(0.27, 0.17, 0.17)
 const ROW_REFUSED_BORDER := Color(0.78, 0.35, 0.28)
 const ROW_REFUSED_HOVER_BORDER := Color(0.93, 0.47, 0.38)
+
+# THE THIRD ANSWER: legal, but leaning on something (#1022). The rune card's rows are the first
+# surface with a middle state -- a carving that channels only because wildcards cover a deficit --
+# and red/plain alone made it look as safe as one paid outright.
+#
+# AMBER because the palette has no warning hue at all: every red here already means REFUSED, and a
+# second red would be two words in one colour. It sits BETWEEN the two on value, so the three read as
+# a scale rather than as three unrelated tints, and the row's own bg/border split is unchanged --
+# validity is the border's channel (see ROW_REFUSED_BORDER's note) and this is validity's third rung.
+const ROW_CAUTION_BG := Color(0.27, 0.23, 0.15)
+const ROW_CAUTION_BORDER := Color(0.85, 0.65, 0.28)
 
 # Execute has to read as ACT NOW against the slate, which the engine's default button chrome cannot:
 # it is grey on a grey panel and simply disappeared (dev, 2026-09-03). Crimson rather than the old
@@ -203,6 +216,12 @@ const PALETTES := {
 		Role.ROW_REFUSED_BG: Color(0.969, 0.871, 0.847),
 		Role.ROW_REFUSED_BORDER: Color(0.659, 0.204, 0.165),
 		Role.ROW_REFUSED_HOVER_BORDER: Color(0.490, 0.122, 0.094),
+		# The caution rung on paper. Slate's reasoning pointed at a light ground: the fill stays
+		# BETWEEN the plain row and the refused one so the three still read as a scale, and the
+		# border is an amber-brown rather than slate's bright amber, which on cream would read as
+		# highlighter rather than as a warning.
+		Role.ROW_CAUTION_BG: Color(0.976, 0.933, 0.831),
+		Role.ROW_CAUTION_BORDER: Color(0.639, 0.463, 0.133),
 		Role.EXECUTE_BG: Color(0.659, 0.204, 0.165),
 		Role.EXECUTE_BORDER: Color(0.851, 0.549, 0.353),   # a warm rim: it sits on the dark frame
 		Role.EXECUTE_HOVER_BG: Color(0.769, 0.259, 0.227),
@@ -316,6 +335,8 @@ static func _authored(role: Role) -> Color:
 		Role.ROW_REFUSED_BG: return ROW_REFUSED_BG
 		Role.ROW_REFUSED_BORDER: return ROW_REFUSED_BORDER
 		Role.ROW_REFUSED_HOVER_BORDER: return ROW_REFUSED_HOVER_BORDER
+		Role.ROW_CAUTION_BG: return ROW_CAUTION_BG
+		Role.ROW_CAUTION_BORDER: return ROW_CAUTION_BORDER
 		Role.EXECUTE_BG: return EXECUTE_BG
 		Role.EXECUTE_BORDER: return EXECUTE_BORDER
 		Role.EXECUTE_HOVER_BG: return EXECUTE_HOVER_BG
@@ -392,6 +413,55 @@ static func row_box(refused: bool, hovered: bool) -> StyleBoxFlat:
 		var box := _flat(bg, border, 1, 4)
 		box.set_content_margin_all(1.0)   # the rail rides flush inside the border
 		return box)
+
+
+# HOW COMFORTABLY a carving channels, as chrome (#1022) -- the rune card's rows. `deploy_box`'s shape
+# one control along, and for its reason: three states is not a base plus a tint, so the box answers
+# for all three rather than a caller layering a second style over `row_box`.
+#
+# CLEAR IS `row_box` VERBATIM, deliberately. The plain state must be the ordinary row a player reads
+# everywhere else -- if it drifted, "nothing is wrong" would be its own decoration, and two of the
+# three rungs would be shouting.
+enum Channel { CLEAR, WILDCARD, REFUSED }
+
+
+static func channel_box(state: Channel, hovered: bool) -> StyleBoxFlat:
+	if state == Channel.CLEAR:
+		return row_box(false, hovered)
+	if state == Channel.REFUSED:
+		return row_box(true, hovered)
+	return _cached("channel_caution_%s" % hovered, func() -> StyleBoxFlat:
+		var border: Color = ink(Role.ROW_HOVER_BORDER) if hovered else ink(Role.ROW_CAUTION_BORDER)
+		var box := _flat(ink(Role.ROW_CAUTION_BG), border, 1, 4)
+		box.set_content_margin_all(1.0)
+		return box)
+
+
+# The chip that opens a detail card (#1022, the dev's pick of four). A bare Button takes the engine's
+# own chrome, which is the diagnosis EXECUTE_BG already carries -- *grey on a grey panel, and it
+# simply disappeared* -- so it gets a box, and the cure is the same one Execute got.
+#
+# BUILT OUT OF ROLES THAT ALREADY EXIST, which is why there is no CHIP role beside the two above: a
+# new role is a colour authored twice, once per palette, and this needs none. The fill is the row
+# lifted one step and the edge is NAME_TEXT, the warm ink this card already uses for what a thing IS,
+# so the chip ties to the surface's own accent rather than introducing a hue. HOVER inverts it into a
+# filled key -- the strongest "pressable" the palette can say without a colour of its own.
+static func chip_box(hovered: bool) -> StyleBoxFlat:
+	return _cached("chip_%s" % hovered, func() -> StyleBoxFlat:
+		var fill: Color = ink(Role.NAME_TEXT) if hovered else ink(Role.ROW_HOVER_BG)
+		var box := _flat(fill, ink(Role.NAME_TEXT), 1, 3)
+		box.content_margin_left = 5.0
+		box.content_margin_right = 5.0
+		box.content_margin_top = 1.0
+		box.content_margin_bottom = 1.0
+		return box)
+
+
+# What a chip's LABEL is, per state. Inverted on hover because the box fills with NAME_TEXT there, so
+# the text has to leave it -- ROW_BG is the ground the chip is sitting on, which is the one colour
+# guaranteed to be readable against its own fill in both palettes.
+static func chip_ink(hovered: bool) -> Color:
+	return ink(Role.ROW_BG) if hovered else ink(Role.NAME_TEXT)
 
 
 static func execute_box() -> StyleBoxFlat:

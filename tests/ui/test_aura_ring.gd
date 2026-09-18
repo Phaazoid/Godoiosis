@@ -516,3 +516,49 @@ func test_an_off_recipe_sector_is_quieted_without_touching_its_alpha() -> void:
 	var quiet := AuraRing.knocked_back(lit)
 	assert_float(quiet.a).is_equal(lit.a)
 	assert_float(quiet.s).is_less(lit.s)
+
+
+# --- the demand arc (#1022) -------------------------------------------------------------------------
+
+func _demand_ring(target: Unit, demand: TransmutationData, box_px: float) -> AuraRing:
+	var ring: AuraRing = auto_free(AuraRing.for_demand(target, null, box_px))
+	add_child(ring)
+	ring.size = Vector2(box_px, box_px)
+	ring.set_carving(demand)
+	await await_idle_frame()
+	return ring
+
+
+# THE ARC LIVES OUTSIDE THE BAND, so the band gives up room for it -- and ONLY when there is one to
+# draw. A pad taken unconditionally would quietly shrink the pre-mission card's 52px wheel and the
+# inspect panel's 108px one for a mark neither surface shows, which is the cost this conditional
+# exists to refuse.
+func test_only_a_ring_showing_a_demand_gives_up_room_for_the_arc() -> void:
+	var celest := _alchemist([FIRE], {FIRE: 2})
+	var plain := await _demand_ring(celest, null, 116.0)
+	var asking := await _demand_ring(celest, _circle([FIRE]), 116.0)
+
+	assert_float(plain._arc_room).override_failure_message(
+		"a ring with no carving reserved room for an arc it will never draw").is_equal(0.0)
+	assert_float(plain._outer).is_equal_approx(58.0, 0.01)
+	assert_float(asking._outer).override_failure_message(
+		"the band never gave up room, so the arc has nowhere to go but off the node"
+		).is_less(plain._outer)
+
+
+# ...and what it gives up has to be ENOUGH. Both bounds are arithmetic over the three ratios, so a
+# re-tune that pushed the arc off the node or back into the ticks reds here rather than in a
+# screenshot -- which is the half a headless suite genuinely can answer about a mark it cannot see.
+func test_the_demand_arc_clears_the_band_and_stays_inside_the_node() -> void:
+	var box := float(RuneDetailCard.RING_PX)
+	var half := box * 0.5
+	var outer := half - half * AuraRing.ARC_PAD_RATIO
+	var radius := outer + half * AuraRing.ARC_GAP_RATIO
+	var reach := maxf(1.5, half * AuraRing.ARC_WIDTH_RATIO) * 0.5
+
+	assert_float(radius + reach).override_failure_message(
+		"the arc's outer edge lands %.2fpx past the node's own rim and would be clipped"
+		% [(radius + reach) - half]).is_less_equal(half)
+	assert_float(radius - reach).override_failure_message(
+		"the arc's inner edge reaches back into the tick band, so the cost overlaps what is paid"
+		).is_greater(outer)

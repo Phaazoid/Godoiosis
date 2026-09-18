@@ -287,3 +287,46 @@ func test_a_utility_circle_never_promises_damage_for_its_spare_aura() -> void:
 	assert_int(gust.base_damage(alch)).is_equal(0)
 	assert_str(gust.aura_text(alch, FIRE)).contains("Channels on")
 	assert_str(gust.aura_text(alch, FIRE)).not_contains("damage")
+
+
+# ==============================================================================
+#  channel_state: HOW COMFORTABLY, the third answer off the same ladder (#1022)
+# ==============================================================================
+# The rune card tints a row red / amber / plain off this. It lives on the carving for the reason the
+# ladder does: a card re-deriving total_deficit and wildcard_capacity for itself would be a second
+# answer to *how close to the line is this*, and it would go on saying "comfortable" the first time
+# either pool's rule moved.
+
+func test_the_three_channel_states_are_the_ladders_own_three_outcomes() -> void:
+	var alch: Unit = _alchemist({ FIRE: 2 })
+
+	# Paid outright: anchored, nothing owed.
+	assert_that(_carving([FIRE]).channel_state(alch, FIRE)).is_equal(
+		TransmutationData.Channel.CLEAR)
+	# Channels, but a wildcard is covering the Air it never grew.
+	assert_that(_carving([FIRE, FIRE, Elemental.Element.AIR]).channel_state(alch, FIRE)).is_equal(
+		TransmutationData.Channel.WILDCARD)
+	# No anchor at all.
+	assert_that(_carving([Elemental.Element.WATER, Elemental.Element.WATER]).channel_state(
+		alch, FIRE)).is_equal(TransmutationData.Channel.REFUSED)
+
+
+# DERIVED, not a third opinion: anything the ladder refuses is REFUSED whatever its deficit reads,
+# so the row's tint and the sentence beside it cannot end up describing two different carvings.
+func test_a_refused_carving_is_never_reported_as_merely_leaning() -> void:
+	var alch: Unit = _alchemist({ FIRE: 1 })
+	# Deficit 2 against a capacity of 1 -- it has a shortfall AND it is refused.
+	var carving: TransmutationData = _carving([FIRE, FIRE, FIRE])
+
+	assert_int(carving.total_deficit(alch)).is_greater(0)
+	assert_str(carving.channel_block_reason(alch, FIRE)).is_not_empty()
+	assert_that(carving.channel_state(alch, FIRE)).override_failure_message(
+		"a refused carving reported as merely leaning on a wildcard"
+		).is_equal(TransmutationData.Channel.REFUSED)
+
+
+# NOBODY CARRYING IT READS AS CLEAR, matching the card's own no-verdict state: channeling is a
+# property of the PAIRING, so with one half missing there is no discomfort to report.
+func test_a_carving_nobody_holds_reports_no_discomfort() -> void:
+	assert_that(_carving([FIRE, FIRE]).channel_state(null, FIRE)).is_equal(
+		TransmutationData.Channel.CLEAR)

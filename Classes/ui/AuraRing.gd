@@ -33,6 +33,11 @@ class_name AuraRing
 # for the same reason hollow is not an alpha -- so the recipe's own elements read first without any
 # empty tick changing what it means.
 #
+# ...AND THE COST IS AN ARC, outside the band, spanning exactly the ticks the carving asks for
+# (#1022). The ticks say what is PAID and the arc says what is OWED, which is why it is a stroke
+# rather than more marks: a quantity read round the sector in one gesture cannot be miscounted the
+# way five separate bars can.
+#
 # THE HIDDEN SIXTH IS NEVER DRAWN, structurally rather than by a filter: rows() walks
 # Elemental.SIGIL_ELEMENTS, and alkahest is not in that vocabulary at all -- it is a bool on
 # UnitInstance that nothing here reads (docs/design/alchemy-kit.md: "no Alkahest bar; Isaac simply
@@ -105,6 +110,19 @@ const HALO_ALPHA := 0.35
 # two Aether the recipe does not want" and "has never grown Aether" would render as the same picture.
 const OFF_RECIPE_SATURATION := 0.35
 
+# THE DEMAND ARC: a solid stroke OUTSIDE the tick band spanning exactly the ticks this carving asks
+# for, so the cost is one gesture read round the sector rather than a count of marks (#1022; it was
+# in the approved mockup and #1019 shipped without it).
+#
+# The band gives up ARC_PAD_RATIO of the half-box to make room, and ONLY when a demand is drawn --
+# which is what leaves the pre-mission card's 52px ring and the panel's 108px one at exactly the
+# radius they had, by construction rather than by a flag anyone sets. All three are fractions of the
+# same half-box, so they scale together and "the arc fits inside the node" is arithmetic a case can
+# assert instead of a pixel count somebody typed.
+const ARC_PAD_RATIO := 0.12
+const ARC_GAP_RATIO := 0.069     # band's outer edge -> the arc's centreline
+const ARC_WIDTH_RATIO := 0.041
+
 # Which palette this ring's colours come out of -- see the header. SKINNED follows the player's menu
 # colours (the pre-mission card); AUTHORED is the dev's own element wheel (the inspect panel).
 enum Ground { AUTHORED, SKINNED }
@@ -139,6 +157,10 @@ var hovered: Elemental.Element = Elemental.Element.NONE
 var _centre := Vector2.ZERO
 var _outer := 0.0
 var _inner := 0.0
+# Room reserved outside the band for the demand arc, or 0.0 when no demand is drawn. Derived in
+# _layout beside the radii, for the same reason _portrait_rect is: a case reads the geometry the
+# frame would have used rather than re-deriving it.
+var _arc_room := 0.0
 # Where the portrait is DRAWN -- derived in _layout beside the radii rather than worked out in _draw,
 # so a headless case can read the geometry the frame would have used (#990).
 var _portrait_rect := Rect2()
@@ -317,7 +339,11 @@ func _ready_common() -> void:
 # than by agreeing with an offset (#560's finding, now structural).
 func _layout() -> void:
 	_centre = size * 0.5
-	_outer = minf(size.x, size.y) * 0.5
+	var half := minf(size.x, size.y) * 0.5
+	# The band gives up room for the arc, and only while there is an arc -- see ARC_PAD_RATIO. A ring
+	# with no carving is bit-identical to what it was before #1022.
+	_arc_room = half * ARC_PAD_RATIO if carving != null else 0.0
+	_outer = half - _arc_room
 	_inner = _outer * (1.0 - BAND_RATIO)
 	# CLEARANCE keeps its meaning and changes direction: the ink is drawn to just inside the band
 	# rather than the band pushed out past the ink.
@@ -337,6 +363,9 @@ func refresh() -> void:
 # host writes and then has to remember to refresh behind.
 func set_carving(demand: TransmutationData) -> void:
 	carving = demand
+	# THE RADIUS DEPENDS ON IT, so this re-lays out rather than only redrawing: the band shrinks to
+	# make room for the arc the first time a demand arrives (see _layout).
+	_layout()
 	refresh()
 
 
@@ -461,6 +490,22 @@ func _draw_sector(row: Row, index: int, width: float, spread: float, demanded: b
 			_draw_hollow(from, to, step, bar, ink)
 		else:
 			draw_line(from, to, ink, bar, true)
+
+	# THE COST, as one stroke over the ticks it is owed in -- drawn last so it lies over nothing and
+	# under nothing, being outside the band entirely. Its span is exactly the asked-for ticks, which
+	# is what makes it readable as a QUANTITY rather than as decoration on the sector.
+	if row.wanted > 0:
+		_draw_demand_arc(start, usable, row.wanted, _element_ink(row.element))
+
+
+# The demand arc for one sector. Its three numbers are fractions of the half-box (see ARC_PAD_RATIO),
+# so the whole mark scales with the ring and cannot outgrow the room _layout reserved for it.
+func _draw_demand_arc(start: float, usable: float, wanted: int, ink: Color) -> void:
+	var half := _outer + _arc_room
+	var radius := _outer + half * ARC_GAP_RATIO
+	var thickness := maxf(1.5, half * ARC_WIDTH_RATIO)
+	var span := usable * float(mini(wanted, MAX_TICKS)) / float(MAX_TICKS)
+	draw_arc(_centre, radius, start, start + span, maxi(8, wanted * 8), ink, thickness, true)
 
 
 # An empty bar, drawn as its own outline. INSET by half the stroke at all four sides so the mark's

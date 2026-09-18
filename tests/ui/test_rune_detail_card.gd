@@ -22,6 +22,7 @@ const ZONE_CELLS := 6
 const FIRE := Elemental.Element.FIRE
 const WATER := Elemental.Element.WATER
 const EARTH := Elemental.Element.EARTH
+const AIR := Elemental.Element.AIR
 
 var _main: Node
 var game: Node2D
@@ -167,12 +168,45 @@ static func _list_tooltips(card: RuneDetailCard) -> String:
 	return "\n".join(parts)
 
 
-static func _cost_bars(card: RuneDetailCard) -> Array[ColorRect]:
-	var out: Array[ColorRect] = []
-	for node: Node in _walk(card._list):
-		var bar := node as ColorRect
-		if bar != null:
-			out.append(bar)
+# The bars beside one row's name. Reached STRUCTURALLY -- row > body > line > its last child --
+# rather than by scanning the list for Panels: since #1022 the legend above is made of them and the
+# row's own name label shares the line, so a scan would answer with whatever it met first.
+static func _bars_of(row: Control) -> HBoxContainer:
+	var body := row.get_child(0) as VBoxContainer
+	var line := body.get_child(0) as HBoxContainer
+	return line.get_child(line.get_child_count() - 1) as HBoxContainer
+
+
+# How one row's marks split: the recipe's own bars, then the spare ones past the `+`. The Label IS
+# the separator, which is what lets a case read the split without the card exposing anything for it.
+static func _marks_of(row: Control) -> Dictionary[String, int]:
+	var cost := 0
+	var spare := 0
+	var hollow := 0
+	var past_plus := false
+	for child: Node in _bars_of(row).get_children():
+		if child is Label:
+			past_plus = true
+			continue
+		var bar := child as Panel
+		if bar == null:
+			continue
+		if past_plus:
+			spare += 1
+			continue
+		cost += 1
+		var box := bar.get_theme_stylebox("panel") as StyleBoxFlat
+		if box != null and box.border_width_left > 0:
+			hollow += 1
+	return {"cost": cost, "spare": spare, "hollow": hollow}
+
+
+static func _rows_of(card: RuneDetailCard) -> Array[Control]:
+	var out: Array[Control] = []
+	for child: Node in card._list.get_children():
+		var row := child as PanelContainer
+		if row != null:
+			out.append(row)
 	return out
 
 
@@ -306,9 +340,96 @@ func test_a_carvings_cost_bars_are_one_per_sigil() -> void:
 	var rune := _rune(carvings)
 	var card := await _open(rune, _alchemist({FIRE: 3, EARTH: 1}))
 
-	assert_int(_cost_bars(card).size()).is_equal(rune.inscriptions[0].cost())
-	assert_int(_cost_bars(card).size()).is_equal(3)
+	var marks := _marks_of(_rows_of(card)[0])
+	assert_int(marks["cost"]).is_equal(rune.inscriptions[0].cost())
+	assert_int(marks["cost"]).is_equal(3)
 	assert_str(card._hint.text).contains("3 of 6")
+
+
+# THE BARS CARRY THE RING'S OWN STATES (#1022). Shipped flat at #1019 -- one rectangle per sigil in
+# the element's colour and nothing else -- which is why they said so little: the shape was right and
+# the vocabulary was missing. A carrier who covers half a recipe must see which half.
+func test_a_cost_bar_says_whether_that_sigil_is_paid() -> void:
+	# Fire 1 against a 2-Fire recipe: one paid, one asked-for-and-unpaid.
+	var carvings: Array[TransmutationData] = [_circle([FIRE, FIRE], "Ember")]
+	var card := await _open(_rune(carvings), _alchemist({FIRE: 1}))
+
+	var marks := _marks_of(_rows_of(card)[0])
+	assert_int(marks["cost"]).is_equal(2)
+	assert_int(marks["hollow"]).override_failure_message(
+		"the unpaid sigil drew the same bar as the paid one").is_equal(1)
+
+
+# The SPARE, past a `+` -- the halo's own number said again in the list, so the ring and the row
+# cannot disagree about how much aura is going spare.
+func test_spare_aura_gets_its_own_marks_after_the_recipe() -> void:
+	# Fire 3 against a one-sigil Fire circle: one paid, two spare.
+	var carvings: Array[TransmutationData] = [_circle([FIRE], "Ember")]
+	var card := await _open(_rune(carvings), _alchemist({FIRE: 3}))
+
+	var marks := _marks_of(_rows_of(card)[0])
+	assert_int(marks["cost"]).is_equal(1)
+	assert_int(marks["hollow"]).is_equal(0)
+	assert_int(marks["spare"]).is_equal(2)
+
+	# ...and a carrier who covers the recipe exactly has none, rather than a zero drawn as nothing.
+	var same: Array[TransmutationData] = [_circle([FIRE], "Ember")]
+	var exact := await _open(_rune(same), _alchemist({FIRE: 1}, Vector2i(1, 0)))
+	assert_int(_marks_of(_rows_of(exact)[0])["spare"]).is_equal(0)
+
+
+# A ROW SAYS HOW COMFORTABLY IT CHANNELS, in three states (dev: "red for pressure spray since the
+# unit cannot cast, yellow for zap cannon since it can only be cast with the extra slot, none for
+# fireball since it can be comfortably cast"). Asserted through the LADDER's own answer rather than
+# through a colour -- the tint is chrome, and which of the three a carving is in is the rule.
+func test_a_row_says_how_comfortably_it_channels() -> void:
+	var alch := _alchemist({FIRE: 2})
+	var comfortable := _circle([FIRE], "Fireball")
+	var leaning := _circle([FIRE, FIRE, AIR], "Zap Cannon")      # Air 0: one wildcard covers it
+	var refused := _circle([WATER, WATER], "Pressure Spray")     # no Water anywhere: no anchor
+
+	assert_that(comfortable.channel_state(alch, FIRE)).override_failure_message(
+		"a recipe paid outright read as anything but clear"
+		).is_equal(TransmutationData.Channel.CLEAR)
+	assert_that(leaning.channel_state(alch, FIRE)).override_failure_message(
+		"a carving leaning on a wildcard read the same as one paid outright"
+		).is_equal(TransmutationData.Channel.WILDCARD)
+	assert_that(refused.channel_state(alch, FIRE)).is_equal(TransmutationData.Channel.REFUSED)
+
+	# ...and the three do not collapse onto two boxes on the way to the row.
+	var boxes := {}
+	for state: TransmutationData.Channel in [TransmutationData.Channel.CLEAR,
+			TransmutationData.Channel.WILDCARD, TransmutationData.Channel.REFUSED]:
+		boxes[QueueStyle.channel_box(RuneDetailCard._box_state(state), false)] = true
+	assert_int(boxes.size()).override_failure_message(
+		"two of the three channel states share one box").is_equal(3)
+
+
+# WHAT IT DOES, under the name -- and NOT what it costs, because the bars above are that (dev:
+# "perhaps get rid of the cost X though, since we're already visualizing that with the bars").
+func test_a_row_prints_what_it_does_and_never_what_it_costs() -> void:
+	# A carrier one Air short, so the WILDCARD half of mechanical_text is genuinely present to be
+	# left out -- a fixture with no deficit cannot tell the two readouts apart, which is how the
+	# first version of this case passed against a mutant printing the whole sentence.
+	var recipe: Array[Elemental.Element] = [FIRE, FIRE, AIR]
+	var carvings: Array[TransmutationData] = [_circle(recipe, "Zap")]
+	var rune := _rune(carvings)
+	var alch := _alchemist({FIRE: 2})
+	var card := await _open(rune, alch)
+
+	assert_int(rune.inscriptions[0].total_deficit(alch)).override_failure_message(
+		"the fixture has no shortfall, so the wildcard half is absent either way").is_greater(0)
+
+	var text := _list_text(card)
+	assert_str(text).override_failure_message(
+		"the row never said what the carving does").contains("Damage")
+	# THE RECIPE is the bars' job and THE SHORTFALL is the row tint's, so neither may be printed
+	# again underneath -- that is the same fact twice on one row (dev).
+	assert_str(text).override_failure_message(
+		"the row printed the recipe the bars beside it already draw"
+		).not_contains(rune.inscriptions[0].sigil_text())
+	assert_str(text).override_failure_message(
+		"the row printed the wildcard count its own tint already says").not_contains("Wildcards")
 
 
 # --- the door ---------------------------------------------------------------------------------------
@@ -350,3 +471,70 @@ func test_the_screens_own_door_opens_the_rune_card_and_not_the_weapons() -> void
 		assert_bool(child is ModFittingCard).override_failure_message(
 			"a rune reached the weapon fitting card").is_false()
 	assert_object(opened).override_failure_message("the screen opened no card").is_not_null()
+
+
+# --- the two the dev reported by eye -----------------------------------------------------------------
+
+# THE BARS SIT BESIDE THE NAME, not at the far edge (dev: "the bars in the titles are right aligned").
+# Asserted against the row's own geometry rather than against a size flag: the flag is how it was
+# broken, the POSITION is what was wrong with it, and a case pinned to the flag would go green the
+# next time the same mistake arrives wearing a spacer instead.
+func test_the_cost_bars_sit_beside_the_name_rather_than_at_the_far_edge() -> void:
+	var carvings: Array[TransmutationData] = [_circle([FIRE], "Ember")]
+	var card := await _open(_rune(carvings), _alchemist({FIRE: 2}))
+	await await_idle_frame()
+
+	var row := _rows_of(card)[0]
+	var line := (row.get_child(0) as VBoxContainer).get_child(0) as HBoxContainer
+	var name_label := line.get_child(0) as Label
+	var bars := _bars_of(row)
+
+	var slack := line.size.x - (bars.position.x + bars.size.x)
+	var gap := bars.position.x - (name_label.position.x + name_label.size.x)
+	assert_float(gap).override_failure_message(
+		"the bars are %.0fpx from the name -- they are not beside it" % gap).is_less(20.0)
+	assert_float(slack).override_failure_message(
+		"the row's empty space is before the bars rather than after them, so they read as a second "
+		+ "column instead of what the name costs").is_greater(gap)
+
+
+# THE CHIP PAINTS ITS OWN GROUND (#1022, dev: the buttons "don't really visually read as buttons").
+# A bare Button takes the engine's chrome and vanishes on this panel -- the diagnosis EXECUTE_BG
+# already carries -- so what is pinned is that it HAS a box and that the box MOVES when the pointer
+# lands, which together are the whole of "this is pressable". Which colours those are is the dev's.
+func test_the_detail_chip_paints_its_own_chrome_and_answers_the_pointer() -> void:
+	var carvings: Array[TransmutationData] = [_circle([FIRE], "Ember")]
+	var chip: Button = auto_free(ItemDetail.chip_for(_rune(carvings)))
+
+	# ASK FOR THE OVERRIDE, NOT FOR A BOX. `get_theme_stylebox` falls back to the THEME's own Button
+	# box when nothing is overridden -- which is a real StyleBoxFlat, and is precisely the chrome that
+	# disappears on this panel -- so a case asking merely "is there a box" passes against the bug it
+	# was written for. A mutant deleting the override went green until this line said `override`.
+	assert_bool(chip.has_theme_stylebox_override("normal")).override_failure_message(
+		"the chip inherits the engine's button chrome, which is the thing that disappeared"
+		).is_true()
+	assert_bool(chip.has_theme_stylebox_override("hover")).is_true()
+
+	var resting := chip.get_theme_stylebox("normal") as StyleBoxFlat
+	var hovered := chip.get_theme_stylebox("hover") as StyleBoxFlat
+	assert_object(resting).is_not_null()
+	assert_object(hovered).is_not_null()
+	assert_bool(resting.bg_color == QueueStyle.ink(QueueStyle.Role.ROW_BG)).override_failure_message(
+		"the chip's fill is the row it sits on, so there is nothing to see").is_false()
+	assert_bool(resting.bg_color == hovered.bg_color).override_failure_message(
+		"the chip looks identical under the pointer").is_false()
+	# ...and it says so before the click, at no cost in width.
+	assert_int(chip.mouse_default_cursor_shape).is_equal(Control.CURSOR_POINTING_HAND)
+
+
+# ONE BUILDER FOR BOTH CARDS, so "make it pop" stays a one-place change. A weapon chip and a rune
+# chip differ in what they COUNT and in nothing else.
+func test_both_kinds_of_chip_wear_the_same_chrome() -> void:
+	var carvings: Array[TransmutationData] = [_circle([FIRE], "Ember")]
+	var rune_chip: Button = auto_free(ItemDetail.chip_for(_rune(carvings)))
+	var plain: Button = auto_free(ItemDetail.chip("1/3", "whatever"))
+
+	var a := rune_chip.get_theme_stylebox("normal") as StyleBoxFlat
+	var b := plain.get_theme_stylebox("normal") as StyleBoxFlat
+	assert_bool(a.bg_color == b.bg_color).is_true()
+	assert_bool(a.border_color == b.border_color).is_true()
