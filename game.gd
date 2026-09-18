@@ -1728,9 +1728,10 @@ func threat_field() -> ThreatField:
 # _process and NOT by update_hover_visuals. Any path that draws markup directly then loses it a
 # frame later to a repaint that disagrees about what the pointer is on.
 #
-# Unconditional, because the standing set outlives the toggle: a pinned enemy is still drawn with
-# the ranges key off, and repainting only when that key was on left a pin showing a field built
-# before the order that just moved everybody.
+# Unconditional, because a pin outlives the ORDER: it is drawn with the ranges key off, and
+# repainting only when that key was on left a pin showing a field built before the order that just
+# moved everybody. Note the key's own OFF does now clear pins (2026-09-18) -- that is what a pin no
+# longer outlives, and it is a different event from this one.
 func drop_threat_field() -> void:
 	_threat_field = null
 	_redraw_enemy_ranges(hover_presenter.hovered_enemy())
