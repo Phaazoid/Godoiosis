@@ -132,6 +132,108 @@ func test_the_ranges_key_fills_every_enemy_and_reveals_every_leash() -> void:
 	assert_array(_om().zone_highlight_overlay.get_used_cells()).is_empty()
 
 
+# WHOSE FIELD IS THIS (slice 4, dev: "when hovering a specific unit, their grid should highlight").
+# With V on, three enemies union into one blob and the pointer changed nothing about it.
+func test_hovering_one_of_several_lit_enemies_dims_the_rest() -> void:
+	var focus := _spawn(ENEMY, Vector2i(3, 2))
+	_spawn(ENEMY, Vector2i(1, 4))
+	_spawn(ENEMY, Vector2i(2, 3))
+	game.toggle_enemy_ranges()
+
+	# Nothing hovered: everybody bright, and the dim layers are not merely equal -- they are unused,
+	# which is what keeps a board nobody is pointing at looking exactly as it did before slice 4.
+	assert_array(_om().danger_dim_overlay.get_used_cells()).override_failure_message(
+			"the crowd dimmed with nobody hovered").is_empty()
+	assert_array(_om().enemy_move_dim_overlay.get_used_cells()).is_empty()
+	var everyone: int = _om().danger_overlay.get_used_cells().size()
+
+	game.hover_presenter.update_hover_visuals(focus.movement.cell)
+	var field: ThreatField = game.threat_field()
+	assert_that(_sorted(_om().enemy_move_overlay.get_used_cells())).override_failure_message(
+			"the bright move tone is not the hovered enemy's own envelope"
+			).is_equal(_sorted(field.move_of(focus)))
+	assert_that(_sorted(_om().danger_overlay.get_used_cells())).is_equal(_sorted(field.reach_of(focus)))
+	assert_bool(_om().danger_dim_overlay.get_used_cells().size() > 0).override_failure_message(
+			"the other two enemies vanished instead of dimming").is_true()
+
+	# The crowd is SUBTRACTED from the focus, never stacked under it: four coincident alphas read
+	# differently from two, so a focused cell would change tone wherever a neighbour's field crossed.
+	for cell: Vector2i in _om().danger_dim_overlay.get_used_cells():
+		assert_bool(_om().danger_overlay.get_used_cells().has(cell)).override_failure_message(
+				"%s carries a dim quad UNDER a bright one" % cell).is_false()
+		assert_bool(_om().enemy_move_overlay.get_used_cells().has(cell)).is_false()
+	for cell: Vector2i in _om().enemy_move_dim_overlay.get_used_cells():
+		assert_bool(_om().danger_overlay.get_used_cells().has(cell)).is_false()
+		assert_bool(_om().enemy_move_overlay.get_used_cells().has(cell)).is_false()
+
+	# ...and nothing was lost in the split: every cell that was lit is still lit, somewhere.
+	var lit := {}
+	for cell: Vector2i in _om().danger_overlay.get_used_cells():
+		lit[cell] = true
+	for cell: Vector2i in _om().danger_dim_overlay.get_used_cells():
+		lit[cell] = true
+	assert_int(lit.size()).override_failure_message(
+			"the focus split dropped cells the un-hovered view was painting").is_equal(everyone)
+	game.toggle_enemy_ranges()
+
+
+# The stroke says WHOSE field this is where the two hues alone cannot -- the dev's addition to the
+# mockup. One segment per outward-facing cell edge of the whole footprint, move and reach together.
+func test_the_hovered_enemys_field_is_outlined() -> void:
+	var focus := _spawn(ENEMY, Vector2i(3, 2))
+	_spawn(ENEMY, Vector2i(1, 4))
+	game.toggle_enemy_ranges()
+	assert_array(_om().focus_outline).override_failure_message(
+			"a stroke was drawn with nobody under the pointer").is_empty()
+
+	game.hover_presenter.update_hover_visuals(focus.movement.cell)
+	var field: ThreatField = game.threat_field()
+	var footprint := {}
+	for cell: Vector2i in field.move_of(focus):
+		footprint[cell] = true
+	for cell: Vector2i in field.reach_of(focus):
+		footprint[cell] = true
+
+	# The boundary is derived, never counted by hand: one edge per cell side whose neighbour is
+	# outside the set, which is what makes the count a property of the footprint's SHAPE.
+	var expected := 0
+	for cell: Vector2i in footprint:
+		for dir: Vector2i in [Vector2i.RIGHT, Vector2i.LEFT, Vector2i.UP, Vector2i.DOWN]:
+			if not footprint.has(cell + dir):
+				expected += 1
+	assert_int(_om().focus_outline.size()).override_failure_message(
+			"the stroke is not the footprint's outward-facing boundary").is_equal(expected)
+	assert_int(expected).override_failure_message(
+			"fixture is vacuous: an empty footprint has no boundary").is_greater(0)
+
+	# Every segment is two points in TRACE space -- cell coordinates, rule height -- which is what
+	# lets the flat view flatten it and the mirror lift it exactly as it lifts an intent line.
+	for segment: PackedVector3Array in _om().focus_outline:
+		assert_int(segment.size()).is_equal(2)
+
+	game.hover_presenter.update_hover_visuals(Vector2i(0, 0))
+	assert_array(_om().focus_outline).override_failure_message(
+			"the stroke outlived the pointer leaving the enemy").is_empty()
+	game.toggle_enemy_ranges()
+
+
+# The dim tone is DERIVED from the bright one, so a knob on either carries to both.
+func test_the_crowds_tone_follows_the_tone_it_dims() -> void:
+	_spawn(ENEMY, Vector2i(3, 2))
+	var before: Color = _om().enemy_move_dim_overlay.modulate
+	OverlayManager.ENEMY_MOVE_MODULATE = Color(0.1, 0.9, 0.2, 0.5)
+	_om().restyle_dim_ranges()
+	var after: Color = _om().enemy_move_dim_overlay.modulate
+	assert_that(after).override_failure_message(
+			"the crowd kept the hue the focus tone just left").is_not_equal(before)
+	assert_float(after.a).override_failure_message(
+			"the dim is not alpha-only -- multiplying RGB pulls the hue into the board"
+			).is_equal_approx(0.5 * OverlayManager.ENEMY_RANGE_DIM, 0.001)
+	assert_float(after.g).is_equal_approx(0.9, 0.001)
+	OverlayManager.ENEMY_MOVE_MODULATE = Color(0.25, 0.45, 1, 0.45)
+	_om().restyle_dim_ranges()
+
+
 func test_a_pinned_enemy_survives_the_key_being_turned_on_and_off_again() -> void:
 	# The dev's own wording: a pin OVERRIDES the toggle. The standing set is what the door draws
 	# when the key is off, so the key cannot clear it on its way down.
@@ -202,6 +304,75 @@ func test_a_queued_order_drops_the_cached_field() -> void:
 	game._click_choosing_move(Vector2i(1, 2))
 	assert_int(mover.squad.action_queue.size()).is_greater(0)   # the order really queued
 	assert_object(game.threat_field()).is_not_same(before)
+
+
+# A shove is what makes the PROJECTION observable, and a player's own move is not: a move reaches
+# this field only through occupancy, which a board can render invisible, so the mutant that skips
+# the snapshot would pass. A queued knockback moves the ENEMY, which moves its origins -- and a HOLD
+# unit's envelope is exactly the one cell it stands on, so the whole assertion is which cell that is.
+#
+# The lane is SEARCHED rather than written down: the boot board is authored content, and the first
+# draft of this fixture put the attacker on a tree at (3, 1). Four clear cells in a row is all the
+# geometry the shove needs.
+func _clear_lane() -> Vector2i:
+	var rect: Rect2i = game.grid.get_used_rect()
+	var board: BoardContext = game._board()
+	for y in range(rect.position.y, rect.end.y):
+		for x in range(rect.position.x, rect.end.x - 3):
+			var clear := true
+			for step in 4:
+				var cell := Vector2i(x + step, y)
+				if not board.is_walkable(cell) or board.unit_at_cell(cell) != null:
+					clear = false
+					break
+			if clear:
+				return Vector2i(x, y)
+	return Vector2i.MAX
+
+
+func _shoved_enemy() -> Unit:
+	var lane := _clear_lane()
+	assert_that(lane).override_failure_message(
+			"fixture is vacuous: the boot board has no clear four-cell lane").is_not_equal(Vector2i.MAX)
+	var attacker: Unit = _spawn(PLAYER, lane)
+	var enemy: Unit = _spawn(ENEMY, lane + Vector2i.RIGHT)
+	attacker.equipped_weapon.template.main_attack.knockback = 2
+	game.enter_attack_mode(attacker)
+	game.selected_unit = attacker
+	game._click_attack_targeting(enemy.movement.cell)
+	return enemy
+
+
+func test_the_range_tones_read_the_board_the_plan_will_leave() -> void:
+	var enemy := _shoved_enemy()
+
+	var landing: Vector2i = enemy.get_projected_destination()
+	assert_that(landing).override_failure_message(
+			"fixture is vacuous: the shove published no landing").is_not_equal(enemy.movement.cell)
+
+	var field: ThreatField = game.threat_field()
+	assert_array(field.move_of(enemy)).override_failure_message(
+			"the envelope was drawn where the enemy stands, not where the plan puts it"
+			).is_equal([landing])
+
+
+# The snapshot writes `position` through MovementComponent.set_cell, and a walk is a tween ON that
+# property -- so it must not run while a pass is playing back. HoverPresenter._process carries no
+# board lock, which is the path that reaches this.
+func test_no_repaint_runs_while_a_pass_is_playing_back() -> void:
+	var enemy := _spawn(ENEMY, _clear_lane())
+	game.toggle_enemy_ranges()
+	await await_idle_frame()
+	assert_bool(_om().enemy_move_overlay.get_used_cells().size() > 0).is_true()
+
+	_om().clear_enemy_move()
+	game.order_executor.executing_plan = ResolvedPlan.new()
+	game._redraw_enemy_ranges(enemy)
+	assert_array(_om().enemy_move_overlay.get_used_cells()).override_failure_message(
+			"a repaint ran mid-pass and would have teleported every walking sprite").is_empty()
+
+	game.order_executor.executing_plan = null
+	game.toggle_enemy_ranges()
 
 
 # --- The exact tier's cadence (#710 slice 2) ---------------------------------------------------

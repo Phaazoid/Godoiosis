@@ -23,6 +23,11 @@ static var INTENT_FELL_COLOR := Color(1.0, 0.2, 0.15, 1.0)
 # lethal colour onto its neighbour.
 var intents: Array[PackedVector3Array] = []
 var fells: Array[bool] = []
+# The stroke round the hovered enemy's whole footprint (slice 4) -- one segment per outward-facing
+# cell edge, in the same trace space the intents use, so it flattens through the same _polyline.
+# This node is #710's flat LINE markup entire rather than the intent lines alone now; the class name
+# stays, because renaming it is churn across four suites for no behaviour.
+var outlines: Array[PackedVector3Array] = []
 
 
 # The colour an intent draws in -- one answer, read by this node and copied by the 3D beam.
@@ -41,6 +46,10 @@ static func segment(from_cell: Vector2i, to_cell: Vector2i, board: BoardContext)
 
 
 func _draw() -> void:
+	# The outline first: it lies on the ground, an intent hangs at eye height, and a beam crossing
+	# the stroke should read over it.
+	for segment in outlines:
+		_polyline(segment, OverlayManager.FOCUS_OUTLINE_COLOR)
 	for i in intents.size():
 		_polyline(intents[i], intent_color(i < fells.size() and fells[i]))
 

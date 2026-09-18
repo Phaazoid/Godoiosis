@@ -469,3 +469,31 @@ move envelope as well as its reach. The envelope was already computed and discar
 feeds the reach walk), so the added work is one dictionary insert per origin cell rather than a
 second flood, and the 1.5 ms above should still hold. Reasoned, not profiled — if the hover tier
 ever feels slow, re-measure this before believing the reasoning.
+
+## 2026-09-17 — what slice 4 added to the threat field (#710 slice 4)
+
+Three corrections landed on `ThreatField` and each one costs something. **Reasoned, not profiled** —
+the 1.5 ms build above is the number they are reasoned against, and it was measured before any of
+them. Re-measure before believing any of this if the hover tier ever feels slow.
+
+- **The snapshot.** `game.threat_field()` now stands every unit on its projected cell before
+  building and puts them back after, which is two `MovementComponent.set_cell` calls per unit —
+  two assignments each, no signal, no allocation. Against a flood per enemy it is noise. It runs
+  **once per plan change**, not per frame, because the field is cached; that cache is the whole
+  reason this is affordable, so a future caller that reads it uncached is the thing to watch.
+- **Both move buckets.** `_origins_of` unions `reachable` with `squad_unreachable` instead of
+  reading the first alone. Same flood, same dictionary — a follower's envelope simply stops being
+  truncated afterwards, so the cost is the extra ORIGINS it then dilates in `_reach_of`. For a
+  squad member near its leader that is nothing; for one at the leash's edge it is the difference
+  between a clamped envelope and its whole move range, i.e. up to the same work a leader already did.
+- **The counter rim.** One extra dilation pass per unit that can counter, over ONE attack rather
+  than every selectable one — so at most a fraction of the first pass, and it is skipped entirely
+  for an unarmed or dry enemy. Measured on a representative board it adds cells only for a SENTRY
+  (rushdown +0, hold +0), because every other archetype's counter is already inside the first pass.
+
+**The deferred repaint slice 4 briefly added is GONE**, so there is no change to how often the
+field rebuilds: `drop_threat_field` repaints synchronously exactly as it did in slice 3. It was
+added to coalesce a group move's per-member drops, which is real — five members rebuild the field
+five times — but it broke the hover seam (see visual-clarity.md) and the staleness it was also
+credited with fixing does not exist. If that rebuild count ever matters, the fix belongs at
+`_on_unit_action_queued`'s batching early-out, which the drop currently sits above.

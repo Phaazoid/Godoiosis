@@ -1559,6 +1559,36 @@ func test_an_enemys_reach_and_leash_mirror_in_play_and_the_patrol_layer_does_not
 
 # The exact tier's lines AND their numbers reach the diorama on one version (they are one readout),
 # the label text copied verbatim and its colour taken from the 2D renderer's own statics.
+# The focus stroke (slice 4) mirrors on the intent lines' exact shape, with one difference: an
+# intent HANGS at eye height and carries its own altitude, while this LIES on the ground and takes
+# the layer's lift -- which for a LINE is the one thing set_lines does not add for itself.
+func test_the_focus_outline_reaches_the_diorama_lying_on_the_ground() -> void:
+	var foe := _spawn(ENEMY, Vector2i(4, 3))
+	foe.equipped_weapon = H.make_weapon(3)
+	foe.squad.archetype = AIArchetype.Type.HOLD
+	game.hover_presenter.update_hover_visuals(foe.movement.cell)
+	await _settle()
+
+	var stored: Array[PackedVector3Array] = _om().focus_outline
+	assert_int(stored.size()).override_failure_message(
+			"no stroke was stored -- this case cannot see the wire").is_greater(0)
+	var lifted := _overlays.lines_of(BoardOverlays.Layer.ENEMY_FOCUS_EDGE)
+	assert_int(lifted.size()).is_equal(stored.size())
+
+	var lift: float = _overlays.marker_lift(BoardOverlays.Layer.ENEMY_FOCUS_EDGE)
+	var first: Vector3 = stored[0][0]
+	assert_that(lifted[0][0]).override_failure_message(
+			"the stroke did not arrive at trace_point plus its own layer lift").is_equal(Vector3(
+		first.x * BoardSpace.CELL_SIZE,
+		BoardSpace.surface_y(BoardSpace.top_row_of(0)) + first.y * BoardSpace.ROW_HEIGHT + lift,
+		first.z * BoardSpace.CELL_SIZE))
+
+	game.hover_presenter.update_hover_visuals(Vector2i(0, 0))
+	await _settle()
+	assert_int(_overlays.lines_of(BoardOverlays.Layer.ENEMY_FOCUS_EDGE).size()).override_failure_message(
+			"the stroke outlived the pointer in the diorama").is_equal(0)
+
+
 func test_intent_lines_and_their_numbers_reach_the_diorama() -> void:
 	var mover := _spawn(PLAYER, Vector2i(2, 2))
 	var foe := _spawn(ENEMY, Vector2i(3, 2))

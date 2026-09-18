@@ -33,7 +33,7 @@ enum Layer {
 	ZONE_PATROL, ZONE_HIGHLIGHT, GROUND_ICONS, ATTACK_BLOCKED, SIGHT_TRACE,
 	GUARD_ICONS, GUARD_LINK, WATCH_ICONS,
 	ZONE_DEPLOYMENT, ZONE_DEFEND,
-	DANGER, ENEMY_MOVE, INTENT_LINES, INTENT_LINES_FATAL,
+	DANGER, ENEMY_MOVE, DANGER_DIM, ENEMY_MOVE_DIM, ENEMY_FOCUS_EDGE, INTENT_LINES, INTENT_LINES_FATAL,
 }
 enum Kind { FILL, BRACKET, SPRITE, BILLBOARD, LINE }
 
@@ -74,31 +74,31 @@ const LAYERS: Dictionary[Layer, Dictionary] = {
 	# can never z-fight. Colour here is only the no-mirror fallback -- OverlayMirror drives it per
 	# frame as the live reach modulate x OverlayManager.BLOCKED_REACH_DIM (so no colour knob here).
 	Layer.ATTACK_BLOCKED: {"color": Color(0.45, 0, 0, 0.5), "sort": 1, "kind": Kind.FILL},
-	# The zone BAND sits at -5, with the picked-zone highlight alone at -4 above it. In 2D
+	# The zone BAND sits at the bottom, with the picked-zone highlight alone above it. In 2D
 	# the highlight wins by TREE ORDER (appended last); 3D has no such thing, so the sort
 	# number IS the relationship and a test pins it rather than the values (#231).
 	#
-	# THE WHOLE NEGATIVE STACK MOVED DOWN TWO IN #710 slice 3, because the enemy's two range
-	# tones need two slots between SQUAD (-1 as it then was) and MOVE (0) and there are no
-	# integers there. Downward, not upward: the positive side is packed to 15 under the fire
-	# ceiling at 16, so lifting MOVE would cascade into it. Nothing here pins a VALUE -- the
-	# laws are relationships (highlight above zones, PATROL == CAPTURE) and they survive a
-	# uniform shift. What does NOT survive one is the FLOOR: _lift_of is fill_lift + sort *
-	# lift_step, so at the old fill_lift of 0.02 a sort of -5 landed at EXACTLY 0.0, coplanar
-	# with the tile's own opaque top face -- a real z-fight, unlike the transparent-vs-
-	# transparent case below. fill_lift moved to 0.03 with this, and the floor is now a law.
-	Layer.ZONE_CAPTURE: {"color": Color(0.3, 0.9, 1, 0.5), "sort": -5, "kind": Kind.FILL},
-	Layer.ZONE_EXTRACTION: {"color": Color(0.4, 1, 0.5, 0.5), "sort": -5, "kind": Kind.FILL},
-	Layer.ZONE_PATROL: {"color": OverlayManager.ZONE_PATROL_MODULATE, "sort": -5, "kind": Kind.FILL},
+	# THE WHOLE NEGATIVE STACK HAS MOVED DOWN TWICE, both times for #710: slice 3 opened two slots
+	# for the enemy's range tones, slice 4 two more for the dimmed CROWD beneath them, and each time
+	# there were no free integers between SQUAD and MOVE. Downward, not upward: the positive side is
+	# packed to 15 under the effect ceiling at 16, so lifting MOVE would cascade into it. Nothing
+	# here pins a VALUE -- the laws are relationships (highlight above zones, PATROL == CAPTURE) and
+	# they survive a uniform shift. What does NOT survive one is the FLOOR: _lift_of is fill_lift +
+	# sort * lift_step, so the lowest sort must still clear the tile's own OPAQUE top face -- a real
+	# z-fight, unlike the transparent-vs-transparent case below. At slice 3 that meant 0.02 -> 0.03;
+	# at slice 4, -7 would have landed at 0.002 and fill_lift went to 0.04. The floor is a law.
+	Layer.ZONE_CAPTURE: {"color": Color(0.3, 0.9, 1, 0.5), "sort": -7, "kind": Kind.FILL},
+	Layer.ZONE_EXTRACTION: {"color": Color(0.4, 1, 0.5, 0.5), "sort": -7, "kind": Kind.FILL},
+	Layer.ZONE_PATROL: {"color": OverlayManager.ZONE_PATROL_MODULATE, "sort": -7, "kind": Kind.FILL},
 	# #736. In the band with the others: it is markup lying on the tile face like every zone, and it
 	# is gone before any of them matter -- turn 1 stops it being drawn at all.
-	Layer.ZONE_DEPLOYMENT: {"color": Color(0.65, 0.5, 1, 0.45), "sort": -5, "kind": Kind.FILL},
+	Layer.ZONE_DEPLOYMENT: {"color": Color(0.65, 0.5, 1, 0.45), "sort": -7, "kind": Kind.FILL},
 	# #571, and in the band for ZONE_DEPLOYMENT's reason. Reads its colour off OverlayManager rather
 	# than restating it, the way ZONE_PATROL does -- the three literals above predate that rule.
-	Layer.ZONE_DEFEND: {"color": OverlayManager.ZONE_DEFEND_MODULATE, "sort": -5, "kind": Kind.FILL},
+	Layer.ZONE_DEFEND: {"color": OverlayManager.ZONE_DEFEND_MODULATE, "sort": -7, "kind": Kind.FILL},
 	# Three literals the mirror overwrites from the 2D every poll (#710), ATTACK's shape: the
 	# authored value is OverlayManager's static (or ThreatLines2D's), which a const table cannot name.
-	Layer.ZONE_HIGHLIGHT: {"color": Color(1, 1, 1, 0.45), "sort": -4, "kind": Kind.FILL},
+	Layer.ZONE_HIGHLIGHT: {"color": Color(1, 1, 1, 0.45), "sort": -6, "kind": Kind.FILL},
 	# The enemy's two tones (#710 slice 3), and their ORDER IS A DEV RULING: the move envelope
 	# draws OVER the reach, so "a body can stand here" is the louder fact and the reach survives
 	# as the halo past it. Two sorts rather than one because a sort IS a plane (_lift_of), and
@@ -108,6 +108,36 @@ const LAYERS: Dictionary[Layer, Dictionary] = {
 	# allocation order. A test pins DANGER < ENEMY_MOVE < MOVE.
 	Layer.DANGER: {"color": Color(1, 0.15, 0.1, 0.3), "sort": -2, "kind": Kind.FILL},
 	Layer.ENEMY_MOVE: {"color": Color(0.25, 0.45, 1, 0.45), "sort": -1, "kind": Kind.FILL},
+	# ...and the CROWD's two tones, under the pair above (slice 4). While the pointer is on one enemy
+	# everybody ELSE draws here, so the one you are asking about is the loud one -- and with nothing
+	# hovered every enemy goes on the bright pair, so an untouched board looks exactly as it did.
+	#
+	# Two more sorts and there were no integers between SQUAD and MOVE, so the negative stack moved
+	# down two AGAIN (slice 3 did it first, same reason). What does not survive a shift is the FLOOR:
+	# _lift_of is fill_lift + sort * lift_step, and -7 at the old fill_lift of 0.03 lands at 0.002 --
+	# a tenth of the clearance slice 3 left over the tile's own opaque face. fill_lift moved to 0.04
+	# with this, putting the floor at 0.012, above the 0.008 the stack ran at before slice 3.
+	#
+	# The COLOURS are derived, never authored: OverlayMirror copies each bright layer's live modulate
+	# scaled by OverlayManager.ENEMY_RANGE_DIM, so a knob turned on the bright tone carries. Alpha
+	# only -- multiplying RGB the way BLOCKED_REACH_DIM does pulls both hues toward the dark board
+	# until neither reads as a hue at all.
+	Layer.DANGER_DIM: {"color": Color(1, 0.15, 0.1, 0.12), "sort": -4, "kind": Kind.FILL},
+	Layer.ENEMY_MOVE_DIM: {"color": Color(0.25, 0.45, 1, 0.18), "sort": -3, "kind": Kind.FILL},
+	# ...and a stroke round the OUTSIDE of the hovered enemy's whole footprint, so which field you
+	# are reading is legible even where the dim and the bright tones are the same hue (slice 4, the
+	# dev's addition to the mockup). One two-point segment per outward-facing cell edge; no chaining
+	# into loops, because a solid stroke draws identically either way.
+	#
+	# Sort 13 is the first free integer and it must be free: the rule in this table is that a layer
+	# may not share a sort with any layer whose CELLS it can overlap, and a board-wide outline can
+	# cross all of them. It lies ON the ground, which is what "lift_sort" says -- see _lift_of -- and
+	# that number is the first ABOVE every FILL, so the stroke clears anything it can be drawn over
+	# without anyone having to reason about which two layers can be up at once. Its
+	# own beam parameters too ("beam"), because the shared trio is tuned for a LASER: at the sight
+	# bead's width and its >1.2 bloom this would be a glowing rope around forty cells.
+	Layer.ENEMY_FOCUS_EDGE: {"color": Color(1, 1, 1, 0.85), "sort": 13, "lift_sort": 5,
+		"beam": "outline", "kind": Kind.LINE},
 	# Above the sight/threat beams at 7 -- an intent is the authoritative readout and must not
 	# z-fight the reach line it supersedes -- and clear of the guard channels at 8/9, which
 	# test_both_guard_channels_sorts_are_unshared caught this taking on its first draft.
@@ -124,8 +154,8 @@ const LAYERS: Dictionary[Layer, Dictionary] = {
 	# would erase the flame it sits beside, which is how #245 found this rule.
 	Layer.HOVER: {"color": Color(1, 0.9, 0.3, 0.9), "sort": 2, "kind": Kind.BRACKET},
 	Layer.INVALID_MOVE: {"color": Color(0.5, 0.36, 0.4, 0.5), "sort": 0, "kind": Kind.FILL},
-	Layer.SQUAD: {"color": Color(1, 0.5, 0, 0.5), "sort": -3, "kind": Kind.FILL},
-	Layer.SQUAD_RANGE: {"color": Color(1, 0.5, 0, 0.5), "sort": -3, "kind": Kind.FILL},
+	Layer.SQUAD: {"color": Color(1, 0.5, 0, 0.5), "sort": -5, "kind": Kind.FILL},
+	Layer.SQUAD_RANGE: {"color": Color(1, 0.5, 0, 0.5), "sort": -5, "kind": Kind.FILL},
 	Layer.AIM: {"color": Color(1, 1, 0, 1), "sort": 4, "kind": Kind.FILL},
 	Layer.TARGET_PICK: {"color": Color.WHITE, "sort": 5, "kind": Kind.SPRITE},
 	Layer.PATH_ARROWS: {"color": Color.WHITE, "sort": 6, "kind": Kind.SPRITE},
@@ -209,9 +239,9 @@ enum SelectorDepth { LEVEL, HALF }
 @export var selector_depth: SelectorDepth = SelectorDepth.LEVEL: set = _set_selector_depth
 # The stack's ZERO, not its bottom: the lowest sort is negative, so the real floor is
 # fill_lift + min_sort * lift_step and THAT is what must clear the tile's opaque top face.
-# Raised from 0.02 when the negative stack moved down two (#710 slice 3) -- at 0.02 the new
-# floor was exactly 0.0. Pinned by a law, since the next layer added below reds it.
-@export var fill_lift := 0.03          # quad height above the top face — the z-fight gap
+# Raised twice as the negative stack moved down for #710: 0.02 -> 0.03 at slice 3 (the floor landed
+# at exactly 0.0), 0.03 -> 0.04 at slice 4 (it landed at 0.002). The law demands a whole lift_step.
+@export var fill_lift := 0.04          # quad height above the top face — the z-fight gap
 @export var lift_step := 0.004         # per-sort spacing so stacked layers never coincide
 @export var billboard_lift := 0.85     # icon height above the cell's top face
 @export var billboard_pixel_size := 1.0 / 32.0
@@ -240,10 +270,25 @@ enum SelectorDepth { LEVEL, HALF }
 @export var beam_width := 0.075: set = _set_beam_width              # world units; a cell is 1.0
 @export var beam_softness := 1.1: set = _set_beam_softness         # edge falloff exponent
 @export var beam_intensity := 3.9: set = _set_beam_intensity       # ALBEDO multiplier; >1.2 blooms
+# The focus outline's own two (slice 4), same re-apply contract as the trio above. Thin and UNLIT
+# by comparison, because this is board markup rather than a laser: at the bead's width and bloom a
+# stroke around forty cells reads as a rope of light laid over the terrain.
+@export var outline_width := 0.03: set = _set_outline_width
+@export var outline_intensity := 1.0: set = _set_outline_intensity
 
 
 func _set_beam_width(value: float) -> void:
 	beam_width = value
+	_apply_beam_params()
+
+
+func _set_outline_width(value: float) -> void:
+	outline_width = value
+	_apply_beam_params()
+
+
+func _set_outline_intensity(value: float) -> void:
+	outline_intensity = value
 	_apply_beam_params()
 
 
@@ -460,15 +505,20 @@ func _apply_beam_params() -> void:
 		if LAYERS[layer]["kind"] != Kind.LINE:
 			continue
 		for node: Node3D in _markers[layer]:
-			_style_beam((node as MeshInstance3D).material_override as ShaderMaterial)
+			_style_beam((node as MeshInstance3D).material_override as ShaderMaterial, LAYERS[layer])
 
 
-func _style_beam(material: ShaderMaterial) -> void:
+# A LINE layer may name its own set (slice 4). The shared trio is tuned for a LASER -- the sight
+# bead's width and an intensity whose own comment reads ">1.2 blooms" -- and the focus outline is
+# markup, so inheriting them made it a glowing rope around forty cells. Softness stays shared: the
+# falloff SHAPE is not a thing the two want to differ about.
+func _style_beam(material: ShaderMaterial, spec: Dictionary = {}) -> void:
 	if material == null:
 		return
-	material.set_shader_parameter("beam_width", beam_width)
+	var outline: bool = spec.get("beam", "") == "outline"
+	material.set_shader_parameter("beam_width", outline_width if outline else beam_width)
 	material.set_shader_parameter("beam_softness", beam_softness)
-	material.set_shader_parameter("beam_intensity", beam_intensity)
+	material.set_shader_parameter("beam_intensity", outline_intensity if outline else beam_intensity)
 
 
 func line_of(layer: Layer) -> PackedVector3Array:
@@ -647,8 +697,14 @@ func _build_bent_mesh(shape: Vector4i) -> ArrayMesh:
 # marker out of its own cell by lift*sin(slope) and stepping the plane at every flat-to-ramp edge.
 # The price is that a 45-degree slope's PERPENDICULAR clearance is cos(45) of the flat ground's
 # -- fill_lift is the knob if a ramp ever speckles.
+# A layer may name the sort its GEOMETRY hangs at separately from the one its material sorts by
+# (slice 4). For a FILL the two are the same thing and always will be. For a LINE they never were:
+# set_lines applies no lift at all and `sort` has only ever meant render priority there, so the
+# focus outline -- which lies ON the ground rather than hanging at EYE_HEIGHT like an intent beam --
+# would take its height from a priority chosen to clear the beams, a tenth of a cell off the terrain
+# it outlines. Relational either way: it moves with fill_lift instead of becoming a second number.
 func _lift_of(spec: Dictionary) -> float:
-	return fill_lift + spec["sort"] * lift_step
+	return fill_lift + spec.get("lift_sort", spec["sort"]) * lift_step
 
 
 # How far off its surface this layer's markup sits. Public because a marker that has to MEET other
@@ -786,7 +842,7 @@ func _make_line(spec: Dictionary) -> MeshInstance3D:
 	instance.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	instance.layers = WORLD_RENDER_LAYER
 	add_child(instance)
-	_style_beam(material)
+	_style_beam(material, spec)
 	return instance
 
 

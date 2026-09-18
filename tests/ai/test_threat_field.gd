@@ -54,6 +54,12 @@ func _neighbours(cell: Vector2i) -> Array[Vector2i]:
 	return out
 
 
+func _keys(store: Dictionary) -> Array[Vector2i]:
+	var out: Array[Vector2i] = []
+	out.assign(store.keys())
+	return out
+
+
 func _sorted(cells: Array[Vector2i]) -> Array[Vector2i]:
 	var out: Array[Vector2i] = cells.duplicate()
 	out.sort()
@@ -84,16 +90,83 @@ func test_a_rushdown_marks_a_cell_it_must_walk_to_first() -> void:
 			"a cell two past the move range is out of reach next turn").is_false()
 
 
-func test_a_sentry_ignores_a_cell_in_weapon_reach_but_outside_its_zone() -> void:
+# SLICE 4 REVERSED THIS CASE'S VERDICT, and the rule it used to pin is still true one layer up:
+# a sentry will not OPEN outside its leash (SentryArchetype's own lure-proofing, pinned there and by
+# the wire case at the bottom of this file), but it ANSWERS a blow from anywhere it can stand. The
+# field is what a player must not walk into, so it carries both.
+func test_a_sentry_answers_one_counter_range_outside_its_leash() -> void:
 	var board: Dictionary = _build_board()
 	var zones: ZoneManager = _make_zone_manager()
 	var sentry: Unit = _spawn(board, Team.Faction.ENEMY, Vector2i(3, 1))   # zone edge, at its post
 	_bind(sentry, AIArchetype.Type.SENTRY, ZONE)
 	var field := ThreatField.build(_context(board, zones), Team.Faction.PLAYER)
-	# (4, 1) is adjacent -- in weapon reach -- and NOT in the zone: the lure-proofing contract.
+	# (4, 1) is adjacent and OUTSIDE the zone: poke it from there and it swings back.
 	assert_bool(field.cells.has(Vector2i(4, 1))).override_failure_message(
-			"a sentry's field leaked past its leash").is_false()
+			"a patrol's counter rim never reached past its leash").is_true()
 	assert_bool(field.cells.has(Vector2i(2, 1))).is_true()
+	# ...and the rim is the COUNTER's reach, not the whole board: two cells out is still clear.
+	assert_bool(field.cells.has(Vector2i(5, 1))).override_failure_message(
+			"the rim ran past the counter's own range").is_false()
+
+
+func test_an_unarmed_patrol_gets_no_counter_rim() -> void:
+	var board: Dictionary = _build_board()
+	var zones: ZoneManager = _make_zone_manager()
+	# No weapon: attack_source_can_counter() is false, which is the gate the rim borrows rather than
+	# restating -- so a dry or unarmed enemy adds nothing, exactly as it counters with nothing.
+	var sentry: Unit = _spawn(board, Team.Faction.ENEMY, Vector2i(3, 1), false)
+	_bind(sentry, AIArchetype.Type.SENTRY, ZONE)
+	var field := ThreatField.build(_context(board, zones), Team.Faction.PLAYER)
+	assert_bool(field.cells.has(Vector2i(4, 1))).override_failure_message(
+			"a unit that cannot counter still painted a counter rim").is_false()
+
+
+func test_the_counter_rim_adds_nothing_to_a_rushdown() -> void:
+	var board: Dictionary = _build_board()
+	var rusher: Unit = _spawn(board, Team.Faction.ENEMY, Vector2i(4, 1))
+	_bind(rusher, AIArchetype.Type.RUSHDOWN)
+	var field := ThreatField.build(_context(board), Team.Faction.PLAYER)
+	# The rim is a PATROL fix and must not widen anybody else's red -- the reason being structural
+	# rather than incidental: a leashless archetype clips nothing, and its counter attack is already
+	# one of the attacks the first pass walks. Assert the reason, then the consequence.
+	assert_array(rusher.get_selectable_attacks()).contains([rusher.get_counter_attack()])
+	var opens := {}
+	for origin: Vector2i in field.move_of(rusher):
+		for attack: AttackData in rusher.get_selectable_attacks():
+			for cell: Vector2i in Reach.get_all_attack_cells_from(rusher, origin, attack):
+				opens[cell] = true
+	assert_array(_sorted(field.reach_of(rusher))).override_failure_message(
+			"the counter rim widened an archetype that has no leash to widen past"
+			).is_equal(_sorted(_keys(opens)))
+
+
+# A FOLLOWER IS NOT LEASHED TO WHERE ITS LEADER STANDS NOW (slice 4). compute_move_range files every
+# cell outside the cohesion bubble under `squad_unreachable`, measured against the leader's CURRENT
+# cell -- but the enemy's own turn moves the leader FIRST and GroupMoveSolver then measures members
+# against its DESTINATION, so those cells are exactly the ground a follower walks. This field is an
+# upper bound; applying the clamp made it a lower one.
+func test_a_followers_envelope_holds_the_cells_its_leash_files_as_unreachable() -> void:
+	var board: Dictionary = _build_board()
+	var leader: Unit = _spawn(board, Team.Faction.ENEMY, Vector2i(0, 1))
+	var member: Unit = _spawn(board, Team.Faction.ENEMY, Vector2i(4, 1))   # out at the leash's edge
+	board.squad_manager.join_squad(member, leader.squad)
+	_bind(leader, AIArchetype.Type.RUSHDOWN)
+
+	var context := _context(board)
+	var walk: Dictionary = RulesService.compute_move_range(member, context)
+	var clamped: Dictionary = walk["squad_unreachable"]
+	assert_int(clamped.size()).override_failure_message(
+			"fixture is vacuous: this member's range never spills past its leader's bubble"
+			).is_greater(0)
+
+	var field := ThreatField.build(context, Team.Faction.PLAYER)
+	var envelope := {}
+	for cell: Vector2i in field.move_of(member):
+		envelope[cell] = true
+	for cell: Vector2i in clamped:
+		assert_bool(envelope.has(cell)).override_failure_message(
+				"%s is walkable next turn once the leader moves, and the envelope omitted it" % cell
+				).is_true()
 
 
 func test_a_sentry_with_no_zone_holds_its_ground() -> void:
