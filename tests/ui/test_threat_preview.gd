@@ -132,6 +132,68 @@ func test_the_ranges_key_fills_every_enemy_and_reveals_every_leash() -> void:
 	assert_array(_om().zone_highlight_overlay.get_used_cells()).is_empty()
 
 
+# WHOSE FIELD IS THIS (slice 4, dev: "when hovering a specific unit, their grid should highlight").
+# With V on, three enemies union into one blob and the pointer changed nothing about it.
+func test_hovering_one_of_several_lit_enemies_dims_the_rest() -> void:
+	var focus := _spawn(ENEMY, Vector2i(3, 2))
+	_spawn(ENEMY, Vector2i(1, 4))
+	_spawn(ENEMY, Vector2i(2, 3))
+	game.toggle_enemy_ranges()
+
+	# Nothing hovered: everybody bright, and the dim layers are not merely equal -- they are unused,
+	# which is what keeps a board nobody is pointing at looking exactly as it did before slice 4.
+	assert_array(_om().danger_dim_overlay.get_used_cells()).override_failure_message(
+			"the crowd dimmed with nobody hovered").is_empty()
+	assert_array(_om().enemy_move_dim_overlay.get_used_cells()).is_empty()
+	var everyone: int = _om().danger_overlay.get_used_cells().size()
+
+	game.hover_presenter.update_hover_visuals(focus.movement.cell)
+	var field: ThreatField = game.threat_field()
+	assert_that(_sorted(_om().enemy_move_overlay.get_used_cells())).override_failure_message(
+			"the bright move tone is not the hovered enemy's own envelope"
+			).is_equal(_sorted(field.move_of(focus)))
+	assert_that(_sorted(_om().danger_overlay.get_used_cells())).is_equal(_sorted(field.reach_of(focus)))
+	assert_bool(_om().danger_dim_overlay.get_used_cells().size() > 0).override_failure_message(
+			"the other two enemies vanished instead of dimming").is_true()
+
+	# The crowd is SUBTRACTED from the focus, never stacked under it: four coincident alphas read
+	# differently from two, so a focused cell would change tone wherever a neighbour's field crossed.
+	for cell: Vector2i in _om().danger_dim_overlay.get_used_cells():
+		assert_bool(_om().danger_overlay.get_used_cells().has(cell)).override_failure_message(
+				"%s carries a dim quad UNDER a bright one" % cell).is_false()
+		assert_bool(_om().enemy_move_overlay.get_used_cells().has(cell)).is_false()
+	for cell: Vector2i in _om().enemy_move_dim_overlay.get_used_cells():
+		assert_bool(_om().danger_overlay.get_used_cells().has(cell)).is_false()
+		assert_bool(_om().enemy_move_overlay.get_used_cells().has(cell)).is_false()
+
+	# ...and nothing was lost in the split: every cell that was lit is still lit, somewhere.
+	var lit := {}
+	for cell: Vector2i in _om().danger_overlay.get_used_cells():
+		lit[cell] = true
+	for cell: Vector2i in _om().danger_dim_overlay.get_used_cells():
+		lit[cell] = true
+	assert_int(lit.size()).override_failure_message(
+			"the focus split dropped cells the un-hovered view was painting").is_equal(everyone)
+	game.toggle_enemy_ranges()
+
+
+# The dim tone is DERIVED from the bright one, so a knob on either carries to both.
+func test_the_crowds_tone_follows_the_tone_it_dims() -> void:
+	_spawn(ENEMY, Vector2i(3, 2))
+	var before: Color = _om().enemy_move_dim_overlay.modulate
+	OverlayManager.ENEMY_MOVE_MODULATE = Color(0.1, 0.9, 0.2, 0.5)
+	_om().restyle_dim_ranges()
+	var after: Color = _om().enemy_move_dim_overlay.modulate
+	assert_that(after).override_failure_message(
+			"the crowd kept the hue the focus tone just left").is_not_equal(before)
+	assert_float(after.a).override_failure_message(
+			"the dim is not alpha-only -- multiplying RGB pulls the hue into the board"
+			).is_equal_approx(0.5 * OverlayManager.ENEMY_RANGE_DIM, 0.001)
+	assert_float(after.g).is_equal_approx(0.9, 0.001)
+	OverlayManager.ENEMY_MOVE_MODULATE = Color(0.25, 0.45, 1, 0.45)
+	_om().restyle_dim_ranges()
+
+
 func test_a_pinned_enemy_survives_the_key_being_turned_on_and_off_again() -> void:
 	# The dev's own wording: a pin OVERRIDES the toggle. The standing set is what the door draws
 	# when the key is off, so the key cannot clear it on its way down.
@@ -252,35 +314,6 @@ func test_the_range_tones_read_the_board_the_plan_will_leave() -> void:
 	assert_array(field.move_of(enemy)).override_failure_message(
 			"the envelope was drawn where the enemy stands, not where the plan puts it"
 			).is_equal([landing])
-
-
-# ONE REPAINT PER GESTURE, not one per order. drop_threat_field sits ABOVE _on_unit_action_queued's
-# batching early-out, so a group move drops once per member and each drop would otherwise rebuild the
-# whole field -- a compute_move_range per enemy, per member. This is the coalescing's ONLY
-# observable; the deferral buys nothing else, which was measured rather than assumed (a synchronous
-# repaint is correct here, because queue_action's candidate gate publishes a shove before the queued
-# signal ever fires).
-func test_a_group_move_costs_one_repaint_and_not_one_per_member() -> void:
-	var lane := _clear_lane()
-	var leader: Unit = _spawn(PLAYER, lane)
-	var member: Unit = _spawn(PLAYER, lane + Vector2i.RIGHT)
-	game.squad_manager.join_squad(member, leader.squad)
-	_spawn(ENEMY, lane + Vector2i.RIGHT * 3)
-	game.toggle_enemy_ranges()
-	await await_idle_frame()
-
-	var before: int = game.threat_repaint_version
-	var queued: bool = game.squad_manager.queue_group_move(
-			leader.squad, lane + Vector2i.RIGHT, game._board())
-	assert_bool(queued).override_failure_message(
-			"fixture is vacuous: the formation never queued, so nothing dropped the field").is_true()
-	assert_int(leader.squad.action_queue.size()).override_failure_message(
-			"fixture is vacuous: one order is not a batch").is_greater(1)
-	await await_idle_frame()
-
-	assert_int(game.threat_repaint_version - before).override_failure_message(
-			"every member of the formation rebuilt the whole field").is_equal(1)
-	game.toggle_enemy_ranges()
 
 
 # The snapshot writes `position` through MovementComponent.set_cell, and a walk is a tween ON that

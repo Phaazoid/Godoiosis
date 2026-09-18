@@ -139,8 +139,6 @@ var ranges_shown := false     # the V toggle (slice 3): every enemy's move + rea
 # Which enemies stay drawn with V off, by instance id -- see toggle_enemy_pin.
 var pinned_enemies: Dictionary[int, bool] = {}
 var _threat_field: ThreatField = null   # built lazily by threat_field(); dropped when the plan moves
-var _threat_repaint_queued := false     # coalesces N drops in one frame into ONE deferred repaint
-var threat_repaint_version := 0         # bumped per sweep; the coalescing's only observable
 var _threat_plan_timer: Timer   # debounces the exact tier: a burst of orders costs ONE recompute
 var threat_plan_version := 0    # bumped on every recompute; the debounce's only observable
 var mission_controller: MissionController
@@ -1719,33 +1717,21 @@ func threat_field() -> ThreatField:
 	return _threat_field
 
 
-# DEFERRED TO COALESCE, and that is the whole claim -- it is NOT a staleness fix. The ordering here
-# was measured rather than reasoned at: a queued attack's shove is already PUBLISHED by the time this
-# runs, because queue_action's own candidate gate resolves the plan with the candidate in it before
-# Squad._queue_action emits. So a synchronous repaint is correct, and the mutant that made it
-# synchronous passed every behavioural case.
+# SYNCHRONOUS, and that was measured rather than assumed. Slice 4 briefly deferred this to idle on
+# the theory that a queued shove is not published yet when it runs -- it is: queue_action's own
+# candidate gate resolves the plan WITH the candidate before Squad._queue_action emits, so the
+# mutant proving a synchronous repaint correct passed every behavioural case.
 #
-# What it is worth is the COUNT. _on_unit_action_queued calls this ABOVE its batching early-out, so a
-# five-member group move drops five times and each drop rebuilds the whole field -- one
-# compute_move_range per enemy, every time. One sweep at idle instead; threat_repaint_version is the
-# only observable, previewed_squad_count's shape. The second null covers a reader that re-cached in
-# between.
+# Deferring also breaks a seam that has to stay synchronous: the sweep would re-derive the subject
+# from hover_presenter.hovered_enemy(), which reads last_hovered_cell -- written by the hover
+# _process and NOT by update_hover_visuals. Any path that draws markup directly then loses it a
+# frame later to a repaint that disagrees about what the pointer is on.
 #
 # Unconditional, because the standing set outlives the toggle: a pinned enemy is still drawn with
 # the ranges key off, and repainting only when that key was on left a pin showing a field built
 # before the order that just moved everybody.
 func drop_threat_field() -> void:
 	_threat_field = null
-	if _threat_repaint_queued:
-		return
-	_threat_repaint_queued = true
-	_sweep_threat_field.call_deferred()
-
-
-func _sweep_threat_field() -> void:
-	_threat_repaint_queued = false
-	_threat_field = null
-	threat_repaint_version += 1
 	_redraw_enemy_ranges(hover_presenter.hovered_enemy())
 
 
@@ -1816,12 +1802,43 @@ func _redraw_enemy_ranges(hovered: Unit = null) -> void:
 		if subjects.is_empty():
 			overlay_manager.clear_enemy_move()
 			overlay_manager.clear_danger()
+			overlay_manager.clear_dim_ranges()
 			overlay_manager.clear_leash()
 			return
 	var field := threat_field()
-	overlay_manager.show_danger(field.reach_cells_of(subjects))
-	overlay_manager.show_enemy_move(field.move_cells_of(subjects))
+	# THE CROWD IS SUBTRACTED FROM THE FOCUS, and only in that direction. The bright pair keeps
+	# overlapping exactly as it shipped -- the dev's move-over-reach ruling composites blue OVER red,
+	# so making those two disjoint would repaint every cell he approved. What must not happen is a
+	# dim quad UNDER a bright one: four coincident alphas read differently from two, so the focused
+	# envelope would change tone wherever somebody else's field crossed it. With nobody hovered the
+	# focus set is empty, the dim layers stay empty, and the board looks exactly as it did.
+	var focus: Array[Unit] = []
+	if hovered != null and _is_previewable_enemy(hovered) and (ranges_shown or subjects.has(hovered)):
+		focus.append(hovered)
+	var lit: Array[Unit] = focus if not focus.is_empty() else subjects
+	var bright_move := field.move_cells_of(lit)
+	var bright_reach := field.reach_cells_of(lit)
+	var dim_move: Array[Vector2i] = []
+	var dim_reach: Array[Vector2i] = []
+	if not focus.is_empty():
+		var covered := bright_move + bright_reach
+		dim_move = _without(field.move_cells_of(subjects), covered)
+		dim_reach = _without(field.reach_cells_of(subjects), covered)
+	overlay_manager.show_danger(bright_reach)
+	overlay_manager.show_enemy_move(bright_move)
+	overlay_manager.show_dim_ranges(dim_reach, dim_move)
 	overlay_manager.reveal_leash(_leash_cells_of(subjects))
+
+
+func _without(cells: Array[Vector2i], taken: Array[Vector2i]) -> Array[Vector2i]:
+	var seen := {}
+	for cell: Vector2i in taken:
+		seen[cell] = true
+	var out: Array[Vector2i] = []
+	for cell: Vector2i in cells:
+		if not seen.has(cell):
+			out.append(cell)
+	return out
 
 
 func _is_previewable_enemy(unit: Unit) -> bool:

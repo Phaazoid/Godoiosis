@@ -442,6 +442,9 @@ const CLASS_KNOBS: Array[Dictionary] = [
 		"tip": "Every cell an enemy could attack next turn. Drawn UNDER the move tone and under your own move range, so alpha is the dial: it can cover a lot of board."},
 	{"group": "Board markup colours", "label": "Enemy move fill (2D+3D)", "static": "ENEMY_MOVE_MODULATE",
 		"tip": "Where an enemy could STAND, drawn over its reach. Blue because every other tone on the board is warm; its risky neighbours are the cyan capture zone and the violet deployment zone, so check it against a board carrying those."},
+	{"group": "Board markup colours", "label": "Unhovered enemy dim (2D+3D)", "static": "ENEMY_RANGE_DIM",
+		"min": 0.05, "max": 1.0, "step": 0.01,
+		"tip": "How far both tones above fall back for every enemy the pointer is NOT on, so the one you are asking about stands out of the crowd. Alpha only. 1.0 turns the distinction off."},
 	# The exact tier (#710 slice 2): what the AI WILL do, as opposed to what it COULD. It has to
 	# read as a promise rather than a possibility, so tune it AGAINST the threat line above -- and
 	# the felling colour against both, since it is the one that has to stop the player.
@@ -1359,6 +1362,7 @@ static func read_static(name: String) -> Variant:
 		"BLOCKED_REACH_DIM": return OverlayManager.BLOCKED_REACH_DIM
 		"DANGER_MODULATE": return OverlayManager.DANGER_MODULATE
 		"ENEMY_MOVE_MODULATE": return OverlayManager.ENEMY_MOVE_MODULATE
+		"ENEMY_RANGE_DIM": return OverlayManager.ENEMY_RANGE_DIM
 		"ZONE_HIGHLIGHT_MODULATE": return OverlayManager.ZONE_HIGHLIGHT_MODULATE
 		"INTENT_LINE_COLOR": return ThreatLines2D.INTENT_LINE_COLOR
 		"INTENT_FELL_COLOR": return ThreatLines2D.INTENT_FELL_COLOR
@@ -1558,6 +1562,7 @@ static func write_static(host: Node3D, name: String, value: Variant) -> void:
 		"BLOCKED_REACH_DIM": OverlayManager.BLOCKED_REACH_DIM = value   # mirror reads it per frame; the refresh below is harmless
 		"DANGER_MODULATE": OverlayManager.DANGER_MODULATE = value
 		"ENEMY_MOVE_MODULATE": OverlayManager.ENEMY_MOVE_MODULATE = value
+		"ENEMY_RANGE_DIM": OverlayManager.ENEMY_RANGE_DIM = value
 		"ZONE_HIGHLIGHT_MODULATE": OverlayManager.ZONE_HIGHLIGHT_MODULATE = value
 		"INTENT_LINE_COLOR": ThreatLines2D.INTENT_LINE_COLOR = value
 		"INTENT_FELL_COLOR": ThreatLines2D.INTENT_FELL_COLOR = value
@@ -2121,8 +2126,16 @@ static func write_static(host: Node3D, name: String, value: Variant) -> void:
 		"CLEAR_COLOR", "BLOCKED_COLOR": manager.restyle_sight_trace()
 		# The threat view's three (#710): the two fills re-tint their 2D layer, which the mirror
 		# copies; the lines re-show the standing set, the sight trace's own re-apply.
-		"DANGER_MODULATE": manager.restyle_danger()
-		"ENEMY_MOVE_MODULATE": manager.restyle_enemy_move()
+		# Each bright tone re-tints its DIM twin too, because that twin is derived from it -- leave it
+		# out and dragging the reach colour repaints the focused enemy and strands the crowd on the
+		# hue it had before, which is the born-dead-slider failure wearing a second layer.
+		"DANGER_MODULATE":
+			manager.restyle_danger()
+			manager.restyle_dim_ranges()
+		"ENEMY_MOVE_MODULATE":
+			manager.restyle_enemy_move()
+			manager.restyle_dim_ranges()
+		"ENEMY_RANGE_DIM": manager.restyle_dim_ranges()
 		"ZONE_HIGHLIGHT_MODULATE": manager.restyle_leash()
 		"INTENT_LINE_COLOR", "INTENT_FELL_COLOR":
 			manager.restyle_threat_intents()

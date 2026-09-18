@@ -106,6 +106,15 @@ func _process(_delta: float) -> void:
 	_fill_gated(BoardOverlays.Layer.ENEMY_MOVE, om.enemy_move_overlay, true)
 	if om.enemy_move_overlay != null:
 		overlays.set_layer_modulate(BoardOverlays.Layer.ENEMY_MOVE, om.enemy_move_overlay.modulate)
+	# ...and the same pair for the CROWD, under both (slice 4). Their tint is copied like every other
+	# layer's rather than re-derived here: the 2D already dimmed it through OverlayManager.dimmed_tone,
+	# so a knob turned on the bright tone reaches the diorama through exactly one spelling.
+	_fill_gated(BoardOverlays.Layer.DANGER_DIM, om.danger_dim_overlay, true)
+	if om.danger_dim_overlay != null:
+		overlays.set_layer_modulate(BoardOverlays.Layer.DANGER_DIM, om.danger_dim_overlay.modulate)
+	_fill_gated(BoardOverlays.Layer.ENEMY_MOVE_DIM, om.enemy_move_dim_overlay, true)
+	if om.enemy_move_dim_overlay != null:
+		overlays.set_layer_modulate(BoardOverlays.Layer.ENEMY_MOVE_DIM, om.enemy_move_dim_overlay.modulate)
 
 	# The aim footprint pulses by layer modulate in 2D — the animation rides the poll.
 	_fill(BoardOverlays.Layer.AIM, om.hover_overlay.get_used_cells())

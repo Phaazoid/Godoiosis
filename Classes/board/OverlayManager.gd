@@ -168,6 +168,11 @@ static var DANGER_MODULATE := Color(1, 0.15, 0.1, 0.3)
 # settled: cool is the only thing on that palette that cannot be mistaken for terrain. It sits
 # near the cyan capture zone and the violet deployment zone, which is the risk the dev accepted.
 static var ENEMY_MOVE_MODULATE := Color(0.25, 0.45, 1, 0.45)
+# How far the two tones above fall back for every enemy the pointer is NOT on (slice 4, dev: "when
+# hovering a specific unit, their grid should highlight"). A multiplier rather than a second pair of
+# authored colours, so tuning a tone carries to its own dim twin -- see dimmed_tone for why it moves
+# alpha alone. 1.0 turns the whole distinction off without removing a layer.
+static var ENEMY_RANGE_DIM := 0.4
 
 
 enum OverlayType {
@@ -345,6 +350,9 @@ var zone_layer_map := {}
 var zone_highlight_overlay: TileMapLayer = null   # the Tile Brush's picked zone; built in _ready
 var danger_overlay: TileMapLayer = null   # the #710 threat fill; built in _ready
 var enemy_move_overlay: TileMapLayer = null   # ...and where they could stand to use it (slice 3)
+# The same two for every enemy the pointer is NOT on (slice 4), under both of the above.
+var danger_dim_overlay: TileMapLayer = null
+var enemy_move_dim_overlay: TileMapLayer = null
 # What the enemy intends, keyed by VICTIM instance id: {"damage": int, "fells": bool}. Rebuilt
 # with the intent lines and read by UnitMirror, which draws it as the predicted span on that
 # unit's own health bar -- the channel #313 already built for your own plan.
@@ -467,6 +475,19 @@ func _ready() -> void:
 		enemy_move_overlay.modulate = ENEMY_MOVE_MODULATE
 		add_child(enemy_move_overlay)
 		move_child(enemy_move_overlay, move_overlay.get_index())
+		# The CROWD's two tones (slice 4), inserted UNDER both of the above so the enemy the pointer
+		# is on stays the loud one. Same duplicate-the-move-layer recipe; only the modulate differs,
+		# and it is DERIVED (dimmed_tone) rather than authored, so a knob on the bright tone carries.
+		danger_dim_overlay = move_overlay.duplicate() as TileMapLayer
+		danger_dim_overlay.name = "DangerDimOverlay"
+		danger_dim_overlay.modulate = dimmed_tone(DANGER_MODULATE)
+		add_child(danger_dim_overlay)
+		move_child(danger_dim_overlay, danger_overlay.get_index())
+		enemy_move_dim_overlay = move_overlay.duplicate() as TileMapLayer
+		enemy_move_dim_overlay.name = "EnemyMoveDimOverlay"
+		enemy_move_dim_overlay.modulate = dimmed_tone(ENEMY_MOVE_MODULATE)
+		add_child(enemy_move_dim_overlay)
+		move_child(enemy_move_dim_overlay, danger_overlay.get_index())
 	_threat_lines_2d = ThreatLines2D.new()
 	_threat_lines_2d.name = "ThreatLines2D"
 	_threat_lines_2d.z_index = TERRAIN_Z_INDEX
@@ -581,6 +602,37 @@ func clear_enemy_move() -> void:
 func restyle_enemy_move() -> void:
 	if enemy_move_overlay != null:
 		enemy_move_overlay.modulate = ENEMY_MOVE_MODULATE
+
+
+# The same two tones for every enemy the pointer is NOT on (slice 4). The four sets arrive DISJOINT
+# from game._redraw_enemy_ranges -- four coincident alpha quads on one cell would otherwise composite
+# differently from the same focused cell over bare ground, so the focused envelope would change tone
+# depending on who happened to overlap it.
+func show_dim_ranges(reach: Array[Vector2i], move: Array[Vector2i]) -> void:
+	if danger_dim_overlay == null:
+		return
+	danger_dim_overlay.clear()
+	draw_cells(danger_dim_overlay, reach, ATLAS_COORDS)
+	enemy_move_dim_overlay.clear()
+	draw_cells(enemy_move_dim_overlay, move, ATLAS_COORDS)
+
+
+func clear_dim_ranges() -> void:
+	var none: Array[Vector2i] = []
+	show_dim_ranges(none, none)
+
+
+func restyle_dim_ranges() -> void:
+	if danger_dim_overlay != null:
+		danger_dim_overlay.modulate = dimmed_tone(DANGER_MODULATE)
+	if enemy_move_dim_overlay != null:
+		enemy_move_dim_overlay.modulate = dimmed_tone(ENEMY_MOVE_MODULATE)
+
+
+# ALPHA ONLY. Multiplying the whole Color the way BLOCKED_REACH_DIM does darkens the hue toward the
+# board until the two tones stop reading as two hues -- drawn both ways before choosing.
+static func dimmed_tone(tone: Color) -> Color:
+	return Color(tone.r, tone.g, tone.b, tone.a * ENEMY_RANGE_DIM)
 
 # What color the reach layer should paint with for this attack -- red for damage, green for a
 # heal. A null attack (bare fists) reads as the default/damage color. A WATCH aim paints its own
