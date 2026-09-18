@@ -138,7 +138,9 @@ var threat_view := ThreatView.INTENTS
 var ranges_shown := false     # the V toggle (slice 3): every enemy's move + reach tones, FE-style
 # Which enemies stay drawn with V off, by instance id -- see toggle_enemy_pin.
 var pinned_enemies: Dictionary[int, bool] = {}
-var _threat_field: ThreatField = null   # built lazily by threat_field(); dropped when the board moves
+var _threat_field: ThreatField = null   # built lazily by threat_field(); dropped when the plan moves
+var _threat_repaint_queued := false     # coalesces N drops in one frame into ONE deferred repaint
+var threat_repaint_version := 0         # bumped per sweep; the coalescing's only observable
 var _threat_plan_timer: Timer   # debounces the exact tier: a burst of orders costs ONE recompute
 var threat_plan_version := 0    # bumped on every recompute; the debounce's only observable
 var mission_controller: MissionController
@@ -1702,18 +1704,48 @@ func refresh_watch_markers(plan: ResolvedPlan = null) -> void:
 # ==============================================================================
 
 # Every cell an enemy could attack next turn. Built once, read by every hover, dropped whenever
-# the roster or the board moves -- never rebuilt on a pointer sweep.
+# the plan or the board moves -- never rebuilt on a pointer sweep.
+#
+# ON THE PROJECTED BOARD since slice 4, the same snapshot AIController.preview_turn plans against.
+# The two tiers used to read different boards -- the intent lines the board the player's pending
+# plan will leave, these tones the board as it stands -- so a line could name a victim the tones
+# said was out of reach, with the line telling the truth. The cache is what bounds the cost: this
+# runs once per plan change, never per frame.
 func threat_field() -> ThreatField:
 	if _threat_field == null:
+		var saved := AIController.stand_on_projected(squad_manager)
 		_threat_field = ThreatField.build(_board(), Team.Faction.PLAYER)
+		AIController.restore_cells(saved)
 	return _threat_field
 
 
+# DEFERRED TO COALESCE, and that is the whole claim -- it is NOT a staleness fix. The ordering here
+# was measured rather than reasoned at: a queued attack's shove is already PUBLISHED by the time this
+# runs, because queue_action's own candidate gate resolves the plan with the candidate in it before
+# Squad._queue_action emits. So a synchronous repaint is correct, and the mutant that made it
+# synchronous passed every behavioural case.
+#
+# What it is worth is the COUNT. _on_unit_action_queued calls this ABOVE its batching early-out, so a
+# five-member group move drops five times and each drop rebuilds the whole field -- one
+# compute_move_range per enemy, every time. One sweep at idle instead; threat_repaint_version is the
+# only observable, previewed_squad_count's shape. The second null covers a reader that re-cached in
+# between.
+#
+# Unconditional, because the standing set outlives the toggle: a pinned enemy is still drawn with
+# the ranges key off, and repainting only when that key was on left a pin showing a field built
+# before the order that just moved everybody.
 func drop_threat_field() -> void:
 	_threat_field = null
-	# Unconditionally, because the standing set outlives the toggle: a pinned enemy is still drawn
-	# with the ranges key off, and repainting only when that key was on left a pin showing a field
-	# built before the order that just moved everybody.
+	if _threat_repaint_queued:
+		return
+	_threat_repaint_queued = true
+	_sweep_threat_field.call_deferred()
+
+
+func _sweep_threat_field() -> void:
+	_threat_repaint_queued = false
+	_threat_field = null
+	threat_repaint_version += 1
 	_redraw_enemy_ranges(hover_presenter.hovered_enemy())
 
 
@@ -1766,6 +1798,14 @@ func drop_enemy_pin(enemy: Unit) -> void:
 # rest. An EMPTY subject list with the key on means "every enemy", which is ThreatField's own
 # convention for a union.
 func _redraw_enemy_ranges(hovered: Unit = null) -> void:
+	# NOT WHILE ANYBODY IS WALKING (slice 4). threat_field() stands every unit on its projected cell
+	# through MovementComponent.set_cell, which writes `position` -- and a walk is a tween ON that
+	# property, so a snapshot taken mid-pass snaps the sprite to a cell centre until the tween writes
+	# again, which UnitMirror's per-frame read can catch. HoverPresenter._process carries no board
+	# lock, so hovering an enemy while your own squad walks is the live path here; the executor's own
+	# drop site is already past its last await. refresh_action_queue guards itself the same way.
+	if order_executor != null and order_executor.executing_plan != null:
+		return
 	var subjects: Array[Unit] = []
 	if not ranges_shown:
 		for unit: Unit in _all_units():

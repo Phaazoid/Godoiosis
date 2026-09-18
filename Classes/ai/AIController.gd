@@ -123,11 +123,7 @@ static func preview_turn(viewer: Team.Faction, sm: SquadManager,
 	previewed_squad_count = 0
 	sm.previewing = true
 
-	var saved := {}
-	for unit: Unit in (sm.board_source.call() as BoardContext).units:   # units_root only -- a grid-less reserve unit would push_error
-		saved[unit] = unit.movement.cell
-	for unit: Unit in saved:
-		unit.movement.set_cell(unit.get_projected_destination())
+	var saved := stand_on_projected(sm)
 
 	var board: BoardContext = sm.board_source.call()   # fresh, so every read below sees the projected cells
 	var field := ThreatField.build(board, viewer)
@@ -138,15 +134,35 @@ static func preview_turn(viewer: Team.Faction, sm: SquadManager,
 			if not is_squad_previewable(squad, faction):
 				continue
 			if not _squad_can_reach_anyone(squad, field, board):
-				continue   # exact and free: the field is a superset of what this squad could aim at
+				continue   # free, and a false is a proof: the field is a superset of what it could aim at
 			previewed_squad_count += 1
 			intents.append_array(_preview_squad(squad, board, sm, saved))
 
-	for unit: Unit in saved:
-		unit.movement.set_cell(saved[unit])
+	restore_cells(saved)
 	_undress(sm)
 	sm.previewing = false
 	return _merged(intents)
+
+
+# THE POSITIONAL SNAPSHOT, as its own pair of doors since slice 4 -- the RANGE tier wants the same
+# board this one plans on, and two spellings of "stand everybody where the plan leaves them" is the
+# duplicate seam that let a threat line and the range tones disagree out loud. Everything the header
+# above argues about why this is safe covers both callers rather than being restated at the second.
+#
+# The caller holds the returned map and MUST hand it back to restore_cells; nothing here is
+# re-entrant, and nobody needs it to be (both callers are synchronous and neither nests).
+static func stand_on_projected(sm: SquadManager) -> Dictionary:
+	var saved := {}
+	for unit: Unit in (sm.board_source.call() as BoardContext).units:   # units_root only -- a grid-less reserve unit would push_error
+		saved[unit] = unit.movement.cell
+	for unit: Unit in saved:
+		unit.movement.set_cell(unit.get_projected_destination())
+	return saved
+
+
+static func restore_cells(saved: Dictionary) -> void:
+	for unit: Unit in saved:
+		unit.movement.set_cell(saved[unit])
 
 
 # ONE squad's intentions, with the board handed back exactly as it arrived. The rollback is the
@@ -219,7 +235,9 @@ static func _merged(intents: Array[ThreatIntent]) -> Array[ThreatIntent]:
 # (tests/ai/test_threat_field.gd pins that), so a false is a proof rather than an estimate.
 #
 # ITS BITE SHRINKS AS RANGES GROW -- a long-enough weapon reaches the whole board and nothing is
-# ever skipped. That is the honest behaviour, not a defect; see docs/performance.md.
+# ever skipped. That is the honest behaviour, not a defect; see docs/performance.md. Slice 4's
+# counter rim widened the superset the same way for a SENTRY: one whose rim touches a player is now
+# planned where it used to be skipped, and it simply decides to do nothing. Cost, never correctness.
 static func _squad_can_reach_anyone(squad: Squad, field: ThreatField, board: BoardContext) -> bool:
 	var faction := squad.leader.get_faction()
 	for member: Unit in squad.get_members():

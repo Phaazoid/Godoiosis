@@ -204,6 +204,104 @@ func test_a_queued_order_drops_the_cached_field() -> void:
 	assert_object(game.threat_field()).is_not_same(before)
 
 
+# A shove is what makes the PROJECTION observable, and a player's own move is not: a move reaches
+# this field only through occupancy, which a board can render invisible, so the mutant that skips
+# the snapshot would pass. A queued knockback moves the ENEMY, which moves its origins -- and a HOLD
+# unit's envelope is exactly the one cell it stands on, so the whole assertion is which cell that is.
+#
+# The lane is SEARCHED rather than written down: the boot board is authored content, and the first
+# draft of this fixture put the attacker on a tree at (3, 1). Four clear cells in a row is all the
+# geometry the shove needs.
+func _clear_lane() -> Vector2i:
+	var rect: Rect2i = game.grid.get_used_rect()
+	var board: BoardContext = game._board()
+	for y in range(rect.position.y, rect.end.y):
+		for x in range(rect.position.x, rect.end.x - 3):
+			var clear := true
+			for step in 4:
+				var cell := Vector2i(x + step, y)
+				if not board.is_walkable(cell) or board.unit_at_cell(cell) != null:
+					clear = false
+					break
+			if clear:
+				return Vector2i(x, y)
+	return Vector2i.MAX
+
+
+func _shoved_enemy() -> Unit:
+	var lane := _clear_lane()
+	assert_that(lane).override_failure_message(
+			"fixture is vacuous: the boot board has no clear four-cell lane").is_not_equal(Vector2i.MAX)
+	var attacker: Unit = _spawn(PLAYER, lane)
+	var enemy: Unit = _spawn(ENEMY, lane + Vector2i.RIGHT)
+	attacker.equipped_weapon.template.main_attack.knockback = 2
+	game.enter_attack_mode(attacker)
+	game.selected_unit = attacker
+	game._click_attack_targeting(enemy.movement.cell)
+	return enemy
+
+
+func test_the_range_tones_read_the_board_the_plan_will_leave() -> void:
+	var enemy := _shoved_enemy()
+
+	var landing: Vector2i = enemy.get_projected_destination()
+	assert_that(landing).override_failure_message(
+			"fixture is vacuous: the shove published no landing").is_not_equal(enemy.movement.cell)
+
+	var field: ThreatField = game.threat_field()
+	assert_array(field.move_of(enemy)).override_failure_message(
+			"the envelope was drawn where the enemy stands, not where the plan puts it"
+			).is_equal([landing])
+
+
+# ONE REPAINT PER GESTURE, not one per order. drop_threat_field sits ABOVE _on_unit_action_queued's
+# batching early-out, so a group move drops once per member and each drop would otherwise rebuild the
+# whole field -- a compute_move_range per enemy, per member. This is the coalescing's ONLY
+# observable; the deferral buys nothing else, which was measured rather than assumed (a synchronous
+# repaint is correct here, because queue_action's candidate gate publishes a shove before the queued
+# signal ever fires).
+func test_a_group_move_costs_one_repaint_and_not_one_per_member() -> void:
+	var lane := _clear_lane()
+	var leader: Unit = _spawn(PLAYER, lane)
+	var member: Unit = _spawn(PLAYER, lane + Vector2i.RIGHT)
+	game.squad_manager.join_squad(member, leader.squad)
+	_spawn(ENEMY, lane + Vector2i.RIGHT * 3)
+	game.toggle_enemy_ranges()
+	await await_idle_frame()
+
+	var before: int = game.threat_repaint_version
+	var queued: bool = game.squad_manager.queue_group_move(
+			leader.squad, lane + Vector2i.RIGHT, game._board())
+	assert_bool(queued).override_failure_message(
+			"fixture is vacuous: the formation never queued, so nothing dropped the field").is_true()
+	assert_int(leader.squad.action_queue.size()).override_failure_message(
+			"fixture is vacuous: one order is not a batch").is_greater(1)
+	await await_idle_frame()
+
+	assert_int(game.threat_repaint_version - before).override_failure_message(
+			"every member of the formation rebuilt the whole field").is_equal(1)
+	game.toggle_enemy_ranges()
+
+
+# The snapshot writes `position` through MovementComponent.set_cell, and a walk is a tween ON that
+# property -- so it must not run while a pass is playing back. HoverPresenter._process carries no
+# board lock, which is the path that reaches this.
+func test_no_repaint_runs_while_a_pass_is_playing_back() -> void:
+	var enemy := _spawn(ENEMY, _clear_lane())
+	game.toggle_enemy_ranges()
+	await await_idle_frame()
+	assert_bool(_om().enemy_move_overlay.get_used_cells().size() > 0).is_true()
+
+	_om().clear_enemy_move()
+	game.order_executor.executing_plan = ResolvedPlan.new()
+	game._redraw_enemy_ranges(enemy)
+	assert_array(_om().enemy_move_overlay.get_used_cells()).override_failure_message(
+			"a repaint ran mid-pass and would have teleported every walking sprite").is_empty()
+
+	game.order_executor.executing_plan = null
+	game.toggle_enemy_ranges()
+
+
 # --- The exact tier's cadence (#710 slice 2) ---------------------------------------------------
 
 # The preview only speaks for factions the AI actually DRIVES -- an unmanaged faction is nobody's

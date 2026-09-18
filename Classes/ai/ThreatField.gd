@@ -3,8 +3,15 @@ class_name ThreatField
 
 # Which cells a faction's units could attack NEXT turn, and who could reach each -- the hover
 # tier of the enemy-intent preview (#710). An upper bound per archetype: Hold stands where it is,
-# Sentry stays on its leash and only answers an intruder inside its zone, Rushdown takes its whole
-# move range. Cohesion is ignored and occupancy is read live, exactly as FE's danger zone does.
+# Sentry opens only on an intruder inside its leash but ANSWERS from anywhere it can stand
+# (_add_counter_reach), Rushdown takes its whole move range. Cohesion is genuinely ignored as of
+# slice 4 -- it used to be applied, which under-stated every follower.
+#
+# WHICH BOARD it is built on is the CALLER's decision and both callers pick the same one: the
+# projected board, every unit stood on its get_projected_destination(). game.threat_field() opens
+# that snapshot itself, AIController.preview_turn holds one open across its whole planning pass.
+# The two tiers answering about different boards is what let a threat LINE name a victim these
+# tones said was out of reach (slice 4).
 
 var cells: Dictionary = {}     # Vector2i -> Array[Unit] that can attack it
 var by_unit: Dictionary = {}   # Unit -> Dictionary[Vector2i, true]
@@ -115,8 +122,18 @@ static func _origins_of(unit: Unit, board: BoardContext, zone: Dictionary) -> Ar
 	if archetype == AIArchetype.Type.SENTRY:
 		var leader: Unit = unit.squad.get_leader()
 		post = unit.squad.home_cell if unit.squad.home_cell != Squad.NO_HOME else leader.movement.cell
-	var reachable: Dictionary = RulesService.compute_move_range(unit, board)["reachable"]
-	for cell in reachable:
+	# BOTH buckets, never `reachable` alone (#710 slice 4). compute_move_range moves every cell
+	# outside the member's cohesion bubble into squad_unreachable, measured against where its leader
+	# stands NOW -- but on the enemy's own turn the leader moves FIRST, and GroupMoveSolver measures
+	# each member against the leader's DESTINATION. So the clamped half is exactly the ground a
+	# follower walks, and a field whose whole contract is an UPPER BOUND was under-stating it. The
+	# pair is the standable footprint followable_destinations already unions for the same reason.
+	# A leader is unaffected either way: that filter is gated on `not unit.is_leader()`.
+	var walk: Dictionary = RulesService.compute_move_range(unit, board)
+	var standable: Dictionary = walk["reachable"]
+	for cell: Vector2i in (walk["squad_unreachable"] as Dictionary):
+		standable[cell] = true
+	for cell in standable:
 		if archetype == AIArchetype.Type.SENTRY and not zone.has(cell) and cell != post:
 			continue
 		if not origins.has(cell):
@@ -128,6 +145,9 @@ static func _origins_of(unit: Unit, board: BoardContext, zone: Dictionary) -> Ar
 # candidate builder applies (AITactics._attack_candidates): fireable, and vertically aimable.
 # Origins and zone arrive as parameters because build() already holds both -- looking them up
 # again here would be a second derivation of the envelope the move tone draws.
+#
+# TWO PASSES since slice 4: what this unit would OPEN with (zone-clipped, below) and what it would
+# ANSWER with (the counter, unclipped -- see _add_counter_reach).
 static func _reach_of(unit: Unit, board: BoardContext, origins: Array[Vector2i], zone: Dictionary) -> Dictionary:
 	var out := {}
 	var attacks: Array[AttackData] = unit.get_selectable_attacks()
@@ -143,4 +163,31 @@ static func _reach_of(unit: Unit, board: BoardContext, origins: Array[Vector2i],
 				if not Reach.is_directional_attack(attack) and not Reach.vertical_aim_ok(attack, origin, cell, board):
 					continue
 				out[cell] = true
+	_add_counter_reach(unit, board, origins, out)
 	return out
+
+
+# A COUNTER DOES NOT ASK ABOUT THE LEASH (#710 slice 4, dev: "technically they can attack one tile
+# outside of their range if already there in counter situations"). The zone clip above is a fact
+# about a Sentry's AGGRESSION -- it will not OPEN from outside its zone -- and because the clipped
+# reach is a subset of the zone while the origins cover the zone, nearly the whole red layer ended
+# up underneath the blue: a melee patrol showed 2 of 30 reach cells, a bow 5 of 36, so the outer
+# silhouette of the threat was the MOVEMENT tone.
+#
+# This is the same walk unclipped, over the counter attack alone. It borrows SquadManager.can_counter's
+# own gates rather than restating them, so a dry weapon and an unauthored AttackData.can_counter both
+# fall out for free. It adds NOTHING for a non-sentry -- their counter is already inside
+# get_selectable_attacks() -- which is measured rather than assumed.
+#
+# It deliberately does NOT ask is_standing_watch(), which can_counter does: an armed watch is a
+# threat by a different mechanism this field cannot draw at all, so dropping the rim there would
+# under-state exactly where the warning matters.
+static func _add_counter_reach(unit: Unit, board: BoardContext, origins: Array[Vector2i], out: Dictionary) -> void:
+	if not unit.attack_source_can_counter():
+		return
+	var counter := unit.get_counter_attack()
+	for origin in origins:
+		for cell in Reach.get_all_attack_cells_from(unit, origin, counter):
+			if not Reach.is_directional_attack(counter) and not Reach.vertical_aim_ok(counter, origin, cell, board):
+				continue
+			out[cell] = true
