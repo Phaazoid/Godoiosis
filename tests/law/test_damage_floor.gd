@@ -89,7 +89,7 @@ func test_zero_damage_hit_does_not_finish_a_downed_target() -> void:
 	# whole point of the ladder living in one place is that they cannot disagree.
 	var attacker := H.spawn_solo(self, _sm, PLAYER, Vector2i(0, 0), {Stats.Stat.STR: 4})
 	var target := H.spawn_solo(self, _sm, ENEMY, Vector2i(1, 0), {Stats.Stat.MHP: 20})
-	target.lifecycle_state = Unit.LifecycleState.DOWNED
+	target.force_down()   # the real door: a body CLINGS at 1, which #1002's HP-based rung reads
 	var start_hp := target.get_current_hp()
 
 	var attack := _fire_attack(attacker, target)
@@ -109,9 +109,13 @@ func test_zero_damage_hit_does_not_finish_a_downed_target() -> void:
 func test_a_damaging_hit_still_finishes_a_downed_target() -> void:
 	# The other half of the amended fork 3, and the reason the exemption is keyed on the DAMAGE
 	# NUMBER rather than on "the target is downed": an ordinary swing still executes a body.
+	#
+	# force_down rather than a hand-set lifecycle, and since #1002 that is load-bearing rather than
+	# tidy: the rung reads the body's HP, so a unit hand-set DOWNED at a full 20 survives a 10-damage
+	# swing and this case would assert the opposite of what it says. A real body clings at 1.
 	var attacker := H.spawn_solo(self, _sm, PLAYER, Vector2i(0, 0), {Stats.Stat.STR: 4})
 	var target := H.spawn_solo(self, _sm, ENEMY, Vector2i(1, 0), {Stats.Stat.MHP: 20})
-	target.lifecycle_state = Unit.LifecycleState.DOWNED
+	target.force_down()
 
 	var attack := _fire_attack(attacker, target)   # base 10 (power 6 + STR 4), no reactions
 	var plan := ResolvedPlan.new()

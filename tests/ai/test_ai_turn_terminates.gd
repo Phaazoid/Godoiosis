@@ -288,10 +288,10 @@ func test_a_faction_turn_survives_a_unit_dying_between_two_squads() -> void:
 	_paint_corridor(8)
 	var killer: Unit = _spawn(Team.Faction.PLAYER, Vector2i(1, 0))
 	var body: Unit = _spawn(Team.Faction.ENEMY, Vector2i(2, 0))
-	body.lifecycle_state = Unit.LifecycleState.DOWNED   # any damaging hit on a body is KILLED
+	body.force_down()   # a real body clings at 1, so any damaging hit finishes it (#1002)
 	var later: Unit = _spawn(Team.Faction.PLAYER, Vector2i(6, 0))
 	var far_body: Unit = _spawn(Team.Faction.ENEMY, Vector2i(5, 0))
-	far_body.lifecycle_state = Unit.LifecycleState.DOWNED   # so the second squad has its own work
+	far_body.force_down()   # so the second squad has its own work
 	await await_idle_frame()
 
 	await game.ai_controller.take_faction_turn(Team.Faction.PLAYER)

@@ -211,11 +211,13 @@ func test_a_predicted_down_shows_one_hp_and_raises_the_alarm() -> void:
 	assert_int(PlanResolver.projected_lifecycle(victim, plan.hypo)).override_failure_message(
 			"the fixture attack did not fell the victim, so there is no alarm to check"
 			).is_equal(Unit.LifecycleState.DOWNED)
-	# The threaded number is NEGATIVE here — that is the ladder's arithmetic, not a readout — and
-	# the clamp is what turns it into the 1 HP a downed unit really clings at. Drawn raw, the notch
-	# would sit at the left edge and the bar would claim a kill.
+	# The threaded number IS the 1 HP a downed unit clings at (#1002): the resolver asks
+	# LethalityRules.hp_after what the rung leaves, rather than subtracting and leaving a negative
+	# for the display clamp to repair. Drawn from the subtraction, the notch would sit at the left
+	# edge and the bar would claim a kill.
 	assert_int(PlanResolver.projected_hp(victim, plan.hypo)).override_failure_message(
-			"the raw prediction is not negative, so the clamp is not being exercised").is_less(0)
+			"the hypo holds the ladder's arithmetic rather than what execution lands on") \
+			.is_equal(1)
 
 	var bar := _unit_mirror.bar_for(victim)
 	assert_int(_grid_predicts(bar, false)).override_failure_message(
