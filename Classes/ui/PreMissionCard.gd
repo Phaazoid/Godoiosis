@@ -49,9 +49,14 @@ signal gear_unhovered(card: PreMissionCard)
 # A job was chosen from this card's picker (#742). The SCREEN performs it, for the same reason it owns
 # every gear move: the card judges nothing and writes nothing.
 signal job_picked(target: Unit, job_id: String)
-# The mod chip on a weapon row was pressed (#732). The SCREEN opens the card, for the same reason it
-# performs every gear move: this card judges nothing and owns no state.
-signal fit_requested(weapon: WeaponInstance, owner_unit: Unit)
+# The detail chip on a gear row was pressed (#732, widened at #1019). The SCREEN opens the card, for
+# the same reason it performs every gear move: this card judges nothing and owns no state.
+#
+# ONE SIGNAL FOR EVERY KIND, and it is Law #4 rather than tidiness: a weapon's chip and a rune's chip
+# ask the identical question -- open this item's detail card -- and the screen is already the only
+# thing that opens one. A second signal beside it would be a second answer whose only difference is
+# which card the handler reaches for, which is a fact the ITEM already carries.
+signal detail_requested(item: Item, owner: Unit)
 
 # The inspect panel owns the ability tooltip wording and its builders are static for exactly this
 # reason -- one sentence, two surfaces. Preloaded because that file is a scene script with no
@@ -677,9 +682,9 @@ func _item_row(item: Item) -> Control:
 	name_label.add_theme_color_override("font_color", QueueStyle.ink(QueueStyle.Role.BODY_TEXT))
 	line.add_child(name_label)
 
-	var chip := ModFittingCard.chip_for(item)
+	var chip := ItemDetail.chip_for(item)
 	if chip != null:
-		chip.pressed.connect(func() -> void: fit_requested.emit(item as WeaponInstance, unit))
+		chip.pressed.connect(func() -> void: detail_requested.emit(item, unit))
 		line.add_child(chip)
 
 	if reason != "":

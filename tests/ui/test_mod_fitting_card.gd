@@ -471,7 +471,7 @@ func test_the_screen_hands_the_card_the_missions_mod_pool() -> void:
 
 	var one: Array[WeaponModData] = [everything[everything.keys()[0]]]
 	mc.loadout().available_mods = one
-	_screen()._on_fit_requested(weapon, null)   # the screen's own door, not ModFittingCard.open
+	_screen()._on_detail_requested(weapon, null)   # the screen's own door, not ModFittingCard.open
 	await await_idle_frame()
 
 	var card: ModFittingCard = null
