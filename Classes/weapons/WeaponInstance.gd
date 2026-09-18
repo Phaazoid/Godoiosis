@@ -80,6 +80,22 @@ func is_attack_fireable(_attack: WeaponAttackData) -> bool:
 func consume_readiness_for(_attack: WeaponAttackData) -> void:
 	pass
 
+# What this family CALLS its readiness (#1017). The three flags are generic -- requires / consumes /
+# builds -- but the word for the thing never is: a mace banks a CHARGE, a spear holds its SPRING, a
+# carbine counts ROUNDS. A readout that has to name it composes one sentence per flag and reads right
+# for every family, instead of each family spelling three sentences of its own.
+#
+# NOT status_text(), and the difference is the whole reason this exists: that one is the weapon's
+# LIVE state ("Charge 0/3 -- Blowback unavailable"). The mod card opens PRE-MISSION, where every
+# battle-scoped counter is freshly reset, so a live line there would call a working weapon broken on
+# the screen where you pick one. The rule is what a loadout screen can honestly say; the state
+# belongs to the battle panels that watch it move.
+#
+# The Chemical Spitter deliberately has none -- its tank is a supercharge, not a gate (its own header
+# says so) -- so it never reaches this and keeps the base answer.
+func readiness_noun() -> String:
+	return "readiness"
+
 # Supercharge seam (#97) — default: this family has no charge to spend, so its main is always its
 # main. The Chemical Spitter's tank overrides it. Sits beside readiness and is deliberately NOT it:
 # readiness gates what may fire, this only changes WHAT the same order fires.

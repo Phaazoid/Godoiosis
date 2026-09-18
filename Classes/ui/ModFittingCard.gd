@@ -49,7 +49,13 @@ var _plate: ShapePlate
 var _headline: Label
 var _damage: Label
 var _range: Label
+# Everything else this attack does that another attack on the same weapon might not (#1017). A
+# VBox rather than a fixed set of Labels because the count is the attack's business, not the card's.
+var _channels: VBoxContainer
 var _proficiency: Label
+# The legend's "can aim" chip, kept because its colour is the ATTACK's (#1017): OverlayManager forks
+# it on `heals`, and a legend built once at _build time was answering for a null attack forever.
+var _reach_chip: Panel
 var _spaces_box: VBoxContainer
 var _offer_box: VBoxContainer
 var _offer_zone: GearDropZone
@@ -130,6 +136,11 @@ func _build_readout(parent: Container) -> void:
 
 	_damage = _readout_label(column)
 	_range = _readout_label(column)
+	# Between range and proficiency deliberately: everything above is about the ATTACK, and
+	# proficiency is about the weapon in this carrier's hands. The channels belong with their kin.
+	_channels = VBoxContainer.new()
+	_channels.add_theme_constant_override("separation", 3)
+	column.add_child(_channels)
 	_proficiency = _readout_label(column)
 	column.add_child(_legend())
 
@@ -149,7 +160,13 @@ func _legend() -> Control:
 	var row := HBoxContainer.new()
 	row.add_theme_constant_override("separation", 10)
 	row.add_child(_swatch("hits", OverlayManager.aim_fill_color()))
-	row.add_child(_swatch("can aim", OverlayManager.attack_reach_color(_attack)))
+	# The reach chip is KEPT and repainted per attack rather than rebuilt: this row is built once,
+	# when _attack is still null, and attack_reach_color forks on `heals`. Picking a heal used to
+	# paint the plate's cells green and leave this swatch red -- a legend lying about the picture
+	# beside it (#1017). Repainting beats rebuilding because nothing here has to be freed.
+	var pair := _swatch("can aim", OverlayManager.attack_reach_color(_attack))
+	_reach_chip = pair.get_child(0) as Panel
+	row.add_child(pair)
 	return row
 
 
@@ -169,6 +186,17 @@ func _swatch(text: String, tint: Color) -> Control:
 	label.add_theme_color_override("font_color", QueueStyle.ink(QueueStyle.Role.FRAME_TEXT))
 	pair.add_child(label)
 	return pair
+
+
+# Repaint rather than rebuild -- see _legend. A StyleBoxFlat is shared by reference once overridden,
+# so the new box is set rather than the old one's colour poked, which would also tint anything that
+# happened to be handed the same resource.
+func _repaint_reach_chip() -> void:
+	if _reach_chip == null:
+		return
+	var box := StyleBoxFlat.new()
+	box.bg_color = OverlayManager.attack_reach_color(_attack)
+	_reach_chip.add_theme_stylebox_override("panel", box)
 
 
 func _build_lists(parent: Container) -> void:
@@ -285,7 +313,104 @@ func _refresh_readout() -> void:
 	_damage.text = _weapon.attack_detail(_wielder, _attack) if _wielder != null and _attack != null else ""
 	_damage.visible = _damage.text != ""
 	_range.text = _range_text(_attack)
+	_refresh_channels()
+	_repaint_reach_chip()
 	_proficiency.text = _proficiency_text(family)
+
+
+# EVERY CHANNEL TWO ATTACKS ON ONE WEAPON CAN DIFFER IN (#1017). The card drew four things -- plate,
+# damage, range, proficiency -- and the Kinetic Mace's Smash and Blowback are identical in all four:
+# same power, same range, no shape, same kind, same targets, same authored blend. What they differ in
+# is KNOCKBACK and READINESS, neither of which had a line, so the picker read as dead. The fix is not
+# "add knockback", it is to enumerate the channels: the next pair of near-identical attacks must not
+# reopen this ticket.
+#
+# EVERY LINE IS THE COMPOSED ANSWER, never the authored field. effective_knockback / hits_allies /
+# can_overwatch fold in the fitted mods, and reading the @export instead would be this same bug one
+# layer down -- a Recoil Lug that moved no line is a picker that looks dead for a second reason.
+#
+# A LINE ONLY APPEARS WHEN IT HAS SOMETHING TO SAY. A plain sword's readout is exactly as short as it
+# was before this ticket; only an attack with something unusual about it grows one.
+func _refresh_channels() -> void:
+	_clear(_channels)
+	for line in _channel_lines():
+		var label := Label.new()
+		label.text = line
+		label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		label.add_theme_font_size_override("font_size", 11)
+		label.add_theme_color_override("font_color", QueueStyle.ink(QueueStyle.Role.FRAME_TEXT))
+		_channels.add_child(label)
+
+
+func _channel_lines() -> Array[String]:
+	var lines: Array[String] = []
+	if _attack == null:
+		return lines
+	var weapon_attack := _attack as WeaponAttackData
+
+	var shove := _weapon.effective_knockback(_wielder, _attack)
+	if shove != 0:
+		lines.append("Shoves %d tile%s" % [shove, "" if shove == 1 else "s"])
+
+	if weapon_attack != null:
+		lines.append_array(_readiness_lines(weapon_attack))
+
+	var elements := _weapon.get_elements(_wielder, weapon_attack) if weapon_attack != null \
+		else ([] as Array[Elemental.Element])
+	if not elements.is_empty():
+		var named: Array[String] = []
+		for element: Elemental.Element in elements:
+			named.append(Elemental.display_name(element))
+		lines.append("Carries %s" % " and ".join(named))
+
+	if _weapon.effective_can_overwatch(_wielder, _attack):
+		lines.append("Watch only — declared as a standing watch, never fired directly")
+	if _weapon.effective_hits_allies(_wielder, _attack):
+		lines.append("Splashes allies")
+	if _attack.hits_self:
+		lines.append("Catches the attacker too")
+	if _attack.pierces_guard:
+		lines.append("Pierces guard")
+	# can_counter defaults TRUE, so the line is the exception -- saying "can counter" on nearly every
+	# attack in the game would be noise wearing the shape of information.
+	if not _attack.can_counter:
+		lines.append("Never counters")
+
+	lines.append_array(_height_lines())
+
+	if weapon_attack != null and weapon_attack.empowered_form != null:
+		lines.append("At a source, becomes %s" % weapon_attack.empowered_form.display_name)
+	return lines
+
+
+# The RULE, never the live counter -- WeaponInstance.readiness_noun's header has the argument, and it
+# is the reason this card says "needs a charge" where the battle panel says "Charge 0/3".
+func _readiness_lines(attack: WeaponAttackData) -> Array[String]:
+	var lines: Array[String] = []
+	var noun := _weapon.readiness_noun()
+	if attack.requires_readiness:
+		lines.append("Needs a %s" % noun)
+	if attack.consumes_readiness:
+		lines.append("Spends a %s" % noun)
+	if attack.builds_readiness:
+		lines.append("Builds a %s on a hit" % noun)
+	return lines
+
+
+# How this attack answers the height question. MELEE ignores the tolerances outright (AttackData's
+# own note), so printing them there would describe a rule that is not running.
+func _height_lines() -> Array[String]:
+	var lines: Array[String] = []
+	if _attack.vertical_rule == AttackData.VerticalRule.MELEE:
+		lines.append("Melee height — same step, or a ramp-legal edge")
+		return lines
+	if _attack.up_tolerance >= 0:
+		lines.append("Reaches %d up" % _attack.up_tolerance)
+	if _attack.down_tolerance >= 0:
+		lines.append("Reaches %d down" % _attack.down_tolerance)
+	if _attack.arc_clearance > 0:
+		lines.append("Arcs %d over its own sightline" % _attack.arc_clearance)
+	return lines
 
 
 static func _range_text(attack: AttackData) -> String:
