@@ -48,6 +48,23 @@ func granted_elements() -> Array[Elemental.Element]:
 	return only
 
 
+# What this vial DOES, in one line -- ArmorData.mechanical_text's role for a carried thing (#137),
+# and the reason a vial is no longer the one item that hovers blank.
+#
+# Alkahest is read off the flag rather than off granted_elements(), which answers the narrower
+# empowerment question and is sigil-shaped: listing those five would UNDER-state a vial that
+# matches() says charges anything, corrosion included.
+func mechanical_text() -> String:
+	if is_alkahest:
+		return "Attunes: any element"
+	var names: Array[String] = []
+	for e in granted_elements():
+		names.append(Elemental.display_name(e))
+	if names.is_empty():
+		return ""
+	return "Attunes: %s" % ", ".join(names)
+
+
 # Does this vial ANSWER for `element`? The injection question (#97), and deliberately not the same
 # one granted_elements() answers, which is "what casts does this empower" -- empowerment is
 # aura-scaled and only sigils carry aura, so that list is sigil-shaped for alkahest.

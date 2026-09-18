@@ -233,51 +233,10 @@ func _do_cancel():
 	_close_action_popup()
 	_refresh()
 
-# Hover readout for one slot. Leads with the numbers a decision actually turns on -- live weapon
-# state, or armor's itemized DEF -- and puts flavour text last.
-func _tooltip_for(item) -> String:
-	var lines: Array[String] = []
-	if item is WeaponInstance:
-		lines.append(item.shown_name())
-		if unit != null:
-			# The headline view is the weapon's MAIN attack, asked for explicitly — base_damage
-			# no longer defaults to it, because null there means "no attack" now (#102).
-			var main_atk: WeaponAttackData = item.default_attack(unit) as WeaponAttackData
-			lines.append("Damage %d" % item.base_damage(unit, main_atk))
-		var status: String = item.status_text()
-		if status != "":
-			lines.append(status)
-	elif item is ArmorData:
-		lines.append(item.display_name)
-		var mech: String = item.mechanical_text(unit)
-		if mech != "":
-			lines.append(mech)
-	elif item is RuneData:
-		# What a decision actually turns on (#167): temper + capacity headline, then one line per
-		# inscribed carving -- readout only, composed from #166's attack_detail/attack_block_reason
-		# pair (the same detail-then-reason order the Transmutation submenu's rows already use).
-		lines.append(item.display_name)
-		var temper_text := "Untempered" if item.temper == Elemental.Element.NONE \
-			else "%s temper" % Elemental.display_name(item.temper)
-		lines.append("%s  ·  %s  ·  %d/%d capacity" % [
-			RuneData.Size.keys()[item.size].capitalize(), temper_text,
-			item.used_capacity(), item.capacity()])
-		for t in item.inscriptions:
-			lines.append("")
-			lines.append(t.display_name)
-			var detail: String = item.attack_detail(unit, t)
-			if detail != "":
-				lines.append(detail)
-			var reason: String = item.attack_block_reason(unit, t)
-			if reason != "":
-				lines.append(reason)
-	else:
-		lines.append(item.display_name)
-	# describe(), never the field: a weapon inherits its family's wording when it carries none (#745).
-	if item.describe() != "":
-		lines.append("")
-		lines.append(item.describe())
-	return "\n".join(lines)
+# Hover readout for one slot. ItemText owns the composition -- since #137 the pre-mission surfaces
+# say the same words, and a panel wording an item its own way is what that door exists to stop.
+func _tooltip_for(item: Item) -> String:
+	return ItemText.hover(item, unit)
 
 func _refresh():
 	for i in range(Unit.MAX_INVENTORY_SIZE):

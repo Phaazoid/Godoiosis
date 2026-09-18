@@ -689,8 +689,12 @@ func _item_row(item: Item) -> Control:
 		warn.add_theme_color_override("font_color", QueueStyle.ink(QueueStyle.Role.ROW_REFUSED_BORDER))
 		line.add_child(warn)
 
-	row.tooltip_text = UiText.wrap(item.shown_name() if reason == "" else
-		"%s — %s" % [item.shown_name(), reason])
+	# What the piece SAYS is ItemText's (#137); the refusal stays here, because only a card has a
+	# wielder for a gate to be failed by.
+	var tip := ItemText.hover(item, unit)
+	if reason != "":
+		tip += "\n%s" % reason
+	row.tooltip_text = UiText.wrap(tip)
 	row.mouse_filter = Control.MOUSE_FILTER_STOP
 	return row
 

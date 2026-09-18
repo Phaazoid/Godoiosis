@@ -10,5 +10,4 @@ flat_def = 2
 covered_kinds = Array[int]([3])
 granted_abilities = Array[ExtResource("1_ccbcd")]([ExtResource("2_bjmtt")])
 display_name = "Asbestos Shroud"
-description = "Loomed mineral fibre, stiff as sailcloth and just as dead to a blade. Flame finds nothing in it to take hold of: embers land and go out, and the ground underfoot can burn all it likes."
 metadata/_custom_type_script = "uid://dj0617uewvdny"
