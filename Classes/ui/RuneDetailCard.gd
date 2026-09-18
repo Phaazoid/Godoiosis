@@ -27,6 +27,10 @@ extends ModalCard
 signal closed
 
 const CARD_W := 600
+# ...and how much of it ONE carving name may claim (#1024). Half, which is arithmetic rather than
+# taste: the bars are guaranteed the other half whatever the dev writes into a display_name, and
+# CARD_W is a MINIMUM on the card's content, so an unbounded name would widen the whole modal.
+const NAME_MAX_W := CARD_W / 2.0
 # The ring stands beside the plate at the PLATE's own height, which is why this is not a number of
 # this file's own: two squares of one size read as a pair, and a hollow tick needs the radius to come
 # out as an outline rather than as a smudge.
@@ -417,10 +421,16 @@ func _carving_row(carving: TransmutationData) -> Control:
 	# NO EXPAND on the name: the bars sit right beside it, and the row's slack trails after them both.
 	# Giving the label the row was what flung them to the far edge (dev: "the bars in the titles are
 	# right aligned"), which read as two unrelated columns rather than a name and what it costs.
+	#
+	# SO IT HAS TO ASK FOR ITS OWN TEXT, and #1024 is what the row looks like when it does not: a
+	# clip_text Label declares a minimum width of ONE and an HBox gives a child exactly its minimum,
+	# so every carving name shipped as a sliver of its first glyph. The clip and the CAP are the other
+	# half -- CARD_W is a floor on the card, not a ceiling, so an unbounded name widens the modal.
 	var name_label := Label.new()
 	name_label.text = _carving_name(carving)
 	name_label.clip_text = true
 	name_label.add_theme_font_size_override("font_size", 11)
+	UiText.fit_width(name_label, 0.0, NAME_MAX_W)
 	name_label.add_theme_color_override("font_color", QueueStyle.ink(QueueStyle.Role.NAME_TEXT))
 	line.add_child(name_label)
 

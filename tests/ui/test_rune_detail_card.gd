@@ -12,6 +12,7 @@
 extends GdUnitTestSuite
 
 const H := preload("res://tests/support/squad_fixtures.gd")
+const FIT := preload("res://tests/support/label_fit.gd")
 
 const SCRATCH := "user://__rune_card_1019.tres"
 const GRASS_SOURCE := 0
@@ -479,6 +480,12 @@ func test_the_screens_own_door_opens_the_rune_card_and_not_the_weapons() -> void
 # Asserted against the row's own geometry rather than against a size flag: the flag is how it was
 # broken, the POSITION is what was wrong with it, and a case pinned to the flag would go green the
 # next time the same mistake arrives wearing a spacer instead.
+#
+# THE NAME'S OWN WIDTH IS THE HALF THIS CASE WAS MISSING, and leaving it out is how #1024 shipped.
+# The two requirements are in TENSION -- the bars sit next to the name, and the name is there -- so a
+# case measuring the GAP from the name's right edge is satisfied, MORE cheaply, by deleting the name:
+# at one pixel wide the gap is the separator's own 8px and every assertion below passes. Pinning one
+# of a tensioned pair is pinning neither.
 func test_the_cost_bars_sit_beside_the_name_rather_than_at_the_far_edge() -> void:
 	var carvings: Array[TransmutationData] = [_circle([FIRE], "Ember")]
 	var card := await _open(_rune(carvings), _alchemist({FIRE: 2}))
@@ -489,6 +496,11 @@ func test_the_cost_bars_sit_beside_the_name_rather_than_at_the_far_edge() -> voi
 	var name_label := line.get_child(0) as Label
 	var bars := _bars_of(row)
 
+	assert_bool(FIT.draws_in_full(name_label)).override_failure_message(
+		("\"%s\" is drawn in %.0fpx and needs %.0f -- a clip_text Label asks for ONE pixel and a "
+		+ "container gives a child exactly what it asks for")
+		% [name_label.text, name_label.size.x, FIT.ink_width(name_label)]).is_true()
+
 	var slack := line.size.x - (bars.position.x + bars.size.x)
 	var gap := bars.position.x - (name_label.position.x + name_label.size.x)
 	assert_float(gap).override_failure_message(
@@ -496,6 +508,99 @@ func test_the_cost_bars_sit_beside_the_name_rather_than_at_the_far_edge() -> voi
 	assert_float(slack).override_failure_message(
 		"the row's empty space is before the bars rather than after them, so they read as a second "
 		+ "column instead of what the name costs").is_greater(gap)
+
+
+# --- the rule at the fourth surface (#1024) ------------------------------------------------------
+
+# THE SWEEP test_pre_mission_screen has run over its own three surfaces since #944, asked of this
+# card. That it was never asked here is the whole reason #1024 shipped.
+#
+# TWO ASSERTIONS, because the rule has two halves and only one of them is fixture-free. The
+# STRUCTURAL half is the bug itself -- a clipped label in a row-laying container that asks for
+# nothing gets the one pixel the flag declares, whatever is written in it -- and it cannot be
+# satisfied by picking short fixture names. The CONTENT half is what makes an answer of "1" not
+# count as having asked, and it is true here only because these names are short: a name past the cap
+# is clipped ON PURPOSE, which is the case below.
+func test_every_clipped_label_on_the_card_draws_what_is_written_in_it() -> void:
+	# Both recipes anchor on FIRE because the first carving IS the rune's temper. The second leans on
+	# a wildcard, so the sweep runs over a caution row and a clear one rather than two alike.
+	var carvings: Array[TransmutationData] = [
+		_circle([FIRE], "Ember"), _circle([FIRE, FIRE, AIR], "Pressure Spray")]
+	var card := await _open(_rune(carvings), _alchemist({FIRE: 2}))
+	await await_idle_frame()
+
+	var unasked: Array[String] = []
+	for label: Label in FIT.unasked_labels(card):
+		unasked.append("\"%s\"" % label.text)
+	assert_array(unasked).override_failure_message(
+		("a clipped label sits in a row-laying container with neither SIZE_EXPAND nor a width of "
+		+ "its own, so it is drawn one pixel wide: %s") % ", ".join(unasked)).is_empty()
+
+	var cut: Array[String] = []
+	var measured := 0
+	for label: Label in FIT.clipped_labels(card):
+		if label.text == "" or label.get_theme_font("font") == null:
+			continue
+		measured += 1
+		if not FIT.draws_in_full(label):
+			cut.append("\"%s\" in %.0fpx of %.0f" % [label.text, label.size.x,
+				FIT.ink_width(label)])
+	assert_array(cut).override_failure_message(
+		("a label on the card is drawn in a box narrower than its own text: %s. A clip_text Label "
+		+ "declares a minimum width of ONE, so it has to ASK for its text.") % ", ".join(cut)) \
+		.is_empty()
+	# Anti-vacuity, and it is not decoration: draws_in_full answers TRUE for a label it cannot
+	# measure, so a run that found nothing to measure would pass saying nothing.
+	assert_int(measured).override_failure_message(
+		"no clipped label on the card carried measurable text, so nothing here was asked").is_greater(0)
+
+
+# ...AND THE CARD STILL DOES NOT GROW TO FIT ITS CONTENT. The cap is the other half of the fix: the
+# clip is what keeps the card's minimum a constant, and a name that asks for its own text without a
+# ceiling hands that constant back to whatever the dev types into display_name.
+#
+# THREE ASSERTIONS AND THE MIDDLE ONE IS THE GUARD, which a mutant is what found: with the ceiling
+# taken off, a 47-character name asks for ~260px and the card still fits inside CARD_W, so the case
+# passed against the very mutation it exists for. The name is long enough that an UNCAPPED ask would
+# be wider than the whole card, and that is stated against CARD_W rather than as a character count,
+# so it cannot go stale when the font moves.
+#
+# The FIRST assertion is what makes it fire on the broken build too -- a long name and a short one
+# both asked for one pixel there. Nothing here pins the ceiling's VALUE, which is a feel call.
+func test_a_long_carving_name_widens_its_row_without_widening_the_card() -> void:
+	var long_name := "Cataclysmic Inundation of the Drowned Cantonment ".repeat(5)
+	var carvings: Array[TransmutationData] = [_circle([FIRE], "Ember"), _circle([FIRE], long_name)]
+	var card := await _open(_rune(carvings), _alchemist({FIRE: 2}))
+	await await_idle_frame()
+
+	var rows := _rows_of(card)
+	var short_label := _name_label_of(rows[0])
+	var long_label := _name_label_of(rows[1])
+	var short_ask := short_label.custom_minimum_size.x
+	var long_ask := long_label.custom_minimum_size.x
+	assert_float(long_ask).override_failure_message(
+		("a %d-character name asks for %.0fpx and a 5-character one asks for %.0f -- the label is "
+		+ "not asking for its own text at all") % [long_name.length(), long_ask, short_ask]) \
+		.is_greater(short_ask)
+
+	assert_float(FIT.ink_width(long_label)).override_failure_message(
+		("the fixture name's own text is %.0fpx, which fits inside the card unaided -- nothing here "
+		+ "is asking the ceiling anything") % FIT.ink_width(long_label)).is_greater(
+		float(RuneDetailCard.CARD_W))
+
+	# Asked of the LIST, never of the card: a ModalCard is a plain Control and aggregates nothing, so
+	# get_combined_minimum_size() on it is (0, 0) however wide the row inside has grown. The list is
+	# a container and its scroller has horizontal scrolling off, so its minimum is what the card is
+	# asked for -- and CARD_W is the bound because the list is INSIDE the card's own margins.
+	assert_float(card._list.get_combined_minimum_size().x).override_failure_message(
+		"one long carving name grew the list past the whole card's CARD_W").is_less_equal(
+		float(RuneDetailCard.CARD_W))
+
+
+static func _name_label_of(row: Control) -> Label:
+	var body := row.get_child(0) as VBoxContainer
+	var line := body.get_child(0) as HBoxContainer
+	return line.get_child(0) as Label
 
 
 # THE CHIP PAINTS ITS OWN GROUND (#1022, dev: the buttons "don't really visually read as buttons").

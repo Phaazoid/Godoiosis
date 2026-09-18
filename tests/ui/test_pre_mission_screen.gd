@@ -11,6 +11,7 @@ extends GdUnitTestSuite
 
 const MAIN_SCENE := "res://Scenes/Main.tscn"
 const H := preload("res://tests/support/squad_fixtures.gd")
+const FIT := preload("res://tests/support/label_fit.gd")
 const SCRATCH := "user://__pre_mission_740.tres"
 
 const GRASS_SOURCE := 0
@@ -679,17 +680,10 @@ func test_every_card_wears_its_units_aura_ring_around_the_portrait() -> void:
 const GENERIC_FAMILY := preload("res://Resources/Weapons/MainVarieties/Carbine.tres")
 
 
-# Wide enough to draw what is written in it -- measured off the font the label ACTUALLY draws with,
-# so nothing here pins a pixel count and no theme or font change can make the assertion lie. This is
-# the property the bug report names ("cut off instead of continuing to the right") stated in the one
-# unit a feel pass cannot move.
+# Wide enough to draw what is written in it. The measurement is tests/support/label_fit.gd since
+# #1024, where the same rule bit a fourth surface one card over and could not reach this helper.
 static func _draws_in_full(label: Label) -> bool:
-	var font: Font = label.get_theme_font("font")
-	if font == null:
-		return true   # nothing to measure against; the width assertions below still speak
-	var needed := font.get_string_size(label.text, HORIZONTAL_ALIGNMENT_LEFT, -1,
-		label.get_theme_font_size("font_size")).x
-	return label.size.x + 0.5 >= needed
+	return FIT.draws_in_full(label)
 
 
 func _label_reading(root: Node, text: String) -> Label:

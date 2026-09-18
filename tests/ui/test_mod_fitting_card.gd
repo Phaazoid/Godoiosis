@@ -9,6 +9,8 @@
 # card to ask it would only make them slower and flakier.
 extends GdUnitTestSuite
 
+const FIT := preload("res://tests/support/label_fit.gd")
+
 const SCRATCH := "user://__mod_card_732.tres"
 const GRASS_SOURCE := 0
 const GRASS_ATLAS := Vector2i(5, 0)
@@ -654,4 +656,36 @@ func test_the_legend_chip_follows_the_picked_attack() -> void:
 		"the legend chip kept the attack colour for a heal -- it is built once and never repainted"
 		).is_false()
 	assert_object(healing).is_equal(OverlayManager.attack_reach_color(mend))
+	card.free()
+
+
+# --- the same rule at the sibling card (#1024) ---------------------------------------------------
+
+# THE STRUCTURAL HALF of the rule the rune card next door shipped broken: a clip_text Label in a
+# row-laying container that neither carries SIZE_EXPAND nor asks for a width of its own is drawn ONE
+# PIXEL wide, whatever is written in it. ItemDetail opens both cards off the same chip and they share
+# the row idiom, so guarding only the card that broke leaves the family half covered.
+#
+# DELIBERATELY NOT the content half. This card's mod descriptions run past their column and are
+# CLIPPED ON PURPOSE, with the whole sentence on the row's hover -- the header law that nothing may
+# demand width from its content. A draws_in_full sweep here would assert the opposite of the design.
+#
+# AND DELIBERATELY NO ANTI-VACUITY GUARD: the population is legitimately EMPTY today (the only
+# clipped label this card puts in an HBox is the headline, which expands). What this pins is the next
+# one, which is the whole reason the rune card's version of it was owed before #1022 rather than after.
+func test_no_clipped_label_on_the_card_is_laid_out_without_asking_for_width() -> void:
+	if not await _enter_phase():
+		return
+	var weapon := _weapon()
+	if weapon == null:
+		return
+	var card := await _open(weapon)
+	await await_idle_frame()
+
+	var unasked: Array[String] = []
+	for label: Label in FIT.unasked_labels(card):
+		unasked.append("\"%s\"" % label.text)
+	assert_array(unasked).override_failure_message(
+		("a clipped label sits in a row-laying container with neither SIZE_EXPAND nor a width of "
+		+ "its own, so it is drawn one pixel wide: %s") % ", ".join(unasked)).is_empty()
 	card.free()
