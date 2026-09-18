@@ -173,6 +173,19 @@ static var ENEMY_MOVE_MODULATE := Color(0.25, 0.45, 1, 0.45)
 # authored colours, so tuning a tone carries to its own dim twin -- see dimmed_tone for why it moves
 # alpha alone. 1.0 turns the whole distinction off without removing a layer.
 static var ENEMY_RANGE_DIM := 0.4
+# ...and a stroke round the outside of that one enemy's whole footprint, so which field the pointer
+# is on stays legible where the dim and the bright tones are the same hue.
+static var FOCUS_OUTLINE_COLOR := Color(1, 1, 1, 0.85)
+
+# Which two CORNERS an outward-facing cell edge runs between, as offsets inside the cell. The corner
+# HEIGHTS come from Terrain.VERTEX_CORNERS read backwards (a vertex names the corner of the cell at
+# its own negated offset), so this table carries geometry and no second copy of that mapping.
+const EDGE_CORNERS: Dictionary[Vector2i, Array] = {
+	Vector2i.RIGHT: [Vector2i(1, 0), Vector2i(1, 1)],
+	Vector2i.LEFT: [Vector2i(0, 0), Vector2i(0, 1)],
+	Vector2i.DOWN: [Vector2i(0, 1), Vector2i(1, 1)],
+	Vector2i.UP: [Vector2i(0, 0), Vector2i(1, 0)],
+}
 
 
 enum OverlayType {
@@ -353,6 +366,10 @@ var enemy_move_overlay: TileMapLayer = null   # ...and where they could stand to
 # The same two for every enemy the pointer is NOT on (slice 4), under both of the above.
 var danger_dim_overlay: TileMapLayer = null
 var enemy_move_dim_overlay: TileMapLayer = null
+# The stroke round that one enemy's footprint (slice 4), in ThreatLines2D's trace space. Versioned
+# on intent_version's shape, because OverlayMirror polls rather than listening.
+var focus_outline: Array[PackedVector3Array] = []
+var focus_outline_version := 0
 # What the enemy intends, keyed by VICTIM instance id: {"damage": int, "fells": bool}. Rebuilt
 # with the intent lines and read by UnitMirror, which draws it as the predicted span on that
 # unit's own health bar -- the channel #313 already built for your own plan.
@@ -633,6 +650,55 @@ func restyle_dim_ranges() -> void:
 # board until the two tones stop reading as two hues -- drawn both ways before choosing.
 static func dimmed_tone(tone: Color) -> Color:
 	return Color(tone.r, tone.g, tone.b, tone.a * ENEMY_RANGE_DIM)
+
+
+# The BOUNDARY of the hovered enemy's whole footprint -- move and reach together, since what the
+# stroke answers is "this is the field you are pointing at" and not which tone a cell carries.
+#
+# One two-point segment per outward-facing cell edge, never chained into loops: a solid stroke is
+# identical either way and a chainer is a sorting problem for nothing. Points are in ThreatLines2D's
+# TRACE SPACE (cell coordinates, rule height), which is what lets the flat view flatten them and the
+# mirror lift them through BoardSpace.trace_point exactly as it lifts an intent line -- so each
+# endpoint takes the INSIDE cell's own corner height and the stroke follows a ramp instead of
+# floating over it.
+func show_focus_outline(cells: Array[Vector2i], board: BoardContext) -> void:
+	var inside := {}
+	for cell in cells:
+		inside[cell] = true
+	var segments: Array[PackedVector3Array] = []
+	for cell: Vector2i in inside:
+		for dir: Vector2i in EDGE_CORNERS:
+			if inside.has(cell + dir):
+				continue
+			var points := PackedVector3Array()
+			for offset: Vector2i in EDGE_CORNERS[dir]:
+				points.append(Vector3(float(cell.x + offset.x),
+						_corner_height(cell, offset, board), float(cell.y + offset.y)))
+			segments.append(points)
+	focus_outline = segments
+	focus_outline_version += 1
+	if _threat_lines_2d != null:
+		_threat_lines_2d.outlines = segments
+		_threat_lines_2d.queue_redraw()
+
+
+func clear_focus_outline() -> void:
+	var none: Array[Vector2i] = []
+	show_focus_outline(none, null)
+
+
+func restyle_focus_outline() -> void:
+	if focus_outline.is_empty():
+		return
+	focus_outline_version += 1   # geometry unchanged; the mirror re-pushes for the new colour
+	_threat_lines_2d.queue_redraw()
+
+
+func _corner_height(cell: Vector2i, offset: Vector2i, board: BoardContext) -> float:
+	if board == null:
+		return 0.0
+	return float(Terrain.corner_height(board.corners_at(cell),
+			Terrain.VERTEX_CORNERS[-offset]))
 
 # What color the reach layer should paint with for this attack -- red for damage, green for a
 # heal. A null attack (bare fists) reads as the default/damage color. A WATCH aim paints its own

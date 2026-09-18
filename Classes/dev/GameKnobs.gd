@@ -72,6 +72,13 @@ const KNOBS: Array[Dictionary] = [
 	# re-applies on write through its own setter, so a standing beam changes under the slider.
 	{"group": "Board markup", "node": "BoardOverlays", "prop": "beam_width", "label": "Sight beam width", "min": 0.01, "max": 0.4, "step": 0.005,
 		"tip": "How thick the aim's sight beam is, in cells -- it is a ribbon turned to face the camera, so this is a real world width that gets smaller with distance like everything else in the diorama. Thin reads as a laser sight, thick as a tracer round."},
+	# The focus stroke around the hovered enemy (#710 slice 4) has its OWN width and brightness rather
+	# than the beam's: the trio above is tuned for a laser, and at that width and bloom a stroke round
+	# forty cells reads as a rope of light laid over the terrain. The edge falloff stays shared.
+	{"group": "Board markup", "node": "BoardOverlays", "prop": "outline_width", "label": "Enemy focus outline width", "min": 0.005, "max": 0.2, "step": 0.005,
+		"tip": "How thick the stroke round the hovered enemy's whole field is, in cells. It says WHOSE field you are looking at while the rest of the crowd is dimmed, so it wants to be legible and quiet rather than bright."},
+	{"group": "Board markup", "node": "BoardOverlays", "prop": "outline_intensity", "label": "Enemy focus outline glow", "min": 0.2, "max": 4.0, "step": 0.05,
+		"tip": "Brightness multiplier on that stroke. 1.0 draws it flat, which is what board markup wants; above about 1.2 it blooms and starts reading as an effect rather than as a boundary."},
 	{"group": "Board markup", "node": "BoardOverlays", "prop": "beam_softness", "label": "Sight beam edge", "min": 0.25, "max": 6.0, "step": 0.05,
 		"tip": "How the beam fades from its bright middle to nothing at the edge. Around 1 is a flat, even ribbon; higher pulls the brightness into a narrow core with a soft halo around it, which is what stops it reading as a solid strip of geometry."},
 	{"group": "Board markup", "node": "BoardOverlays", "prop": "beam_intensity", "label": "Sight beam glow", "min": 0.5, "max": 6.0, "step": 0.05,
@@ -448,6 +455,8 @@ const CLASS_KNOBS: Array[Dictionary] = [
 	# The exact tier (#710 slice 2): what the AI WILL do, as opposed to what it COULD. It has to
 	# read as a promise rather than a possibility, so tune it AGAINST the threat line above -- and
 	# the felling colour against both, since it is the one that has to stop the player.
+	{"group": "Board markup colours", "label": "Enemy focus outline (2D+3D)", "static": "FOCUS_OUTLINE_COLOR",
+		"tip": "The stroke round the whole field of the enemy under the pointer, while everybody else is dimmed. It crosses both tones and the terrain, so it is the one markup colour that has to read against all of them."},
 	{"group": "Board markup colours", "label": "Intent line (2D+3D)", "static": "INTENT_LINE_COLOR", "script": THREAT_LINES_SCRIPT,
 		"tip": "The line from an enemy to the unit it will actually attack next turn. Distinct from the threat line, which only says an enemy COULD reach that cell."},
 	{"group": "Board markup colours", "label": "Intent, lethal (2D+3D)", "static": "INTENT_FELL_COLOR", "script": THREAT_LINES_SCRIPT,
@@ -1363,6 +1372,7 @@ static func read_static(name: String) -> Variant:
 		"DANGER_MODULATE": return OverlayManager.DANGER_MODULATE
 		"ENEMY_MOVE_MODULATE": return OverlayManager.ENEMY_MOVE_MODULATE
 		"ENEMY_RANGE_DIM": return OverlayManager.ENEMY_RANGE_DIM
+		"FOCUS_OUTLINE_COLOR": return OverlayManager.FOCUS_OUTLINE_COLOR
 		"ZONE_HIGHLIGHT_MODULATE": return OverlayManager.ZONE_HIGHLIGHT_MODULATE
 		"INTENT_LINE_COLOR": return ThreatLines2D.INTENT_LINE_COLOR
 		"INTENT_FELL_COLOR": return ThreatLines2D.INTENT_FELL_COLOR
@@ -1563,6 +1573,7 @@ static func write_static(host: Node3D, name: String, value: Variant) -> void:
 		"DANGER_MODULATE": OverlayManager.DANGER_MODULATE = value
 		"ENEMY_MOVE_MODULATE": OverlayManager.ENEMY_MOVE_MODULATE = value
 		"ENEMY_RANGE_DIM": OverlayManager.ENEMY_RANGE_DIM = value
+		"FOCUS_OUTLINE_COLOR": OverlayManager.FOCUS_OUTLINE_COLOR = value
 		"ZONE_HIGHLIGHT_MODULATE": OverlayManager.ZONE_HIGHLIGHT_MODULATE = value
 		"INTENT_LINE_COLOR": ThreatLines2D.INTENT_LINE_COLOR = value
 		"INTENT_FELL_COLOR": ThreatLines2D.INTENT_FELL_COLOR = value
@@ -2136,6 +2147,7 @@ static func write_static(host: Node3D, name: String, value: Variant) -> void:
 			manager.restyle_enemy_move()
 			manager.restyle_dim_ranges()
 		"ENEMY_RANGE_DIM": manager.restyle_dim_ranges()
+		"FOCUS_OUTLINE_COLOR": manager.restyle_focus_outline()
 		"ZONE_HIGHLIGHT_MODULATE": manager.restyle_leash()
 		"INTENT_LINE_COLOR", "INTENT_FELL_COLOR":
 			manager.restyle_threat_intents()

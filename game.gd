@@ -1803,6 +1803,7 @@ func _redraw_enemy_ranges(hovered: Unit = null) -> void:
 			overlay_manager.clear_enemy_move()
 			overlay_manager.clear_danger()
 			overlay_manager.clear_dim_ranges()
+			overlay_manager.clear_focus_outline()
 			overlay_manager.clear_leash()
 			return
 	var field := threat_field()
@@ -1827,6 +1828,13 @@ func _redraw_enemy_ranges(hovered: Unit = null) -> void:
 	overlay_manager.show_danger(bright_reach)
 	overlay_manager.show_enemy_move(bright_move)
 	overlay_manager.show_dim_ranges(dim_reach, dim_move)
+	# The stroke goes round the WHOLE footprint, move and reach together: it answers "this is the
+	# field you are pointing at", which is a different question from which tone a cell carries. Only
+	# ever drawn for a hovered enemy -- with V on and the pointer elsewhere there is nobody to name.
+	var outline: Array[Vector2i] = []
+	if not focus.is_empty():
+		outline = bright_move + _without(bright_reach, bright_move)
+	overlay_manager.show_focus_outline(outline, _board())
 	overlay_manager.reveal_leash(_leash_cells_of(subjects))
 
 

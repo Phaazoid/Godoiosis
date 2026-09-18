@@ -698,6 +698,27 @@ func test_the_lowest_markup_plane_still_clears_the_tile_it_lies_on() -> void:
 			% [lowest, floor_lift, overlays.lift_step]).is_greater(overlays.lift_step)
 
 
+func test_the_focus_outline_hangs_at_its_lift_sort_and_not_at_its_render_sort() -> void:
+	# For a LINE layer `sort` has only ever meant render PRIORITY -- set_lines applies no lift at all
+	# -- and the focus stroke needs a high one, since a board-wide outline can cross every other
+	# layer's cells. Taking its HEIGHT from that number would hang it a tenth of a cell over the
+	# terrain it outlines, so the spec names the two separately.
+	var overlays := _overlays()
+	var spec: Dictionary = BoardOverlays.LAYERS[BoardOverlays.Layer.ENEMY_FOCUS_EDGE]
+	var lift: float = overlays.marker_lift(BoardOverlays.Layer.ENEMY_FOCUS_EDGE)
+	var by_render_sort: float = overlays.fill_lift + spec["sort"] * overlays.lift_step
+	assert_float(lift).override_failure_message(
+			"the stroke hangs at its render sort (%f) -- it would float over the ground it outlines" \
+			% by_render_sort).is_less(by_render_sort)
+	# ...and it still clears every fill it can lie on top of, or the ground would win the depth test.
+	for layer: BoardOverlays.Layer in BoardOverlays.LAYERS:
+		if BoardOverlays.LAYERS[layer]["kind"] != BoardOverlays.Kind.FILL:
+			continue
+		assert_float(lift).override_failure_message(
+				"the stroke sits under a fill it crosses (%s)" % BoardOverlays.Layer.keys()[layer]
+				).is_greater(overlays.marker_lift(layer))
+
+
 func test_markup_that_hangs_in_the_air_sorts_above_markup_that_lies_on_the_floor() -> void:
 	# A RELATIONSHIP, not a value (#325 follow-up, found in play: the crown drew under the
 	# squad rings). Every FILL/SPRITE layer is markup lying on the board face; a BILLBOARD

@@ -177,6 +177,46 @@ func test_hovering_one_of_several_lit_enemies_dims_the_rest() -> void:
 	game.toggle_enemy_ranges()
 
 
+# The stroke says WHOSE field this is where the two hues alone cannot -- the dev's addition to the
+# mockup. One segment per outward-facing cell edge of the whole footprint, move and reach together.
+func test_the_hovered_enemys_field_is_outlined() -> void:
+	var focus := _spawn(ENEMY, Vector2i(3, 2))
+	_spawn(ENEMY, Vector2i(1, 4))
+	game.toggle_enemy_ranges()
+	assert_array(_om().focus_outline).override_failure_message(
+			"a stroke was drawn with nobody under the pointer").is_empty()
+
+	game.hover_presenter.update_hover_visuals(focus.movement.cell)
+	var field: ThreatField = game.threat_field()
+	var footprint := {}
+	for cell: Vector2i in field.move_of(focus):
+		footprint[cell] = true
+	for cell: Vector2i in field.reach_of(focus):
+		footprint[cell] = true
+
+	# The boundary is derived, never counted by hand: one edge per cell side whose neighbour is
+	# outside the set, which is what makes the count a property of the footprint's SHAPE.
+	var expected := 0
+	for cell: Vector2i in footprint:
+		for dir: Vector2i in [Vector2i.RIGHT, Vector2i.LEFT, Vector2i.UP, Vector2i.DOWN]:
+			if not footprint.has(cell + dir):
+				expected += 1
+	assert_int(_om().focus_outline.size()).override_failure_message(
+			"the stroke is not the footprint's outward-facing boundary").is_equal(expected)
+	assert_int(expected).override_failure_message(
+			"fixture is vacuous: an empty footprint has no boundary").is_greater(0)
+
+	# Every segment is two points in TRACE space -- cell coordinates, rule height -- which is what
+	# lets the flat view flatten it and the mirror lift it exactly as it lifts an intent line.
+	for segment: PackedVector3Array in _om().focus_outline:
+		assert_int(segment.size()).is_equal(2)
+
+	game.hover_presenter.update_hover_visuals(Vector2i(0, 0))
+	assert_array(_om().focus_outline).override_failure_message(
+			"the stroke outlived the pointer leaving the enemy").is_empty()
+	game.toggle_enemy_ranges()
+
+
 # The dim tone is DERIVED from the bright one, so a knob on either carries to both.
 func test_the_crowds_tone_follows_the_tone_it_dims() -> void:
 	_spawn(ENEMY, Vector2i(3, 2))

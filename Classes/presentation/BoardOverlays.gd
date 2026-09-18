@@ -33,7 +33,7 @@ enum Layer {
 	ZONE_PATROL, ZONE_HIGHLIGHT, GROUND_ICONS, ATTACK_BLOCKED, SIGHT_TRACE,
 	GUARD_ICONS, GUARD_LINK, WATCH_ICONS,
 	ZONE_DEPLOYMENT, ZONE_DEFEND,
-	DANGER, ENEMY_MOVE, DANGER_DIM, ENEMY_MOVE_DIM, INTENT_LINES, INTENT_LINES_FATAL,
+	DANGER, ENEMY_MOVE, DANGER_DIM, ENEMY_MOVE_DIM, ENEMY_FOCUS_EDGE, INTENT_LINES, INTENT_LINES_FATAL,
 }
 enum Kind { FILL, BRACKET, SPRITE, BILLBOARD, LINE }
 
@@ -124,6 +124,20 @@ const LAYERS: Dictionary[Layer, Dictionary] = {
 	# until neither reads as a hue at all.
 	Layer.DANGER_DIM: {"color": Color(1, 0.15, 0.1, 0.12), "sort": -4, "kind": Kind.FILL},
 	Layer.ENEMY_MOVE_DIM: {"color": Color(0.25, 0.45, 1, 0.18), "sort": -3, "kind": Kind.FILL},
+	# ...and a stroke round the OUTSIDE of the hovered enemy's whole footprint, so which field you
+	# are reading is legible even where the dim and the bright tones are the same hue (slice 4, the
+	# dev's addition to the mockup). One two-point segment per outward-facing cell edge; no chaining
+	# into loops, because a solid stroke draws identically either way.
+	#
+	# Sort 13 is the first free integer and it must be free: the rule in this table is that a layer
+	# may not share a sort with any layer whose CELLS it can overlap, and a board-wide outline can
+	# cross all of them. It lies ON the ground, which is what "lift_sort" says -- see _lift_of -- and
+	# that number is the first ABOVE every FILL, so the stroke clears anything it can be drawn over
+	# without anyone having to reason about which two layers can be up at once. Its
+	# own beam parameters too ("beam"), because the shared trio is tuned for a LASER: at the sight
+	# bead's width and its >1.2 bloom this would be a glowing rope around forty cells.
+	Layer.ENEMY_FOCUS_EDGE: {"color": Color(1, 1, 1, 0.85), "sort": 13, "lift_sort": 5,
+		"beam": "outline", "kind": Kind.LINE},
 	# Above the sight/threat beams at 7 -- an intent is the authoritative readout and must not
 	# z-fight the reach line it supersedes -- and clear of the guard channels at 8/9, which
 	# test_both_guard_channels_sorts_are_unshared caught this taking on its first draft.
@@ -225,8 +239,8 @@ enum SelectorDepth { LEVEL, HALF }
 @export var selector_depth: SelectorDepth = SelectorDepth.LEVEL: set = _set_selector_depth
 # The stack's ZERO, not its bottom: the lowest sort is negative, so the real floor is
 # fill_lift + min_sort * lift_step and THAT is what must clear the tile's opaque top face.
-# Raised from 0.02 when the negative stack moved down two (#710 slice 3) -- at 0.02 the new
-# floor was exactly 0.0. Pinned by a law, since the next layer added below reds it.
+# Raised twice as the negative stack moved down for #710: 0.02 -> 0.03 at slice 3 (the floor landed
+# at exactly 0.0), 0.03 -> 0.04 at slice 4 (it landed at 0.002). The law demands a whole lift_step.
 @export var fill_lift := 0.04          # quad height above the top face — the z-fight gap
 @export var lift_step := 0.004         # per-sort spacing so stacked layers never coincide
 @export var billboard_lift := 0.85     # icon height above the cell's top face
@@ -256,10 +270,25 @@ enum SelectorDepth { LEVEL, HALF }
 @export var beam_width := 0.075: set = _set_beam_width              # world units; a cell is 1.0
 @export var beam_softness := 1.1: set = _set_beam_softness         # edge falloff exponent
 @export var beam_intensity := 3.9: set = _set_beam_intensity       # ALBEDO multiplier; >1.2 blooms
+# The focus outline's own two (slice 4), same re-apply contract as the trio above. Thin and UNLIT
+# by comparison, because this is board markup rather than a laser: at the bead's width and bloom a
+# stroke around forty cells reads as a rope of light laid over the terrain.
+@export var outline_width := 0.03: set = _set_outline_width
+@export var outline_intensity := 1.0: set = _set_outline_intensity
 
 
 func _set_beam_width(value: float) -> void:
 	beam_width = value
+	_apply_beam_params()
+
+
+func _set_outline_width(value: float) -> void:
+	outline_width = value
+	_apply_beam_params()
+
+
+func _set_outline_intensity(value: float) -> void:
+	outline_intensity = value
 	_apply_beam_params()
 
 
@@ -476,15 +505,20 @@ func _apply_beam_params() -> void:
 		if LAYERS[layer]["kind"] != Kind.LINE:
 			continue
 		for node: Node3D in _markers[layer]:
-			_style_beam((node as MeshInstance3D).material_override as ShaderMaterial)
+			_style_beam((node as MeshInstance3D).material_override as ShaderMaterial, LAYERS[layer])
 
 
-func _style_beam(material: ShaderMaterial) -> void:
+# A LINE layer may name its own set (slice 4). The shared trio is tuned for a LASER -- the sight
+# bead's width and an intensity whose own comment reads ">1.2 blooms" -- and the focus outline is
+# markup, so inheriting them made it a glowing rope around forty cells. Softness stays shared: the
+# falloff SHAPE is not a thing the two want to differ about.
+func _style_beam(material: ShaderMaterial, spec: Dictionary = {}) -> void:
 	if material == null:
 		return
-	material.set_shader_parameter("beam_width", beam_width)
+	var outline: bool = spec.get("beam", "") == "outline"
+	material.set_shader_parameter("beam_width", outline_width if outline else beam_width)
 	material.set_shader_parameter("beam_softness", beam_softness)
-	material.set_shader_parameter("beam_intensity", beam_intensity)
+	material.set_shader_parameter("beam_intensity", outline_intensity if outline else beam_intensity)
 
 
 func line_of(layer: Layer) -> PackedVector3Array:
@@ -663,8 +697,14 @@ func _build_bent_mesh(shape: Vector4i) -> ArrayMesh:
 # marker out of its own cell by lift*sin(slope) and stepping the plane at every flat-to-ramp edge.
 # The price is that a 45-degree slope's PERPENDICULAR clearance is cos(45) of the flat ground's
 # -- fill_lift is the knob if a ramp ever speckles.
+# A layer may name the sort its GEOMETRY hangs at separately from the one its material sorts by
+# (slice 4). For a FILL the two are the same thing and always will be. For a LINE they never were:
+# set_lines applies no lift at all and `sort` has only ever meant render priority there, so the
+# focus outline -- which lies ON the ground rather than hanging at EYE_HEIGHT like an intent beam --
+# would take its height from a priority chosen to clear the beams, a tenth of a cell off the terrain
+# it outlines. Relational either way: it moves with fill_lift instead of becoming a second number.
 func _lift_of(spec: Dictionary) -> float:
-	return fill_lift + spec["sort"] * lift_step
+	return fill_lift + spec.get("lift_sort", spec["sort"]) * lift_step
 
 
 # How far off its surface this layer's markup sits. Public because a marker that has to MEET other
@@ -802,7 +842,7 @@ func _make_line(spec: Dictionary) -> MeshInstance3D:
 	instance.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	instance.layers = WORLD_RENDER_LAYER
 	add_child(instance)
-	_style_beam(material)
+	_style_beam(material, spec)
 	return instance
 
 

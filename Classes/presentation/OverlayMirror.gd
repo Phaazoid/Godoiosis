@@ -55,6 +55,7 @@ var _staging_moved := false
 
 var _last_trace_version := -1   # OverlayManager.sight_trace_version -- the store's own signal (#308)
 var _last_intent_version := -1   # ...and the exact tier's own (#710 slice 2)
+var _last_outline_version := -1  # ...and the focus stroke's (slice 4)
 
 # How far the drop pointer stands off the cliff face it hangs on (#431), in cells. A depth-buffer
 # epsilon, not a feel value: big enough that a coplanar wall cannot stipple through it, small
@@ -123,6 +124,7 @@ func _process(_delta: float) -> void:
 	_attack(om)
 	_sight_trace(om)
 	_threat_intents(om)
+	_focus_outline(om)
 	_arrows(om)
 
 	var kb_trails: Array[Dictionary] = []
@@ -682,3 +684,20 @@ func _anchor_px(px: Vector2) -> Dictionary:
 # transform -- and two spellings of pixels-to-cell is the drift Law #4 names.
 func _cell_of_px(px: Vector2) -> Vector2i:
 	return Vector2i(floori(px.x / float(GridUtils.TILE_SIZE)), floori(px.y / float(GridUtils.TILE_SIZE)))
+
+
+# The stroke round the hovered enemy's footprint (slice 4). _threat_intents' shape exactly, one
+# difference: an intent hangs at Reach.EYE_HEIGHT and carries its own altitude, while this LIES on
+# the ground and takes the LAYER's lift -- which for a LINE is the one thing set_lines does not add.
+func _focus_outline(om: OverlayManager) -> void:
+	if om.focus_outline_version == _last_outline_version:
+		return
+	_last_outline_version = om.focus_outline_version
+	var lift := Vector3.UP * overlays.marker_lift(BoardOverlays.Layer.ENEMY_FOCUS_EDGE)
+	var segments: Array[PackedVector3Array] = []
+	for segment in om.focus_outline:
+		var points := PackedVector3Array()
+		for p: Vector3 in segment:
+			points.append(BoardSpace.trace_point(p) + lift)
+		segments.append(points)
+	overlays.set_lines(BoardOverlays.Layer.ENEMY_FOCUS_EDGE, segments, OverlayManager.FOCUS_OUTLINE_COLOR)
