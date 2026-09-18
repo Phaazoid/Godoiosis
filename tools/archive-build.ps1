@@ -22,6 +22,16 @@
   reproduces it. Switching to --export-release changes what a tester runs (is_debug_build, and how
   eagerly the engine flushes the log a bug report tails) and is a call to make deliberately.
 
+  ONE FILE, BECAUSE THE PACK IS EMBEDDED (#1029, dev 2026-09-18). `binary_format/embed_pck=true`
+  appends the game to the executable, so a player can be handed the exe alone. Before that it was
+  a 98 MB runtime whose game sat in a 13.6 MB .pck beside it, and a bare exe uploaded to itch could
+  not find it - and a ZIP has the same failure, because Windows runs an exe straight out of its own
+  archive preview without extracting the pack next to it.
+
+  So whether a .pck exists is the PRESET's answer, never this script's. The check is narrowed rather
+  than dropped: with embed_pck off, a missing pack is exactly the fault above, and refusing on it is
+  the whole point of looking.
+
   NOTHING HERE IS TYPED TWICE. The engine comes from $env:GODOT_BIN exactly as tests\run_tests.ps1
   reads it, the version from project.godot (Build.version()'s one store), and the export path and
   the build's own name from export_presets.cfg - so an editor export and a scripted one land in the
@@ -48,6 +58,17 @@ function Read-Setting {
     if (-not (Test-Path $Path)) { throw "Cannot find $Path - run this from inside the repo." }
     $match = Select-String -Path $Path -Pattern $Pattern | Select-Object -First 1
     if (-not $match) { throw "$Path has no $What." }
+    return $match.Matches[0].Groups[1].Value
+}
+
+# Its tolerant twin, for a setting whose ABSENCE has a defined meaning. Only embed_pck uses it, and
+# the default has to be the one whose guess fails LOUDLY: reading a separate pack that is not there
+# is a refusal, where skipping a pack that should be there ships the build that cannot find its own
+# game. Godot's own default is false, so the safe answer is also the correct one.
+function Read-Setting-Or {
+    param([string]$Path, [string]$Pattern, [string]$Fallback)
+    $match = Select-String -Path $Path -Pattern $Pattern | Select-Object -First 1
+    if (-not $match) { return $Fallback }
     return $match.Matches[0].Groups[1].Value
 }
 
@@ -84,8 +105,10 @@ if ($dirt) {
 
 # ---- 3. what this build is ---------------------------------------------------------------------
 
+$presets = Join-Path $root 'export_presets.cfg'
 $version = Read-Setting (Join-Path $root 'project.godot') '^config/version="(.+)"$' 'application/config/version'
-$exportPath = Read-Setting (Join-Path $root 'export_presets.cfg') '^export_path="(.+)"$' 'an export_path'
+$exportPath = Read-Setting $presets '^export_path="(.+)"$' 'an export_path'
+$embedded = (Read-Setting-Or $presets '^binary_format/embed_pck=(.+)$' 'false') -eq 'true'
 
 # export_path is relative to the project root, and the preset writes the other two files beside the
 # exe under its own base name - so the exe's name is where "what is this build called" is answered.
@@ -130,6 +153,16 @@ if ($tagExists) {
 # exactly this from inside a running engine, and run_tests.ps1 drives one while the editor is open.
 
 New-Item -ItemType Directory -Force -Path $outDir | Out-Null
+
+# A STALE PACK IS A HAZARD, NOT LITTER. Godot resolves an external <name>.pck sitting beside the
+# exe, so one left by an earlier un-embedded export would be loaded IN PREFERENCE to the game inside
+# the binary - a self-contained build silently running older content - and it would ride into the
+# zip besides. The only file this script ever removes, and one it wrote itself.
+if ($embedded -and (Test-Path $pck)) {
+    Remove-Item $pck -Force
+    Write-Host "Removed a stale $([IO.Path]::GetFileName($pck)) - the pack is embedded now." -ForegroundColor Yellow
+}
+
 Write-Host "Exporting $name $tag ($branch @ $sha)..." -ForegroundColor Cyan
 
 $sw = [System.Diagnostics.Stopwatch]::StartNew()
@@ -140,8 +173,10 @@ $sw.Stop()
 if ($exportCode -ne 0) { throw "Godot exited $exportCode - no zip written, no tag created." }
 
 # Godot has been known to exit 0 having written nothing useful, so the artifact is checked rather
-# than inferred from the exit code.
-foreach ($required in @($exe, $pck)) {
+# than inferred from the exit code. The pack is required only when the preset keeps it separate.
+$required_files = @($exe)
+if (-not $embedded) { $required_files += $pck }
+foreach ($required in $required_files) {
     if (-not (Test-Path $required)) {
         throw "Godot exited 0 but $required is not there - no zip written, no tag created."
     }
@@ -160,7 +195,8 @@ if ($after) {
 # writes a folder's entries with backslash separators, which some extractors unpack as one file with
 # a strange name; handing it a file list sidesteps that, and Extract All makes the folder anyway.
 
-$files = @($exe, $pck)
+$files = @($exe)
+if (-not $embedded) { $files += $pck }
 if (Test-Path $console) { $files += $console }
 Compress-Archive -Path $files -DestinationPath $zip -Force
 
