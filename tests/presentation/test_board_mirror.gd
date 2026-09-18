@@ -3195,6 +3195,60 @@ func test_a_shaft_is_floored_so_the_sky_does_not_show_through_it() -> void:
 				).is_greater(0.9)
 
 
+# ...and a shaft rides its own cell through a tear-out FLIGHT (#893). A lip is keyed on the HOLE's
+# cell, not on the ground around it, so this needs the hole itself staged -- which a cell attack
+# aimed into a chasm does. The mid-flight window is the same one #893 is about: the version bumps on
+# landings only, so nothing re-placed what was already standing.
+#
+# It is here rather than beside the prop and flame cases because the LIP IS THE ONE PER-CELL NODE IN
+# BoardMirror NOT PLACED BY surface_point -- it is built in world vertices spanning shared edges and
+# takes the bare offset -- so it is the one arm of the re-seat that a prop case structurally cannot
+# cover. ADDED AFTER a mutant deleting exactly that arm survived all 122 cases in both suites.
+func test_a_hole_shaft_rides_its_own_cell_mid_flight() -> void:
+	_scene.load_mission(PROLOG)
+	await _settle()
+	_game.game_state = _game.GameState.DEV_MODE
+	var cell := _an_inland_cell()
+	assert_bool(cell != GridUtils.NO_CELL).override_failure_message(
+			"no cell on this board has ground on all four sides; the case is vacuous").is_true()
+	_game.grid.erase(cell)
+	await _settle()
+	assert_int(_walls_at(cell)).override_failure_message(
+			"the hole grew no walls, so there is no shaft to fly").is_equal(4)
+
+	var lift := BoardSpace.lift_offset()
+	BoardSpace.stage([cell] as Array[Vector2i], lift)
+	await _settle()
+	assert_vector(_mirror().lip_at(cell).position).override_failure_message(
+			"the settled shaft is not at the diorama, so this case starts from the wrong place"
+			).is_equal_approx(lift, Vector3.ONE * 0.01)
+
+	# Airborne, by hand -- a frame would let _process move the flight under the assertion.
+	var plan := StagingFlight.schedule([cell] as Array[Vector2i])
+	BoardSpace.begin_flight(plan, -lift, Vector3.ZERO, true)
+	BoardSpace.advance_flight(StagingFlight.total(plan) * 0.5)
+	_scene._drive_transition(0.0)
+
+	var in_air := BoardSpace.flight_offset(cell)
+	assert_bool(BoardSpace.in_flight(cell)).override_failure_message(
+			"the tile is not in flight, so this case is asking about a settled board").is_true()
+	assert_float(in_air.length()).override_failure_message(
+			"the tile has already landed -- the rebuild would have re-seated the shaft anyway"
+			).is_greater(0.1)
+	assert_float((in_air - (-lift)).length()).override_failure_message(
+			"the tile has not left its socket, where the unstaged placement is already right"
+			).is_greater(0.1)
+
+	assert_vector(_mirror().lip_at(cell).position).override_failure_message(
+			"the shaft hung behind the cell it belongs to: it is at %s and its cell is at %s" \
+			% [_mirror().lip_at(cell).position, BoardSpace.staged_offset(cell)]
+			).is_equal_approx(BoardSpace.staged_offset(cell), Vector3.ONE * 0.01)
+
+	BoardSpace.end_flight_now()
+	BoardSpace.clear_staging()
+	await _settle()
+
+
 # --- The rim (#876 slice 2) ----------------------------------------------------------------------
 #
 # Headless renders nothing, so none of these can see whether a rim LOOKS like the mouth of a pit.
