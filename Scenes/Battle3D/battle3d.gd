@@ -482,9 +482,14 @@ func _sync_flight_maps() -> void:
 			_drop_flight_map(cell)
 	# The transform is the whole point: the column sits at the diorama's cell coordinates and this
 	# is what holds it short of them.
+	#
+	# ...and what STANDS on the column rides the same line (#893). Here rather than in a poll of its
+	# own because this is already the one place that answers "where is this column right now", and a
+	# second answer is how a flame ends up on a different schedule from its own ground.
 	for cell: Vector2i in _flight_drawn:
 		var map: GridMap = _flight_drawn[cell]
 		map.position = BoardSpace.stage_offset() + BoardSpace.flight_offset(cell)
+		_board_mirror.reseat_cell(cell, game.board_heights)
 
 
 # The flash that covers the swap. Ramp up, hold, ramp down -- anchored at the transition's

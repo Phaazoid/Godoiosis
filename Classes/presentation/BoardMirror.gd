@@ -555,6 +555,31 @@ func surface_point(cell: Vector2i, heights: BoardHeights) -> Vector3:
 	return BoardSpace.surface_point(cell, heights) + BoardSpace.staged_offset(cell)
 
 
+# Re-place everything STANDING on this cell against where the cell renders RIGHT NOW (#893), for a
+# caller driving a tear-out FLIGHT. Every other placement here is reconciled on a discrete event;
+# a tile in the air has no such event between its departure and its landing, so its flame hung at
+# the height of the last one while the ground climbed out from under it.
+#
+# A placement write, NEVER a rebuild. #521 measured the per-frame rebuild and rejected it, which is
+# why staging_version bumps on landings only -- this asks nothing of that version and drops nothing,
+# so that rule is untouched. What makes one line enough is #992: every standing node's parts are
+# LOCAL deltas under a root that carries the whole of surface_point, so the root IS the answer, and
+# a tuft needs no case of its own here. Safe beside the flame animation for the same reason --
+# advance_flames writes each flame CHILD's transform and never the marker root.
+func reseat_cell(cell: Vector2i, heights: BoardHeights) -> void:
+	var at := surface_point(cell, heights)
+	if _props.has(cell):
+		_props[cell].position = at
+	if _fire_markers.has(cell):
+		_fire_markers[cell].position = at
+	if _cover_markers.has(cell):
+		_cover_markers[cell].position = at
+	# The lip takes the bare offset, not the surface: it is the one per-cell node in this file with
+	# no cell centre to stand at, built in world vertices instead (see _reconcile_lip).
+	if _lips.has(cell):
+		_lips[cell].position = BoardSpace.staged_offset(cell)
+
+
 # The live terrain diff: write only what differs, erase what the 2D no longer paints.
 # board.clear() is deliberately NOT here — a wholesale repaint per motion event is the
 # thing this exists to avoid; rebuild() owns the clear for a genuine board swap.
