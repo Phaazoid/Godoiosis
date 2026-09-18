@@ -2,9 +2,14 @@ extends Control
 class_name AuraRing
 
 # A unit's elemental aura, as a ring of five fixed sectors with five ticks each -- one filled tick per
-# aura point (#930). Two surfaces draw it and BOTH wrap a portrait: the pre-mission card's 52px map
-# sprite, and the inspect panel's 96px portrait at twice the size. #292's parity asked before rather
-# than after, and one motif rather than two.
+# aura point (#930). THREE surfaces draw it: the pre-mission card's 52px map sprite, the inspect
+# panel's 96px portrait at twice the size, and the rune detail card (#1019), which overlays what a
+# carving ASKS FOR on top of what the carrier holds. #292's parity asked before rather than after,
+# and one motif rather than two.
+#
+# THE RUNE CARD'S RING MAY HAVE NO CARRIER AT ALL -- a rune in the stash is held by nobody, so the
+# centre is empty and every sector reads as pure demand. That is why rows() takes both halves and
+# refuses only when it is given neither.
 #
 # THE FIRST _draw() WIDGET IN Classes/ui/ (presentation/UnitHealthBar.gd is the only precedent
 # anywhere). A ring of 25 rotated ticks is not a container of Labels, and the hover highlight has to
@@ -18,6 +23,15 @@ class_name AuraRing
 # limb tax empties a pool while the growth right survives, so a tick has THREE states, not two. Lit is
 # an aura point; dim-but-coloured is an affinity with nothing in it yet; faint grey is an element this
 # unit can never grow. A readout keyed on `aura >= 1` erases exactly the case the model was split for.
+#
+# A DEMAND ADDS TWO MORE (#1019), and only when one is being shown. HOLLOW is a tick the carving asks
+# for and the carrier does not hold -- the deficit, drawn as an outline rather than at a lower alpha,
+# because alpha is the channel the two empty states already use and a third value on it is
+# indistinguishable at a 5px tick. HALOED is a tick held PAST the recipe: base_damage sums the
+# wielder's aura over every sigil and is uncapped, so a surplus point is not waste, it is damage, and
+# nothing on screen said so. A sector the recipe does not ask for is knocked back by DESATURATION,
+# for the same reason hollow is not an alpha -- so the recipe's own elements read first without any
+# empty tick changing what it means.
 #
 # THE HIDDEN SIXTH IS NEVER DRAWN, structurally rather than by a filter: rows() walks
 # Elemental.SIGIL_ELEMENTS, and alkahest is not in that vocabulary at all -- it is a bool on
@@ -72,6 +86,25 @@ const FAINT_ALPHA := 0.16               # an element this unit can never grow
 const HOVER_CORE_RATIO := 0.55
 const HOVER_BORDER := 0.8               # how far the border wraps past each END of the bar
 
+# What an ASKED-FOR tick the carrier cannot pay looks like: the bar's outline at the element's own
+# hue, with nothing inside it. The edge is a fraction of the bar's own width so the footprint is
+# unchanged -- the HOVER_CORE_RATIO discipline, for the reason #930 found the hard way: anything that
+# grows a bar SIDEWAYS fuses the five of them into one arc at the card's radius.
+const HOLLOW_EDGE_RATIO := 0.30
+const HOLLOW_ALPHA := 0.85
+
+# The glow behind a tick held PAST what the recipe asks. A RATIO OF THE MID RADIUS, never a pixel
+# count: the ticks sit `mid * 0.2164` apart at every ring size, so 0.053 a side is exactly where they
+# fuse and a px constant that reads right on the 116px card is a solid ribbon on the 52px one. This is
+# the smallest weight that still reads.
+const HALO_SPREAD_RATIO := 0.034
+const HALO_ALPHA := 0.35
+
+# How far an OFF-RECIPE sector is knocked back while a demand is on screen -- saturation, never alpha.
+# An alpha knock-back at 0.40 against DIM_ALPHA's 0.30 is indistinguishable at a 5px tick, so "holds
+# two Aether the recipe does not want" and "has never grown Aether" would render as the same picture.
+const OFF_RECIPE_SATURATION := 0.35
+
 # Which palette this ring's colours come out of -- see the header. SKINNED follows the player's menu
 # colours (the pre-mission card); AUTHORED is the dev's own element wheel (the inspect panel).
 enum Ground { AUTHORED, SKINNED }
@@ -85,11 +118,19 @@ class Row:
 	var element: Elemental.Element = Elemental.Element.NONE
 	var affine := false
 	var depth := 0
+	# How many sigils of this element the shown carving asks for; 0 when no carving is shown, and 0
+	# for an element an off-recipe sector. Kept as the raw weight rather than as a deficit, because
+	# the deficit is `wanted - depth` and the SURPLUS is `depth - wanted` -- one number answers both,
+	# and a stored deficit could not say which ticks the halo belongs on.
+	var wanted := 0
 
 
 var unit: Unit
 var ground: Ground = Ground.AUTHORED
 var portrait: Texture2D                 # drawn in the middle, card-side; the panel's is a node below us
+# The carving whose demand is drawn over the pool, or null. NOT a second model -- rows() folds it in,
+# so _draw goes on rendering exactly what rows() returns (see the header's own law).
+var carving: TransmutationData
 
 # Which element the cursor is in, or NONE. Public because it is the one piece of hover state a
 # headless case can assert -- _gui_input takes a synthetic motion event and this is the answer.
@@ -108,15 +149,20 @@ var _portrait_rect := Rect2()
 # Every sigil element, in wheel order, with what this unit can grow and what it holds. Read through
 # Unit -- never UnitInstance -- because PreMissionCard's law is that a second implementation reading
 # the instance directly is the duplicate seam spawning the roster as real Units exists to prevent.
-static func rows(target: Unit) -> Array[Row]:
+# A CARVING WITH NO CARRIER STILL HAS A MODEL, which is the one place the null contract widened
+# (#1019): a rune in the stash is held by nobody, so every row reads depth 0 and affine FALSE while
+# `wanted` carries the whole answer. `rows(null)` on its own is still empty, unchanged -- nothing to
+# say about nobody is the honest answer when there is no demand either.
+static func rows(target: Unit, demand: TransmutationData = null) -> Array[Row]:
 	var result: Array[Row] = []
-	if target == null:
+	if target == null and demand == null:
 		return result
 	for element: Elemental.Element in WHEEL:
 		var row := Row.new()
 		row.element = element
-		row.affine = target.has_affinity(element)
-		row.depth = target.get_element_aura(element)
+		row.affine = target != null and target.has_affinity(element)
+		row.depth = target.get_element_aura(element) if target != null else 0
+		row.wanted = demand.sigils.count(element) if demand != null else 0
 		result.append(row)
 	return result
 
@@ -128,14 +174,26 @@ static func rows(target: Unit) -> Array[Row]:
 # [0] reads as primary, and since #930 draws no primary marker this text is the only place rank
 # survives -- which matters because rank and depth genuinely disagree in shipped content (Celest's
 # primary Earth is her shallowest pool).
-static func readout(target: Unit) -> String:
-	if target == null:
+static func readout(target: Unit, demand: TransmutationData = null) -> String:
+	if target == null and demand == null:
 		return ""
 	var lines: Array[String] = [Glossary.short(Glossary.Term.AURA)]
+	lines.append_array(_pool_lines(target))
+	lines.append_array(_mark_lines(rows(target, demand), demand))
+	return UiText.wrap("\n".join(lines))
+
+
+# What this carrier holds, in affinity rank order. Empty for a ring with nobody in the middle, which
+# is the rune card's stash case -- a demand is still worth explaining there, and a pool is not.
+static func _pool_lines(target: Unit) -> Array[String]:
+	var lines: Array[String] = []
+	if target == null:
+		lines.append("Nobody is carrying this, so the ring shows only what is asked for.")
+		return lines
 	var order: Array[Elemental.Element] = target.affinity_order()
 	if order.is_empty():
 		lines.append("No elemental affinity — a rune is inert rock in this unit's hands.")
-		return UiText.wrap("\n".join(lines))
+		return lines
 
 	var parts: Array[String] = []
 	var any_empty := false
@@ -148,7 +206,34 @@ static func readout(target: Unit) -> String:
 	if any_empty:
 		lines.append("An element at 0 is still theirs to grow: a lost limb empties the deepest pool "
 			+ "without taking the affinity with it.")
-	return UiText.wrap("\n".join(lines))
+	return lines
+
+
+# The ring explains its OWN MARKS and judges nothing (the header's law) -- whether a carving can
+# actually be channelled is the ladder's answer and belongs to whoever is hosting this ring.
+#
+# EACH LINE IS KEYED ON A MARK THAT IS ACTUALLY DRAWN, so a recipe the carrier covers exactly says
+# nothing at all rather than describing two states the picture does not contain.
+static func _mark_lines(model: Array[Row], demand: TransmutationData) -> Array[String]:
+	var lines: Array[String] = []
+	if demand == null:
+		return lines
+	var short := false
+	var spare := false
+	for row: Row in model:
+		short = short or row.wanted > row.depth
+		spare = spare or (row.wanted > 0 and row.depth > row.wanted)
+	if short:
+		lines.append("A hollow mark is aura this circle asks for that is not there.")
+	# The damage clause is the carving's own to make: a utility carving suppresses scaling outright
+	# (AttackData.deals_no_damage), so surplus aura buys it nothing and saying otherwise would be a
+	# readout promising a number the resolver never adds.
+	if spare and demand.deals_no_damage:
+		lines.append("A halo is aura past the recipe. This circle deals no damage, so it buys depth "
+			+ "rather than force.")
+	elif spare:
+		lines.append("A halo is aura past the recipe — every point of it is damage.")
+	return lines
 
 
 # --- building --------------------------------------------------------------------------------------
@@ -188,6 +273,25 @@ static func over_portrait(target: Unit) -> AuraRing:
 	return ring
 
 
+# The rune card's (#1019): the carrier's pool with a carving's demand laid over it, sized to stand
+# beside the plate rather than inside a column, so a hollow tick has room to read as an outline.
+#
+# AUTHORED, and that is #814's question asked rather than a copy of the panel's answer: this ring
+# sits directly on ModalCard's frame, which is panel_box() and therefore dark under BOTH palettes
+# (parchment's PANEL_BG is the dark frame its paper lies on). The cost bars further down that same
+# card sit inside a section box -- paper, under parchment -- and take SKINNED. One card, two grounds.
+#
+# A NULL TARGET IS LEGAL and is the whole stash case: no sprite, an empty centre, demand only.
+static func for_demand(target: Unit, sprite: Texture2D, box_px: float) -> AuraRing:
+	var ring := AuraRing.new()
+	ring.unit = target
+	ring.portrait = sprite
+	ring.ground = Ground.AUTHORED
+	ring.custom_minimum_size = Vector2(box_px, box_px)
+	ring._ready_common()
+	return ring
+
+
 func _ready_common() -> void:
 	# STOP, or _gui_input never fires and the whole hover is dead. On the card there is no child node
 	# to steal it either -- the portrait is DRAWN rather than parented, which is also what lets the
@@ -222,10 +326,18 @@ func _layout() -> void:
 	queue_redraw()
 
 
-# Everything that can change under a standing ring: the pool itself moves when a limb is lost.
+# Everything that can change under a standing ring: the pool itself moves when a limb is lost, and
+# the demand moves whenever the host's picker lands on another carving.
 func refresh() -> void:
-	tooltip_text = readout(unit)
+	tooltip_text = readout(unit, carving)
 	queue_redraw()
+
+
+# Which carving's demand this ring shows, or null for none. One door rather than a public field the
+# host writes and then has to remember to refresh behind.
+func set_carving(demand: TransmutationData) -> void:
+	carving = demand
+	refresh()
 
 
 func set_unit(target: Unit) -> void:
@@ -291,15 +403,23 @@ func _draw() -> void:
 		draw_texture_rect(portrait, _portrait_rect, false)
 	var mid := (_inner + _outer) * 0.5
 	var width := maxf(2.0, mid * TICK_W_RATIO)
-	var model := rows(unit)
+	var model := rows(unit, carving)
+	# A HALO IS SIZED OFF THE MID RADIUS, so it keeps its proportion on all three surfaces -- see
+	# HALO_SPREAD_RATIO. Solved once here rather than per sector, the radii being the ring's.
+	var spread := mid * HALO_SPREAD_RATIO
 	for i in model.size():
-		_draw_sector(model[i], i, width)
+		_draw_sector(model[i], i, width, spread, carving != null)
 	if hovered != Elemental.Element.NONE:
 		_draw_hover_readout(model)
 
 
-func _draw_sector(row: Row, index: int, width: float) -> void:
+func _draw_sector(row: Row, index: int, width: float, spread: float, demanded: bool) -> void:
 	var lit := _element_ink(row.element)
+	# OFF-RECIPE, while a recipe is on screen: knocked back so the asked-for elements read first. It
+	# is applied to the sector's HUE, so it reaches the lit ticks and the dim affine ones alike and
+	# leaves the never-growable grey (which has no saturation to lose) exactly as it was.
+	if demanded and row.wanted == 0:
+		lit = knocked_back(lit)
 	var usable := SECTOR - SECTOR_PAD * 2.0
 	var start := ARC_START + index * SECTOR + SECTOR_PAD
 	var highlighted := hovered == row.element
@@ -309,10 +429,23 @@ func _draw_sector(row: Row, index: int, width: float) -> void:
 		var from := _centre + step * _inner
 		var to := _centre + step * _outer
 		var ink := lit
+		var hollow := false
 		if k >= row.depth:
-			ink.a = DIM_ALPHA if row.affine else FAINT_ALPHA
-			if not row.affine:
-				ink = _neutral_ink(ink.a)
+			# ASKED FOR AND NOT HELD: hollow rather than dim, because DIM_ALPHA and FAINT_ALPHA
+			# already spend the alpha channel and a third value on it reads as neither at 5px.
+			if demanded and k < row.wanted:
+				ink.a = HOLLOW_ALPHA
+				hollow = true
+			else:
+				ink.a = DIM_ALPHA if row.affine else FAINT_ALPHA
+				if not row.affine:
+					ink = _neutral_ink(ink.a)
+		elif row.wanted > 0 and k >= row.wanted:
+			# HELD PAST THE RECIPE. Drawn BEHIND the bar rather than instead of it: the tick is an
+			# ordinary aura point and the glow is the surplus, which is exactly what it buys.
+			var glow := lit
+			glow.a = HALO_ALPHA
+			draw_line(from, to, glow, width + spread * 2.0, true)
 		# THE BORDER STAYS INSIDE THE BAR'S OWN FOOTPRINT: drawn at the full width and a shade longer,
 		# with the COLOUR shrinking to fit inside it. Every bar therefore keeps exactly the gap it
 		# started with -- which is the whole point, because an outline that grew SIDEWAYS fused the
@@ -324,7 +457,27 @@ func _draw_sector(row: Row, index: int, width: float) -> void:
 			var cap := step * HOVER_BORDER
 			draw_line(from - cap, to + cap, _outline_ink(), width, true)
 			bar = width * HOVER_CORE_RATIO
-		draw_line(from, to, ink, bar, true)
+		if hollow:
+			_draw_hollow(from, to, step, bar, ink)
+		else:
+			draw_line(from, to, ink, bar, true)
+
+
+# An empty bar, drawn as its own outline. INSET by half the stroke at all four sides so the mark's
+# footprint is the filled bar's exactly -- the HOVER_BORDER discipline, and for the same reason: a
+# mark that grew sideways would fuse the five of a sector into one arc at the card's radius.
+#
+# A POLYLINE rather than draw_rect, which is axis-aligned while every tick here is rotated onto its
+# own sector's angle.
+func _draw_hollow(from: Vector2, to: Vector2, step: Vector2, bar: float, ink: Color) -> void:
+	var edge := maxf(1.0, bar * HOLLOW_EDGE_RATIO)
+	var side := Vector2(-step.y, step.x) * maxf(0.5, (bar - edge) * 0.5)
+	var cap := step * edge * 0.5
+	var a := from + cap + side
+	var b := to - cap + side
+	var c := to - cap - side
+	var d := from + cap - side
+	draw_polyline(PackedVector2Array([a, b, c, d, a]), ink, edge, true)
 
 
 # "Aether 2" across the middle while the cursor is in that arc (dev, #930). Both surfaces have art
@@ -341,7 +494,10 @@ func _draw_hover_readout(model: Array[Row]) -> void:
 		return
 	var font := get_theme_default_font()
 	var font_size := 11
-	var text := "%s %d" % [Elemental.display_name(row.element), row.depth]
+	# HELD OVER ASKED-FOR while a recipe is up -- the chip idiom the rune card already uses on its own
+	# rows, so "Fire 0/2" and "Fire 3/2" read as short and over without a second vocabulary.
+	var text: String = "%s %d/%d" % [Elemental.display_name(row.element), row.depth, row.wanted] \
+		if row.wanted > 0 else "%s %d" % [Elemental.display_name(row.element), row.depth]
 	var scrim := _ground_ink()
 	scrim.a = 0.86
 	draw_circle(_centre, _inner, scrim)
@@ -375,3 +531,15 @@ func _neutral_ink(alpha: float) -> Color:
 		else QueueStyle.adapted_ink(ElementPalette.NEUTRAL)
 	ink.a = alpha
 	return ink
+
+
+# An element the shown recipe does not ask for. SATURATION, never alpha -- an alpha knock-back lands
+# between DIM_ALPHA and full and reads as a third empty state rather than as a quieter colour, which
+# is the mistake this constant exists to have already made once.
+#
+# STATIC AND PUBLIC for the reason element_at is: which CHANNEL this moves is the thing worth pinning,
+# and a case asking the painter would be pinning the painter.
+static func knocked_back(ink: Color) -> Color:
+	var quiet := ink
+	quiet.s *= OFF_RECIPE_SATURATION
+	return quiet

@@ -213,3 +213,77 @@ func test_a_rune_does_not_become_equippable_beside_a_source() -> void:
 	assert_bool(rune.can_equip(dry)) \
 		.override_failure_message("a materia source made a dead rune equippable").is_false()
 	assert_str(rune.can_equip_reason(dry)).is_not_empty()
+
+
+# ==============================================================================
+#  aura_text: the POSITIVE half, derived from the same ladder (#1019)
+# ==============================================================================
+# The rune detail card prints one sentence beside the ring, refusal or not. It has to be derived
+# rather than written beside the ladder for this file's own reason: two answers to "may this be
+# channeled" is the drift Law #4 forbids, and a positive sentence built independently would go on
+# saying a carving channels after the ladder had started refusing it.
+
+func test_a_refusal_reaches_the_readout_as_the_ladders_own_words() -> void:
+	var alch: Unit = _alchemist({ Elemental.Element.WATER: 5 })
+	var carving: TransmutationData = _carving([FIRE, EARTH])
+
+	assert_str(carving.aura_text(alch, FIRE)).is_equal(carving.channel_block_reason(alch, FIRE))
+
+
+# The mutant this is the grave of: a positive sentence composed without asking the ladder first. Every
+# one of these is REFUSED, so a readout that skipped the ask would announce each as channelable.
+func test_no_refusal_is_ever_dressed_up_as_a_positive_sentence() -> void:
+	var no_aura: Dictionary[Elemental.Element, int] = {}
+	var cases := {
+		# anchor: nothing to open it with
+		_alchemist(no_aura): _carving([FIRE]),
+		# anchor: real training, wrong element
+		_alchemist({ Elemental.Element.WATER: 5 }, Vector2i(1, 0)): _carving([FIRE, EARTH]),
+		# coverage: deficit 2 against a capacity of 1
+		_alchemist({ FIRE: 1 }, Vector2i(2, 0)): _carving([FIRE, FIRE, FIRE]),
+	}
+	for alch: Unit in cases:
+		var carving: TransmutationData = cases[alch]
+		assert_str(carving.aura_text(alch, FIRE)).override_failure_message(
+			"a refused carving read as channelable").not_contains("Channels on")
+
+
+# SURPLUS IS PER SIGIL, NOT PER ELEMENT, because base_damage sums the wielder's pool once for EVERY
+# sigil: an alchemist on Fire 4 firing a 2-Fire circle scales twice off the two spare points, so the
+# number is 4 rather than 2. Counted per element it understates by exactly the recipe's own weight,
+# and that number is the whole reason the ring draws a halo at all.
+func test_the_surplus_is_counted_once_per_sigil() -> void:
+	var alch: Unit = _alchemist({ FIRE: 4 })
+	var doubled: TransmutationData = _carving([FIRE, FIRE])
+	var single: TransmutationData = _carving([FIRE], "Single")
+
+	# Measured against base_damage rather than retyped: the sentence's number IS what firing it pays.
+	var spare_on_doubled := doubled.base_damage(alch) - (doubled.power + doubled.sigils.size() * 2)
+	assert_int(spare_on_doubled).is_equal(4)
+	assert_str(doubled.aura_text(alch, FIRE)).contains("4")
+	# ...and the same pool through a one-sigil circle is worth three, not four.
+	var spare_on_single := single.base_damage(alch) - (single.power + single.sigils.size() * 1)
+	assert_int(spare_on_single).is_equal(3)
+	assert_str(single.aura_text(alch, FIRE)).contains("3")
+
+
+# A carving whose recipe the carrier covers exactly has no surplus to describe, so the sentence stops
+# rather than reporting a zero -- the ring beside it draws no halo either, and the two cannot disagree.
+func test_an_exactly_covered_circle_claims_no_spare_damage() -> void:
+	var alch: Unit = _alchemist({ FIRE: 2 })
+	var carving: TransmutationData = _carving([FIRE, FIRE])
+
+	assert_str(carving.aura_text(alch, FIRE)).contains("Channels on")
+	assert_str(carving.aura_text(alch, FIRE)).not_contains("damage")
+
+
+# A utility carving suppresses scaling outright (#126), so its spare aura buys nothing. Saying
+# otherwise would promise a number the resolver never adds -- and base_damage is what proves it.
+func test_a_utility_circle_never_promises_damage_for_its_spare_aura() -> void:
+	var alch: Unit = _alchemist({ FIRE: 4 })
+	var gust: TransmutationData = _carving([FIRE])
+	gust.deals_no_damage = true
+
+	assert_int(gust.base_damage(alch)).is_equal(0)
+	assert_str(gust.aura_text(alch, FIRE)).contains("Channels on")
+	assert_str(gust.aura_text(alch, FIRE)).not_contains("damage")

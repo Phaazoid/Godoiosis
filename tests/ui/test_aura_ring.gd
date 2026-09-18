@@ -366,3 +366,153 @@ static func _walk(root: Node) -> Array[Node]:
 		out.append(child)
 		out.append_array(_walk(child))
 	return out
+
+
+# --- the demand overlay (#1019) ---------------------------------------------------------------------
+
+# WHAT THESE CANNOT SEE, said out loud beside the header's own list: a hollow tick is drawn as its own
+# outline and a halo as a wider bar behind one, and neither leaves anything a headless case can read --
+# _draw writes pixels and returns nothing. So what is pinned here is the MODEL that decides both
+# states, plus the two arithmetic properties a wrong constant would break silently. Whether a hollow
+# bar reads as empty at 116px is the dev's to play.
+
+func _circle(sigils: Array[Elemental.Element], utility := false) -> TransmutationData:
+	var carving := TransmutationData.new()
+	carving.sigils = sigils.duplicate()
+	carving.deals_no_damage = utility
+	return carving
+
+
+func _demand_row(target: Unit, carving: TransmutationData,
+		element: Elemental.Element) -> AuraRing.Row:
+	for row: AuraRing.Row in AuraRing.rows(target, carving):
+		if row.element == element:
+			return row
+	return null
+
+
+# Repeats are WEIGHT, so a 2-Fire circle asks for two Fire and the row carries the count rather than a
+# deficit -- the deficit and the surplus are both derived from it, and a stored deficit could not say
+# which ticks a halo belongs on.
+func test_a_carving_asks_sector_by_sector_and_repeats_are_weight() -> void:
+	var celest := _alchemist([EARTH, FIRE, AETHER], {FIRE: 2, EARTH: 1, AETHER: 2})
+	var circle := _circle([FIRE, FIRE, EARTH])
+
+	assert_int(_demand_row(celest, circle, FIRE).wanted).is_equal(2)
+	assert_int(_demand_row(celest, circle, EARTH).wanted).is_equal(1)
+	# Every sigil still gets a sector, asked for or not -- fixed positions are what make it learnable.
+	assert_int(_demand_row(celest, circle, WATER).wanted).is_equal(0)
+	assert_int(_demand_row(celest, circle, AETHER).wanted).is_equal(0)
+
+
+# THE POOL IS UNTOUCHED BY THE DEMAND LAID OVER IT. A mutant that folded the recipe into `depth` --
+# the tempting simplification, since the picture only ever shows their difference -- would render
+# identically for a carrier who covers the recipe exactly and lie about everyone else.
+func test_showing_a_carving_changes_nothing_about_the_pool_underneath() -> void:
+	var celest := _alchemist([EARTH, FIRE, AETHER], {FIRE: 2, EARTH: 1, AETHER: 2})
+	var plain := AuraRing.rows(celest)
+	var over := AuraRing.rows(celest, _circle([FIRE, FIRE, EARTH]))
+
+	assert_int(over.size()).is_equal(plain.size())
+	for i in plain.size():
+		assert_that(over[i].element).is_equal(plain[i].element)
+		assert_bool(over[i].affine).is_equal(plain[i].affine)
+		assert_int(over[i].depth).is_equal(plain[i].depth)
+
+
+# A rune in the stash is held by NOBODY, and the honest answer there is the demand with nothing paid --
+# not an empty model, which is what the old null contract gave. `rows(null)` on its own is still
+# empty, unchanged: nothing to say about nobody, when nothing is being asked either.
+func test_a_carving_with_no_carrier_is_still_a_model() -> void:
+	var circle := _circle([WATER, WATER, AIR])
+	var demanded := AuraRing.rows(null, circle)
+
+	assert_int(demanded.size()).is_equal(Elemental.SIGIL_ELEMENTS.size())
+	for row: AuraRing.Row in demanded:
+		assert_int(row.depth).is_equal(0)
+		assert_bool(row.affine).is_false()
+	for row: AuraRing.Row in demanded:
+		if row.element == WATER:
+			assert_int(row.wanted).is_equal(2)
+		if row.element == AIR:
+			assert_int(row.wanted).is_equal(1)
+
+	assert_array(AuraRing.rows(null)).is_empty()
+
+
+# The ring explains the marks that are ON SCREEN and no others: a carrier who covers a recipe exactly
+# sees neither sentence, because neither mark is drawn. A legend listing every state a widget CAN draw
+# is how a readout starts describing a picture nobody is looking at.
+func test_the_readout_names_only_the_marks_that_are_actually_drawn() -> void:
+	var celest := _alchemist([EARTH, FIRE], {FIRE: 2, EARTH: 1})
+
+	var exact := AuraRing.readout(celest, _circle([FIRE, FIRE, EARTH]))
+	assert_int(exact.find("hollow")).is_equal(-1)
+	assert_int(exact.find("halo")).is_equal(-1)
+
+	# One Earth short of a 2-Earth circle, and one Fire past what it asks for.
+	var lopsided := AuraRing.readout(celest, _circle([FIRE, EARTH, EARTH]))
+	assert_int(lopsided.find("hollow")).is_greater(-1)
+	assert_int(lopsided.find("halo")).is_greater(-1)
+
+	# And no carving at all says nothing about either, which is every pre-#1019 surface.
+	assert_int(AuraRing.readout(celest).find("hollow")).is_equal(-1)
+	assert_int(AuraRing.readout(celest).find("halo")).is_equal(-1)
+
+
+# A halo is drawn because surplus aura is DAMAGE -- base_damage sums the pool over every sigil and is
+# uncapped. A utility carving suppresses that scaling outright (#126), so the same picture must not
+# carry the same promise: the readout would be pledging a number the resolver never adds.
+func test_a_utility_circles_surplus_promises_no_damage() -> void:
+	var celest := _alchemist([FIRE], {FIRE: 3})
+	assert_int(_flat(AuraRing.readout(celest, _circle([FIRE]))).find("is damage")).is_greater(-1)
+	assert_int(_flat(AuraRing.readout(celest, _circle([FIRE], true))).find("is damage")).is_equal(-1)
+	# ...and still says a halo is there, because one is.
+	assert_int(_flat(AuraRing.readout(celest, _circle([FIRE], true))).find("halo")).is_greater(-1)
+
+
+# UiText.wrap breaks a line wherever its width runs out, so a PHRASE is searched with the wrapping
+# undone. Without this a case goes red because a sentence happened to break across two lines, which is
+# a fact about the wrapper and not about the readout.
+static func _flat(text: String) -> String:
+	return text.replace("\n", " ")
+
+
+# A HALO MAY NOT FUSE ITS SECTOR INTO ONE ARC -- the failure #930 already paid for once with the hover
+# border, where a value that read correctly on the panel's 108px ring drew a solid ribbon on the
+# card's 52px one.
+#
+# WHAT IS ASSERTED IS A DRAWABLE GAP, not a margin anybody chose. The first version of this case asked
+# only that a haloed bar stay INSIDE the pitch, and the fuse ratio SURVIVED it: at 0.053 two halos
+# stop 0.02px apart, which passes an overlap test and renders as one arc, because a gap thinner than a
+# pixel is not a gap. One pixel is a fact about rasterising rather than a taste threshold, and it
+# leaves the ratio a wide band to be re-tuned in -- which is the razor's own point.
+#
+# ONLY THE SIZES A DEMAND IS ACTUALLY DRAWN AT. The 52px pre-mission ring shows no carving and so
+# draws no halo; if a hover tip ever adopts the demand at that size, this list is where it gets asked.
+func test_a_halo_leaves_a_drawable_gap_at_every_size_that_shows_one() -> void:
+	var sizes: Array[float] = [RuneDetailCard.RING_PX as float]
+	for box: float in sizes:
+		var outer := box * 0.5
+		var inner := outer * (1.0 - AuraRing.BAND_RATIO)
+		var mid := (inner + outer) * 0.5
+		var width := maxf(2.0, mid * AuraRing.TICK_W_RATIO)
+		var haloed := width + mid * AuraRing.HALO_SPREAD_RATIO * 2.0
+		# The arc distance between two neighbouring ticks, measured where the bars actually sit.
+		var pitch := mid * (AuraRing.SECTOR - AuraRing.SECTOR_PAD * 2.0) / float(AuraRing.MAX_TICKS)
+		assert_float(pitch - haloed).override_failure_message(
+			"two halos on a %.0fpx ring stop %.2fpx apart -- under a pixel, so the sector reads as "
+			% [box, pitch - haloed] + "one arc").is_greater_equal(1.0)
+
+
+# The off-recipe knock-back may NOT land on alpha: DIM_ALPHA and FAINT_ALPHA already spend that
+# channel, so a sector that merely dimmed would read as "never grown" rather than as "not asked for" --
+# and at a 5px tick the two are the same picture. The channel is the thing pinned, not the amount.
+func test_an_off_recipe_sector_is_quieted_without_touching_its_alpha() -> void:
+	var lit := ElementPalette.color_for_element(FIRE)
+	assert_float(lit.s).override_failure_message(
+		"this element has no saturation to lose, so the case proves nothing").is_greater(0.0)
+
+	var quiet := AuraRing.knocked_back(lit)
+	assert_float(quiet.a).is_equal(lit.a)
+	assert_float(quiet.s).is_less(lit.s)

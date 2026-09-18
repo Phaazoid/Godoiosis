@@ -312,7 +312,7 @@ func _refresh_readout() -> void:
 	# than a number computed against nobody.
 	_damage.text = _weapon.attack_detail(_wielder, _attack) if _wielder != null and _attack != null else ""
 	_damage.visible = _damage.text != ""
-	_range.text = _range_text(_attack)
+	_range.text = AttackChannelText.range_text(_attack)
 	_refresh_channels()
 	_repaint_reach_chip()
 	_proficiency.text = _proficiency_text(family)
@@ -325,9 +325,9 @@ func _refresh_readout() -> void:
 # "add knockback", it is to enumerate the channels: the next pair of near-identical attacks must not
 # reopen this ticket.
 #
-# EVERY LINE IS THE COMPOSED ANSWER, never the authored field. effective_knockback / hits_allies /
-# can_overwatch fold in the fitted mods, and reading the @export instead would be this same bug one
-# layer down -- a Recoil Lug that moved no line is a picker that looks dead for a second reason.
+# THE ENUMERATION ITSELF IS AttackChannelText'S SINCE #1019, which gave it a second card. Only the
+# WEAPON's own channels are written here -- readiness and the empowered form -- and the composed
+# values are handed over rather than looked up; that file's header has the full argument.
 #
 # A LINE ONLY APPEARS WHEN IT HAS SOMETHING TO SAY. A plain sword's readout is exactly as short as it
 # was before this ticket; only an attack with something unusual about it grows one.
@@ -342,41 +342,27 @@ func _refresh_channels() -> void:
 		_channels.add_child(label)
 
 
+# The shared enumeration is AttackChannelText's (#1019 gave it a second card); what stays here is
+# what only a WEAPON attack has. READINESS LEADS, because it is the gate: whether this attack can be
+# fired at all outranks what it does when it is.
 func _channel_lines() -> Array[String]:
 	var lines: Array[String] = []
 	if _attack == null:
 		return lines
 	var weapon_attack := _attack as WeaponAttackData
 
-	var shove := _weapon.effective_knockback(_wielder, _attack)
-	if shove != 0:
-		lines.append("Shoves %d tile%s" % [shove, "" if shove == 1 else "s"])
-
 	if weapon_attack != null:
 		lines.append_array(_readiness_lines(weapon_attack))
 
+	# COMPOSED, never authored -- effective_* folds in the fitted mods, and reading the @export would
+	# be #1017 one layer down: a Recoil Lug that moved no line is a picker that looks dead again.
 	var elements := _weapon.get_elements(_wielder, weapon_attack) if weapon_attack != null \
 		else ([] as Array[Elemental.Element])
-	if not elements.is_empty():
-		var named: Array[String] = []
-		for element: Elemental.Element in elements:
-			named.append(Elemental.display_name(element))
-		lines.append("Carries %s" % " and ".join(named))
-
-	if _weapon.effective_can_overwatch(_wielder, _attack):
-		lines.append("Watch only — declared as a standing watch, never fired directly")
-	if _weapon.effective_hits_allies(_wielder, _attack):
-		lines.append("Splashes allies")
-	if _attack.hits_self:
-		lines.append("Catches the attacker too")
-	if _attack.pierces_guard:
-		lines.append("Pierces guard")
-	# can_counter defaults TRUE, so the line is the exception -- saying "can counter" on nearly every
-	# attack in the game would be noise wearing the shape of information.
-	if not _attack.can_counter:
-		lines.append("Never counters")
-
-	lines.append_array(_height_lines())
+	lines.append_array(AttackChannelText.lines(_attack,
+		_weapon.effective_knockback(_wielder, _attack),
+		elements,
+		_weapon.effective_can_overwatch(_wielder, _attack),
+		_weapon.effective_hits_allies(_wielder, _attack)))
 
 	if weapon_attack != null and weapon_attack.empowered_form != null:
 		lines.append("At a source, becomes %s" % weapon_attack.empowered_form.display_name)
@@ -395,32 +381,6 @@ func _readiness_lines(attack: WeaponAttackData) -> Array[String]:
 	if attack.builds_readiness:
 		lines.append("Builds a %s on a hit" % noun)
 	return lines
-
-
-# How this attack answers the height question. MELEE ignores the tolerances outright (AttackData's
-# own note), so printing them there would describe a rule that is not running.
-func _height_lines() -> Array[String]:
-	var lines: Array[String] = []
-	if _attack.vertical_rule == AttackData.VerticalRule.MELEE:
-		lines.append("Melee height — same step, or a ramp-legal edge")
-		return lines
-	if _attack.up_tolerance >= 0:
-		lines.append("Reaches %d up" % _attack.up_tolerance)
-	if _attack.down_tolerance >= 0:
-		lines.append("Reaches %d down" % _attack.down_tolerance)
-	if _attack.arc_clearance > 0:
-		lines.append("Arcs %d over its own sightline" % _attack.arc_clearance)
-	return lines
-
-
-static func _range_text(attack: AttackData) -> String:
-	if attack == null:
-		return ""
-	if attack.is_directional():
-		return "Aims a facing"
-	var span := "Range %d" % attack.max_range if attack.min_range == attack.max_range \
-		else "Range %d-%d" % [attack.min_range, attack.max_range]
-	return "%s, bevelled corners" % span if attack.max_and_a_half else span
 
 
 # What the carrier can actually reach (#732, dev: "what the carrier's current proficiency is").

@@ -111,6 +111,30 @@ func channel_block_reason(wielder: Unit, temper: Elemental.Element) -> String:
 func can_channel(wielder: Unit, temper: Elemental.Element) -> bool:
 	return channel_block_reason(wielder, temper).is_empty()
 
+
+# The channelling verdict as ONE sentence, whichever way it falls (#1019) -- what a readout prints
+# beside the ring, so the picture's marks and the words under it come from one walk.
+#
+# THE LADDER IS ASKED FIRST AND ITS ANSWER IS RETURNED VERBATIM. The positive half is built only when
+# the ladder comes back empty, which is can_channel's own derivation one line up: worded
+# independently, a refusal and its explanation are two answers to one question and drift the first
+# time either is edited (Law #4; #166's whole reason for the ladder existing).
+func aura_text(wielder: Unit, temper: Elemental.Element) -> String:
+	var refusal := channel_block_reason(wielder, temper)
+	if refusal != "":
+		return refusal
+	# SURPLUS IS PER SIGIL, NOT PER ELEMENT: base_damage sums the wielder's aura once for every sigil,
+	# so one spare point in a 2-Fire circle is worth 2. Counted per element it would understate a
+	# weighted recipe by exactly that weight, which is the number the halo is drawn for.
+	var spare := 0
+	for e in distinct_elements():
+		spare += maxi(0, wielder.get_element_aura(e) - sigils.count(e)) * sigils.count(e)
+	# A utility carving suppresses scaling outright, so its surplus buys nothing and claiming a number
+	# here would promise damage the resolver never adds (deals_no_damage, #126).
+	if spare == 0 or deals_no_damage:
+		return "Channels on %s" % sigil_text()
+	return "Channels on %s, and the aura past it adds %d damage" % [sigil_text(), spare]
+
 # "Fire or Earth" — the anchor refusal names what would open the carving.
 func _element_list_text() -> String:
 	var names: Array[String] = []
