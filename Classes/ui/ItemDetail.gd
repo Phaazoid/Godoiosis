@@ -22,6 +22,36 @@ static func chip_for(item: Item) -> Button:
 	return null
 
 
+# THE CHIP ITSELF, in one place (#1022). Both cards spelled these lines and neither set a stylebox,
+# so both took the engine's default chrome -- which is exactly what EXECUTE_BG's own comment already
+# records as *grey on a grey panel, and it simply disappeared* (dev, 2026-09-03), and the dev read
+# this one the same way: it did not look interactable. The cure is Execute's: a box of its own.
+#
+# ONE BUILDER, so "make it pop" is a one-place change rather than two that agree until they do not --
+# which is the same argument that made `chip_for` above a single fork.
+#
+# ALL FOUR FONT STATES, and that is not belt-and-braces: a Button falls back to the THEME's colour on
+# hover, so overriding only `font_color` is how the Loadout button vanished under parchment (#814).
+# The pointing hand costs no width and is the one signal that survives any palette.
+static func chip(text: String, tip: String) -> Button:
+	var chip := Button.new()
+	chip.text = text
+	chip.add_theme_font_size_override("font_size", 9)
+	chip.focus_mode = Control.FOCUS_NONE
+	chip.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	chip.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
+	chip.tooltip_text = UiText.wrap(tip)
+	chip.add_theme_stylebox_override("normal", QueueStyle.chip_box(false))
+	chip.add_theme_stylebox_override("focus", QueueStyle.chip_box(false))
+	chip.add_theme_stylebox_override("hover", QueueStyle.chip_box(true))
+	chip.add_theme_stylebox_override("pressed", QueueStyle.chip_box(true))
+	chip.add_theme_color_override("font_color", QueueStyle.chip_ink(false))
+	chip.add_theme_color_override("font_focus_color", QueueStyle.chip_ink(false))
+	chip.add_theme_color_override("font_hover_color", QueueStyle.chip_ink(true))
+	chip.add_theme_color_override("font_pressed_color", QueueStyle.chip_ink(true))
+	return chip
+
+
 # `mods` is the mission's own mod pool (#812) and `on_closed` what the host does afterwards. Both are
 # the WEAPON card's business and are carried past the rune branch rather than forked at the call site,
 # which is the whole point of one door -- see below for why the rune branch drops the second.

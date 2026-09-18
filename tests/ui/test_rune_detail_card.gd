@@ -22,6 +22,7 @@ const ZONE_CELLS := 6
 const FIRE := Elemental.Element.FIRE
 const WATER := Elemental.Element.WATER
 const EARTH := Elemental.Element.EARTH
+const AIR := Elemental.Element.AIR
 
 var _main: Node
 var game: Node2D
@@ -167,12 +168,45 @@ static func _list_tooltips(card: RuneDetailCard) -> String:
 	return "\n".join(parts)
 
 
-static func _cost_bars(card: RuneDetailCard) -> Array[ColorRect]:
-	var out: Array[ColorRect] = []
-	for node: Node in _walk(card._list):
-		var bar := node as ColorRect
-		if bar != null:
-			out.append(bar)
+# The bars beside one row's name. Reached STRUCTURALLY -- row > body > line > its last child --
+# rather than by scanning the list for Panels: since #1022 the legend above is made of them and the
+# row's own name label shares the line, so a scan would answer with whatever it met first.
+static func _bars_of(row: Control) -> HBoxContainer:
+	var body := row.get_child(0) as VBoxContainer
+	var line := body.get_child(0) as HBoxContainer
+	return line.get_child(line.get_child_count() - 1) as HBoxContainer
+
+
+# How one row's marks split: the recipe's own bars, then the spare ones past the `+`. The Label IS
+# the separator, which is what lets a case read the split without the card exposing anything for it.
+static func _marks_of(row: Control) -> Dictionary[String, int]:
+	var cost := 0
+	var spare := 0
+	var hollow := 0
+	var past_plus := false
+	for child: Node in _bars_of(row).get_children():
+		if child is Label:
+			past_plus = true
+			continue
+		var bar := child as Panel
+		if bar == null:
+			continue
+		if past_plus:
+			spare += 1
+			continue
+		cost += 1
+		var box := bar.get_theme_stylebox("panel") as StyleBoxFlat
+		if box != null and box.border_width_left > 0:
+			hollow += 1
+	return {"cost": cost, "spare": spare, "hollow": hollow}
+
+
+static func _rows_of(card: RuneDetailCard) -> Array[Control]:
+	var out: Array[Control] = []
+	for child: Node in card._list.get_children():
+		var row := child as PanelContainer
+		if row != null:
+			out.append(row)
 	return out
 
 
@@ -306,9 +340,82 @@ func test_a_carvings_cost_bars_are_one_per_sigil() -> void:
 	var rune := _rune(carvings)
 	var card := await _open(rune, _alchemist({FIRE: 3, EARTH: 1}))
 
-	assert_int(_cost_bars(card).size()).is_equal(rune.inscriptions[0].cost())
-	assert_int(_cost_bars(card).size()).is_equal(3)
+	var marks := _marks_of(_rows_of(card)[0])
+	assert_int(marks["cost"]).is_equal(rune.inscriptions[0].cost())
+	assert_int(marks["cost"]).is_equal(3)
 	assert_str(card._hint.text).contains("3 of 6")
+
+
+# THE BARS CARRY THE RING'S OWN STATES (#1022). Shipped flat at #1019 -- one rectangle per sigil in
+# the element's colour and nothing else -- which is why they said so little: the shape was right and
+# the vocabulary was missing. A carrier who covers half a recipe must see which half.
+func test_a_cost_bar_says_whether_that_sigil_is_paid() -> void:
+	# Fire 1 against a 2-Fire recipe: one paid, one asked-for-and-unpaid.
+	var carvings: Array[TransmutationData] = [_circle([FIRE, FIRE], "Ember")]
+	var card := await _open(_rune(carvings), _alchemist({FIRE: 1}))
+
+	var marks := _marks_of(_rows_of(card)[0])
+	assert_int(marks["cost"]).is_equal(2)
+	assert_int(marks["hollow"]).override_failure_message(
+		"the unpaid sigil drew the same bar as the paid one").is_equal(1)
+
+
+# The SPARE, past a `+` -- the halo's own number said again in the list, so the ring and the row
+# cannot disagree about how much aura is going spare.
+func test_spare_aura_gets_its_own_marks_after_the_recipe() -> void:
+	# Fire 3 against a one-sigil Fire circle: one paid, two spare.
+	var carvings: Array[TransmutationData] = [_circle([FIRE], "Ember")]
+	var card := await _open(_rune(carvings), _alchemist({FIRE: 3}))
+
+	var marks := _marks_of(_rows_of(card)[0])
+	assert_int(marks["cost"]).is_equal(1)
+	assert_int(marks["hollow"]).is_equal(0)
+	assert_int(marks["spare"]).is_equal(2)
+
+	# ...and a carrier who covers the recipe exactly has none, rather than a zero drawn as nothing.
+	var same: Array[TransmutationData] = [_circle([FIRE], "Ember")]
+	var exact := await _open(_rune(same), _alchemist({FIRE: 1}, Vector2i(1, 0)))
+	assert_int(_marks_of(_rows_of(exact)[0])["spare"]).is_equal(0)
+
+
+# A ROW SAYS HOW COMFORTABLY IT CHANNELS, in three states (dev: "red for pressure spray since the
+# unit cannot cast, yellow for zap cannon since it can only be cast with the extra slot, none for
+# fireball since it can be comfortably cast"). Asserted through the LADDER's own answer rather than
+# through a colour -- the tint is chrome, and which of the three a carving is in is the rule.
+func test_a_row_says_how_comfortably_it_channels() -> void:
+	var alch := _alchemist({FIRE: 2})
+	var comfortable := _circle([FIRE], "Fireball")
+	var leaning := _circle([FIRE, FIRE, AIR], "Zap Cannon")      # Air 0: one wildcard covers it
+	var refused := _circle([WATER, WATER], "Pressure Spray")     # no Water anywhere: no anchor
+
+	assert_that(comfortable.channel_state(alch, FIRE)).override_failure_message(
+		"a recipe paid outright read as anything but clear"
+		).is_equal(TransmutationData.Channel.CLEAR)
+	assert_that(leaning.channel_state(alch, FIRE)).override_failure_message(
+		"a carving leaning on a wildcard read the same as one paid outright"
+		).is_equal(TransmutationData.Channel.WILDCARD)
+	assert_that(refused.channel_state(alch, FIRE)).is_equal(TransmutationData.Channel.REFUSED)
+
+	# ...and the three do not collapse onto two boxes on the way to the row.
+	var boxes := {}
+	for state: TransmutationData.Channel in [TransmutationData.Channel.CLEAR,
+			TransmutationData.Channel.WILDCARD, TransmutationData.Channel.REFUSED]:
+		boxes[QueueStyle.channel_box(RuneDetailCard._box_state(state), false)] = true
+	assert_int(boxes.size()).override_failure_message(
+		"two of the three channel states share one box").is_equal(3)
+
+
+# WHAT IT DOES, under the name -- and NOT what it costs, because the bars above are that (dev:
+# "perhaps get rid of the cost X though, since we're already visualizing that with the bars").
+func test_a_row_prints_what_it_does_and_never_what_it_costs() -> void:
+	var carvings: Array[TransmutationData] = [_circle([FIRE, FIRE], "Ember")]
+	var card := await _open(_rune(carvings), _alchemist({FIRE: 3}))
+
+	var text := _list_text(card)
+	assert_str(text).override_failure_message(
+		"the row never said what the carving does").contains("Damage")
+	assert_str(text).not_contains("cost")
+	assert_str(text).not_contains("Wildcards")
 
 
 # --- the door ---------------------------------------------------------------------------------------

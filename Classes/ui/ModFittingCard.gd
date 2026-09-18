@@ -684,11 +684,7 @@ static func chip_for(item: Item) -> Button:
 	for i in range(weapon.space_count()):
 		if not weapon.space(i).is_empty():
 			filled += 1
-	var chip := Button.new()
-	chip.text = "%d/%d" % [filled, weapon.space_count()]
-	chip.add_theme_font_size_override("font_size", 9)
-	chip.focus_mode = Control.FOCUS_NONE
-	chip.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-	chip.tooltip_text = UiText.wrap("Fit mods — %d of %d spaces hold something." % [
-		filled, weapon.space_count()])
-	return chip
+	# The CHROME is ItemDetail's since #1022 -- this answers only what the chip SAYS, which is the
+	# one thing the two kinds of chip genuinely differ about.
+	return ItemDetail.chip("%d/%d" % [filled, weapon.space_count()],
+		"Fit mods — %d of %d spaces hold something." % [filled, weapon.space_count()])

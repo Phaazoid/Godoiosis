@@ -135,6 +135,30 @@ func aura_text(wielder: Unit, temper: Elemental.Element) -> String:
 		return "Channels on %s" % sigil_text()
 	return "Channels on %s, and the aura past it adds %d damage" % [sigil_text(), spare]
 
+
+# HOW COMFORTABLY this channels, which is the THIRD answer the ladder already computes and throws
+# away (#1022, dev: *"red for pressure spray since the unit cannot cast, yellow for zap cannon since
+# it can only be cast with the extra slot, none for fireball since it can be comfortably cast"*).
+#
+# IT LIVES HERE RATHER THAN ON THE CARD for #166's own reason, one rung further up: a surface can
+# only grey what the data layer can explain, and a card re-deriving total_deficit/wildcard_capacity
+# for itself would be a second answer to *how close to the line is this* -- one that goes on saying
+# "comfortable" the first time either pool's rule is edited.
+#
+# NOBODY CARRYING IT READS AS CLEAR, matching the card's own "no verdict" state: channeling is a
+# property of the PAIRING, so with one half missing there is no discomfort to report.
+enum Channel { CLEAR, WILDCARD, REFUSED }
+
+
+func channel_state(wielder: Unit, temper: Elemental.Element) -> Channel:
+	if wielder == null:
+		return Channel.CLEAR
+	if channel_block_reason(wielder, temper) != "":
+		return Channel.REFUSED
+	# A DEFICIT WITH NO REFUSAL means the wildcards are carrying it -- the ladder passed COVERAGE, so
+	# the shortfall is real and something is paying for it that the recipe did not ask for.
+	return Channel.WILDCARD if total_deficit(wielder) > 0 else Channel.CLEAR
+
 # "Fire or Earth" — the anchor refusal names what would open the carving.
 func _element_list_text() -> String:
 	var names: Array[String] = []
@@ -149,12 +173,19 @@ func sigil_text() -> String:
 		parts.append("%s %d" % [Elemental.display_name(e), sigils.count(e)])
 	return ", ".join(parts)
 
+# The PAYLOAD half alone: what this carving does, with neither its recipe nor its wildcard count
+# (#1022). Split out because the rune card's rows draw both of those as MARKS -- the recipe as cost
+# bars, the wildcards as the row's own tint -- and printing them again underneath would be the same
+# fact twice on one row. Extracted rather than re-spelled, so "Damage 11, Blunt (unit)" exists once
+# and the hover readout below and the row cannot word it two ways.
+func effect_text(wielder: Unit) -> String:
+	return "%s %s" % [payload_text(base_damage(wielder), delivered_kind()), targets_text()]
+
 # What this carving DOES for this wielder, for the menu's hover readout (#166) — the carving's
 # answer to the role ArmorData.mechanical_text plays for a worn piece. Itemized per wielder because
 # both numbers depend on them: damage scales off their aura, wildcards off their gaps.
 func mechanical_text(wielder: Unit, _temper: Elemental.Element) -> String:
-	var parts: Array[String] = [sigil_text(),
-		"%s %s" % [payload_text(base_damage(wielder), delivered_kind()), targets_text()]]
+	var parts: Array[String] = [sigil_text(), effect_text(wielder)]
 	var deficit := total_deficit(wielder)
 	if deficit > 0:
 		parts.append("Wildcards %d" % deficit)

@@ -153,22 +153,31 @@ static func _ground_under(node: Control, base: Color) -> Color:
 # ITS OWN BOX IS COMPOSITED, NEVER SUBSTITUTED, and getting that wrong is what this suite's first run
 # reported: the engine's button box is dark at alpha 0.6, so treating it as the whole ground made
 # every Deploy button read as white-on-cream and the real answer is the blend of the two.
-static func _ground_for(node: Control, base: Color) -> Color:
+static func _ground_for(node: Control, base: Color, box_name: String) -> Color:
 	var under := _ground_under(node, base)
 	var button := node as Button
-	if button == null or button.flat:
+	if button == null or button.flat or box_name == "":
 		return under
-	var bg: Variant = _box_bg(button.get_theme_stylebox("normal"))
+	var bg: Variant = _box_bg(button.get_theme_stylebox(box_name))
 	return under if bg == null else _over(bg, under)
 
 
-# Which font colours a control will actually draw. A Button resolves hover independently, which is
-# the half #774's fix needed and the half a normal-state-only override still gets wrong.
+# Which font colours a control will actually draw, EACH WITH THE BOX IT IS DRAWN OVER.
+#
+# THE PAIRING IS THE POINT, and it was wrong here from #814 until #1022: a Button resolves hover
+# independently in BOTH channels -- its ink and its chrome -- so reading the hover colour against the
+# NORMAL box judges a state that never exists on screen. It went unseen because no control on these
+# menus had a hover box that differed, so the two grounds happened to be the same colour; the detail
+# chip is the first that inverts, and it was reported as unreadable while being the opposite.
+#
+# This is the same blind spot this suite already carries a note about one state along -- a sweep over
+# a RESTING state cannot see the states a control can be put into -- and the cure is the same: name
+# the state on both halves rather than on one.
 static func _ink_states(node: Control) -> Array:
 	if node is Button:
-		return [["font_color", node.get_theme_color("font_color")],
-				["font_hover_color", node.get_theme_color("font_hover_color")]]
-	return [["font_color", node.get_theme_color("font_color")]]
+		return [["font_color", node.get_theme_color("font_color"), "normal"],
+				["font_hover_color", node.get_theme_color("font_hover_color"), "hover"]]
+	return [["font_color", node.get_theme_color("font_color"), ""]]
 
 
 static func _readable_text(node: Control) -> String:
@@ -196,9 +205,9 @@ func _findings(root: Node, base: Color, label: String) -> Array[String]:
 			continue
 		if _readable_text(control).strip_edges() == "":
 			continue   # a spacer, or an empty inventory slot's placeholder
-		var ground := _ground_for(control, base)
 		for pair: Array in _ink_states(control):
 			var ink: Color = pair[1]
+			var ground := _ground_for(control, base, pair[2])
 			var gap := _contrast(ink, ground)
 			if gap > CONTRAST_FLOOR:
 				continue

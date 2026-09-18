@@ -35,6 +35,12 @@ const LIST_H := 168
 # One cost mark per sigil. RECTANGLES, matching the ring's own bars (dev: "it should be the same
 # rectangle shape as the ring for consistency instead of circles") -- one motif, twice on one card.
 const COST_BAR := Vector2(4, 12)
+# ...and carrying the ring's own THREE STATES (#1022). A bar is solid where the carrier's aura pays
+# that sigil, hollow where it is asked for and unpaid, and lighter for a spare point past the recipe.
+# The two numbers are the RING's, read off AuraRing where they exist, so the two motifs cannot drift;
+# only these two have no tick equivalent to borrow, the hollow tick being an outline rather than a fill.
+const HOLLOW_SWATCH_FILL := 0.14
+const SPARE_ALPHA := 0.45
 
 var _rune: RuneData
 # Null for a rune nobody is holding -- one sitting in the stash. The ring then draws demand alone and
@@ -72,6 +78,7 @@ func _build(game_node: Node) -> void:
 
 	_build_head(content)
 	_build_readout(content)
+	_build_legend(content)
 	content.add_child(HSeparator.new())
 	_build_list(content)
 
@@ -105,9 +112,9 @@ func _build_head(parent: Container) -> void:
 # The plate, the ring and the numbers, side by side: all three answer for the SAME picked carving, and
 # picking another moves all three, so they have to be read together to be read at all.
 #
-# NO LEGEND ROW, which is where this parts from the card it mirrors. That card's legend names what its
-# two plate inks mean; here the ring is the thing with a vocabulary, and it carries its own -- a row
-# of swatches under it would be a second explanation of marks the ring's tooltip already words.
+# A LEGEND ROW SITS UNDER IT since #1022, reversing #1019's call that the ring's tooltip was enough
+# (dev: *"it will be useful for the player, too"*). The earlier ruling was not wrong about the
+# tooltip -- it is right there and it does word every mark -- it was wrong about who finds one.
 func _build_readout(parent: Container) -> void:
 	var strip := HBoxContainer.new()
 	strip.add_theme_constant_override("separation", 12)
@@ -148,6 +155,74 @@ func _build_readout(parent: Container) -> void:
 	_aura = _readout_label(column)
 	_aura.clip_text = false
 	_aura.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+
+
+# WHAT THE RING'S MARKS MEAN, spelled out (dev, 2026-09-18: *"add the legend row that you included
+# there, because it will be useful for the player, too"*). That REVERSES #1019's own call -- no legend,
+# the ring's tooltip explains itself -- and it is recorded rather than flipped quietly, because the
+# earlier ruling was a real one: a tooltip is found only by a player who already suspects there is
+# something to find.
+#
+# THE RING'S OWN AUTHORED INKS AND ITS OWN ALPHAS, read off AuraRing rather than retyped, so a swatch
+# and the mark it names cannot come out two different colours the day either is tuned. It sits on the
+# card's FRAME, so the words take FRAME_TEXT while the swatches take the element wheel.
+func _build_legend(parent: Container) -> void:
+	var row := HFlowContainer.new()
+	row.add_theme_constant_override("h_separation", 11)
+	row.add_theme_constant_override("v_separation", 2)
+	parent.add_child(row)
+
+	var fire := ElementPalette.color_for_element(Elemental.Element.FIRE)
+	var air := ElementPalette.color_for_element(Elemental.Element.AIR)
+	var aether := ElementPalette.color_for_element(Elemental.Element.AETHER)
+	_legend_entry(row, _swatch_bar(fire, 1.0, false), "aura you hold")
+	_legend_entry(row, _swatch_bar(air, HOLLOW_SWATCH_FILL, true), "asked for, unpaid")
+	_legend_entry(row, _swatch_bar(fire, SPARE_ALPHA, false), "spare, powering it")
+	_legend_entry(row, _swatch_bar(aether, AuraRing.DIM_ALPHA, false), "affinity, not grown")
+	_legend_entry(row, _swatch_bar(ElementPalette.NEUTRAL, AuraRing.FAINT_ALPHA, false),
+		"can never grow")
+	_legend_entry(row, ArcSwatch.new(fire), "the cost")
+
+
+func _legend_entry(parent: Container, swatch: Control, text: String) -> void:
+	var pair := HBoxContainer.new()
+	pair.add_theme_constant_override("separation", 3)
+	pair.add_child(swatch)
+	var label := Label.new()
+	label.text = text
+	label.add_theme_font_size_override("font_size", 9)
+	label.add_theme_color_override("font_color", QueueStyle.ink(QueueStyle.Role.FRAME_TEXT))
+	pair.add_child(label)
+	parent.add_child(pair)
+
+
+# One legend swatch, drawn as the ring's own rectangle so the key and the mark share a shape.
+func _swatch_bar(tint: Color, alpha: float, outlined: bool) -> Control:
+	var box := StyleBoxFlat.new()
+	box.bg_color = Color(tint, alpha)
+	if outlined:
+		box.border_color = tint
+		box.set_border_width_all(1)
+	var bar := Panel.new()
+	bar.add_theme_stylebox_override("panel", box)
+	bar.custom_minimum_size = Vector2(5, 12)
+	bar.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	return bar
+
+
+# The cost's glyph, and the one legend mark that is not a rectangle -- because the cost is not one.
+# A swatch that lied about its own shape would teach the wrong thing about the ring beside it.
+class ArcSwatch extends Control:
+	var tint := Color.WHITE
+
+	func _init(colour: Color) -> void:
+		tint = colour
+		custom_minimum_size = Vector2(16, 12)
+		size_flags_vertical = Control.SIZE_SHRINK_CENTER
+		mouse_filter = Control.MOUSE_FILTER_IGNORE
+
+	func _draw() -> void:
+		draw_arc(Vector2(size.x * 0.5, size.y - 1.0), size.x * 0.42, PI, TAU, 14, tint, 2.2, true)
 
 
 # The carrier's map sprite, or nothing at all. A rune in the stash gets an EMPTY centre rather than a
@@ -312,10 +387,18 @@ func _refresh_carvings() -> void:
 		_list.add_child(_carving_row(carving))
 
 
+# A ROW SAYS HOW COMFORTABLY IT CHANNELS, in three states (dev: *"red for pressure spray since the
+# unit cannot cast, yellow for zap cannon since it can only be cast with the extra slot, none for
+# fireball since it can be comfortably cast"*). The rule is the LADDER's -- see
+# TransmutationData.channel_state -- and this only paints it.
+#
+# THE TINT REPLACED A "!" LABEL. That mark said *refused* and nothing else, and with the whole row
+# carrying validity it would have been the same fact twice, on the one axis the border already owns.
 func _carving_row(carving: TransmutationData) -> Control:
+	var state := carving.channel_state(_wielder, _rune.temper)
 	var reason := _block_reason(carving)
 	var row := PanelContainer.new()
-	row.add_theme_stylebox_override("panel", QueueStyle.row_box(reason != "", false))
+	row.add_theme_stylebox_override("panel", QueueStyle.channel_box(_box_state(state), false))
 	var tip := "%s\n%s" % [carving.sigil_text(), _rune.attack_detail(_wielder, carving)] \
 		if _wielder != null else carving.sigil_text()
 	if reason != "":
@@ -323,33 +406,58 @@ func _carving_row(carving: TransmutationData) -> Control:
 	row.tooltip_text = UiText.wrap(tip)
 	row.mouse_filter = Control.MOUSE_FILTER_STOP
 
-	var line := HBoxContainer.new()
-	line.add_theme_constant_override("separation", 6)
-	row.add_child(line)
+	var body := VBoxContainer.new()
+	body.add_theme_constant_override("separation", 1)
+	row.add_child(body)
 
+	var line := HBoxContainer.new()
+	line.add_theme_constant_override("separation", 8)
+	body.add_child(line)
+
+	# NO EXPAND on the name: the bars sit right beside it, and the row's slack trails after them both.
+	# Giving the label the row was what flung them to the far edge (dev: "the bars in the titles are
+	# right aligned"), which read as two unrelated columns rather than a name and what it costs.
 	var name_label := Label.new()
 	name_label.text = _carving_name(carving)
 	name_label.clip_text = true
-	name_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	name_label.add_theme_font_size_override("font_size", 11)
 	name_label.add_theme_color_override("font_color", QueueStyle.ink(QueueStyle.Role.NAME_TEXT))
 	line.add_child(name_label)
 
 	line.add_child(_cost_bars(carving))
 
-	if reason != "":
-		var warn := Label.new()
-		warn.text = "!"
-		warn.add_theme_font_size_override("font_size", 11)
-		warn.add_theme_color_override("font_color",
-			QueueStyle.ink(QueueStyle.Role.ROW_REFUSED_BORDER))
-		line.add_child(warn)
+	# WHAT IT DOES, underneath -- damage, kind, targets, and deliberately NOT the cost: the bars above
+	# ARE the cost (dev). It needs a carrier, since the damage scales off their aura, so a stash rune's
+	# rows are a name and its recipe alone.
+	if _wielder != null:
+		var detail := Label.new()
+		detail.text = carving.effect_text(_wielder)
+		detail.clip_text = true
+		detail.add_theme_font_size_override("font_size", 9)
+		detail.add_theme_color_override("font_color", QueueStyle.ink(QueueStyle.Role.HEADER_TEXT))
+		body.add_child(detail)
 	return row
 
 
-# The recipe as MARKS: one bar per sigil, in that element's own ink, so a 2-Fire/1-Earth circle reads
-# as three of them and the rune capacity it spends is simply how many there are (cost() is the raw
-# sigil count -- #60's ruling that cost is derived from the recipe, never author-set).
+# The DOMAIN's answer mapped onto the CHROME's. Two enums on purpose -- one is what the rule says, the
+# other what a row looks like -- and an explicit match rather than a cast, so re-ordering either one
+# is a compile-time conversation instead of a silently wrong colour.
+static func _box_state(state: TransmutationData.Channel) -> QueueStyle.Channel:
+	match state:
+		TransmutationData.Channel.REFUSED:
+			return QueueStyle.Channel.REFUSED
+		TransmutationData.Channel.WILDCARD:
+			return QueueStyle.Channel.WILDCARD
+	return QueueStyle.Channel.CLEAR
+
+
+# The recipe as MARKS, one bar per sigil, carrying the RING'S OWN THREE STATES (#1022): solid where
+# this carrier's aura pays that sigil, hollow where it is asked for and unpaid, and a lighter bar past
+# a `+` for each spare point. Shipped flat at #1019, which is why they said so little -- the shape was
+# right and the vocabulary was missing.
+#
+# THE POOL IS WALKED DOWN A COPY, sigil by sigil, so a 2-Fire recipe against Fire 1 draws one paid bar
+# and one hollow rather than two of either -- the ring's own per-tick rule, one surface along.
 #
 # SKINNED, because these sit on the list's paper, where the ring above takes AUTHORED off the card's
 # own dark frame. Two grounds on one card is #814's rule, not an inconsistency.
@@ -357,12 +465,45 @@ func _cost_bars(carving: TransmutationData) -> Control:
 	var bars := HBoxContainer.new()
 	bars.add_theme_constant_override("separation", 2)
 	bars.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+
+	var left: Dictionary[Elemental.Element, int] = {}
+	for element: Elemental.Element in carving.distinct_elements():
+		left[element] = _wielder.get_element_aura(element) if _wielder != null else 0
 	for element: Elemental.Element in carving.sigils:
-		var bar := ColorRect.new()
-		bar.color = QueueStyle.element_ink(element)
-		bar.custom_minimum_size = COST_BAR
-		bars.add_child(bar)
+		var paid: bool = left.get(element, 0) > 0
+		if paid:
+			left[element] = left[element] - 1
+		bars.add_child(_cost_bar(element, 1.0 if paid else HOLLOW_SWATCH_FILL, not paid))
+
+	# What is LEFT after paying is the spare -- the halo's own number, said again in the list so the
+	# ring and the row cannot disagree about how much is going spare.
+	var spare: Array[Elemental.Element] = []
+	for element: Elemental.Element in carving.distinct_elements():
+		for _i in range(maxi(0, left.get(element, 0))):
+			spare.append(element)
+	if not spare.is_empty():
+		var plus := Label.new()
+		plus.text = "+"
+		plus.add_theme_font_size_override("font_size", 9)
+		plus.add_theme_color_override("font_color", QueueStyle.ink(QueueStyle.Role.HEADER_TEXT))
+		plus.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+		bars.add_child(plus)
+		for element: Elemental.Element in spare:
+			bars.add_child(_cost_bar(element, SPARE_ALPHA, false))
 	return bars
+
+
+func _cost_bar(element: Elemental.Element, alpha: float, outlined: bool) -> Control:
+	var tint := QueueStyle.element_ink(element)
+	var box := StyleBoxFlat.new()
+	box.bg_color = Color(tint, alpha)
+	if outlined:
+		box.border_color = tint
+		box.set_border_width_all(1)
+	var bar := Panel.new()
+	bar.add_theme_stylebox_override("panel", box)
+	bar.custom_minimum_size = COST_BAR
+	return bar
 
 
 # THE RUNE'S OWN ANSWER, never a second one: attack_block_reason delegates to the carving with THIS
@@ -427,11 +568,7 @@ static func chip_for(item: Item) -> Button:
 	var rune := item as RuneData
 	if rune == null:
 		return null
-	var chip := Button.new()
-	chip.text = "%d/%d" % [rune.used_capacity(), rune.capacity()]
-	chip.add_theme_font_size_override("font_size", 9)
-	chip.focus_mode = Control.FOCUS_NONE
-	chip.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-	chip.tooltip_text = UiText.wrap("What this rune holds — %d of %d capacity spent." % [
-		rune.used_capacity(), rune.capacity()])
-	return chip
+	# The CHROME is ItemDetail's since #1022 -- only the COUNT is this kind's own business.
+	return ItemDetail.chip("%d/%d" % [rune.used_capacity(), rune.capacity()],
+		"What this rune holds — %d of %d capacity spent." % [
+			rune.used_capacity(), rune.capacity()])
