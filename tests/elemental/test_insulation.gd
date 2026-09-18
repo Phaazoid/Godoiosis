@@ -260,7 +260,7 @@ func test_an_insulated_bolt_still_finishes_a_downed_unit() -> void:
 	var alch: Unit = _alchemist({ Elemental.Element.FIRE: 4 })
 	var foe: Unit = H.spawn_solo(self, _sm, ENEMY, Vector2i(1, 0), {Stats.Stat.MHP: 50})
 	foe.worn_armor = _insulated_against(Elemental.Element.SHOCK)
-	foe.lifecycle_state = Unit.LifecycleState.DOWNED
+	foe.force_down()   # the real door: a body clings at 1, which #1002's HP-based rung reads
 
 	var atk := H.stamped_attack(alch, foe)
 	atk.fired_attack = _lightning_bolt(5)
@@ -279,7 +279,7 @@ func test_an_unblocked_bolt_still_finishes_a_downed_unit() -> void:
 	var alch: Unit = _alchemist({ Elemental.Element.FIRE: 4 })
 	var foe: Unit = H.spawn_solo(self, _sm, ENEMY, Vector2i(1, 0), {Stats.Stat.MHP: 50})
 	foe.worn_armor = _armor_granting(Abilities.Id.TAUNT)
-	foe.lifecycle_state = Unit.LifecycleState.DOWNED
+	foe.force_down()   # the real door: a body clings at 1, which #1002's HP-based rung reads
 
 	var atk := H.stamped_attack(alch, foe)
 	atk.fired_attack = _lightning_bolt(5)

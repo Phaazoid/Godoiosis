@@ -213,10 +213,11 @@ func _add_event(badge: String, spoken: String) -> void:
 
 func _show_hp_delta(outcome: ResolvedOutcome, subject: Unit) -> void:
 	# target_hp_after is threaded across the whole pass (R4): for the Nth hit it already accounts
-	# for the earlier hits this combat. The raw number goes negative on a fatal hit, so the
-	# DISPLAYED "after" is clamped by the lifecycle result -- a down/maim leaves HP at 1, a kill at 0.
-	# That clamp is LethalityRules' since #313: the ghost readout over the unit draws the same
-	# prediction, and two spellings of it would let this panel and the board disagree.
+	# for the earlier hits this combat. Since #1002 the resolver threads what the rung LEAVES
+	# (LethalityRules.hp_after), so a down already reads 1 here; only a kill still goes negative,
+	# and displayed_hp clamps that to 0. That clamp is LethalityRules' since #313: the ghost readout
+	# over the unit draws the same prediction, and two spellings would let this panel and the board
+	# disagree.
 	var hp_before: int = outcome.hp_before
 	var hp_after: int = LethalityRules.displayed_hp(outcome.target_hp_after,
 			LethalityRules.lifecycle_for(outcome.lethality))

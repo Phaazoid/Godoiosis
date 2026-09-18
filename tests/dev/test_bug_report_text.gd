@@ -11,9 +11,11 @@
 #   * the units loop silently stopped emitting rows (the section header printed, zero rows under
 #     it) -- so a row COUNT is asserted, never just "the header is there";
 #   * a solo squad has no squad_name, so the plan header rendered "Squad: " blank;
-#   * attack rows print the RAW target_hp_after. The queue panel clamps a fatal value to 0/1 by
-#     matching on lethality; copying that ladder here would duplicate a decision LethalityRules
-#     owns. If someone "fixes" the raw number, the fatal-hit case below goes red.
+#   * attack rows print the RAW target_hp_after. The queue panel clamps a KILL's negative to 0;
+#     copying that ladder here would duplicate a decision LethalityRules owns. If someone "fixes"
+#     the raw number, the fatal-hit case below goes red. (Since #1002 a DOWN is no longer part of
+#     that claim: the resolver threads the cling, so raw and clamped agree for one -- which is why
+#     the case below aims at a kill and says so.)
 extends GdUnitTestSuite
 
 const BoardBuilder := preload("res://play/board_builder.gd")
@@ -21,8 +23,11 @@ const BoardBuilder := preload("res://play/board_builder.gd")
 const PLAYER := Team.Faction.PLAYER
 const ENEMY := Team.Faction.ENEMY
 
-func _data(unit_name: String, fac: Team.Faction) -> UnitData:
-	return UnitFactory.create_unit_data(Stats.STAT_DEFAULTS.duplicate(), unit_name, fac)
+func _data(unit_name: String, fac: Team.Faction,
+		overrides: Dictionary[Stats.Stat, int] = {}) -> UnitData:
+	var stats: Dictionary[Stats.Stat, int] = Stats.STAT_DEFAULTS.duplicate()
+	stats.merge(overrides, true)
+	return UnitFactory.create_unit_data(stats, unit_name, fac)
 
 # Everything under "## Units", up to the log section.
 func _units_section(text: String) -> String:
@@ -155,11 +160,15 @@ func test_a_fatal_hit_reports_raw_hp_not_the_panels_clamp() -> void:
 	var board: Dictionary = BoardBuilder.build(self)
 	auto_free(board.root)
 	BoardBuilder.paint_rect(board.grid, Rect2i(-2, -2, 8, 8))
-	var hero: Unit = BoardBuilder.spawn(board, _data("Hero", PLAYER), Vector2i(0, 0))
+	# A KILL, not a down -- the hit has to clear OVERKILL_CEILING past the foe's remaining HP. Since
+	# #1002 a DOWN threads the cling (1) rather than the raw subtraction, so a down is exactly the
+	# rung this case cannot use: its raw and its clamp would be the same number and there would be
+	# nothing left to distinguish. A kill still threads below zero, which is the whole claim here.
+	var hero: Unit = BoardBuilder.spawn(board, _data("Hero", PLAYER, {Stats.Stat.STR: 30}), Vector2i(0, 0))
 	var foe: Unit = BoardBuilder.spawn(board, _data("Foe", ENEMY), Vector2i(1, 0))
 	var manager: SquadManager = board.squad_manager
 
-	foe.take_damage(foe.get_current_hp() - 1)   # 1 HP left: the next hit overshoots
+	foe.take_damage(foe.get_current_hp() - 1)   # 1 HP left: the next hit overshoots, hugely
 	assert_int(foe.get_current_hp()).is_equal(1)
 
 	var attack := AttackAction.declare(hero, hero.movement.cell, Vector2i(1, 0))
@@ -169,17 +178,19 @@ func test_a_fatal_hit_reports_raw_hp_not_the_panels_clamp() -> void:
 	var plan: ResolvedPlan = manager.resolve_plan(hero.squad, context)
 	var resolved: ResolvedOutcome = plan.attacks[0].resolved
 
-	# Guard the guard: the raw value must be STRICTLY negative, so it cannot coincide with either
-	# number the panel would clamp to (1 for a down/maim, 0 for a kill). At -1 or better this case
-	# is blind to the clamp it exists to forbid.
+	# Guard the guard: the raw value must be STRICTLY negative, so it cannot coincide with what the
+	# panel would clamp a kill to (0). At -1 or better this case is blind to the clamp it forbids.
+	assert_int(resolved.lethality).override_failure_message(
+			"the fixture hit no longer kills, so the raw number is the cling and this case "
+			+ "is blind to the clamp it exists to forbid") \
+			.is_equal(ResolvedOutcome.Lethality.KILLED)
 	assert_int(resolved.target_hp_after).is_less(0)
-	assert_int(resolved.lethality).is_not_equal(ResolvedOutcome.Lethality.NONE)
 
 	var units: Array[Unit] = [hero, foe]
 	var text := BugReporter.build_report_text("stamp", "IDLE", BugReporter.Kind.BUG, "",hero.squad, plan, units, "log")
 
 	# The RAW number, and the lethality name that gives it meaning. The queue panel would show
-	# this same hit clamped to 0 or 1 -- deliberately not copied here.
+	# this same hit clamped to 0 -- deliberately not copied here.
 	assert_str(text).contains("%d raw" % resolved.target_hp_after)
 	assert_str(text).contains(ResolvedOutcome.Lethality.keys()[resolved.lethality])
 

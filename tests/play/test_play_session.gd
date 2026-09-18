@@ -70,6 +70,12 @@ func test_sub_ceiling_lethal_hit_downs_and_skips_counter() -> void:
 	assert_bool(res.ok).is_true()
 	assert_bool(target.is_downed()).is_true()              # NOT dead
 	assert_int(target.get_current_hp()).is_equal(1)        # clings at 1 HP
+	# ...and the headless twin's Law #2 claim now covers a FELL, which it could not before #1002:
+	# the preview threaded the ladder's raw arithmetic (negative here) while execution clung at 1,
+	# so test_preview_equals_execution above could only ever be asserted on a survivable hit.
+	assert_int(prev.plan.attacks[0].hp_after).override_failure_message(
+			"the headless preview promised an HP the execution did not land on") \
+			.is_equal(target.get_current_hp())
 	assert_int(attacker.get_current_hp()).is_equal(attacker_hp)   # counter was skipped — no reprisal
 	assert_str(BoardView.render_overview(_session)).contains("[DOWNED]")   # legend flags the body
 
