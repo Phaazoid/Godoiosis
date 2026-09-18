@@ -1,0 +1,61 @@
+[gd_resource type="Resource" script_class="Roster" format=3 uid="uid://blbn21eraegcr"]
+
+[ext_resource type="Script" uid="uid://df2c8ssuh18ff" path="res://Classes/weapons/WeaponModData.gd" id="1_lw6h4"]
+[ext_resource type="Script" uid="uid://dbb0pgdet8qo0" path="res://Classes/flow/ScenarioUnitEntry.gd" id="2_qqvny"]
+[ext_resource type="Script" uid="uid://jytv7xrjv6l1" path="res://Classes/items/Item.gd" id="3_4uk1i"]
+[ext_resource type="Script" uid="uid://6vu10nf3p58m" path="res://Classes/units/StatEffect.gd" id="4_i0dgb"]
+[ext_resource type="Resource" uid="uid://dxhlknpfvr3sy" path="res://Resources/Units/Isaac.tres" id="5_vwkm0"]
+[ext_resource type="Resource" uid="uid://cvvsnph8bcjc8" path="res://Resources/Units/Torv.tres" id="6_i540u"]
+[ext_resource type="Resource" path="res://Resources/Units/Ross.tres" id="7_c3j6b"]
+[ext_resource type="Resource" uid="uid://cilw8ay33gk61" path="res://Resources/Units/Marco.tres" id="8_ji63g"]
+[ext_resource type="Resource" uid="uid://cuns07k40xaxv" path="res://Resources/Units/Sara.tres" id="9_fw5l0"]
+[ext_resource type="Resource" path="res://Resources/Units/Rebecca.tres" id="10_uqhu3"]
+[ext_resource type="Script" uid="uid://cwhromthxtouo" path="res://Classes/flow/Roster.gd" id="11_qvlfp"]
+[ext_resource type="Resource" path="res://Resources/Weapons/MainVarieties/Carbine.tres" id="12_xhy4c"]
+[ext_resource type="Resource" uid="uid://qm4wjlfxedbr" path="res://Resources/Weapons/MainVarieties/ChainSword.tres" id="13_ef53g"]
+[ext_resource type="Resource" uid="uid://d0sf3gb33rpfy" path="res://Resources/Weapons/MainVarieties/Chemical_Spitter.tres" id="14_q5i0o"]
+[ext_resource type="Resource" uid="uid://bv7tui68o7xfr" path="res://Resources/Weapons/MainVarieties/Drill.tres" id="15_wx2e7"]
+[ext_resource type="Resource" uid="uid://ceogmk32dfq6l" path="res://Resources/Weapons/MainVarieties/Kinetic_Mace.tres" id="16_p3fa2"]
+[ext_resource type="Resource" uid="uid://fx3dcqyslgbe" path="res://Resources/Weapons/MainVarieties/Springspear.tres" id="17_pgbla"]
+[ext_resource type="Resource" uid="uid://bxva1ht20h7en" path="res://Resources/RuneVariants/Wind Rune.tres" id="18_jilnb"]
+[ext_resource type="Resource" uid="uid://b17pmec74vt1l" path="res://Resources/RuneVariants/Electric Rune.tres" id="19_4je2g"]
+[ext_resource type="Resource" uid="uid://g207p44clmyf" path="res://Resources/RuneVariants/Earth Rune.tres" id="20_mah4l"]
+[ext_resource type="Resource" uid="uid://migwb2q24cv7" path="res://Resources/RuneVariants/Fire Rune.tres" id="21_kkfs0"]
+[ext_resource type="Resource" uid="uid://dq8xjurnrp551" path="res://Resources/RuneVariants/Heal2.tres" id="22_aki5w"]
+[ext_resource type="Resource" path="res://Resources/RuneVariants/FreezeRune.tres" id="23_pdw14"]
+
+[sub_resource type="Resource" id="Resource_u24sa"]
+script = ExtResource("2_qqvny")
+unit_data = ExtResource("5_vwkm0")
+state_saved = false
+
+[sub_resource type="Resource" id="Resource_8ru5b"]
+script = ExtResource("2_qqvny")
+unit_data = ExtResource("6_i540u")
+state_saved = false
+
+[sub_resource type="Resource" id="Resource_1ula4"]
+script = ExtResource("2_qqvny")
+unit_data = ExtResource("7_c3j6b")
+state_saved = false
+
+[sub_resource type="Resource" id="Resource_jq8ag"]
+script = ExtResource("2_qqvny")
+unit_data = ExtResource("8_ji63g")
+state_saved = false
+
+[sub_resource type="Resource" id="Resource_egnjn"]
+script = ExtResource("2_qqvny")
+unit_data = ExtResource("9_fw5l0")
+state_saved = false
+
+[sub_resource type="Resource" id="Resource_e7dfs"]
+script = ExtResource("2_qqvny")
+unit_data = ExtResource("10_uqhu3")
+state_saved = false
+
+[resource]
+script = ExtResource("11_qvlfp")
+entries = Array[ExtResource("2_qqvny")]([SubResource("Resource_u24sa"), SubResource("Resource_8ru5b"), SubResource("Resource_1ula4"), SubResource("Resource_jq8ag"), SubResource("Resource_egnjn"), SubResource("Resource_e7dfs")])
+stash = Array[ExtResource("3_4uk1i")]([ExtResource("12_xhy4c"), ExtResource("13_ef53g"), ExtResource("14_q5i0o"), ExtResource("15_wx2e7"), ExtResource("16_p3fa2"), ExtResource("17_pgbla"), ExtResource("18_jilnb"), ExtResource("19_4je2g"), ExtResource("20_mah4l"), ExtResource("21_kkfs0"), ExtResource("22_aki5w"), ExtResource("23_pdw14")])
+offers_every_job = false
