@@ -408,14 +408,28 @@ func test_a_row_says_how_comfortably_it_channels() -> void:
 # WHAT IT DOES, under the name -- and NOT what it costs, because the bars above are that (dev:
 # "perhaps get rid of the cost X though, since we're already visualizing that with the bars").
 func test_a_row_prints_what_it_does_and_never_what_it_costs() -> void:
-	var carvings: Array[TransmutationData] = [_circle([FIRE, FIRE], "Ember")]
-	var card := await _open(_rune(carvings), _alchemist({FIRE: 3}))
+	# A carrier one Air short, so the WILDCARD half of mechanical_text is genuinely present to be
+	# left out -- a fixture with no deficit cannot tell the two readouts apart, which is how the
+	# first version of this case passed against a mutant printing the whole sentence.
+	var recipe: Array[Elemental.Element] = [FIRE, FIRE, AIR]
+	var carvings: Array[TransmutationData] = [_circle(recipe, "Zap")]
+	var rune := _rune(carvings)
+	var alch := _alchemist({FIRE: 2})
+	var card := await _open(rune, alch)
+
+	assert_int(rune.inscriptions[0].total_deficit(alch)).override_failure_message(
+		"the fixture has no shortfall, so the wildcard half is absent either way").is_greater(0)
 
 	var text := _list_text(card)
 	assert_str(text).override_failure_message(
 		"the row never said what the carving does").contains("Damage")
-	assert_str(text).not_contains("cost")
-	assert_str(text).not_contains("Wildcards")
+	# THE RECIPE is the bars' job and THE SHORTFALL is the row tint's, so neither may be printed
+	# again underneath -- that is the same fact twice on one row (dev).
+	assert_str(text).override_failure_message(
+		"the row printed the recipe the bars beside it already draw"
+		).not_contains(rune.inscriptions[0].sigil_text())
+	assert_str(text).override_failure_message(
+		"the row printed the wildcard count its own tint already says").not_contains("Wildcards")
 
 
 # --- the door ---------------------------------------------------------------------------------------
@@ -492,10 +506,18 @@ func test_the_detail_chip_paints_its_own_chrome_and_answers_the_pointer() -> voi
 	var carvings: Array[TransmutationData] = [_circle([FIRE], "Ember")]
 	var chip: Button = auto_free(ItemDetail.chip_for(_rune(carvings)))
 
+	# ASK FOR THE OVERRIDE, NOT FOR A BOX. `get_theme_stylebox` falls back to the THEME's own Button
+	# box when nothing is overridden -- which is a real StyleBoxFlat, and is precisely the chrome that
+	# disappears on this panel -- so a case asking merely "is there a box" passes against the bug it
+	# was written for. A mutant deleting the override went green until this line said `override`.
+	assert_bool(chip.has_theme_stylebox_override("normal")).override_failure_message(
+		"the chip inherits the engine's button chrome, which is the thing that disappeared"
+		).is_true()
+	assert_bool(chip.has_theme_stylebox_override("hover")).is_true()
+
 	var resting := chip.get_theme_stylebox("normal") as StyleBoxFlat
 	var hovered := chip.get_theme_stylebox("hover") as StyleBoxFlat
-	assert_object(resting).override_failure_message(
-		"the chip draws no box of its own, so it reads as a label").is_not_null()
+	assert_object(resting).is_not_null()
 	assert_object(hovered).is_not_null()
 	assert_bool(resting.bg_color == QueueStyle.ink(QueueStyle.Role.ROW_BG)).override_failure_message(
 		"the chip's fill is the row it sits on, so there is nothing to see").is_false()
