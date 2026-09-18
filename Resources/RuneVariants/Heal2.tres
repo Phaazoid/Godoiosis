@@ -4,10 +4,10 @@
 [ext_resource type="Script" uid="uid://dle5ob08qngde" path="res://Classes/presentation/EffectLook.gd" id="2_fvwxf"]
 [ext_resource type="Script" uid="uid://ckrp1phgirys0" path="res://Classes/alchemy/RuneData.gd" id="3_j4cyw"]
 
-[sub_resource type="Resource" id="Resource_advc0"]
+[sub_resource type="Resource" id="Resource_fvwxf"]
 script = ExtResource("1_fvwxf")
 sigils = Array[int]([7])
-display_name = "heal2"
+display_name = "Heal"
 power = 6
 min_range = 0
 max_range = 2
@@ -17,6 +17,6 @@ heals = true
 
 [resource]
 script = ExtResource("3_j4cyw")
-inscriptions = Array[ExtResource("1_fvwxf")]([SubResource("Resource_advc0")])
+inscriptions = Array[ExtResource("1_fvwxf")]([SubResource("Resource_fvwxf")])
 temper = 7
 display_name = "Heal Rune"

@@ -18,8 +18,12 @@ class_name TelemetryNotice
 # MissionEndBanner and MissionSelectScreen. The button is the only door, which is the point of a
 # notice somebody is meant to read.
 
-const TITLE := "This is an early playtest build."
-const BODY := """This build sends playtest data.    
+const TITLE := "Thanks for trying out this little demo!."
+const BODY := """This is a very early build of the game.  Please give feedback, or report bugs, through the feedback options in the menu!
+
+There are a couple of short levels to try. 
+
+This build sends playtest data.    
 
 It is anonymous: a random id for this install, and nothing else. No name, no account, nothing about your machine or your files. """
 const ACKNOWLEDGE := "Got it"

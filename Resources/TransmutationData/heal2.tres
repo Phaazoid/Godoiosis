@@ -6,7 +6,7 @@
 [resource]
 script = ExtResource("2_fa0vc")
 sigils = Array[int]([7])
-display_name = "heal2"
+display_name = "Heal"
 power = 6
 min_range = 0
 max_range = 2
