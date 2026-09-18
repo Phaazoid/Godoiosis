@@ -479,7 +479,9 @@ func test_a_shove_into_deep_water_takes_everything_the_blow_left() -> void:
 	# "Losing all one's health", stated as the arithmetic rather than as a number: total damage IS
 	# what the unit had, so no tuning value is pinned here.
 	assert_int(outcome.damage).is_equal(outcome.hp_before)
-	assert_int(outcome.target_hp_after).is_equal(0)
+	# And what the rung LEAVES is the cling, which is what execution lands on -- since #1002 the
+	# resolver threads that rather than the raw subtraction, so this is Law #2 rather than arithmetic.
+	assert_int(outcome.target_hp_after).is_equal(1)
 	assert_int(outcome.drown_damage).is_greater(0)
 
 
@@ -571,7 +573,9 @@ func test_a_tumble_that_bottoms_out_in_a_lake_ends_in_the_lake() -> void:
 		.override_failure_message("the slide should carry on into the water, not stop dry above it") \
 		.is_true()
 	assert_that(_lifecycle(outcome)).is_equal(Unit.LifecycleState.DOWNED)
-	assert_int(outcome.target_hp_after).is_equal(0)
+	# The water took everything (the property), and the down leaves the cling (#1002).
+	assert_int(outcome.damage).is_equal(outcome.hp_before)
+	assert_int(outcome.target_hp_after).is_equal(1)
 
 
 func test_a_fall_into_water_pays_the_fall_and_the_water_takes_the_rest() -> void:
@@ -596,7 +600,7 @@ func test_a_fall_into_water_pays_the_fall_and_the_water_takes_the_rest() -> void
 	# THE property, and it is tuning-proof: however the blow and the fall are priced, the water takes
 	# the remainder, so the total is exactly what the unit had.
 	assert_int(outcome.damage).is_equal(outcome.hp_before)
-	assert_int(outcome.target_hp_after).is_equal(0)
+	assert_int(outcome.target_hp_after).is_equal(1)   # and the down leaves the cling (#1002)
 
 
 # A hit that alone kills leaves nothing to shove (the pre-#259 rule, judged provisionally).

@@ -343,3 +343,40 @@ func test_a_heal_the_cap_ate_leaves_the_body_on_its_clock() -> void:
 	assert_int(body.downed_turns_remaining).override_failure_message(
 			"a heal that moved no HP stopped the clock anyway") \
 			.is_equal(clock)
+
+
+# --- a heal on an ally the SAME PASS already felled (#1002) ---
+# The reported shape that started the arc, from the preview side: the resolver threaded the ladder's
+# raw arithmetic (negative on an overkill down) and the heal added to THAT, so the queue row read
+# from a number no board state ever holds. Execution heals the body from the 1 HP it clings at.
+
+func test_a_heal_on_an_ally_felled_earlier_in_the_pass_previews_what_execution_lands_on() -> void:
+	# STR 0 so base damage is the weapon power exactly (the lethality suite's fixture idiom).
+	var bruiser := H.spawn_solo(self, _sm, PLAYER, Vector2i(0, 1), {Stats.Stat.STR: 0}, true, 25)
+	var healer := H.spawn_solo(self, _sm, PLAYER, Vector2i(0, 0), {Stats.Stat.STR: 0})
+	var victim := H.spawn_solo(self, _sm, PLAYER, Vector2i(1, 0), {Stats.Stat.MHP: 20})
+
+	var blow := H.stamped_attack(bruiser, victim)   # 25 into 20 HP: overkill 5, so a DOWN not a kill
+	var heal := _heal_attack(healer, victim, 6)
+
+	var plan := ResolvedPlan.new()
+	plan.attacks.append(blow)
+	plan.attacks.append(heal)
+	PlanResolver.resolve(plan)
+
+	assert_int(blow.resolved.lethality).override_failure_message(
+			"the blow did not FELL the victim, so the heal lands on a standing unit and this case "
+			+ "is an ordinary top-up") \
+			.is_equal(ResolvedOutcome.Lethality.DOWNED)
+
+	# The same two hits, in the same order, for real.
+	victim.take_damage(blow.resolved.damage)
+	victim.heal(heal.resolved.heal_amount)
+
+	assert_int(heal.resolved.target_hp_after).override_failure_message(
+			"the queue previewed the heal from the ladder's raw arithmetic rather than from the HP "
+			+ "the body actually clings at") \
+			.is_equal(victim.get_current_hp())
+	assert_int(heal.resolved.hp_before).override_failure_message(
+			"the row's 'before' is a number no board state ever holds") \
+			.is_equal(1)

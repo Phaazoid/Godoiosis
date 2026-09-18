@@ -722,3 +722,29 @@ func test_a_crisis_armed_target_is_priced_like_any_other_kill() -> void:
 	assert_that(rung).override_failure_message(
 			"fixture: the queued hit sentenced the Berserker to %s, not CRISIS -- this measured an ordinary kill"
 			% ResolvedOutcome.Lethality.keys()[rung]).is_equal(ResolvedOutcome.Lethality.CRISIS)
+
+
+# A HEALED body is still worth +1 (#1002, keeping #720's ruling literal). That "+1" was never a
+# constant -- it is the overkill clamp at the victim's own HP, worth 1 only while a body clung at 1
+# -- so once a heal can leave one holding real health the same arithmetic prices finishing it at
+# full damage, which ties with chipping somebody upright and hands the pick to board order.
+#
+# The body is spawned FIRST so it WINS that tie: with the clamp gone this case aims at the corpse.
+func test_a_healed_body_is_still_priced_at_one_beside_a_standing_enemy() -> void:
+	var board: Dictionary = _build_board()
+	var attacker: Unit = _spawn(board, PLAYER, Vector2i(0, 0))
+	var body: Unit = _spawn(board, ENEMY, Vector2i(1, 0))
+	_down(body)
+	body.heal(40)                                            # stabilised, and holding real HP
+	var standing: Unit = _spawn(board, ENEMY, Vector2i(0, 1))
+
+	assert_int(body.get_current_hp()).override_failure_message(
+			"the heal left the body at its cling, so the clamp and the raw HP agree and this case "
+			+ "cannot see the difference").is_greater(1)
+
+	AITactics.queue_main_actions_for_squad(attacker.squad, _context(board), board.squad_manager)
+
+	assert_int(_aim_count(attacker.squad, standing.movement.cell)).override_failure_message(
+			"the AI took the healed body over somebody still on their feet -- #720's ranking, "
+			+ "broken by the HP a heal put on a corpse").is_equal(1)
+	assert_int(_aim_count(attacker.squad, body.movement.cell)).is_equal(0)

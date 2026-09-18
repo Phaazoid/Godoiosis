@@ -75,13 +75,44 @@ func test_one_past_the_ceiling_kills() -> void:
 	var outcome := _resolve_attack(_attacker(hp + LethalityRules.OVERKILL_CEILING + 1), _target(hp))
 	assert_int(outcome.lethality).is_equal(ResolvedOutcome.Lethality.KILLED)
 
-# --- already-downed target (Fork 3: a hit on a downed unit kills it, any damage) ---
+# --- already-downed target (Fork 3, HP-based since #1002: a hit finishes a body when it meets the
+# HP the body is holding, which for an unhealed one clinging at 1 is any damaging hit at all) ---
 
-func test_hitting_a_downed_unit_is_predicted_killed() -> void:
+func test_hitting_a_downed_unit_at_one_hp_is_predicted_killed() -> void:
 	var target := _target(20)
 	target.take_damage(target.get_current_hp())   # exactly-lethal -> DOWNED, clings at 1 HP
 	assert_bool(target.is_downed()).is_true()
 	var outcome := _resolve_attack(_attacker(1), target)   # even a 1-damage poke
+	assert_int(outcome.lethality).is_equal(ResolvedOutcome.Lethality.KILLED)
+
+
+func test_a_healed_body_survives_a_hit_smaller_than_the_hp_it_holds() -> void:
+	# The dev's ruling: a healed body "isn't necessarily dead in one hit anymore". The HP is real,
+	# so the hit takes it rather than finishing the unit, and the body stays a body.
+	var target := _target(20)
+	target.take_damage(target.get_current_hp())
+	target.heal(8)                                        # #1002: a stabilised body, 9 HP
+	assert_int(target.get_current_hp()).override_failure_message(
+			"the heal did not raise the body's HP, so there is nothing here for the hit to fail to "
+			+ "get through").is_greater(1)
+
+	var outcome := _resolve_attack(_attacker(4), target)
+
+	assert_int(outcome.lethality).is_equal(ResolvedOutcome.Lethality.NONE)
+	assert_int(outcome.target_hp_after).is_equal(target.get_current_hp() - outcome.damage)
+	# And execution agrees -- one ladder, two callers (Law #2).
+	target.take_damage(outcome.damage)
+	assert_bool(target.is_downed()).override_failure_message(
+			"the hit finished the healed body, or stood it up").is_true()
+	assert_int(target.get_current_hp()).is_equal(outcome.target_hp_after)
+
+
+func test_a_hit_that_meets_a_healed_bodys_hp_still_finishes_it() -> void:
+	# The other side of the threshold, so the rung cannot widen into "a body never dies to a hit".
+	var target := _target(20)
+	target.take_damage(target.get_current_hp())
+	target.heal(5)                                        # 6 HP
+	var outcome := _resolve_attack(_attacker(target.get_current_hp()), target)
 	assert_int(outcome.lethality).is_equal(ResolvedOutcome.Lethality.KILLED)
 
 # --- Law #2: the previewed rung is the rung execution actually lands on ---
@@ -114,3 +145,21 @@ func test_die_is_idempotent() -> void:
 	target.die()
 	assert_int(emissions[0]).is_equal(1)
 	assert_bool(target.is_dead()).is_true()
+
+
+# What the resolver THREADS after a down is the cling, not the ladder's arithmetic (#1002). This is
+# what makes PlanResolver's rescue-copy floor redundant -- that line raised a negative hp back to 1
+# for a body a queued rescue stands up, and the hypo now never holds a negative for a downed unit,
+# so the floor was a third spelling of LethalityRules.hp_after's own answer.
+func test_a_down_threads_the_cling_rather_than_the_ladders_arithmetic() -> void:
+	var target := _target(20)
+	var attack := H.stamped_attack(_attacker(25), target)   # overkill 5: a DOWN, and 20 - 25 < 0
+	var plan := ResolvedPlan.new()
+	plan.attacks.append(attack)
+	var no_reactions: Array[ElementalReaction] = []
+	PlanResolver.resolve(plan, no_reactions)
+
+	assert_int(attack.resolved.lethality).is_equal(ResolvedOutcome.Lethality.DOWNED)
+	assert_int(PlanResolver.projected_hp(target, plan.hypo)).override_failure_message(
+			"the hypo holds the subtraction rather than what execution lands on") \
+			.is_equal(1)

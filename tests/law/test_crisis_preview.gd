@@ -83,3 +83,19 @@ func test_crisis_then_second_hit_previews_kill_no_safety_net() -> void:
 	_resolve([first, second])
 	assert_that(first.resolved.lethality).is_equal(ResolvedOutcome.Lethality.CRISIS)
 	assert_that(second.resolved.lethality).is_equal(ResolvedOutcome.Lethality.KILLED)
+
+
+# The SECOND writer of target_hp_after (#419's tile hit) reaching the same answer as the first.
+# It threaded its own subtraction until #1002, so a burn that fired the gambit previewed the unit
+# at zero while execution stood them up at CRISIS_REVIVE_HP -- one map, both writers, no clamp.
+func test_a_tile_burn_that_fires_the_gambit_previews_the_revive_hp() -> void:
+	var target := H.spawn_solo(self, _sm, PLAYER, Vector2i(1, 0), {Stats.Stat.MHP: 10, Stats.Stat.WIL: 20})
+	_arm(target)
+
+	var hit := TileHitAction.make(target, Terrain.TileState.BURNING,
+			target.get_current_hp(), LethalityRules.situation_for(target))
+
+	assert_that(hit.resolved.lethality).override_failure_message(
+			"the burn did not fire the gambit, so this case is not about the Crisis rung") \
+			.is_equal(ResolvedOutcome.Lethality.CRISIS)
+	assert_int(hit.resolved.target_hp_after).is_equal(Abilities.CRISIS_REVIVE_HP)
