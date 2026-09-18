@@ -457,3 +457,62 @@ func test_the_screens_own_door_opens_the_rune_card_and_not_the_weapons() -> void
 		assert_bool(child is ModFittingCard).override_failure_message(
 			"a rune reached the weapon fitting card").is_false()
 	assert_object(opened).override_failure_message("the screen opened no card").is_not_null()
+
+
+# --- the two the dev reported by eye -----------------------------------------------------------------
+
+# THE BARS SIT BESIDE THE NAME, not at the far edge (dev: "the bars in the titles are right aligned").
+# Asserted against the row's own geometry rather than against a size flag: the flag is how it was
+# broken, the POSITION is what was wrong with it, and a case pinned to the flag would go green the
+# next time the same mistake arrives wearing a spacer instead.
+func test_the_cost_bars_sit_beside_the_name_rather_than_at_the_far_edge() -> void:
+	var carvings: Array[TransmutationData] = [_circle([FIRE], "Ember")]
+	var card := await _open(_rune(carvings), _alchemist({FIRE: 2}))
+	await await_idle_frame()
+
+	var row := _rows_of(card)[0]
+	var line := (row.get_child(0) as VBoxContainer).get_child(0) as HBoxContainer
+	var name_label := line.get_child(0) as Label
+	var bars := _bars_of(row)
+
+	var slack := line.size.x - (bars.position.x + bars.size.x)
+	var gap := bars.position.x - (name_label.position.x + name_label.size.x)
+	assert_float(gap).override_failure_message(
+		"the bars are %.0fpx from the name -- they are not beside it" % gap).is_less(20.0)
+	assert_float(slack).override_failure_message(
+		"the row's empty space is before the bars rather than after them, so they read as a second "
+		+ "column instead of what the name costs").is_greater(gap)
+
+
+# THE CHIP PAINTS ITS OWN GROUND (#1022, dev: the buttons "don't really visually read as buttons").
+# A bare Button takes the engine's chrome and vanishes on this panel -- the diagnosis EXECUTE_BG
+# already carries -- so what is pinned is that it HAS a box and that the box MOVES when the pointer
+# lands, which together are the whole of "this is pressable". Which colours those are is the dev's.
+func test_the_detail_chip_paints_its_own_chrome_and_answers_the_pointer() -> void:
+	var carvings: Array[TransmutationData] = [_circle([FIRE], "Ember")]
+	var chip: Button = auto_free(ItemDetail.chip_for(_rune(carvings)))
+
+	var resting := chip.get_theme_stylebox("normal") as StyleBoxFlat
+	var hovered := chip.get_theme_stylebox("hover") as StyleBoxFlat
+	assert_object(resting).override_failure_message(
+		"the chip draws no box of its own, so it reads as a label").is_not_null()
+	assert_object(hovered).is_not_null()
+	assert_bool(resting.bg_color == QueueStyle.ink(QueueStyle.Role.ROW_BG)).override_failure_message(
+		"the chip's fill is the row it sits on, so there is nothing to see").is_false()
+	assert_bool(resting.bg_color == hovered.bg_color).override_failure_message(
+		"the chip looks identical under the pointer").is_false()
+	# ...and it says so before the click, at no cost in width.
+	assert_int(chip.mouse_default_cursor_shape).is_equal(Control.CURSOR_POINTING_HAND)
+
+
+# ONE BUILDER FOR BOTH CARDS, so "make it pop" stays a one-place change. A weapon chip and a rune
+# chip differ in what they COUNT and in nothing else.
+func test_both_kinds_of_chip_wear_the_same_chrome() -> void:
+	var carvings: Array[TransmutationData] = [_circle([FIRE], "Ember")]
+	var rune_chip: Button = auto_free(ItemDetail.chip_for(_rune(carvings)))
+	var plain: Button = auto_free(ItemDetail.chip("1/3", "whatever"))
+
+	var a := rune_chip.get_theme_stylebox("normal") as StyleBoxFlat
+	var b := plain.get_theme_stylebox("normal") as StyleBoxFlat
+	assert_bool(a.bg_color == b.bg_color).is_true()
+	assert_bool(a.border_color == b.border_color).is_true()
