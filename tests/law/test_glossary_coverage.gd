@@ -4,7 +4,13 @@
 # stat, tile state, element state or menu verb cannot ship without its glossary line.
 #
 # Presence only, never wording: content is tuned freely (and numbers are interpolated from
-# the constants that rule them), so nothing here pins what any entry SAYS.
+# the constants that rule them), so nothing HERE pins what any entry SAYS.
+#
+# There is one wording law, and it lives next door rather than in this file:
+# test_glossary_entries_carry_no_dash_tell.gd, which refuses a dash in anything a player reads.
+# It is separate because it is about the shipped SURFACE rather than about completeness, and its
+# header carries the dev's ruling and the scope boundary. Nothing about LENGTH is pinned anywhere,
+# deliberately -- how long an entry should be is a judgment he makes while reading the page.
 extends GdUnitTestSuite
 
 
