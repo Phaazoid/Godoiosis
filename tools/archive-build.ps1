@@ -48,6 +48,11 @@ param(
 
 $ErrorActionPreference = 'Stop'
 
+# How long the archive waits out something holding a build file. ~10s, comfortably past a virus
+# scan of a 112 MB binary, and short enough that a real lock refuses rather than hangs.
+$ZIP_ATTEMPTS = 5
+$ZIP_RETRY_SECONDS = 2
+
 $root = Split-Path $PSScriptRoot -Parent
 
 # One reader for "what does this config file say", used for the version and for both halves of the
@@ -70,6 +75,53 @@ function Read-Setting-Or {
     $match = Select-String -Path $Path -Pattern $Pattern | Select-Object -First 1
     if (-not $match) { return $Fallback }
     return $match.Matches[0].Groups[1].Value
+}
+
+# THE ARCHIVE, AND WHY IT IS NOT `Compress-Archive` (#1031). That cmdlet opens each source with a
+# RESTRICTIVE share mode, so anything else touching the file fails the whole archive - which is what
+# happened on the first embedded build: Windows Defender scanning a freshly written 112 MB binary.
+# It also refuses the obvious workflow of launching the build to test it and then re-exporting,
+# because a running executable is readable on Windows but not to that cmdlet.
+#
+# So the read asks for `FileShare.ReadWrite` - a holder that permits reading no longer fails us -
+# and the RETRY covers the other shape, a brief EXCLUSIVE lock that no share mode can open. Both
+# halves are here because the two causes are different: one is a reader, one is a scanner.
+#
+# Entries are written BY NAME, which makes the flat layout structural rather than a side effect of
+# handing a cmdlet a file list. A partial zip is deleted on every failure, so a truncated archive
+# can never sit in the output directory looking like a build.
+function New-Zip {
+    param([string[]]$Files, [string]$Destination)
+    Add-Type -AssemblyName System.IO.Compression.FileSystem
+    for ($attempt = 1; $attempt -le $ZIP_ATTEMPTS; $attempt++) {
+        if (Test-Path $Destination) { Remove-Item $Destination -Force }
+        try {
+            $archive = [IO.Compression.ZipFile]::Open($Destination, 'Create')
+            try {
+                foreach ($file in $Files) {
+                    $entry = $archive.CreateEntry([IO.Path]::GetFileName($file), 'Optimal')
+                    $writer = $entry.Open()
+                    try {
+                        $reader = [IO.File]::Open($file, 'Open', 'Read', 'ReadWrite')
+                        try { $reader.CopyTo($writer) } finally { $reader.Dispose() }
+                    } finally { $writer.Dispose() }
+                }
+            } finally { $archive.Dispose() }
+            return
+        } catch {
+            $why = $_.Exception.Message
+            if ($attempt -lt $ZIP_ATTEMPTS) {
+                Write-Host ("Something is holding a build file; retrying ({0}/{1})..." -f $attempt, $ZIP_ATTEMPTS) -ForegroundColor Yellow
+                Start-Sleep -Seconds $ZIP_RETRY_SECONDS
+            } else {
+                if (Test-Path $Destination) { Remove-Item $Destination -Force }
+                throw ("Could not read a build file after $ZIP_ATTEMPTS attempts - no zip written," +
+                       " no tag created. Something is holding it: a virus scan that has not finished," +
+                       " or the game still running out of that folder. Close it and run this again.`n" +
+                       "  $why")
+            }
+        }
+    }
 }
 
 # Takes ONE array rather than remaining arguments: a token like `--porcelain` handed to an advanced
@@ -191,14 +243,11 @@ if ($after) {
 }
 
 # ---- 6. the zip --------------------------------------------------------------------------------
-# FLAT - the three files at the zip's root, no folder inside. Compress-Archive on Windows PowerShell
-# writes a folder's entries with backslash separators, which some extractors unpack as one file with
-# a strange name; handing it a file list sidesteps that, and Extract All makes the folder anyway.
 
 $files = @($exe)
 if (-not $embedded) { $files += $pck }
 if (Test-Path $console) { $files += $console }
-Compress-Archive -Path $files -DestinationPath $zip -Force
+New-Zip $files $zip
 
 # ---- 7. the tag, last --------------------------------------------------------------------------
 
