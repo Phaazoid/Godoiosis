@@ -72,7 +72,8 @@ static func crisis_armed_for(unit: Unit) -> bool:
 
 # The ladder itself:
 #   already DEAD        -> no-op (NONE)
-#   already DOWNED      -> any DAMAGING hit kills (Fork 3: downed-attack = kill)
+#   already DOWNED      -> a DAMAGING hit kills once it meets the HP the body holds (Fork 3 as
+#                          amended by #1002; a body nothing healed clings at 1, so any hit does)
 #   damage < hp         -> survivable (NONE)
 #   overkill > ceiling  -> KILLED
 #   would-be-down       -> CRISIS if full-Will + the Crisis ability is held (deterministic, #158),
