@@ -85,7 +85,8 @@ below follows from taking that literally.
 > **And no transform can describe a corner cell at all**, which is the other half of the same
 > mistake. Four non-coplanar points, and an affine transform maps a plane to a plane: the best-fit
 > plane CROSSES the ground by a quarter of the climb at every corner, alternating sign — an eighth of
-> a cell on the gentle slope against a `fill_lift` of 0.02, which is why it read as z-fighting on the
+> a cell on the gentle slope, an order of magnitude past `fill_lift` whatever that is tuned to (0.02
+> when this was written, 0.04 since #710 slice 4), which is why it read as z-fighting on the
 > tile's flat half and as arrows cutting through it. So **`lie_on` returns an identity basis on a
 > non-planar form** rather than a tilt it cannot honour, `Terrain.is_planar_form` is the question, and
 > **the FOLD lives in the marker's MESH** (`BoardOverlays._surface_mesh`): four vertices at their true

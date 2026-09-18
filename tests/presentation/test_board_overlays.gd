@@ -664,6 +664,14 @@ func test_the_enemys_move_tone_draws_over_its_reach_and_under_your_own_range() -
 	assert_int(envelope).override_failure_message(
 			"the enemy's move envelope sorts at %d and your own move range at %d -- the enemy tone would swallow your range" \
 			% [envelope, own]).is_less(own)
+	# ...and the CROWD's twins sit under BOTH of them (slice 4), in the same reach-then-envelope
+	# order, so the enemy under the pointer is the loud one whichever tone a cell carries.
+	var dim_danger: int = BoardOverlays.LAYERS[BoardOverlays.Layer.DANGER_DIM]["sort"]
+	var dim_envelope: int = BoardOverlays.LAYERS[BoardOverlays.Layer.ENEMY_MOVE_DIM]["sort"]
+	assert_int(dim_danger).is_less(dim_envelope)
+	assert_int(dim_envelope).override_failure_message(
+			"an unhovered enemy's move tone sorts at %d and the hovered one's reach at %d -- the crowd would draw over the focus" \
+			% [dim_envelope, danger]).is_less(danger)
 
 
 func test_the_lowest_markup_plane_still_clears_the_tile_it_lies_on() -> void:
@@ -681,9 +689,34 @@ func test_the_lowest_markup_plane_still_clears_the_tile_it_lies_on() -> void:
 	assert_int(lowest).override_failure_message(
 			"no layer sorts below zero, so this case proves nothing").is_less(0)
 	var floor_lift: float = overlays.fill_lift + lowest * overlays.lift_step
+	# AT LEAST ONE SORT STEP of clearance, not merely a positive number -- slice 4 pushed the stack
+	# down two more and landed the floor at 0.002, which is above zero and a tenth of what slice 3
+	# left. A `> 0.0` law passes that and it is not a floor anybody chose. lift_step is the stack's
+	# own unit, so this stays relational rather than becoming a second magic number to keep in step.
 	assert_float(floor_lift).override_failure_message(
-			"the lowest markup plane (sort %d) sits %f above the tile face -- it is coplanar with the terrain it lies on" \
-			% [lowest, floor_lift]).is_greater(0.0)
+			"the lowest markup plane (sort %d) sits %f above the tile face, under one lift_step of %f -- raise fill_lift" \
+			% [lowest, floor_lift, overlays.lift_step]).is_greater(overlays.lift_step)
+
+
+func test_the_focus_outline_hangs_at_its_lift_sort_and_not_at_its_render_sort() -> void:
+	# For a LINE layer `sort` has only ever meant render PRIORITY -- set_lines applies no lift at all
+	# -- and the focus stroke needs a high one, since a board-wide outline can cross every other
+	# layer's cells. Taking its HEIGHT from that number would hang it a tenth of a cell over the
+	# terrain it outlines, so the spec names the two separately.
+	var overlays := _overlays()
+	var spec: Dictionary = BoardOverlays.LAYERS[BoardOverlays.Layer.ENEMY_FOCUS_EDGE]
+	var lift: float = overlays.marker_lift(BoardOverlays.Layer.ENEMY_FOCUS_EDGE)
+	var by_render_sort: float = overlays.fill_lift + spec["sort"] * overlays.lift_step
+	assert_float(lift).override_failure_message(
+			"the stroke hangs at its render sort (%f) -- it would float over the ground it outlines" \
+			% by_render_sort).is_less(by_render_sort)
+	# ...and it still clears every fill it can lie on top of, or the ground would win the depth test.
+	for layer: BoardOverlays.Layer in BoardOverlays.LAYERS:
+		if BoardOverlays.LAYERS[layer]["kind"] != BoardOverlays.Kind.FILL:
+			continue
+		assert_float(lift).override_failure_message(
+				"the stroke sits under a fill it crosses (%s)" % BoardOverlays.Layer.keys()[layer]
+				).is_greater(overlays.marker_lift(layer))
 
 
 func test_markup_that_hangs_in_the_air_sorts_above_markup_that_lies_on_the_floor() -> void:

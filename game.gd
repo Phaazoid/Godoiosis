@@ -138,7 +138,7 @@ var threat_view := ThreatView.INTENTS
 var ranges_shown := false     # the V toggle (slice 3): every enemy's move + reach tones, FE-style
 # Which enemies stay drawn with V off, by instance id -- see toggle_enemy_pin.
 var pinned_enemies: Dictionary[int, bool] = {}
-var _threat_field: ThreatField = null   # built lazily by threat_field(); dropped when the board moves
+var _threat_field: ThreatField = null   # built lazily by threat_field(); dropped when the plan moves
 var _threat_plan_timer: Timer   # debounces the exact tier: a burst of orders costs ONE recompute
 var threat_plan_version := 0    # bumped on every recompute; the debounce's only observable
 var mission_controller: MissionController
@@ -1702,18 +1702,36 @@ func refresh_watch_markers(plan: ResolvedPlan = null) -> void:
 # ==============================================================================
 
 # Every cell an enemy could attack next turn. Built once, read by every hover, dropped whenever
-# the roster or the board moves -- never rebuilt on a pointer sweep.
+# the plan or the board moves -- never rebuilt on a pointer sweep.
+#
+# ON THE PROJECTED BOARD since slice 4, the same snapshot AIController.preview_turn plans against.
+# The two tiers used to read different boards -- the intent lines the board the player's pending
+# plan will leave, these tones the board as it stands -- so a line could name a victim the tones
+# said was out of reach, with the line telling the truth. The cache is what bounds the cost: this
+# runs once per plan change, never per frame.
 func threat_field() -> ThreatField:
 	if _threat_field == null:
+		var saved := AIController.stand_on_projected(squad_manager)
 		_threat_field = ThreatField.build(_board(), Team.Faction.PLAYER)
+		AIController.restore_cells(saved)
 	return _threat_field
 
 
+# SYNCHRONOUS, and that was measured rather than assumed. Slice 4 briefly deferred this to idle on
+# the theory that a queued shove is not published yet when it runs -- it is: queue_action's own
+# candidate gate resolves the plan WITH the candidate before Squad._queue_action emits, so the
+# mutant proving a synchronous repaint correct passed every behavioural case.
+#
+# Deferring also breaks a seam that has to stay synchronous: the sweep would re-derive the subject
+# from hover_presenter.hovered_enemy(), which reads last_hovered_cell -- written by the hover
+# _process and NOT by update_hover_visuals. Any path that draws markup directly then loses it a
+# frame later to a repaint that disagrees about what the pointer is on.
+#
+# Unconditional, because the standing set outlives the toggle: a pinned enemy is still drawn with
+# the ranges key off, and repainting only when that key was on left a pin showing a field built
+# before the order that just moved everybody.
 func drop_threat_field() -> void:
 	_threat_field = null
-	# Unconditionally, because the standing set outlives the toggle: a pinned enemy is still drawn
-	# with the ranges key off, and repainting only when that key was on left a pin showing a field
-	# built before the order that just moved everybody.
 	_redraw_enemy_ranges(hover_presenter.hovered_enemy())
 
 
@@ -1766,6 +1784,14 @@ func drop_enemy_pin(enemy: Unit) -> void:
 # rest. An EMPTY subject list with the key on means "every enemy", which is ThreatField's own
 # convention for a union.
 func _redraw_enemy_ranges(hovered: Unit = null) -> void:
+	# NOT WHILE ANYBODY IS WALKING (slice 4). threat_field() stands every unit on its projected cell
+	# through MovementComponent.set_cell, which writes `position` -- and a walk is a tween ON that
+	# property, so a snapshot taken mid-pass snaps the sprite to a cell centre until the tween writes
+	# again, which UnitMirror's per-frame read can catch. HoverPresenter._process carries no board
+	# lock, so hovering an enemy while your own squad walks is the live path here; the executor's own
+	# drop site is already past its last await. refresh_action_queue guards itself the same way.
+	if order_executor != null and order_executor.executing_plan != null:
+		return
 	var subjects: Array[Unit] = []
 	if not ranges_shown:
 		for unit: Unit in _all_units():
@@ -1776,12 +1802,51 @@ func _redraw_enemy_ranges(hovered: Unit = null) -> void:
 		if subjects.is_empty():
 			overlay_manager.clear_enemy_move()
 			overlay_manager.clear_danger()
+			overlay_manager.clear_dim_ranges()
+			overlay_manager.clear_focus_outline()
 			overlay_manager.clear_leash()
 			return
 	var field := threat_field()
-	overlay_manager.show_danger(field.reach_cells_of(subjects))
-	overlay_manager.show_enemy_move(field.move_cells_of(subjects))
+	# THE CROWD IS SUBTRACTED FROM THE FOCUS, and only in that direction. The bright pair keeps
+	# overlapping exactly as it shipped -- the dev's move-over-reach ruling composites blue OVER red,
+	# so making those two disjoint would repaint every cell he approved. What must not happen is a
+	# dim quad UNDER a bright one: four coincident alphas read differently from two, so the focused
+	# envelope would change tone wherever somebody else's field crossed it. With nobody hovered the
+	# focus set is empty, the dim layers stay empty, and the board looks exactly as it did.
+	var focus: Array[Unit] = []
+	if hovered != null and _is_previewable_enemy(hovered) and (ranges_shown or subjects.has(hovered)):
+		focus.append(hovered)
+	var lit: Array[Unit] = focus if not focus.is_empty() else subjects
+	var bright_move := field.move_cells_of(lit)
+	var bright_reach := field.reach_cells_of(lit)
+	var dim_move: Array[Vector2i] = []
+	var dim_reach: Array[Vector2i] = []
+	if not focus.is_empty():
+		var covered := bright_move + bright_reach
+		dim_move = _without(field.move_cells_of(subjects), covered)
+		dim_reach = _without(field.reach_cells_of(subjects), covered)
+	overlay_manager.show_danger(bright_reach)
+	overlay_manager.show_enemy_move(bright_move)
+	overlay_manager.show_dim_ranges(dim_reach, dim_move)
+	# The stroke goes round the WHOLE footprint, move and reach together: it answers "this is the
+	# field you are pointing at", which is a different question from which tone a cell carries. Only
+	# ever drawn for a hovered enemy -- with V on and the pointer elsewhere there is nobody to name.
+	var outline: Array[Vector2i] = []
+	if not focus.is_empty():
+		outline = bright_move + _without(bright_reach, bright_move)
+	overlay_manager.show_focus_outline(outline, _board())
 	overlay_manager.reveal_leash(_leash_cells_of(subjects))
+
+
+func _without(cells: Array[Vector2i], taken: Array[Vector2i]) -> Array[Vector2i]:
+	var seen := {}
+	for cell: Vector2i in taken:
+		seen[cell] = true
+	var out: Array[Vector2i] = []
+	for cell: Vector2i in cells:
+		if not seen.has(cell):
+			out.append(cell)
+	return out
 
 
 func _is_previewable_enemy(unit: Unit) -> bool:
