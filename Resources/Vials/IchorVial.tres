@@ -7,5 +7,4 @@ script = ExtResource("1_vial")
 element = 7
 is_alkahest = false
 display_name = "Vial of Ichor"
-description = "What runs in the veins of the gods, and the serum that weeps from a wound -- to blood what Aether is to the other four. An excess of life, held in glass."
 weight = 1

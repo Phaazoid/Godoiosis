@@ -360,13 +360,9 @@ func _refresh_stash() -> void:
 		# NO BLOCK REASON HERE, and that is the design: can_equip_reason takes a wielder and the stash
 		# has nobody to validate against, so the marking lives on the unit card (dev, 2026-09-05). What
 		# a piece DEMANDS is the other question, and the one a list of loose gear can answer -- so the
-		# armor gate rides the tooltip, through the same _gate_text spelling the card's sentence uses.
-		var tip := item.describe() if item.describe() != "" else item.shown_name()
-		var armor := item as ArmorData
-		if armor != null and armor.requirement_text() != "":
-			tip += "
-Requires: %s" % armor.requirement_text()
-		row.tooltip_text = UiText.wrap(tip)
+		# NULL wielder is the whole argument: ItemText drops every term that needs one and keeps the
+		# armor gate, which mechanical_text already words as "Requires:" (#137).
+		row.tooltip_text = UiText.wrap(ItemText.hover(item))
 
 		var line := HBoxContainer.new()
 		line.add_theme_constant_override("separation", 4)

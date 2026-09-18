@@ -14,5 +14,4 @@ stat_minimums = Dictionary[int, int]({
 })
 granted_abilities = Array[ExtResource("2_ability")]([ExtResource("3_brace")])
 display_name = "Bulwark Plate"
-description = "Layered slab plating. Only a powerful frame can carry it -- and the stronger the frame, the more of it bites. The plate's own bulk turns aside a little no matter who wears it, and a wearer who plants themselves in front of someone else turns aside a great deal more."
 metadata/_custom_type_script = "uid://dj0617uewvdny"

@@ -7,5 +7,4 @@ script = ExtResource("1_vial")
 element = 6
 is_alkahest = false
 display_name = "Vial of Nitre"
-description = "The air's own salt. The old masters held that every breath and every flame draws on a hidden nitre; this is that, refined. It is also why powder burns."
 weight = 1

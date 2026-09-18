@@ -7,5 +7,4 @@ script = ExtResource("1_vial")
 element = 1
 is_alkahest = false
 display_name = "Vial of Sulfur"
-description = "Concentrated fire, held in glass. Broken over a cast, it lends the caster a furnace they need not stand beside."
 weight = 1
