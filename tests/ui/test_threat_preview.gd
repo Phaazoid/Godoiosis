@@ -437,13 +437,47 @@ func test_the_toggle_draws_intent_lines_with_their_numbers() -> void:
 	game._click_choosing_move(Vector2i(2, 2))   # walk into reach, for real
 	game.refresh_threat_plan()
 
-	assert_int(_om().intent_lines.size()).override_failure_message(
-			"no intent line for a unit standing next to an enemy").is_equal(1)
+	assert_int(_om().intent_marks.size()).override_failure_message(
+			"no intent mark for a unit standing next to an enemy").is_equal(1)
 	assert_int(_om().intent_fells.size()).override_failure_message(
-			"the lethal flags are not paired one-for-one with the lines").is_equal(1)
-	var seg: PackedVector3Array = _om().intent_lines[0]
-	assert_that(Vector2i(int(seg[1].x - 0.5), int(seg[1].z - 0.5))).override_failure_message(
-			"the line does not end on the unit it names").is_equal(Vector2i(2, 2))
+			"the lethal flags are not paired one-for-one with the marks").is_equal(1)
+	# The shaft is the mark's first stroke; it stops HEAD_INSET short of the victim, so the test
+	# asks which cell it is nearest rather than which cell it lands in.
+	var shaft: PackedVector3Array = _om().intent_marks[0][0]
+	var victim := Vector2(2.5, 2.5)
+	assert_float(Vector2(shaft[1].x, shaft[1].z).distance_to(victim)).override_failure_message(
+			"the mark does not run toward the unit it names").is_less(0.5)
+
+
+# #1042's whole first ask: "an arrow indicating direction". The arrowhead's apex has to sit at the
+# VICTIM end and its legs open back toward the attacker -- which is the half a symmetric two-point
+# line could never say, and the half a from/to swap silently inverts.
+func test_an_intents_arrowhead_points_at_its_victim() -> void:
+	_enable_enemy_ai()
+	var mover := _spawn(PLAYER, Vector2i(1, 1))
+	_spawn(ENEMY, Vector2i(3, 2))
+	game.enter_move_mode(mover)
+	game.selected_unit = mover
+	game._click_choosing_move(Vector2i(2, 2))
+	game.refresh_threat_plan()
+
+	var strokes: Array = _om().intent_marks[0]
+	assert_int(strokes.size()).override_failure_message(
+			"the mark is not a shaft plus two arrowhead legs").is_equal(3)
+	var shaft: PackedVector3Array = strokes[0]
+	var attacker_end := Vector2(shaft[0].x, shaft[0].z)
+	var tip := Vector2(shaft[1].x, shaft[1].z)
+	for i in [1, 2]:
+		var leg: PackedVector3Array = strokes[i]
+		# Each leg is built back-to-tip, so its far point IS the apex and it is shared with the
+		# shaft's end. Anything else and the head is hanging off the wrong end of the line.
+		assert_float(Vector2(leg[1].x, leg[1].z).distance_to(tip)).override_failure_message(
+				"an arrowhead leg does not meet the shaft's point").is_less(0.001)
+		var heel := Vector2(leg[0].x, leg[0].z)
+		assert_bool(heel.distance_to(attacker_end) < tip.distance_to(attacker_end)) \
+			.override_failure_message(
+				"the arrowhead opens toward the victim rather than back toward the enemy") \
+			.is_true()
 
 
 func test_the_key_cycles_three_states_and_comes_back_round() -> void:
@@ -487,7 +521,7 @@ func test_nothing_means_nothing_is_computed() -> void:
 	assert_int(AIController.previewed_squad_count).override_failure_message(
 			"the enemy squads were planned anyway -- the gate hides the answer without saving the work") \
 		.is_equal(0)
-	assert_array(_om().intent_lines).is_empty()
+	assert_array(_om().intent_marks).is_empty()
 
 
 func test_the_damage_reaches_the_bars_only_at_everything() -> void:
@@ -502,7 +536,7 @@ func test_the_damage_reaches_the_bars_only_at_everything() -> void:
 	game.refresh_threat_plan()
 
 	assert_int(game.threat_view).is_equal(game.ThreatView.INTENTS)
-	assert_int(_om().intent_lines.size()).override_failure_message(
+	assert_int(_om().intent_marks.size()).override_failure_message(
 			"no intent line, so neither half of this case proves anything").is_equal(1)
 	assert_bool(game.threat_forecast().is_empty()).override_failure_message(
 			"the bars are fed at INTENTS, so the two states show the same thing").is_true()
@@ -528,7 +562,7 @@ func test_two_enemies_on_one_target_sum_into_one_forecast() -> void:
 	game._click_choosing_move(Vector2i(2, 2))
 	game.refresh_threat_plan()
 
-	assert_int(_om().intent_lines.size()).override_failure_message(
+	assert_int(_om().intent_marks.size()).override_failure_message(
 			"both enemies did not intend an attack, so there is nothing to sum").is_equal(2)
 	var forecast: Dictionary = game.threat_forecast()
 	assert_int(forecast.size()).override_failure_message(
@@ -552,8 +586,57 @@ func test_the_intent_channel_clears_on_board_load() -> void:
 	game.selected_unit = mover
 	game._click_choosing_move(Vector2i(2, 2))
 	game.refresh_threat_plan()
-	assert_bool(_om().intent_lines.size() > 0).is_true()
+	assert_bool(_om().intent_marks.size() > 0).is_true()
 
 	game._clear_threat_plan()
-	assert_array(_om().intent_lines).is_empty()
+	assert_array(_om().intent_marks).is_empty()
 	assert_array(_om().intent_fells).is_empty()
+
+
+# #1001's cheap half. The commonest shape of the whole feature: you line up the kill, and the board
+# goes on saying the dead man is about to hit you -- which undercuts exactly the trust the preview
+# is for. Dropped at the harvest, so what the AI DECIDED is untouched (a doomed enemy still
+# influenced its squadmates' plan, which is the declared limit).
+func test_an_enemy_your_plan_fells_previews_no_intent() -> void:
+	_enable_enemy_ai()
+	var hero := _spawn(PLAYER, Vector2i(2, 2))
+	var foe := _spawn(ENEMY, Vector2i(3, 2))
+	game.threat_view = game.ThreatView.EVERYTHING
+	game.refresh_threat_plan()
+	assert_int(_om().intent_marks.size()).override_failure_message(
+			"the enemy intends nothing to begin with, so this case cannot see its own claim") \
+		.is_equal(1)
+
+	# Enough of a blow to fell it outright, then queue the aim for real.
+	foe.set_current_hp(1)
+	hero.equipped_weapon = H.make_weapon(20)
+	var attack := AttackAction.declare(hero, hero.movement.cell, foe.movement.cell)
+	game.squad_manager.queue_action(hero.squad, attack)
+	game.refresh_threat_plan()
+
+	assert_array(_om().intent_marks).override_failure_message(
+			"a man your own plan fells is still promising to attack you").is_empty()
+	assert_bool(game.threat_forecast().is_empty()).override_failure_message(
+			"the mark went but its damage is still coming off the victim's health bar") \
+		.is_true()
+
+
+# ...and the other direction, which is the one that matters more: a blow that does NOT fell leaves
+# the warning standing. Erring toward over-warning is the deliberate choice, since an absent mark
+# reads as provably safe.
+func test_an_enemy_your_plan_only_wounds_still_previews_its_attack() -> void:
+	_enable_enemy_ai()
+	var hero := _spawn(PLAYER, Vector2i(2, 2))
+	var foe := _spawn(ENEMY, Vector2i(3, 2))
+	foe.set_current_hp(foe.get_max_hp())
+	game.threat_view = game.ThreatView.EVERYTHING
+	hero.equipped_weapon = H.make_weapon(1)
+	var attack := AttackAction.declare(hero, hero.movement.cell, foe.movement.cell)
+	game.squad_manager.queue_action(hero.squad, attack)
+	game.refresh_threat_plan()
+
+	assert_bool(foe.is_active()).override_failure_message(
+			"the fixture felled it after all, so this case proves nothing").is_true()
+	assert_int(_om().intent_marks.size()).override_failure_message(
+			"a wounded enemy stopped being previewed -- the filter is dropping the living") \
+		.is_equal(1)

@@ -931,3 +931,104 @@ func test_a_sprite_with_no_corners_lies_on_nothing_and_stays_flat() -> void:
 	overlays.set_markers(BoardOverlays.Layer.PATH_ARROWS, [
 		{"pos": Vector3(2.5, 1.0, 2.5), "texture": GridUtils.ERROR_ICON, "modulate": Color.WHITE}])
 	assert_bool(_one_marker(overlays, BoardOverlays.Layer.PATH_ARROWS).mesh is PlaneMesh).is_true()
+
+
+# --- The intent mark's own beam (#1042) ---------------------------------------------------------
+
+# One MARK is several strokes, and the bead has to measure across the WHOLE of it. Each stroke is
+# its own surface, so without a chained start every leg would begin at zero and run a little pulse
+# of its own where the arrowhead is -- noise at exactly the point the mark exists to make.
+func test_a_marks_bead_measure_chains_across_its_own_strokes() -> void:
+	var overlays := _bare_overlays()
+	var shaft := PackedVector3Array([Vector3(0, 1, 0), Vector3(4, 1, 0)])
+	var leg := PackedVector3Array([Vector3(3.5, 1, 0.5), Vector3(4, 1, 0)])
+	var marks: Array[Array] = [[shaft, leg]]
+	overlays.set_marks(BoardOverlays.Layer.INTENT_LINES, marks, Color.WHITE)
+
+	var mesh := _one_marker(overlays, BoardOverlays.Layer.INTENT_LINES).mesh as ImmediateMesh
+	assert_int(mesh.get_surface_count()).override_failure_message(
+			"the mark's strokes did not each become a surface").is_equal(2)
+	var shaft_uv2: PackedVector2Array = mesh.surface_get_arrays(0)[Mesh.ARRAY_TEX_UV2]
+	var leg_uv2: PackedVector2Array = mesh.surface_get_arrays(1)[Mesh.ARRAY_TEX_UV2]
+	assert_float(shaft_uv2[0].x).override_failure_message(
+			"the shaft does not begin its measure at the attacker").is_equal_approx(0.0, 0.001)
+	assert_float(shaft_uv2[shaft_uv2.size() - 1].x).override_failure_message(
+			"the shaft's measure is not its own world length").is_equal_approx(4.0, 0.001)
+	assert_float(leg_uv2[0].x).override_failure_message(
+			"the arrowhead restarted the measure instead of continuing the shaft's") \
+		.is_greater(3.9)
+
+
+# A second stroke of a DIFFERENT mark must NOT continue the first's, or every mark after the first
+# on a layer reads as farther from its own attacker than it is.
+func test_the_measure_restarts_between_marks() -> void:
+	var overlays := _bare_overlays()
+	var first := PackedVector3Array([Vector3(0, 1, 0), Vector3(4, 1, 0)])
+	var second := PackedVector3Array([Vector3(0, 1, 2), Vector3(3, 1, 2)])
+	var marks: Array[Array] = [[first], [second]]
+	overlays.set_marks(BoardOverlays.Layer.INTENT_LINES, marks, Color.WHITE)
+
+	var mesh := _one_marker(overlays, BoardOverlays.Layer.INTENT_LINES).mesh as ImmediateMesh
+	var second_uv2: PackedVector2Array = mesh.surface_get_arrays(1)[Mesh.ARRAY_TEX_UV2]
+	assert_float(second_uv2[0].x).override_failure_message(
+			"the second mark inherited the first mark's measure").is_equal_approx(0.0, 0.001)
+
+
+# THE RULING (dev, 2026-09-19): lethality is not a colour. The two layers still exist because a
+# flash is a per-material time term, but they may not differ by tint -- which is the thing this
+# ticket deleted and the thing a tidy-up would put back.
+func test_both_intent_layers_draw_one_colour_and_differ_only_by_the_flash() -> void:
+	var plain: Dictionary = BoardOverlays.LAYERS[BoardOverlays.Layer.INTENT_LINES]
+	var fatal: Dictionary = BoardOverlays.LAYERS[BoardOverlays.Layer.INTENT_LINES_FATAL]
+	assert_that(fatal["color"]).override_failure_message(
+			"a felling mark is a second HUE again -- the dev ruled it flashes instead") \
+		.is_equal(plain["color"])
+	assert_bool(fatal.get("flash", false)).override_failure_message(
+			"the felling layer carries no flash, so nothing distinguishes it at all").is_true()
+	assert_bool(plain.get("flash", false)).override_failure_message(
+			"an ordinary intent flashes, so the felling one says nothing extra").is_false()
+
+
+# #217's standing rule reaches the MATERIAL, not just the composer. With the setting on the mark
+# still draws -- its direction is carried by the arrowhead, which is geometry -- and the flash holds
+# at its bright point rather than vanishing, so a lethal mark stays the louder of the two.
+func test_photosensitivity_freezes_the_marks_motion_and_the_beam_still_draws() -> void:
+	var overlays := _bare_overlays()
+	var marks: Array[Array] = [[PackedVector3Array([Vector3(0, 1, 0), Vector3(4, 1, 0)])]]
+	overlays.set_marks(BoardOverlays.Layer.INTENT_LINES_FATAL, marks, Color.WHITE)
+	var was := PlayerSettings.is_on(PlayerSettings.Setting.PHOTOSENSITIVITY)
+
+	PlayerSettings.set_on(PlayerSettings.Setting.PHOTOSENSITIVITY, false)
+	overlays.poll_beam_motion()
+	assert_float(overlays.beam_parameter(BoardOverlays.Layer.INTENT_LINES_FATAL, &"motion")) \
+		.override_failure_message("the mark is frozen with the setting OFF").is_equal_approx(1.0, 0.001)
+
+	PlayerSettings.set_on(PlayerSettings.Setting.PHOTOSENSITIVITY, true)
+	overlays.poll_beam_motion()
+	assert_float(overlays.beam_parameter(BoardOverlays.Layer.INTENT_LINES_FATAL, &"motion")) \
+		.override_failure_message("the photosensitivity setting never reached the beam's material") \
+		.is_equal_approx(0.0, 0.001)
+	assert_bool(_one_marker(overlays, BoardOverlays.Layer.INTENT_LINES_FATAL).visible) \
+		.override_failure_message("freezing the motion stopped the mark being drawn at all").is_true()
+	assert_float(overlays.beam_parameter(BoardOverlays.Layer.INTENT_LINES_FATAL, &"flash_hz")) \
+		.override_failure_message("the felling layer stopped declaring its flash").is_greater(0.0)
+
+	PlayerSettings.set_on(PlayerSettings.Setting.PHOTOSENSITIVITY, was)
+
+
+# The bead belongs to the intent layers alone. Left on, the sight bead and the focus outline would
+# both acquire a travelling pulse nobody asked for -- and #674 has already ruled what the AIM's
+# motion is, which is a repeating dash pattern rather than this.
+func test_only_the_intent_layers_carry_a_bead() -> void:
+	var overlays := _bare_overlays()
+	var marks: Array[Array] = [[PackedVector3Array([Vector3(0, 1, 0), Vector3(4, 1, 0)])]]
+	overlays.set_marks(BoardOverlays.Layer.INTENT_LINES, marks, Color.WHITE)
+	overlays.set_marks(BoardOverlays.Layer.SIGHT_TRACE, marks, Color.WHITE)
+	overlays.set_marks(BoardOverlays.Layer.ENEMY_FOCUS_EDGE, marks, Color.WHITE)
+
+	assert_float(overlays.beam_parameter(BoardOverlays.Layer.INTENT_LINES, &"bead_length")) \
+		.override_failure_message("the intent mark has no bead").is_greater(0.0)
+	for layer: BoardOverlays.Layer in [BoardOverlays.Layer.SIGHT_TRACE,
+			BoardOverlays.Layer.ENEMY_FOCUS_EDGE]:
+		assert_float(overlays.beam_parameter(layer, &"bead_length")).override_failure_message(
+				"a beam that is not an intent picked up the travelling bead").is_equal_approx(0.0, 0.001)
