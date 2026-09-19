@@ -158,6 +158,26 @@ func test_a_submitted_report_writes_the_note_and_the_board() -> void:
 	assert_bool(FileAccess.file_exists(result["dir"] + "board.tres")).is_true()
 
 
+func test_the_written_report_names_no_machine_path() -> void:
+	# #1036, the WIRE. tests/dev/test_bug_report_text.gd pins the scrub itself; this drives the real
+	# report() and reads the file back off disk, so a builder that stopped calling it reds here.
+	#
+	# The NOTE is the carrier on purpose. A headless run has file logging off, so _log_tail()
+	# returns its "(no godot.log)" sentence -- an absence-assertion resting on the tail would pass
+	# VACUOUSLY. The note is known to reach the body (the case above asserts exactly that), and the
+	# paired contains() is what keeps this one honest.
+	var dir := OS.get_user_data_dir().trim_suffix("/")
+	assert_str(dir).is_not_empty()
+
+	var result: Dictionary = await game.bug_reporter.report(
+		"IDLE", BugReporter.Kind.BUG, "it broke while writing to %s/reports/x/" % dir, null)
+	_written.append(result["dir"])
+
+	var text := FileAccess.get_file_as_string(result["dir"] + "report.md")
+	assert_str(text).contains("user://reports/x/")
+	assert_str(text).not_contains(dir)
+
+
 func test_the_screenshot_comes_from_the_window_and_not_the_hidden_subviewport() -> void:
 	# #240. game.get_viewport() is the SubViewport the 2D game lives in, and since #222 that
 	# viewport is transparent with the board visuals hidden -- so a frame grabbed there is 2D UI
