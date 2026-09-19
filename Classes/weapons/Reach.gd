@@ -42,8 +42,10 @@ class_name Reach
 # board for exactly that (required, not optional: an optional would give one question two answers,
 # the movement_cost precedent). The FOOTPRINT question takes the board too since #756: a directional
 # SPREAD is TRUNCATED at the first cell the shot cannot reach (dev, 2026-09-04 -- "truncate, and all
-# 8"), lane by lane. A point aim's splash stays board-blind -- whether a blast covers a volume is the
-# deferred 3D-blast-extent question (#218).
+# 8"), lane by lane. AND A PLACED ONE SPREADS FROM WHERE IT LANDS SINCE #805 -- the blast propagates
+# outward from the impact, blocked by what a flat shot from that cell would be blocked by and carried
+# vertically by the attack's own burst_tolerance. So no footprint is board-blind any more; what #218
+# still defers is a blast covering a VOLUME rather than a heightmap's surface.
 #
 # THE DRAWN PATH IS THE RULE (dev, 2026-08-20): sight_trace's trajectory is one function that both
 # the legality check and the in-game bead readout evaluate, so what the player sees can never
@@ -51,7 +53,8 @@ class_name Reach
 
 # The cells an aim may be DECLARED at. Self-anchored: the shape placed for the facing the hint
 # implies -- the pointed cell need not be a member, and a hint with no cardinal answers empty (a dud
-# order, refused upstream). Anchored: the range ring, board-blind.
+# order, refused upstream). Anchored: the range ring, board-blind -- where an aim may be DECLARED is
+# still a pure range question, and it is the FOOTPRINT that reads the terrain (#756, #805).
 static func get_attack_cells_from(_unit: Unit, origin_cell: Vector2i, target_hint_cell: Vector2i, attack: AttackData) -> Array[Vector2i]:
 	if attack == null:
 		return GridUtils.cells_within_manhattan_range(origin_cell, 1)
@@ -120,7 +123,13 @@ static func _lane_aim_ok(attack: AttackData, shooter_cell: Vector2i, lane_base: 
 		return true
 	if not _vertical_rule_ok(attack, shooter_cell, target_cell, board):
 		return false
-	return not _trace(attack, lane_base, target_cell, float(board.elevation_at(shooter_cell)), board).blocked
+	return not _trace(_clearance_of(attack), lane_base, target_cell, float(board.elevation_at(shooter_cell)), board).blocked
+
+
+# A null attack (bare fists) arcs not at all. One home for that, because three callers ask it and the
+# third -- a burst -- deliberately passes 0.0 instead: see _spread.
+static func _clearance_of(attack: AttackData) -> float:
+	return 0.0 if attack == null else float(attack.arc_clearance)
 
 
 static func _vertical_rule_ok(attack: AttackData, origin_cell: Vector2i, target_cell: Vector2i, board: BoardContext) -> bool:
@@ -164,16 +173,19 @@ static func draws_sight_trace(attack: AttackData) -> bool:
 # in the sheet is a full run or a corner L.
 static func sight_trace(attack: AttackData, origin_cell: Vector2i, target_cell: Vector2i, board: BoardContext) -> SightTrace:
 	var origin_h := 0.0 if board == null else float(board.elevation_at(origin_cell))
-	return _trace(attack, origin_cell, target_cell, origin_h, board)
+	return _trace(_clearance_of(attack), origin_cell, target_cell, origin_h, board)
 
 
 # The trace body, with the ORIGIN HEIGHT as a parameter rather than read off origin_cell: a spread's
 # side lane starts beside the shooter but is fired from the shooter's own height (#756). sight_trace
 # is the point form; nothing else reads this directly.
-static func _trace(attack: AttackData, origin_cell: Vector2i, target_cell: Vector2i, origin_h: float, board: BoardContext) -> SightTrace:
+#
+# It takes the CLEARANCE rather than the attack (#805) because that is the only thing it ever wanted
+# from one, and because a BURST is flat whatever the attack authored -- passing 0.0 says so at the
+# call site, where passing a null attack to mean the same thing would read as "no attack".
+static func _trace(clearance: float, origin_cell: Vector2i, target_cell: Vector2i, origin_h: float, board: BoardContext) -> SightTrace:
 	var trace := SightTrace.new()
 	var target_h := 0.0 if board == null else float(board.elevation_at(target_cell))
-	var clearance := 0.0 if attack == null else float(attack.arc_clearance)
 	var p0 := Vector2(origin_cell) + Vector2(0.5, 0.5)
 	var p1 := Vector2(target_cell) + Vector2(0.5, 0.5)
 	var span := p1 - p0
@@ -251,9 +263,11 @@ static func get_all_attack_cells_from(unit: Unit, origin_cell: Vector2i, attack:
 				cells.append(cell)
 	return cells
 
-# The AoE footprint an aim at target_cell actually lands on. A directional SPREAD is TRUNCATED by
-# the terrain (#756, dev 2026-09-04: "truncate, and all 8") -- see _truncate below. A point aim's
-# splash is untouched: whether a blast covers a volume is still #218's deferred question.
+# The AoE footprint an aim at target_cell actually lands on, and BOTH kinds read the terrain. A
+# directional SPREAD is TRUNCATED lane by lane from the shooter (#756, dev 2026-09-04: "truncate, and
+# all 8") -- see _truncate. A PLACED one spreads outward from where it landed (#805) -- see _spread.
+# A swing travels in parallel lanes and a blast propagates; those are different claims about what the
+# attack physically is, which is why they are two rules rather than one asked from two cells.
 #
 # The board is REQUIRED, not optional -- the movement_cost precedent an optional board would break,
 # since a footprint answered without one is a different answer to the same question. A null board
@@ -261,24 +275,29 @@ static func get_all_attack_cells_from(unit: Unit, origin_cell: Vector2i, attack:
 static func get_affected_cells_from(_unit: Unit, origin_cell: Vector2i, target_cell: Vector2i, attack: AttackData, board: BoardContext) -> Array[Vector2i]:
 	if attack == null:
 		return [target_cell]
-	var dir := GridUtils.cardinal_direction_i_between(origin_cell, target_cell)
-	var cells: Array[Vector2i] = []
 	if attack.is_directional():
+		var dir := GridUtils.cardinal_direction_i_between(origin_cell, target_cell)
 		if dir == Vector2i.ZERO:
 			return []
-		cells = _place(attack, origin_cell, dir)
-	else:
-		# AN ANCHORED SHAPE NEVER TURNS (#818): it lands exactly as drawn, grid-up reading as board
-		# north whatever direction the aim came from. Turning it to the attacker-to-target cardinal
-		# is what the dev found wrong in play -- the orientation of a shape you are PLACING was
-		# being driven by where you happened to be standing, so an asymmetric stamp spun as the
-		# cursor swept its own ring. This RETIRES the old min_range-0 special case rather than
-		# adding one: an aim at the attacker's own cell has no cardinal, which used to need its own
-		# clause and is now simply what anchored means.
-		cells = _place(attack, target_cell, AttackShape.FORWARD)
-	if board == null or not attack.is_directional():
-		return cells
-	return _truncate(cells, origin_cell, dir, attack, board)
+		var swung := _place(attack, origin_cell, dir)
+		if board == null:
+			return swung
+		return _truncate(swung, origin_cell, dir, attack, board)
+	# AN ANCHORED SHAPE NEVER TURNS (#818): it lands exactly as drawn, grid-up reading as board
+	# north whatever direction the aim came from. Turning it to the attacker-to-target cardinal
+	# is what the dev found wrong in play -- the orientation of a shape you are PLACING was
+	# being driven by where you happened to be standing, so an asymmetric stamp spun as the
+	# cursor swept its own ring. This RETIRES the old min_range-0 special case rather than
+	# adding one: an aim at the attacker's own cell has no cardinal, which used to need its own
+	# clause and is now simply what anchored means.
+	#
+	# The attacker's direction is not computed on this path AT ALL, and that is the point: since
+	# #805 the terrain narrows a placed footprint too, and a filter keyed off the attacker-to-target
+	# cardinal would put that same spin back into the blast after #818 took it out of the placement.
+	var placed := _place(attack, target_cell, AttackShape.FORWARD)
+	if board == null:
+		return placed
+	return _spread(placed, target_cell, attack, board)
 
 
 # THE TRUNCATION (#756). A spread advances as a FRONT: each lane is judged from near to far, and the
@@ -309,6 +328,87 @@ static func _truncate(cells: Array[Vector2i], origin_cell: Vector2i, dir: Vector
 		kept[cell] = true
 		out.append(cell)
 	return out
+
+
+# THE SPREAD (#805). A placed blast propagates OUTWARD FROM WHERE IT LANDS, and the terrain decides
+# how much of the authored shape it reaches. The shooter is out of the picture once the shot has
+# landed -- the lob was spent getting there -- so this asks nothing about where it was fired from.
+#
+# Two clauses, the pair _truncate already carries, re-anchored off the shooter and onto the impact:
+#
+#   CONNECTIVITY -- a cell is reached when a neighbour one step TOWARD the impact was reached. The
+#   blast propagates through the BOARD rather than through the stamp, so a shape whose cells do not
+#   touch each other (a ring, a scatter, the authored Test shape, whose stamp holds no orthogonal
+#   neighbour of its own centre) still lands in full across open ground: the stamp says what the
+#   blast COVERS, the terrain says what stops it. Stepping only toward the impact is what keeps this
+#   a SPREAD rather than a search -- a blast cannot snake around a wall and rejoin behind it -- and
+#   it bounds the walk to the shape's own extent with no arbitrary radius.
+#
+#   REACH FROM THE IMPACT -- the flat trace and the burst tolerance, in _burst_cell_ok below.
+#
+# WHY NOT _truncate, which is the obvious move and is wrong twice over. Its predecessor is
+# `cell - dir` along ONE facing, and for an anchored aim `dir` is the attacker-to-target cardinal --
+# so a placed cross's centre would be nobody's predecessor, and which cells survived would depend on
+# where the attacker happened to be standing. And any predecessor pass needs cells decided TOWARD
+# THE ORIGIN first, which AttackShape.place's sort guarantees only near-to-far along a facing: for an
+# anchored shape that sort reads out in BOARD terms, southern row first, so the south arm is emitted
+# before the centre it has to propagate through. Walking outward by distance from the impact needs no
+# sort at all, which is why this is order-independent where a predecessor pass could not be.
+#
+# The survivors are returned in EMISSION order, never in flood order -- victim order is volley order,
+# and that is the shape's rule to make (AttackShape.place), not this filter's.
+static func _spread(cells: Array[Vector2i], impact_cell: Vector2i, attack: AttackData, board: BoardContext) -> Array[Vector2i]:
+	var lo := impact_cell
+	var hi := impact_cell
+	for cell in cells:
+		lo = Vector2i(mini(lo.x, cell.x), mini(lo.y, cell.y))
+		hi = Vector2i(maxi(hi.x, cell.x), maxi(hi.y, cell.y))
+	# The impact is the SEED, not automatically a victim: it is in the footprint only if the stamp
+	# names its own centre. The shot's own legality already cleared this cell (can_hit_cell_from).
+	var reached: Dictionary[Vector2i, bool] = {}
+	reached[impact_cell] = true
+	var frontier: Array[Vector2i] = [impact_cell]
+	while not frontier.is_empty():
+		var here: Vector2i = frontier.pop_front()
+		var here_steps := GridUtils.manhattan_distance(impact_cell, here)
+		for step: Vector2i in GridUtils.CARDINAL_DIRECTIONS:
+			var next: Vector2i = here + step
+			if reached.has(next):
+				continue
+			if next.x < lo.x or next.x > hi.x or next.y < lo.y or next.y > hi.y:
+				continue
+			# Outward only. A cardinal neighbour is one step nearer or one step further, so this is
+			# what makes the walk monotone -- and, with it, order-independent.
+			if GridUtils.manhattan_distance(impact_cell, next) != here_steps + 1:
+				continue
+			if not _burst_cell_ok(attack, impact_cell, next, board):
+				continue
+			reached[next] = true
+			frontier.append(next)
+	var out: Array[Vector2i] = []
+	for cell in cells:
+		if reached.has(cell):
+			out.append(cell)
+	return out
+
+
+# May the blast reach this cell from where it landed (#805)? Two authored answers, both measured from
+# the IMPACT rather than from the attacker.
+#
+# The BURST TOLERANCE is how far the blast carries vertically -- the surface within reach of the
+# impact point -- so a bomb landing on a terrace does not catch the men on the plateau above. -1 is
+# unlimited, matching its two siblings on AttackData.
+#
+# The trace is FLAT (clearance 0) whatever the attack authored: arc_clearance is how the shot arcs on
+# its way TO the aimed cell, and a burst that re-arced would let a bomb lobbed behind a wall spray
+# back over it. It runs at the impact cell's own height, so the blast is stopped by exactly what
+# stops a flat shot fired from there -- the same ground-plus-prop column every other shot reads
+# (#660), one trajectory model for the delivery and the burst alike.
+static func _burst_cell_ok(attack: AttackData, impact_cell: Vector2i, cell: Vector2i, board: BoardContext) -> bool:
+	var impact_h := board.elevation_at(impact_cell)
+	if attack.burst_tolerance >= 0 and absi(board.elevation_at(cell) - impact_h) > attack.burst_tolerance:
+		return false
+	return not _trace(0.0, impact_cell, cell, float(impact_h), board).blocked
 
 
 # The cell a lane is fired FROM: the shooter's own cell carried sideways onto this lane, which is

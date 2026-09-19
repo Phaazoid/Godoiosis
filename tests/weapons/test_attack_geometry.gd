@@ -201,3 +201,126 @@ func test_an_anchored_footprint_emits_in_board_order() -> void:
 	var t := Vector2i(0, 3)
 	assert_array(_affected(attack, Vector2i.ZERO, t)).contains_exactly(
 		[Vector2i(0, 4), Vector2i(0, 3), Vector2i(0, 2)])
+
+
+# --- The spread: a placed blast propagates from where it lands (#805) --------------------------
+#
+# Pure, on test_vertical_tolerance's terms: Reach's geometry never touches the unit and a grid-less
+# BoardContext answers 0 for every prop column, so a bare BoardHeights IS the board and the blocking
+# column is ground alone. Anchored placement is unturned (#818), so a grid offset is a board offset
+# and every stamp below reads as the board picture it draws.
+
+const NO_UNITS: Array[Unit] = []
+
+
+func _board(heights: Dictionary) -> BoardContext:
+	var h := BoardHeights.new()
+	for cell: Vector2i in heights:
+		h.set_cell(cell, heights[cell])
+	return BoardContext.new(null, NO_UNITS, null, null, null, h)
+
+
+# A placed, shaped attack aimed at `target`, over a real board.
+func _blast(offsets: Array[Vector2i], target: Vector2i, board: BoardContext, tolerance := -1) -> Array[Vector2i]:
+	var attack := P.stamped(_attack(), 4, offsets)
+	attack.burst_tolerance = tolerance
+	return Reach.get_affected_cells_from(null, Vector2i(9, 9), target, attack, board)
+
+
+func test_a_wall_between_the_impact_and_the_shape_cuts_what_is_behind_it() -> void:
+	# The shape reaches three cells east; a 2-high column stands on the second, which is not itself
+	# a member. The near cell is clear, the far one's flat trace crosses the column and is cut.
+	# This is the ticket's own sentence -- "that second half of the attack could be blocked by
+	# walls" -- and it is the TRACE clause doing the work.
+	var east: Array[Vector2i] = [Vector2i(1, 0), Vector2i(3, 0)]
+	var board := _board({Vector2i(2, 0): 2})
+	assert_array(_blast(east, Vector2i.ZERO, board)).contains_exactly([Vector2i(1, 0)])
+	# The control: with that column gone, both land. Without this the case would pass just as well
+	# against a rule that cut the far cell for some reason of its own.
+	assert_array(_blast(east, Vector2i.ZERO, _board({}))).contains_exactly([Vector2i(1, 0), Vector2i(3, 0)])
+
+
+func test_a_cell_the_blast_cannot_propagate_THROUGH_is_cut_even_though_it_is_reachable_itself() -> void:
+	# THE CASE THAT SEPARATES THE TWO CLAUSES, and the only shape that can. The impact stands on a
+	# plateau; the next cell out is a dip below the burst tolerance, and the cell beyond it is back
+	# at the impact's own height with a clean flat line over the dip.
+	#
+	# So the far cell passes BOTH of its own clauses -- its height is level with the impact and
+	# nothing blocks its trace -- and is cut only because the cell the blast had to cross was. A
+	# wall version of this asserts nothing extra: there the trace from the impact crosses the wall
+	# too, so the far cell fails on its own account and connectivity is never consulted.
+	var east: Array[Vector2i] = [Vector2i(1, 0), Vector2i(2, 0)]
+	var dip := _board({Vector2i.ZERO: 4, Vector2i(2, 0): 4})
+	assert_array(_blast(east, Vector2i.ZERO, dip, 2)).override_failure_message(
+		"a cell past a gap the blast could not cross was reached anyway").is_empty()
+	# The control: level the dip and the same two cells, the same tolerance, both land.
+	var level := _board({Vector2i.ZERO: 4, Vector2i(1, 0): 4, Vector2i(2, 0): 4})
+	assert_array(_blast(east, Vector2i.ZERO, level, 2)).contains_exactly([Vector2i(1, 0), Vector2i(2, 0)])
+
+
+func test_the_burst_tolerance_is_what_decides_how_far_it_carries_vertically() -> void:
+	# A bomb on a terrace does not catch the men on the plateau above: one arm climbs out of reach,
+	# the other stays level. Reading the shot's own up_tolerance here instead is what the field
+	# exists to avoid -- a lob authors that unlimited so it can be lobbed anywhere.
+	var arms: Array[Vector2i] = [Vector2i(1, 0), Vector2i(0, 1)]
+	var board := _board({Vector2i(1, 0): 4})
+	assert_array(_blast(arms, Vector2i.ZERO, board, 2)).contains_exactly([Vector2i(0, 1)])
+	# -1 is unlimited, spelled the way its two siblings are: the same board, the same shape, both.
+	# In the shape's own emission order, which is board order -- the southern cell before the
+	# eastern one -- since the spread filters that order rather than re-sorting it.
+	assert_array(_blast(arms, Vector2i.ZERO, board, -1)).contains_exactly([Vector2i(0, 1), Vector2i(1, 0)])
+
+
+func test_the_blast_travels_through_the_board_and_not_through_the_stamp() -> void:
+	# A stamp whose cells do not touch each other -- or its centre -- still lands in full over open
+	# ground. The stamp says what the blast COVERS; the terrain says what stops it. A flood confined
+	# to stamp membership would answer empty here, and would collapse the authored Test shape (whose
+	# stamp holds no orthogonal neighbour of its own centre) to a single cell.
+	var scattered: Array[Vector2i] = [Vector2i(3, 0), Vector2i(-2, 2)]
+	assert_array(_blast(scattered, Vector2i.ZERO, _board({}))).contains_exactly_in_any_order(scattered)
+
+
+func test_a_flat_arm_survives_whichever_end_of_it_is_emitted_first() -> void:
+	# The ORDERING guard, and the direction is the whole point. An anchored shape emits in BOARD
+	# order -- southern row first -- so this arm's FAR cell is handed out before the near cell it
+	# must propagate through. Deciding membership in emission order with a predecessor rule (which
+	# is what pointing _truncate at the landing cell would do) cuts every cell whose predecessor has
+	# not been reached yet, leaving only the nearest. Walking outward by distance from the impact is
+	# what makes the answer independent of the sort.
+	var south: Array[Vector2i] = [Vector2i(0, 1), Vector2i(0, 2), Vector2i(0, 3)]
+	assert_array(_blast(south, Vector2i.ZERO, _board({}))).override_failure_message(
+		"a flat arm lost cells to the order its own shape emits them in").contains_exactly(
+		[Vector2i(0, 3), Vector2i(0, 2), Vector2i(0, 1)])
+
+
+func test_the_survivors_keep_the_shapes_own_emission_order() -> void:
+	# Victim order is volley order, and that is the SHAPE's rule (AttackShape.place). The spread is
+	# a filter over it, never a re-sort into flood order -- which for this shape would be the exact
+	# reverse, the flood running outward while the sort reads southern row first.
+	var column: Array[Vector2i] = [Vector2i(0, 1), Vector2i(0, 2), Vector2i(0, 3)]
+	var board := _board({Vector2i(0, 2): 4})
+	# The middle of the arm climbs out of reach, so it and everything past it go.
+	assert_array(_blast(column, Vector2i.ZERO, board, 2)).contains_exactly([Vector2i(0, 1)])
+
+
+func test_a_null_board_hands_back_the_whole_authored_shape() -> void:
+	# ShapePlate draws the authored footprint on the mod-fitting card and passes a null board on
+	# purpose to get it. A blast that narrowed there would draw the player a shape no board was
+	# being consulted about.
+	var scattered: Array[Vector2i] = [Vector2i(1, 0), Vector2i(3, 0), Vector2i(-2, 2)]
+	var attack := P.stamped(_attack(), 4, scattered)
+	attack.burst_tolerance = 0
+	assert_array(Reach.get_affected_cells_from(null, Vector2i(9, 9), Vector2i.ZERO, attack, null)) \
+		.contains_exactly_in_any_order(scattered)
+
+
+func test_a_swung_shape_is_still_truncated_from_the_shooter_and_not_from_its_own_far_end() -> void:
+	# #756 is untouched: a self-anchored spread is a SWING, cut lane by lane from the attacker, and
+	# it never asks burst_tolerance. A one-level step two cells ahead stops the lane at the step
+	# under a melee rule, which is the same answer this suite's vertical cases give.
+	var swung := P.line(_attack(), 3)
+	swung.vertical_rule = AttackData.VerticalRule.MELEE
+	swung.burst_tolerance = 0
+	var board := _board({Vector2i(0, -2): 2})
+	var hit := Reach.get_affected_cells_from(null, Vector2i.ZERO, Vector2i(0, -1), swung, board)
+	assert_array(hit).contains_exactly([Vector2i(0, -1)])

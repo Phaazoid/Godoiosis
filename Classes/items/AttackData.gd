@@ -40,8 +40,9 @@ extends Resource
 # from the attacker, stopping at the first wall/unit/edge. 0 = no displacement (every attack
 # today). Generic on purpose — a future air-blast rune could carry it too. Resolved by
 # PlanResolver, applied on execute; the Kinetic Mace's Blowback is the first user.
-# How this attack answers the height question at aim time (#258; judged by Reach.vertical_aim_ok,
-# directional spreads exempt in v1 — their per-cell height question is the deferred footprint one):
+# How this attack answers the height question at aim time (#258; judged by Reach.vertical_aim_ok.
+# A directional spread was exempt in v1 and is not since #756 — it asks this per LANE — and a placed
+# footprint asks burst_tolerance below from its impact cell since #805):
 #   RANGED — the target may sit up to up_tolerance above / down_tolerance below the attacker
 #            (-1 = unlimited). A lob's climb ceiling is its up_tolerance; a gun stays -1.
 #   MELEE  — dev ruling 2026-08-20: same step, or a facing half step — same elevation, or adjacent
@@ -64,6 +65,19 @@ enum VerticalRule { RANGED, MELEE }
 # The sightline runs at eye height and the arc is the ONE trajectory both the legality check and
 # the in-game bead trace read (Reach.sight_trace) — the drawn path IS the rule.
 @export var arc_clearance: int = 0
+# How far a PLACED blast carries VERTICALLY from where it lands (#805), in the same height units as
+# everything above: the burst covers cells whose surface is within this of the impact point, so a
+# bomb landing on a terrace does not catch the men on the plateau above. -1 = unlimited, spelled the
+# way its two siblings above spell it.
+#
+# It is the BURST's reach, never the shot's, and that is why it is a field rather than a reuse of the
+# tolerances: a lob authors unlimited up-tolerance so it can be lobbed anywhere, and reading that
+# same number after the shot has landed would make every such blast vertically unlimited too --
+# catching exactly the plateau this exists to miss.
+#
+# Read only where a burst actually spreads (Reach._spread): a self-anchored spread is truncated from
+# the SHOOTER instead (#756), and an attack with no shape covers the anchor cell alone.
+@export var burst_tolerance: int = -1
 @export var heals := false   # EITHER damage OR heal, never both; reinterprets base damage as HP restored
 # A pure-utility attack (#126): SCALING is suppressed, so neither aura nor a weapon's stat blend can
 # sneak damage into a damageless effect. Only the attack's own contribution — an elemental reaction's
@@ -235,7 +249,7 @@ static func property_sections() -> Array[Dictionary]:
 		{"title": "Identity", "fields": PackedStringArray(["display_name"])},
 		{"title": "Range and shape", "fields": PackedStringArray(["max_range", "min_range", "max_and_a_half", "attack_shape"])},
 		{"title": "Who it can hit", "fields": PackedStringArray(["targets", "hits_allies", "hits_self", "pierces_guard"])},
-		{"title": "Height", "fields": PackedStringArray(["vertical_rule", "up_tolerance", "down_tolerance", "arc_clearance"])},
+		{"title": "Height", "fields": PackedStringArray(["vertical_rule", "up_tolerance", "down_tolerance", "arc_clearance", "burst_tolerance"])},
 		{"title": "Payload", "fields": PackedStringArray(["heals", "deals_no_damage", "power", "damage_kind", "knockback", "sound"])},
 		{"title": "How it is used", "fields": PackedStringArray(["can_counter", "can_overwatch"])},
 		# LAST because it is the biggest: one picker plus every look row the element has, which for
@@ -273,6 +287,11 @@ static func in_section(sections: Array[Dictionary], title: String, fields: Packe
 #                           ring (GridUtils.cells_within_blended_range), and a facing aim has none.
 #   MELEE                -- Reach._vertical_rule_ok returns before either tolerance. arc_clearance
 #                           is deliberately NOT here: the lane trace reads it whatever the rule.
+#                           burst_tolerance is not here either, and for the same kind of reason --
+#                           it is measured from the IMPACT, so the shooter's own rule never gates it.
+#   no placed shape      -- burst_tolerance is read only by Reach._spread, which a self-anchored
+#                           spread (truncated from the shooter, #756) and a shapeless attack (the
+#                           anchor cell alone) never reach.
 #   deals_no_damage      -- both base_damage implementations return 0 before power or the blend.
 #                           knockback and elemental_damage_type STAY: a damageless shove is Gust,
 #                           and the element is applied separately from the damage number.
@@ -286,6 +305,12 @@ static func in_section(sections: Array[Dictionary], title: String, fields: Packe
 # authored tolerance under a MELEE rule survives being invisible.
 func hidden_fields() -> PackedStringArray:
 	var hidden: PackedStringArray = []
+	if is_directional() or attack_shape == null:
+		# burst_tolerance is read ONLY by Reach._spread, which runs for a placed, shaped attack and
+		# nothing else: a self-anchored spread truncates from the shooter (#756) and a shapeless
+		# attack covers the anchor cell alone, so neither ever asks. Derived from what the rule
+		# reads, like every other entry here -- the ground-smash slice widens the first half.
+		hidden.append("burst_tolerance")
 	if is_directional():
 		hidden.append_array(["min_range", "max_and_a_half"])
 	if vertical_rule == VerticalRule.MELEE:
@@ -330,6 +355,7 @@ static func property_tips() -> Dictionary:
 		"up_tolerance": "RANGED only: how many levels ABOVE the attacker a target may stand. -1 = unlimited, which is what a gun wants. A lob's climb ceiling.",
 		"down_tolerance": "RANGED only: how many levels BELOW the attacker a target may stand. -1 = unlimited.",
 		"arc_clearance": "How high the shot arcs above its own sight line mid-flight -- this is the LOB setting, not the tolerances above. 0 = a flat, straight shot. Higher clears taller walls to the far side. There is deliberately no unlimited value.",
+		"burst_tolerance": "How far this attack's BLAST carries up or down from the cell it lands on, once it has got there. The burst covers cells whose ground is within this of the impact point, so a bomb landing on a terrace does not catch anyone on the plateau above. -1 = unlimited.\nThis is the burst's reach, not the shot's: the tolerances above decide where you may AIM, this decides how much of the shape the blast then fills. The blast is always FLAT from where it landed -- the lob was spent getting there -- and a wall between the impact and part of the shape stops it.\nOnly does anything on an attack that is placed at range AND has a shape. A shape swung from the attacker is cut short lane by lane instead, and an attack with no shape only ever covers the one cell.",
 		"heals": "Reinterprets the damage number as HP restored instead. An attack is either damage or a heal, never both.",
 		"deals_no_damage": "Pure utility: scaling is suppressed, so neither aura nor a weapon's stat blend can sneak damage into a damageless effect. Mutually exclusive with Heals.",
 		"pierces_guard": "Ignores a Guard -- the hit lands on whoever it was aimed at, bodyguard or no.",
