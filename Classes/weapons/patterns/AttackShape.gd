@@ -28,7 +28,11 @@ class_name AttackShape
 # southern row first, then northward, west to east within a row. Still one rule and still fully
 # deterministic (law #1), but it is no longer *nearest the attacker first* -- an anchored footprint
 # has no attacker in it to be near. Ordering a placed blast outward from where it LANDS is a spread
-# question and belongs to #805, not to a sort that cannot see the origin.
+# question, and #805 answered it WITHOUT touching this sort: a placed blast decides its membership by
+# flooding outward from the impact, which supplies its own order, and Reach then filters the
+# survivors back into this one. So emission order stays the shape's rule and the spread stays
+# independent of it -- which it has to be, because this sort hands out a south arm before the centre
+# that arm propagates through.
 #
 # A stamp is a SET -- a duplicated offset counts once. The centre is a legal member (dev,
 # 2026-09-06): at range 0 it is the attacker's own cell in the footprint, and whether they are then

@@ -443,9 +443,12 @@ Cleave to its middle cell at a one-level ledge and **loses both side lanes when 
 plateau edge** — the *"standing on a cliff edge still shoots down past it"* purpose broken for
 spreads. Both shapes are pinned in `tests/weapons/test_vertical_tolerance.gd`.
 
-The 3D-blast-extent deferral below keeps only its other half: a POINT aim's splash is still
+The 3D-blast-extent deferral below then kept only its other half — a POINT aim's splash, still
 board-blind, because whether a blast covers a *volume* is a different question from how far a spread
 gets. The fork was put to the dev rendered as two board diagrams rather than described.
+**[#805](https://github.com/Phaazoid/Godoiosis/issues/805) (2026-09-19) closed that half too**: a
+placed footprint spreads outward from where it lands. Nothing is board-blind now except a blast's
+third dimension, which is all the deferral below was ever really about.
 
 ### Why it is a separate check and not added to distance
 
@@ -491,10 +494,10 @@ placed there — which halved how much of `Reach` had to learn about the board.
 **Half of that split survives and half is repealed.** A directional SPREAD's footprint reads the
 board now (`get_affected_cells_from` takes it as a REQUIRED parameter, the `movement_cost`
 precedent), because a spread has no single aim cell to attach the check to: its cells *are* the
-question. A POINT aim's splash is still board-blind, and that is the deferred blast-extent
-question, unchanged. `Reach` is no longer board-blind in general, so the sentence that argued from
-its being so no longer carries weight; what keeps the scope honest instead is that patterns stay
-pure geometry — the truncation lives in `Reach`, which already owned the sight trace.
+question. **And [#805](https://github.com/Phaazoid/Godoiosis/issues/805) repealed the other half**:
+a placed footprint reads the board too, spreading from its impact cell. So the split is gone
+entirely — every footprint question is a board question now. What keeps the scope honest instead is
+that shapes stay pure geometry: both filters live in `Reach`, which already owned the sight trace.
 
 ### What this buys, all from one rule
 
@@ -1432,14 +1435,22 @@ itself.
   as well, but we can shelve that for a later grill session."* `elevation_delta` is the wire it will
   attach to. Likeliest first case: a heavy melee weapon swung downhill, since falling damage already
   establishes height-as-force in the fiction.
-- **3D blast extent.** *"A fire ball can be lobbed, and create a 3D explosion radius where it lands."*
-  Explicitly **not** part of this arc — recorded as a supported direction. On a heightmap it needs no
-  volume math: it is one more authored number, "the blast covers cells whose surface is within V of
-  the impact point," so a fireball on a terrace does not catch the men on the plateau above.
-  **Narrowed by [#756](https://github.com/Phaazoid/Godoiosis/issues/756) (2026-09-04):** a directional
-  SPREAD no longer waits on this, having been given its own rule — it truncates at the first cell its
-  shot cannot reach. What stays deferred is a POINT aim's splash, the volume question this bullet is
-  really about.
+- ~~**3D blast extent**~~ — **BUILT 2026-09-19 as [#805](https://github.com/Phaazoid/Godoiosis/issues/805),
+  and this bullet's own sketch is what shipped.** *"A fire ball can be lobbed, and create a 3D
+  explosion radius where it lands."* It predicted the mechanism correctly: on a heightmap it needs no
+  volume math, only one more authored number — `AttackData.burst_tolerance`, *"the blast covers cells
+  whose surface is within V of the impact point"* — so a fireball on a terrace does not catch the men
+  on the plateau above. **Narrowed first by [#756](https://github.com/Phaazoid/Godoiosis/issues/756)
+  (2026-09-04)**, which gave a directional SPREAD its own rule; #805 then answered the POINT aim's
+  splash, which is what was left.
+  **Two things the sketch did not have.** The vertical number is only half of it — a blast is also
+  stopped HORIZONTALLY, by a flat trace from the impact, so a bomb lobbed behind a wall does not
+  spray back over it; and the reach is a PROPAGATION rather than a filter, so a cell whose own line
+  is clear is still cut when the cell the blast had to cross was not. And the number had to be its
+  own field rather than the aim's `up_tolerance`/`down_tolerance`: a lob authors those unlimited so
+  it can be lobbed anywhere, and reusing them would have made every such burst vertically unlimited —
+  catching exactly the plateau this bullet named. What remains genuinely deferred is a blast that
+  covers a VOLUME rather than a heightmap's surface, which is all this was ever really about.
 - **A projectile graphic riding the sight line** — dev, 2026-08-20: *"we can add a little graphic
   of a fire following it when it goes off, for when the advanced battle zoom is disabled"*. The
   trajectory function is already the one home the flight path would read.
