@@ -3,7 +3,7 @@
 importer="texture"
 type="CompressedTexture2D"
 uid="uid://utcba4ppc03"
-path="res://.godot/imported/Priest.png-fa24c0c121083bcd826cdb47efb8e059.ctex"
+path="res://godot/imported/Priest.png-fa24c0c121083bcd826cdb47efb8e059.ctex"
 metadata={
 "vram_texture": false
 }
@@ -11,7 +11,7 @@ metadata={
 [deps]
 
 source_file="res://Art/Units/MapSprites/Priest.png"
-dest_files=["res://.godot/imported/Priest.png-fa24c0c121083bcd826cdb47efb8e059.ctex"]
+dest_files=["res://godot/imported/Priest.png-fa24c0c121083bcd826cdb47efb8e059.ctex"]
 
 [params]
 

@@ -3,7 +3,7 @@
 importer="texture"
 type="CompressedTexture2D"
 uid="uid://c5hsj8u5k7kqe"
-path="res://.godot/imported/TallGrass.png-c03b91283580cdda9fa6ac25a7461868.ctex"
+path="res://godot/imported/TallGrass.png-c03b91283580cdda9fa6ac25a7461868.ctex"
 metadata={
 "vram_texture": false
 }
@@ -11,7 +11,7 @@ metadata={
 [deps]
 
 source_file="res://Art/Icons/TerrainIcons/TallGrass.png"
-dest_files=["res://.godot/imported/TallGrass.png-c03b91283580cdda9fa6ac25a7461868.ctex"]
+dest_files=["res://godot/imported/TallGrass.png-c03b91283580cdda9fa6ac25a7461868.ctex"]
 
 [params]
 

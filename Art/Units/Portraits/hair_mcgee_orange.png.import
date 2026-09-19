@@ -3,7 +3,7 @@
 importer="texture"
 type="CompressedTexture2D"
 uid="uid://cum85ohppxgiq"
-path="res://.godot/imported/hair_mcgee_orange.png-1629ad67fdc759610c6c9b3af4902e5a.ctex"
+path="res://godot/imported/hair_mcgee_orange.png-1629ad67fdc759610c6c9b3af4902e5a.ctex"
 metadata={
 "vram_texture": false
 }
@@ -11,7 +11,7 @@ metadata={
 [deps]
 
 source_file="res://Art/Units/Portraits/hair_mcgee_orange.png"
-dest_files=["res://.godot/imported/hair_mcgee_orange.png-1629ad67fdc759610c6c9b3af4902e5a.ctex"]
+dest_files=["res://godot/imported/hair_mcgee_orange.png-1629ad67fdc759610c6c9b3af4902e5a.ctex"]
 
 [params]
 

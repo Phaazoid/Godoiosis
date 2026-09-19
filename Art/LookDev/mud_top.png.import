@@ -3,7 +3,7 @@
 importer="texture"
 type="CompressedTexture2D"
 uid="uid://cwdrg2qa8kd1x"
-path.s3tc="res://.godot/imported/mud_top.png-0a83016bd9a1f17b1dad9c3b9acc34a3.s3tc.ctex"
+path.s3tc="res://godot/imported/mud_top.png-0a83016bd9a1f17b1dad9c3b9acc34a3.s3tc.ctex"
 metadata={
 "imported_formats": ["s3tc_bptc"],
 "vram_texture": true
@@ -12,7 +12,7 @@ metadata={
 [deps]
 
 source_file="res://Art/LookDev/mud_top.png"
-dest_files=["res://.godot/imported/mud_top.png-0a83016bd9a1f17b1dad9c3b9acc34a3.s3tc.ctex"]
+dest_files=["res://godot/imported/mud_top.png-0a83016bd9a1f17b1dad9c3b9acc34a3.s3tc.ctex"]
 
 [params]
 

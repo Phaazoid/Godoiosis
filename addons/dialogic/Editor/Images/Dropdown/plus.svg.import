@@ -3,7 +3,7 @@
 importer="texture"
 type="CompressedTexture2D"
 uid="uid://cqqtygfbvgtag"
-path="res://.godot/imported/plus.svg-e094b0b8505b5d910717883d06553532.ctex"
+path="res://godot/imported/plus.svg-e094b0b8505b5d910717883d06553532.ctex"
 metadata={
 "has_editor_variant": true,
 "vram_texture": false
@@ -12,7 +12,7 @@ metadata={
 [deps]
 
 source_file="res://addons/dialogic/Editor/Images/Dropdown/plus.svg"
-dest_files=["res://.godot/imported/plus.svg-e094b0b8505b5d910717883d06553532.ctex"]
+dest_files=["res://godot/imported/plus.svg-e094b0b8505b5d910717883d06553532.ctex"]
 
 [params]
 

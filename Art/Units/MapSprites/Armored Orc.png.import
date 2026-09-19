@@ -3,7 +3,7 @@
 importer="texture"
 type="CompressedTexture2D"
 uid="uid://lktkwhktmdc4"
-path="res://.godot/imported/Armored Orc.png-de88f6846d5efb67c8473ed6adf74351.ctex"
+path="res://godot/imported/Armored Orc.png-de88f6846d5efb67c8473ed6adf74351.ctex"
 metadata={
 "vram_texture": false
 }
@@ -11,7 +11,7 @@ metadata={
 [deps]
 
 source_file="res://Art/Units/MapSprites/Armored Orc.png"
-dest_files=["res://.godot/imported/Armored Orc.png-de88f6846d5efb67c8473ed6adf74351.ctex"]
+dest_files=["res://godot/imported/Armored Orc.png-de88f6846d5efb67c8473ed6adf74351.ctex"]
 
 [params]
 

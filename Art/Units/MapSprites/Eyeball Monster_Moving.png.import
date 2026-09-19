@@ -3,7 +3,7 @@
 importer="texture"
 type="CompressedTexture2D"
 uid="uid://db6w7xyi4pf0f"
-path="res://.godot/imported/Eyeball Monster_Moving.png-09c9718ed0ce6699f4a1b3d5ff3d6bcc.ctex"
+path="res://godot/imported/Eyeball Monster_Moving.png-09c9718ed0ce6699f4a1b3d5ff3d6bcc.ctex"
 metadata={
 "vram_texture": false
 }
@@ -11,7 +11,7 @@ metadata={
 [deps]
 
 source_file="res://Art/Units/MapSprites/Eyeball Monster_Moving.png"
-dest_files=["res://.godot/imported/Eyeball Monster_Moving.png-09c9718ed0ce6699f4a1b3d5ff3d6bcc.ctex"]
+dest_files=["res://godot/imported/Eyeball Monster_Moving.png-09c9718ed0ce6699f4a1b3d5ff3d6bcc.ctex"]
 
 [params]
 

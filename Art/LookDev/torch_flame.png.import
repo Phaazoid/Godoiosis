@@ -3,7 +3,7 @@
 importer="texture"
 type="CompressedTexture2D"
 uid="uid://cfamyhlji3e0i"
-path.s3tc="res://.godot/imported/torch_flame.png-66d9f80e159817ae01417e7d6cadda27.s3tc.ctex"
+path.s3tc="res://godot/imported/torch_flame.png-66d9f80e159817ae01417e7d6cadda27.s3tc.ctex"
 metadata={
 "imported_formats": ["s3tc_bptc"],
 "vram_texture": true
@@ -12,7 +12,7 @@ metadata={
 [deps]
 
 source_file="res://Art/LookDev/torch_flame.png"
-dest_files=["res://.godot/imported/torch_flame.png-66d9f80e159817ae01417e7d6cadda27.s3tc.ctex"]
+dest_files=["res://godot/imported/torch_flame.png-66d9f80e159817ae01417e7d6cadda27.s3tc.ctex"]
 
 [params]
 

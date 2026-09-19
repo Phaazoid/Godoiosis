@@ -3,7 +3,7 @@
 importer="texture"
 type="CompressedTexture2D"
 uid="uid://k781x25a5b6t"
-path.s3tc="res://.godot/imported/water_side.png-053a62e9cb47d6307fc2e33757679256.s3tc.ctex"
+path.s3tc="res://godot/imported/water_side.png-053a62e9cb47d6307fc2e33757679256.s3tc.ctex"
 metadata={
 "imported_formats": ["s3tc_bptc"],
 "vram_texture": true
@@ -12,7 +12,7 @@ metadata={
 [deps]
 
 source_file="res://Art/LookDev/water_side.png"
-dest_files=["res://.godot/imported/water_side.png-053a62e9cb47d6307fc2e33757679256.s3tc.ctex"]
+dest_files=["res://godot/imported/water_side.png-053a62e9cb47d6307fc2e33757679256.s3tc.ctex"]
 
 [params]
 

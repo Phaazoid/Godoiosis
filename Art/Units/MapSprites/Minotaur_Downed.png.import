@@ -3,7 +3,7 @@
 importer="texture"
 type="CompressedTexture2D"
 uid="uid://c88dvskdsw8i7"
-path="res://.godot/imported/Minotaur_Downed.png-b36a8e804f2dc65beeffe7dedb7a7fff.ctex"
+path="res://godot/imported/Minotaur_Downed.png-b36a8e804f2dc65beeffe7dedb7a7fff.ctex"
 metadata={
 "vram_texture": false
 }
@@ -11,7 +11,7 @@ metadata={
 [deps]
 
 source_file="res://Art/Units/MapSprites/Minotaur_Downed.png"
-dest_files=["res://.godot/imported/Minotaur_Downed.png-b36a8e804f2dc65beeffe7dedb7a7fff.ctex"]
+dest_files=["res://godot/imported/Minotaur_Downed.png-b36a8e804f2dc65beeffe7dedb7a7fff.ctex"]
 
 [params]
 

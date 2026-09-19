@@ -3,7 +3,7 @@
 importer="texture"
 type="CompressedTexture2D"
 uid="uid://81alxmwnp6ll"
-path="res://.godot/imported/Demon_B_Downed.png-8ea7ab349b2eddc1bd1fd01c8185c942.ctex"
+path="res://godot/imported/Demon_B_Downed.png-8ea7ab349b2eddc1bd1fd01c8185c942.ctex"
 metadata={
 "vram_texture": false
 }
@@ -11,7 +11,7 @@ metadata={
 [deps]
 
 source_file="res://Art/Units/MapSprites/Demon_B_Downed.png"
-dest_files=["res://.godot/imported/Demon_B_Downed.png-8ea7ab349b2eddc1bd1fd01c8185c942.ctex"]
+dest_files=["res://godot/imported/Demon_B_Downed.png-8ea7ab349b2eddc1bd1fd01c8185c942.ctex"]
 
 [params]
 

@@ -3,7 +3,7 @@
 importer="texture"
 type="CompressedTexture2D"
 uid="uid://bndrafy1uydrf"
-path="res://.godot/imported/Crossbow.png-dd1b71f876e85e36e9c90cd17e9e3bcd.ctex"
+path="res://godot/imported/Crossbow.png-dd1b71f876e85e36e9c90cd17e9e3bcd.ctex"
 metadata={
 "vram_texture": false
 }
@@ -11,7 +11,7 @@ metadata={
 [deps]
 
 source_file="res://Art/Icons/WeaponIcons/Crossbow.png"
-dest_files=["res://.godot/imported/Crossbow.png-dd1b71f876e85e36e9c90cd17e9e3bcd.ctex"]
+dest_files=["res://godot/imported/Crossbow.png-dd1b71f876e85e36e9c90cd17e9e3bcd.ctex"]
 
 [params]
 

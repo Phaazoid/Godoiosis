@@ -3,7 +3,7 @@
 importer="texture"
 type="CompressedTexture2D"
 uid="uid://3kc3cr7flpuo"
-path="res://.godot/imported/vertical.png-d74e2dabb3acc0ab236c312fa90a43ed.ctex"
+path="res://godot/imported/vertical.png-d74e2dabb3acc0ab236c312fa90a43ed.ctex"
 metadata={
 "vram_texture": false
 }
@@ -11,7 +11,7 @@ metadata={
 [deps]
 
 source_file="res://Art/Icons/ArrowIcons/vertical.png"
-dest_files=["res://.godot/imported/vertical.png-d74e2dabb3acc0ab236c312fa90a43ed.ctex"]
+dest_files=["res://godot/imported/vertical.png-d74e2dabb3acc0ab236c312fa90a43ed.ctex"]
 
 [params]
 

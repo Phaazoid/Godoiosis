@@ -3,7 +3,7 @@
 importer="texture"
 type="CompressedTexture2D"
 uid="uid://c26gsbguoshhd"
-path="res://.godot/imported/Armored Skeleton.png-e9fa6841e8ce5b91d81c8e473473f3a3.ctex"
+path="res://godot/imported/Armored Skeleton.png-e9fa6841e8ce5b91d81c8e473473f3a3.ctex"
 metadata={
 "vram_texture": false
 }
@@ -11,7 +11,7 @@ metadata={
 [deps]
 
 source_file="res://Art/Units/MapSprites/Armored Skeleton.png"
-dest_files=["res://.godot/imported/Armored Skeleton.png-e9fa6841e8ce5b91d81c8e473473f3a3.ctex"]
+dest_files=["res://godot/imported/Armored Skeleton.png-e9fa6841e8ce5b91d81c8e473473f3a3.ctex"]
 
 [params]
 

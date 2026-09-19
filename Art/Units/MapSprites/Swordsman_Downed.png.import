@@ -3,7 +3,7 @@
 importer="texture"
 type="CompressedTexture2D"
 uid="uid://djqtna32u8h7g"
-path="res://.godot/imported/Swordsman_Downed.png-3413ead65437d09b983d5cd07c3ea910.ctex"
+path="res://godot/imported/Swordsman_Downed.png-3413ead65437d09b983d5cd07c3ea910.ctex"
 metadata={
 "vram_texture": false
 }
@@ -11,7 +11,7 @@ metadata={
 [deps]
 
 source_file="res://Art/Units/MapSprites/Swordsman_Downed.png"
-dest_files=["res://.godot/imported/Swordsman_Downed.png-3413ead65437d09b983d5cd07c3ea910.ctex"]
+dest_files=["res://godot/imported/Swordsman_Downed.png-3413ead65437d09b983d5cd07c3ea910.ctex"]
 
 [params]
 

@@ -3,7 +3,7 @@
 importer="texture"
 type="CompressedTexture2D"
 uid="uid://igjhf27ark85"
-path="res://.godot/imported/Down.png-065a66d49b4fb1f737d1e32d29609ab3.ctex"
+path="res://godot/imported/Down.png-065a66d49b4fb1f737d1e32d29609ab3.ctex"
 metadata={
 "vram_texture": false
 }
@@ -11,7 +11,7 @@ metadata={
 [deps]
 
 source_file="res://Art/Icons/StateIcons/Down.png"
-dest_files=["res://.godot/imported/Down.png-065a66d49b4fb1f737d1e32d29609ab3.ctex"]
+dest_files=["res://godot/imported/Down.png-065a66d49b4fb1f737d1e32d29609ab3.ctex"]
 
 [params]
 

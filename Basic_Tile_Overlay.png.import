@@ -3,7 +3,7 @@
 importer="texture"
 type="CompressedTexture2D"
 uid="uid://bcoyc0w1aws1m"
-path="res://.godot/imported/Basic_Tile_Overlay.png-339908a4b9e51c5c16b09475ad71bd84.ctex"
+path="res://godot/imported/Basic_Tile_Overlay.png-339908a4b9e51c5c16b09475ad71bd84.ctex"
 metadata={
 "vram_texture": false
 }
@@ -11,7 +11,7 @@ metadata={
 [deps]
 
 source_file="res://Basic_Tile_Overlay.png"
-dest_files=["res://.godot/imported/Basic_Tile_Overlay.png-339908a4b9e51c5c16b09475ad71bd84.ctex"]
+dest_files=["res://godot/imported/Basic_Tile_Overlay.png-339908a4b9e51c5c16b09475ad71bd84.ctex"]
 
 [params]
 

@@ -3,7 +3,7 @@
 importer="texture"
 type="CompressedTexture2D"
 uid="uid://crnj5vnn7pgik"
-path="res://.godot/imported/Greatsword Skeleton.png-4f348159d72fcba0f95104f16cce6e1c.ctex"
+path="res://godot/imported/Greatsword Skeleton.png-4f348159d72fcba0f95104f16cce6e1c.ctex"
 metadata={
 "vram_texture": false
 }
@@ -11,7 +11,7 @@ metadata={
 [deps]
 
 source_file="res://Art/Units/MapSprites/Greatsword Skeleton.png"
-dest_files=["res://.godot/imported/Greatsword Skeleton.png-4f348159d72fcba0f95104f16cce6e1c.ctex"]
+dest_files=["res://godot/imported/Greatsword Skeleton.png-4f348159d72fcba0f95104f16cce6e1c.ctex"]
 
 [params]
 

@@ -3,7 +3,7 @@
 importer="texture"
 type="CompressedTexture2D"
 uid="uid://btfcbrki5oe4d"
-path="res://.godot/imported/Aether.png-6f9f465a86f779d08742ff96a114e870.ctex"
+path="res://godot/imported/Aether.png-6f9f465a86f779d08742ff96a114e870.ctex"
 metadata={
 "vram_texture": false
 }
@@ -11,7 +11,7 @@ metadata={
 [deps]
 
 source_file="res://Art/Icons/ElementIcons/Aether.png"
-dest_files=["res://.godot/imported/Aether.png-6f9f465a86f779d08742ff96a114e870.ctex"]
+dest_files=["res://godot/imported/Aether.png-6f9f465a86f779d08742ff96a114e870.ctex"]
 
 [params]
 
