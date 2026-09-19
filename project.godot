@@ -11,8 +11,9 @@ config_version=5
 [application]
 
 config/name="Iosis"
-config/version="0.188.6"
+config/version="0.188.7"
 run/main_scene="res://Scenes/Battle3D/Battle3D.tscn"
+config/use_hidden_project_data_directory=false
 config/features=PackedStringArray("4.7", "Mobile")
 config/icon="res://icon.svg"
 
@@ -22,20 +23,8 @@ Dialogic="*uid://ds2q0uclmolvu"
 
 [dialogic]
 
-directories/dch_directory={
-"torv": "res://Scenarios/dialog/characters/torv.dch"
-}
-directories/dtl_directory={
-"DryFieldIntro": "res://Scenarios/dialog/DryFieldIntro.dtl",
-"causeway_intro": "res://Scenarios/dialog/causeway_intro.dtl",
-"ford_intro": "res://Scenarios/dialog/ford_intro.dtl",
-"prolog_intro": "res://Scenarios/dialog/prolog_intro.dtl",
-"prolog_step_complete": "res://Scenarios/dialog/prolog_step_complete.dtl",
-"prolog_step_first_join": "res://Scenarios/dialog/prolog_step_first_join.dtl",
-"prolog_step_selected": "res://Scenarios/dialog/prolog_step_selected.dtl",
-"quarry_intro": "res://Scenarios/dialog/quarry_intro.dtl",
-"terraces_intro": "res://Scenarios/dialog/terraces_intro.dtl"
-}
+directories/dch_directory={}
+directories/dtl_directory={}
 layout/style_directory={}
 
 [display]
