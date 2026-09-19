@@ -3,7 +3,7 @@
 importer="texture"
 type="CompressedTexture2D"
 uid="uid://dxgiu24ohfcpr"
-path="res://godot/imported/Chainsword.png-7ef8a4f785ebc7dfc050631016ed4788.ctex"
+path="res://.godot/imported/Chainsword.png-7ef8a4f785ebc7dfc050631016ed4788.ctex"
 metadata={
 "vram_texture": false
 }
@@ -11,7 +11,7 @@ metadata={
 [deps]
 
 source_file="res://Art/Icons/WeaponIcons/Chainsword.png"
-dest_files=["res://godot/imported/Chainsword.png-7ef8a4f785ebc7dfc050631016ed4788.ctex"]
+dest_files=["res://.godot/imported/Chainsword.png-7ef8a4f785ebc7dfc050631016ed4788.ctex"]
 
 [params]
 

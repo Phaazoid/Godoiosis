@@ -3,7 +3,7 @@
 importer="texture"
 type="CompressedTexture2D"
 uid="uid://dfag6ll5s4dbd"
-path="res://godot/imported/Lancer_Downed.png-11c8bafddb82bc343e08f1da161710bb.ctex"
+path="res://.godot/imported/Lancer_Downed.png-11c8bafddb82bc343e08f1da161710bb.ctex"
 metadata={
 "vram_texture": false
 }
@@ -11,7 +11,7 @@ metadata={
 [deps]
 
 source_file="res://Art/Units/MapSprites/Lancer_Downed.png"
-dest_files=["res://godot/imported/Lancer_Downed.png-11c8bafddb82bc343e08f1da161710bb.ctex"]
+dest_files=["res://.godot/imported/Lancer_Downed.png-11c8bafddb82bc343e08f1da161710bb.ctex"]
 
 [params]
 

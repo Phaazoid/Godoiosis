@@ -3,7 +3,7 @@
 importer="texture"
 type="CompressedTexture2D"
 uid="uid://b5tgfei3m0xaw"
-path="res://godot/imported/Necromancer_Moving.png-6ae547444ef1dd97fd351c40f2fb8014.ctex"
+path="res://.godot/imported/Necromancer_Moving.png-6ae547444ef1dd97fd351c40f2fb8014.ctex"
 metadata={
 "vram_texture": false
 }
@@ -11,7 +11,7 @@ metadata={
 [deps]
 
 source_file="res://Art/Units/MapSprites/Necromancer_Moving.png"
-dest_files=["res://godot/imported/Necromancer_Moving.png-6ae547444ef1dd97fd351c40f2fb8014.ctex"]
+dest_files=["res://.godot/imported/Necromancer_Moving.png-6ae547444ef1dd97fd351c40f2fb8014.ctex"]
 
 [params]
 

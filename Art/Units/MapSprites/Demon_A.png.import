@@ -3,7 +3,7 @@
 importer="texture"
 type="CompressedTexture2D"
 uid="uid://bum0hi56qw3f2"
-path="res://godot/imported/Demon_A.png-a1003aa60fc85a48b41e1e8eca17f55f.ctex"
+path="res://.godot/imported/Demon_A.png-a1003aa60fc85a48b41e1e8eca17f55f.ctex"
 metadata={
 "vram_texture": false
 }
@@ -11,7 +11,7 @@ metadata={
 [deps]
 
 source_file="res://Art/Units/MapSprites/Demon_A.png"
-dest_files=["res://godot/imported/Demon_A.png-a1003aa60fc85a48b41e1e8eca17f55f.ctex"]
+dest_files=["res://.godot/imported/Demon_A.png-a1003aa60fc85a48b41e1e8eca17f55f.ctex"]
 
 [params]
 

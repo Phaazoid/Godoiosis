@@ -3,7 +3,7 @@
 importer="texture"
 type="CompressedTexture2D"
 uid="uid://nmi5q8kwhidn"
-path="res://godot/imported/Ghostfire.png-596c12d7bdd815fec7b7f120da590a94.ctex"
+path="res://.godot/imported/Ghostfire.png-596c12d7bdd815fec7b7f120da590a94.ctex"
 metadata={
 "vram_texture": false
 }
@@ -11,7 +11,7 @@ metadata={
 [deps]
 
 source_file="res://Art/Units/MapSprites/Ghostfire.png"
-dest_files=["res://godot/imported/Ghostfire.png-596c12d7bdd815fec7b7f120da590a94.ctex"]
+dest_files=["res://.godot/imported/Ghostfire.png-596c12d7bdd815fec7b7f120da590a94.ctex"]
 
 [params]
 

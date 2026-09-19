@@ -3,7 +3,7 @@
 importer="texture"
 type="CompressedTexture2D"
 uid="uid://dtyfmd46djvuv"
-path="res://godot/imported/Flame Golem.png-c42f441a3597ba2e2a0bd96d4fd6f00d.ctex"
+path="res://.godot/imported/Flame Golem.png-c42f441a3597ba2e2a0bd96d4fd6f00d.ctex"
 metadata={
 "vram_texture": false
 }
@@ -11,7 +11,7 @@ metadata={
 [deps]
 
 source_file="res://Art/Units/MapSprites/Flame Golem.png"
-dest_files=["res://godot/imported/Flame Golem.png-c42f441a3597ba2e2a0bd96d4fd6f00d.ctex"]
+dest_files=["res://.godot/imported/Flame Golem.png-c42f441a3597ba2e2a0bd96d4fd6f00d.ctex"]
 
 [params]
 

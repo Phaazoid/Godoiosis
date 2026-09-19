@@ -3,7 +3,7 @@
 importer="texture"
 type="CompressedTexture2D"
 uid="uid://bu5m2fk2c8n68"
-path="res://godot/imported/Warlock.png-de978d34c023d59aeab25bf3bf95e165.ctex"
+path="res://.godot/imported/Warlock.png-de978d34c023d59aeab25bf3bf95e165.ctex"
 metadata={
 "vram_texture": false
 }
@@ -11,7 +11,7 @@ metadata={
 [deps]
 
 source_file="res://Art/Units/MapSprites/Warlock.png"
-dest_files=["res://godot/imported/Warlock.png-de978d34c023d59aeab25bf3bf95e165.ctex"]
+dest_files=["res://.godot/imported/Warlock.png-de978d34c023d59aeab25bf3bf95e165.ctex"]
 
 [params]
 

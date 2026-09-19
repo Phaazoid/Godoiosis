@@ -3,7 +3,7 @@
 importer="texture"
 type="CompressedTexture2D"
 uid="uid://dre0glhoylx4l"
-path="res://godot/imported/NegativeIcon.png-45b4f540ef2e576df715bfa185f7cda3.ctex"
+path="res://.godot/imported/NegativeIcon.png-45b4f540ef2e576df715bfa185f7cda3.ctex"
 metadata={
 "vram_texture": false
 }
@@ -11,7 +11,7 @@ metadata={
 [deps]
 
 source_file="res://Art/Icons/BoardIcons/NegativeIcon.png"
-dest_files=["res://godot/imported/NegativeIcon.png-45b4f540ef2e576df715bfa185f7cda3.ctex"]
+dest_files=["res://.godot/imported/NegativeIcon.png-45b4f540ef2e576df715bfa185f7cda3.ctex"]
 
 [params]
 

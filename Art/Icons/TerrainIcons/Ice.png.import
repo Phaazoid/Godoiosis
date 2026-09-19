@@ -3,7 +3,7 @@
 importer="texture"
 type="CompressedTexture2D"
 uid="uid://b6lfmd60utqhk"
-path="res://godot/imported/Ice.png-81b5e9d7b5dba23269adc1989489ccdc.ctex"
+path="res://.godot/imported/Ice.png-81b5e9d7b5dba23269adc1989489ccdc.ctex"
 metadata={
 "vram_texture": false
 }
@@ -11,7 +11,7 @@ metadata={
 [deps]
 
 source_file="res://Art/Icons/TerrainIcons/Ice.png"
-dest_files=["res://godot/imported/Ice.png-81b5e9d7b5dba23269adc1989489ccdc.ctex"]
+dest_files=["res://.godot/imported/Ice.png-81b5e9d7b5dba23269adc1989489ccdc.ctex"]
 
 [params]
 

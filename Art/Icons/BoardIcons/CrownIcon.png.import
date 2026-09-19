@@ -3,7 +3,7 @@
 importer="texture"
 type="CompressedTexture2D"
 uid="uid://puiiodptwmjg"
-path="res://godot/imported/CrownIcon.png-2dc8dbb9e7b732082e4c149aeae0fe02.ctex"
+path="res://.godot/imported/CrownIcon.png-2dc8dbb9e7b732082e4c149aeae0fe02.ctex"
 metadata={
 "vram_texture": false
 }
@@ -11,7 +11,7 @@ metadata={
 [deps]
 
 source_file="res://Art/Icons/BoardIcons/CrownIcon.png"
-dest_files=["res://godot/imported/CrownIcon.png-2dc8dbb9e7b732082e4c149aeae0fe02.ctex"]
+dest_files=["res://.godot/imported/CrownIcon.png-2dc8dbb9e7b732082e4c149aeae0fe02.ctex"]
 
 [params]
 

@@ -3,7 +3,7 @@
 importer="texture"
 type="CompressedTexture2D"
 uid="uid://bap2tph7e7lgg"
-path="res://godot/imported/IntimidateIcon.png-ab5f2be8a23e9e6ae6f08d126f94c579.ctex"
+path="res://.godot/imported/IntimidateIcon.png-ab5f2be8a23e9e6ae6f08d126f94c579.ctex"
 metadata={
 "vram_texture": false
 }
@@ -11,7 +11,7 @@ metadata={
 [deps]
 
 source_file="res://Art/Icons/ActionIcons/IntimidateIcon.png"
-dest_files=["res://godot/imported/IntimidateIcon.png-ab5f2be8a23e9e6ae6f08d126f94c579.ctex"]
+dest_files=["res://.godot/imported/IntimidateIcon.png-ab5f2be8a23e9e6ae6f08d126f94c579.ctex"]
 
 [params]
 

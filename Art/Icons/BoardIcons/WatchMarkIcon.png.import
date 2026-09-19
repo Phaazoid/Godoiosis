@@ -3,7 +3,7 @@
 importer="texture"
 type="CompressedTexture2D"
 uid="uid://dmwxo6322j1ej"
-path="res://godot/imported/WatchMarkIcon.png-c842056eda64e166ae16c4259b053af8.ctex"
+path="res://.godot/imported/WatchMarkIcon.png-c842056eda64e166ae16c4259b053af8.ctex"
 metadata={
 "vram_texture": false
 }
@@ -11,7 +11,7 @@ metadata={
 [deps]
 
 source_file="res://Art/Icons/BoardIcons/WatchMarkIcon.png"
-dest_files=["res://godot/imported/WatchMarkIcon.png-c842056eda64e166ae16c4259b053af8.ctex"]
+dest_files=["res://.godot/imported/WatchMarkIcon.png-c842056eda64e166ae16c4259b053af8.ctex"]
 
 [params]
 

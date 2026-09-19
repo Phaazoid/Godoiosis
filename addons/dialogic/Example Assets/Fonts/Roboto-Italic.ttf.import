@@ -3,12 +3,12 @@
 importer="font_data_dynamic"
 type="FontFile"
 uid="uid://b5c0p00x6g6u5"
-path="res://godot/imported/Roboto-Italic.ttf-844485a0171d6031f98f4829003a881a.fontdata"
+path="res://.godot/imported/Roboto-Italic.ttf-844485a0171d6031f98f4829003a881a.fontdata"
 
 [deps]
 
 source_file="res://addons/dialogic/Example Assets/Fonts/Roboto-Italic.ttf"
-dest_files=["res://godot/imported/Roboto-Italic.ttf-844485a0171d6031f98f4829003a881a.fontdata"]
+dest_files=["res://.godot/imported/Roboto-Italic.ttf-844485a0171d6031f98f4829003a881a.fontdata"]
 
 [params]
 

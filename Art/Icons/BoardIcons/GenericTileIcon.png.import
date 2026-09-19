@@ -3,7 +3,7 @@
 importer="texture"
 type="CompressedTexture2D"
 uid="uid://ci2xmlo4888vv"
-path="res://godot/imported/GenericTileIcon.png-4d808ae5b782553200a9ec4e37d69dc0.ctex"
+path="res://.godot/imported/GenericTileIcon.png-4d808ae5b782553200a9ec4e37d69dc0.ctex"
 metadata={
 "vram_texture": false
 }
@@ -11,7 +11,7 @@ metadata={
 [deps]
 
 source_file="res://Art/Icons/BoardIcons/GenericTileIcon.png"
-dest_files=["res://godot/imported/GenericTileIcon.png-4d808ae5b782553200a9ec4e37d69dc0.ctex"]
+dest_files=["res://.godot/imported/GenericTileIcon.png-4d808ae5b782553200a9ec4e37d69dc0.ctex"]
 
 [params]
 

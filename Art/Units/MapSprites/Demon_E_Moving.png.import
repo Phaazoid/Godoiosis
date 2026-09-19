@@ -3,7 +3,7 @@
 importer="texture"
 type="CompressedTexture2D"
 uid="uid://csy1b28e0v52f"
-path="res://godot/imported/Demon_E_Moving.png-8fab38a0d48e0787ee6c4c125bea66b0.ctex"
+path="res://.godot/imported/Demon_E_Moving.png-8fab38a0d48e0787ee6c4c125bea66b0.ctex"
 metadata={
 "vram_texture": false
 }
@@ -11,7 +11,7 @@ metadata={
 [deps]
 
 source_file="res://Art/Units/MapSprites/Demon_E_Moving.png"
-dest_files=["res://godot/imported/Demon_E_Moving.png-8fab38a0d48e0787ee6c4c125bea66b0.ctex"]
+dest_files=["res://.godot/imported/Demon_E_Moving.png-8fab38a0d48e0787ee6c4c125bea66b0.ctex"]
 
 [params]
 

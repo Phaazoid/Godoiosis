@@ -3,7 +3,7 @@
 importer="texture"
 type="CompressedTexture2D"
 uid="uid://cm0yges7wmba"
-path="res://godot/imported/DedIcon.png-4f02731fc6810e1919e2d587849a5b0b.ctex"
+path="res://.godot/imported/DedIcon.png-4f02731fc6810e1919e2d587849a5b0b.ctex"
 metadata={
 "vram_texture": false
 }
@@ -11,7 +11,7 @@ metadata={
 [deps]
 
 source_file="res://Art/Icons/StateIcons/DedIcon.png"
-dest_files=["res://godot/imported/DedIcon.png-4f02731fc6810e1919e2d587849a5b0b.ctex"]
+dest_files=["res://.godot/imported/DedIcon.png-4f02731fc6810e1919e2d587849a5b0b.ctex"]
 
 [params]
 

@@ -3,7 +3,7 @@
 importer="texture"
 type="CompressedTexture2D"
 uid="uid://dpd0m64njf8rn"
-path="res://godot/imported/Archer_Downed.png-ba038411448f6e9e7b28ae4296429714.ctex"
+path="res://.godot/imported/Archer_Downed.png-ba038411448f6e9e7b28ae4296429714.ctex"
 metadata={
 "vram_texture": false
 }
@@ -11,7 +11,7 @@ metadata={
 [deps]
 
 source_file="res://Art/Units/MapSprites/Archer_Downed.png"
-dest_files=["res://godot/imported/Archer_Downed.png-ba038411448f6e9e7b28ae4296429714.ctex"]
+dest_files=["res://.godot/imported/Archer_Downed.png-ba038411448f6e9e7b28ae4296429714.ctex"]
 
 [params]
 

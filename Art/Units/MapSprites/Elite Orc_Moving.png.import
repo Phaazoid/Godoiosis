@@ -3,7 +3,7 @@
 importer="texture"
 type="CompressedTexture2D"
 uid="uid://qfpyeomxw3q1"
-path="res://godot/imported/Elite Orc_Moving.png-a30dc1fe21235004faf42c93835f6c17.ctex"
+path="res://.godot/imported/Elite Orc_Moving.png-a30dc1fe21235004faf42c93835f6c17.ctex"
 metadata={
 "vram_texture": false
 }
@@ -11,7 +11,7 @@ metadata={
 [deps]
 
 source_file="res://Art/Units/MapSprites/Elite Orc_Moving.png"
-dest_files=["res://godot/imported/Elite Orc_Moving.png-a30dc1fe21235004faf42c93835f6c17.ctex"]
+dest_files=["res://.godot/imported/Elite Orc_Moving.png-a30dc1fe21235004faf42c93835f6c17.ctex"]
 
 [params]
 

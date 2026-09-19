@@ -3,7 +3,7 @@
 importer="texture"
 type="CompressedTexture2D"
 uid="uid://cdq4i2wjp3jjx"
-path="res://godot/imported/topright.png-82aebba2ad94435d494e0acc4d5b96bd.ctex"
+path="res://.godot/imported/topright.png-82aebba2ad94435d494e0acc4d5b96bd.ctex"
 metadata={
 "vram_texture": false
 }
@@ -11,7 +11,7 @@ metadata={
 [deps]
 
 source_file="res://Art/Icons/ArrowIcons/topright.png"
-dest_files=["res://godot/imported/topright.png-82aebba2ad94435d494e0acc4d5b96bd.ctex"]
+dest_files=["res://.godot/imported/topright.png-82aebba2ad94435d494e0acc4d5b96bd.ctex"]
 
 [params]
 

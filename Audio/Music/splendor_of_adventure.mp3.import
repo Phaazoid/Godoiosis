@@ -3,12 +3,12 @@
 importer="mp3"
 type="AudioStreamMP3"
 uid="uid://vtwh2dgv8r6v"
-path="res://godot/imported/splendor_of_adventure.mp3-59a18678bff60bd6afe4ae401b114990.mp3str"
+path="res://.godot/imported/splendor_of_adventure.mp3-59a18678bff60bd6afe4ae401b114990.mp3str"
 
 [deps]
 
 source_file="res://Audio/Music/splendor_of_adventure.mp3"
-dest_files=["res://godot/imported/splendor_of_adventure.mp3-59a18678bff60bd6afe4ae401b114990.mp3str"]
+dest_files=["res://.godot/imported/splendor_of_adventure.mp3-59a18678bff60bd6afe4ae401b114990.mp3str"]
 
 [params]
 

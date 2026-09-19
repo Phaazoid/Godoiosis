@@ -3,7 +3,7 @@
 importer="texture"
 type="CompressedTexture2D"
 uid="uid://jw3i15lfq25i"
-path="res://godot/imported/Skeleton Archer.png-69f9e673507852ac3e29e95503caa5c9.ctex"
+path="res://.godot/imported/Skeleton Archer.png-69f9e673507852ac3e29e95503caa5c9.ctex"
 metadata={
 "vram_texture": false
 }
@@ -11,7 +11,7 @@ metadata={
 [deps]
 
 source_file="res://Art/Units/MapSprites/Skeleton Archer.png"
-dest_files=["res://godot/imported/Skeleton Archer.png-69f9e673507852ac3e29e95503caa5c9.ctex"]
+dest_files=["res://.godot/imported/Skeleton Archer.png-69f9e673507852ac3e29e95503caa5c9.ctex"]
 
 [params]
 

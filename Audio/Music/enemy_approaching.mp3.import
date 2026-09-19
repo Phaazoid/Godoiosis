@@ -3,12 +3,12 @@
 importer="mp3"
 type="AudioStreamMP3"
 uid="uid://dwoptwakiaefe"
-path="res://godot/imported/enemy_approaching.mp3-5ef4114a829feebb0d917e7f2f3de387.mp3str"
+path="res://.godot/imported/enemy_approaching.mp3-5ef4114a829feebb0d917e7f2f3de387.mp3str"
 
 [deps]
 
 source_file="res://Audio/Music/enemy_approaching.mp3"
-dest_files=["res://godot/imported/enemy_approaching.mp3-5ef4114a829feebb0d917e7f2f3de387.mp3str"]
+dest_files=["res://.godot/imported/enemy_approaching.mp3-5ef4114a829feebb0d917e7f2f3de387.mp3str"]
 
 [params]
 
