@@ -397,3 +397,19 @@ func test_the_discord_summary_scrubs_the_note_too() -> void:
 
 	assert_str(summary).contains("user://reports/x/")
 	assert_str(summary).not_contains(dir)
+
+func test_a_path_straddling_the_summary_truncation_is_scrubbed_before_the_cut() -> void:
+	# The reason build_summary scrubs its NOTE and not only its return: a path cut at
+	# NOTE_IN_MESSAGE leaves a head no later pass can match, so the return scrub is structurally
+	# unable to catch it. Falsified by moving the note's scrub after the truncation -- which the
+	# case above CANNOT see, its note being far short of the cut.
+	var dir := _user_data_dir()
+	var filler := "x".repeat(BugReporter.NOTE_IN_MESSAGE - 10)
+	var head := dir.substr(0, 20)
+	assert_str(head).is_not_empty()
+
+	var summary := BugReporter.build_summary("stamp", "IDLE", BugReporter.Kind.BUG,
+		"%s %s/reports/x/" % [filler, dir])
+
+	assert_str(summary).contains("full text in report.md")   # the cut really happened
+	assert_str(summary).not_contains(head)
