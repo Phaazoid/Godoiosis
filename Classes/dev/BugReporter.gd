@@ -9,6 +9,10 @@ class_name BugReporter
 # user:// and not res://: res:// is read-only once exported, so the whole feature was inert in a
 # build. Reports also stay outside Scenarios/, so Mission Select and #9's folder scan never see one.
 #
+# NOTHING IT SHIPS NAMES THE MACHINE IT CAME FROM (#1036) -- see scrub_paths below. A report goes to
+# a public channel and gets quoted into a public tracker, so the reporter's account name must not
+# ride along in it.
+#
 # It owns NO state and adds no new seam: the board is ScenarioManager.capture_scenario (#87), the
 # plan is ActionQueueDisplayEntry.build_for (what the queue panel draws), and the transport is
 # ReportUploader, which never looks inside a report. board.tres is authoritative; report.md is a
@@ -29,6 +33,11 @@ const LOG_TAIL_LINES := 80
 
 # Discord caps a message at 2000 characters, and the untruncated note is in report.md regardless.
 const NOTE_IN_MESSAGE := 400
+
+# What a scrubbed path is rewritten TO. user:// is Godot's own spelling of that directory, so a
+# reader loses nothing; ~ is this project's choice and is the one line to change if it reads badly.
+const USER_TOKEN := "user://"
+const HOME_TOKEN := "~"
 
 # What the stamped lines say when nothing answered them (#240, #328). Named so a test can assert
 # the honest sentence rather than the absence of a section.
@@ -152,7 +161,9 @@ func report(state_name: String, kind: Kind, note: String, frame: Image) -> Dicti
 	if dev_frame != null and not dev_frame.is_empty():
 		dev_frame.save_png(dir + "devtools.png")
 
-	print("Report written to %s" % ProjectSettings.globalize_path(dir))
+	# The user:// form, never the globalized one (#1036): this line lands in godot.log, whose tail
+	# the NEXT report ships. DevInfoTool's Report folder row is where a dev gets the real location.
+	print("Report written to %s" % dir)
 	var sent: bool = await _uploader.send_report(dir, build_summary(stamp, state_name, kind, note))
 	return {"dir": dir, "sent": sent}
 
@@ -233,11 +244,39 @@ func _trace_note() -> String:
 	var note: String = trace_source.call()
 	return note
 
+# Every machine path out of the two builders below (#1036). It lives here because those two are the
+# only text this project ships off the machine -- a telemetry run carries res:// paths, ids and enum
+# names and nothing else, so there is no second caller to mint a shared home for (Law #4).
+#
+# TWO PASSES, AND THE ORDER IS THE GUARANTEE. The data dir lives INSIDE the home dir, so the longer
+# one goes first, and what pass 1 misses -- a bare mention of the data dir, with no separator after
+# it -- falls through to pass 2 as ~/AppData/.../Iosis, which names no account either. Pass 1 takes
+# the separator with it because get_user_data_dir() carries none while a globalized path does, and
+# matching the bare dir would leave it behind as "user:///reports/".
+static func scrub_paths(text: String) -> String:
+	var data_dir := OS.get_user_data_dir().trim_suffix("/")
+	var out := _replace_both_forms(text, data_dir + "/", USER_TOKEN)
+	var home := OS.get_environment("USERPROFILE")
+	if home == "":
+		home = OS.get_environment("HOME")
+	return _replace_both_forms(out, home.trim_suffix("/"), HOME_TOKEN)
+
+
+# Windows prints a path in either slash form and in either case: the engine writes forward slashes,
+# the OS writes backslashes, and neither is guaranteed. replacen() is the case-insensitive one.
+static func _replace_both_forms(text: String, path: String, token: String) -> String:
+	if path == "":
+		return text
+	return text.replacen(path.replace("\\", "/"), token).replacen(path.replace("/", "\\"), token)
+
+
 # The Discord message body, derived from the same four facts report() writes into report.md so the
 # channel and the attachment can never disagree. The note is truncated HERE only -- the full text
 # is always in report.md, which is attached to the same message.
 static func build_summary(stamp: String, state_name: String, kind: Kind, note: String) -> String:
-	var trimmed := note.strip_edges()
+	# Scrubbed BEFORE the truncation, or a path cut at NOTE_IN_MESSAGE survives as a fragment no
+	# later pass can match; the return is scrubbed too, so the guarantee is on the OUTPUT.
+	var trimmed := scrub_paths(note.strip_edges())
 	if trimmed == "":
 		trimmed = "(nothing typed)"
 	elif trimmed.length() > NOTE_IN_MESSAGE:
@@ -250,7 +289,8 @@ static func build_summary(stamp: String, state_name: String, kind: Kind, note: S
 	var checkout := Checkout.describe()
 	if checkout != "":
 		build += " -- %s" % checkout
-	return "**%s** - state `%s` - %s - %s\n>>> %s" % [Kind.keys()[kind], state_name, stamp, build, trimmed]
+	return scrub_paths("**%s** - state `%s` - %s - %s\n>>> %s" % [
+		Kind.keys()[kind], state_name, stamp, build, trimmed])
 
 # Pure + static so it is testable without a game scene, the capture/save split again.
 static func build_report_text(stamp: String, state_name: String, kind: Kind, note: String,
@@ -326,7 +366,9 @@ static func build_report_text(stamp: String, state_name: String, kind: Kind, not
 	out += "\n## Camera trace\n\n%s\n" % (NO_CAMERA_TRACE if trace_note == "" else trace_note)
 
 	out += "\n## Engine log (last %d lines)\n\n```\n%s\n```\n" % [LOG_TAIL_LINES, log_tail]
-	return out
+	# The one exit (#1036). On the whole body rather than on the tail alone: the note is the
+	# player's own words and may hold a path too.
+	return scrub_paths(out)
 
 # The active squad is whose plan the panel is showing; fall back to whoever is selected.
 func _plan_squad() -> Squad:

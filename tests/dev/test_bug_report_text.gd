@@ -1,5 +1,6 @@
-# Report-a-bug dump guard (#128, 2026-08-02). BugReporter.build_report_text is pure + static so
-# the whole report can be pinned without a game scene -- the same capture/save split #87 made.
+# Report-a-bug dump guard (#128, 2026-08-02). BugReporter.build_report_text is static and needs no
+# game scene, so the whole report can be pinned here -- the same capture/save split #87 made. It
+# stopped being PURE at #1036: the path scrub reads the machine's own directories.
 #
 # #131 grew the signature by a Kind and a note; every case here passes BUG with no note, because
 # what this file guards is the BODY of a report and neither of those changes it. The note, the
@@ -307,3 +308,92 @@ func test_the_trace_sits_below_the_board_and_above_the_log() -> void:
 
 	assert_int(text.find("## Units")).is_less(text.find("## Camera trace"))
 	assert_int(text.find("## Camera trace")).is_less(text.find("## Engine log"))
+
+# ---- nothing shipped names the machine it came from (#1036) ----
+#
+# Every case interpolates off OS.get_user_data_dir() or the environment, never a pinned literal --
+# the convention the build and checkout cases above already use, and what makes these pass on the
+# Linux runners as well as here. The leak they guard was real: BugReporter's own print globalized
+# the report folder into godot.log, and the NEXT report shipped that tail to a public channel.
+
+func _user_data_dir() -> String:
+	return OS.get_user_data_dir().trim_suffix("/")
+
+# Forward slashes whatever the platform wrote: get_user_data_dir() uses them and USERPROFILE does
+# not, so a case comparing the two has to normalise or it is asserting about a separator.
+func _home_forward() -> String:
+	var home := OS.get_environment("USERPROFILE")
+	if home == "":
+		home = OS.get_environment("HOME")
+	return home.replace("\\", "/").trim_suffix("/")
+
+func _report_with_tail(tail: String) -> String:
+	var no_units: Array[Unit] = []
+	return BugReporter.build_report_text("stamp", "IDLE", BugReporter.Kind.BUG, "", null, null,
+		no_units, tail)
+
+func test_the_log_tail_loses_the_user_data_directory() -> void:
+	# The shipped leak's exact shape. Falsified by dropping the scrub call, and also by matching
+	# the bare directory instead of the directory-plus-separator, which emits "user:///reports/".
+	var dir := _user_data_dir()
+	assert_str(dir).is_not_empty()
+
+	var text := _report_with_tail("Report written to %s/reports/2026-01-01_00-00-00/" % dir)
+
+	assert_str(text).contains("user://reports/2026-01-01_00-00-00/")
+	assert_str(text).not_contains(dir)
+
+func test_the_backslash_form_of_that_path_is_scrubbed_too() -> void:
+	# Godot writes forward slashes and Windows writes backslashes, and the engine log carries
+	# whatever the writer used. Falsified by dropping the second form from _replace_both_forms.
+	var back := _user_data_dir().replace("/", "\\")
+
+	var text := _report_with_tail("could not open %s\\reports\\x\\board.tres" % back)
+
+	assert_str(text).contains("user://reports\\x\\board.tres")
+	assert_str(text).not_contains(back)
+
+func test_a_case_shifted_path_is_scrubbed() -> void:
+	# replacen() is the case-insensitive replace; falsified by swapping it for replace().
+	var dir := _user_data_dir()
+	assert_str(dir.to_upper()).is_not_equal(dir)   # or the case says nothing about either one
+
+	var text := _report_with_tail("opening %s/logs/godot.log" % dir.to_upper())
+
+	assert_str(text).contains("user://logs/godot.log")
+	assert_str(text).not_contains(dir.to_upper())
+
+func test_a_home_path_outside_the_data_directory_becomes_a_tilde() -> void:
+	# Pass 2 -- the net for a path the engine prints that is not under user:// at all, which is
+	# every absolute path in a crash trace. Falsified by dropping the home half.
+	var home := _home_forward()
+	assert_str(home).is_not_empty()
+
+	var text := _report_with_tail("loading %s/Desktop/iosis-demo/Iosis.exe" % home)
+
+	assert_str(text).contains("%s/Desktop/iosis-demo/Iosis.exe" % BugReporter.HOME_TOKEN)
+	assert_str(text).not_contains(home)
+
+func test_a_bare_data_directory_still_loses_the_account_name() -> void:
+	# THE CASCADE. Pass 1 needs a separator, so a bare mention of the directory falls through to
+	# pass 2 and comes back under ~ -- no account name either way. Falsified by dropping pass 2.
+	var dir := _user_data_dir()
+	var home := _home_forward()
+	assert_bool(dir.to_lower().begins_with(home.to_lower())).is_true()   # the cascade's premise
+
+	var text := _report_with_tail("user data dir is %s" % dir)
+
+	assert_str(text).contains(BugReporter.HOME_TOKEN)
+	assert_str(text).not_contains(home)
+	assert_str(text).not_contains(dir)
+
+func test_the_discord_summary_scrubs_the_note_too() -> void:
+	# The other thing that leaves the machine, and the one carrying the player's own words.
+	# Falsified by dropping the scrub from build_summary.
+	var dir := _user_data_dir()
+
+	var summary := BugReporter.build_summary("stamp", "IDLE", BugReporter.Kind.BUG,
+		"crashed while saving to %s/reports/x/" % dir)
+
+	assert_str(summary).contains("user://reports/x/")
+	assert_str(summary).not_contains(dir)
