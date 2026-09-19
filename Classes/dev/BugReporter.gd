@@ -274,8 +274,10 @@ static func _replace_both_forms(text: String, path: String, token: String) -> St
 # channel and the attachment can never disagree. The note is truncated HERE only -- the full text
 # is always in report.md, which is attached to the same message.
 static func build_summary(stamp: String, state_name: String, kind: Kind, note: String) -> String:
-	# Scrubbed BEFORE the truncation, or a path cut at NOTE_IN_MESSAGE survives as a fragment no
-	# later pass can match; the return is scrubbed too, so the guarantee is on the OUTPUT.
+	# Scrubbed BEFORE the truncation. A cut landing INSIDE the home directory leaves a partial
+	# account name that neither pass can match afterwards -- a cut anywhere below it leaves a
+	# fragment still starting with the home directory, which pass 2 catches however late it runs,
+	# so that narrow case is the whole of what this call buys. Measured, not assumed.
 	var trimmed := scrub_paths(note.strip_edges())
 	if trimmed == "":
 		trimmed = "(nothing typed)"
@@ -289,6 +291,12 @@ static func build_summary(stamp: String, state_name: String, kind: Kind, note: S
 	var checkout := Checkout.describe()
 	if checkout != "":
 		build += " -- %s" % checkout
+	# UNOBSERVABLE TODAY, and kept deliberately: with the note already scrubbed, every other part of
+	# this line is machine-independent by construction (a timestamp, a GameState key, an enum key,
+	# project.godot's version, and a checkout that is "branch @ sha" or nothing). So a mutant
+	# deleting this call SURVIVES -- measured -- and the reason to keep it is that the guarantee
+	# belongs to what this function RETURNS rather than to the one argument that can carry a path
+	# today. A field added to this line later is covered without anyone remembering to.
 	return scrub_paths("**%s** - state `%s` - %s - %s\n>>> %s" % [
 		Kind.keys()[kind], state_name, stamp, build, trimmed])
 

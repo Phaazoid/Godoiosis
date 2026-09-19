@@ -403,13 +403,22 @@ func test_a_path_straddling_the_summary_truncation_is_scrubbed_before_the_cut() 
 	# NOTE_IN_MESSAGE leaves a head no later pass can match, so the return scrub is structurally
 	# unable to catch it. Falsified by moving the note's scrub after the truncation -- which the
 	# case above CANNOT see, its note being far short of the cut.
+	# WHERE THE CUT LANDS IS THE WHOLE CASE, and two earlier versions of it were vacuous. A cut
+	# falling anywhere BELOW the home directory leaves a fragment that still begins with the home
+	# directory, and pass 2 scrubs that on the way out however late it runs -- so the only thing
+	# the note's own scrub buys is a cut landing INSIDE the home directory, which leaves a partial
+	# account name that neither pass can match. That is what this aims at: keep two characters
+	# fewer than the home path, derived at runtime so it lands the same way on the Linux runners.
 	var dir := _user_data_dir()
-	var filler := "x".repeat(BugReporter.NOTE_IN_MESSAGE - 10)
-	var head := dir.substr(0, 20)
-	assert_str(head).is_not_empty()
+	var keep := _home_forward().length() - 2
+	assert_int(keep).is_greater_equal(8)                      # or the fragment says nothing
+	assert_int(keep).is_less(BugReporter.NOTE_IN_MESSAGE)
+
+	var lead := "x".repeat(BugReporter.NOTE_IN_MESSAGE - keep)
+	var fragment := dir.substr(0, keep)
 
 	var summary := BugReporter.build_summary("stamp", "IDLE", BugReporter.Kind.BUG,
-		"%s %s/reports/x/" % [filler, dir])
+		"%s%s/reports/x/%s" % [lead, dir, "y".repeat(100)])
 
 	assert_str(summary).contains("full text in report.md")   # the cut really happened
-	assert_str(summary).not_contains(head)
+	assert_str(summary).not_contains(fragment)
