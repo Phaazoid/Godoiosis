@@ -7,7 +7,7 @@ its child [#49 Action Queue UX](https://github.com/Phaazoid/Godoiosis/issues/49)
 This is a *guidelines* doc, not a spec — it captures the principles we're holding the work to,
 plus the running order of the queue-UX checklist. Update it as items land.
 
-**Canon checked through #1024 (2026-09-18).**
+**Canon checked through #1042 (2026-09-19).**
 
 ## Principles
 
@@ -3399,11 +3399,27 @@ A recompute skips any squad whose reach envelope holds no hostile unit -- exact,
 
 ### Drawing it
 
-**One line per intent, and its LETHALITY rides the line.** `Layer.INTENT_LINES` and `Layer.INTENT_LINES_FATAL` are two LINE layers at their own sorts, because `set_lines` paints a whole layer one colour and two lines can cross. Slice 2 refused that split deliberately -- the damage NUMBER carried the distinction then, so a second layer differing only in hue would have been a duplicate seam. Slice 3 moved the number onto the health bar, so that argument expired and the beam is the only thing left that can say it. The dev kept the distinction on purpose: *a category, not a number*.
+**One MARK per intent, and its LETHALITY rides the mark.** `Layer.INTENT_LINES` and `Layer.INTENT_LINES_FATAL` are two LINE layers at their own sorts, because two marks can cross. **That split has now been justified three times by three different arguments, which is worth knowing before anyone tidies it away.** Slice 2 refused it (the damage NUMBER carried the distinction, so a second layer differing only in hue was a duplicate seam). Slice 3 made it (the number moved to the health bar, so the beam had to say it, in a second hue). [#1042](https://github.com/Phaazoid/Godoiosis/issues/1042) kept it and deleted the hue: a flash is a shader TIME TERM, a term is per material, and a material is per layer -- so the layers are what makes a per-mark animation expressible at all.
+
+### ...and what #1042 re-dressed it as (2026-09-19)
+
+**The dev watched a first-time player read a threat line as a way of aiming a fireball**, and asked for three things: *"They need to pulsate from the enemy to the unit the enemy targets, they need an arrow indicating direction, and they need to be visually different from the targeting lines."*
+
+**The vocabulary was measured rather than argued, against a drawn mockup.** The intent channel collided with the AIM channel at BOTH of its colours, not just the one the report named: the old amber `(1.0, 0.8, 0.2)` against the aim footprint's pure yellow, and the old lethal red `(1.0, 0.2, 0.15)` against `SightTrace2D.BLOCKED_COLOR` `(1.0, 0.25, 0.2)` -- two BEAMS, effectively the same red. **PINK won because it is the only hue nothing on this board owns.** Blue was drawn and discarded: an intent mark in the enemy's own blue spends most of its length inside the enemy's own blue move tone. Violet was drawn and discarded for the same reason one phase over -- the deployment zone is `(0.65, 0.5, 1)` and PRE_MISSION leaves the board unlocked, so T draws intents over it.
+
+**LETHALITY IS NOT A COLOUR (dev ruling):** *"I don't think the color should change for lethal intent - perhaps the whole line can flash?"* Both layers carry one pink; the felling one flashes toward white in colour AND alpha. `ThreatLines2D.INTENT_FELL_COLOR` was DELETED rather than retuned -- the diff removes a value rather than adding one.
+
+**The arrowhead is GEOMETRY, and each leg is its own stroke.** `BoardOverlays.beam_tangents` averages the two directions at a joint, so a chevron drawn as one polyline twists the ribbon open at exactly the apex the arrow exists for. It stops **0.4 of a cell short** of the victim -- [#450](https://github.com/Phaazoid/Godoiosis/issues/450)'s measured ground-arrow value, which turns out to be right here too: the mark hangs at `Reach.EYE_HEIGHT` (1.0) and the crown and guard ward hang at `BoardOverlays.billboard_lift` (0.85) just under it, so a head drawn at the victim lands on the marker saying what that unit IS (#346). **A first mockup judged that inset against a bare sprite and concluded 0.4 detached the head into open air; drawing the ward on the victim inverted the answer.** Measure the arrowhead against the BAND it lands in, not against the body.
+
+**The bead measures in WORLD distance and chains across a mark's strokes.** `add_beam_strip` writes `UV2.x` as a running distance beside `UV.x`'s normalized one, and `set_marks` restarts it per mark: normalized, a two-cell mark and a nine-cell one would pulse at wildly different speeds off one number, and unchained, every arrowhead leg would run a little pulse of its own. Chained, the bead sweeps the shaft and flares through the head as it arrives. `set_lines` is now a thin wrapper over `set_marks` -- one mechanism, not two.
+
+**#217 takes both motions, and the FROZEN state is designed rather than defaulted.** `BoardOverlays.beams_animating()` is the one composed read (`BoardMirror._flame_animating`'s shape); `OverlayMirror` polls it because `PlayerSettings` has no changed signal. With the setting on, **nothing is lost**: direction is carried by the arrowhead, which is geometry, and the flash holds at its ALPHA peak so a felling mark stays the louder of the two. It deliberately does NOT hold the WHITE peak -- a permanently white mark is the sight beam's own colour, on the one channel whose whole ticket is being different from it.
+
+**The two motions are split by SIGNATURE, not by exclusivity (dev, 2026-09-19).** The threat mark gets a single travelling BEAD; the repeating DASH pattern is reserved for player attacks, which is [#674](https://github.com/Phaazoid/Godoiosis/issues/674)'s sight-trace ruling given a second reason to exist.
 
 ### Declared limits
 
-- **Kills are not applied.** The snapshot moves bodies, not HP: an enemy your plan fells still previews its attack. It over-warns, which is the safe direction. Filed as [#1001](https://github.com/Phaazoid/Godoiosis/issues/1001), and slice 3 sharpens it -- the phantom attack now eats a visible bite out of your own bar rather than drawing a line you can ignore.
+- **Kills are not applied to the BOARD, but a felled attacker's intent is dropped ([#1001](https://github.com/Phaazoid/Godoiosis/issues/1001)'s cheap half, built with #1042).** `AIController._felled_by_viewer` resolves each viewer squad's real queue on the live board and drops any intent whose ATTACKER the plan leaves non-live. It filters the HARVEST rather than the snapshot, so what the AI decided is untouched -- a doomed enemy still influenced its squadmates' plan. The question is `PlanResolver.actor_is_live`, the same predicate execution uses (#1005), and deliberately **not** `plan_fells`, which answers true for a unit entering CRISIS -- a unit in Crisis is emphatically still attacking, and dropping its mark would UNDER-warn.
 - **A void-removed enemy** publishes no landing and previews from where it stands. Same direction.
 - **Only factions the AI drives are previewed** -- an unmanaged faction is nobody's to predict.
 

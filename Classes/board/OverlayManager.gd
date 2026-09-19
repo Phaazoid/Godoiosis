@@ -408,9 +408,15 @@ var _sight_trace_2d: SightTrace2D
 var _threat_lines_2d: ThreatLines2D
 # What the enemy will attack (#710 slice 2), stored as DATA the way the sight trace is:
 # ThreatLines2D draws it flat, OverlayMirror lifts it, and the version is the mirror's change
-# signal. `intent_fells` is paired BY INDEX and written in the same pass, so a silent intent
-# cannot shift a later line's lethal colour onto its neighbour.
-var intent_lines: Array[PackedVector3Array] = []
+# signal. ONE ENTRY PER INTENT -- each holding that mark's strokes (shaft + arrowhead legs, #1042)
+# -- so `intent_fells` pairs with INTENTS rather than with strokes, which makes slice 3's drift
+# unrepresentable rather than merely avoided.
+#
+# `intent_shafts` is the SOURCE and `intent_marks` is derived from it by the one function below;
+# the shafts are kept because the arrowhead's shape is a tuned value, and a knob that moves it has
+# to re-derive geometry rather than merely re-push a colour. Same reason `_reach_attack` is kept.
+var intent_shafts: Array[PackedVector3Array] = []
+var intent_marks: Array[Array] = []
 var intent_fells: Array[bool] = []
 var intent_version := 0
 
@@ -541,12 +547,12 @@ func restyle_sight_trace() -> void:
 # The exact tier (#710 slice 2). Takes the INTENTS rather than geometry, so the line and what it
 # means come from one row each and can never be matched up wrongly.
 func show_threat_intents(intents: Array[ThreatIntent], board: BoardContext) -> void:
-	if intents.is_empty() and intent_lines.is_empty():
+	if intents.is_empty() and intent_shafts.is_empty():
 		return   # idempotent, like the trace -- the version only moves on real change
-	var lines: Array[PackedVector3Array] = []
+	var shafts: Array[PackedVector3Array] = []
 	var fatal: Array[bool] = []
 	for intent: ThreatIntent in intents:
-		lines.append(ThreatLines2D.segment(intent.from, intent.to, board))
+		shafts.append(ThreatLines2D.segment(intent.from, intent.to, board))
 		fatal.append(intent.fells)
 	# ...and the same intents keyed by VICTIM, which is what the health bars read (#710 slice 3).
 	# SUMMED per target rather than kept per attacker: two enemies converging on one unit is one
@@ -562,12 +568,9 @@ func show_threat_intents(intents: Array[ThreatIntent], board: BoardContext) -> v
 		row["fells"] = bool(row["fells"]) or intent.fells
 		forecast[id] = row
 	threat_forecast = forecast
-	intent_lines = lines
+	intent_shafts = shafts
 	intent_fells = fatal
-	intent_version += 1
-	_threat_lines_2d.intents = intent_lines
-	_threat_lines_2d.fells = intent_fells
-	_threat_lines_2d.queue_redraw()
+	_rebuild_intent_marks()
 
 
 func clear_threat_intents() -> void:
@@ -575,10 +578,21 @@ func clear_threat_intents() -> void:
 	show_threat_intents(none, null)
 
 
+# Re-derive the drawn marks from the shafts. The ONE derivation, so the knob path and the draw path
+# cannot disagree about what an arrowhead looks like.
 func restyle_threat_intents() -> void:
-	if intent_lines.is_empty():
+	if intent_shafts.is_empty():
 		return
-	intent_version += 1   # the geometry is unchanged; the mirror re-pushes for the new colour
+	_rebuild_intent_marks()
+
+
+func _rebuild_intent_marks() -> void:
+	var built: Array[Array] = []
+	for shaft in intent_shafts:
+		built.append(ThreatLines2D.mark(shaft))
+	intent_marks = built
+	intent_version += 1
+	_threat_lines_2d.marks = intent_marks
 	_threat_lines_2d.queue_redraw()
 
 

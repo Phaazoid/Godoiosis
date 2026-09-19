@@ -1598,12 +1598,16 @@ func test_intent_lines_and_their_numbers_reach_the_diorama() -> void:
 	game.refresh_threat_plan()
 	await _settle()
 
-	var stored: Array[PackedVector3Array] = _om().intent_lines
+	var stored: Array = _om().intent_marks
 	assert_int(stored.size()).override_failure_message(
 			"nothing was previewed -- this case cannot see the wire").is_equal(1)
 	var lifted := _overlays.lines_of(BoardOverlays.Layer.INTENT_LINES)
-	assert_int(lifted.size()).is_equal(1)
-	var first: Vector3 = stored[0][0]
+	# One MARK arrives as three strokes since #1042 -- the shaft and the arrowhead's two legs -- and
+	# all three have to be lifted, or the head is drawn flat on the board while the line hangs.
+	assert_int(lifted.size()).override_failure_message(
+			"the mark did not arrive as a shaft and two arrowhead legs").is_equal(3)
+	var shaft: PackedVector3Array = stored[0][0]
+	var first: Vector3 = shaft[0]
 	assert_that(lifted[0][0]).is_equal(Vector3(
 		first.x * BoardSpace.CELL_SIZE,
 		BoardSpace.surface_y(BoardSpace.top_row_of(0)) + first.y * BoardSpace.ROW_HEIGHT,
