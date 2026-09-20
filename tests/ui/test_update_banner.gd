@@ -125,6 +125,51 @@ func test_the_band_runs_end_to_end() -> void:
 	assert_float(band.size.x).is_equal_approx(banner.size.x, 1.0)
 
 
+func _banner_under(node: Node) -> UpdateBanner:
+	for child in node.get_children():
+		if child is UpdateBanner:
+			return child
+	return null
+
+
+# THE GUARD AGAINST A NAG LANDING ON A BATTLE. The answer arrives off the network, so it can come
+# back after the player has already picked a mission -- and this band claims ModalLock, so dropping
+# one onto a running board would freeze it behind something the player never asked for.
+#
+# Both halves, because the negative alone would pass on a _nag_if_outdated that does nothing at all.
+# VersionCheck's cache is SEEDED rather than fetched, which is what lets the real async path run
+# here with no network: latest() hands back _latest once _asked is set.
+func test_the_nag_waits_for_the_title_screen_and_gives_up_without_it() -> void:
+	var was_enabled := VersionCheck.enabled
+	var was_asked := VersionCheck._asked
+	var was_latest := VersionCheck._latest
+	VersionCheck.enabled = true
+	VersionCheck._asked = true
+	VersionCheck._latest = {"version": "9.9.9", "url": URL}
+	var mc: MissionController = game.mission_controller
+
+	# Still on the title screen -- the band is due.
+	mc._select_screen = MissionSelectScreen.open(game, [], [], false)
+	await mc._nag_if_outdated()
+	await await_idle_frame()
+	assert_object(_banner_under(game.ui_layer)).is_not_null()
+
+	_banner_under(game.ui_layer).free()
+	mc._select_screen.free()
+	mc._select_screen = null
+	UpdateBanner._dismissed = false
+	await await_idle_frame()
+
+	# Gone from it -- the reply is the same, and nothing may appear.
+	await mc._nag_if_outdated()
+	await await_idle_frame()
+	assert_object(_banner_under(game.ui_layer)).is_null()
+
+	VersionCheck.enabled = was_enabled
+	VersionCheck._asked = was_asked
+	VersionCheck._latest = was_latest
+
+
 func _find_panel(node: Node) -> PanelContainer:
 	for child in node.get_children():
 		if child is PanelContainer:
