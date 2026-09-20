@@ -86,10 +86,16 @@ static func can_aim_at(unit: Unit, origin_cell: Vector2i, cell: Vector2i, attack
 		return not get_affected_cells_from(unit, origin_cell, cell, attack, board).is_empty()
 	return can_hit_cell_from(unit, origin_cell, cell, attack, board)
 
-# The sightline's height above a shooter's feet -- the SPRITE'S CENTER (dev, 2026-08-20: the line
-# "should originate from the center of the sprite"). A RULE constant, not a knob: it defines what a
+# The sightline's height above a shooter's feet. A RULE constant, not a knob: it defines what a
 # wall is, and the #218 purpose survives (standing ON a cliff edge still shoots down past it).
 # In height UNITS since #427, so this is the SAME physical height it always was: half a level.
+#
+# IT IS NOT THE SPRITE'S CENTRE, whatever this comment said until #1059 measured it. 1.0 rule unit
+# is 0.5 WORLD, and a map sprite's ink stands 0.625 world tall (MapSpriteInk.INK_RECT at
+# UnitSprite3D.texels_per_unit) -- so this sits at 80% of a body, near the head. The dev's
+# 2026-08-20 ruling ("the line should originate from the center of the sprite") is honoured by
+# ThreatLines2D.MARK_HEIGHT, which is a LOOK and may move; this cannot, because moving it changes
+# which shots are legal. Two answers, declared: a trace draws the trajectory the rule judges.
 const EYE_HEIGHT := 1.0
 # Trace samples per cell of shot length -- readout resolution only, never legality (blocking is
 # judged per crossed CELL, not per sample). Dense enough that a lob's line draws as a CURVE.
