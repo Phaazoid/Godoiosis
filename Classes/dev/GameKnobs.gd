@@ -83,6 +83,24 @@ const KNOBS: Array[Dictionary] = [
 		"tip": "How the beam fades from its bright middle to nothing at the edge. Around 1 is a flat, even ribbon; higher pulls the brightness into a narrow core with a soft halo around it, which is what stops it reading as a solid strip of geometry."},
 	{"group": "Board markup", "node": "BoardOverlays", "prop": "beam_intensity", "label": "Sight beam glow", "min": 0.5, "max": 6.0, "step": 0.05,
 		"tip": "Brightness multiplier on the beam's colour. Past the scene's glow threshold (1.2 by default, on the Moods tab) the bloom takes over and the beam starts to burn -- which is the dial that makes it read as light rather than paint. Separate from the colour because a colour row cannot go above full white."},
+	# The intent mark's own beam set and its two motions (#1042). Neither a laser nor a stroke: it
+	# is the one piece of board markup that travels.
+	{"group": "Board markup", "node": "BoardOverlays", "prop": "intent_width", "label": "Intent mark width", "min": 0.01, "max": 0.4, "step": 0.005,
+		"tip": "How thick the mark from an enemy to its target is, in cells. Wider than the focus outline and thinner than the sight beam -- it has to read across the whole board without becoming the loudest thing on it."},
+	{"group": "Board markup", "node": "BoardOverlays", "prop": "intent_intensity", "label": "Intent mark glow", "min": 0.2, "max": 6.0, "step": 0.05,
+		"tip": "Brightness multiplier on the mark. Past the scene's glow threshold (1.2) it blooms."},
+	{"group": "Board markup", "node": "BoardOverlays", "prop": "bead_speed", "label": "Intent bead speed", "min": 0.0, "max": 12.0, "step": 0.1,
+		"tip": "How fast the bright pulse runs from the enemy to its target, in cells per second. It is what says which end is which without the arrowhead having to be read, so it wants to be unmistakable in direction and calm in pace."},
+	{"group": "Board markup", "node": "BoardOverlays", "prop": "bead_length", "label": "Intent bead length", "min": 0.0, "max": 3.0, "step": 0.05,
+		"tip": "How long that pulse is, in cells. Zero turns the bead off entirely and leaves a still mark with its arrowhead."},
+	{"group": "Board markup", "node": "BoardOverlays", "prop": "bead_gap", "label": "Intent bead spacing", "min": 0.5, "max": 30.0, "step": 0.5,
+		"tip": "How far apart successive pulses run, in cells. Shorter than the mark and you get a chain of them travelling at once; longer and there is exactly one at a time with a rest between."},
+	{"group": "Board markup", "node": "BoardOverlays", "prop": "flash_hz", "label": "Lethal intent flash rate", "min": 0.0, "max": 4.0, "step": 0.05,
+		"tip": "How many times a second a mark that would DOWN or KILL pulses. Lethality is not a colour here -- it is the same pink flashing white -- so this is the whole of what separates the two. Keep it slow: a felling warning that strobes is exactly what the photosensitivity setting exists to prevent, and that setting freezes this at its bright point."},
+	{"group": "Board markup", "node": "BoardOverlays", "prop": "flash_white", "label": "Lethal flash whiteness", "min": 0.0, "max": 1.0, "step": 0.05,
+		"tip": "How far toward white the flash carries the mark at its peak. 1.0 reaches white; lower keeps it a hot pink. It never holds the white with photosensitivity on, because a permanently white mark is the sight beam's own colour."},
+	{"group": "Board markup", "node": "BoardOverlays", "prop": "flash_alpha", "label": "Lethal flash strength", "min": 0.0, "max": 2.0, "step": 0.05,
+		"tip": "How much extra alpha the flash adds at its peak. It only ever rises, so at the bottom of the cycle a lethal mark is never quieter than an ordinary one."},
 
 	# --- Dev chrome ---
 	# Filed truthfully rather than folded into the markup above it: these are the only rows on this
@@ -453,14 +471,20 @@ const CLASS_KNOBS: Array[Dictionary] = [
 		"min": 0.05, "max": 1.0, "step": 0.01,
 		"tip": "How far both tones above fall back for every enemy the pointer is NOT on, so the one you are asking about stands out of the crowd. Alpha only. 1.0 turns the distinction off."},
 	# The exact tier (#710 slice 2): what the AI WILL do, as opposed to what it COULD. It has to
-	# read as a promise rather than a possibility, so tune it AGAINST the threat line above -- and
-	# the felling colour against both, since it is the one that has to stop the player.
+	# read as a promise rather than a possibility, so tune it AGAINST the threat line above.
 	{"group": "Board markup colours", "label": "Enemy focus outline (2D+3D)", "static": "FOCUS_OUTLINE_COLOR",
 		"tip": "The stroke round the whole field of the enemy under the pointer, while everybody else is dimmed. It crosses both tones and the terrain, so it is the one markup colour that has to read against all of them."},
-	{"group": "Board markup colours", "label": "Intent line (2D+3D)", "static": "INTENT_LINE_COLOR", "script": THREAT_LINES_SCRIPT,
-		"tip": "The line from an enemy to the unit it will actually attack next turn. Distinct from the threat line, which only says an enemy COULD reach that cell."},
-	{"group": "Board markup colours", "label": "Intent, lethal (2D+3D)", "static": "INTENT_FELL_COLOR", "script": THREAT_LINES_SCRIPT,
-		"tip": "The number over an attack that would down or kill. The one readout on the board that is telling you not to stand there."},
+	{"group": "Board markup colours", "label": "Intent mark (2D+3D)", "static": "INTENT_LINE_COLOR", "script": THREAT_LINES_SCRIPT,
+		"tip": "The mark from an enemy to the unit it will actually attack next turn. ONE colour for both the ordinary and the felling mark: a felling one is the same pink and flashes white instead. Pink because nothing else on the board owns that hue -- the aim footprint is yellow and the sight bead white, which is what the old amber read as."},
+	{"group": "Board markup colours", "label": "Intent arrowhead size", "static": "HEAD_SIZE", "script": THREAT_LINES_SCRIPT,
+		"min": 0.0, "max": 1.0, "step": 0.05,
+		"tip": "How long the arrowhead's legs are, in cells. Zero draws a bare line with no arrow."},
+	{"group": "Board markup colours", "label": "Intent arrowhead inset", "static": "HEAD_INSET", "script": THREAT_LINES_SCRIPT,
+		"min": 0.0, "max": 1.0, "step": 0.05,
+		"tip": "How far short of the victim the mark stops, in cells. It has to clear the crown and the guard ward, which hang just under the height the mark runs at -- too small and the arrow lands on them, too large and it points at open air."},
+	{"group": "Board markup colours", "label": "Intent arrowhead spread", "static": "HEAD_SPREAD", "script": THREAT_LINES_SCRIPT,
+		"min": 0.1, "max": 1.5, "step": 0.05,
+		"tip": "How wide the arrowhead opens, as a fraction of its own length."},
 	{"group": "Board markup colours", "label": "Threat preview delay", "static": "THREAT_PLAN_DELAY", "script": PACING_SCRIPT,
 		"min": 0.0, "max": 1.0, "step": 0.05,
 		"tip": "How long your plan sits still before the intent lines recompute. It bounds how OFTEN the preview runs, never how long it takes -- raise it if queueing orders feels sticky, lower it if the lines lag behind your thinking."},
@@ -1375,7 +1399,9 @@ static func read_static(name: String) -> Variant:
 		"FOCUS_OUTLINE_COLOR": return OverlayManager.FOCUS_OUTLINE_COLOR
 		"ZONE_HIGHLIGHT_MODULATE": return OverlayManager.ZONE_HIGHLIGHT_MODULATE
 		"INTENT_LINE_COLOR": return ThreatLines2D.INTENT_LINE_COLOR
-		"INTENT_FELL_COLOR": return ThreatLines2D.INTENT_FELL_COLOR
+		"HEAD_SIZE": return ThreatLines2D.HEAD_SIZE
+		"HEAD_INSET": return ThreatLines2D.HEAD_INSET
+		"HEAD_SPREAD": return ThreatLines2D.HEAD_SPREAD
 		"THREAT_PLAN_DELAY": return Pacing.THREAT_PLAN_DELAY
 		"SQUAD_RING_ALPHA": return OverlayManager.SQUAD_RING_ALPHA
 		"SQUAD_RING_PULSE_GAIN": return OverlayManager.SQUAD_RING_PULSE_GAIN
@@ -1576,7 +1602,9 @@ static func write_static(host: Node3D, name: String, value: Variant) -> void:
 		"FOCUS_OUTLINE_COLOR": OverlayManager.FOCUS_OUTLINE_COLOR = value
 		"ZONE_HIGHLIGHT_MODULATE": OverlayManager.ZONE_HIGHLIGHT_MODULATE = value
 		"INTENT_LINE_COLOR": ThreatLines2D.INTENT_LINE_COLOR = value
-		"INTENT_FELL_COLOR": ThreatLines2D.INTENT_FELL_COLOR = value
+		"HEAD_SIZE": ThreatLines2D.HEAD_SIZE = value
+		"HEAD_INSET": ThreatLines2D.HEAD_INSET = value
+		"HEAD_SPREAD": ThreatLines2D.HEAD_SPREAD = value
 		"THREAT_PLAN_DELAY":
 			Pacing.THREAT_PLAN_DELAY = value
 			return   # read when the debounce STARTS; there is no standing preview to re-apply it to
@@ -2149,7 +2177,7 @@ static func write_static(host: Node3D, name: String, value: Variant) -> void:
 		"ENEMY_RANGE_DIM": manager.restyle_dim_ranges()
 		"FOCUS_OUTLINE_COLOR": manager.restyle_focus_outline()
 		"ZONE_HIGHLIGHT_MODULATE": manager.restyle_leash()
-		"INTENT_LINE_COLOR", "INTENT_FELL_COLOR":
+		"INTENT_LINE_COLOR", "HEAD_SIZE", "HEAD_INSET", "HEAD_SPREAD":
 			manager.restyle_threat_intents()
 		# No bespoke sweep for the three planned-move tints: redraw_planned_paths already tears
 		# every arrow down and rebuilds it through _arrow_modulate, so it IS the re-apply.

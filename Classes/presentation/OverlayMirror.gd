@@ -123,6 +123,7 @@ func _process(_delta: float) -> void:
 
 	_attack(om)
 	_sight_trace(om)
+	overlays.poll_beam_motion()   # #217 has no changed signal; this is the one composed read (#1042)
 	_threat_intents(om)
 	_focus_outline(om)
 	_arrows(om)
@@ -285,30 +286,35 @@ func _sight_trace(om: OverlayManager) -> void:
 	overlays.set_line(BoardOverlays.Layer.SIGHT_TRACE, points, tint)
 
 
-# The exact tier (#710 slice 2), gated on one version. Colours are COPIED from the 2D renderer,
-# as the trace's are.
+# The exact tier (#710 slice 2), gated on one version. The colour is COPIED from the 2D renderer,
+# as the trace's is -- ONE colour now, both layers (#1042).
 #
-# SPLIT BY LETHALITY across two layers, which slice 2 refused for a reason that has since expired:
-# set_lines paints a whole layer one colour, and back then the damage NUMBER carried the fatal
-# distinction, so a second layer differing only in tint would have been a duplicate seam. Slice 3
-# moved the number onto the victim's health bar, so the beam is the only thing left that can say
-# it -- and the dev kept that distinction deliberately ("a category, not a number").
+# STILL SPLIT BY LETHALITY across two layers, for a THIRD reason. Slice 2 refused the split (the
+# damage number carried the distinction); slice 3 made it (the number moved to the health bar, so
+# the beam had to say it, in a second hue); #1042 keeps it because the dev ruled lethality is not a
+# colour at all -- the mark FLASHES -- and a flash is a shader time term, which is per MATERIAL and
+# therefore per layer. The layers are what makes a per-mark animation expressible.
+#
+# Marks rather than segments, so the bead measures along the shaft and its arrowhead as one run.
 func _threat_intents(om: OverlayManager) -> void:
 	if om.intent_version == _last_intent_version:
 		return
 	_last_intent_version = om.intent_version
-	var plain: Array[PackedVector3Array] = []
-	var fatal: Array[PackedVector3Array] = []
-	for i in om.intent_lines.size():
-		var points := PackedVector3Array()
-		for p: Vector3 in om.intent_lines[i]:
-			points.append(BoardSpace.trace_point(p))
+	var plain: Array[Array] = []
+	var fatal: Array[Array] = []
+	for i in om.intent_marks.size():
+		var strokes: Array[PackedVector3Array] = []
+		for stroke: PackedVector3Array in om.intent_marks[i]:
+			var points := PackedVector3Array()
+			for p: Vector3 in stroke:
+				points.append(BoardSpace.trace_point(p))
+			strokes.append(points)
 		if i < om.intent_fells.size() and om.intent_fells[i]:
-			fatal.append(points)
+			fatal.append(strokes)
 		else:
-			plain.append(points)
-	overlays.set_lines(BoardOverlays.Layer.INTENT_LINES, plain, ThreatLines2D.INTENT_LINE_COLOR)
-	overlays.set_lines(BoardOverlays.Layer.INTENT_LINES_FATAL, fatal, ThreatLines2D.INTENT_FELL_COLOR)
+			plain.append(strokes)
+	overlays.set_marks(BoardOverlays.Layer.INTENT_LINES, plain, ThreatLines2D.INTENT_LINE_COLOR)
+	overlays.set_marks(BoardOverlays.Layer.INTENT_LINES_FATAL, fatal, ThreatLines2D.INTENT_LINE_COLOR)
 
 
 func _target_pick_texture(om: OverlayManager) -> Texture2D:
