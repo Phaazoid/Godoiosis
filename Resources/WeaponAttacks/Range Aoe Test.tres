@@ -2,6 +2,7 @@
 
 [ext_resource type="Resource" uid="uid://cqee1a02mrs6v" path="res://Resources/AttackShapes/Test.tres" id="1_ltmrd"]
 [ext_resource type="Script" uid="uid://ddqeee7njjjq2" path="res://Classes/weapons/WeaponAttackData.gd" id="2_ipbxh"]
+[ext_resource type="Script" uid="uid://dle5ob08qngde" path="res://Classes/presentation/EffectLook.gd" id="2_nk4mo"]
 
 [resource]
 script = ExtResource("2_ipbxh")
