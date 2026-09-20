@@ -274,6 +274,23 @@ wrangler d1 execute iosis-telemetry --remote --command "select key as attack, su
 ```
 
 ```bash
+# WHO IS PLAYING -- the opt-in name (#1049), with the install id behind it
+wrangler d1 execute iosis-telemetry --remote --command "select coalesce(nullif(json_extract(summary, '\$.player_name'), ''), '(anonymous)') as who, json_extract(summary, '\$.install_id') as install, count(*) n, max(received_at) last_seen from runs where sandbox = 0 and dev_mode = 0 and trivial = 0 group by who, install order by n desc"
+```
+
+**`install_id` is in that GROUP BY on purpose, and it is the half that keeps working when the name
+is blank.** The name is opt-in and most rows will not carry one, so grouping on it alone collapses
+every anonymous player into a single row. The install id is what tells two silent players apart --
+and it is also how a name typed LATE reaches earlier runs: the stamp is per run and is never
+rewritten, so a player who names themselves on their tenth mission still has their first nine
+gathered under the same install.
+
+```bash
+# every run from one person, named or not -- paste an install id from the recipe above
+wrangler d1 execute iosis-telemetry --remote --command "select run_id, scenario, outcome, rounds, json_extract(summary, '\$.player_name') as who from runs where json_extract(summary, '\$.install_id') = 'PASTE_INSTALL_ID' order by received_at desc"
+```
+
+```bash
 # pull one run's raw log back out
 wrangler d1 execute iosis-telemetry --remote --command "select events from runs where run_id = 'PASTE_ID'" --json
 ```
