@@ -332,3 +332,40 @@ func test_a_self_anchored_attack_offers_no_ring_rows_at_all() -> void:
 	_open(attack)
 	assert_bool(_row("Min range").visible).is_false()
 	assert_bool(_row("Max and a half").visible).is_false()
+
+
+# --- the Swing modifier's row (#1055) ---------------------------------------------------------
+
+# It reads nothing without a shape: Reach._place answers the anchor cell alone, and one cell has
+# nothing to stop at. An inert tick on every single-target attack in the game is what this avoids.
+func test_the_swing_box_is_absent_until_the_attack_names_a_shape() -> void:
+	var attack := WeaponAttackData.new()
+	attack.attack_shape = null
+	_open(attack)
+	var row := _row("Swing")
+	assert_object(row).override_failure_message("no Swing row in the form at all").is_not_null()
+	assert_bool(row.visible).override_failure_message(
+		"a shapeless attack offers a Swing tick that reaches nothing"
+	).is_false()
+
+
+func test_giving_an_attack_a_shape_brings_the_swing_box_back_live() -> void:
+	# THE WIRE, and it rides the same door the form's own controls write through -- DevWidgets.write
+	# sets and then emits `changed`, which is what bind_hidden_fields listens to. Asserting on the
+	# node held from BEFORE the edit is what separates a reflow from a rebuild (#741).
+	var attack := WeaponAttackData.new()
+	attack.attack_shape = null
+	_open(attack)
+	var row := _row("Swing")
+	assert_bool(row.visible).is_false()
+
+	DevWidgets.write(attack, "attack_shape", AttackShape.new())
+	assert_bool(is_instance_valid(row)).override_failure_message(
+		"the form REBUILT instead of reflowing -- that frees the control being edited (#741)"
+	).is_true()
+	assert_bool(row.visible).override_failure_message(
+		"picking a shape left the Swing tick hidden, so the modifier is unauthorable"
+	).is_true()
+
+	DevWidgets.write(attack, "attack_shape", null)
+	assert_bool(row.visible).override_failure_message("the row never went away again").is_false()

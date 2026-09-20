@@ -273,6 +273,7 @@ display_name = "Freeze"
 power = 4
 max_range = 0
 attack_shape = ExtResource("61_shape0")
+swing = true
 hits_allies = true
 targets = 2
 
@@ -285,6 +286,7 @@ display_name = "Splash"
 power = 2
 max_range = 0
 attack_shape = ExtResource("61_shape1")
+swing = true
 hits_allies = true
 targets = 2
 deals_no_damage = true

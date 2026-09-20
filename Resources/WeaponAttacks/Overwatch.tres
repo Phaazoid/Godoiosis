@@ -16,6 +16,7 @@ display_name = "Overwatch"
 power = 4
 max_range = 0
 attack_shape = ExtResource("3_shape0")
+swing = true
 can_overwatch = true
 damage_kind = 2
 metadata/_custom_type_script = "uid://ddqeee7njjjq2"

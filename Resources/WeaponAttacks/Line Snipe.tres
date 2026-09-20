@@ -15,6 +15,7 @@ display_name = "Line Snipe"
 power = 5
 max_range = 0
 attack_shape = ExtResource("2_shape0")
+swing = true
 hits_allies = true
 can_overwatch = true
 damage_kind = 2

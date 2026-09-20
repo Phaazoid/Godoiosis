@@ -16,6 +16,7 @@ display_name = "Spring"
 power = 5
 max_range = 0
 attack_shape = ExtResource("3_shape0")
+swing = true
 hits_allies = true
 damage_kind = 2
 metadata/_custom_type_script = "uid://ddqeee7njjjq2"

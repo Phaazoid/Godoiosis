@@ -14,5 +14,6 @@ display_name = "Lance"
 power = 5
 max_range = 0
 attack_shape = ExtResource("3_shape0")
+swing = true
 hits_allies = true
 damage_kind = 2

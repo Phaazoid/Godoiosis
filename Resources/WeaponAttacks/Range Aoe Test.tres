@@ -10,4 +10,5 @@ display_name = "Range Aoe Test"
 max_range = 3
 max_and_a_half = true
 attack_shape = ExtResource("1_ltmrd")
+swing = true
 targets = 2
