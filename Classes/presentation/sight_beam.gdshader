@@ -60,7 +60,7 @@ uniform float flash_hz = 0.0;       // 0 = this layer does not flash
 uniform float flash_alpha = 1.0;    // extra alpha at the peak
 uniform float flash_white = 1.0;    // how far toward white at the peak
 // #217's composed read, pushed by BoardOverlays. 0 FREEZES both: the bead stops drawing (direction
-// is still carried by the arrowhead, which is geometry) and the flash HOLDS AT ITS ALPHA PEAK in
+// is still carried by the CONE, which is geometry) and the flash HOLDS AT ITS ALPHA PEAK in
 // the beam's own colour -- never at the white one, which is the aim beam's value and would leave a
 // lethal mark permanently wearing it.
 uniform float motion = 1.0;
@@ -83,7 +83,12 @@ void vertex() {
 	side = length(side) > 0.000001 ? normalize(side) : vec3(1.0, 0.0, 0.0);
 
 	// No depth term, deliberately -- see the render_mode note. The offset is bounded by the knob.
-	view_pos += side * side_sign * beam_width * 0.5;
+	// UV2.y carries a per-vertex width SCALE as `scale - 1.0`, so ZERO means unchanged and every
+	// caller that writes none -- the sight bead, the arc's bolts, every stroke with no taper -- is
+	// untouched by construction (#1059). It is what lets the intent mark's CONE converge to a point
+	// on the same layer, and therefore the same material, as the shaft it grows out of.
+	float width_scale = max(1.0 + UV2.y, 0.0);
+	view_pos += side * side_sign * beam_width * width_scale * 0.5;
 	POSITION = PROJECTION_MATRIX * vec4(view_pos, 1.0);
 }
 

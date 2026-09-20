@@ -408,12 +408,13 @@ var _sight_trace_2d: SightTrace2D
 var _threat_lines_2d: ThreatLines2D
 # What the enemy will attack (#710 slice 2), stored as DATA the way the sight trace is:
 # ThreatLines2D draws it flat, OverlayMirror lifts it, and the version is the mirror's change
-# signal. ONE ENTRY PER INTENT -- each holding that mark's strokes (shaft + arrowhead legs, #1042)
+# signal. ONE ENTRY PER INTENT -- each holding that mark's strokes (the bowed arc, then the cone at
+# the victim, #1059)
 # -- so `intent_fells` pairs with INTENTS rather than with strokes, which makes slice 3's drift
 # unrepresentable rather than merely avoided.
 #
 # `intent_shafts` is the SOURCE and `intent_marks` is derived from it by the one function below;
-# the shafts are kept because the arrowhead's shape is a tuned value, and a knob that moves it has
+# the chords are kept because the mark's shape is tuned values, and a knob that moves one has
 # to re-derive geometry rather than merely re-push a colour. Same reason `_reach_attack` is kept.
 var intent_shafts: Array[PackedVector3Array] = []
 var intent_marks: Array[Array] = []
@@ -579,7 +580,7 @@ func clear_threat_intents() -> void:
 
 
 # Re-derive the drawn marks from the shafts. The ONE derivation, so the knob path and the draw path
-# cannot disagree about what an arrowhead looks like.
+# cannot disagree about what a mark looks like.
 func restyle_threat_intents() -> void:
 	if intent_shafts.is_empty():
 		return

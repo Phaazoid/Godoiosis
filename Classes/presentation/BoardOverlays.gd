@@ -283,7 +283,7 @@ enum SelectorDepth { LEVEL, HALF }
 @export var intent_width := 0.055: set = _set_intent_width
 @export var intent_intensity := 2.4: set = _set_intent_intensity
 # The BEAD -- one bright pulse running enemy -> victim, which is what says which end is which
-# without the arrowhead having to be read. Speed and length are in CELLS, so a mark of any length
+# without the cone having to be read. Speed and length are in CELLS, so a mark of any length
 # pulses at the same pace; `bead_gap` is how far apart two beads run, so a long mark can hold more
 # than one. Zero length is no bead at all.
 @export var bead_speed := 3.4: set = _set_bead_speed
@@ -481,14 +481,18 @@ func set_lines(layer: Layer, segments: Array[PackedVector3Array], color: Color) 
 	set_marks(layer, marks, color)
 
 
-# A layer carrying several MARKS, each of which may be several strokes (#1042's arrowhead: a shaft
-# and two legs). One pooled mesh, one surface per stroke.
+# A layer carrying several MARKS, each of which may be several strokes (#1059's intent: a bowed arc
+# and the cone at its victim's end). One pooled mesh, one surface per stroke.
 #
 # DISTANCE CHAINS WITHIN A MARK AND RESTARTS BETWEEN THEM, which is the whole reason this exists
-# rather than a longer `set_lines`: the bead is a window in world distance, so the legs have to
-# continue the shaft's measure or each one runs its own little pulse. Chained, the bead sweeps the
-# shaft and flares out through the arrowhead as it arrives.
-func set_marks(layer: Layer, marks: Array[Array], color: Color) -> void:
+# rather than a longer `set_lines`: the bead is a window in world distance, so the cone has to
+# continue the arc's measure or each stroke runs its own little pulse. Chained, the bead sweeps the
+# arc and arrives through the cone.
+#
+# `widths` is shaped like `marks` -- a per-point scale for each stroke -- and empty means every
+# stroke is drawn at the layer's own width, which is what `set_lines` and its three other layers want.
+func set_marks(layer: Layer, marks: Array[Array], color: Color,
+		widths: Array[Array] = []) -> void:
 	var spec: Dictionary = LAYERS[layer]
 	if spec["kind"] != Kind.LINE:
 		push_error("set_marks on a %s layer" % Kind.keys()[spec["kind"]])
@@ -505,10 +509,14 @@ func set_marks(layer: Layer, marks: Array[Array], color: Color) -> void:
 	var mesh := node.mesh as ImmediateMesh
 	mesh.clear_surfaces()
 	var drawn := false
-	for strokes in marks:
+	for m in marks.size():
+		var strokes: Array = marks[m]
+		var scales: Array = widths[m] if m < widths.size() else []
 		var travelled := 0.0
-		for stroke: PackedVector3Array in strokes:
-			if add_beam_strip(mesh, stroke, Color.WHITE, travelled):
+		for s in strokes.size():
+			var stroke: PackedVector3Array = strokes[s]
+			var scale: PackedFloat32Array = PackedFloat32Array() if s >= scales.size() else scales[s]
+			if add_beam_strip(mesh, stroke, Color.WHITE, travelled, scale):
 				drawn = true
 			travelled += _stroke_length(stroke)
 	node.visible = drawn
@@ -537,8 +545,15 @@ static func _stroke_length(points: PackedVector3Array) -> float:
 # ribbon" (the falloff's and a future wipe's), UV2.x is "how far from the enemy" -- the only one a
 # bead can travel at a constant pace whatever the mark's length. Left at its default it is simply
 # the stroke's own length, which is what every pre-#1042 caller wants.
+#
+# `widths` is a per-point WIDTH SCALE (#1059's cone, which tapers to nothing at the victim). A
+# ribbon's width is a material uniform, so a shaft and a cone on one layer cannot differ by one --
+# and UV2.y is the only free per-vertex channel. It carries `scale - 1.0` rather than `scale`, so
+# ZERO MEANS UNCHANGED and the sight beam and ArcLightning's bolts are untouched by construction
+# rather than by care; an empty array is the same thing said at the call site.
 static func add_beam_strip(mesh: ImmediateMesh, points: PackedVector3Array,
-		tint := Color.WHITE, dist_start := 0.0) -> bool:
+		tint := Color.WHITE, dist_start := 0.0,
+		widths := PackedFloat32Array()) -> bool:
 	if points.size() < 2:
 		return false
 	var tangents := beam_tangents(points)
@@ -550,7 +565,8 @@ static func add_beam_strip(mesh: ImmediateMesh, points: PackedVector3Array,
 		var along := float(i) / last
 		if i > 0:
 			travelled += points[i].distance_to(points[i - 1])
-		var measure := Vector2(travelled, 0.0)
+		var scale: float = 1.0 if i >= widths.size() else widths[i]
+		var measure := Vector2(travelled, scale - 1.0)
 		mesh.surface_set_color(tint)
 		mesh.surface_set_normal(tangents[i])
 		mesh.surface_set_uv(Vector2(along, 0.0))
@@ -647,7 +663,7 @@ func _style_beam(material: ShaderMaterial, spec: Dictionary = {}) -> void:
 
 # The one composed read of "may board markup MOVE", #217's standing rule in BoardMirror's
 # `_flame_animating` shape: the authored rate ANDed with the player's own choice. A frozen mark is
-# not a mark with a cue missing -- the arrowhead still says which way it runs, and the flash holds
+# not a mark with a cue missing -- the cone still says which way it runs, and the flash holds
 # at its ALPHA peak (see the shader), so a felling mark stays the louder of the two.
 func beams_animating() -> bool:
 	return not PlayerSettings.is_on(PlayerSettings.Setting.PHOTOSENSITIVITY)

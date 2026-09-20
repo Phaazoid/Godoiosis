@@ -295,26 +295,37 @@ func _sight_trace(om: OverlayManager) -> void:
 # colour at all -- the mark FLASHES -- and a flash is a shader time term, which is per MATERIAL and
 # therefore per layer. The layers are what makes a per-mark animation expressible.
 #
-# Marks rather than segments, so the bead measures along the shaft and its arrowhead as one run.
+# Marks rather than segments, so the bead measures along the arc and its cone as one run.
 func _threat_intents(om: OverlayManager) -> void:
 	if om.intent_version == _last_intent_version:
 		return
 	_last_intent_version = om.intent_version
 	var plain: Array[Array] = []
 	var fatal: Array[Array] = []
+	# The width scales ride ALONGSIDE the strokes rather than being re-derived here: ThreatLines2D
+	# owns the mark's shape, and the flat view lays out its cone polygon off the same answer (#1059).
+	var plain_widths: Array[Array] = []
+	var fatal_widths: Array[Array] = []
 	for i in om.intent_marks.size():
+		var flat: Array[PackedVector3Array] = []
+		flat.assign(om.intent_marks[i])
 		var strokes: Array[PackedVector3Array] = []
-		for stroke: PackedVector3Array in om.intent_marks[i]:
+		for stroke: PackedVector3Array in flat:
 			var points := PackedVector3Array()
 			for p: Vector3 in stroke:
 				points.append(BoardSpace.trace_point(p))
 			strokes.append(points)
+		var widths := ThreatLines2D.mark_widths(flat)
 		if i < om.intent_fells.size() and om.intent_fells[i]:
 			fatal.append(strokes)
+			fatal_widths.append(widths)
 		else:
 			plain.append(strokes)
-	overlays.set_marks(BoardOverlays.Layer.INTENT_LINES, plain, ThreatLines2D.INTENT_LINE_COLOR)
-	overlays.set_marks(BoardOverlays.Layer.INTENT_LINES_FATAL, fatal, ThreatLines2D.INTENT_LINE_COLOR)
+			plain_widths.append(widths)
+	overlays.set_marks(BoardOverlays.Layer.INTENT_LINES, plain,
+			ThreatLines2D.INTENT_LINE_COLOR, plain_widths)
+	overlays.set_marks(BoardOverlays.Layer.INTENT_LINES_FATAL, fatal,
+			ThreatLines2D.INTENT_LINE_COLOR, fatal_widths)
 
 
 func _target_pick_texture(om: OverlayManager) -> Texture2D:
