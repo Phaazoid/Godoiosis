@@ -141,14 +141,17 @@ const LAYERS: Dictionary[Layer, Dictionary] = {
 	# Above the sight/threat beams at 7 -- an intent is the authoritative readout and must not
 	# z-fight the reach line it supersedes -- and clear of the guard channels at 8/9, which
 	# test_both_guard_channels_sorts_are_unshared caught this taking on its first draft.
-	Layer.INTENT_LINES: {"color": Color(1.0, 0.8, 0.2, 0.95), "sort": 11, "kind": Kind.LINE},
-	# A felling intent gets its OWN layer, which slice 2 deliberately refused: set_lines paints a
-	# whole layer one colour, so two tints need two layers, and the argument then was that the
-	# damage NUMBER already carried the distinction and a second layer differing only in hue would
-	# be a duplicate seam. The number is gone (slice 3 -- it rides the victim's health bar now), so
-	# that argument is void and the beam has to say it. Its own sort because two lines can cross,
-	# which is exactly the overlap the shared-sort rule forbids.
-	Layer.INTENT_LINES_FATAL: {"color": Color(1.0, 0.2, 0.15, 1.0), "sort": 12, "kind": Kind.LINE},
+	# Its own beam set ("intent"): an intent is markup that TRAVELS, so it carries the bead and is
+	# tuned nothing like the sight laser. Colour arrives per draw from ThreatLines2D's one static.
+	Layer.INTENT_LINES: {"color": Color(1.0, 0.251, 0.784, 0.95), "sort": 11,
+		"beam": "intent", "kind": Kind.LINE},
+	# A felling intent keeps its OWN layer, and #1042 changed WHY. Slice 3 gave it one so it could
+	# be a second HUE; the dev has since ruled that lethality is not a colour at all -- the whole
+	# mark FLASHES instead. A flash is a shader time term and a term is per MATERIAL, so the two
+	# layers are still exactly what expresses it, now differing by "flash" rather than by tint.
+	# Its own sort because two marks can cross, which is the overlap the shared-sort rule forbids.
+	Layer.INTENT_LINES_FATAL: {"color": Color(1.0, 0.251, 0.784, 0.95), "sort": 12,
+		"beam": "intent", "flash": true, "kind": Kind.LINE},
 	# Above its own line at 11 and under the lawful ceiling: EFFECT_RENDER_PRIORITY is 16 and
 	# ICONS holds 15, both pinned by laws in test_board_overlays. A number that drew over fire
 	# would erase the flame it sits beside, which is how #245 found this rule.
@@ -275,6 +278,63 @@ enum SelectorDepth { LEVEL, HALF }
 # stroke around forty cells reads as a rope of light laid over the terrain.
 @export var outline_width := 0.03: set = _set_outline_width
 @export var outline_intensity := 1.0: set = _set_outline_intensity
+# ...and the intent mark's own set (#1042), which is neither: wider than a stroke, dimmer than a
+# laser, and the only beam in the game that MOVES.
+@export var intent_width := 0.055: set = _set_intent_width
+@export var intent_intensity := 2.4: set = _set_intent_intensity
+# The BEAD -- one bright pulse running enemy -> victim, which is what says which end is which
+# without the arrowhead having to be read. Speed and length are in CELLS, so a mark of any length
+# pulses at the same pace; `bead_gap` is how far apart two beads run, so a long mark can hold more
+# than one. Zero length is no bead at all.
+@export var bead_speed := 3.4: set = _set_bead_speed
+@export var bead_length := 0.55: set = _set_bead_length
+@export var bead_gap := 9.0: set = _set_bead_gap
+# The FLASH, on the felling layer alone (dev, 2026-09-19): the whole mark pulses toward white and
+# up in alpha. Upward only -- at its trough a lethal mark is never quieter than an ordinary one --
+# and SLOW, because a felling warning that strobes is what #217 exists to prevent.
+@export var flash_hz := 0.8: set = _set_flash_hz
+@export var flash_alpha := 1.0: set = _set_flash_alpha       # extra alpha at the peak
+@export var flash_white := 1.0: set = _set_flash_white       # how far to white at the peak
+
+
+func _set_intent_width(value: float) -> void:
+	intent_width = value
+	_apply_beam_params()
+
+
+func _set_intent_intensity(value: float) -> void:
+	intent_intensity = value
+	_apply_beam_params()
+
+
+func _set_bead_speed(value: float) -> void:
+	bead_speed = value
+	_apply_beam_params()
+
+
+func _set_bead_length(value: float) -> void:
+	bead_length = value
+	_apply_beam_params()
+
+
+func _set_bead_gap(value: float) -> void:
+	bead_gap = value
+	_apply_beam_params()
+
+
+func _set_flash_hz(value: float) -> void:
+	flash_hz = value
+	_apply_beam_params()
+
+
+func _set_flash_alpha(value: float) -> void:
+	flash_alpha = value
+	_apply_beam_params()
+
+
+func _set_flash_white(value: float) -> void:
+	flash_white = value
+	_apply_beam_params()
 
 
 func _set_beam_width(value: float) -> void:
@@ -302,6 +362,8 @@ func _set_beam_intensity(value: float) -> void:
 	_apply_beam_params()
 
 var fill_texture: Texture2D
+
+var _beams_animating := true   # the last composed photosensitivity read; see poll_beam_motion
 
 var _markers: Dictionary[Layer, Array] = {}       # layer -> node pool (all kinds)
 var _cells: Dictionary[Layer, Array] = {}         # set_cells layers: the current cell list
@@ -411,13 +473,31 @@ func set_line(layer: Layer, points: PackedVector3Array, color: Color) -> void:
 
 
 # The same layer carrying SEVERAL polylines (#710's threat lines): one pooled mesh, one surface
-# per segment.
+# per segment. Each segment is its own MARK, so nothing chains between them.
 func set_lines(layer: Layer, segments: Array[PackedVector3Array], color: Color) -> void:
+	var marks: Array[Array] = []
+	for points in segments:
+		marks.append([points])
+	set_marks(layer, marks, color)
+
+
+# A layer carrying several MARKS, each of which may be several strokes (#1042's arrowhead: a shaft
+# and two legs). One pooled mesh, one surface per stroke.
+#
+# DISTANCE CHAINS WITHIN A MARK AND RESTARTS BETWEEN THEM, which is the whole reason this exists
+# rather than a longer `set_lines`: the bead is a window in world distance, so the legs have to
+# continue the shaft's measure or each one runs its own little pulse. Chained, the bead sweeps the
+# shaft and flares out through the arrowhead as it arrives.
+func set_marks(layer: Layer, marks: Array[Array], color: Color) -> void:
 	var spec: Dictionary = LAYERS[layer]
 	if spec["kind"] != Kind.LINE:
-		push_error("set_lines on a %s layer" % Kind.keys()[spec["kind"]])
+		push_error("set_marks on a %s layer" % Kind.keys()[spec["kind"]])
 		return
-	_lines[layer] = segments.duplicate()
+	var flat: Array[PackedVector3Array] = []
+	for strokes in marks:
+		for stroke: PackedVector3Array in strokes:
+			flat.append(stroke)
+	_lines[layer] = flat
 	var pool: Array = _pool_for(layer)
 	if pool.is_empty():
 		pool.append(_make_marker(layer))
@@ -425,10 +505,21 @@ func set_lines(layer: Layer, segments: Array[PackedVector3Array], color: Color) 
 	var mesh := node.mesh as ImmediateMesh
 	mesh.clear_surfaces()
 	var drawn := false
-	for points in segments:
-		drawn = add_beam_strip(mesh, points) or drawn
+	for strokes in marks:
+		var travelled := 0.0
+		for stroke: PackedVector3Array in strokes:
+			if add_beam_strip(mesh, stroke, Color.WHITE, travelled):
+				drawn = true
+			travelled += _stroke_length(stroke)
 	node.visible = drawn
 	(node.material_override as ShaderMaterial).set_shader_parameter("beam_color", color)
+
+
+static func _stroke_length(points: PackedVector3Array) -> float:
+	var total := 0.0
+	for i in range(1, points.size()):
+		total += points[i].distance_to(points[i - 1])
+	return total
 
 
 # ONE RIBBON, APPENDED to a mesh as its own surface -- the recipe sight_beam.gdshader is fed, and
@@ -440,23 +531,35 @@ func set_lines(layer: Layer, segments: Array[PackedVector3Array], color: Color) 
 # node. `tint` rides in the VERTEX COLOUR rather than the material, which is precisely what lets one
 # material draw twenty bolts at twenty different ages -- see the shader's own note. The overlay
 # layer passes white and is unchanged by it.
+# `dist_start` is how far along its MARK this stroke begins, in world units, and it rides UV2.x as
+# a running WORLD distance beside UV.x's normalized one. It is a second measure rather than a
+# rescaling of the first because they answer different questions: UV.x is "how far through this
+# ribbon" (the falloff's and a future wipe's), UV2.x is "how far from the enemy" -- the only one a
+# bead can travel at a constant pace whatever the mark's length. Left at its default it is simply
+# the stroke's own length, which is what every pre-#1042 caller wants.
 static func add_beam_strip(mesh: ImmediateMesh, points: PackedVector3Array,
-		tint := Color.WHITE) -> bool:
+		tint := Color.WHITE, dist_start := 0.0) -> bool:
 	if points.size() < 2:
 		return false
 	var tangents := beam_tangents(points)
 	var last := float(points.size() - 1)
+	var travelled := dist_start
 	mesh.surface_begin(Mesh.PRIMITIVE_TRIANGLE_STRIP)
 	for i in points.size():
 		# UV.x is the position along the beam, UV.y the side flag the shader remaps to -1/+1.
 		var along := float(i) / last
+		if i > 0:
+			travelled += points[i].distance_to(points[i - 1])
+		var measure := Vector2(travelled, 0.0)
 		mesh.surface_set_color(tint)
 		mesh.surface_set_normal(tangents[i])
 		mesh.surface_set_uv(Vector2(along, 0.0))
+		mesh.surface_set_uv2(measure)
 		mesh.surface_add_vertex(points[i])
 		mesh.surface_set_color(tint)
 		mesh.surface_set_normal(tangents[i])
 		mesh.surface_set_uv(Vector2(along, 1.0))
+		mesh.surface_set_uv2(measure)
 		mesh.surface_add_vertex(points[i])
 	mesh.surface_end()
 	return true
@@ -511,14 +614,53 @@ func _apply_beam_params() -> void:
 # A LINE layer may name its own set (slice 4). The shared trio is tuned for a LASER -- the sight
 # bead's width and an intensity whose own comment reads ">1.2 blooms" -- and the focus outline is
 # markup, so inheriting them made it a glowing rope around forty cells. Softness stays shared: the
-# falloff SHAPE is not a thing the two want to differ about.
+# falloff SHAPE is not a thing the three want to differ about.
+#
+# Three tenants since #1042, so the binary fork became a named lookup rather than a second ternary
+# per parameter -- a fourth adds a row here and nothing else.
 func _style_beam(material: ShaderMaterial, spec: Dictionary = {}) -> void:
 	if material == null:
 		return
-	var outline: bool = spec.get("beam", "") == "outline"
-	material.set_shader_parameter("beam_width", outline_width if outline else beam_width)
+	var width := beam_width
+	var intensity := beam_intensity
+	match spec.get("beam", "") as String:
+		"outline":
+			width = outline_width
+			intensity = outline_intensity
+		"intent":
+			width = intent_width
+			intensity = intent_intensity
+	material.set_shader_parameter("beam_width", width)
 	material.set_shader_parameter("beam_softness", beam_softness)
-	material.set_shader_parameter("beam_intensity", outline_intensity if outline else beam_intensity)
+	material.set_shader_parameter("beam_intensity", intensity)
+	# The bead rides ONLY the layers that ask for it; everything else reads a zero length and the
+	# shader's whole motion branch drops out. `motion` is the composed photosensitivity read.
+	var carries_bead: bool = spec.get("beam", "") == "intent"
+	material.set_shader_parameter("bead_length", bead_length if carries_bead else 0.0)
+	material.set_shader_parameter("bead_speed", bead_speed)
+	material.set_shader_parameter("bead_gap", maxf(bead_gap, 0.001))
+	material.set_shader_parameter("flash_hz", flash_hz if spec.get("flash", false) else 0.0)
+	material.set_shader_parameter("flash_alpha", flash_alpha)
+	material.set_shader_parameter("flash_white", flash_white)
+	material.set_shader_parameter("motion", 1.0 if beams_animating() else 0.0)
+
+
+# The one composed read of "may board markup MOVE", #217's standing rule in BoardMirror's
+# `_flame_animating` shape: the authored rate ANDed with the player's own choice. A frozen mark is
+# not a mark with a cue missing -- the arrowhead still says which way it runs, and the flash holds
+# at its ALPHA peak (see the shader), so a felling mark stays the louder of the two.
+func beams_animating() -> bool:
+	return not PlayerSettings.is_on(PlayerSettings.Setting.PHOTOSENSITIVITY)
+
+
+# PlayerSettings has no changed signal by design (callers poll it), so the mirror polls this once a
+# frame and it re-pushes only on a real flip.
+func poll_beam_motion() -> void:
+	var animating := beams_animating()
+	if animating == _beams_animating:
+		return
+	_beams_animating = animating
+	_apply_beam_params()
 
 
 func line_of(layer: Layer) -> PackedVector3Array:
@@ -558,6 +700,18 @@ func markers_of(layer: Layer) -> Array[Dictionary]:
 
 func layer_modulate(layer: Layer) -> Color:
 	return _layer_colors.get(layer, LAYERS[layer]["color"])
+
+
+# What a LINE layer's beam is actually carrying right now -- `layer_modulate`'s twin for the
+# parameters a shader holds rather than a modulate. It exists because the beam's motion is composed
+# from two places (the authored rate and the player's photosensitivity choice) and the only honest
+# question about that wire is what reached the MATERIAL, not what the composer answered.
+func beam_parameter(layer: Layer, name: StringName) -> Variant:
+	var pool: Array = _markers.get(layer, [])
+	if pool.is_empty():
+		return null
+	var material := (pool[0] as MeshInstance3D).material_override as ShaderMaterial
+	return null if material == null else material.get_shader_parameter(name)
 
 
 # The AUTHORED colour, ignoring any runtime override — what a layer goes back TO. Distinct from

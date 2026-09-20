@@ -123,6 +123,8 @@ static func preview_turn(viewer: Team.Faction, sm: SquadManager,
 	previewed_squad_count = 0
 	sm.previewing = true
 
+	var doomed := _felled_by_viewer(viewer, sm)   # on the LIVE board, before anybody is moved
+
 	var saved := stand_on_projected(sm)
 
 	var board: BoardContext = sm.board_source.call()   # fresh, so every read below sees the projected cells
@@ -141,7 +143,53 @@ static func preview_turn(viewer: Team.Faction, sm: SquadManager,
 	restore_cells(saved)
 	_undress(sm)
 	sm.previewing = false
-	return _merged(intents)
+	return _merged(_dropping(intents, doomed))
+
+
+# #1001's cheap half: an enemy the VIEWER'S OWN PLAN fells is not going to attack anybody, so its
+# line comes off the board. Queue the blow that kills a man and the dead man used to go on promising
+# to hit you -- which undercuts exactly the trust the preview exists for, and is the commonest shape
+# of the whole feature.
+#
+# It filters the harvested INTENTS rather than the board the AI plans against, deliberately. Making
+# the snapshot carry OUTCOMES as well as positions is a second thing that executes a plan without
+# executing it, beside OrderExecutor, and Law #4 says not to mint one casually. The declared cost:
+# a doomed enemy still INFLUENCED its squadmates' plan, exactly as it does today.
+#
+# The question is `actor_is_live`, which is the same predicate execution uses to decide that a
+# felled actor does nothing (#1005) -- not `plan_fells`, which also answers true for a unit entering
+# CRISIS. A unit in Crisis is emphatically still attacking, and dropping its line would UNDER-warn,
+# which is the one direction this feature must never err in.
+static func _felled_by_viewer(viewer: Team.Faction, sm: SquadManager) -> Array[Unit]:
+	var doomed: Array[Unit] = []
+	var board: BoardContext = sm.board_source.call()
+	for squad: Squad in sm.squads.duplicate():
+		if not is_instance_valid(squad) or squad.leader == null:
+			continue
+		if squad.leader.get_faction() != viewer or squad.action_queue.is_empty():
+			continue
+		# resolve_hypothetical with NO candidate resolves the squad's real queue and deliberately
+		# does not write the plan cache, which resolve_plan would -- the queue panel's "already
+		# queued prefix" must not become a preview's by-product. _undress' own resolve at the end of
+		# preview_turn is what satisfies that function's finish-with-a-real-resolve contract.
+		var none: Array[BaseAction] = []
+		var plan := sm.resolve_hypothetical(squad, none, board)
+		for unit: Unit in plan.hypo:
+			if not is_instance_valid(unit) or not Team.is_enemy(viewer, unit.get_faction()):
+				continue
+			if not PlanResolver.actor_is_live(unit, plan.hypo) and not doomed.has(unit):
+				doomed.append(unit)
+	return doomed
+
+
+static func _dropping(intents: Array[ThreatIntent], doomed: Array[Unit]) -> Array[ThreatIntent]:
+	if doomed.is_empty():
+		return intents
+	var kept: Array[ThreatIntent] = []
+	for intent: ThreatIntent in intents:
+		if not doomed.has(intent.attacker):
+			kept.append(intent)
+	return kept
 
 
 # THE POSITIONAL SNAPSHOT, as its own pair of doors since slice 4 -- the RANGE tier wants the same
