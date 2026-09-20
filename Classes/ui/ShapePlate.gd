@@ -13,7 +13,12 @@ extends VBoxContainer
 # IT DERIVES NOTHING. Since #808 an attack's geometry is two fields -- the RANGE trio on AttackData
 # and a shared AttackShape -- and Reach is the one place that answers using both. Both queries here
 # are board-blind by Reach's own contract: get_attack_cells_from's anchored branch never touches the
-# board, and get_affected_cells_from returns the untruncated placement when handed a null one. A
+# board, and get_affected_cells_from returns the untruncated placement when handed a null one.
+#
+# THAT NULL IS LOAD-BEARING SINCE #805, where it used to be merely true: a placed footprint is now
+# narrowed by the terrain it lands on, so handing this a real board would draw the player whichever
+# board happened to be loaded rather than the shape the weapon carries. The card describes a weapon,
+# not a cell. A
 # second copy of the bevel, the min-range dead zone or the null-shape fallback is exactly what this
 # class exists not to be.
 #
