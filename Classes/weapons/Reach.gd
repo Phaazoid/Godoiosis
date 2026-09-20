@@ -43,9 +43,11 @@ class_name Reach
 # the movement_cost precedent). The FOOTPRINT question takes the board too since #756: a directional
 # SPREAD is TRUNCATED at the first cell the shot cannot reach (dev, 2026-09-04 -- "truncate, and all
 # 8"), lane by lane. AND A PLACED ONE SPREADS FROM WHERE IT LANDS SINCE #805 -- the blast propagates
-# outward from the impact, blocked by what a flat shot from that cell would be blocked by and carried
-# vertically by the attack's own burst_tolerance. So no footprint is board-blind any more; what #218
-# still defers is a blast covering a VOLUME rather than a heightmap's surface.
+# outward from the impact and each cell asks this SAME gate, with the impact standing in for the
+# shooter. So a blast's vertical reach and what blocks it are the attack's own three fields read from
+# where it landed, not a second vocabulary: one rule, two anchors, and which anchor applies is the
+# question max_range already answers. No footprint is board-blind any more; what #218 still defers is
+# a blast covering a VOLUME rather than a heightmap's surface.
 #
 # THE DRAWN PATH IS THE RULE (dev, 2026-08-20): sight_trace's trajectory is one function that both
 # the legality check and the in-game bead readout evaluate, so what the player sees can never
@@ -123,13 +125,7 @@ static func _lane_aim_ok(attack: AttackData, shooter_cell: Vector2i, lane_base: 
 		return true
 	if not _vertical_rule_ok(attack, shooter_cell, target_cell, board):
 		return false
-	return not _trace(_clearance_of(attack), lane_base, target_cell, float(board.elevation_at(shooter_cell)), board).blocked
-
-
-# A null attack (bare fists) arcs not at all. One home for that, because three callers ask it and the
-# third -- a burst -- deliberately passes 0.0 instead: see _spread.
-static func _clearance_of(attack: AttackData) -> float:
-	return 0.0 if attack == null else float(attack.arc_clearance)
+	return not _trace(attack, lane_base, target_cell, float(board.elevation_at(shooter_cell)), board).blocked
 
 
 static func _vertical_rule_ok(attack: AttackData, origin_cell: Vector2i, target_cell: Vector2i, board: BoardContext) -> bool:
@@ -173,19 +169,16 @@ static func draws_sight_trace(attack: AttackData) -> bool:
 # in the sheet is a full run or a corner L.
 static func sight_trace(attack: AttackData, origin_cell: Vector2i, target_cell: Vector2i, board: BoardContext) -> SightTrace:
 	var origin_h := 0.0 if board == null else float(board.elevation_at(origin_cell))
-	return _trace(_clearance_of(attack), origin_cell, target_cell, origin_h, board)
+	return _trace(attack, origin_cell, target_cell, origin_h, board)
 
 
 # The trace body, with the ORIGIN HEIGHT as a parameter rather than read off origin_cell: a spread's
 # side lane starts beside the shooter but is fired from the shooter's own height (#756). sight_trace
 # is the point form; nothing else reads this directly.
-#
-# It takes the CLEARANCE rather than the attack (#805) because that is the only thing it ever wanted
-# from one, and because a BURST is flat whatever the attack authored -- passing 0.0 says so at the
-# call site, where passing a null attack to mean the same thing would read as "no attack".
-static func _trace(clearance: float, origin_cell: Vector2i, target_cell: Vector2i, origin_h: float, board: BoardContext) -> SightTrace:
+static func _trace(attack: AttackData, origin_cell: Vector2i, target_cell: Vector2i, origin_h: float, board: BoardContext) -> SightTrace:
 	var trace := SightTrace.new()
 	var target_h := 0.0 if board == null else float(board.elevation_at(target_cell))
+	var clearance := 0.0 if attack == null else float(attack.arc_clearance)
 	var p0 := Vector2(origin_cell) + Vector2(0.5, 0.5)
 	var p1 := Vector2(target_cell) + Vector2(0.5, 0.5)
 	var span := p1 - p0
@@ -344,7 +337,11 @@ static func _truncate(cells: Array[Vector2i], origin_cell: Vector2i, dir: Vector
 #   a SPREAD rather than a search -- a blast cannot snake around a wall and rejoin behind it -- and
 #   it bounds the walk to the shape's own extent with no arbitrary radius.
 #
-#   REACH FROM THE IMPACT -- the flat trace and the burst tolerance, in _burst_cell_ok below.
+#   REACH FROM THE IMPACT -- the attack's OWN aim gate (vertical_aim_ok), asked with the impact cell
+#   standing in for the shooter. It owns no numbers of its own: the vertical rule, the two tolerances
+#   and arc_clearance are read off whatever attack is spreading, measured from where it landed.
+#   That is what makes this the right home for a PAYLOAD attack when one arrives -- a blast fired
+#   from the impact answers these questions with its own authored fields rather than the delivery's.
 #
 # WHY NOT _truncate, which is the obvious move and is wrong twice over. Its predecessor is
 # `cell - dir` along ONE facing, and for an anchored aim `dir` is the attacker-to-target cardinal --
@@ -381,7 +378,7 @@ static func _spread(cells: Array[Vector2i], impact_cell: Vector2i, attack: Attac
 			# what makes the walk monotone -- and, with it, order-independent.
 			if GridUtils.manhattan_distance(impact_cell, next) != here_steps + 1:
 				continue
-			if not _burst_cell_ok(attack, impact_cell, next, board):
+			if not vertical_aim_ok(attack, impact_cell, next, board):
 				continue
 			reached[next] = true
 			frontier.append(next)
@@ -390,25 +387,6 @@ static func _spread(cells: Array[Vector2i], impact_cell: Vector2i, attack: Attac
 		if reached.has(cell):
 			out.append(cell)
 	return out
-
-
-# May the blast reach this cell from where it landed (#805)? Two authored answers, both measured from
-# the IMPACT rather than from the attacker.
-#
-# The BURST TOLERANCE is how far the blast carries vertically -- the surface within reach of the
-# impact point -- so a bomb landing on a terrace does not catch the men on the plateau above. -1 is
-# unlimited, matching its two siblings on AttackData.
-#
-# The trace is FLAT (clearance 0) whatever the attack authored: arc_clearance is how the shot arcs on
-# its way TO the aimed cell, and a burst that re-arced would let a bomb lobbed behind a wall spray
-# back over it. It runs at the impact cell's own height, so the blast is stopped by exactly what
-# stops a flat shot fired from there -- the same ground-plus-prop column every other shot reads
-# (#660), one trajectory model for the delivery and the burst alike.
-static func _burst_cell_ok(attack: AttackData, impact_cell: Vector2i, cell: Vector2i, board: BoardContext) -> bool:
-	var impact_h := board.elevation_at(impact_cell)
-	if attack.burst_tolerance >= 0 and absi(board.elevation_at(cell) - impact_h) > attack.burst_tolerance:
-		return false
-	return not _trace(0.0, impact_cell, cell, float(impact_h), board).blocked
 
 
 # The cell a lane is fired FROM: the shooter's own cell carried sideways onto this lane, which is

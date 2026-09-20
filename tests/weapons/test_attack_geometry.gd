@@ -220,10 +220,14 @@ func _board(heights: Dictionary) -> BoardContext:
 	return BoardContext.new(null, NO_UNITS, null, null, null, h)
 
 
-# A placed, shaped attack aimed at `target`, over a real board.
+# A placed, shaped attack aimed at `target`, over a real board. `tolerance` is the attack's OWN
+# up/down tolerance: the spread asks its ordinary aim gate with the impact cell standing in for the
+# shooter, so a blast's vertical reach is the same three fields a shot's is, measured from where it
+# landed. The attacker is parked far away to make the point that nothing reads it.
 func _blast(offsets: Array[Vector2i], target: Vector2i, board: BoardContext, tolerance := -1) -> Array[Vector2i]:
 	var attack := P.stamped(_attack(), 4, offsets)
-	attack.burst_tolerance = tolerance
+	attack.up_tolerance = tolerance
+	attack.down_tolerance = tolerance
 	return Reach.get_affected_cells_from(null, Vector2i(9, 9), target, attack, board)
 
 
@@ -258,10 +262,11 @@ func test_a_cell_the_blast_cannot_propagate_THROUGH_is_cut_even_though_it_is_rea
 	assert_array(_blast(east, Vector2i.ZERO, level, 2)).contains_exactly([Vector2i(1, 0), Vector2i(2, 0)])
 
 
-func test_the_burst_tolerance_is_what_decides_how_far_it_carries_vertically() -> void:
+func test_the_attacks_own_tolerance_decides_how_far_the_blast_carries_vertically() -> void:
 	# A bomb on a terrace does not catch the men on the plateau above: one arm climbs out of reach,
-	# the other stays level. Reading the shot's own up_tolerance here instead is what the field
-	# exists to avoid -- a lob authors that unlimited so it can be lobbed anywhere.
+	# the other stays level. The blast asks the attack's ORDINARY vertical gate, with the impact
+	# cell standing in for the shooter -- so the reach is measured from where it landed, and no
+	# blast-only field is needed to say so.
 	var arms: Array[Vector2i] = [Vector2i(1, 0), Vector2i(0, 1)]
 	var board := _board({Vector2i(1, 0): 4})
 	assert_array(_blast(arms, Vector2i.ZERO, board, 2)).contains_exactly([Vector2i(0, 1)])
@@ -309,18 +314,20 @@ func test_a_null_board_hands_back_the_whole_authored_shape() -> void:
 	# being consulted about.
 	var scattered: Array[Vector2i] = [Vector2i(1, 0), Vector2i(3, 0), Vector2i(-2, 2)]
 	var attack := P.stamped(_attack(), 4, scattered)
-	attack.burst_tolerance = 0
+	attack.up_tolerance = 0
+	attack.down_tolerance = 0
 	assert_array(Reach.get_affected_cells_from(null, Vector2i(9, 9), Vector2i.ZERO, attack, null)) \
 		.contains_exactly_in_any_order(scattered)
 
 
 func test_a_swung_shape_is_still_truncated_from_the_shooter_and_not_from_its_own_far_end() -> void:
-	# #756 is untouched: a self-anchored spread is a SWING, cut lane by lane from the attacker, and
-	# it never asks burst_tolerance. A one-level step two cells ahead stops the lane at the step
-	# under a melee rule, which is the same answer this suite's vertical cases give.
+	# #756 is untouched: a self-anchored spread is a SWING, cut lane by lane from the ATTACKER, so
+	# its gate is measured from the shooter's cell where a blast's is measured from the impact. One
+	# rule, two anchors, and which one applies is the anchor question max_range already answers.
+	# A one-level step two cells ahead stops the lane at the step under a melee rule, which is the
+	# same answer this suite's vertical cases give.
 	var swung := P.line(_attack(), 3)
 	swung.vertical_rule = AttackData.VerticalRule.MELEE
-	swung.burst_tolerance = 0
 	var board := _board({Vector2i(0, -2): 2})
 	var hit := Reach.get_affected_cells_from(null, Vector2i.ZERO, Vector2i(0, -1), swung, board)
 	assert_array(hit).contains_exactly([Vector2i(0, -1)])

@@ -1438,19 +1438,22 @@ itself.
 - ~~**3D blast extent**~~ — **BUILT 2026-09-19 as [#805](https://github.com/Phaazoid/Godoiosis/issues/805),
   and this bullet's own sketch is what shipped.** *"A fire ball can be lobbed, and create a 3D
   explosion radius where it lands."* It predicted the mechanism correctly: on a heightmap it needs no
-  volume math, only one more authored number — `AttackData.burst_tolerance`, *"the blast covers cells
-  whose surface is within V of the impact point"* — so a fireball on a terrace does not catch the men
-  on the plateau above. **Narrowed first by [#756](https://github.com/Phaazoid/Godoiosis/issues/756)
-  (2026-09-04)**, which gave a directional SPREAD its own rule; #805 then answered the POINT aim's
-  splash, which is what was left.
-  **Two things the sketch did not have.** The vertical number is only half of it — a blast is also
-  stopped HORIZONTALLY, by a flat trace from the impact, so a bomb lobbed behind a wall does not
-  spray back over it; and the reach is a PROPAGATION rather than a filter, so a cell whose own line
-  is clear is still cut when the cell the blast had to cross was not. And the number had to be its
-  own field rather than the aim's `up_tolerance`/`down_tolerance`: a lob authors those unlimited so
-  it can be lobbed anywhere, and reusing them would have made every such burst vertically unlimited —
-  catching exactly the plateau this bullet named. What remains genuinely deferred is a blast that
-  covers a VOLUME rather than a heightmap's surface, which is all this was ever really about.
+  volume math — *"the blast covers cells whose surface is within V of the impact point"* — so a
+  fireball on a terrace does not catch the men on the plateau above. **Narrowed first by
+  [#756](https://github.com/Phaazoid/Godoiosis/issues/756) (2026-09-04)**, which gave a directional
+  SPREAD its own rule; #805 then answered the POINT aim's splash, which is what was left.
+  **But it needed NO authored number at all, and that correction is the useful part.** The sketch
+  assumed a new field; what shipped asks the attack's own `vertical_rule` / `up_tolerance` /
+  `down_tolerance` / `arc_clearance` **with the impact cell standing in for the shooter** — one rule
+  at two anchors, rather than a second vocabulary for blasts. A blast-only tolerance looked necessary
+  only while the delivery and the blast were the same attack (a lob authors its tolerances unlimited
+  so it can be lobbed anywhere, which would have made its burst unlimited too); **once a blast is its
+  own attack fired from the impact, it authors its own reach and the conflict dissolves.**
+  **Two things the sketch did not have.** A blast is stopped HORIZONTALLY as well as vertically, by
+  the trace from the impact — so a flat one lobbed behind a wall does not spray back over it; and the
+  reach is a PROPAGATION rather than a filter, so a cell whose own line is clear is still cut when
+  the cell the blast had to cross was not. What remains genuinely deferred is a blast that covers a
+  VOLUME rather than a heightmap's surface, which is all this was ever really about.
 - **A projectile graphic riding the sight line** — dev, 2026-08-20: *"we can add a little graphic
   of a fire following it when it goes off, for when the advanced battle zoom is disabled"*. The
   trajectory function is already the one home the flight path would read.
