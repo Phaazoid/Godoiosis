@@ -13,6 +13,13 @@ class_name BugReporter
 # a public channel and gets quoted into a public tracker, so the reporter's account name must not
 # ride along in it.
 #
+# IT DOES SHIP WHAT THE PLAYER CHOSE TO BE CALLED (#1049), and the two rules do not fight: what
+# #1036 removed was an identity taken from the machine WITHOUT anyone offering it. This one is
+# typed by the player, into a box that says it is optional and need not be real, default empty.
+# The anonymous install id rides beside it so that two reports from one person can be told apart
+# even when nobody named themselves -- which was the actual gap: a report used to carry no handle
+# of any kind, so there was nobody to ask about it.
+#
 # It owns NO state and adds no new seam: the board is ScenarioManager.capture_scenario (#87), the
 # plan is ActionQueueDisplayEntry.build_for (what the queue panel draws), and the transport is
 # ReportUploader, which never looks inside a report. board.tres is authoritative; report.md is a
@@ -143,8 +150,14 @@ func report(state_name: String, kind: Kind, note: String, frame: Image) -> Dicti
 		push_error("Report: could not write report.md")
 		return {"dir": "", "sent": false}
 	var look: String = game.scenario_manager.current_look_preset
+	# READ ONCE, PASSED TWICE (#1049). Both builders are static and pure, which is what makes them
+	# testable without a game scene -- so the stores are read HERE, the way `stamp` and `look` are.
+	# install_id() MINTS on first ask and writes the cfg, which is a thing a pure text builder must
+	# never do behind a caller's back.
+	var reporter := PlayerSettings.text_of(PlayerSettings.Setting.PLAYER_NAME)
+	var install_id := TelemetryStore.install_id()
 	md.store_string(build_report_text(stamp, state_name, kind, note, squad, plan, units, _log_tail(),
-		_view_note(), look, _devtools_note(), _trace_note()))
+		_view_note(), look, _devtools_note(), _trace_note(), reporter, install_id))
 	md.close()
 
 	if frame == null:
@@ -164,7 +177,8 @@ func report(state_name: String, kind: Kind, note: String, frame: Image) -> Dicti
 	# The user:// form, never the globalized one (#1036): this line lands in godot.log, whose tail
 	# the NEXT report ships. DevInfoTool's Report folder row is where a dev gets the real location.
 	print("Report written to %s" % dir)
-	var sent: bool = await _uploader.send_report(dir, build_summary(stamp, state_name, kind, note))
+	var sent: bool = await _uploader.send_report(dir,
+		build_summary(stamp, state_name, kind, note, reporter, install_id))
 	return {"dir": dir, "sent": sent}
 
 # The viewport texture is only valid after a draw, so this always costs a frame. Callers grab it
@@ -273,7 +287,8 @@ static func _replace_both_forms(text: String, path: String, token: String) -> St
 # The Discord message body, derived from the same four facts report() writes into report.md so the
 # channel and the attachment can never disagree. The note is truncated HERE only -- the full text
 # is always in report.md, which is attached to the same message.
-static func build_summary(stamp: String, state_name: String, kind: Kind, note: String) -> String:
+static func build_summary(stamp: String, state_name: String, kind: Kind, note: String,
+		reporter: String, install_id: String) -> String:
 	# Scrubbed BEFORE the truncation. A cut landing INSIDE the home directory leaves a partial
 	# account name that neither pass can match afterwards -- a cut anywhere below it leaves a
 	# fragment still starting with the home directory, which pass 2 catches however late it runs,
@@ -291,24 +306,42 @@ static func build_summary(stamp: String, state_name: String, kind: Kind, note: S
 	var checkout := Checkout.describe()
 	if checkout != "":
 		build += " -- %s" % checkout
-	# UNOBSERVABLE TODAY, and kept deliberately: with the note already scrubbed, every other part of
-	# this line is machine-independent by construction (a timestamp, a GameState key, an enum key,
-	# project.godot's version, and a checkout that is "branch @ sha" or nothing). So a mutant
-	# deleting this call SURVIVES -- measured -- and the reason to keep it is that the guarantee
-	# belongs to what this function RETURNS rather than to the one argument that can carry a path
-	# today. A field added to this line later is covered without anyone remembering to.
-	return scrub_paths("**%s** - state `%s` - %s - %s\n>>> %s" % [
-		Kind.keys()[kind], state_name, stamp, build, trimmed])
+	# WHO SENT IT (#1049). Two facts, and they are not the same one twice: `reporter` is what the
+	# player asked to be called and may be anything or nothing, while `install_id` is the stable
+	# anonymous handle that joins this report to their other reports and to their runs in D1. A
+	# report used to carry NEITHER, so two reports from one person could not be told apart.
+	#
+	# An unnamed reporter says so rather than being omitted: a line that sometimes has a field and
+	# sometimes does not is read as a bug in triage, and "anonymous" is a real answer.
+	var who := "anonymous" if reporter == "" else reporter
+	# THE TRAILING SCRUB IS NO LONGER UNOBSERVABLE, and that comment retires with this line. It was
+	# kept for "a field added to this line later is covered without anyone remembering to" -- this
+	# is that field. `reporter` is player-typed, so it is the second thing here that can carry a
+	# path, and unlike the note it is not scrubbed by anything upstream. A mutant deleting this
+	# call now reds.
+	return scrub_paths("**%s** - state `%s` - %s - %s\n%s (`%s`)\n>>> %s" % [
+		Kind.keys()[kind], state_name, stamp, build, who, install_id, trimmed])
 
 # Pure + static so it is testable without a game scene, the capture/save split again.
+#
+# `reporter` and `install_id` are OPTIONAL here where build_summary makes them required, and the
+# asymmetry is this function's own idiom rather than an oversight: it already ends in four optional
+# notes, and a caller that omits them gets the honest "anonymous" line either way. The Discord
+# summary has no optionals at all, and a sender silently dropped from the one line a triage session
+# actually reads is the failure worth refusing at the signature.
 static func build_report_text(stamp: String, state_name: String, kind: Kind, note: String,
 		squad: Squad, plan: ResolvedPlan, units: Array[Unit], log_tail: String,
-		view_note := "", look_note := "", devtools_note := "", trace_note := "") -> String:
+		view_note := "", look_note := "", devtools_note := "", trace_note := "",
+		reporter := "", install_id := "") -> String:
 	var out := "# %s report %s\n\n" % [Kind.keys()[kind].to_lower().capitalize(), stamp]
 
 	out += "## What they wrote\n\n"
 	out += "%s\n\n" % ("(nothing typed)" if note.strip_edges() == "" else note.strip_edges())
 
+	# WHO, above the machine facts, because it is the question this file exists to answer since
+	# #1049 and the one a reader is looking for first. Both halves always print -- see build_summary.
+	out += "From: **%s**\n\n" % ("anonymous" if reporter == "" else reporter)
+	out += "Install: **%s**\n\n" % install_id
 	out += "Game state: **%s**\n\n" % state_name
 	out += "Build: **%s**\n\n" % Build.version()
 	# WHICH CHECKOUT produced it (#295), beside the version rather than instead of it: they answer

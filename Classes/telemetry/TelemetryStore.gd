@@ -13,12 +13,28 @@ class_name TelemetryStore
 # ITS OWN cfg, deliberately NOT settings.cfg: PlayerSettings.save_state() writes a fresh ConfigFile,
 # so a second section in that file would be dropped on the next settings write.
 #
-# The install id is the ONLY identity in the data -- random, generated once, never tied to a name,
-# a path or an account. #53's privacy rule: no PII, ever.
+# The install id is the only identity this file MINTS -- random, generated once, never derived from
+# a name, a path or an account. #53's privacy rule holds where it always did: nothing here reads the
+# machine.
+#
+# It is no longer the only identity in the DATA, since #1049: a player may type a name for
+# themselves, and a run carries it. The distinction is the whole of why that was safe to add -- the
+# name is OPT-IN, freeform, default empty, and lives in PlayerSettings where the player can change
+# or clear it. This file never asks for it and never stores it; MissionLog reads the store when it
+# stamps a run, the way it reads install_id() here.
 
 const CONFIG_SECTION := "telemetry"
 const INSTALL_ID_KEY := "install_id"
-const NOTICE_SEEN_KEY := "notice_seen"
+# WHICH TERMS this install has been shown (#1049), replacing the boolean `notice_seen`. The card's
+# wording is not fixed for all time -- when what the game sends CHANGES, the notice describing it is
+# due again, and a one-way bit cannot say that. An int can: the card carries the version its copy is
+# written for (TelemetryNotice.VERSION) and this is the last one acknowledged.
+#
+# NO MIGRATION, DELIBERATELY. An install carrying the old `notice_seen` key has no `notice_version`,
+# reads 0, and is shown the card -- which is exactly what is wanted, since those are the installs
+# already playing under the old terms. The dead key is left behind, this project's standing answer
+# for a retired cfg key. Nothing reads it, so nothing can be confused by it.
+const NOTICE_VERSION_KEY := "notice_version"
 
 # THE TWO FILES A RUN FOLDER HOLDS, named here because this is the file that knows a path -- they
 # were spelled once here and once on ReplayRun until the sweep needed a third (#53 slice 4b).
@@ -116,32 +132,41 @@ static func install_id() -> String:
 	return _install_id
 
 
-# HAS THIS PLAYER BEEN TOLD? (#53 slice 3) -- the one bit behind the first-launch notice.
+# WHICH TERMS HAS THIS PLAYER BEEN TOLD? (#53 slice 3, versioned by #1049) -- the one number behind
+# the launch notice. 0 means "none", which is both a fresh install and every install that only ever
+# saw the pre-#1049 card.
+#
+# RENAMED from notice_seen(), and the rename is the safety net rather than tidying: the return type
+# went bool -> int, and `if TelemetryStore.notice_seen()` would still COMPILE against an int and read
+# every version but 0 as "told" -- right by accident today and wrong the first time the version is
+# bumped. The rename makes a stale caller a parse error instead. #418's trick, three files over.
 #
 # Read FRESH every time, with no cached static beside _install_id's. That one caches because it
 # MINTS a value and must hand back the same one all session; this only ever reads one, so a cache
 # would buy nothing and cost a staleness trap the moment a suite writes the key behind it.
 #
-# False while persistence is off, which is the honest answer rather than a guard: nothing was
-# written, so nothing was seen. TelemetryNotice.should_show refuses in that case for its own
-# reason -- a notice we cannot remember showing would reappear every launch.
-static func notice_seen() -> bool:
+# 0 while persistence is off, which is the honest answer rather than a guard: nothing was written,
+# so nothing was seen. TelemetryNotice.should_show refuses in that case for its own reason -- a
+# notice we cannot remember showing would reappear every launch.
+static func notice_version_seen() -> int:
 	if not persistence_enabled:
-		return false
+		return 0
 	var cfg := ConfigFile.new()
 	if cfg.load(config_path()) != OK:
-		return false
-	return bool(cfg.get_value(CONFIG_SECTION, NOTICE_SEEN_KEY, false))
+		return 0
+	return int(cfg.get_value(CONFIG_SECTION, NOTICE_VERSION_KEY, 0))
 
 
-# One-way and idempotent in PLAY: nothing a player does un-sees the notice. reset_notice below is
-# the dev door out, and it is deliberately not the same function wearing a bool.
-static func mark_notice_seen() -> void:
-	_write_key(NOTICE_SEEN_KEY, true)
+# One-way in PLAY: nothing a player does un-sees the notice. The VERSION is passed in rather than
+# read from a const here, because which terms a card states is the CARD's fact -- this file owns
+# where it is written down, never what it says. reset_notice below is the dev door out, and it is
+# deliberately not the same function wearing an argument.
+static func mark_notice_seen(version: int) -> void:
+	_write_key(NOTICE_VERSION_KEY, version)
 
 
-# DEV ONLY (#53 slice 4): put the first-launch notice back so it can be re-checked without going and
-# deleting a file by hand. Erases the key rather than writing false, so the cfg returns to exactly
+# DEV ONLY (#53 slice 4): put the launch notice back so it can be re-checked without going and
+# deleting a file by hand. Erases the key rather than writing 0, so the cfg returns to exactly
 # the state a fresh install has -- and leaves install_id alone, which deleting the file would not.
 static func reset_notice() -> void:
 	if not persistence_enabled:
@@ -149,7 +174,7 @@ static func reset_notice() -> void:
 	var cfg := ConfigFile.new()
 	if cfg.load(config_path()) != OK:
 		return
-	cfg.erase_section_key(CONFIG_SECTION, NOTICE_SEEN_KEY)
+	cfg.erase_section_key(CONFIG_SECTION, NOTICE_VERSION_KEY)
 	cfg.save(config_path())
 
 

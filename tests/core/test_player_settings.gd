@@ -1,6 +1,6 @@
 # Guards for the player-preferences store (Classes/core/PlayerSettings.gd, #350; two row KINDS
-# since #418, three since #136's level row). Pure static calls — no nodes built — so this stays
-# orphan-clean. tests/experiments's shape.
+# since #418, three since #136's level row, four since #1049's text box). Pure static calls — no
+# nodes built — so this stays orphan-clean. tests/experiments's shape.
 #
 # before_test() calls PlayerSettings.reset_for_test() so every case starts hermetic (in-memory,
 # defaults only, no disk I/O). The cases that need real disk opt back in against a temp cfg and
@@ -15,6 +15,7 @@ const BOOL_SETTING := PlayerSettings.Setting.ALWAYS_SHOW_SQUAD_RINGS
 const CHOICE_SETTING := PlayerSettings.Setting.HEALTH_BARS
 const ZOOM_SETTING := PlayerSettings.Setting.BATTLE_ZOOM_MODE
 const LEVEL_SETTING := PlayerSettings.Setting.SFX_VOLUME
+const TEXT_SETTING := PlayerSettings.Setting.PLAYER_NAME
 
 func before_test() -> void:
 	PlayerSettings.reset_for_test()
@@ -280,6 +281,96 @@ func test_a_hand_edited_level_out_of_range_is_clamped_on_load() -> void:
 
 	assert_float(PlayerSettings.level_of(LEVEL_SETTING)).is_equal_approx(
 			PlayerSettings.max_of(LEVEL_SETTING), 0.001)
+	_close_disk()
+
+# --- the TEXT row (#1049) ------------------------------------------------------------------------
+
+func test_a_text_row_is_derived_from_its_max_length_and_is_none_of_the_other_kinds() -> void:
+	assert_bool(PlayerSettings.is_text(TEXT_SETTING)).is_true()
+	assert_bool(PlayerSettings.is_choice(TEXT_SETTING)).is_false()
+	assert_bool(PlayerSettings.is_level(TEXT_SETTING)).is_false()
+	# ...and the other kinds are not text, or _add_row's new branch would swallow them.
+	assert_bool(PlayerSettings.is_text(BOOL_SETTING)).is_false()
+	assert_bool(PlayerSettings.is_text(CHOICE_SETTING)).is_false()
+	assert_bool(PlayerSettings.is_text(LEVEL_SETTING)).is_false()
+
+func test_a_name_is_empty_until_somebody_types_one() -> void:
+	# The opt-in half, asserted rather than assumed: nobody is named by default, and "" is what
+	# every consumer reads as anonymous.
+	assert_str(PlayerSettings.text_of(TEXT_SETTING)).is_empty()
+
+func test_a_text_reads_and_writes_through_its_own_facade() -> void:
+	PlayerSettings.set_text(TEXT_SETTING, "Jae")
+	assert_str(PlayerSettings.text_of(TEXT_SETTING)).is_equal("Jae")
+
+func test_reading_a_text_row_through_the_toggle_facade_is_refused() -> void:
+	# THE SHARPEST OF THE #647 REFUSALS. bool("") is false and bool("Jae") is true, so without the
+	# guard an unnamed player reads as OFF and a named one as ON -- plausibly, and forever.
+	PlayerSettings.set_text(TEXT_SETTING, "Jae")
+	assert_bool(PlayerSettings.is_on(TEXT_SETTING)).override_failure_message(
+			"is_on answered a text row -- a name is being read as a boolean").is_false()
+
+func test_writing_a_text_row_through_the_toggle_facade_is_refused() -> void:
+	PlayerSettings.set_text(TEXT_SETTING, "Jae")
+	PlayerSettings.set_on(TEXT_SETTING, true)
+	assert_str(PlayerSettings.text_of(TEXT_SETTING)).override_failure_message(
+			"set_on wrote a bool over a name").is_equal("Jae")
+
+func test_writing_a_toggle_row_through_the_text_facade_is_refused() -> void:
+	PlayerSettings.set_on(BOOL_SETTING, true)
+	PlayerSettings.set_text(BOOL_SETTING, "Jae")
+	assert_bool(PlayerSettings.is_on(BOOL_SETTING)).override_failure_message(
+			"set_text wrote a string into a toggle row").is_true()
+
+func test_a_name_keeps_its_inner_spaces() -> void:
+	# The two-word case, and it is not pedantry: the store is written on every KEYSTROKE from the
+	# settings box, so a rule that collapsed inner whitespace would make "Jae Smith" untypeable --
+	# the space would vanish the instant it was pressed. Only the EDGES are trimmed.
+	PlayerSettings.set_text(TEXT_SETTING, "  Jae Smith  ")
+	assert_str(PlayerSettings.text_of(TEXT_SETTING)).is_equal("Jae Smith")
+
+func test_a_name_is_capped_at_the_rows_own_length() -> void:
+	var limit := PlayerSettings.max_length_of(TEXT_SETTING)
+	PlayerSettings.set_text(TEXT_SETTING, "x".repeat(limit + 40))
+	assert_int(PlayerSettings.text_of(TEXT_SETTING).length()).is_equal(limit)
+
+func test_a_name_carries_no_control_characters() -> void:
+	# It rides a ONE-LINE Discord message and a JSON field. A newline in it would break the first
+	# into a shape nothing downstream expects.
+	PlayerSettings.set_text(TEXT_SETTING, "Jae\nSmith\tand a bell")
+	var stored := PlayerSettings.text_of(TEXT_SETTING)
+	assert_bool(stored.contains("\n")).is_false()
+	assert_bool(stored.contains("\t")).is_false()
+	assert_str(stored).is_equal("JaeSmithand a bell")
+
+func test_a_name_survives_a_relaunch_as_TEXT() -> void:
+	# THE FALSIFICATION TARGET, the level row's trap one kind over: load_state's toggle branch
+	# coerces with bool(), so a name answered after it comes back as `true` and str(true) is
+	# "true" -- every named player would relaunch called "true", consistently, with nothing in the
+	# log. Reverting the is_text branch reds this case and nothing else in this file.
+	var path := "user://settings_text_roundtrip_test.cfg"
+	_open_disk(path)
+	PlayerSettings.set_text(TEXT_SETTING, "Jae")
+	_relaunch()
+
+	assert_str(PlayerSettings.text_of(TEXT_SETTING)).override_failure_message(
+			"a saved name did not come back as the text that was written").is_equal("Jae")
+	_close_disk()
+
+func test_a_hand_edited_name_is_cleaned_on_load() -> void:
+	# The cfg is a text file the player can open -- the level row's clamp reasoning, in the form
+	# this kind takes.
+	var path := "user://settings_text_clean_test.cfg"
+	_open_disk(path)
+	PlayerSettings.set_text(TEXT_SETTING, "Jae")
+	var cfg := ConfigFile.new()
+	assert_int(cfg.load(path)).is_equal(OK)
+	cfg.set_value("settings", PlayerSettings.Setting.keys()[TEXT_SETTING], "  " + "z".repeat(200) + "  ")
+	cfg.save(path)
+	_relaunch()
+
+	assert_int(PlayerSettings.text_of(TEXT_SETTING).length()).is_equal(
+			PlayerSettings.max_length_of(TEXT_SETTING))
 	_close_disk()
 
 # --- helpers -----------------------------------------------------------------------------------

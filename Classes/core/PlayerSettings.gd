@@ -11,13 +11,14 @@ class_name PlayerSettings
 ## `docs/design/presentation-effects.md` ruled that a settings surface DRIVES that switch rather
 ## than a second one growing beside it.
 ##
-## THREE KINDS OF ROW (#418, third kind #136). A row is a TOGGLE unless it declares `options`, in
-## which case it is a CHOICE the player picks a value from, or `step`, in which case it is a LEVEL
-## the player slides. The kind is derived from the table rather than stated in a second field, so
-## there is nothing to keep in step. The generic three — value_of / set_value / default_value — are
-## what a caller walking DEFS uses; is_on, choice_of and level_of are typed façades over them for the
-## callers that know which kind they are reading, and since #647 each REFUSES the other kinds' rows
-## rather than coercing it silently (see the note above them).
+## FOUR KINDS OF ROW (#418, third kind #136, fourth #1049). A row is a TOGGLE unless it declares
+## `options`, in which case it is a CHOICE the player picks a value from, or `step`, in which case it
+## is a LEVEL the player slides, or `max_length`, in which case it is TEXT the player types. The kind
+## is derived from the table rather than stated in a second field, so there is nothing to keep in
+## step. The generic three — value_of / set_value / default_value — are
+## what a caller walking DEFS uses; is_on, choice_of, level_of and text_of are typed façades over them
+## for the callers that know which kind they are reading, and since #647 each REFUSES the other kinds'
+## rows rather than coercing it silently (see the note above them).
 ##
 ## A LEVEL's bounds are FLAT keys on the entry (`min`/`max`/`step`), never a nested dictionary: DEFS
 ## is a const literal and KnobSource's SETTING_DEFAULT rewriter is brace-bounded per entry, so a
@@ -45,6 +46,7 @@ enum Setting {
 	CAMERA_SMOOTHING,
 	SFX_VOLUME,
 	MUSIC_VOLUME,
+	PLAYER_NAME,
 }
 
 ## How far a camera-handling value is scaled from its authored one (#394). ONE enum over three rows,
@@ -219,6 +221,24 @@ const DEFS := {
 		"step": 0.05,
 		"default": 0.6,
 	},
+	# The first TEXT row (#1049), and the only setting here that is not about how the game looks or
+	# sounds: it is what the player wants to be CALLED on anything they send back. Opt-in by
+	# construction -- the default is empty, empty means anonymous, and nothing anywhere treats a
+	# blank as a problem to solve.
+	#
+	# `max_length` is the marker AND the cap, spelled once: SettingsScreen puts it straight on the
+	# LineEdit and set_text enforces the same number, so the control and the store cannot disagree
+	# about what fits. 32 is chosen against the ONE line it has to share -- a Discord message with a
+	# stamp, a state, a version and a note already on it.
+	#
+	# TITLE AND DESC ARE PLACEHOLDERS FOR THE DEV. Player-facing prose is his; these are plain
+	# labels standing in so the row renders, not finished copy.
+	Setting.PLAYER_NAME: {
+		"title": "Name",
+		"desc": "The name attached to bug reports and feedback you send. Optional -- leave it blank and what you send stays anonymous. It does not have to be your real name.",
+		"max_length": 32,
+		"default": "",
+	},
 }
 
 const CONFIG_SECTION := "settings"
@@ -275,6 +295,12 @@ static func is_on(setting: Setting) -> bool:
 	if is_level(setting):
 		push_error("PlayerSettings: %s is a level row -- read it with level_of" % _name_of(setting))
 		return false
+	# TEXT is refused HERE rather than left to the bool() below, and it is the sharpest of the three:
+	# `bool("")` is false and `bool("Dave")` is true, so an unnamed player would read as OFF and a
+	# named one as ON, plausibly, forever (#1049).
+	if is_text(setting):
+		push_error("PlayerSettings: %s is a text row -- read it with text_of" % _name_of(setting))
+		return false
 	return bool(value_of(setting))
 
 static func set_on(setting: Setting, value: bool) -> void:
@@ -283,6 +309,9 @@ static func set_on(setting: Setting, value: bool) -> void:
 		return
 	if is_level(setting):
 		push_error("PlayerSettings: %s is a level row -- write it with set_level" % _name_of(setting))
+		return
+	if is_text(setting):
+		push_error("PlayerSettings: %s is a text row -- write it with set_text" % _name_of(setting))
 		return
 	set_value(setting, value)
 
@@ -310,6 +339,43 @@ static func set_level(setting: Setting, value: float) -> void:
 		return
 	set_value(setting, clampf(value, min_of(setting), max_of(setting)))
 
+# TRIMMED AT READ, never at write (#1049). The settings page reconciles its controls against this
+# store every frame, so trimming on the way IN would rewrite the box under the caret: typing "John "
+# would save "John", the next frame would put "John" back, and a two-word name could never be typed
+# at all. Trimming here instead means the box keeps whatever is being typed and every CONSUMER still
+# gets a clean value -- the guarantee sits on the read, which is the side that has callers.
+#
+# The cap is applied here too, for the same reason set_text applies it: a cfg is a text file the
+# player can open, so a 900-character name is reachable input rather than a bug.
+static func text_of(setting: Setting) -> String:
+	if not is_text(setting):
+		push_error("PlayerSettings: %s is not a text row -- read it with is_on, choice_of or level_of" % _name_of(setting))
+		return ""
+	return _clean_text(str(value_of(setting)), max_length_of(setting))
+
+static func set_text(setting: Setting, value: String) -> void:
+	if not is_text(setting):
+		push_error("PlayerSettings: %s is not a text row -- write it with set_on, set_choice or set_level" % _name_of(setting))
+		return
+	set_value(setting, _clean_text(value, max_length_of(setting)))
+
+# What a text row is allowed to hold. Control characters go rather than being escaped: this value
+# rides a ONE-LINE Discord message and a JSON field, and a newline in it would break the first into
+# a shape nothing downstream expects. Mentions are already disarmed at the transport
+# (ReportUploader sends allowed_mentions.parse = []), so markdown in a name is cosmetic only.
+static func _clean_text(value: String, limit: int) -> String:
+	var out := ""
+	for i in value.length():
+		var c := value[i]
+		# Everything below space, plus DEL. `strip_escapes` would also eat the trailing space a
+		# typist is mid-word on, which is the thing the read-side trim is careful to keep.
+		if c.unicode_at(0) >= 32 and c.unicode_at(0) != 127:
+			out += c
+	out = out.strip_edges()
+	if out.length() > limit:
+		out = out.substr(0, limit).strip_edges()
+	return out
+
 # The enum member's own name, for an error a reader can act on. Same spelling the cfg keys use.
 static func _name_of(setting: Setting) -> String:
 	return Setting.keys()[setting]
@@ -329,6 +395,14 @@ static func is_choice(setting: Setting) -> bool:
 ## A LEVEL row -- a slider. `step`'s presence is the marker, the way `options`' is for a choice.
 static func is_level(setting: Setting) -> bool:
 	return DEFS[setting].has("step")
+
+## A TEXT row -- a box the player types into (#1049). `max_length`'s presence is the marker, and it
+## is the cap as well, so the widget and the store read ONE number.
+static func is_text(setting: Setting) -> bool:
+	return DEFS[setting].has("max_length")
+
+static func max_length_of(setting: Setting) -> int:
+	return int(DEFS[setting]["max_length"])
 
 static func min_of(setting: Setting) -> float:
 	return float(DEFS[setting]["min"])
@@ -366,6 +440,14 @@ static func load_state() -> void:
 		# outside the range means the nearest end of it.
 		if is_level(setting):
 			_state[setting] = clampf(float(raw), min_of(setting), max_of(setting))
+			continue
+		# TEXT is answered before the toggle fallback below, for the reason the LEVEL branch states
+		# one comment up and more bluntly: `bool("Dave")` is true, so a saved name would come back
+		# from disk as `true` and be lost on the first relaunch -- silently, and consistently
+		# (#1049). CLEANED rather than trusted, the level branch's clamp in its other form: the cfg
+		# is a text file the player can open.
+		if is_text(setting):
+			_state[setting] = _clean_text(str(raw), max_length_of(setting))
 			continue
 		if not is_choice(setting):
 			_state[setting] = bool(raw)

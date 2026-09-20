@@ -452,7 +452,7 @@ func test_reports_are_written_outside_the_scenario_tree() -> void:
 
 func test_the_summary_names_the_kind_and_state_and_carries_the_note() -> void:
 	var summary := BugReporter.build_summary(
-		"2026-08-05_10-00-00", "AI_TURN", BugReporter.Kind.FEEDBACK, "the shove was the best part")
+		"2026-08-05_10-00-00", "AI_TURN", BugReporter.Kind.FEEDBACK, "the shove was the best part", "", "")
 	assert_str(summary).contains("FEEDBACK")
 	assert_str(summary).contains("AI_TURN")
 	assert_str(summary).contains("the shove was the best part")
@@ -462,7 +462,7 @@ func test_a_long_note_is_truncated_in_the_message_but_not_in_the_report() -> voi
 	# Discord drops a message over 2000 characters entirely -- the failure is silence, not an error,
 	# so the truncation is what keeps a wordy playtester's report from vanishing.
 	var long_note := "x".repeat(BugReporter.NOTE_IN_MESSAGE * 3)
-	var summary := BugReporter.build_summary("stamp", "IDLE", BugReporter.Kind.BUG, long_note)
+	var summary := BugReporter.build_summary("stamp", "IDLE", BugReporter.Kind.BUG, long_note, "", "")
 	assert_int(summary.length()).is_less(2000)
 	assert_str(summary).contains("full text in report.md")
 
@@ -474,5 +474,5 @@ func test_a_long_note_is_truncated_in_the_message_but_not_in_the_report() -> voi
 func test_an_empty_note_is_stated_rather_than_left_blank() -> void:
 	# F3 files with no note at all. "(nothing typed)" beats an empty section that reads as a bug
 	# in the reporter itself.
-	var summary := BugReporter.build_summary("stamp", "IDLE", BugReporter.Kind.BUG, "   ")
+	var summary := BugReporter.build_summary("stamp", "IDLE", BugReporter.Kind.BUG, "   ", "", "")
 	assert_str(summary).contains("(nothing typed)")
