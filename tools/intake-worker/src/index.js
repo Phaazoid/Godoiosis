@@ -36,16 +36,21 @@ export default {
       return new Response(null, { status: 204, headers: corsHeaders() });
     }
 
-    if (request.method !== "POST") {
-      return text("POST only", 405);
-    }
-
+    // THE METHOD CHECK BELONGS TO THE ROUTE, not to the door (#1060). A blanket "POST only" sat
+    // here above the dispatch, which was right while every route was a POST -- /version is a GET,
+    // and it would have been refused before routing ever ran.
     const path = new URL(request.url).pathname.replace(/\/+$/, "");
-    if (path === "/telemetry") return handleTelemetry(request, env);
-    if (path === "") return handleReport(request, env);
+    if (path === "/telemetry") return only("POST", request, handleTelemetry, env);
+    if (path === "/version") return only("GET", request, handleVersion, env);
+    if (path === "") return only("POST", request, handleReport, env);
     return text(`no such route: ${path}`, 404);
   },
 };
+
+function only(method, request, handler, env) {
+  if (request.method !== method) return text(`${method} only`, 405);
+  return handler(request, env);
+}
 
 // --- the report relay (#131), unchanged in behaviour ---
 
@@ -149,6 +154,32 @@ async function handleTelemetry(request, env) {
   return text("ok", 200);
 }
 
+// --- the latest build (#1060) ---
+
+// WHAT THE GAME ASKS ON EVERY LAUNCH. One row, written at release time by tools/archive-build.ps1
+// with wrangler as the account owner -- so there is no write route here, no token, and no secret
+// compiled into anything (pull-runs.ps1's ruling, applied to a write instead of a read).
+//
+// THE URL IS IN THE PAYLOAD DELIBERATELY. A const in the game would be frozen into every build
+// already in someone's hands, so moving off itch is an UPDATE here rather than a re-export.
+async function handleVersion(request, env) {
+  if (!env.DB) {
+    return text("DB (D1) binding is not set on this Worker", 500);
+  }
+  const row = await env.DB.prepare(
+    "SELECT version, url FROM release WHERE id = 1"
+  ).first();
+  if (!row) {
+    // No release announced yet. Not an error -- the game reads anything but 200 as "stay quiet",
+    // which is the right answer before the first butler push has ever run.
+    return text("no release recorded", 404);
+  }
+  return new Response(JSON.stringify({ version: row.version, url: row.url }), {
+    status: 200,
+    headers: { ...corsHeaders(), "content-type": "application/json; charset=utf-8" },
+  });
+}
+
 async function partText(form, name) {
   const part = form.get(name);
   if (part === null) return null;
@@ -166,7 +197,7 @@ function corsHeaders() {
   return {
     "content-type": "text/plain; charset=utf-8",
     "access-control-allow-origin": "*",
-    "access-control-allow-methods": "POST, OPTIONS",
+    "access-control-allow-methods": "GET, POST, OPTIONS",
     "access-control-allow-headers": "content-type",
   };
 }

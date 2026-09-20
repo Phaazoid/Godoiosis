@@ -247,11 +247,27 @@ func _open_mission_select(dev: bool) -> void:
 	# Defaults to FEEDBACK, not BUG: nobody reaches this screen mid-defect (#131 item 6).
 	_select_screen.feedback_chosen.connect(func(): game.open_report_card(BugReporter.Kind.FEEDBACK))
 	_select_screen.quit_chosen.connect(func(): game.get_tree().quit())
+	# The update nag (#1060), on the same door and for the same reason. NOT awaited: its answer
+	# comes off the network, and the title screen may not wait for it. Called BEFORE the notice so
+	# that when both are due on one launch, the notice is the later sibling and sits on top.
+	_nag_if_outdated()
 	# The first-launch notice (#53 slice 3), stacked over the screen we just built. Here rather
 	# than in game._ready because this is the ONE door to the title screen, so the card is
 	# guaranteed something to sit on; it costs nothing on the later returns through here, since
 	# should_show() is false forever after the first dismissal.
 	TelemetryNotice.show_if_needed(game)
+
+
+# Asks once per launch and shows the banner only if the player is STILL on the title screen -- the
+# answer arrives off the network, so a slow reply must not drop a modal over a battle that started
+# while it was in flight.
+func _nag_if_outdated() -> void:
+	if not UpdateBanner.should_show():
+		return
+	var latest: Dictionary = await VersionCheck.latest(game)
+	if latest.is_empty() or not is_instance_valid(_select_screen):
+		return
+	UpdateBanner.show_if_needed(game, str(latest["url"]))
 
 # Which of those boards a build WITHOUT dev tools may list (#860).
 #
