@@ -90,9 +90,9 @@ const KNOBS: Array[Dictionary] = [
 	{"group": "Board markup", "node": "BoardOverlays", "prop": "intent_intensity", "label": "Intent mark glow", "min": 0.2, "max": 6.0, "step": 0.05,
 		"tip": "Brightness multiplier on the mark. Past the scene's glow threshold (1.2) it blooms."},
 	{"group": "Board markup", "node": "BoardOverlays", "prop": "bead_speed", "label": "Intent bead speed", "min": 0.0, "max": 12.0, "step": 0.1,
-		"tip": "How fast the bright pulse runs from the enemy to its target, in cells per second. It is what says which end is which without the arrowhead having to be read, so it wants to be unmistakable in direction and calm in pace."},
+		"tip": "How fast the bright pulse runs from the enemy to its target, in cells per second. It is what says which end is which without the cone having to be read, so it wants to be unmistakable in direction and calm in pace."},
 	{"group": "Board markup", "node": "BoardOverlays", "prop": "bead_length", "label": "Intent bead length", "min": 0.0, "max": 3.0, "step": 0.05,
-		"tip": "How long that pulse is, in cells. Zero turns the bead off entirely and leaves a still mark with its arrowhead."},
+		"tip": "How long that pulse is, in cells. Zero turns the bead off entirely and leaves a still mark with its cone."},
 	{"group": "Board markup", "node": "BoardOverlays", "prop": "bead_gap", "label": "Intent bead spacing", "min": 0.5, "max": 30.0, "step": 0.5,
 		"tip": "How far apart successive pulses run, in cells. Shorter than the mark and you get a chain of them travelling at once; longer and there is exactly one at a time with a rest between."},
 	{"group": "Board markup", "node": "BoardOverlays", "prop": "flash_hz", "label": "Lethal intent flash rate", "min": 0.0, "max": 4.0, "step": 0.05,
@@ -476,15 +476,21 @@ const CLASS_KNOBS: Array[Dictionary] = [
 		"tip": "The stroke round the whole field of the enemy under the pointer, while everybody else is dimmed. It crosses both tones and the terrain, so it is the one markup colour that has to read against all of them."},
 	{"group": "Board markup colours", "label": "Intent mark (2D+3D)", "static": "INTENT_LINE_COLOR", "script": THREAT_LINES_SCRIPT,
 		"tip": "The mark from an enemy to the unit it will actually attack next turn. ONE colour for both the ordinary and the felling mark: a felling one is the same pink and flashes white instead. Pink because nothing else on the board owns that hue -- the aim footprint is yellow and the sight bead white, which is what the old amber read as."},
-	{"group": "Board markup colours", "label": "Intent arrowhead size", "static": "HEAD_SIZE", "script": THREAT_LINES_SCRIPT,
+	{"group": "Board markup colours", "label": "Intent mark height", "static": "MARK_HEIGHT", "script": THREAT_LINES_SCRIPT,
+		"min": 0.0, "max": 2.0, "step": 0.025,
+		"tip": "How high above a unit's own footing the mark hangs, in rule height units (two to a level). 0.625 is the middle of a body: a map sprite's ink stands 1.25 of these tall. Deliberately NOT the sight beam's height, which is a RULE about what a wall is and cannot move for a look."},
+	{"group": "Board markup colours", "label": "Intent mark bow", "static": "MARK_BOW_PER_CELL", "script": THREAT_LINES_SCRIPT,
+		"min": 0.0, "max": 1.0, "step": 0.025,
+		"tip": "How far the mark arcs above the straight line between the two units, per CELL of its own length -- so a short mark and a long one bow by the same amount relative to their run. Zero draws a straight line."},
+	{"group": "Board markup colours", "label": "Intent mark inset", "static": "MARK_INSET", "script": THREAT_LINES_SCRIPT,
 		"min": 0.0, "max": 1.0, "step": 0.05,
-		"tip": "How long the arrowhead's legs are, in cells. Zero draws a bare line with no arrow."},
-	{"group": "Board markup colours", "label": "Intent arrowhead inset", "static": "HEAD_INSET", "script": THREAT_LINES_SCRIPT,
-		"min": 0.0, "max": 1.0, "step": 0.05,
-		"tip": "How far short of the victim the mark stops, in cells. It has to clear the crown and the guard ward, which hang just under the height the mark runs at -- too small and the arrow lands on them, too large and it points at open air."},
-	{"group": "Board markup colours", "label": "Intent arrowhead spread", "static": "HEAD_SPREAD", "script": THREAT_LINES_SCRIPT,
-		"min": 0.1, "max": 1.5, "step": 0.05,
-		"tip": "How wide the arrowhead opens, as a fraction of its own length."},
+		"tip": "How far short of the victim the mark stops, in cells. Pure taste -- the crown hangs well above the mark, so nothing is being cleared. Too large and it points at open air."},
+	{"group": "Board markup colours", "label": "Intent cone length", "static": "CONE_LENGTH", "script": THREAT_LINES_SCRIPT,
+		"min": 0.0, "max": 1.5, "step": 0.05,
+		"tip": "How much of the mark's far end tapers to a point, in cells, measured along the arc so a deeper bow does not shrink it. Zero leaves a bare line with nothing saying which way the blow runs but the bead."},
+	{"group": "Board markup colours", "label": "Intent cone width", "static": "CONE_WIDTH_SCALE", "script": THREAT_LINES_SCRIPT,
+		"min": 1.0, "max": 6.0, "step": 0.1,
+		"tip": "How wide the cone's base is as a MULTIPLE of the mark's own width, so widening the mark widens its cone with it. It wants to be subtle -- barely more than the shaft, converging to nothing at the victim."},
 	{"group": "Board markup colours", "label": "Threat preview delay", "static": "THREAT_PLAN_DELAY", "script": PACING_SCRIPT,
 		"min": 0.0, "max": 1.0, "step": 0.05,
 		"tip": "How long your plan sits still before the intent lines recompute. It bounds how OFTEN the preview runs, never how long it takes -- raise it if queueing orders feels sticky, lower it if the lines lag behind your thinking."},
@@ -1399,9 +1405,11 @@ static func read_static(name: String) -> Variant:
 		"FOCUS_OUTLINE_COLOR": return OverlayManager.FOCUS_OUTLINE_COLOR
 		"ZONE_HIGHLIGHT_MODULATE": return OverlayManager.ZONE_HIGHLIGHT_MODULATE
 		"INTENT_LINE_COLOR": return ThreatLines2D.INTENT_LINE_COLOR
-		"HEAD_SIZE": return ThreatLines2D.HEAD_SIZE
-		"HEAD_INSET": return ThreatLines2D.HEAD_INSET
-		"HEAD_SPREAD": return ThreatLines2D.HEAD_SPREAD
+		"MARK_HEIGHT": return ThreatLines2D.MARK_HEIGHT
+		"MARK_BOW_PER_CELL": return ThreatLines2D.MARK_BOW_PER_CELL
+		"MARK_INSET": return ThreatLines2D.MARK_INSET
+		"CONE_LENGTH": return ThreatLines2D.CONE_LENGTH
+		"CONE_WIDTH_SCALE": return ThreatLines2D.CONE_WIDTH_SCALE
 		"THREAT_PLAN_DELAY": return Pacing.THREAT_PLAN_DELAY
 		"SQUAD_RING_ALPHA": return OverlayManager.SQUAD_RING_ALPHA
 		"SQUAD_RING_PULSE_GAIN": return OverlayManager.SQUAD_RING_PULSE_GAIN
@@ -1602,9 +1610,11 @@ static func write_static(host: Node3D, name: String, value: Variant) -> void:
 		"FOCUS_OUTLINE_COLOR": OverlayManager.FOCUS_OUTLINE_COLOR = value
 		"ZONE_HIGHLIGHT_MODULATE": OverlayManager.ZONE_HIGHLIGHT_MODULATE = value
 		"INTENT_LINE_COLOR": ThreatLines2D.INTENT_LINE_COLOR = value
-		"HEAD_SIZE": ThreatLines2D.HEAD_SIZE = value
-		"HEAD_INSET": ThreatLines2D.HEAD_INSET = value
-		"HEAD_SPREAD": ThreatLines2D.HEAD_SPREAD = value
+		"MARK_HEIGHT": ThreatLines2D.MARK_HEIGHT = value
+		"MARK_BOW_PER_CELL": ThreatLines2D.MARK_BOW_PER_CELL = value
+		"MARK_INSET": ThreatLines2D.MARK_INSET = value
+		"CONE_LENGTH": ThreatLines2D.CONE_LENGTH = value
+		"CONE_WIDTH_SCALE": ThreatLines2D.CONE_WIDTH_SCALE = value
 		"THREAT_PLAN_DELAY":
 			Pacing.THREAT_PLAN_DELAY = value
 			return   # read when the debounce STARTS; there is no standing preview to re-apply it to
@@ -2177,7 +2187,7 @@ static func write_static(host: Node3D, name: String, value: Variant) -> void:
 		"ENEMY_RANGE_DIM": manager.restyle_dim_ranges()
 		"FOCUS_OUTLINE_COLOR": manager.restyle_focus_outline()
 		"ZONE_HIGHLIGHT_MODULATE": manager.restyle_leash()
-		"INTENT_LINE_COLOR", "HEAD_SIZE", "HEAD_INSET", "HEAD_SPREAD":
+		"INTENT_LINE_COLOR", "MARK_HEIGHT", "MARK_BOW_PER_CELL", "MARK_INSET", "CONE_LENGTH", "CONE_WIDTH_SCALE":
 			manager.restyle_threat_intents()
 		# No bespoke sweep for the three planned-move tints: redraw_planned_paths already tears
 		# every arrow down and rebuilds it through _arrow_modulate, so it IS the re-apply.

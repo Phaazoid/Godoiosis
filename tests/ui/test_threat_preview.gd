@@ -441,18 +441,21 @@ func test_the_toggle_draws_intent_lines_with_their_numbers() -> void:
 			"no intent mark for a unit standing next to an enemy").is_equal(1)
 	assert_int(_om().intent_fells.size()).override_failure_message(
 			"the lethal flags are not paired one-for-one with the marks").is_equal(1)
-	# The shaft is the mark's first stroke; it stops HEAD_INSET short of the victim, so the test
-	# asks which cell it is nearest rather than which cell it lands in.
-	var shaft: PackedVector3Array = _om().intent_marks[0][0]
+	# The mark's LAST point is its tip; it stops MARK_INSET short of the victim, so the test asks
+	# which cell it is nearest rather than which cell it lands in.
+	var strokes: Array = _om().intent_marks[0]
+	var last: PackedVector3Array = strokes[strokes.size() - 1]
+	var tip := last[last.size() - 1]
 	var victim := Vector2(2.5, 2.5)
-	assert_float(Vector2(shaft[1].x, shaft[1].z).distance_to(victim)).override_failure_message(
+	assert_float(Vector2(tip.x, tip.z).distance_to(victim)).override_failure_message(
 			"the mark does not run toward the unit it names").is_less(0.5)
 
 
-# #1042's whole first ask: "an arrow indicating direction". The arrowhead's apex has to sit at the
-# VICTIM end and its legs open back toward the attacker -- which is the half a symmetric two-point
-# line could never say, and the half a from/to swap silently inverts.
-func test_an_intents_arrowhead_points_at_its_victim() -> void:
+# #1059's replacement for #1042's arrowhead (dev: the arrows "just don't look great in practice.
+# Perhaps a narrow cone at the end instead?"). The cone has to CONVERGE on the victim -- wide where
+# the arc leaves off, nothing at the point -- which is the half a symmetric mark cannot say and the
+# half a from/to swap silently inverts.
+func test_an_intents_cone_converges_on_its_victim() -> void:
 	_enable_enemy_ai()
 	var mover := _spawn(PLAYER, Vector2i(1, 1))
 	_spawn(ENEMY, Vector2i(3, 2))
@@ -461,23 +464,94 @@ func test_an_intents_arrowhead_points_at_its_victim() -> void:
 	game._click_choosing_move(Vector2i(2, 2))
 	game.refresh_threat_plan()
 
-	var strokes: Array = _om().intent_marks[0]
+	var strokes: Array[PackedVector3Array] = []
+	strokes.assign(_om().intent_marks[0])
 	assert_int(strokes.size()).override_failure_message(
-			"the mark is not a shaft plus two arrowhead legs").is_equal(3)
-	var shaft: PackedVector3Array = strokes[0]
-	var attacker_end := Vector2(shaft[0].x, shaft[0].z)
-	var tip := Vector2(shaft[1].x, shaft[1].z)
-	for i in [1, 2]:
-		var leg: PackedVector3Array = strokes[i]
-		# Each leg is built back-to-tip, so its far point IS the apex and it is shared with the
-		# shaft's end. Anything else and the head is hanging off the wrong end of the line.
-		assert_float(Vector2(leg[1].x, leg[1].z).distance_to(tip)).override_failure_message(
-				"an arrowhead leg does not meet the shaft's point").is_less(0.001)
-		var heel := Vector2(leg[0].x, leg[0].z)
-		assert_bool(heel.distance_to(attacker_end) < tip.distance_to(attacker_end)) \
-			.override_failure_message(
-				"the arrowhead opens toward the victim rather than back toward the enemy") \
-			.is_true()
+			"the mark is not an arc plus a cone").is_equal(2)
+	var arc: PackedVector3Array = strokes[0]
+	var cone: PackedVector3Array = strokes[1]
+	var attacker_end := Vector2(arc[0].x, arc[0].z)
+	assert_float(Vector2(cone[0].x, cone[0].z).distance_to(Vector2(arc[arc.size() - 1].x, arc[arc.size() - 1].z))) \
+		.override_failure_message("the cone does not begin where the arc leaves off").is_less(0.001)
+	var base := Vector2(cone[0].x, cone[0].z)
+	var point := Vector2(cone[cone.size() - 1].x, cone[cone.size() - 1].z)
+	assert_bool(point.distance_to(attacker_end) > base.distance_to(attacker_end)) \
+		.override_failure_message(
+			"the cone points back at the enemy rather than at the victim").is_true()
+
+	var widths := ThreatLines2D.mark_widths(strokes)
+	var cone_w: PackedFloat32Array = widths[1]
+	assert_float(cone_w[0]).override_failure_message(
+			"the cone's base is no wider than the arc it grows out of").is_greater(1.0)
+	assert_float(cone_w[cone_w.size() - 1]).override_failure_message(
+			"the cone does not converge to nothing at the victim").is_equal_approx(0.0, 0.001)
+	var arc_w: PackedFloat32Array = widths[0]
+	for scale in arc_w:
+		assert_float(scale).override_failure_message(
+				"the arc is not drawn at the mark's own width").is_equal_approx(1.0, 0.001)
+
+
+# WHERE THE MARK LEAVES FROM, asked without naming the tuned number (#1059, dev: "the point of
+# origin needs to come from the actual unit rather than over its head"). A probe is written into
+# the store and read back off real geometry, so the case survives every retune and still reds the
+# moment the height goes back to reading Reach.EYE_HEIGHT -- which is a RULE about what a wall is
+# and must never move for a look.
+func test_the_mark_hangs_at_its_own_height_and_not_the_sight_beams() -> void:
+	var probe := 0.21875   # nothing else in the game is this
+	var kept := ThreatLines2D.MARK_HEIGHT
+	ThreatLines2D.MARK_HEIGHT = probe
+	var chord := ThreatLines2D.segment(Vector2i(1, 1), Vector2i(4, 1), game._board())
+	ThreatLines2D.MARK_HEIGHT = kept
+	assert_float(chord[0].y).override_failure_message(
+			"the mark ignores its own height -- it is still hanging at the sight beam's").is_equal_approx(probe, 0.001)
+	assert_float(chord[1].y).override_failure_message(
+			"only one end of the mark reads the height").is_equal_approx(probe, 0.001)
+
+
+# ...and WHAT IT MEASURES FROM. board.elevation_at is a cell's LOW side, while a body on a ramp
+# stands at the slope's midpoint -- so a mark measured from the low corner sinks into the slope.
+# EYE_HEIGHT's 1.0 happened to equal that half level, which is why the old mark cleared a ramp by
+# coincidence rather than by rule.
+func test_a_mark_on_a_ramp_leaves_from_the_surface_a_body_stands_on() -> void:
+	var board: BoardContext = game._board()
+	var ramp := Vector2i(2, 2)
+	game.board_heights.set_corners(ramp, Vector4i(0, 0, 2, 2))
+	board = game._board()
+	var corners := board.corners_at(ramp)
+	assert_int(board.elevation_at(ramp)).override_failure_message(
+			"the fixture did not build a ramp -- its low side is not the floor").is_equal(0)
+	var surface := Terrain.height_at_uv(corners, 0.5, 0.5)
+	assert_bool(surface > float(board.elevation_at(ramp))).override_failure_message(
+			"the fixture's ramp is flat, so this case cannot tell the two reads apart").is_true()
+	var chord := ThreatLines2D.segment(ramp, Vector2i(5, 2), board)
+	assert_float(chord[0].y).override_failure_message(
+			"the mark measures from the ramp's LOW corner, so it sinks into the slope") \
+		.is_equal_approx(surface + ThreatLines2D.MARK_HEIGHT, 0.001)
+
+
+# The arc, and the reason its lift is authored PER CELL: "shallow" is a property of the shape, so a
+# two-cell mark and a nine-cell one have to bow by the same amount relative to their own run.
+func test_the_mark_bows_above_its_own_chord_in_proportion_to_its_length() -> void:
+	var board: BoardContext = game._board()
+	var short_mark := ThreatLines2D.mark(ThreatLines2D.segment(Vector2i(1, 1), Vector2i(4, 1), board))
+	var long_mark := ThreatLines2D.mark(ThreatLines2D.segment(Vector2i(1, 3), Vector2i(10, 3), board))
+	var flat := ThreatLines2D.MARK_HEIGHT
+	var short_rise := _peak(short_mark) - flat
+	var long_rise := _peak(long_mark) - flat
+	assert_bool(short_rise > 0.001).override_failure_message(
+			"the mark runs straight -- nothing is bowing it above its chord").is_true()
+	assert_bool(long_rise > short_rise * 1.5).override_failure_message(
+			"the bow does not scale with the run, so one lift cannot read as shallow at every length") \
+		.is_true()
+
+
+# The highest point any of a mark's strokes reaches.
+func _peak(strokes: Array[PackedVector3Array]) -> float:
+	var top := -INF
+	for stroke in strokes:
+		for p in stroke:
+			top = maxf(top, p.y)
+	return top
 
 
 func test_the_key_cycles_three_states_and_comes_back_round() -> void:

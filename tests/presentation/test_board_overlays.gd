@@ -955,8 +955,44 @@ func test_a_marks_bead_measure_chains_across_its_own_strokes() -> void:
 	assert_float(shaft_uv2[shaft_uv2.size() - 1].x).override_failure_message(
 			"the shaft's measure is not its own world length").is_equal_approx(4.0, 0.001)
 	assert_float(leg_uv2[0].x).override_failure_message(
-			"the arrowhead restarted the measure instead of continuing the shaft's") \
+			"the cone restarted the measure instead of continuing the arc's") \
 		.is_greater(3.9)
+
+
+# THE TAPER HAS TO REACH THE MESH (#1059). A ribbon's width is a material uniform, so the cone
+# rides `UV2.y` as `scale - 1.0` -- and every assertion about the widths themselves is one
+# ThreatLines2D answers on its own, which a strip builder that ignored them would still pass.
+# This is the wire: the numbers are in the vertices the shader reads, or they are nowhere.
+func test_a_strokes_width_scales_reach_the_vertices_the_shader_reads() -> void:
+	var overlays := _bare_overlays()
+	var cone := PackedVector3Array([Vector3(0, 1, 0), Vector3(1, 1, 0)])
+	var marks: Array[Array] = [[cone]]
+	var widths: Array[Array] = [[PackedFloat32Array([2.5, 0.0])]]
+	overlays.set_marks(BoardOverlays.Layer.INTENT_LINES, marks, Color.WHITE, widths)
+
+	var mesh := _one_marker(overlays, BoardOverlays.Layer.INTENT_LINES).mesh as ImmediateMesh
+	var uv2: PackedVector2Array = mesh.surface_get_arrays(0)[Mesh.ARRAY_TEX_UV2]
+	# Two vertices per point, both rims of the same width.
+	assert_float(uv2[0].y).override_failure_message(
+			"the base's width scale never reached the mesh -- the cone draws at the shaft's width") \
+		.is_equal_approx(1.5, 0.001)
+	assert_float(uv2[uv2.size() - 1].y).override_failure_message(
+			"the point's width scale never reached the mesh -- the cone does not converge") \
+		.is_equal_approx(-1.0, 0.001)
+
+
+# ...and the OTHER half of that encoding: zero means UNCHANGED, which is what keeps the sight bead
+# and ArcLightning's bolts out of this feature by construction rather than by anybody remembering.
+func test_a_stroke_with_no_widths_asks_the_shader_for_no_change() -> void:
+	var overlays := _bare_overlays()
+	overlays.set_lines(BoardOverlays.Layer.SIGHT_TRACE,
+			[PackedVector3Array([Vector3(0, 1, 0), Vector3(3, 1, 0)])], Color.WHITE)
+
+	var mesh := _one_marker(overlays, BoardOverlays.Layer.SIGHT_TRACE).mesh as ImmediateMesh
+	var uv2: PackedVector2Array = mesh.surface_get_arrays(0)[Mesh.ARRAY_TEX_UV2]
+	for point in uv2:
+		assert_float(point.y).override_failure_message(
+				"a stroke that asked for no taper still moved the shader's width").is_equal_approx(0.0, 0.001)
 
 
 # A second stroke of a DIFFERENT mark must NOT continue the first's, or every mark after the first
