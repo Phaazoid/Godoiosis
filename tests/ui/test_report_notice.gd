@@ -88,6 +88,11 @@ func test_the_sign_is_not_a_door() -> void:
 	# GDScript refuses to COMPILE the check -- "Expression is of type Label so it can't be of type
 	# BaseButton". The check has to be made where the type is still open, which is also the only
 	# place the mistake could be made.
+	#
+	# MEASURED 2026-09-21: dropping `mouse_filter = 2` from the .tscn leaves all seven cases green,
+	# because Godot 4.7 already defaults a Label to IGNORE. So the second assertion bites on the
+	# node CHANGING TYPE -- a Button or a RichTextLabel stops at STOP -- and not on that line, which
+	# is an explicit restatement of a default kept where someone would make the swap.
 	var node: Node = game.mission_status_panel.get_node("ReportHint")
 	assert_bool(node is BaseButton).override_failure_message(
 		"the report sign became a button again -- it is a SIGN, and the card already has three doors"
@@ -97,8 +102,10 @@ func test_the_sign_is_not_a_door() -> void:
 
 
 func test_the_sign_sits_clear_of_the_version_stamp() -> void:
-	# It shares a 25px band with the stamp, ten pixels apart, so this one has real teeth: dropping
-	# the post-preset step in _build_report_hint() lands them on the same anchor and reds it.
+	# MEASURED in the 1280x720 design space (#659): the sign sits at x 1133..1220, the stamp at
+	# 1230..1274, both y 6..22, ten pixels apart -- so unlike its predecessor this one has real
+	# teeth. Dropping the post-preset step in _build_report_hint() puts the sign at 1187..1274, on
+	# top of the stamp, and reds both assertions below.
 	#
 	# The guard MEASURES both rects rather than recomputing the arithmetic it is guarding -- the
 	# step is taken from the stamp's own minimum size, so a longer version string pushes the sign
@@ -115,7 +122,7 @@ func test_the_sign_sits_clear_of_the_version_stamp() -> void:
 
 func test_the_sign_does_not_sit_under_the_action_queue_dock() -> void:
 	# The other neighbour in that corner, and a TRIPWIRE rather than a live guard: the dock's panel
-	# begins at y 25 and the strip is above it, so nothing short of moving one of them brings these
+	# begins at y 25 and the strip ends at 22, so nothing short of moving one of them brings these
 	# together. Kept because "put it lower, there is room" is exactly the obvious next edit.
 	var sign_rect := _rect_of(_sign())
 	var dock: Control = game.squad_action_queue_control.get_node("BackgroundPanel")
