@@ -69,9 +69,13 @@ const ENTRIES: Array[Dictionary] = [
 	{"key": "F2", "context": Context.DEV, "when": "",
 		"does": "Reload the board",
 		"action": "dev_reset_scenario"},
-	{"key": "F3", "context": Context.DEV, "when": "",
-		"does": "File a bug report",
-		"action": "dev_report_bug"},
+	# PLAIN F3 IS THE PLAYER'S NOW (#1050) and lives in the BOARD block below. What is left here is
+	# the zero-friction path: no card, no note, straight to a filed report -- which is correct for
+	# the developer and meaningless to anybody else, since the note is the whole of what a stranger
+	# has to say.
+	{"key": "Shift+F3", "context": Context.DEV, "when": "",
+		"does": "File a report instantly",
+		"action": "dev_report_instant"},
 	{"key": "F4", "context": Context.DEV, "when": "3D view",
 		"does": "Flat 2D, full screen",
 		"action": HARDCODED},
@@ -135,6 +139,12 @@ const ENTRIES: Array[Dictionary] = [
 	{"key": "V", "context": Context.BOARD, "when": "",
 		"does": "Enemy ranges",
 		"action": "toggle_enemy_ranges"},
+	# A PLAYER BINDING SINCE #1050. It was a dev key for its whole life, which meant a shipped build
+	# had no hotkey for the one thing a stranger most needs to do -- and this page is half the point
+	# of promoting it, the other half being that a key nobody is told about is not a door.
+	{"key": "F3", "context": Context.BOARD, "when": "",
+		"does": "Report a bug",
+		"action": "report_bug"},
 	{"key": "Shift+click", "context": Context.BOARD, "when": "On an enemy",
 		"does": "Pin its ranges",
 		"action": HARDCODED},

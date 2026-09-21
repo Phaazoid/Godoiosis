@@ -56,6 +56,7 @@ extends Node2D
 @onready var squad_action_queue_control: SquadActionQueueControl = $UILayer/SquadActionQueueControl
 @onready var mission_status_panel: MissionStatusPanel = $UILayer/MissionStatusPanel
 @onready var end_turn_button: EndTurnButton = $UILayer/EndTurnButton
+@onready var report_button: ReportButton = $UILayer/ReportButton
 @onready var cursor_controller: CursorController = $CursorController
 @onready var camera_controller: CameraController = $CameraController
 @onready var scenario_manager: ScenarioManager = $ScenarioManager
@@ -314,6 +315,10 @@ func _wire_signals() -> void:
 	squad_action_queue_control.reorder_requested.connect(_on_queue_reorder)
 	squad_action_queue_control.row_hover_changed.connect(hover_presenter.on_queue_row_hover_changed)
 	end_turn_button.end_turn_requested.connect(_on_end_turn_button_pressed)
+	# The on-screen report mark (#1051). It is dumb and knows nothing about reports, so the wire is
+	# here beside End Turn's -- and it lands on open_report_card, the same one door F3 and the pause
+	# menu row use, rather than a second path to the card.
+	report_button.report_requested.connect(func(): open_report_card(BugReporter.Kind.BUG))
 
 	# HoverPresenter connects its own handlers in its _ready, so this one runs after them.
 	hover_presenter.hovered_unit_changed.connect(overlay_manager.on_hovered_unit_changed)
@@ -366,6 +371,20 @@ func _input(event: InputEvent) -> void:
 	if event.is_action_pressed("toggle_enemy_ranges") and not ModalLock.any_open(get_tree()) \
 			and not _board_locked_for_player():
 		toggle_enemy_ranges()
+
+	# THE PLAYER'S REPORT KEY (#1050). Here rather than in _unhandled_input for the reason Esc and
+	# the two above are: a 3D host sets board_input_delegated and _unhandled_input returns on it
+	# before reaching anything, and the 3D view is the only one a player ever sees.
+	#
+	# EXACT_MATCH, which no other check on this page asks for. `is_action_pressed(action, allow_echo,
+	# exact_match)` IGNORES additional modifiers by default, so a Shift+F3 press matches the plain-F3
+	# binding too -- and Shift+F3 is the dev's note-less instant report (DevController). Without the
+	# third argument one keypress fires both: the card opens AND a report files behind it.
+	#
+	# Deliberately NOT gated on _board_locked_for_player(): a pass playing back at you is exactly
+	# when something looks wrong, and the pause menu is already reachable there (#723).
+	if event.is_action_pressed("report_bug", false, true) and not ModalLock.any_open(get_tree()):
+		open_report_card(BugReporter.Kind.BUG)
 
 func _unhandled_input(event: InputEvent) -> void:
 	# A 3D host (#222) picks board cells itself and calls _on_left_click/_on_right_click

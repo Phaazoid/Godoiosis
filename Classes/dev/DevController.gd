@@ -4,7 +4,8 @@ class_name DevController
 # Dev-only board manipulation, pulled out of game.gd (#22): unit move/duplicate arming,
 # tile-brush paint/erase, and map resize. Holds a back-ref to the Game coordinator for the
 # board primitives it needs. Isolating this keeps the shipping coordinator clean and the dev
-# glue strippable. Also the one home for the dev KEYS (F1/F2/F3, #154) -- see _input.
+# glue strippable. Also the one home for the dev KEYS (F1/F2/Shift+F3, #154 -- plain F3 became the
+# PLAYER's in #1050) -- see _input.
 
 enum PendingAction { NONE, MOVE, DUPLICATE }
 
@@ -62,8 +63,8 @@ func _input(event: InputEvent) -> void:
 # EVERY dev key, in one PUBLIC entry, because this node can only ever hear HALF of them.
 #
 # The project runs two real OS windows (dev tools unembedded), and a key event reaches only the
-# FOCUSED one. This node lives in the game subtree, so F1/F2/F3 and Z/C were all dead whenever the
-# dev-tools window had focus -- which is exactly where authoring puts you: pick a tile from the
+# FOCUSED one. This node lives in the game subtree, so F1/F2/Shift+F3 and Z/C were all dead
+# whenever the dev-tools window had focus -- which is exactly where authoring puts you: pick a tile from the
 # palette, then press Z to turn the rise, and nothing happens until you click the game window back.
 # Reported in play against #340 (dev: "maybe the 5th time this issue has bit us").
 #
@@ -77,7 +78,12 @@ func handle_dev_key(event: InputEvent) -> void:
 		_toggle_dev_overlay()
 	elif event.is_action_pressed("dev_reset_scenario"):
 		game.scenario_manager.reload_current()
-	elif event.is_action_pressed("dev_report_bug"):
+	elif event.is_action_pressed("dev_report_instant"):
+		# SHIFT+F3 SINCE #1050, plain F3 having become the player's card. No exact_match needed on
+		# THIS side: the event would have to carry the modifier this binding requires, and a plain
+		# F3 does not -- it is only the unmodified action that matches a modified press, which is
+		# why game.gd's player check is the one that asks for an exact match.
+		#
 		# The zero-friction path: no card, no note, nothing covering the board, so it is the one
 		# caller that lets report() grab its own frame.
 		var state_name: String = game.GameState.keys()[game.game_state]
@@ -185,7 +191,7 @@ func _handle_zoom_animation_key(event: InputEvent) -> void:
 # Hardcoded physical keycodes rather than Input Map actions, matching the Q/E precedent in
 # CameraRig3D -- and project.godot is the one file concurrent PRs reliably collide on.
 # Here rather than game.gd because that arm dies under a modal (#154), and because these keys are
-# dev-layer exactly like F1/F2/F3.
+# dev-layer exactly like F1/F2/Shift+F3.
 func _handle_brush_keys(event: InputEvent) -> void:
 	var key := event as InputEventKey
 	if key == null or not key.pressed or key.echo:
