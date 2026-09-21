@@ -332,7 +332,16 @@ if (-not $NoUpload) {
     $sql = ("UPDATE release SET version = '$version', url = '$DOWNLOAD_URL'," +
             " announced_at = '$announcedAt' WHERE id = 1;")
     Write-Host "Announcing $tag to the update check..." -ForegroundColor Cyan
-    & wrangler d1 execute $TELEMETRY_DB --remote --config $WORKER_CONFIG --command $sql
+    # RUN IT FROM THE WORKER'S FOLDER. wrangler writes .wrangler/cache into the CURRENT directory
+    # rather than beside --config, so announcing from the repo root left a second cache at the root
+    # holding the account id and owner email -- untracked, unignored, and dirtying the tree after
+    # every release. --config is kept so the call still states what it targets.
+    Push-Location (Split-Path $WORKER_CONFIG -Parent)
+    try {
+        & wrangler d1 execute $TELEMETRY_DB --remote --config $WORKER_CONFIG --command $sql
+    } finally {
+        Pop-Location
+    }
     if ($LASTEXITCODE -ne 0) {
         # The build IS up and tagged at this point, so this is recoverable rather than fatal to what
         # already happened -- and re-running the whole script would re-export for one statement.

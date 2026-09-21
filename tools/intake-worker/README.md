@@ -347,6 +347,11 @@ uploads, and not harmless at all the moment it hands runs back. A read route wou
 own, and a secret compiled into a dev build is not a secret. `wrangler` is already authenticated as
 the account owner, so the query is the whole mechanism: no route, no new surface, nothing to leak.
 
+**Run every `wrangler` command from this folder.** It writes `.wrangler/cache` into the CURRENT
+directory, not beside `--config`, and that cache holds the account id and owner email — so running it
+from the repo root leaves a second copy somewhere nobody is looking. `.gitignore` no longer anchors
+on this path, so a stray one cannot be committed, but one folder is still the intent.
+
 `/version` (#1060) is a read route and does not weaken that rule. It hands back one row that is
 public by intention — the newest version number and the download page — holds nothing anybody
 submitted, and needs no auth for the same reason the endpoint itself needs none. The rule is about
