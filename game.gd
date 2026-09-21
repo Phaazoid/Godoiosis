@@ -106,9 +106,11 @@ var last_clicked_cell: Vector2i = GridUtils.NO_CELL
 # Set once at selection, never re-derived from a cell (#107). Cleared in exit_current_mode, NOT in
 # clear_selection — that runs on every menu PICK, i.e. on the way INTO a mode.
 var selected_unit: Unit = null
-# Destinations the whole squad can follow to; built by enter_group_move_mode, cleared on exit.
-# EMPTY means "nowhere", not "unset", so there is no recompute-if-empty fallback.
-var group_move_followable: Dictionary = {}
+# Destinations the whole squad can follow a leader to; built by either move mode when the selected
+# unit LEADS somebody, cleared on exit. EMPTY means "nowhere", not "unset", so there is no
+# recompute-if-empty fallback -- and the two modes ask the same question for the same reason, which
+# is why this is not named after group move any more (#1069).
+var leader_followable: Dictionary = {}
 var target_pick_cells: Array[Vector2i] = []   # candidates while PICKING_TARGET; read by HoverPresenter
 var _target_pick_callback: Callable           # func(cell: Vector2i) -> void
 # Bumped by every enter_cell_pick_mode. _click_picking_target snapshots it around the callback so a
@@ -638,6 +640,13 @@ func select_unit(unit: Unit, cell: Vector2i) -> void:
 func _click_choosing_move(cell: Vector2i) -> void:
 	var unit := selected_unit
 	var moverange := compute_move_range(unit)
+	# ...and a LEADER may not take a destination its squad cannot follow to (#1069). Read off the
+	# cache enter_move_mode built, exactly as _click_choosing_group_move reads it, so the refusal
+	# and the red tile can never disagree about which cells they mean. Silently, like every other
+	# refusal on this board.
+	if unit.is_leader() and unit.has_squad() and not leader_followable.has(cell):
+		exit_current_mode()
+		return
 	# Physical reach is the click's business; whether the SQUAD permits landing there is queue_action's.
 	if moverange.reachable.keys().has(cell) or moverange.squad_unreachable.keys().has(cell):
 		var path := RulesService.reconstruct_path(moverange.came_from, unit.movement.cell, cell)
@@ -652,7 +661,7 @@ func _click_choosing_group_move(cell: Vector2i) -> void:
 	var leader := selected_unit
 	# The two questions the overlay painted, in the same order: can the leader get there, and can the
 	# squad follow. A red tile is clickable and does nothing, exactly like a squadmate's own.
-	if compute_move_range(leader).reachable.keys().has(cell) and group_move_followable.has(cell):
+	if compute_move_range(leader).reachable.keys().has(cell) and leader_followable.has(cell):
 		squad_manager.queue_group_move(leader.squad, cell, _board())
 	exit_current_mode()
 
@@ -901,7 +910,30 @@ func enter_move_mode(unit: Unit):
 	if unit.has_squad():
 		draw_squad_leader_range(unit.squad, unit.squad.leader.get_projected_destination())
 	var standable := get_move_range(moverange, unit)
-	overlay_manager.show_overlay(OverlayManager.OverlayType.MOVE, standable, OverlayManager.ATLAS_COORDS)
+	# A LEADER MAY NOT STRAND A SQUADMATE (#1069, dev: "we need to block the user from even being
+	# able to make moves with a squad leader that leaves a member of their squad without any legal
+	# moves"). Measured: it could, and by construction rather than by oversight --
+	# compute_move_range builds a cohesion field only for a NON-leader, so a leader's
+	# squad_unreachable is always empty, and SquadPlanValidator._check_leader_range iterates the
+	# plan's MOVE ACTIONS, so a member who queues nothing is invisible to it. The leader walked off,
+	# the plan validated clean, and enforce_contact ejected everybody after the fact.
+	#
+	# Group move already asked exactly this question at its own mode entry, of the same solver, and
+	# followable_destinations already counts "stay put" as a placement -- which is the semantics an
+	# individual move needs. So this is the same sweep at the same moment, and the cache is shared.
+	var green := standable
+	if unit.is_leader() and unit.has_squad():
+		leader_followable = GroupMoveSolver.followable_destinations(unit.squad, _board(), standable)
+		green = []
+		var stranding: Array[Vector2i] = []
+		for cell: Vector2i in standable:
+			if leader_followable.has(cell):
+				green.append(cell)
+			else:
+				stranding.append(cell)
+		overlay_manager.show_overlay(OverlayManager.OverlayType.INVALIDMOVE, stranding,
+				OverlayManager.ATLAS_COORDS)
+	overlay_manager.show_overlay(OverlayManager.OverlayType.MOVE, green, OverlayManager.ATLAS_COORDS)
 	# From where the body IS, until the pointer names a candidate -- HoverPresenter moves it to each
 	# hovered destination. The mode was entered by cancelling any queued move, so the body's cell and
 	# its projected one are the same here.
@@ -918,11 +950,11 @@ func enter_group_move_mode(unit: Unit):
 	# the same red as a squadmate's own out-of-range tiles. Swept once here — per-SQUAD work, the
 	# same cost for one destination as for forty — and the hover and click read the result.
 	var destinations := get_move_range(compute_move_range(unit), unit)
-	group_move_followable = GroupMoveSolver.followable_destinations(unit.squad, _board(), destinations)
+	leader_followable = GroupMoveSolver.followable_destinations(unit.squad, _board(), destinations)
 	var green: Array[Vector2i] = []
 	var red: Array[Vector2i] = []
 	for cell in destinations:
-		if group_move_followable.has(cell):
+		if leader_followable.has(cell):
 			green.append(cell)
 		else:
 			red.append(cell)
@@ -1019,7 +1051,7 @@ func exit_current_mode():
 	overlay_manager.clear_reach_lines()
 	last_clicked_cell = GridUtils.NO_CELL
 	selected_unit = null
-	group_move_followable = {}
+	leader_followable = {}
 	clear_selection()
 	if squad_manager.active_squad != null:
 		squad_manager.validate_squad_plan(squad_manager.active_squad)

@@ -172,11 +172,25 @@ func release(unit: Unit):
 	_detach_from_current_squad(unit)
 
 # #151's loss-of-contact backstop: a member whose SETTLED position cannot path to its leader within
-# COH leaves into a solo squad -- you cannot command what you cannot see or hear. Movement can no
-# longer author a split (the validator refuses it), so what reaches here is displacement the plan
-# didn't choose: a shove around a corner, ice melting under a formation. Called at the two points
-# board state settles, mirroring OrderExecutor._process_downed_pending -- end of a resolution pass
-# and turn start after the terrain/downed ticks. Deliberately not previewed, same as downed ejection.
+# COH leaves into a solo squad -- you cannot command what you cannot see or hear. Called at the two
+# points board state settles, mirroring OrderExecutor._process_downed_pending -- end of a resolution
+# pass and turn start after the terrain/downed ticks. Deliberately not previewed, same as downed
+# ejection.
+#
+# WHAT REACHES HERE, corrected at #1069. This used to say movement could no longer author a split
+# because "the validator refuses it", and that was FALSE for a leader's own move for as long as it
+# was written: SquadPlanValidator._check_leader_range iterates the plan's MOVE ACTIONS and skips the
+# leader by name, so a member who queued nothing was invisible to it -- the leader walked to the
+# edge of its MOV, every member stayed, the plan validated clean, and this sweep ejected them all
+# afterwards. The PLAYER can no longer author that (game.enter_move_mode refuses the destination
+# outright, the way group move always has), but the refusal is at the UI and not in the validator,
+# so the AI and the Play API reach queue_action directly and still land here. That is a declared
+# limit rather than a gap being ignored: the clause belongs in a fixed-point loop that
+# HoverPresenter runs per hovered cell, and a per-member solver sweep at that cadence is a real
+# cost for a path a human can no longer take.
+#
+# Everything else that reaches here is displacement the plan didn't choose: a shove around a
+# corner, ice melting under a formation.
 func enforce_contact() -> void:
 	for member in contact_breaks():
 		leave_squad(member)

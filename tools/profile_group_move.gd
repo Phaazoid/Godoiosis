@@ -106,14 +106,14 @@ func _run() -> void:
 	game.refresh_action_queue(squad)
 	_stamp("refresh_action_queue", Time.get_ticks_usec() - t)
 
-	# HOVER is what game.group_move_followable buys. The sweep is per-SQUAD work, so a single-cell
+	# HOVER is what game.leader_followable buys. The sweep is per-SQUAD work, so a single-cell
 	# query costs nearly what the whole range does, and hover used to pay it on every cell change.
 	# The second stamp is that avoided cost — if it ever approaches the first, the cache stopped
 	# being read. Averaged over a sample, warmed first: the sprite churn in show_hover_move_paths is
 	# part of the real cost, and one cell is one sample.
 	print("\nHOVER — per cell change, averaged over %d destinations" % mini(12, all_destinations.size()))
 	game.selected_unit = leader
-	game.enter_group_move_mode(leader)   # builds game.group_move_followable, which hover reads
+	game.enter_group_move_mode(leader)   # builds game.leader_followable, which hover reads
 	var sample: Array = all_destinations.slice(0, mini(12, all_destinations.size()))
 	for c in sample:
 		game.hover_presenter._hover_choosing_group_move(c)   # warm

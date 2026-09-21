@@ -203,7 +203,7 @@ func _hover_choosing_group_move(cell: Vector2i) -> void:
 	# Reads what enter_group_move_mode computed: per hovered cell it cost 6.8 ms of a 16.7 ms frame
 	# (docs/performance.md). Same two questions, same order, as game._click_choosing_group_move.
 	var followable: bool = game.compute_move_range(leader).reachable.keys().has(cell) \
-		and game.group_move_followable.has(cell)
+		and game.leader_followable.has(cell)
 	if followable:
 		var formation := GroupMoveSolver.plan(leader.squad, cell, game._board())
 		game.overlay_manager.show_hover_move_paths(formation)
@@ -274,14 +274,28 @@ func _hover_choosing_move(cell: Vector2i) -> void:
 		_set_cursor_for_preview(cell, false)
 		return
 
+	# ...and a LEADER's destination its squad cannot follow to is refused the same way (#1069).
+	# Asked HERE as well as at the click, and off the same cache, because the cursor and the click
+	# disagreeing about which cells are legal is the shape _hover_choosing_group_move already
+	# avoids -- it asks the identical two questions in the identical order.
+	var strands: bool = unit.is_leader() and unit.has_squad() and not game.leader_followable.has(cell)
+	if strands:
+		# The reach still moves: what a tile would cost you is worth knowing about one you are being
+		# stopped from taking. What does NOT happen is the path preview and the plan re-validation,
+		# which would describe an order this click cannot author.
+		game.show_player_reach(unit, cell)
+		game.show_reach_lines_at(cell)
+		_set_cursor_for_preview(cell, false)
+		return
+
 	# WHAT YOU WOULD THREATEN FROM THERE, and WHO REACHES YOU THERE (#1069) -- the two halves of
 	# "what happens if I stop here", both re-aimed at the cell under the pointer rather than at the
 	# body. The red is the same layer enter_move_mode painted from the unit's own cell; it simply
 	# follows the candidate now.
 	#
-	# Drawn for any cell inside the move footprint, refused ones included: what a tile costs you is
-	# worth knowing about one you are being stopped from taking, and it is the same sentence either
-	# way.
+	# Drawn for any cell inside the move footprint, refused ones included (see the leader clause
+	# above): what a tile costs you is worth knowing about one you are being stopped from taking,
+	# and it is the same sentence either way.
 	game.show_player_reach(unit, cell)
 	game.show_reach_lines_at(cell)
 
