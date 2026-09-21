@@ -162,7 +162,13 @@ func _hover_idle(cell: Vector2i) -> Dictionary:
 	if hovered.has_squad():
 		game.draw_squad_leader_range(hovered.squad, hovered.squad.leader.get_projected_destination())
 
-	game.overlay_manager.show_overlay(OverlayManager.OverlayType.MOVE, game.get_move_range(moverange, hovered), OverlayManager.ATLAS_COORDS)
+	# Blue where it may stand, red where it could hit from there (#1066) -- the two halves of a Fire
+	# Emblem readout, and the answer to the dev's "nothing for attack range is really outdated". The
+	# red is drawn on HOVER as well as on selection, on his ruling: deciding who to move is when you
+	# want to know who they can touch.
+	var standable: Array[Vector2i] = game.get_move_range(moverange, hovered)
+	game.overlay_manager.show_overlay(OverlayManager.OverlayType.MOVE, standable, OverlayManager.ATLAS_COORDS)
+	game.show_player_reach(hovered, standable)
 	_show_hover_panel(hovered, cell)
 	game.overlay_manager.show_overlay(OverlayManager.OverlayType.INVALIDMOVE, moverange.squad_unreachable.keys(), OverlayManager.ATLAS_COORDS)
 

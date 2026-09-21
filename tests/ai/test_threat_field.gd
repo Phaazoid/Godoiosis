@@ -169,6 +169,41 @@ func test_a_followers_envelope_holds_the_cells_its_leash_files_as_unreachable() 
 				).is_true()
 
 
+# ...and the PUBLIC door over the same walk answers about the origins it is HANDED (#1066). That
+# is the whole reason it exists: the player's own red range rides this walk, and the envelope above
+# is a prediction about an enemy where the player's blue is a PERMISSION -- so the caller names the
+# ground rather than the walk choosing it. A door that quietly re-derived origins would be the
+# duplicate this one was built to avoid.
+func test_reach_from_answers_about_the_origins_it_is_given() -> void:
+	var board: Dictionary = _build_board()
+	var leader: Unit = _spawn(board, Team.Faction.ENEMY, Vector2i(0, 1))
+	var member: Unit = _spawn(board, Team.Faction.ENEMY, Vector2i(4, 1))
+	board.squad_manager.join_squad(member, leader.squad)
+	_bind(leader, AIArchetype.Type.RUSHDOWN)
+	var context := _context(board)
+
+	# One cell in, so the answer is the neighbourhood of that cell and nothing else.
+	var here: Array[Vector2i] = [member.movement.cell]
+	assert_that(_sorted(ThreatField.reach_from(member, context, here))).override_failure_message(
+			"the door widened past the one origin it was given").is_equal(_neighbours(member.movement.cell))
+
+	# ...and the whole envelope in, so it is strictly more. Both sets are derived, so a retuned
+	# archetype or a re-authored weapon moves them together.
+	var whole: Array[Vector2i] = field_origins(context, member)
+	assert_int(ThreatField.reach_from(member, context, whole).size()).override_failure_message(
+			"a whole move envelope reaches no further than one cell -- the case proves nothing"
+			).is_greater(4)
+
+	var none: Array[Vector2i] = []
+	assert_array(ThreatField.reach_from(member, context, none)).override_failure_message(
+			"nowhere to stand still threatened something").is_empty()
+
+
+# The envelope ThreatField itself would use, read back off a built field rather than re-derived.
+func field_origins(context: BoardContext, unit: Unit) -> Array[Vector2i]:
+	return ThreatField.build(context, Team.Faction.PLAYER).move_of(unit)
+
+
 func test_a_sentry_with_no_zone_holds_its_ground() -> void:
 	var board: Dictionary = _build_board()
 	var sentry: Unit = _spawn(board, Team.Faction.ENEMY, Vector2i(0, 1))

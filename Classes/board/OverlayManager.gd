@@ -161,20 +161,21 @@ const ZONE_PATROL_MODULATE := Color(1, 0.5, 0, 0.35)
 const ZONE_DEFEND_MODULATE := Color(1, 0.82, 0.25, 0.45)
 # A static var since #710: the leash reveal made it a play colour, so GameKnobs may write it.
 static var ZONE_HIGHLIGHT_MODULATE := Color(1, 1, 1, 0.45)
-# The enemy threat fill (#710 hover tier): every cell an enemy could reach next turn.
-static var DANGER_MODULATE := Color(1, 0.15, 0.1, 0.3)
-# ...and where they could stand to use it (slice 3). BLUE against a board whose every other tone
-# is warm -- grass, dirt, your own yellow range, this layer's own red -- which a drawn mockup
-# settled: cool is the only thing on that palette that cannot be mistaken for terrain. It sits
-# near the cyan capture zone and the violet deployment zone, which is the risk the dev accepted.
-static var ENEMY_MOVE_MODULATE := Color(0.25, 0.45, 1, 0.45)
-# How far the two tones above fall back for every enemy the pointer is NOT on (slice 4, dev: "when
-# hovering a specific unit, their grid should highlight"). A multiplier rather than a second pair of
-# authored colours, so tuning a tone carries to its own dim twin -- see dimmed_tone for why it moves
-# alpha alone. 1.0 turns the whole distinction off without removing a layer.
-static var ENEMY_RANGE_DIM := 0.4
-# ...and a stroke round the outside of that one enemy's whole footprint, so which field the pointer
-# is on stays legible where the dim and the bright tones are the same hue.
+# YOUR unit's attack reach (#1066): every cell it could hit from anywhere in its move envelope.
+# Red, and it draws UNDER your blue, so what shows is the halo past where you may stand.
+static var REACH_MODULATE := Color(1, 0.15, 0.1, 0.38)
+# ...and the ENEMY's whole field, move and reach together, under both of yours. One unbroken reddish
+# purple on the dev's Fire Emblem ruling (#1066) -- it replaced a red/blue pair that asked the player
+# to read an enemy in the same two-question vocabulary as their own unit. The hue is his pick from
+# four drawn candidates ("barely purple... could perhaps be a little darker"), darkened.
+#
+# Where it crosses your blue, the composite IS the third colour: nothing authors an intersect tint,
+# and nothing should -- a cell that is both is exactly blue-over-purple and reads as such because
+# BoardOverlays sorts MOVE above THREAT.
+static var THREAT_MODULATE := Color(0.72, 0.15, 0.28, 0.5)
+# ...and a stroke round the outside of the hovered enemy's whole footprint. Since #1066 it is the
+# ONLY thing separating that enemy from the rest, so it has to read against the field it encircles
+# (dev: "They shouldn't dim at all, the outline on the main one should be the only differentiator").
 static var FOCUS_OUTLINE_COLOR := Color(1, 1, 1, 0.85)
 
 # Which two CORNERS an outward-facing cell edge runs between, as offsets inside the cell. The corner
@@ -361,11 +362,8 @@ var knockback_ghost_by_unit := {} # { Unit : Sprite2D }
 # own layer. Adding a kind is one line here.
 var zone_layer_map := {}
 var zone_highlight_overlay: TileMapLayer = null   # the Tile Brush's picked zone; built in _ready
-var danger_overlay: TileMapLayer = null   # the #710 threat fill; built in _ready
-var enemy_move_overlay: TileMapLayer = null   # ...and where they could stand to use it (slice 3)
-# The same two for every enemy the pointer is NOT on (slice 4), under both of the above.
-var danger_dim_overlay: TileMapLayer = null
-var enemy_move_dim_overlay: TileMapLayer = null
+var reach_overlay: TileMapLayer = null   # YOUR unit's attack reach (#1066); built in _ready
+var threat_overlay: TileMapLayer = null   # ...and the enemy's one undifferentiated field, under it
 # The stroke round that one enemy's footprint (slice 4), in ThreatLines2D's trace space. Versioned
 # on intent_version's shape, because OverlayMirror polls rather than listening.
 var focus_outline: Array[PackedVector3Array] = []
@@ -435,7 +433,10 @@ func _ready() -> void:
 		OverlayType.INVALIDMOVE: invalidmove_overlay
 	}
 	
-	move_overlay.modulate = Color(1, 1, 0, .5)
+	# BLUE since #1066 -- see BoardOverlays.LAYERS[MOVE], whose literal this restates for the reason
+	# the zone layers below restate theirs. Yellow was the player's move tone for the whole project
+	# before the Fire Emblem readout landed; the blue is the tone the ENEMY wore until this slice.
+	move_overlay.modulate = Color(0.25, 0.45, 1, 0.55)
 	# Through the accessors, never the statics: these two layers wear a PALETTE now, and a raw read
 	# here would paint the authored colour once at setup and stay wrong until the next aim (#422).
 	attack_overlay.modulate = attack_reach_color(null)
@@ -483,35 +484,22 @@ func _ready() -> void:
 	_sight_trace_2d.name = "SightTrace2D"
 	_sight_trace_2d.z_index = TERRAIN_Z_INDEX
 	add_child(_sight_trace_2d)
-	# The threat fill (#710): a duplicate of the move layer, tinted, and placed UNDER it in tree
-	# order so a move range still reads over a threatened cell. The enemy's MOVE tone (slice 3)
-	# goes between the two -- over the reach because the dev ruled a body's standing room the
-	# louder fact, under your own range because the cell you are about to step on must still read.
+	# The two range fills under the move layer (#1066), each a duplicate of it, tinted, and placed
+	# UNDER it in tree order: your blue, then your red beneath it, then the enemy's purple beneath
+	# both. THREAT is inserted first and REACH second, because move_child(x, move_overlay.get_index())
+	# puts each new layer directly under the move layer and pushes the previous one further down.
 	# Tree order here is the 2D's answer to what the sort numbers say in 3D; the two must agree.
 	if move_overlay is TileMapLayer:
-		danger_overlay = move_overlay.duplicate() as TileMapLayer
-		danger_overlay.name = "DangerOverlay"
-		danger_overlay.modulate = DANGER_MODULATE
-		add_child(danger_overlay)
-		move_child(danger_overlay, move_overlay.get_index())
-		enemy_move_overlay = move_overlay.duplicate() as TileMapLayer
-		enemy_move_overlay.name = "EnemyMoveOverlay"
-		enemy_move_overlay.modulate = ENEMY_MOVE_MODULATE
-		add_child(enemy_move_overlay)
-		move_child(enemy_move_overlay, move_overlay.get_index())
-		# The CROWD's two tones (slice 4), inserted UNDER both of the above so the enemy the pointer
-		# is on stays the loud one. Same duplicate-the-move-layer recipe; only the modulate differs,
-		# and it is DERIVED (dimmed_tone) rather than authored, so a knob on the bright tone carries.
-		danger_dim_overlay = move_overlay.duplicate() as TileMapLayer
-		danger_dim_overlay.name = "DangerDimOverlay"
-		danger_dim_overlay.modulate = dimmed_tone(DANGER_MODULATE)
-		add_child(danger_dim_overlay)
-		move_child(danger_dim_overlay, danger_overlay.get_index())
-		enemy_move_dim_overlay = move_overlay.duplicate() as TileMapLayer
-		enemy_move_dim_overlay.name = "EnemyMoveDimOverlay"
-		enemy_move_dim_overlay.modulate = dimmed_tone(ENEMY_MOVE_MODULATE)
-		add_child(enemy_move_dim_overlay)
-		move_child(enemy_move_dim_overlay, danger_overlay.get_index())
+		threat_overlay = move_overlay.duplicate() as TileMapLayer
+		threat_overlay.name = "ThreatOverlay"
+		threat_overlay.modulate = THREAT_MODULATE
+		add_child(threat_overlay)
+		move_child(threat_overlay, move_overlay.get_index())
+		reach_overlay = move_overlay.duplicate() as TileMapLayer
+		reach_overlay.name = "ReachOverlay"
+		reach_overlay.modulate = REACH_MODULATE
+		add_child(reach_overlay)
+		move_child(reach_overlay, move_overlay.get_index())
 	_threat_lines_2d = ThreatLines2D.new()
 	_threat_lines_2d.name = "ThreatLines2D"
 	_threat_lines_2d.z_index = TERRAIN_Z_INDEX
@@ -597,74 +585,44 @@ func _rebuild_intent_marks() -> void:
 	_threat_lines_2d.queue_redraw()
 
 
-# The threat fill (#710): the cells an enemy could reach next turn -- the whole field, or one
-# enemy's while it is under the pointer.
-func show_danger(cells: Array[Vector2i]) -> void:
-	if danger_overlay == null:
+# YOUR unit's attack reach (#1066): every cell it could hit from anywhere in the move envelope the
+# blue layer is drawing. Its own door rather than a second argument to show_overlay, because it is
+# replaced wholesale on every hover change and MOVE is not (show_overlay erases squad tint as it
+# goes, which this layer has no business doing).
+func show_reach(cells: Array[Vector2i]) -> void:
+	if reach_overlay == null:
 		return
-	danger_overlay.clear()
-	draw_cells(danger_overlay, cells, ATLAS_COORDS)
+	reach_overlay.clear()
+	draw_cells(reach_overlay, cells, ATLAS_COORDS)
 
 
-func clear_danger() -> void:
+func clear_reach() -> void:
 	var none: Array[Vector2i] = []
-	show_danger(none)
+	show_reach(none)
 
 
-func restyle_danger() -> void:
-	if danger_overlay != null:
-		danger_overlay.modulate = DANGER_MODULATE
+func restyle_reach() -> void:
+	if reach_overlay != null:
+		reach_overlay.modulate = REACH_MODULATE
 
 
-# The enemy's move envelope (#710 slice 3) -- where a body could STAND, as against where it could
-# reach. Its own door rather than a second argument to show_danger: the two are drawn together by
-# one caller today, and will be cleared independently the moment a reason to show one alone exists.
-func show_enemy_move(cells: Array[Vector2i]) -> void:
-	if enemy_move_overlay == null:
+# The ENEMY's whole field (#1066): move and reach unioned, for every enemy whose ranges are up. ONE
+# door because it is ONE statement -- the split the enemy used to draw is the player's vocabulary now.
+func show_threat(cells: Array[Vector2i]) -> void:
+	if threat_overlay == null:
 		return
-	enemy_move_overlay.clear()
-	draw_cells(enemy_move_overlay, cells, ATLAS_COORDS)
+	threat_overlay.clear()
+	draw_cells(threat_overlay, cells, ATLAS_COORDS)
 
 
-func clear_enemy_move() -> void:
+func clear_threat() -> void:
 	var none: Array[Vector2i] = []
-	show_enemy_move(none)
+	show_threat(none)
 
 
-func restyle_enemy_move() -> void:
-	if enemy_move_overlay != null:
-		enemy_move_overlay.modulate = ENEMY_MOVE_MODULATE
-
-
-# The same two tones for every enemy the pointer is NOT on (slice 4). The four sets arrive DISJOINT
-# from game._redraw_enemy_ranges -- four coincident alpha quads on one cell would otherwise composite
-# differently from the same focused cell over bare ground, so the focused envelope would change tone
-# depending on who happened to overlap it.
-func show_dim_ranges(reach: Array[Vector2i], move: Array[Vector2i]) -> void:
-	if danger_dim_overlay == null:
-		return
-	danger_dim_overlay.clear()
-	draw_cells(danger_dim_overlay, reach, ATLAS_COORDS)
-	enemy_move_dim_overlay.clear()
-	draw_cells(enemy_move_dim_overlay, move, ATLAS_COORDS)
-
-
-func clear_dim_ranges() -> void:
-	var none: Array[Vector2i] = []
-	show_dim_ranges(none, none)
-
-
-func restyle_dim_ranges() -> void:
-	if danger_dim_overlay != null:
-		danger_dim_overlay.modulate = dimmed_tone(DANGER_MODULATE)
-	if enemy_move_dim_overlay != null:
-		enemy_move_dim_overlay.modulate = dimmed_tone(ENEMY_MOVE_MODULATE)
-
-
-# ALPHA ONLY. Multiplying the whole Color the way BLOCKED_REACH_DIM does darkens the hue toward the
-# board until the two tones stop reading as two hues -- drawn both ways before choosing.
-static func dimmed_tone(tone: Color) -> Color:
-	return Color(tone.r, tone.g, tone.b, tone.a * ENEMY_RANGE_DIM)
+func restyle_threat() -> void:
+	if threat_overlay != null:
+		threat_overlay.modulate = THREAT_MODULATE
 
 
 # The BOUNDARY of the hovered enemy's whole footprint -- move and reach together, since what the
@@ -1500,6 +1458,11 @@ func clear_selection_overlays():
 	squad_overlay.clear()
 	invalidmove_overlay.clear()
 	squadrange_overlay.clear()
+	# The player's reach goes with the move layer it belongs to (#1066) -- they are two halves of
+	# one answer about one unit, and a red halo outliving its blue names nobody. The THREAT layer
+	# is deliberately NOT here: an enemy field is up because of a key or a pin, not a selection.
+	if reach_overlay != null:
+		reach_overlay.clear()
 
 # The live terrain state on the board (#50). Drawn from TerrainStateManager after execution,
 # NOT cleared by clear_selection_overlays (or any selection change) — a burning tile stays burning regardless of what

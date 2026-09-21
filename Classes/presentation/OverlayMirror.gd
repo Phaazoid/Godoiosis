@@ -98,24 +98,16 @@ func _process(_delta: float) -> void:
 	_fill_gated(BoardOverlays.Layer.ZONE_HIGHLIGHT, om.zone_highlight_overlay, authoring or om.leash_revealed)
 	if om.zone_highlight_overlay != null:
 		overlays.set_layer_modulate(BoardOverlays.Layer.ZONE_HIGHLIGHT, om.zone_highlight_overlay.modulate)
-	# The threat fill (#710): cells and tint both copied from the 2D.
-	_fill_gated(BoardOverlays.Layer.DANGER, om.danger_overlay, true)
-	if om.danger_overlay != null:
-		overlays.set_layer_modulate(BoardOverlays.Layer.DANGER, om.danger_overlay.modulate)
-	# ...and the move tone over it (slice 3). Its own layer rather than a second tint on DANGER,
-	# because a layer IS a plane and these two overlap on nearly every cell.
-	_fill_gated(BoardOverlays.Layer.ENEMY_MOVE, om.enemy_move_overlay, true)
-	if om.enemy_move_overlay != null:
-		overlays.set_layer_modulate(BoardOverlays.Layer.ENEMY_MOVE, om.enemy_move_overlay.modulate)
-	# ...and the same pair for the CROWD, under both (slice 4). Their tint is copied like every other
-	# layer's rather than re-derived here: the 2D already dimmed it through OverlayManager.dimmed_tone,
-	# so a knob turned on the bright tone reaches the diorama through exactly one spelling.
-	_fill_gated(BoardOverlays.Layer.DANGER_DIM, om.danger_dim_overlay, true)
-	if om.danger_dim_overlay != null:
-		overlays.set_layer_modulate(BoardOverlays.Layer.DANGER_DIM, om.danger_dim_overlay.modulate)
-	_fill_gated(BoardOverlays.Layer.ENEMY_MOVE_DIM, om.enemy_move_dim_overlay, true)
-	if om.enemy_move_dim_overlay != null:
-		overlays.set_layer_modulate(BoardOverlays.Layer.ENEMY_MOVE_DIM, om.enemy_move_dim_overlay.modulate)
+	# YOUR unit's attack reach (#1066): cells and tint both copied from the 2D, ATTACK's shape.
+	_fill_gated(BoardOverlays.Layer.REACH, om.reach_overlay, true)
+	if om.reach_overlay != null:
+		overlays.set_layer_modulate(BoardOverlays.Layer.REACH, om.reach_overlay.modulate)
+	# ...and the enemy's ONE field under it. Its own layer rather than a second tint on REACH, because
+	# a layer IS a plane and these two overlap wherever you are walking into danger -- which is the
+	# cell the whole readout exists to flag.
+	_fill_gated(BoardOverlays.Layer.THREAT, om.threat_overlay, true)
+	if om.threat_overlay != null:
+		overlays.set_layer_modulate(BoardOverlays.Layer.THREAT, om.threat_overlay.modulate)
 
 	# The aim footprint pulses by layer modulate in 2D — the animation rides the poll.
 	_fill(BoardOverlays.Layer.AIM, om.hover_overlay.get_used_cells())

@@ -1528,7 +1528,7 @@ func test_a_shoved_units_ghost_can_be_highlighted() -> void:
 # The threat fill and the leash reveal are 2D layers the mirror copies -- cells AND tint, since
 # both colours are knobs now -- and the leash rides the picked-zone highlight WITHOUT the
 # authoring gate, while the patrol layer itself stays authoring-only.
-func test_an_enemys_reach_and_leash_mirror_in_play_and_the_patrol_layer_does_not() -> void:
+func test_an_enemys_field_and_leash_mirror_in_play_and_the_patrol_layer_does_not() -> void:
 	game.zone_manager.load_dict({
 		"post": {"kind": ZoneManager.Kind.PATROL, "cells": [Vector2i(4, 3), Vector2i(5, 3)]},
 	})
@@ -1541,10 +1541,10 @@ func test_an_enemys_reach_and_leash_mirror_in_play_and_the_patrol_layer_does_not
 	_om().set_zone_visibility(false)
 	game.hover_presenter.update_hover_visuals(sentry.movement.cell)
 	await _settle()
-	assert_that(_sorted_3d(BoardOverlays.Layer.DANGER)).is_equal(_lifted(_om().danger_overlay))
-	assert_bool(_overlays.cells_of(BoardOverlays.Layer.DANGER).size() > 0).override_failure_message(
-			"the case proves nothing -- no reach was drawn").is_true()
-	assert_that(_overlays.layer_modulate(BoardOverlays.Layer.DANGER)).is_equal(OverlayManager.DANGER_MODULATE)
+	assert_that(_sorted_3d(BoardOverlays.Layer.THREAT)).is_equal(_lifted(_om().threat_overlay))
+	assert_bool(_overlays.cells_of(BoardOverlays.Layer.THREAT).size() > 0).override_failure_message(
+			"the case proves nothing -- no threat field was drawn").is_true()
+	assert_that(_overlays.layer_modulate(BoardOverlays.Layer.THREAT)).is_equal(OverlayManager.THREAT_MODULATE)
 	assert_that(_sorted_3d(BoardOverlays.Layer.ZONE_HIGHLIGHT)).is_equal(_lifted(_om().zone_highlight_overlay))
 	assert_bool(_overlays.cells_of(BoardOverlays.Layer.ZONE_HIGHLIGHT).size() > 0).override_failure_message(
 			"the leash never reached the diorama -- the highlight is still gated on authoring").is_true()
@@ -1553,8 +1553,26 @@ func test_an_enemys_reach_and_leash_mirror_in_play_and_the_patrol_layer_does_not
 			"the patrol layer leaked into play alongside the leash").is_equal(0)
 	game.hover_presenter.update_hover_visuals(Vector2i(2, 2))
 	await _settle()
-	assert_int(_overlays.cells_of(BoardOverlays.Layer.DANGER).size()).is_equal(0)
+	assert_int(_overlays.cells_of(BoardOverlays.Layer.THREAT).size()).is_equal(0)
 	assert_int(_overlays.cells_of(BoardOverlays.Layer.ZONE_HIGHLIGHT).size()).is_equal(0)
+
+
+# ...and YOUR unit's reach is the same copy one layer up (#1066) -- the half of the readout a
+# friendly had nothing at all for. Its own case rather than a clause on the one above, because a
+# hovered enemy and a hovered friendly are two branches and neither draws the other's layer.
+func test_a_hovered_friendlys_reach_mirrors_in_play() -> void:
+	var friend := _spawn(PLAYER, Vector2i(2, 2))
+	friend.equipped_weapon = H.make_weapon(3)
+	game.hover_presenter.update_hover_visuals(friend.movement.cell)
+	await _settle()
+	assert_that(_sorted_3d(BoardOverlays.Layer.REACH)).is_equal(_lifted(_om().reach_overlay))
+	assert_bool(_overlays.cells_of(BoardOverlays.Layer.REACH).size() > 0).override_failure_message(
+			"the case proves nothing -- no reach was drawn").is_true()
+	assert_that(_overlays.layer_modulate(BoardOverlays.Layer.REACH)).is_equal(OverlayManager.REACH_MODULATE)
+	game.hover_presenter.update_hover_visuals(Vector2i(9, 9))
+	await _settle()
+	assert_int(_overlays.cells_of(BoardOverlays.Layer.REACH).size()).override_failure_message(
+			"the red halo outlived the blue it belongs to").is_equal(0)
 
 
 # The exact tier's lines AND their numbers reach the diorama on one version (they are one readout),
