@@ -350,6 +350,17 @@ var guard_preview_icons: Array[Sprite2D] = []
 var guard_preview_links: Array[Sprite2D] = []
 var hover_move_preview: MoveAction = null
 var hover_move_previews: Array[MoveAction] = []
+# The stand-in at the cell the pointer is on while a move is being chosen (#1069, dev: "we
+# currently don't show the unit's plan ghost until a new tile is selected, but I think we should
+# show it on move hover"). A DECLARED second store rather than an entry in projected_unit_sprites
+# below, on knockback_ghost_by_unit's precedent, because that dictionary means "a move is QUEUED" to
+# has_projected_unit and to the queue-row hover -- and this is a move nobody has made.
+#
+# It also does NOT hide the real sprite, which every other ghost in this file does. Both of those
+# pair "hide the real one" with "draw a stand-in" because unit_at_pointer leans on that identity:
+# a preview of a move you have not made must not move where the unit IS. The unit stays put and
+# this is additional, which is also what FE shows.
+var hover_ghost_sprites: Array[Sprite2D] = []
 var projected_unit_sprites := {} # { Unit : Sprite2D }
 var knockback_preview_sprites: Array[Node2D] = []
 # The knockback ghosts, keyed so "which sprite stands for this unit?" has an answer for them too.
@@ -883,6 +894,33 @@ func clear_hover_move_path():
 	for m in hover_move_previews:
 		m.clear_preview_sprites()
 	hover_move_previews.clear()
+	clear_hover_ghosts()
+
+
+# A stand-in where the pointer is, for every unit a hovered move would place (#1069) -- one for a
+# single move, one per member for a formation. Replaced wholesale on each call, like every other
+# hover-scoped markup in this file, and taken down by clear_hover_move_path, which every branch
+# that draws a candidate already calls first.
+func show_hover_ghosts(moves: Array[MoveAction]) -> void:
+	clear_hover_ghosts()
+	for move: MoveAction in moves:
+		if move == null or move.actor == null or not is_instance_valid(move.actor):
+			continue
+		var sprite := Sprite2D.new()
+		sprite.texture = move.actor.get_move_texture()
+		sprite.global_position = GridUtils.cell_world(board_tilemap, move.destination)
+		sprite.z_index = Unit.BASE_SPRITE_INDEX
+		sprite.modulate = PROJECTED_MODULATE
+		sprite.offset = Vector2i(0, -8)
+		projected_unit_overlay.add_child(sprite)
+		hover_ghost_sprites.append(sprite)
+
+
+func clear_hover_ghosts() -> void:
+	for sprite: Sprite2D in hover_ghost_sprites:
+		if is_instance_valid(sprite):
+			sprite.queue_free()
+	hover_ghost_sprites.clear()
 
 # Plan-time preview of pending deposits (Law #2 — the board shows the ignite/entrenchment BEFORE
 # you execute). Takes {"cell": Vector2i, "state": Terrain.TileState} entries (mirrors

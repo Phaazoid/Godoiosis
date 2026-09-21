@@ -625,7 +625,7 @@ func _terrain(om: OverlayManager) -> void:
 	_markers(BoardOverlays.Layer.TERRAIN_PREVIEW, preview)
 
 
-# Move-projection ghosts + knockback landing ghosts -> UnitMirror's ghost pool.
+# Move-projection ghosts + move-HOVER stand-ins + knockback landing ghosts -> UnitMirror's pool.
 func _ghost_sync(om: OverlayManager, kb_ghosts: Array[Dictionary]) -> void:
 	var entries: Array[Dictionary] = []
 	for sprite in om.projected_unit_sprites.values():
@@ -635,6 +635,12 @@ func _ghost_sync(om: OverlayManager, kb_ghosts: Array[Dictionary]) -> void:
 		if ghost == null or ghost.texture == null:
 			continue
 		entries.append(_marker(_anchor_px(ghost.global_position), ghost.texture, ghost.modulate))
+	# ...and the MOVE-HOVER stand-ins (#1069), which are their own store because they mean a move
+	# nobody has made. They have to be walked HERE or they are 2D-only -- this loop is the whole of
+	# how a ghost reaches the diorama, and the flat view is the dev-only one.
+	for sprite: Sprite2D in om.hover_ghost_sprites:
+		if is_instance_valid(sprite) and sprite.texture != null:
+			entries.append(_marker(_anchor_px(sprite.global_position), sprite.texture, sprite.modulate))
 	entries.append_array(kb_ghosts)
 	if _last_ghosts == entries:
 		return

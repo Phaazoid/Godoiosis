@@ -205,7 +205,11 @@ func _hover_choosing_group_move(cell: Vector2i) -> void:
 	var followable: bool = game.compute_move_range(leader).reachable.keys().has(cell) \
 		and game.group_move_followable.has(cell)
 	if followable:
-		game.overlay_manager.show_hover_move_paths(GroupMoveSolver.plan(leader.squad, cell, game._board()))
+		var formation := GroupMoveSolver.plan(leader.squad, cell, game._board())
+		game.overlay_manager.show_hover_move_paths(formation)
+		# ...and a stand-in for every member the formation places, not just the leader: what the
+		# player is choosing here is where the whole squad lands.
+		game.overlay_manager.show_hover_ghosts(formation)
 		# ...and what the LEADER would threaten there, and who reaches it (#1069). Only on a
 		# followable cell, unlike the single-unit branch above: an unfollowable one is not a
 		# destination this squad has, so there is no "if you stop here" to answer.
@@ -290,6 +294,12 @@ func _hover_choosing_move(cell: Vector2i) -> void:
 	var squad = unit.squad
 	game.squad_manager.validate_squad_plan_preview(squad, move)
 	game.overlay_manager.show_hover_move_path(move)
+	# ...and the body that would stand there (#1069). After show_hover_move_path, which clears the
+	# whole hover store: drawn before it, the ghost would be swept away by the arrows. The typed
+	# local is required -- a bare literal passed through the untyped `game` ref is not coerced and
+	# fails at RUNTIME (see CLAUDE.md's note on clear_selection_icons).
+	var one: Array[MoveAction] = [move]
+	game.overlay_manager.show_hover_ghosts(one)
 
 	if unit.has_squad():
 		game.overlay_manager.redraw_squad_unit_icons(squad)

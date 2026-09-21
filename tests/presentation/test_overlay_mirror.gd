@@ -1560,19 +1560,22 @@ func test_an_enemys_field_and_leash_mirror_in_play_and_the_patrol_layer_does_not
 # ...and YOUR unit's reach is the same copy one layer up (#1066) -- the half of the readout a
 # friendly had nothing at all for. Its own case rather than a clause on the one above, because a
 # hovered enemy and a hovered friendly are two branches and neither draws the other's layer.
-func test_a_hovered_friendlys_reach_mirrors_in_play() -> void:
+#
+# Driven from a SELECTION rather than a hover since #1069: the red moved off hover entirely, so a
+# case that still hovered would be asserting the mirror copies an empty layer.
+func test_a_selected_friendlys_reach_mirrors_in_play() -> void:
 	var friend := _spawn(PLAYER, Vector2i(2, 2))
 	friend.equipped_weapon = H.make_weapon(3)
-	game.hover_presenter.update_hover_visuals(friend.movement.cell)
+	game._click_idle(friend.movement.cell)
 	await _settle()
 	assert_that(_sorted_3d(BoardOverlays.Layer.REACH)).is_equal(_lifted(_om().reach_overlay))
 	assert_bool(_overlays.cells_of(BoardOverlays.Layer.REACH).size() > 0).override_failure_message(
 			"the case proves nothing -- no reach was drawn").is_true()
 	assert_that(_overlays.layer_modulate(BoardOverlays.Layer.REACH)).is_equal(OverlayManager.REACH_MODULATE)
-	game.hover_presenter.update_hover_visuals(Vector2i(9, 9))
+	game.exit_current_mode()
 	await _settle()
 	assert_int(_overlays.cells_of(BoardOverlays.Layer.REACH).size()).override_failure_message(
-			"the red halo outlived the blue it belongs to").is_equal(0)
+			"the red outlived the selection it belongs to").is_equal(0)
 
 
 # The exact tier's lines AND their numbers reach the diorama on one version (they are one readout),
@@ -1640,3 +1643,30 @@ func test_reach_lines_reach_the_diorama_and_leave_with_the_gesture() -> void:
 	await _settle()
 	assert_int(_overlays.lines_of(BoardOverlays.Layer.REACH_LINES).size()).override_failure_message(
 			"the marks outlived the move gesture in the diorama").is_equal(0)
+
+
+# The MOVE-HOVER stand-in (#1069) reaches the diorama. Its own store, so _ghost_sync had to be
+# taught to walk it -- and nothing in the flat view can see that omission, since the 2D sprite is
+# built either way. A mutant dropping the second loop leaves every 2D case green.
+func test_the_move_hover_ghost_reaches_the_diorama() -> void:
+	var friend := _spawn(PLAYER, Vector2i(2, 2))
+	await _settle()
+	var before := _unit_mirror.ghost_count()
+
+	game.enter_move_mode(friend)
+	game.selected_unit = friend
+	game.hover_presenter.update_hover_visuals(Vector2i(4, 2))
+	await _settle()
+	assert_int(_om().hover_ghost_sprites.size()).override_failure_message(
+			"the flat view drew no stand-in, so this case cannot see the mirror").is_equal(1)
+	assert_int(_unit_mirror.ghost_count()).override_failure_message(
+			"the move-hover stand-in never reached the diorama -- _ghost_sync walks only the "
+			+ "queued-move store").is_equal(before + 1)
+	# ...and the real sprite is still on screen, unlike every other ghost's subject.
+	assert_bool(_unit_mirror.sprite_for(friend).visible).override_failure_message(
+			"the hover ghost hid the real body in the diorama").is_true()
+
+	game.exit_current_mode()
+	await _settle()
+	assert_int(_unit_mirror.ghost_count()).override_failure_message(
+			"the stand-in outlived the gesture in the diorama").is_equal(before)

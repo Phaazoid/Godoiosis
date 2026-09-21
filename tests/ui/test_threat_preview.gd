@@ -700,3 +700,53 @@ func test_the_flat_view_draws_your_movement_range_hollow_and_the_two_washes_soli
 	assert_bool(om.reach_overlay.tile_set == om.threat_overlay.tile_set).override_failure_message(
 			"the two washes stopped sharing one tileset, which is a second thing to keep in step") \
 		.is_true()
+
+
+# --- The move-hover GHOST (#1069) ---------------------------------------------------------------
+
+# The dev: "we currently don't show the unit's plan ghost until a new tile is selected, but I think
+# we should show it on move hover, along with the attack radius from each tile." Measured before
+# building: there was no code path at all -- show_hover_move_path draws ARROWS, and
+# redraw_projected_units rebuilds only from moves that queue_action has already accepted.
+func test_hovering_a_destination_stands_a_ghost_on_it() -> void:
+	var friend := _spawn(PLAYER, Vector2i(2, 2))
+	game.enter_move_mode(friend)
+	game.selected_unit = friend
+	game.hover_presenter.update_hover_visuals(Vector2i(4, 2))
+
+	assert_int(_om().hover_ghost_sprites.size()).override_failure_message(
+			"hovering a destination put no stand-in on it").is_equal(1)
+	assert_that(_om().hover_ghost_sprites[0].global_position).override_failure_message(
+			"the ghost is not standing on the cell under the pointer") \
+		.is_equal(GridUtils.cell_world(game.grid, Vector2i(4, 2)))
+
+
+# ...and the UNIT STAYS PUT. Every other ghost in OverlayManager pairs "draw a stand-in" with
+# "hide the real sprite", because unit_at_pointer leans on that identity -- so a preview of a move
+# nobody has made must not take it. This is the case that refuses the tidy-up making this one
+# consistent with the others.
+func test_the_hover_ghost_does_not_move_where_the_unit_is() -> void:
+	var friend := _spawn(PLAYER, Vector2i(2, 2))
+	game.enter_move_mode(friend)
+	game.selected_unit = friend
+	game.hover_presenter.update_hover_visuals(Vector2i(4, 2))
+
+	assert_bool(friend.visuals.projected).override_failure_message(
+			"the hover ghost hid the real sprite, so the board now says the unit has moved") \
+		.is_false()
+	assert_object(game.unit_at_pointer(Vector2i(2, 2))).override_failure_message(
+			"the unit stopped answering for the cell it is standing on").is_same(friend)
+
+
+# It leaves with the gesture. Both doors: moving the pointer onto a cell outside the footprint,
+# and leaving the mode outright.
+func test_the_hover_ghost_leaves_with_the_gesture() -> void:
+	var friend := _spawn(PLAYER, Vector2i(2, 2))
+	game.enter_move_mode(friend)
+	game.selected_unit = friend
+	game.hover_presenter.update_hover_visuals(Vector2i(4, 2))
+	assert_int(_om().hover_ghost_sprites.size()).is_equal(1)   # precondition, not the claim
+
+	game.exit_current_mode()
+	assert_array(_om().hover_ghost_sprites).override_failure_message(
+			"the stand-in outlived the move gesture").is_empty()
