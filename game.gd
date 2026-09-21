@@ -627,6 +627,12 @@ func _click_idle(cell: Vector2i) -> void:
 func show_selected_reach(unit: Unit) -> void:
 	if unit == null or not is_instance_valid(unit):
 		return
+	# NOT FOR AN ENEMY, which a plain click also selects -- the hotseat allowance means the ring
+	# opens on anybody. #710 slice 3's ruling holds here exactly as it does on hover: an enemy is
+	# read in the ENEMY's own vocabulary, which is the one unbroken purple field, and painting your
+	# red over one would be a second picture of the same fact in the colour that means "yours".
+	if Team.is_enemy(Team.Faction.PLAYER, unit.get_faction()):
+		return
 	show_player_reach(unit, unit.get_projected_destination())
 
 

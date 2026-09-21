@@ -835,3 +835,14 @@ func test_a_held_pulse_is_still_at_its_peak_when_a_plain_one_has_started_falling
 	probe.queue_free()
 	plain_target.queue_free()
 	held_target.queue_free()
+
+
+# ...and NOT for an enemy, which a plain click also selects -- the ring opens on anybody, the
+# hotseat allowance. #710 slice 3's ruling holds at the click exactly as it does on hover: an enemy
+# is read in the enemy's own vocabulary, so painting your red over one would be a second picture of
+# the same fact, in the colour that means "yours".
+func test_selecting_an_enemy_paints_its_field_and_never_your_red() -> void:
+	var foe := _spawn(ENEMY, Vector2i(3, 2))
+	game._click_idle(foe.movement.cell)
+	assert_array(_om().reach_overlay.get_used_cells()).override_failure_message(
+			"selecting an enemy painted its reach in YOUR red").is_empty()
