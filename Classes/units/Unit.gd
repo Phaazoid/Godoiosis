@@ -327,7 +327,9 @@ func remove_block_reason(index: int) -> String:
 		return "There is nothing in that slot."
 	var weapon := inventory[index] as WeaponInstance
 	if weapon != null and unit_instance.is_installed_prosthetic(weapon):
-		return "%s is a fitted limb, not carried gear." % weapon.display_name
+		# shown_name(), never the field (#945): a DERIVED generic carries no name of its own, so the
+		# field is "" and the sentence came out headless -- now that the Toss row wears it, visibly.
+		return "%s is a fitted limb, not carried gear." % weapon.shown_name()
 	return ""
 
 func remove_item(index: int):

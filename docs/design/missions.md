@@ -2,7 +2,7 @@
 
 **Status: ALL FOUR SLICES BUILT 2026-07-28 ([#96](https://github.com/Phaazoid/Godoiosis/issues/96)).** Filed 2026-07-27, when the project acquired a win condition for the first time. Before this, Iosis had ten interlocking systems and no way to finish a battle — which meant a design question could be answered *"is this coherent?"* but never *"does this improve play?"*
 
-**Canon checked through #1024 (2026-09-18).**
+**Canon checked through #1072 (2026-09-21).**
 
 ## What a mission is
 
@@ -231,6 +231,15 @@ as callables rather than reaching for the screen.
 derived from them. An installed prosthetic sits *in* the inventory, so a mover that did not read that
 guard would let a player trade away someone's arm — and a mover that re-asked `is_installed_prosthetic`
 and worded its own sentence would be the second gate #744 exists to prevent.
+
+That is exactly what the IN-BATTLE inventory panel was still doing, found in play at
+[#1072](https://github.com/Phaazoid/Godoiosis/issues/1072): its Toss row re-asked the prosthetic rule
+directly — and asked it with the wrong argument, aborting the popup builder for every carried weapon
+in the game — while the three rows above it already read their gates' own sentences. It reads
+`remove_block_reason` now, and **greys wearing the sentence rather than hiding**, which is the other
+half of the same shape: a row the player cannot use still has to say why (#166). So the gate has two
+consumers on two surfaces and one wording, which is the property that made the fix a one-line read
+instead of a second refusal to keep in step.
 
 **A REDRAW NEVER RUNS INSIDE THE CLICK THAT CAUSED IT.** Every handler is reached from a row's own
 signal, and a refresh frees every row to rebuild them — the emitting one included, which Godot refuses
