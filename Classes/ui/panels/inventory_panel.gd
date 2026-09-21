@@ -165,11 +165,18 @@ func _show_action_popup(index: int):
 			use_btn.pressed.connect(_do_use.bind(index))
 		vbox.add_child(use_btn)
 
-	if not (item is WeaponInstance and unit.unit_instance.is_installed_prosthetic(item.template)):
-		var toss_btn := Button.new()
+	# Unit's own rule (#741), not a second reading of the prosthetic fitting -- the gate this used to
+	# re-ask is the shape #744 collapsed in the three branches above. Disabled wearing the sentence
+	# rather than hidden, for their reason: a row the player cannot use still has to say why (#166).
+	var toss_block := unit.remove_block_reason(index)
+	var toss_btn := Button.new()
+	if toss_block != "":
+		toss_btn.text = "Toss — %s" % toss_block
+		toss_btn.disabled = true
+	else:
 		toss_btn.text = "Toss"
 		toss_btn.pressed.connect(_do_toss.bind(index))
-		vbox.add_child(toss_btn)
+	vbox.add_child(toss_btn)
 
 	var cancel_btn := Button.new()
 	cancel_btn.text = "Cancel"
