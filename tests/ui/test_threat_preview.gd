@@ -750,3 +750,88 @@ func test_the_hover_ghost_leaves_with_the_gesture() -> void:
 	game.exit_current_mode()
 	assert_array(_om().hover_ghost_sprites).override_failure_message(
 			"the stand-in outlived the move gesture").is_empty()
+
+
+# THE FLASH GOES WHITE AND SITS THERE (#1069). The dev, playing #1066's version: "the flashes are
+# very hard to see. Instead of going dark, the flashes should be going white, and linger on the
+# white part of the flash a bit longer, to draw attention."
+#
+# The VALUES are never pinned -- both are sliders he may drag tomorrow -- only the two properties
+# that make it a flash rather than a breathe: the peak is BRIGHTER than resting, and the cycle
+# spends real time AT it. A symmetric ramp touches its peak for one frame, which is what made the
+# dips read as the event.
+func test_the_pin_flash_is_a_flash_rather_than_a_breathe() -> void:
+	var enemy := _spawn(ENEMY, Vector2i(3, 2))
+	game.toggle_enemy_pin(enemy)
+	assert_object(enemy.visuals.pin_tween).override_failure_message(
+			"nothing is flashing, so this case cannot see its own claim").is_not_null()
+
+	var base: Color = enemy.visuals.base_modulate
+	var peak: Color = UnitVisuals.PIN_PULSE_MODULATE
+	assert_bool(peak.r > base.r and peak.g > base.g and peak.b > base.b).override_failure_message(
+			"the pin's peak is not brighter than the sprite at rest, so the cue is a DIP") \
+		.is_true()
+	assert_float(UnitVisuals.PIN_PULSE_HOLD).override_failure_message(
+			"the flash holds for no time at all -- it touches white for one frame and spends the "
+			+ "rest of the cycle coming back, which is what reads as going dark").is_greater(0.0)
+
+
+
+
+# A turned knob reaches a STANDING flash. _sync_pin_flashes is idempotent by design -- it compares
+# "should there be one" against "is there one" -- so it would leave the old endpoints running: a
+# Tween holds what it was started with. #591 found exactly this on the aim pulse, where a retuned
+# colour breathed back to the old one twice a second.
+func test_turning_the_pin_flash_rebuilds_the_one_already_running() -> void:
+	var enemy := _spawn(ENEMY, Vector2i(3, 2))
+	game.toggle_enemy_pin(enemy)
+	var before: Tween = enemy.visuals.pin_tween
+	assert_object(before).is_not_null()
+
+	game.restyle_pin_flashes()
+	assert_object(enemy.visuals.pin_tween).override_failure_message(
+			"the standing flash was torn down and not rebuilt").is_not_null()
+	assert_bool(enemy.visuals.pin_tween == before).override_failure_message(
+			"the standing flash is the SAME tween, so it is still running the old endpoints") \
+		.is_false()
+
+
+# ...and the hold reaches the TWEEN, not just the constant. Pulse gained an optional interval for
+# this, and a caller that forgot to pass it would leave every assertion above green while the flash
+# on screen was unchanged -- the "test the wire" shape, one knob along.
+#
+# Stepped by hand rather than waited out: Tween.custom_step advances a paused tween by an exact
+# delta, so this asks what the two shapes are DOING at one moment instead of putting a second of
+# real clock on the suite.
+func test_a_held_pulse_is_still_at_its_peak_when_a_plain_one_has_started_falling() -> void:
+	var probe := Sprite2D.new()
+	game.add_child(probe)
+	var peak := Color(2.0, 2.0, 2.0, 1.0)
+
+	var plain_target := Sprite2D.new()
+	game.add_child(plain_target)
+	var plain := Pulse.start(probe, plain_target, &"modulate", Color.WHITE, peak, 0.2, 0.0)
+	var held_target := Sprite2D.new()
+	game.add_child(held_target)
+	var held := Pulse.start(probe, held_target, &"modulate", Color.WHITE, peak, 0.2, 0.4)
+	plain.pause()
+	held.pause()
+
+	plain.custom_step(0.2)   # both have just reached the peak
+	held.custom_step(0.2)
+	assert_float(held_target.modulate.r).override_failure_message(
+			"the held pulse never reached its peak at all").is_equal_approx(peak.r, 0.01)
+
+	plain.custom_step(0.1)   # ...and now, halfway into what the hold covers
+	held.custom_step(0.1)
+	assert_bool(plain_target.modulate.r < peak.r - 0.01).override_failure_message(
+			"the plain pulse is not falling, so this case cannot tell the two shapes apart").is_true()
+	assert_float(held_target.modulate.r).override_failure_message(
+			"the hold never reached the tween -- the flash starts coming back the instant it "
+			+ "arrives, which is what reads as a dip rather than a flash").is_equal_approx(peak.r, 0.01)
+
+	plain.kill()
+	held.kill()
+	probe.queue_free()
+	plain_target.queue_free()
+	held_target.queue_free()

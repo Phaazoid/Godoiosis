@@ -418,6 +418,7 @@ const QUEUE_STYLE_SCRIPT := "res://Classes/ui/queue/QueueStyle.gd"
 const BOARD_SPACE_SCRIPT := "res://Classes/presentation/BoardSpace.gd"
 const SIGHT_TRACE_SCRIPT := "res://Classes/board/SightTrace2D.gd"
 const THREAT_LINES_SCRIPT := "res://Classes/board/ThreatLines2D.gd"
+const UNIT_VISUALS_SCRIPT := "res://Classes/units/UnitVisuals.gd"
 const MUSIC_DIRECTOR_SCRIPT := "res://Classes/audio/MusicDirector.gd"
 const STAGING_DUST_SCRIPT := "res://Classes/presentation/StagingDust.gd"
 const ARC_LIGHTNING_SCRIPT := "res://Classes/presentation/ArcLightning.gd"
@@ -473,6 +474,15 @@ const CLASS_KNOBS: Array[Dictionary] = [
 		"tip": "Where an enemy could go AND what it could hit, as one unbroken field. Under both of your tones, so where it crosses your blue the composite IS the intersect colour -- tune it there as well as over bare ground. Its risky neighbours are the violet deployment zone and the mauve invalid-move fill."},
 	# The exact tier (#710 slice 2): what the AI WILL do, as opposed to what it COULD. It has to
 	# read as a promise rather than a possibility, so tune it AGAINST the threat line above.
+	# The PIN flash (#1066, re-cut by #1069). Its own two rows because a cue that says "you asked for
+	# this one" has to be findable at a glance and was tunable nowhere at all -- PIN_PULSE_MODULATE
+	# has been a static var with no row since the day it was written.
+	{"group": "Board markup colours", "label": "Pinned enemy flash", "static": "PIN_PULSE_MODULATE",
+		"script": UNIT_VISUALS_SCRIPT,
+		"tip": "What a shift+clicked enemy's sprite brightens TO. Above 1.0 on each channel washes the art toward white, which is what the dev asked for after the first version read as the unit going dark between beats. It may be brighter than the aim pulse: the two no longer differ by depth, they differ by cadence -- an aim breathes, a pin snaps and sits."},
+	{"group": "Board markup colours", "label": "Pinned enemy flash hold", "static": "PIN_PULSE_HOLD",
+		"script": UNIT_VISUALS_SCRIPT, "min": 0.0, "max": 3.0, "step": 0.05,
+		"tip": "How long it stays at that peak before easing back, in seconds. Zero is the old symmetric breathe, which spends half its cycle returning to normal and reads as a DIP rather than a flash. The ramp either side is half a second, so this is roughly how much of the cycle the cue actually occupies."},
 	{"group": "Board markup colours", "label": "Enemy focus outline (2D+3D)", "static": "FOCUS_OUTLINE_COLOR",
 		"tip": "The stroke round the whole field of the enemy under the pointer. Since #1066 it is the ONLY thing separating that enemy from every other one whose ranges are up -- nothing dims any more -- so it has to read against the threat field, your own two tones and the terrain alike."},
 	{"group": "Board markup colours", "label": "Reach mark (2D+3D)", "static": "MARK_LINE_COLOR", "script": THREAT_LINES_SCRIPT,
@@ -1407,6 +1417,8 @@ static func read_static(name: String) -> Variant:
 		"MARK_INSET": return ThreatLines2D.MARK_INSET
 		"CONE_LENGTH": return ThreatLines2D.CONE_LENGTH
 		"CONE_WIDTH_SCALE": return ThreatLines2D.CONE_WIDTH_SCALE
+		"PIN_PULSE_MODULATE": return UnitVisuals.PIN_PULSE_MODULATE
+		"PIN_PULSE_HOLD": return UnitVisuals.PIN_PULSE_HOLD
 		"SQUAD_RING_ALPHA": return OverlayManager.SQUAD_RING_ALPHA
 		"SQUAD_RING_PULSE_GAIN": return OverlayManager.SQUAD_RING_PULSE_GAIN
 		"KNOCKBACK_MODULATE": return OverlayManager.KNOCKBACK_MODULATE
@@ -1610,6 +1622,18 @@ static func write_static(host: Node3D, name: String, value: Variant) -> void:
 		"MARK_INSET": ThreatLines2D.MARK_INSET = value
 		"CONE_LENGTH": ThreatLines2D.CONE_LENGTH = value
 		"CONE_WIDTH_SCALE": ThreatLines2D.CONE_WIDTH_SCALE = value
+		# Both need a REBUILD rather than a re-push: a running Tween holds the endpoints it was
+		# STARTED with, so a turned value reaches a standing flash only by the flash being rebuilt.
+		# That is #591's lesson from the aim pulse, which breathed back to its old colour twice a
+		# second after a knob moved -- right in a screenshot and wrong in motion.
+		"PIN_PULSE_MODULATE":
+			UnitVisuals.PIN_PULSE_MODULATE = value
+			_restyle_pin_flashes(host)
+			return
+		"PIN_PULSE_HOLD":
+			UnitVisuals.PIN_PULSE_HOLD = value
+			_restyle_pin_flashes(host)
+			return
 		"SQUAD_RING_ALPHA": OverlayManager.SQUAD_RING_ALPHA = value
 		"SQUAD_RING_PULSE_GAIN": OverlayManager.SQUAD_RING_PULSE_GAIN = value
 		"KNOCKBACK_MODULATE": OverlayManager.KNOCKBACK_MODULATE = value
@@ -2198,6 +2222,14 @@ static func _refresh_mission_status(host: Node3D) -> void:
 # The action queue's re-apply (#685). Deliberately NOT game.refresh_action_queue, which is the
 # mission-status precedent's shape: that door re-RESOLVES the plan, and an element colour is a UI
 # fact the panel can repaint from its own cached entries.
+static func _restyle_pin_flashes(host: Node3D) -> void:
+	if host == null:
+		return
+	var game_2d: Node2D = host.game
+	if game_2d != null:
+		game_2d.restyle_pin_flashes()
+
+
 static func _restyle_action_queue(host: Node3D) -> void:
 	if host == null:
 		return

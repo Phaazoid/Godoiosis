@@ -1893,6 +1893,15 @@ func _sync_pin_flashes() -> void:
 			unit.visuals.set_pinned(pinned_enemies.has(unit.get_instance_id()))
 
 
+# ...and the dev-knob door beside it (#1069). NOT the sweep above, which is idempotent by design and
+# would therefore leave a standing flash exactly as it was: a running Tween holds the endpoints it
+# was started with, so the only way a turned colour or hold reaches one is to rebuild it.
+func restyle_pin_flashes() -> void:
+	for unit: Unit in _all_units():
+		if is_instance_valid(unit) and unit.visuals != null:
+			unit.visuals.restyle_pin_flash()
+
+
 func _without(cells: Array[Vector2i], taken: Array[Vector2i]) -> Array[Vector2i]:
 	var seen := {}
 	for cell: Vector2i in taken:
