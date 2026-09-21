@@ -162,13 +162,16 @@ func _hover_idle(cell: Vector2i) -> Dictionary:
 	if hovered.has_squad():
 		game.draw_squad_leader_range(hovered.squad, hovered.squad.leader.get_projected_destination())
 
-	# Blue where it may stand, red where it could hit from there (#1066) -- the two halves of a Fire
-	# Emblem readout, and the answer to the dev's "nothing for attack range is really outdated". The
-	# red is drawn on HOVER as well as on selection, on his ruling: deciding who to move is when you
-	# want to know who they can touch.
+	# BLUE ALONE ON HOVER (#1069), where #1066 drew blue and red both. The dev, on 3D FE: "hovering a
+	# unit doesn't show the attack range at all, actually. Selecting a unit, though... brings up the
+	# unit's attack radius from the unit's tile." That repeals his own earlier ruling here -- the red
+	# WAS on hover deliberately -- and the reason it moves is what the red now means: it grew from
+	# everywhere the unit could walk, which is most of the board and worth little, and it now grows
+	# from one cell, which is worth something only once you have said which cell. Hover is before
+	# that; the ring and the move gesture are after it. Painted by game._click_idle and by
+	# HoverPresenter's own move-hover branches respectively.
 	var standable: Array[Vector2i] = game.get_move_range(moverange, hovered)
 	game.overlay_manager.show_overlay(OverlayManager.OverlayType.MOVE, standable, OverlayManager.ATLAS_COORDS)
-	game.show_player_reach(hovered, standable)
 	_show_hover_panel(hovered, cell)
 	game.overlay_manager.show_overlay(OverlayManager.OverlayType.INVALIDMOVE, moverange.squad_unreachable.keys(), OverlayManager.ATLAS_COORDS)
 
@@ -203,9 +206,10 @@ func _hover_choosing_group_move(cell: Vector2i) -> void:
 		and game.group_move_followable.has(cell)
 	if followable:
 		game.overlay_manager.show_hover_move_paths(GroupMoveSolver.plan(leader.squad, cell, game._board()))
-		# ...and who reaches the LEADER there (#1069). Only on a followable cell, unlike the
-		# single-unit branch above: an unfollowable one is not a destination this squad has, so
-		# there is no "if you stop here" to answer.
+		# ...and what the LEADER would threaten there, and who reaches it (#1069). Only on a
+		# followable cell, unlike the single-unit branch above: an unfollowable one is not a
+		# destination this squad has, so there is no "if you stop here" to answer.
+		game.show_player_reach(leader, cell)
 		game.show_reach_lines_at(cell)
 	_set_cursor_for_preview(cell, followable)
 
@@ -266,10 +270,15 @@ func _hover_choosing_move(cell: Vector2i) -> void:
 		_set_cursor_for_preview(cell, false)
 		return
 
-	# WHO REACHES YOU HERE (#1069) -- one mark per enemy whose field covers this candidate. Drawn
-	# for any cell inside the move footprint, refused ones included: "these could hit you there" is
-	# worth knowing about a tile you are being stopped from taking, and it is the same sentence
-	# either way.
+	# WHAT YOU WOULD THREATEN FROM THERE, and WHO REACHES YOU THERE (#1069) -- the two halves of
+	# "what happens if I stop here", both re-aimed at the cell under the pointer rather than at the
+	# body. The red is the same layer enter_move_mode painted from the unit's own cell; it simply
+	# follows the candidate now.
+	#
+	# Drawn for any cell inside the move footprint, refused ones included: what a tile costs you is
+	# worth knowing about one you are being stopped from taking, and it is the same sentence either
+	# way.
+	game.show_player_reach(unit, cell)
 	game.show_reach_lines_at(cell)
 
 	# Live preview: build the move this click WOULD queue and validate the plan against it, so

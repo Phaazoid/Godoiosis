@@ -121,16 +121,7 @@ func test_hovering_an_enemy_never_borrows_your_own_movement_layers() -> void:
 	assert_bool(_om().threat_overlay.get_used_cells().size() > 0).is_true()
 
 
-# --- YOUR unit's two tones (#1066) -------------------------------------------------------------
-
-# The blue cells plus the one the body is standing on -- get_move_range drops that cell because
-# there is nothing to say about walking where you already are, and everything about shooting there.
-func _with_own(standable: Array[Vector2i], unit: Unit) -> Array[Vector2i]:
-	var out: Array[Vector2i] = standable.duplicate()
-	if not out.has(unit.movement.cell):
-		out.append(unit.movement.cell)
-	return out
-
+# --- YOUR unit's two tones (#1066, retimed and narrowed by #1069) ------------------------------
 
 # Every cell this unit's weapon could touch from `origins` BY THE GEOMETRY ALONE -- no vertical
 # gate, no counter rim -- so it is a strict superset of what the readout may legally paint. A
@@ -144,66 +135,64 @@ func _geometric_reach(unit: Unit, origins: Array[Vector2i]) -> Dictionary:
 	return out
 
 
-func test_a_hovered_friendly_says_where_it_may_stand_and_where_it_could_hit() -> void:
-	# The dev's opening complaint (#1066): "friendly units having different colors for showing
-	# movement and nothing for attack range is really outdated... Blue for movement, attack range
-	# as red, like everyone else." Two disjoint questions on two layers, both on HOVER.
+func test_a_hovered_friendly_says_where_it_may_stand_and_nothing_about_its_reach() -> void:
+	# #1066 drew both on hover, on the dev's ruling then. #1069 repeals that half of it after he
+	# looked at 3D FE again: "hovering a unit doesn't show the attack range at all, actually."
 	var friend := _spawn(PLAYER, Vector2i(2, 2))
 	game.hover_presenter.update_hover_visuals(friend.movement.cell)
-	var moverange: Dictionary = game.compute_move_range(friend)
-	var standable: Array[Vector2i] = game.get_move_range(moverange, friend)
+	var standable: Array[Vector2i] = game.get_move_range(game.compute_move_range(friend), friend)
 	assert_that(_sorted(_om().move_overlay.get_used_cells())).override_failure_message(
 			"the blue is not this unit's move range").is_equal(_sorted(standable))
+	assert_array(_om().reach_overlay.get_used_cells()).override_failure_message(
+			"hovering a unit still paints its attack range").is_empty()
+
+
+# ...and SELECTING it does (dev: "Selecting a unit, though (for us, bringing up the radial menu,
+# and also choosing a move, etc), brings up the unit's attack radius from the unit's tile").
+#
+# Driven through the real click arm, not by calling the door: opening the ring paints no overlays of
+# its own, so what a case calling show_selected_reach directly could not see is whether anything
+# reaches it.
+func test_selecting_a_unit_shows_its_reach_from_the_tile_it_stands_on() -> void:
+	var friend := _spawn(PLAYER, Vector2i(2, 2))
+	game._click_idle(friend.movement.cell)
+
 	var red: Array[Vector2i] = _om().reach_overlay.get_used_cells()
 	assert_bool(red.size() > 0).override_failure_message(
-			"a friendly still says nothing about where it could hit").is_true()
-
-	# It reaches at least as far as standing still lets it -- you need not move to attack...
-	for cell: Vector2i in _geometric_reach(friend, [friend.movement.cell]):
-		assert_bool(red.has(cell)).override_failure_message(
-				"%s is in reach from where this unit stands and the red does not cover it" % cell).is_true()
-	# ...and no further than the whole envelope's geometry allows.
-	var envelope := _geometric_reach(friend, _with_own(standable, friend))
+			"selecting a unit says nothing about where it could hit").is_true()
+	# FROM ONE CELL, not from the envelope. #1066 grew it from every cell drawn blue, which answers
+	# "could this unit ever hit that square" -- true of most of the board. The envelope is derived
+	# here only to prove the narrow answer is strictly smaller, which is the whole repeal.
+	var here := _geometric_reach(friend, [friend.movement.cell])
 	for cell: Vector2i in red:
-		assert_bool(envelope.has(cell)).override_failure_message(
-				"%s is red and no cell of the blue can reach it" % cell).is_true()
+		assert_bool(here.has(cell)).override_failure_message(
+				"%s is red and this unit cannot reach it from the tile it stands on" % cell).is_true()
+	var standable: Array[Vector2i] = game.get_move_range(game.compute_move_range(friend), friend)
+	assert_int(_geometric_reach(friend, standable).size()).override_failure_message(
+			"fixture is vacuous: walking first reaches nothing extra, so one origin and the whole "
+			+ "envelope are the same answer here").is_greater(here.size())
 
-	game.hover_presenter.update_hover_visuals(Vector2i(0, 0))
-	assert_array(_om().move_overlay.get_used_cells()).is_empty()
-	assert_array(_om().reach_overlay.get_used_cells()).override_failure_message(
-			"the red halo outlived the blue it belongs to").is_empty()
 
+# ...and choosing a move moves it to the cell under the pointer, which is the question actually
+# being asked while you stand over a candidate: not "could I ever hit that" but "what do I threaten
+# if I stop HERE".
+func test_choosing_a_move_shows_the_reach_from_the_cell_under_the_pointer() -> void:
+	var friend := _spawn(PLAYER, Vector2i(2, 2))
+	game.enter_move_mode(friend)
+	game.selected_unit = friend
+	var resting := _sorted(_om().reach_overlay.get_used_cells())
+	assert_bool(resting.size() > 0).override_failure_message(
+			"entering move mode drew no reach at all, so the move below proves nothing").is_true()
 
-func test_a_friendlys_reach_grows_only_from_cells_it_may_actually_be_ordered_to() -> void:
-	# The one thing in this slice that is not a colour. ThreatField._origins_of deliberately unions
-	# `reachable` with `squad_unreachable` (slice 4: cohesion clamps a follower to where its leader
-	# stands NOW, while the enemy turn moves the leader first) -- right for a PREDICTION about an
-	# enemy, wrong for a PERMISSION about your own unit. A mutant pointing the player's reach at
-	# ThreatField's own origins reddens here.
-	var leader := _spawn(PLAYER, Vector2i(2, 2))
-	var follower := _spawn(PLAYER, Vector2i(3, 2))
-	game.squad_manager.join_squad(follower, leader.squad)
-	var moverange: Dictionary = game.compute_move_range(follower)
-	var clamped: Dictionary = moverange["squad_unreachable"]
-	assert_int(clamped.size()).override_failure_message(
-			"fixture is vacuous: nothing is outside this follower's leash, so both origin sets agree"
-			).is_greater(0)
-
-	var permitted := _with_own(game.get_move_range(moverange, follower), follower)
-	var wider: Array[Vector2i] = permitted.duplicate()
-	for cell: Vector2i in clamped:
-		if not wider.has(cell):
-			wider.append(cell)
-	var narrow := ThreatField.reach_from(follower, game._board(), permitted)
-	var wide := ThreatField.reach_from(follower, game._board(), wider)
-	assert_int(wide.size()).override_failure_message(
-			"fixture is vacuous: the clamped ground reaches nothing the permitted ground does not"
-			).is_greater(narrow.size())
-
-	game.hover_presenter.update_hover_visuals(follower.movement.cell)
-	assert_that(_sorted(_om().reach_overlay.get_used_cells())).override_failure_message(
-			"the red grew from ground this squad may not actually be ordered onto"
-			).is_equal(_sorted(narrow))
+	var candidate := Vector2i(4, 2)
+	game.hover_presenter.update_hover_visuals(candidate)
+	var moved := _sorted(_om().reach_overlay.get_used_cells())
+	assert_bool(moved == resting).override_failure_message(
+			"the reach stayed on the body's own cell while the pointer named another").is_false()
+	var from_candidate := _geometric_reach(friend, [candidate])
+	for cell: Vector2i in moved:
+		assert_bool(from_candidate.has(cell)).override_failure_message(
+				"%s is red and the hovered cell cannot reach it" % cell).is_true()
 
 
 func test_a_hold_enemys_field_never_spreads_past_what_it_can_hit_from_where_it_stands() -> void:

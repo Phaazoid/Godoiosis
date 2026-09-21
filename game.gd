@@ -592,6 +592,7 @@ func _click_pre_mission(cell: Vector2i) -> void:
 	var target := unit_at_pointer(cell)
 	if target != null:
 		select_unit(target, cell)
+		show_selected_reach(target)
 		main_action_menu.show_main_menu(target, get_viewport().get_mouse_position())
 		return
 	if mission_controller.can_deploy_another() and mission_controller.open_deployment_cells().has(cell):
@@ -605,7 +606,27 @@ func _click_idle(cell: Vector2i) -> void:
 		return
 	select_unit(target, cell)
 	game_state = GameState.TILE_SELECTED
+	show_selected_reach(target)
 	main_action_menu.show_main_menu(target, get_viewport().get_mouse_position())
+
+# WHAT A SELECTED UNIT THREATENS FROM WHERE IT STANDS (#1069, dev: "Selecting a unit, though (for
+# us, bringing up the radial menu, and also choosing a move, etc), brings up the unit's attack
+# radius from the unit's tile").
+#
+# It is painted at the CLICK rather than by the ring, because opening the ring draws no overlays of
+# its own -- what is on screen while it is up is whatever the last hover left, and TILE_SELECTED's
+# hover branch clears nothing and draws nothing. Taking it down needs no door either: every close,
+# pick or back-out, runs MainActionMenu._on_menu_cancelled -> clear_selection ->
+# clear_selection_overlays, which already owns this layer.
+#
+# THE PROJECTED CELL, NOT THE BODY'S, because enter_attack_mode already reads
+# get_projected_destination() as its own reach origin: a unit with a queued move attacks from where
+# it will stand, and the ring's red and the aim's red have to be one answer about one unit.
+func show_selected_reach(unit: Unit) -> void:
+	if unit == null or not is_instance_valid(unit):
+		return
+	show_player_reach(unit, unit.get_projected_destination())
+
 
 # THE select write point (#107) -- the selection is stored, never re-derived from a cell. Two doors
 # reach it: a click on the board, and right-click re-opening a queued move's planning.
@@ -881,7 +902,10 @@ func enter_move_mode(unit: Unit):
 		draw_squad_leader_range(unit.squad, unit.squad.leader.get_projected_destination())
 	var standable := get_move_range(moverange, unit)
 	overlay_manager.show_overlay(OverlayManager.OverlayType.MOVE, standable, OverlayManager.ATLAS_COORDS)
-	show_player_reach(unit, standable)
+	# From where the body IS, until the pointer names a candidate -- HoverPresenter moves it to each
+	# hovered destination. The mode was entered by cancelling any queued move, so the body's cell and
+	# its projected one are the same here.
+	show_player_reach(unit, unit.movement.cell)
 	if not unit.is_leader():
 		var unreachable = moverange.squad_unreachable.keys()
 		overlay_manager.show_overlay(OverlayManager.OverlayType.INVALIDMOVE, unreachable, OverlayManager.ATLAS_COORDS)
@@ -903,7 +927,7 @@ func enter_group_move_mode(unit: Unit):
 		else:
 			red.append(cell)
 	overlay_manager.show_overlay(OverlayManager.OverlayType.MOVE, green, OverlayManager.ATLAS_COORDS)
-	show_player_reach(unit, green)   # the FOLLOWABLE set only: the red grows from the drawn blue
+	show_player_reach(unit, unit.movement.cell)   # the leader's own cell; the pointer moves it
 	overlay_manager.show_overlay(OverlayManager.OverlayType.INVALIDMOVE, red, OverlayManager.ATLAS_COORDS)
 
 # What the aim being taken will PRODUCE (#413). Overwatch is declared through the normal targeting
@@ -1928,25 +1952,26 @@ func get_move_range(result: Dictionary, unit: Unit) -> Array[Vector2i]:
 	return cells
 
 # YOUR unit's attack reach (#1066, dev: "Blue for movement, attack range as red, like everyone
-# else"). Grown from exactly the cells drawn BLUE plus the one the body is standing on -- get_move_range
-# drops that cell because there is nothing to say about walking where you already are, and everything
-# to say about shooting from there.
+# else") FROM ONE CELL (#1069).
 #
-# Taking the drawn set rather than the move-range Dictionary is the rule, and it is the rule at every
-# caller: the red answers "from anywhere the blue says you may stand", so the two can never disagree
-# about what is offered. In group-move mode the blue is only the FOLLOWABLE subset, and the red
-# narrows with it for free.
+# THAT REPEALS #1066's OWN RULE, which was that the red grew from every cell drawn blue plus the
+# body's own -- the union over everywhere the unit could walk. The dev, after looking at 3D FE
+# again: "it doesn't show the attack range as the total possible attack range... Selecting a unit
+# brings up the unit's attack radius from the unit's tile." A union answers "could this unit ever
+# hit that square", which is true of most of the board and tells you nothing; one origin answers
+# "what do I threaten if I stand HERE", which is the question being asked while you choose.
+#
+# The caller names the cell and nothing is appended, so the one place that decides which cell it is
+# stays the one that knows what the player is doing: the body's own while the ring is up, the cell
+# under the pointer while a move is being chosen.
 #
 # It rides ThreatField.reach_from rather than a second walk -- see there for why the origins are
 # passed in rather than looked up, which is the difference between a permission and a prediction.
-func show_player_reach(unit: Unit, standable: Array[Vector2i]) -> void:
+func show_player_reach(unit: Unit, origin: Vector2i) -> void:
 	if unit == null or not is_instance_valid(unit):
 		overlay_manager.clear_reach()
 		return
-	var origins: Array[Vector2i] = standable.duplicate()
-	if not origins.has(unit.movement.cell):
-		origins.append(unit.movement.cell)
-	overlay_manager.show_reach(ThreatField.reach_from(unit, _board(), origins))
+	overlay_manager.show_reach(ThreatField.reach_from(unit, _board(), [origin] as Array[Vector2i]))
 
 # Where a set of units' SPRITES are -- projected, not live (#126), so the target-pick overlay marks the
 # tile the player can actually see and click. Both no-plan callers (squad-up, join-squad) are gated on an
