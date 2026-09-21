@@ -74,13 +74,17 @@ $ITCH_TARGET = 'phlogistongames/iosis:windows'
 # alter-2026-09-20-release.sql exists only so the route can answer before the first push.
 $DOWNLOAD_URL = 'https://phlogistongames.itch.io/iosis'
 
-# The intake Worker's database, and its config. --config is needed because this script runs from the
-# repo root, where wrangler would otherwise find no wrangler.toml -- pull-runs.ps1 gets away without
-# it only because it sits in that folder.
+# The intake Worker's database. Its config path is built from $root below, not from here.
 $TELEMETRY_DB = 'iosis-telemetry'
-$WORKER_CONFIG = 'tools\intake-worker\wrangler.toml'
 
 $root = Split-Path $PSScriptRoot -Parent
+
+# --config is needed because wrangler looks for a wrangler.toml in the CURRENT DIRECTORY, and this
+# script does not run in the Worker's folder -- pull-runs.ps1 gets away without it only because it
+# sits there. ABSOLUTE, off $root, for the reason every other path in this file is: nothing here may
+# depend on where it was invoked from, and a relative path would work from the repo root and fail
+# silently-looking ("no config file found") from anywhere else.
+$WORKER_CONFIG = Join-Path $root 'tools\intake-worker\wrangler.toml'
 
 # One reader for "what does this config file say", used for the version and for both halves of the
 # export path. Refuses rather than returning empty: every one of these is load-bearing downstream,
