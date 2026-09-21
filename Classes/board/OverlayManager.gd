@@ -483,13 +483,19 @@ func _ready() -> void:
 	# puts each new layer directly under the move layer and pushes the previous one further down.
 	# Tree order here is the 2D's answer to what the sort numbers say in 3D; the two must agree.
 	if move_overlay is TileMapLayer:
+		# ...and each takes a plain FILL tileset back, because MOVE's own is a hollow frame since
+		# #1069 and these two are washes (the dev's ruling: only the player's movement range loses
+		# its centres). They are duplicated off MOVE for the tree position and the cell metric, so
+		# the art has to be put back explicitly -- INVALIDMOVE's is the same sheet MOVE used to draw.
 		threat_overlay = move_overlay.duplicate() as TileMapLayer
 		threat_overlay.name = "ThreatOverlay"
+		threat_overlay.tile_set = invalidmove_overlay.tile_set
 		threat_overlay.modulate = THREAT_MODULATE
 		add_child(threat_overlay)
 		move_child(threat_overlay, move_overlay.get_index())
 		reach_overlay = move_overlay.duplicate() as TileMapLayer
 		reach_overlay.name = "ReachOverlay"
+		reach_overlay.tile_set = invalidmove_overlay.tile_set
 		reach_overlay.modulate = REACH_MODULATE
 		add_child(reach_overlay)
 		move_child(reach_overlay, move_overlay.get_index())

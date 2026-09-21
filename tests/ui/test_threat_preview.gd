@@ -691,3 +691,23 @@ func test_an_enemy_your_plan_only_wounds_still_previews_its_attack() -> void:
 	assert_int(game.ai_controller.preview_faction_turn(PLAYER).size()).override_failure_message(
 			"a wounded enemy stopped being previewed -- the filter is dropping the living") \
 		.is_equal(1)
+
+
+# --- The movement range draws as GRIDLINES (#1069) ----------------------------------------------
+
+# The flat view's half of it. MOVE's own tileset carries the hollow tile; the two washes under it
+# are duplicated off MOVE for their tree position and cell metric, so they have to be handed a fill
+# tileset back explicitly -- and a duplicate that quietly inherited the frame is exactly the bug
+# this pins, because it would leave the enemy's whole field drawn as an empty grid.
+func test_the_flat_view_draws_your_movement_range_hollow_and_the_two_washes_solid() -> void:
+	var om := _om()
+	assert_object(om.reach_overlay).override_failure_message(
+			"the reach layer was never built, so this case cannot see its own claim").is_not_null()
+	assert_bool(om.reach_overlay.tile_set == om.move_overlay.tile_set).override_failure_message(
+			"your reach inherited the movement range's hollow tile -- the wash is drawing as a grid") \
+		.is_false()
+	assert_bool(om.threat_overlay.tile_set == om.move_overlay.tile_set).override_failure_message(
+			"the enemy's field inherited the movement range's hollow tile").is_false()
+	assert_bool(om.reach_overlay.tile_set == om.threat_overlay.tile_set).override_failure_message(
+			"the two washes stopped sharing one tileset, which is a second thing to keep in step") \
+		.is_true()

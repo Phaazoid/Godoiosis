@@ -1159,3 +1159,49 @@ func test_turning_the_facet_count_rebuilds_a_standing_cone() -> void:
 	assert_int(overlays.cone_vertices_of(BoardOverlays.Layer.REACH_LINES).size()) \
 		.override_failure_message("turning the facet count left the standing cone at its old shape") \
 		.is_greater(coarse)
+
+
+# --- The movement range draws as GRIDLINES (#1069) ----------------------------------------------
+
+# The dev, on 3D FE: "the player movement tiles don't actually flood fill, only the gridlines of the
+# tiles get the color highlights." It is still a Kind.FILL -- hollow ART, not a new render kind --
+# which is what keeps the sort, the lift, the ramp tilt and the corner fold applying to it.
+#
+# Asserted as a DIFFERENCE between the three range layers rather than against a filename: what
+# would break this is somebody giving them one texture again, and the filename is a value the dev
+# may change.
+func test_your_movement_range_draws_different_art_from_the_two_washes_under_it() -> void:
+	var overlays := _bare_overlays()
+	var cells: Array[Vector3i] = [Vector3i(0, 0, 0)]
+	for layer: BoardOverlays.Layer in [BoardOverlays.Layer.MOVE, BoardOverlays.Layer.REACH,
+			BoardOverlays.Layer.THREAT]:
+		overlays.set_cells(layer, cells)
+
+	var move_art := _albedo_of(overlays, BoardOverlays.Layer.MOVE)
+	var reach_art := _albedo_of(overlays, BoardOverlays.Layer.REACH)
+	var threat_art := _albedo_of(overlays, BoardOverlays.Layer.THREAT)
+	assert_object(move_art).override_failure_message(
+			"the movement range has no art at all, so it cannot be drawing gridlines").is_not_null()
+	assert_bool(move_art == reach_art).override_failure_message(
+			"your movement range is drawing the same wash as your reach -- the centres are back") \
+		.is_false()
+	assert_bool(reach_art == threat_art).override_failure_message(
+			"the two washes stopped sharing one texture, which is a second file to keep in step") \
+		.is_true()
+
+
+# ...and the DEFAULT is untouched: a layer that names no texture goes on wearing the fill. Without
+# this the key could be read backwards -- outline by default, wash by exception -- and every other
+# markup layer in the game would quietly hollow out.
+func test_a_layer_that_names_no_texture_still_draws_the_fill() -> void:
+	var overlays := _bare_overlays()
+	var cells: Array[Vector3i] = [Vector3i(0, 0, 0)]
+	overlays.set_cells(BoardOverlays.Layer.SQUAD, cells)
+	assert_object(_albedo_of(overlays, BoardOverlays.Layer.SQUAD)).override_failure_message(
+			"a layer with no texture key came up with the wrong art").is_same(overlays.fill_texture)
+
+
+func _albedo_of(overlays: BoardOverlays, layer: BoardOverlays.Layer) -> Texture2D:
+	var marker := _one_marker(overlays, layer) as MeshInstance3D
+	var material := marker.material_override as StandardMaterial3D
+	return null if material == null else material.albedo_texture

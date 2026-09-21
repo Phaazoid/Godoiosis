@@ -66,12 +66,27 @@ const EFFECT_RENDER_PRIORITY := 16
 # and its glyphs.
 const UNIT_HUD_RENDER_PRIORITY := 48
 
+# The hollow twin of the overlay fill, for markup that draws as GRIDLINES rather than as a wash
+# (#1069). Generated beside the fill by tools/lookdev/gen_lookdev_assets.gd, which is where its
+# sibling came from and the only place the two can be kept in step. Declared up here rather than
+# beside FILL_TEXTURE_PATH because LAYERS names it, and a const table may only read a const already
+# declared above it.
+const OUTLINE_TEXTURE_PATH := "res://Art/LookDev/cell_outline.png"
+
 const LAYERS: Dictionary[Layer, Dictionary] = {
 	# BLUE since #1066, and it is the player's half of a Fire Emblem readout: your unit says where it
 	# may STAND in blue and where it could HIT from there in red, while an enemy is one undifferentiated
 	# field. Sort 0 keeps it at the TOP of the range stack, which is what makes the intersect with an
 	# enemy's purple read as tinted blue rather than as purple -- the composite the dev ruled on.
-	Layer.MOVE: {"color": Color(0.25, 0.45, 1, 0.55), "sort": 0, "kind": Kind.FILL},
+	# GRIDLINES rather than a wash since #1069 (dev, on 3D FE: "the player movement tiles don't
+	# actually flood fill, only the gridlines of the tiles get the color highlights. So what we have
+	# now, but with the centers removed"). It is STILL a Kind.FILL -- the hollow art is the whole
+	# change -- so the sort, the lift, the ramp tilt, the corner fold and the mirror's tint copy are
+	# untouched. Only YOUR movement range: the reach under it and the enemy's field under that stay
+	# washes, on his ruling, so the three read as line art over two tints rather than as three grids.
+	# NB `"texture"` goes LAST -- see _texture_for.
+	Layer.MOVE: {"color": Color(0.25, 0.45, 1, 0.55), "sort": 0, "kind": Kind.FILL,
+		"texture": OUTLINE_TEXTURE_PATH},
 	Layer.ATTACK: {"color": Color(1, 0, 0, 0.5), "sort": 1, "kind": Kind.FILL},
 	# Reach cells past the aim's vertical tolerance (#258). Shares ATTACK's sort safely: the 2D
 	# splits the one layer by atlas coords, so the two cell sets are disjoint by construction and
@@ -387,6 +402,11 @@ func _set_beam_intensity(value: float) -> void:
 
 var fill_texture: Texture2D
 
+# The textures a FILL layer may name through its `"texture"` key (#1069), cached by PATH so the two
+# layers that share one share the object. Lazy, and deliberately not preloaded in _ready beside
+# fill_texture: a layer that never comes up should not pay for its art.
+var _fill_textures: Dictionary[String, Texture2D] = {}
+
 var _beams_animating := true   # the last composed photosensitivity read; see poll_beam_motion
 
 var _markers: Dictionary[Layer, Array] = {}       # layer -> node pool (all kinds)
@@ -413,6 +433,24 @@ var _bent_meshes: Dictionary[Vector4i, ArrayMesh] = {}
 func _ready() -> void:
 	if fill_texture == null:
 		fill_texture = load(FILL_TEXTURE_PATH) as Texture2D
+
+
+# What art a FILL layer draws with (#1069). The default is the wash every markup layer has always
+# worn; a layer that names a `"texture"` gets that instead, which is how MOVE draws as GRIDLINES
+# without becoming a second render Kind -- every law this table already carries (the sort, the lift,
+# the ramp tilt, the corner-cell fold, set_layer_modulate, the mirror's per-frame tint copy) goes on
+# applying to it untouched, because it IS still a fill.
+#
+# The key is declared LAST on its LAYERS line, and that is not style: KnobSource's colour rewriter
+# is a regex requiring `"color"` to be an entry's FIRST key, so a key ahead of it would make every
+# colour save in the dev panel fail silently.
+func _texture_for(spec: Dictionary) -> Texture2D:
+	var path: String = spec.get("texture", "")
+	if path.is_empty():
+		return fill_texture
+	if not _fill_textures.has(path):
+		_fill_textures[path] = load(path) as Texture2D
+	return _fill_textures[path]
 
 
 # Replaces the layer's cells wholesale (idempotent — calling twice with the same
@@ -1143,7 +1181,7 @@ func _make_marker(layer: Layer) -> Node3D:
 		Kind.SPRITE:
 			return _make_quad(spec, null, Color.WHITE)
 		_:
-			return _make_quad(spec, fill_texture, _layer_colors.get(layer, spec["color"]))
+			return _make_quad(spec, _texture_for(spec), _layer_colors.get(layer, spec["color"]))
 
 
 # The one fill/sprite recipe: an unshaded alpha quad lying on the cell's top face —
