@@ -1607,20 +1607,20 @@ func test_the_focus_outline_reaches_the_diorama_lying_on_the_ground() -> void:
 			"the stroke outlived the pointer in the diorama").is_equal(0)
 
 
-func test_intent_lines_and_their_numbers_reach_the_diorama() -> void:
-	var mover := _spawn(PLAYER, Vector2i(2, 2))
+# The REACH lines (#1069, slice 1's channel re-pointed) reach the diorama -- lifted through the
+# same trace_point the focus stroke above is, and taken down with the gesture that drew them.
+func test_reach_lines_reach_the_diorama_and_leave_with_the_gesture() -> void:
 	var foe := _spawn(ENEMY, Vector2i(3, 2))
 	foe.equipped_weapon = H.make_weapon(3)
 	foe.squad.archetype = AIArchetype.Type.HOLD
-	game.ai_controller.set_faction_ai_enabled(ENEMY, true)
-	game.refresh_threat_plan()
+	game.show_reach_lines_at(Vector2i(2, 2))
 	await _settle()
 
-	var stored: Array = _om().intent_marks
+	var stored: Array = _om().reach_line_marks
 	assert_int(stored.size()).override_failure_message(
-			"nothing was previewed -- this case cannot see the wire").is_equal(1)
-	var lifted := _overlays.lines_of(BoardOverlays.Layer.INTENT_LINES)
-	# One MARK arrives as two strokes since #1059 -- the bowed arc and the cone at the victim -- and
+			"nobody was found reaching that cell -- this case cannot see the wire").is_equal(1)
+	var lifted := _overlays.lines_of(BoardOverlays.Layer.REACH_LINES)
+	# One MARK arrives as two strokes since #1059 -- the bowed arc and the cone at your end -- and
 	# both have to be lifted, or the cone is drawn flat on the board while the arc hangs.
 	assert_int(lifted.size()).override_failure_message(
 			"the mark did not arrive as an arc and a cone").is_equal(2)
@@ -1631,10 +1631,12 @@ func test_intent_lines_and_their_numbers_reach_the_diorama() -> void:
 		BoardSpace.surface_y(BoardSpace.top_row_of(0)) + first.y * BoardSpace.ROW_HEIGHT,
 		first.z * BoardSpace.CELL_SIZE))
 
-	assert_object(mover).is_not_null()
+	# ...and the SOLID cone with them, which the flat store has no equivalent of at all: the 2D view
+	# draws that stroke as a filled polygon where the diorama replaces it with geometry.
+	assert_array(_overlays.cone_vertices_of(BoardOverlays.Layer.REACH_LINES)) \
+		.override_failure_message("the mark's cone arrived as a ribbon rather than a solid").is_not_empty()
 
-	game._clear_threat_plan()
+	_om().clear_reach_lines()
 	await _settle()
-	assert_int(_overlays.lines_of(BoardOverlays.Layer.INTENT_LINES).size()).is_equal(0)
-	assert_int(_overlays.lines_of(BoardOverlays.Layer.INTENT_LINES_FATAL).size()).override_failure_message(
-			"a lethal line outlived the plain ones it was drawn beside").is_equal(0)
+	assert_int(_overlays.lines_of(BoardOverlays.Layer.REACH_LINES).size()).override_failure_message(
+			"the marks outlived the move gesture in the diorama").is_equal(0)

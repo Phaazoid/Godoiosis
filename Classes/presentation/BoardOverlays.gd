@@ -33,7 +33,7 @@ enum Layer {
 	ZONE_PATROL, ZONE_HIGHLIGHT, GROUND_ICONS, ATTACK_BLOCKED, SIGHT_TRACE,
 	GUARD_ICONS, GUARD_LINK, WATCH_ICONS,
 	ZONE_DEPLOYMENT, ZONE_DEFEND,
-	REACH, THREAT, ENEMY_FOCUS_EDGE, INTENT_LINES, INTENT_LINES_FATAL,
+	REACH, THREAT, ENEMY_FOCUS_EDGE, REACH_LINES,
 }
 enum Kind { FILL, BRACKET, SPRITE, BILLBOARD, LINE }
 
@@ -136,20 +136,26 @@ const LAYERS: Dictionary[Layer, Dictionary] = {
 	# bead's width and its >1.2 bloom this would be a glowing rope around forty cells.
 	Layer.ENEMY_FOCUS_EDGE: {"color": Color(1, 1, 1, 0.85), "sort": 13, "lift_sort": 5,
 		"beam": "outline", "kind": Kind.LINE},
-	# Above the sight/threat beams at 7 -- an intent is the authoritative readout and must not
-	# z-fight the reach line it supersedes -- and clear of the guard channels at 8/9, which
-	# test_both_guard_channels_sorts_are_unshared caught this taking on its first draft.
-	# Its own beam set ("intent"): an intent is markup that TRAVELS, so it carries the bead and is
-	# tuned nothing like the sight laser. Colour arrives per draw from ThreatLines2D's one static.
-	Layer.INTENT_LINES: {"color": Color(1.0, 0.251, 0.784, 0.95), "sort": 11,
-		"beam": "intent", "kind": Kind.LINE},
-	# A felling intent keeps its OWN layer, and #1042 changed WHY. Slice 3 gave it one so it could
-	# be a second HUE; the dev has since ruled that lethality is not a colour at all -- the whole
-	# mark FLASHES instead. A flash is a shader time term and a term is per MATERIAL, so the two
-	# layers are still exactly what expresses it, now differing by "flash" rather than by tint.
-	# Its own sort because two marks can cross, which is the overlap the shared-sort rule forbids.
-	Layer.INTENT_LINES_FATAL: {"color": Color(1.0, 0.251, 0.784, 0.95), "sort": 12,
-		"beam": "intent", "flash": true, "kind": Kind.LINE},
+	# WHO CAN REACH THE CELL YOU ARE HOVERING (#1069) -- one mark per enemy whose field covers your
+	# candidate destination, running enemy -> that cell, drawn ONLY while you are choosing a move.
+	#
+	# That REPEALS #710 slice 2's intent readout, on the dev's own ruling after looking at 3D FE:
+	# "they aren't conveying enemy intent at all, just who can reach who. And they don't show all
+	# the time, just during move hover mode." It is slice 1's reach lines coming back with the
+	# narrower trigger that answers why slice 3 deleted them ("a bit too much") -- what was too much
+	# was a board-wide beam channel standing up at rest, not the channel itself.
+	#
+	# ONE LAYER, where the intent pair was two. The second existed to carry "flash" for a FELLING
+	# intent, and reachability cannot know lethality without running the ladder -- slice 1's lines
+	# had no fatal variant either. Declared rather than forgotten; the flash channel went with it.
+	#
+	# Above the sight beam at 7 -- this is the authoritative readout over a cell the aim may also be
+	# tracing -- and clear of the guard channels at 8/9, which
+	# test_both_guard_channels_sorts_are_unshared caught the intent layer taking on its first draft.
+	# Its own beam set ("mark"): this is markup that TRAVELS, so it carries the bead and is tuned
+	# nothing like the sight laser. Colour arrives per draw from ThreatLines2D's one static.
+	Layer.REACH_LINES: {"color": Color(1.0, 0.251, 0.784, 0.95), "sort": 11,
+		"beam": "mark", "kind": Kind.LINE},
 	# Above its own line at 11 and under the lawful ceiling: EFFECT_RENDER_PRIORITY is 16 and
 	# ICONS holds 15, both pinned by laws in test_board_overlays. A number that drew over fire
 	# would erase the flame it sits beside, which is how #245 found this rule.
@@ -218,6 +224,15 @@ const LAYERS: Dictionary[Layer, Dictionary] = {
 const FILL_TEXTURE_PATH := "res://Art/LookDev/cell_fill.png"
 # Colocated with its only consumer rather than in a shaders folder the project does not have.
 const SIGHT_BEAM_SHADER_PATH := "res://Classes/presentation/sight_beam.gdshader"
+# ...and the SOLID cone's own (#1069). A second file rather than a flag on the one above, because
+# what a volume must not have -- the rim falloff and `depth_draw_never` -- are a fragment constant
+# and a render_mode, and render_mode is per shader file. See that file's header.
+const REACH_CONE_SHADER_PATH := "res://Classes/presentation/reach_cone.gdshader"
+# The fixed world direction the cone's facets are shaded against. NOT the camera and NOT a knob:
+# the shade is baked into vertex colour when a mark is rebuilt (on a hover change), so a
+# camera-relative bake is stale the instant the rig orbits, and a direction is three sliders nobody
+# drags. Over the left shoulder and well above, which is where the diorama's own key light sits.
+const CONE_LIGHT := Vector3(-0.45, 0.85, 0.35)
 # The 2D art's metric: a 16px texture covers exactly one board cell.
 const ART_PIXELS_PER_CELL := 16.0
 
@@ -276,10 +291,10 @@ enum SelectorDepth { LEVEL, HALF }
 # stroke around forty cells reads as a rope of light laid over the terrain.
 @export var outline_width := 0.03: set = _set_outline_width
 @export var outline_intensity := 1.0: set = _set_outline_intensity
-# ...and the intent mark's own set (#1042), which is neither: wider than a stroke, dimmer than a
-# laser, and the only beam in the game that MOVES.
-@export var intent_width := 0.055: set = _set_intent_width
-@export var intent_intensity := 2.4: set = _set_intent_intensity
+# ...and the reach mark's own set (#1042, renamed with the channel at #1069), which is neither:
+# wider than a stroke, dimmer than a laser, and the only beam in the game that MOVES.
+@export var mark_width := 0.055: set = _set_mark_width
+@export var mark_intensity := 2.4: set = _set_mark_intensity
 # The BEAD -- one bright pulse running enemy -> victim, which is what says which end is which
 # without the cone having to be read. Speed and length are in CELLS, so a mark of any length
 # pulses at the same pace; `bead_gap` is how far apart two beads run, so a long mark can hold more
@@ -287,21 +302,32 @@ enum SelectorDepth { LEVEL, HALF }
 @export var bead_speed := 3.4: set = _set_bead_speed
 @export var bead_length := 0.55: set = _set_bead_length
 @export var bead_gap := 9.0: set = _set_bead_gap
-# The FLASH, on the felling layer alone (dev, 2026-09-19): the whole mark pulses toward white and
-# up in alpha. Upward only -- at its trough a lethal mark is never quieter than an ordinary one --
-# and SLOW, because a felling warning that strobes is what #217 exists to prevent.
-@export var flash_hz := 0.8: set = _set_flash_hz
-@export var flash_alpha := 1.0: set = _set_flash_alpha       # extra alpha at the peak
-@export var flash_white := 1.0: set = _set_flash_white       # how far to white at the peak
+# THE CONE'S OWN THREE (#1069), because a SOLID has a property a ribbon does not: which way its
+# faces point. Everything else about the mark -- length, base width, colour, bow, inset -- is
+# already tunable and unchanged; these are the values that had no home while the cone was a
+# tapering ribbon whose rim faded to nothing.
+#
+# The glow is SPLIT from the shaft's rather than shared, and that is the one number #1069 did not
+# carry over. `mark_intensity` is 2.4, which is right for a ribbon whose rim reaches zero alpha --
+# most of its area is far dimmer than the multiplier says. A solid surface at 2.4 is 2.4 EVERYWHERE,
+# past the diorama's glow_hdr_threshold of 1.2 across the whole face, so it blooms into a white blob
+# and the shading below is invisible.
+@export var cone_intensity := 1.0: set = _set_cone_intensity
+# The FLOOR of the baked facet shading: 1.0 is flat and unreadable, 0.0 is hard black on a facet
+# pointing away from the light. What sells a cone as a volume rather than a silhouette.
+@export var cone_shading := 0.45: set = _set_cone_shading
+# Radial segments round the cone. Low reads as a cut gem, high as smooth; the base cap uses the
+# same count, so this is the whole shape's resolution.
+@export var cone_facets := 12: set = _set_cone_facets
 
 
-func _set_intent_width(value: float) -> void:
-	intent_width = value
+func _set_mark_width(value: float) -> void:
+	mark_width = value
 	_apply_beam_params()
 
 
-func _set_intent_intensity(value: float) -> void:
-	intent_intensity = value
+func _set_mark_intensity(value: float) -> void:
+	mark_intensity = value
 	_apply_beam_params()
 
 
@@ -320,19 +346,19 @@ func _set_bead_gap(value: float) -> void:
 	_apply_beam_params()
 
 
-func _set_flash_hz(value: float) -> void:
-	flash_hz = value
+func _set_cone_intensity(value: float) -> void:
+	cone_intensity = value
 	_apply_beam_params()
 
 
-func _set_flash_alpha(value: float) -> void:
-	flash_alpha = value
-	_apply_beam_params()
+func _set_cone_shading(value: float) -> void:
+	cone_shading = value
+	_rebuild_cones()
 
 
-func _set_flash_white(value: float) -> void:
-	flash_white = value
-	_apply_beam_params()
+func _set_cone_facets(value: int) -> void:
+	cone_facets = maxi(value, 3)
+	_rebuild_cones()
 
 
 func _set_beam_width(value: float) -> void:
@@ -367,6 +393,14 @@ var _markers: Dictionary[Layer, Array] = {}       # layer -> node pool (all kind
 var _cells: Dictionary[Layer, Array] = {}         # set_cells layers: the current cell list
 var _marker_data: Dictionary[Layer, Array] = {}   # set_markers layers: the current entries
 var _lines: Dictionary[Layer, Array] = {}   # LINE layers: the current segments (Array[PackedVector3Array])
+# A LINE layer's SOLID cones (#1069): a second node beside the ribbon, because the cone is opaque
+# geometry on a different shader and a material carries one shader. Kept out of the `_markers` pool
+# so nothing that walks a pool -- visibility, colour, the beam sweep -- has to learn there are two
+# kinds of node in it; `_cone_batches` is what a knob change re-emits from, the way `intent_shafts`
+# is what a mark knob re-derives from one layer up.
+var _cones: Dictionary[Layer, MeshInstance3D] = {}
+var _cone_batches: Dictionary[Layer, Array] = {}
+var _cone_colors: Dictionary[Layer, Color] = {}
 var _layer_colors: Dictionary[Layer, Color] = {}  # runtime fill colors (set_layer_modulate)
 var _bracket_mesh: ArrayMesh
 var _quad_mesh: PlaneMesh
@@ -490,7 +524,7 @@ func set_lines(layer: Layer, segments: Array[PackedVector3Array], color: Color) 
 # `widths` is shaped like `marks` -- a per-point scale for each stroke -- and empty means every
 # stroke is drawn at the layer's own width, which is what `set_lines` and its three other layers want.
 func set_marks(layer: Layer, marks: Array[Array], color: Color,
-		widths: Array[Array] = []) -> void:
+		widths: Array[Array] = [], cones: Array[Dictionary] = []) -> void:
 	var spec: Dictionary = LAYERS[layer]
 	if spec["kind"] != Kind.LINE:
 		push_error("set_marks on a %s layer" % Kind.keys()[spec["kind"]])
@@ -507,18 +541,114 @@ func set_marks(layer: Layer, marks: Array[Array], color: Color,
 	var mesh := node.mesh as ImmediateMesh
 	mesh.clear_surfaces()
 	var drawn := false
+	var batch: Array[Dictionary] = []
 	for m in marks.size():
 		var strokes: Array = marks[m]
 		var scales: Array = widths[m] if m < widths.size() else []
+		var cone: Dictionary = cones[m] if m < cones.size() else {}
+		# A SOLID cone is not a ribbon, so its own stroke is dropped from the strip pass and the
+		# shaft simply ENDS where the cone's base begins -- no overlap to z-fight and no tapering
+		# ribbon left inside the volume. `_lines` still holds every stroke, because that store is
+		# the geometry this layer represents rather than a list of what got rasterized how.
+		var strip_count: int = strokes.size()
+		if not cone.is_empty() and strip_count > 1:
+			strip_count -= 1
 		var travelled := 0.0
-		for s in strokes.size():
+		for s in strip_count:
 			var stroke: PackedVector3Array = strokes[s]
 			var scale: PackedFloat32Array = PackedFloat32Array() if s >= scales.size() else scales[s]
 			if add_beam_strip(mesh, stroke, Color.WHITE, travelled, scale):
 				drawn = true
 			travelled += _stroke_length(stroke)
+		if not cone.is_empty():
+			# The bead's measure CONTINUES across the join: the cone starts at the distance the
+			# shaft ended at, which is the same chaining set_marks has always done between strokes.
+			var entry := cone.duplicate()
+			entry["dist"] = travelled
+			batch.append(entry)
 	node.visible = drawn
 	(node.material_override as ShaderMaterial).set_shader_parameter("beam_color", color)
+	_cone_batches[layer] = batch
+	_cone_colors[layer] = color
+	_emit_cones(layer)
+
+
+# Re-emit every layer's cones from the stored batch. The `restyle` shape one level down: a facet
+# count or a shading floor is baked into the MESH, so turning either has to rebuild it -- where
+# cone_intensity is a material uniform and rides _apply_beam_params like every other beam number.
+# Without this those two would be #264's born-dead sliders.
+func _rebuild_cones() -> void:
+	for layer: Layer in _cone_batches:
+		_emit_cones(layer)
+
+
+func _emit_cones(layer: Layer) -> void:
+	var batch: Array = _cone_batches.get(layer, [])
+	var node := _cone_for(layer)
+	var mesh := node.mesh as ImmediateMesh
+	mesh.clear_surfaces()
+	var drawn := false
+	for entry: Dictionary in batch:
+		if add_beam_cone(mesh, entry["base"], entry["tip"], float(entry["radius"]),
+				float(entry.get("dist", 0.0)), cone_shading, cone_facets):
+			drawn = true
+	node.visible = drawn
+	(node.material_override as ShaderMaterial).set_shader_parameter("beam_color",
+			_cone_colors.get(layer, Color.WHITE))
+
+
+# One SOLID cone: a radial fan from `base` to `tip` plus the base cap, emitted as triangles onto a
+# shared ImmediateMesh. Static and pure so a case can state a base, a tip and a radius and read the
+# vertices back, rather than photographing a viewport.
+#
+# The FACET SHADE is baked per triangle into the vertex colour, which is the only channel that can
+# vary inside one unshaded draw -- UnitHealthBar._build_cube_mesh's trick, and the reason this is
+# not a lit StandardMaterial3D (the dev's unshaded ruling for board markup, which
+# test_board_overlays enforces over every material under this node).
+#
+# UV2.x carries the vertex's own distance ALONG THE AXIS from `dist_start`, so the shaft's bead runs
+# into the cone and up to the tip as one continuous sweep instead of restarting at the base.
+static func add_beam_cone(mesh: ImmediateMesh, base: Vector3, tip: Vector3, radius: float,
+		dist_start := 0.0, shading := 0.45, facets := 12) -> bool:
+	var axis := tip - base
+	var length := axis.length()
+	if length <= 0.0 or radius <= 0.0 or facets < 3:
+		return false
+	axis /= length
+	# Any perpendicular will do -- the cone is radially symmetric, so the ring's starting angle is
+	# arbitrary. UP unless the axis is nearly vertical, which a steeply bowed mark's tail can be.
+	var seed := Vector3.UP if absf(axis.dot(Vector3.UP)) < 0.95 else Vector3.RIGHT
+	var u := axis.cross(seed).normalized()
+	var v := axis.cross(u)
+	var light := CONE_LIGHT.normalized()
+	var ring := PackedVector3Array()
+	for i in facets:
+		var a := TAU * float(i) / float(facets)
+		ring.append(base + (u * cos(a) + v * sin(a)) * radius)
+	mesh.surface_begin(Mesh.PRIMITIVE_TRIANGLES)
+	for i in facets:
+		var j := (i + 1) % facets
+		_cone_face(mesh, tip, ring[i], ring[j], base, axis, light, dist_start, shading)
+		# The cap, wound the other way so its own face normal points back down the axis and it
+		# shades as the underside rather than as a copy of the side above it.
+		_cone_face(mesh, base, ring[j], ring[i], base, axis, light, dist_start, shading)
+	mesh.surface_end()
+	return true
+
+
+static func _cone_face(mesh: ImmediateMesh, a: Vector3, b: Vector3, c: Vector3, base: Vector3,
+		axis: Vector3, light: Vector3, dist_start: float, shading: float) -> void:
+	var normal := (b - a).cross(c - a)
+	if normal.length_squared() > 0.0:
+		normal = normal.normalized()
+	var lit: float = shading + (1.0 - shading) * maxf(normal.dot(light), 0.0)
+	var tint := Color(lit, lit, lit, 1.0)
+	for p: Vector3 in [a, b, c]:
+		mesh.surface_set_color(tint)
+		mesh.surface_set_normal(normal)
+		mesh.surface_set_uv(Vector2(0.0, 0.5))
+		mesh.surface_set_uv2(Vector2(dist_start + (p - base).dot(axis), 0.0))
+		mesh.surface_add_vertex(p)
 
 
 static func _stroke_length(points: PackedVector3Array) -> float:
@@ -623,6 +753,9 @@ func _apply_beam_params() -> void:
 			continue
 		for node: Node3D in _markers[layer]:
 			_style_beam((node as MeshInstance3D).material_override as ShaderMaterial, LAYERS[layer])
+	# ...and the cones beside them, which carry the bead's own three so the pulse stays one sweep.
+	for layer: Layer in _cones:
+		_style_cone((_cones[layer] as MeshInstance3D).material_override as ShaderMaterial)
 
 
 # A LINE layer may name its own set (slice 4). The shared trio is tuned for a LASER -- the sight
@@ -641,21 +774,32 @@ func _style_beam(material: ShaderMaterial, spec: Dictionary = {}) -> void:
 		"outline":
 			width = outline_width
 			intensity = outline_intensity
-		"intent":
-			width = intent_width
-			intensity = intent_intensity
+		"mark":
+			width = mark_width
+			intensity = mark_intensity
 	material.set_shader_parameter("beam_width", width)
 	material.set_shader_parameter("beam_softness", beam_softness)
 	material.set_shader_parameter("beam_intensity", intensity)
 	# The bead rides ONLY the layers that ask for it; everything else reads a zero length and the
 	# shader's whole motion branch drops out. `motion` is the composed photosensitivity read.
-	var carries_bead: bool = spec.get("beam", "") == "intent"
+	var carries_bead: bool = spec.get("beam", "") == "mark"
 	material.set_shader_parameter("bead_length", bead_length if carries_bead else 0.0)
 	material.set_shader_parameter("bead_speed", bead_speed)
 	material.set_shader_parameter("bead_gap", maxf(bead_gap, 0.001))
-	material.set_shader_parameter("flash_hz", flash_hz if spec.get("flash", false) else 0.0)
-	material.set_shader_parameter("flash_alpha", flash_alpha)
-	material.set_shader_parameter("flash_white", flash_white)
+	material.set_shader_parameter("motion", 1.0 if beams_animating() else 0.0)
+
+
+# The CONE's material (#1069), which is a different shader from the shaft's and therefore a
+# different push. It shares the bead's three numbers so the pulse runs off the shaft and into the
+# cone as one sweep, and takes its own intensity -- see cone_intensity's own note for why that one
+# may not be inherited.
+func _style_cone(material: ShaderMaterial) -> void:
+	if material == null:
+		return
+	material.set_shader_parameter("cone_intensity", cone_intensity)
+	material.set_shader_parameter("bead_length", bead_length)
+	material.set_shader_parameter("bead_speed", bead_speed)
+	material.set_shader_parameter("bead_gap", maxf(bead_gap, 0.001))
 	material.set_shader_parameter("motion", 1.0 if beams_animating() else 0.0)
 
 
@@ -726,6 +870,41 @@ func beam_parameter(layer: Layer, name: StringName) -> Variant:
 		return null
 	var material := (pool[0] as MeshInstance3D).material_override as ShaderMaterial
 	return null if material == null else material.get_shader_parameter(name)
+
+
+# The same question of a layer's SOLID cone (#1069), which is a second node on a second shader and
+# so answers about different uniforms -- `cone_intensity` where the ribbon has `beam_intensity`.
+func cone_parameter(layer: Layer, name: StringName) -> Variant:
+	if not _cones.has(layer) or not is_instance_valid(_cones[layer]):
+		return null
+	var material := (_cones[layer] as MeshInstance3D).material_override as ShaderMaterial
+	return null if material == null else material.get_shader_parameter(name)
+
+
+# A layer's cone geometry as it was actually emitted: one entry per triangle VERTEX, each
+# {"point", "shade", "dist"}. Flat rather than grouped, because what a case asks of it is a
+# property of the whole surface (every vertex carries a baked shade; the tip continues the shaft's
+# measure), and grouping would invite a case to reach for "the third triangle", which is an
+# ordering nothing promises.
+func cone_vertices_of(layer: Layer) -> Array[Dictionary]:
+	var out: Array[Dictionary] = []
+	if not _cones.has(layer) or not is_instance_valid(_cones[layer]):
+		return out
+	var mesh := (_cones[layer] as MeshInstance3D).mesh as ImmediateMesh
+	if mesh == null:
+		return out
+	for s in mesh.get_surface_count():
+		var arrays := mesh.surface_get_arrays(s)
+		var points: PackedVector3Array = arrays[Mesh.ARRAY_VERTEX]
+		var colors: PackedColorArray = arrays[Mesh.ARRAY_COLOR]
+		var uv2: PackedVector2Array = arrays[Mesh.ARRAY_TEX_UV2]
+		for i in points.size():
+			out.append({
+				"point": points[i],
+				"shade": 1.0 if i >= colors.size() else colors[i].r,
+				"dist": 0.0 if i >= uv2.size() else uv2[i].x,
+			})
+	return out
 
 
 # The AUTHORED colour, ignoring any runtime override — what a layer goes back TO. Distinct from
@@ -1011,6 +1190,30 @@ func _make_line(spec: Dictionary) -> MeshInstance3D:
 	instance.layers = WORLD_RENDER_LAYER
 	add_child(instance)
 	_style_beam(material, spec)
+	return instance
+
+
+# The SOLID cone's node (#1069), built lazily beside the ribbon's on the first mark that carries
+# one. Deliberately NOT in the layer's `_markers` pool: everything that walks a pool -- set_cells,
+# set_markers, the visibility sweep, _apply_beam_params -- would have to learn that one entry is a
+# different shader with different uniforms, and a pool with two kinds of node in it is exactly the
+# sort of thing the next reader gets wrong.
+#
+# No render_priority: the shader writes no ALPHA, so this is opaque geometry that depth-tests
+# against the world like any object, which is the whole point of the second shader.
+func _cone_for(layer: Layer) -> MeshInstance3D:
+	if _cones.has(layer) and is_instance_valid(_cones[layer]):
+		return _cones[layer]
+	var instance := MeshInstance3D.new()
+	instance.mesh = ImmediateMesh.new()
+	var material := ShaderMaterial.new()
+	material.shader = load(REACH_CONE_SHADER_PATH) as Shader
+	instance.material_override = material
+	instance.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	instance.layers = WORLD_RENDER_LAYER
+	add_child(instance)
+	_style_cone(material)
+	_cones[layer] = instance
 	return instance
 
 

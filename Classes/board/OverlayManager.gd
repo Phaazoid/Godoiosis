@@ -365,13 +365,9 @@ var zone_highlight_overlay: TileMapLayer = null   # the Tile Brush's picked zone
 var reach_overlay: TileMapLayer = null   # YOUR unit's attack reach (#1066); built in _ready
 var threat_overlay: TileMapLayer = null   # ...and the enemy's one undifferentiated field, under it
 # The stroke round that one enemy's footprint (slice 4), in ThreatLines2D's trace space. Versioned
-# on intent_version's shape, because OverlayMirror polls rather than listening.
+# on reach_line_version's shape, because OverlayMirror polls rather than listening.
 var focus_outline: Array[PackedVector3Array] = []
 var focus_outline_version := 0
-# What the enemy intends, keyed by VICTIM instance id: {"damage": int, "fells": bool}. Rebuilt
-# with the intent lines and read by UnitMirror, which draws it as the predicted span on that
-# unit's own health bar -- the channel #313 already built for your own plan.
-var threat_forecast: Dictionary[int, Dictionary] = {}
 var leash_revealed := false   # a play-time reveal is holding the highlight layer up (#710)
 # The two inputs to whether authoring zones draw -- see set_zone_visibility. The INTENT is what
 # a 3D mirror asks; `.visible` is the product and answers only "does the 2D draw this".
@@ -404,20 +400,17 @@ var sight_trace: Reach.SightTrace = null
 var sight_trace_version := 0
 var _sight_trace_2d: SightTrace2D
 var _threat_lines_2d: ThreatLines2D
-# What the enemy will attack (#710 slice 2), stored as DATA the way the sight trace is:
-# ThreatLines2D draws it flat, OverlayMirror lifts it, and the version is the mirror's change
-# signal. ONE ENTRY PER INTENT -- each holding that mark's strokes (the bowed arc, then the cone at
-# the victim, #1059)
-# -- so `intent_fells` pairs with INTENTS rather than with strokes, which makes slice 3's drift
-# unrepresentable rather than merely avoided.
+# WHICH ENEMIES CAN REACH THE CELL BEING HOVERED (#710 slice 1, deleted by slice 3, brought back and
+# re-pointed by #1069), stored as DATA the way the sight trace is: ThreatLines2D draws it flat,
+# OverlayMirror lifts it, and the version is the mirror's change signal. ONE ENTRY PER MARK -- each
+# holding that mark's strokes, the bowed arc then the cone at your end (#1059).
 #
-# `intent_shafts` is the SOURCE and `intent_marks` is derived from it by the one function below;
-# the chords are kept because the mark's shape is tuned values, and a knob that moves one has
+# `reach_line_shafts` is the SOURCE and `reach_line_marks` is derived from it by the one function
+# below; the chords are kept because the mark's shape is tuned values, and a knob that moves one has
 # to re-derive geometry rather than merely re-push a colour. Same reason `_reach_attack` is kept.
-var intent_shafts: Array[PackedVector3Array] = []
-var intent_marks: Array[Array] = []
-var intent_fells: Array[bool] = []
-var intent_version := 0
+var reach_line_shafts: Array[PackedVector3Array] = []
+var reach_line_marks: Array[Array] = []
+var reach_line_version := 0
 
 
 
@@ -533,55 +526,45 @@ func restyle_sight_trace() -> void:
 	show_sight_trace(sight_trace)
 
 
-# The exact tier (#710 slice 2). Takes the INTENTS rather than geometry, so the line and what it
-# means come from one row each and can never be matched up wrongly.
-func show_threat_intents(intents: Array[ThreatIntent], board: BoardContext) -> void:
-	if intents.is_empty() and intent_shafts.is_empty():
+# WHO REACHES YOU HERE (#1069). One mark per attacker, each running from where that enemy stands to
+# the cell the player is hovering a move onto.
+#
+# Takes the ATTACKERS and the destination rather than prepared geometry, for the reason slice 2's
+# door took intents: the line and what it means then come from one place and cannot be matched up
+# wrongly. The caller's job is to ask the threat field who reaches the cell; shaping that into a
+# mark is this store's.
+func show_reach_lines(attackers: Array[Unit], cell: Vector2i, board: BoardContext) -> void:
+	if attackers.is_empty() and reach_line_shafts.is_empty():
 		return   # idempotent, like the trace -- the version only moves on real change
 	var shafts: Array[PackedVector3Array] = []
-	var fatal: Array[bool] = []
-	for intent: ThreatIntent in intents:
-		shafts.append(ThreatLines2D.segment(intent.from, intent.to, board))
-		fatal.append(intent.fells)
-	# ...and the same intents keyed by VICTIM, which is what the health bars read (#710 slice 3).
-	# SUMMED per target rather than kept per attacker: two enemies converging on one unit is one
-	# prediction as far as that unit's own readout is concerned, and a bar cannot draw two spans.
-	# Which attacker owns which part of the bite is #1012.
-	var forecast: Dictionary[int, Dictionary] = {}
-	for intent: ThreatIntent in intents:
-		if intent.target == null or not is_instance_valid(intent.target):
+	for attacker: Unit in attackers:
+		if attacker == null or not is_instance_valid(attacker):
 			continue
-		var id := intent.target.get_instance_id()
-		var row: Dictionary = forecast.get(id, {"damage": 0, "fells": false})
-		row["damage"] = int(row["damage"]) + intent.damage
-		row["fells"] = bool(row["fells"]) or intent.fells
-		forecast[id] = row
-	threat_forecast = forecast
-	intent_shafts = shafts
-	intent_fells = fatal
-	_rebuild_intent_marks()
+		shafts.append(ThreatLines2D.segment(attacker.movement.cell, cell, board))
+	reach_line_shafts = shafts
+	_rebuild_reach_line_marks()
 
 
-func clear_threat_intents() -> void:
-	var none: Array[ThreatIntent] = []
-	show_threat_intents(none, null)
+func clear_reach_lines() -> void:
+	var none: Array[Unit] = []
+	show_reach_lines(none, Vector2i.ZERO, null)
 
 
 # Re-derive the drawn marks from the shafts. The ONE derivation, so the knob path and the draw path
 # cannot disagree about what a mark looks like.
-func restyle_threat_intents() -> void:
-	if intent_shafts.is_empty():
+func restyle_reach_lines() -> void:
+	if reach_line_shafts.is_empty():
 		return
-	_rebuild_intent_marks()
+	_rebuild_reach_line_marks()
 
 
-func _rebuild_intent_marks() -> void:
+func _rebuild_reach_line_marks() -> void:
 	var built: Array[Array] = []
-	for shaft in intent_shafts:
+	for shaft in reach_line_shafts:
 		built.append(ThreatLines2D.mark(shaft))
-	intent_marks = built
-	intent_version += 1
-	_threat_lines_2d.marks = intent_marks
+	reach_line_marks = built
+	reach_line_version += 1
+	_threat_lines_2d.marks = reach_line_marks
 	_threat_lines_2d.queue_redraw()
 
 

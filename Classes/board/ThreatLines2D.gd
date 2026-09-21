@@ -1,19 +1,27 @@
 class_name ThreatLines2D
 extends Node2D
 
-# The flat projection of the threat preview's intent marks (#710, re-dressed by #1042 and #1059): who
-# the enemy will attack, and which way the blow runs. Pure renderer -- OverlayManager owns the store
-# and OverlayMirror lifts the same points into the diorama.
+# The flat projection of the threat preview's REACH marks (#710, re-dressed by #1042 and #1059,
+# re-pointed by #1069): which enemies can reach the cell you are hovering a move onto, and which way
+# the blow would run. Pure renderer -- OverlayManager owns the store and OverlayMirror lifts the same
+# points into the diorama.
 #
-# ONE COLOUR FOR BOTH (dev, 2026-09-19: "I don't think the color should change for lethal intent --
-# perhaps the whole line can flash?"). A felling intent is the same pink and FLASHES to white; the
-# two 3D layers survive because a flash is a per-material time term, not because they are tinted
-# differently. That REPEALS slice 3's "the beam has to say it" -- an argument for a second HUE, made
-# when the damage number that used to carry lethality was deleted.
+# WHAT THESE MARKS SAY CHANGED AT #1069 AND THE SHAPE DID NOT. They were slice 2's INTENT lines --
+# a real AI turn per engaged squad, answering who will attack whom -- until the dev looked at 3D FE
+# again: "they aren't conveying enemy intent at all, just who can reach who. And they don't show all
+# the time, just during move hover mode." So the geometry below is untouched and only the trigger and
+# the source moved, which is why none of this file's shape rulings were re-opened.
 #
-# The flash and the travelling bead are diorama-only: the flat view draws a plain stroke, the
-# declared #292 asymmetry SightTrace2D already carries and #674 ruled for the sight trace. The mark's
-# GEOMETRY is not diorama-only -- the arc and the cone are drawn in both views.
+# ONE COLOUR, and there is no longer a second layer to differ from. #1042 settled that lethality is
+# not a hue ("I don't think the color should change for lethal intent -- perhaps the whole line can
+# flash?") and #1069 removed the question: reachability cannot know lethality without running the
+# ladder, so the felling FLASH and the layer that carried it are both gone.
+#
+# The travelling bead is diorama-only: the flat view draws a plain stroke, the declared #292
+# asymmetry SightTrace2D already carries and #674 ruled for the sight trace. The mark's GEOMETRY is
+# not diorama-only -- the arc and the cone are drawn in both views, though since #1069 the diorama
+# draws the cone as a SOLID (BoardOverlays.add_beam_cone) where this view keeps its filled polygon.
+# That is the same answer wearing each view's own means: `_taper` was always opaque.
 #
 # THE MARK HANGS AT ITS OWN HEIGHT, NOT AT Reach.EYE_HEIGHT (#1059). That constant is a RULE: it
 # defines what a wall is for the sight trace and the vertical aim gate, so it cannot move for a look.
@@ -21,17 +29,19 @@ extends Node2D
 # where the rule says, while an intent mark is a statement about who attacks whom and may hang where
 # the body is.
 #
-# The REACH tier's lines are gone as of slice 3 (dev: "a bit too much"). What answers "who can
-# reach this cell" now is the two-tone range fill, which says it for the whole board at once
-# rather than as a beam per attacker. The damage NUMBER went with them in the same pass -- it is
-# drawn as the predicted span on the victim's own health bar instead.
+# SLICE 3 DELETED THESE LINES AND #1069 BROUGHT THEM BACK, which is worth knowing before anyone
+# deletes them again. The reason given then -- the dev's "a bit too much" -- was about a board-wide
+# beam channel standing up AT REST beside the range fill, not about the channel itself. Bound to
+# move hover, they answer a question the fill cannot: not "who can reach here" for the whole board,
+# but "who reaches ME if I stop on this tile", which is the question a player is actually asking
+# while the cursor is on a destination.
 
 const LINE_WIDTH := 1.5
 # Pink, because it is the one hue nothing else on this board owns (#1042, settled against a drawn
 # mockup): the aim footprint is yellow, the sight bead white, the enemy's own tones red and blue,
 # the zones cyan/violet/amber. Amber and the old lethal red were both neighbours of an AIM colour,
 # which is the confusion that ticket existed to fix.
-static var INTENT_LINE_COLOR := Color(1.0, 0.251, 0.784, 0.95)
+static var MARK_LINE_COLOR := Color(1.0, 0.251, 0.784, 0.95)
 
 # --- The mark's shape (#1059, settled against a drawn mockup) -----------------------------------
 #
@@ -56,14 +66,15 @@ static var MARK_INSET := 0.25
 # as the bow deepens.
 static var CONE_LENGTH := 0.45
 # ...and how wide its base is, AS A MULTIPLE OF THE SHAFT rather than as an absolute width. The shaft's
-# width is BoardOverlays.intent_width, a node export this 2D node cannot see -- and an absolute would
-# go stale anyway, since that setter re-pushes material parameters without bumping intent_version, so
-# a baked ratio would outlive the change. A multiple also makes the two knobs behave together.
+# width is BoardOverlays.mark_width, a node export this 2D node cannot see -- and an absolute would
+# go stale anyway, since that setter re-pushes material parameters without bumping the mark version,
+# so a baked ratio would outlive the change. A multiple also makes the two knobs behave together.
 static var CONE_WIDTH_SCALE := 2.4
 
-# One entry per intent, each the STROKES that draw it (the arc, then the cone). Grouped rather than
-# flat so `fells` pairs 1:1 with intents instead of with strokes -- slice 3's bug was two arrays
-# appended at different rates, and this shape makes that unrepresentable.
+# One entry per mark, each the STROKES that draw it (the arc, then the cone). Grouped rather than
+# flat so a mark's own facts -- its cone, its widths -- pair 1:1 with the MARK instead of with a
+# stroke: slice 3's bug was two arrays appended at different rates, and this shape makes that
+# unrepresentable.
 var marks: Array[Array] = []
 # The stroke round the hovered enemy's whole footprint (slice 4) -- one segment per outward-facing
 # cell edge, in the same trace space the intents use, so it flattens through the same _polyline.
@@ -143,6 +154,24 @@ static func mark(chord: PackedVector3Array) -> Array[PackedVector3Array]:
 # because it is a pure function of the strokes, so there is no stored copy to drift. The coupling it
 # DOES carry is that a mark is arc-then-cone; that is stated here, owned by this one class, and
 # pinned by a case rather than left for two files to agree on by luck.
+# The cone of a mark as a SOLID's terms rather than as a stroke's: where its base sits, where its
+# tip does, and how wide the base is as a multiple of the shaft. Empty when the mark has no cone --
+# too short to carry one, or CONE_LENGTH turned off -- which is the same "a lone stroke is a bare
+# arc" rule `mark_widths` reads, stated once here so the two cannot disagree about which mark has a
+# cone (#1069).
+#
+# THE SCALE, NOT A RADIUS, for CONE_WIDTH_SCALE's own reason: the shaft's width is a BoardOverlays
+# export this 2D class cannot see. Whoever draws the solid multiplies it by the width it is drawing
+# the shaft at, which is the same composition the ribbon does through UV2.y.
+static func cone_of(strokes: Array[PackedVector3Array]) -> Dictionary:
+	if strokes.size() < 2:
+		return {}
+	var tail := strokes[strokes.size() - 1]
+	if tail.size() < 2:
+		return {}
+	return {"base": tail[0], "tip": tail[tail.size() - 1], "scale": CONE_WIDTH_SCALE}
+
+
 static func mark_widths(strokes: Array[PackedVector3Array]) -> Array[PackedFloat32Array]:
 	var out: Array[PackedFloat32Array] = []
 	for i in strokes.size():
@@ -221,9 +250,9 @@ func _draw() -> void:
 			# A constant-width stroke is a polyline; a tapering one has to be a polygon, because
 			# draw_polyline carries ONE width for the whole line.
 			if i == strokes.size() - 1 and strokes.size() > 1:
-				_taper(strokes[i], widths[i], INTENT_LINE_COLOR)
+				_taper(strokes[i], widths[i], MARK_LINE_COLOR)
 			else:
-				_polyline(strokes[i], INTENT_LINE_COLOR)
+				_polyline(strokes[i], MARK_LINE_COLOR)
 
 
 func _polyline(seg: PackedVector3Array, color: Color) -> void:

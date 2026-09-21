@@ -203,6 +203,10 @@ func _hover_choosing_group_move(cell: Vector2i) -> void:
 		and game.group_move_followable.has(cell)
 	if followable:
 		game.overlay_manager.show_hover_move_paths(GroupMoveSolver.plan(leader.squad, cell, game._board()))
+		# ...and who reaches the LEADER there (#1069). Only on a followable cell, unlike the
+		# single-unit branch above: an unfollowable one is not a destination this squad has, so
+		# there is no "if you stop here" to answer.
+		game.show_reach_lines_at(cell)
 	_set_cursor_for_preview(cell, followable)
 
 func _hover_attack_targeting(cell: Vector2i) -> void:
@@ -261,6 +265,12 @@ func _hover_choosing_move(cell: Vector2i) -> void:
 	if not moverange.reachable.keys().has(cell) and not moverange.squad_unreachable.keys().has(cell):
 		_set_cursor_for_preview(cell, false)
 		return
+
+	# WHO REACHES YOU HERE (#1069) -- one mark per enemy whose field covers this candidate. Drawn
+	# for any cell inside the move footprint, refused ones included: "these could hit you there" is
+	# worth knowing about a tile you are being stopped from taking, and it is the same sentence
+	# either way.
+	game.show_reach_lines_at(cell)
 
 	# Live preview: build the move this click WOULD queue and validate the plan against it, so
 	# the arrow and the queue panel show the real consequence before anything is committed.
@@ -327,8 +337,16 @@ func _on_hovered_unit_changed(previous_unit: Unit, new_unit: Unit) -> void:
 # cleared here and must not be -- game._redraw_enemy_ranges owns them, and a pinned enemy has to
 # survive the pointer moving off it. Every arm of update_hover_visuals that does not draw them
 # calls that door with no hovered enemy, which is what puts the transient half down.
+#
+# The REACH LINES are cleared here outright, which is the opposite treatment and the right one
+# (#1069): they answer about the cell under the pointer, so there is no version of them that
+# survives the pointer moving. Clearing unconditionally and letting the two move-hover branches
+# draw them back is what makes "these exist only while you are choosing a move" true by
+# construction rather than by every other branch remembering to say so. At rest both calls are
+# free -- an empty clear over an empty store early-outs without touching the version.
 func _clear_threat_markup() -> void:
 	game._redraw_enemy_ranges(null)
+	game.overlay_manager.clear_reach_lines()
 
 # ==============================================================================
 #  Shared helpers

@@ -1,10 +1,14 @@
-# The range and intent views (#710, re-cut by #1066), through the REAL triggers: an enemy under
-# the pointer shows ONE unbroken field and its leash and none of your own layers, a FRIENDLY under
-# the pointer shows the two tones the enemy used to wear, V fills every enemy, Shift+click pins one
-# past the pointer and past the key and makes its sprite flash, and a queued order drops the cached
-# field. The reach LINES this suite used to pin are GONE (slice 3, dev: "a bit too much") -- the
-# fill is what answers "who can reach here" now. Fixture is #114's -- the instanced root MUST be
-# named "Main" under /root.
+# The range and reach views (#710, re-cut by #1066 and #1069), through the REAL triggers: an enemy
+# under the pointer shows ONE unbroken field and its leash and none of your own layers, a FRIENDLY
+# under the pointer shows where it may stand, V fills every enemy, Shift+click pins one past the
+# pointer and past the key and makes its sprite flash, and a queued order drops the cached field.
+#
+# THE REACH LINES ARE BACK (#1069), after slice 3 deleted them for being "a bit too much" at rest:
+# bound to move hover they answer "who reaches ME if I stop here", which the fill cannot. What went
+# instead is slice 2's INTENT readout -- the T cycle, the debounce, the damage on a victim's bar --
+# while the prediction behind it stays live and keeps its own cases at the bottom of this file.
+#
+# Fixture is #114's -- the instanced root MUST be named "Main" under /root.
 extends GdUnitTestSuite
 
 const MAIN_SCENE := "res://Scenes/Main.tscn"
@@ -502,115 +506,6 @@ func test_no_repaint_runs_while_a_pass_is_playing_back() -> void:
 
 	game.order_executor.executing_plan = null
 	game.toggle_enemy_ranges()
-
-
-# --- The exact tier's cadence (#710 slice 2) ---------------------------------------------------
-
-# The preview only speaks for factions the AI actually DRIVES -- an unmanaged faction is nobody's
-# to predict. clear_board() empties that set, so every case below has to put the enemy back.
-func _enable_enemy_ai() -> void:
-	game.ai_controller.set_faction_ai_enabled(ENEMY, true)
-
-# The debounce's whole job: a burst of orders costs ONE recompute. threat_plan_version is the only
-# observable -- the intents themselves are identical either way, so counting is the test.
-func test_a_burst_of_orders_costs_one_recompute() -> void:
-	var mover := _spawn(PLAYER, Vector2i(1, 1))
-	_spawn(ENEMY, Vector2i(4, 1))
-	var before: int = game.threat_plan_version
-
-	game._restart_threat_plan()
-	game._restart_threat_plan()
-	game._restart_threat_plan()
-	assert_int(game.threat_plan_version).override_failure_message(
-			"the preview ran while the timer was still counting -- the debounce is not debouncing").is_equal(before)
-	assert_bool(game._threat_plan_timer.is_stopped()).is_false()
-
-	game.refresh_threat_plan()   # what the timeout does
-	assert_int(game.threat_plan_version).is_equal(before + 1)
-	assert_bool(game._threat_plan_timer.is_stopped()).override_failure_message(
-			"a recompute left the timer running -- it would fire a second time").is_true()
-	assert_object(mover).is_not_null()
-
-
-func test_execute_stops_a_pending_recompute() -> void:
-	_spawn(PLAYER, Vector2i(1, 1))
-	_spawn(ENEMY, Vector2i(4, 1))
-	game._restart_threat_plan()
-	assert_bool(game._threat_plan_timer.is_stopped()).is_false()
-
-	game._on_queue_execute_requested()   # no active squad, so it returns early -- after stopping the timer
-	assert_bool(game._threat_plan_timer.is_stopped()).override_failure_message(
-			"a recompute was still pending over a board that is about to move").is_true()
-
-
-# The exact tier draws a line per intent and a number on it, and the toggle asks for it immediately
-# rather than after the debounce.
-func test_the_toggle_draws_intent_lines_with_their_numbers() -> void:
-	_enable_enemy_ai()
-	var mover := _spawn(PLAYER, Vector2i(1, 1))
-	_spawn(ENEMY, Vector2i(3, 2))
-	game.enter_move_mode(mover)
-	game.selected_unit = mover
-	game._click_choosing_move(Vector2i(2, 2))   # walk into reach, for real
-	game.refresh_threat_plan()
-
-	assert_int(_om().intent_marks.size()).override_failure_message(
-			"no intent mark for a unit standing next to an enemy").is_equal(1)
-	assert_int(_om().intent_fells.size()).override_failure_message(
-			"the lethal flags are not paired one-for-one with the marks").is_equal(1)
-	# The mark's LAST point is its tip; it stops MARK_INSET short of the victim, so the test asks
-	# which cell it is nearest rather than which cell it lands in.
-	var strokes: Array = _om().intent_marks[0]
-	var last: PackedVector3Array = strokes[strokes.size() - 1]
-	var tip := last[last.size() - 1]
-	var victim := Vector2(2.5, 2.5)
-	assert_float(Vector2(tip.x, tip.z).distance_to(victim)).override_failure_message(
-			"the mark does not run toward the unit it names").is_less(0.5)
-
-
-# #1059's replacement for #1042's arrowhead (dev: the arrows "just don't look great in practice.
-# Perhaps a narrow cone at the end instead?"). The cone has to CONVERGE on the victim -- wide where
-# the arc leaves off, nothing at the point -- which is the half a symmetric mark cannot say and the
-# half a from/to swap silently inverts.
-func test_an_intents_cone_converges_on_its_victim() -> void:
-	_enable_enemy_ai()
-	var mover := _spawn(PLAYER, Vector2i(1, 1))
-	_spawn(ENEMY, Vector2i(3, 2))
-	game.enter_move_mode(mover)
-	game.selected_unit = mover
-	game._click_choosing_move(Vector2i(2, 2))
-	game.refresh_threat_plan()
-
-	var strokes: Array[PackedVector3Array] = []
-	strokes.assign(_om().intent_marks[0])
-	assert_int(strokes.size()).override_failure_message(
-			"the mark is not an arc plus a cone").is_equal(2)
-	var arc: PackedVector3Array = strokes[0]
-	var cone: PackedVector3Array = strokes[1]
-	var attacker_end := Vector2(arc[0].x, arc[0].z)
-	assert_float(Vector2(cone[0].x, cone[0].z).distance_to(Vector2(arc[arc.size() - 1].x, arc[arc.size() - 1].z))) \
-		.override_failure_message("the cone does not begin where the arc leaves off").is_less(0.001)
-	var base := Vector2(cone[0].x, cone[0].z)
-	var point := Vector2(cone[cone.size() - 1].x, cone[cone.size() - 1].z)
-	assert_bool(point.distance_to(attacker_end) > base.distance_to(attacker_end)) \
-		.override_failure_message(
-			"the cone points back at the enemy rather than at the victim").is_true()
-
-	var widths := ThreatLines2D.mark_widths(strokes)
-	var cone_w: PackedFloat32Array = widths[1]
-	assert_float(cone_w[0]).override_failure_message(
-			"the cone's base is no wider than the arc it grows out of").is_greater(1.0)
-	assert_float(cone_w[cone_w.size() - 1]).override_failure_message(
-			"the cone does not converge to nothing at the victim").is_equal_approx(0.0, 0.001)
-	var arc_w: PackedFloat32Array = widths[0]
-	for scale in arc_w:
-		assert_float(scale).override_failure_message(
-				"the arc is not drawn at the mark's own width").is_equal_approx(1.0, 0.001)
-
-
-# WHERE THE MARK LEAVES FROM, asked without naming the tuned number (#1059, dev: "the point of
-# origin needs to come from the actual unit rather than over its head"). A probe is written into
-# the store and read back off real geometry, so the case survives every retune and still reds the
 # moment the height goes back to reading Reach.EYE_HEIGHT -- which is a RULE about what a wall is
 # and must never move for a look.
 func test_the_mark_hangs_at_its_own_height_and_not_the_sight_beams() -> void:
@@ -671,130 +566,101 @@ func _peak(strokes: Array[PackedVector3Array]) -> float:
 	return top
 
 
-func test_the_key_cycles_three_states_and_comes_back_round() -> void:
-	# The reported bug: T turned the numbers ON and had no way back. Three states, and the third
-	# tap has to reach NOTHING or the report stands.
-	assert_int(game.threat_view).override_failure_message(
-			"boot does not sit at INTENTS, so a stranger who never presses T sees no preview") \
-		.is_equal(game.ThreatView.INTENTS)
-	game.toggle_threat_view()
-	assert_int(game.threat_view).is_equal(game.ThreatView.EVERYTHING)
-	game.toggle_threat_view()
-	assert_int(game.threat_view).is_equal(game.ThreatView.NONE)
-	game.toggle_threat_view()
-	assert_int(game.threat_view).is_equal(game.ThreatView.INTENTS)
+
+# --- WHO REACHES YOU HERE (#1069) --------------------------------------------------------------
+#
+# The lines are #710 slice 1's channel, deleted by slice 3 and brought back with a narrower
+# trigger: they answer who could hit the cell you are hovering a MOVE onto, and they exist only
+# while that gesture is running. Everything about slice 2's INTENT readout -- the T cycle, the
+# debounce, the damage on the victim's bar -- went with it; the prediction behind it did not, and
+# its own cases are at the bottom of this file.
+
+# The preview only speaks for factions the AI actually DRIVES -- an unmanaged faction is nobody's
+# to predict. clear_board() empties that set, so every case below has to put the enemy back.
+func _enable_enemy_ai() -> void:
+	game.ai_controller.set_faction_ai_enabled(ENEMY, true)
 
 
-func test_the_view_survives_a_turn_handover() -> void:
-	# Sticky, by the dev's call: a player who turned it off does not want it back every turn.
-	game.threat_view = game.ThreatView.NONE
-	game._on_turn_started(PLAYER)
-	assert_int(game.threat_view).override_failure_message(
-			"the hand-over reset the view -- turning it off buys you one turn of quiet").is_equal(game.ThreatView.NONE)
+# Walk the real gesture: enter move mode, put the pointer on a candidate destination, and read what
+# was drawn. Driven through HoverPresenter rather than through the door, because the whole claim is
+# WHEN these appear and a case calling show_reach_lines_at directly could not see a trigger that
+# never fires.
+func _hover_destination(unit: Unit, cell: Vector2i) -> void:
+	game.enter_move_mode(unit)
+	game.selected_unit = unit
+	game.hover_presenter.update_hover_visuals(cell)
 
 
-func test_nothing_means_nothing_is_computed() -> void:
-	# The saving that makes the OFF state worth having: the preview runs a real AI turn per engaged
-	# squad, so NONE must not merely hide it. previewed_squad_count is the observable slice 2 added
-	# precisely because an optimisation with no behavioural signature cannot be tested.
-	_enable_enemy_ai()
+func test_choosing_a_move_says_who_could_hit_you_on_the_cell_you_are_hovering() -> void:
 	var mover := _spawn(PLAYER, Vector2i(1, 1))
 	_spawn(ENEMY, Vector2i(3, 2))
-	game.threat_view = game.ThreatView.NONE
-	var version: int = game.threat_plan_version
-	AIController.previewed_squad_count = 0
-	game.enter_move_mode(mover)
-	game.selected_unit = mover
-	game._click_choosing_move(Vector2i(2, 2))
-	game.refresh_threat_plan()
-	assert_int(game.threat_plan_version).override_failure_message(
-			"a recompute ran with the view off").is_equal(version)
-	assert_int(AIController.previewed_squad_count).override_failure_message(
-			"the enemy squads were planned anyway -- the gate hides the answer without saving the work") \
-		.is_equal(0)
-	assert_array(_om().intent_marks).is_empty()
+	_hover_destination(mover, Vector2i(2, 2))
+
+	assert_int(_om().reach_line_marks.size()).override_failure_message(
+			"no mark for a destination standing right beside an enemy").is_equal(1)
+	# The mark's LAST point is its tip; it stops MARK_INSET short, so the case asks which cell it is
+	# nearest rather than which cell it lands in.
+	var strokes: Array = _om().reach_line_marks[0]
+	var last: PackedVector3Array = strokes[strokes.size() - 1]
+	var tip := last[last.size() - 1]
+	assert_float(Vector2(tip.x, tip.z).distance_to(Vector2(2.5, 2.5))).override_failure_message(
+			"the mark does not run toward the cell you are hovering").is_less(0.5)
 
 
-func test_the_damage_reaches_the_bars_only_at_everything() -> void:
-	# The dev's own split: "showing who they intend to attack" and "showing everything" are two
-	# states, and the damage is what the second one adds. The lines are up in both.
-	_enable_enemy_ai()
+# EXACTLY the field's own answer, not a second walk. What would break this is somebody deriving
+# "who can reach here" a second way -- which is the divergence Law #4 exists for, and which nothing
+# cheaper than asking both sides can see.
+func test_the_marks_name_exactly_the_enemies_the_field_says_reach_that_cell() -> void:
 	var mover := _spawn(PLAYER, Vector2i(1, 1))
 	_spawn(ENEMY, Vector2i(3, 2))
-	game.enter_move_mode(mover)
-	game.selected_unit = mover
-	game._click_choosing_move(Vector2i(2, 2))
-	game.refresh_threat_plan()
+	_spawn(ENEMY, Vector2i(8, 8))   # far away; must NOT be named
+	var cell := Vector2i(2, 2)
+	_hover_destination(mover, cell)
 
-	assert_int(game.threat_view).is_equal(game.ThreatView.INTENTS)
-	assert_int(_om().intent_marks.size()).override_failure_message(
-			"no intent line, so neither half of this case proves anything").is_equal(1)
-	assert_bool(game.threat_forecast().is_empty()).override_failure_message(
-			"the bars are fed at INTENTS, so the two states show the same thing").is_true()
-
-	game.toggle_threat_view()
-	game.refresh_threat_plan()
-	var forecast: Dictionary = game.threat_forecast()
-	assert_bool(forecast.has(mover.get_instance_id())).override_failure_message(
-			"EVERYTHING does not name the unit the enemy intends to hit").is_true()
-	assert_int(int(forecast[mover.get_instance_id()]["damage"])).is_greater(0)
+	var expected: int = game.threat_field().attackers_of(cell).size()
+	assert_int(expected).override_failure_message(
+			"nobody reaches that cell, so this case cannot see its own claim").is_greater(0)
+	assert_int(_om().reach_line_marks.size()).override_failure_message(
+			"the marks and the threat field disagree about who reaches this cell") \
+		.is_equal(expected)
 
 
-func test_two_enemies_on_one_target_sum_into_one_forecast() -> void:
-	# A bar draws ONE span, so the readout has to be per victim rather than per attacker. Which
-	# attacker owns which part of the bite is a separate ticket, and this is the shape it edits.
-	_enable_enemy_ai()
+# The whole reason slice 3 deleted these: a beam channel standing up at rest was "a bit too much".
+# Bound to the gesture, they must be absent everywhere else -- including over the very cell that
+# would have drawn one a moment ago.
+func test_the_marks_are_drawn_only_while_a_move_is_being_chosen() -> void:
 	var mover := _spawn(PLAYER, Vector2i(1, 1))
 	_spawn(ENEMY, Vector2i(3, 2))
-	_spawn(ENEMY, Vector2i(2, 3))
-	game.threat_view = game.ThreatView.EVERYTHING
-	game.enter_move_mode(mover)
-	game.selected_unit = mover
-	game._click_choosing_move(Vector2i(2, 2))
-	game.refresh_threat_plan()
 
-	assert_int(_om().intent_marks.size()).override_failure_message(
-			"both enemies did not intend an attack, so there is nothing to sum").is_equal(2)
-	var forecast: Dictionary = game.threat_forecast()
-	assert_int(forecast.size()).override_failure_message(
-			"two intents on one unit produced two forecast rows").is_equal(1)
-	# Summed, not replaced: each attacker alone is a strict fraction of the total.
-	var summed := int(forecast[mover.get_instance_id()]["damage"])
-	var heaviest := 0
-	for intent: ThreatIntent in AIController.preview_turn(PLAYER, game.squad_manager, [ENEMY]):
-		heaviest = maxi(heaviest, intent.damage)
-	assert_int(heaviest).override_failure_message(
-			"neither enemy intends any damage, so there is nothing to sum").is_greater(0)
-	assert_int(summed).override_failure_message(
-			"the forecast took one attacker.s damage rather than both").is_greater(heaviest)
+	game.hover_presenter.update_hover_visuals(Vector2i(2, 2))   # IDLE over the same cell
+	assert_array(_om().reach_line_marks).override_failure_message(
+			"the marks are up at rest, which is what slice 3 deleted them for").is_empty()
+
+	_hover_destination(mover, Vector2i(2, 2))
+	assert_int(_om().reach_line_marks.size()).override_failure_message(
+			"the gesture drew nothing, so the teardown below proves nothing").is_equal(1)
+
+	game.exit_current_mode()
+	assert_array(_om().reach_line_marks).override_failure_message(
+			"the marks outlived the move gesture -- leaving a mode is not a cell change, so the "
+			+ "hover sweep never comes along to take them down").is_empty()
 
 
-func test_the_intent_channel_clears_on_board_load() -> void:
-	_enable_enemy_ai()
-	var mover := _spawn(PLAYER, Vector2i(1, 1))
-	_spawn(ENEMY, Vector2i(3, 2))
-	game.enter_move_mode(mover)
-	game.selected_unit = mover
-	game._click_choosing_move(Vector2i(2, 2))
-	game.refresh_threat_plan()
-	assert_bool(_om().intent_marks.size() > 0).is_true()
+# --- The prediction that STAYS (#710 slice 2, kept at #1069) ------------------------------------
+#
+# The dev, retiring the readout: "don't get rid of the intent logic, we might end up using it
+# somewhere else." So these ask about AIController.preview_faction_turn directly -- it has no
+# production caller now, and a seam nobody draws is exactly the kind that rots quietly.
 
-	game._clear_threat_plan()
-	assert_array(_om().intent_marks).is_empty()
-	assert_array(_om().intent_fells).is_empty()
-
-
-# #1001's cheap half. The commonest shape of the whole feature: you line up the kill, and the board
-# goes on saying the dead man is about to hit you -- which undercuts exactly the trust the preview
-# is for. Dropped at the harvest, so what the AI DECIDED is untouched (a doomed enemy still
-# influenced its squadmates' plan, which is the declared limit).
+# A man your own plan kills makes no promises. Without this the preview goes on saying the dead man
+# is about to hit you, which undercuts exactly the trust it is for. Dropped at the HARVEST, so what
+# the AI decided is untouched (a doomed enemy still influenced its squadmates' plan, the declared
+# limit).
 func test_an_enemy_your_plan_fells_previews_no_intent() -> void:
 	_enable_enemy_ai()
 	var hero := _spawn(PLAYER, Vector2i(2, 2))
 	var foe := _spawn(ENEMY, Vector2i(3, 2))
-	game.threat_view = game.ThreatView.EVERYTHING
-	game.refresh_threat_plan()
-	assert_int(_om().intent_marks.size()).override_failure_message(
+	assert_int(game.ai_controller.preview_faction_turn(PLAYER).size()).override_failure_message(
 			"the enemy intends nothing to begin with, so this case cannot see its own claim") \
 		.is_equal(1)
 
@@ -803,13 +669,9 @@ func test_an_enemy_your_plan_fells_previews_no_intent() -> void:
 	hero.equipped_weapon = H.make_weapon(20)
 	var attack := AttackAction.declare(hero, hero.movement.cell, foe.movement.cell)
 	game.squad_manager.queue_action(hero.squad, attack)
-	game.refresh_threat_plan()
 
-	assert_array(_om().intent_marks).override_failure_message(
+	assert_array(game.ai_controller.preview_faction_turn(PLAYER)).override_failure_message(
 			"a man your own plan fells is still promising to attack you").is_empty()
-	assert_bool(game.threat_forecast().is_empty()).override_failure_message(
-			"the mark went but its damage is still coming off the victim's health bar") \
-		.is_true()
 
 
 # ...and the other direction, which is the one that matters more: a blow that does NOT fell leaves
@@ -820,14 +682,12 @@ func test_an_enemy_your_plan_only_wounds_still_previews_its_attack() -> void:
 	var hero := _spawn(PLAYER, Vector2i(2, 2))
 	var foe := _spawn(ENEMY, Vector2i(3, 2))
 	foe.set_current_hp(foe.get_max_hp())
-	game.threat_view = game.ThreatView.EVERYTHING
 	hero.equipped_weapon = H.make_weapon(1)
 	var attack := AttackAction.declare(hero, hero.movement.cell, foe.movement.cell)
 	game.squad_manager.queue_action(hero.squad, attack)
-	game.refresh_threat_plan()
 
 	assert_bool(foe.is_active()).override_failure_message(
 			"the fixture felled it after all, so this case proves nothing").is_true()
-	assert_int(_om().intent_marks.size()).override_failure_message(
+	assert_int(game.ai_controller.preview_faction_turn(PLAYER).size()).override_failure_message(
 			"a wounded enemy stopped being previewed -- the filter is dropping the living") \
 		.is_equal(1)
