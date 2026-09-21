@@ -18,8 +18,12 @@ class_name SettingsScreen
 # ruling in docs/design/presentation-effects.md that a settings surface DRIVES that switch rather
 # than a second one growing beside it only holds if this page never learns a setting's name.
 #
-# TWO ROW KINDS since #418, and the projection survives it: the page learns that a row is a toggle
-# or a choice — which the store answers — never WHICH setting it is looking at.
+# FOUR ROW KINDS since #1049 (two at #418, the level at #136, the text box last), and the projection
+# survives all of them: the page learns that a row is a toggle, a choice, a level or a text box —
+# which the store answers — never WHICH setting it is looking at. That is the property worth
+# defending, and the text row is the one that came closest to breaking it: parking a name in some
+# other store would have meant this page reading a second source for one row, i.e. learning that
+# row's name. A fourth ROW KIND keeps the page generic; a fourth STORE would not have.
 #
 # ITS CONTROLS FOLLOW THE STORE, they do not merely write to it (#647, dev ruling 2026-08-28: *"if
 # there is a setting in both dev and player controls, I don't want them to ever disagree"*). The
@@ -65,6 +69,7 @@ var _toggles: Dictionary[PlayerSettings.Setting, CheckButton] = {}
 var _segments: Dictionary[PlayerSettings.Setting, Array] = {}
 var _levels: Dictionary[PlayerSettings.Setting, HSlider] = {}
 var _readouts: Dictionary[PlayerSettings.Setting, Label] = {}
+var _texts: Dictionary[PlayerSettings.Setting, LineEdit] = {}
 
 func _init() -> void:
 	button_size = Vector2(150, 36)
@@ -244,6 +249,8 @@ func _add_row(parent: Container, setting: PlayerSettings.Setting) -> void:
 		_add_choice_row(parent, setting)
 	elif PlayerSettings.is_level(setting):
 		_add_level_row(parent, setting)
+	elif PlayerSettings.is_text(setting):
+		_add_text_row(parent, setting)
 	else:
 		_add_toggle_row(parent, setting)
 	_apply_desc_tooltip(parent, first, setting)
@@ -293,6 +300,37 @@ func _add_choice_row(parent: Container, setting: PlayerSettings.Setting) -> void
 		built.append(segment)
 	parent.add_child(strip)
 	_segments[setting] = built
+
+
+# A LineEdit (#1049), and the ONE row on this page whose control must not be reconciled while it is
+# in use -- see _process. Everything else here mirrors a value the player CHOSE with one gesture; a
+# name is built a character at a time, and a value that is only half-typed is still the live value.
+#
+# max_length comes off the setting rather than being typed here, so the box and the store share one
+# number: a box that let somebody finish typing a 40-character name while the store cut it to 32
+# would silently disagree at the moment of submission.
+func _add_text_row(parent: Container, setting: PlayerSettings.Setting) -> void:
+	var title := Label.new()
+	title.text = PlayerSettings.title_of(setting)
+	parent.add_child(title)
+
+	var box := LineEdit.new()
+	box.text = PlayerSettings.text_of(setting)
+	box.max_length = PlayerSettings.max_length_of(setting)
+	box.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	# Straight through to the store on every keystroke, the page's no-Apply rule. The cost is real
+	# and accepted: set_value saves the cfg per write, so a twelve-character name is twelve saves --
+	# the LEVEL row already takes twenty across one slider drag, and a name is typed once.
+	#
+	# The store CLEANS but does not trim mid-word (PlayerSettings._clean_text strips the edges only
+	# on the way out), which is what lets a two-word name be typed at all.
+	box.text_changed.connect(func(value: String): PlayerSettings.set_text(setting, value))
+	# Enter and clicking away both mean "done", and both put the STORED value back in the box --
+	# which is the player seeing what was actually kept, trailing space and all removed.
+	box.text_submitted.connect(func(_value: String): box.release_focus())
+	box.focus_exited.connect(func(): box.text = PlayerSettings.text_of(setting))
+	parent.add_child(box)
+	_texts[setting] = box
 
 
 # An HSlider, which needs none of the choice row's popup caution — a slider is a plain Control and
@@ -362,6 +400,24 @@ func _process(_delta: float) -> void:
 			slider.set_value_no_signal(level)
 			var readout: Label = _readouts[setting]
 			readout.text = _level_text(level)
+	# THE ONE EXCEPTION TO "CONTROLS FOLLOW THE STORE" (#1049), and it is under the caret only.
+	#
+	# A text row is the only control here whose live value is built a keystroke at a time, and the
+	# store CLEANS what it is handed -- so writing the stored value back into a focused box fights
+	# the typist: a trailing space is stripped the instant it is typed, and a two-word name can
+	# never be entered at all. The doctrine holds everywhere it can and stands down where it cannot.
+	#
+	# Which is why focus_exited puts the stored value back (see _add_text_row): the box is
+	# reconciled the moment it stops being the thing the player is holding, so the exemption lasts
+	# exactly as long as the typing does, and the other OS window's copy of this page still wins the
+	# moment focus leaves.
+	for setting: PlayerSettings.Setting in _texts:
+		var box: LineEdit = _texts[setting]
+		if box.has_focus():
+			continue
+		var text := PlayerSettings.text_of(setting)
+		if box.text != text:
+			box.text = text
 
 # THE DESCRIPTION IS HOVER TEXT, not a line under the row (dev, 2026-09-02: the page was getting too
 # crowded). The store is untouched -- `desc` is still the one place the words live and this page still

@@ -20,6 +20,7 @@ const ACTION_ROW_SEPARATION := 12
 
 var _kind: BugReporter.Kind
 var _note_edit: TextEdit
+var _name_note: Label
 var _status: Label
 var _actions: HBoxContainer
 var _report_dir: String = ""
@@ -66,6 +67,16 @@ func _build(default_kind: BugReporter.Kind, has_board: bool, upload_enabled: boo
 	disclosure.modulate = Color(0.75, 0.75, 0.78)
 	content.add_child(disclosure)
 
+	# Beneath the disclosure and in its register, because it is the same promise one step more
+	# specific: that line says a name goes, this one says WHICH.
+	_name_note = Label.new()
+	_name_note.text = _name_note_text()
+	_name_note.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_name_note.custom_minimum_size = Vector2(NOTE_MIN_SIZE.x, 0)
+	_name_note.add_theme_font_size_override("font_size", 13)
+	_name_note.modulate = Color(0.75, 0.75, 0.78)
+	content.add_child(_name_note)
+
 	_status = Label.new()
 	_status.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_status.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
@@ -101,13 +112,30 @@ func _add_kind_button(row: HBoxContainer, group: ButtonGroup, kind: BugReporter.
 	button.pressed.connect(func() -> void: _kind = kind)
 	row.add_child(button)
 
+# PLACEHOLDER WORDING, as the name line below is: "Nothing else is collected" stopped being true
+# the day a name could ride along (#1049), so it could not ship unedited -- but player-facing prose
+# is the dev's, and this states the facts rather than being finished copy.
 func _disclosure_text(has_board: bool, upload_enabled: bool) -> String:
 	if not upload_enabled:
 		return "Saving to this machine only -- no intake endpoint is configured in this build."
 	var carried := "a screenshot and the last 80 lines of the game log"
 	if has_board:
 		carried = "a screenshot, a snapshot of the current board, and the last 80 lines of the game log"
-	return "Submitting sends the developer your message plus %s. Nothing else is collected." % carried
+	return "Submitting sends the developer your message plus %s, and the name below. Nothing else is collected." % carried
+
+
+# WHAT NAME IS ABOUT TO GO WITH THIS, said out loud on the card that sends it (#1049). The player
+# set it on the launch notice or the settings page, possibly weeks ago, and pressing Submit is the
+# moment it matters -- a card that quietly attaches an identity the player has forgotten about is
+# the thing the opt-in was supposed to avoid. Read fresh at build rather than passed in, because the
+# store is the one answer and this is a reader of it like any other.
+#
+# PLACEHOLDER WORDING, for the dev.
+func _name_note_text() -> String:
+	var reporter := PlayerSettings.text_of(PlayerSettings.Setting.PLAYER_NAME)
+	if reporter == "":
+		return "Sending anonymously. You can add a name in Settings."
+	return "Sending as %s. You can change this in Settings." % reporter
 
 # ==============================================================================
 #  The three states: collecting, sending, done

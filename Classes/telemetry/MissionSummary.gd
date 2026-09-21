@@ -143,6 +143,11 @@ static func of(events: Array[Dictionary]) -> Dictionary:
 		# also what lets the intake read this one line and never open the event log at all.
 		"run_id": start.get("run_id", ""),
 		"install_id": start.get("install_id", ""),
+		# ...and WHO, by their own account (#1049). Promoted for exactly the reason the three above
+		# are: the summary is the row the intake indexes, so a name that lived only in the events
+		# blob could not answer "whose run is this" without opening every log. "" is the honest
+		# default and the common one -- it means anonymous, not missing.
+		"player_name": start.get("player_name", ""),
 		"session_id": start.get("session_id", ""),
 		"scenario": start.get("scenario", ""),
 		"build": start.get("build", ""),

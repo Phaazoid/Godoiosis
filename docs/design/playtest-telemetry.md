@@ -55,6 +55,27 @@ The summary is **not** a third file: it is the last line of the log, and it is a
 | 2026-09-08 | **Query recipes, not a dashboard** — the arc ends when runs are in D1 and the README carries copy-paste queries. |
 | 2026-09-09 | **A run may be refused at the client only when it is structurally EMPTY.** Anything merely thin is sent and stamped. Refines FLAG-NEVER-EXCLUDE rather than repealing it. Settled by [#851](https://github.com/Phaazoid/Godoiosis/issues/851) — see *Where the line between refusing and flagging fell* below. |
 | 2026-09-09 | **A run whose board lost a reference is SEEDED and marked untrusted, not refused.** The replay harness is the tool you would reach for to investigate such a run, so refusing removes the only instrument. Settled by [#871](https://github.com/Phaazoid/Godoiosis/issues/871). |
+| 2026-09-20 | **A player may NAME themselves, opt-in, and the name rides both pipes.** Freeform, skippable, default empty -- so the record stays anonymous unless somebody chose otherwise. Settled by [#1049](https://github.com/Phaazoid/Godoiosis/issues/1049). |
+
+### Who a run is from (#1049, 2026-09-20)
+
+**The install id is still the only identity the system MINTS.** It is random, generated once, derived from nothing about the machine, and it remains what joins one person's runs to each other.
+
+**What #1049 added is an identity the player may OFFER**: a name they type for themselves, asked once on the launch notice and editable afterwards on the settings page. It lives in `PlayerSettings` as the store's first TEXT row, `MissionLog` stamps it into `mission_start` beside `install_id`, and `MissionSummary` promotes it for the reason `sandbox` and `dev_mode` are promoted — the summary is the row the intake indexes, so a name reachable only through the events blob could not answer *whose run is this* without opening every log.
+
+**Opt-in, freeform, skippable, default empty, and each of those is load-bearing rather than courtesy.** [#1036](https://github.com/Phaazoid/Godoiosis/issues/1036) had just removed an identity taken from the machine *without anyone offering it* — a reporter's Windows account name, leaked into a public channel through an engine log tail. A name the player types into a box that says it is optional and need not be real is the opposite act, which is why the two rulings do not fight. Empty means anonymous everywhere that reads it, and nothing treats a blank as a problem to solve.
+
+**A rename is not retroactive, and that is the design rather than a limitation.** The name is stamped per RUN, so runs recorded before it was typed carry `""` — the answer to *who was playing* is the one they gave at the time. `install_id` is what gathers the rest: naming yourself on run 10 labels runs 1–9 **by query** (`WHERE json_extract(summary,'$.install_id') = ...`), never by rewrite.
+
+**No Worker change and no D1 migration were needed**, which is the one-blob-with-generated-columns design paying out exactly as intended: the field is reachable through `json_extract` the day it is first written, and promoting it to an indexed column later is one `ALTER` in a new `alter-*.sql` — never back-written into `schema.sql`.
+
+### The notice is VERSIONED, not a one-way bit (#1049)
+
+`TelemetryStore` keeps the last notice version acknowledged rather than a boolean, and `TelemetryNotice.VERSION` is what each card's copy is written for. **When what the game sends changes, the description of it is due again — to everyone, not only to installs that have never seen a card.**
+
+That was not an abstraction bought early. `notice_seen` was one-way, so a first-boot-only prompt would have reached every install *except* the ones already playing the itch demo — which is precisely the population whose reports could not be attributed, and the whole reason the ticket exists.
+
+**There is no migration, deliberately.** An install carrying the retired `notice_seen` key has no `notice_version`, reads 0, and is shown the card — which is the wanted behaviour, so the shim would have had to be written and then defeated. The dead key is left behind, this project's standing answer for a retired cfg key. `tests/ui/test_telemetry_notice.gd` writes that old key raw and asserts the card is due; adding the migration reds that case and nothing else.
 
 ### Why FLAG-NEVER-EXCLUDE is a law and not a preference
 
@@ -72,7 +93,7 @@ The law above has exactly one exception and it is drawn where **there is nothing
 
 ## What is recorded, and what is deliberately not
 
-Recorded: the mission's start (roster, scenario, build, install and session ids), every turn's pre-tick vitals, every resolution pass with its committed queue and its per-hit outcomes, the four decision channels a replay needs (a rescue's chosen `haul_to`, the squad verbs, mid-battle gear changes, a `dev_touched` flag), the lifecycle events, and the ending.
+Recorded: the mission's start (roster, scenario, build, install and session ids, **and `player_name` since [#1049](https://github.com/Phaazoid/Godoiosis/issues/1049) — see *Who a run is from* below**), every turn's pre-tick vitals, every resolution pass with its committed queue and its per-hit outcomes, the four decision channels a replay needs (a rescue's chosen `haul_to`, the squad verbs, mid-battle gear changes, a `dev_touched` flag), the lifecycle events, and the ending.
 
 **`build` is a version string, and it resolves to a commit and to a kept binary only because the build was tagged** ([#1027](https://github.com/Phaazoid/Godoiosis/issues/1027)). It is the whole of what identifies the code a run came from — `Checkout.describe()`'s `branch @ sha` is dev-only by construction, so a stranger's run carries `v0.188.3` and nothing more. `tools/archive-build.ps1` is what makes a handed-out build: it tags `v<version>` at the commit it exported from and keeps the zip, which is what lets a run recorded weeks ago be replayed against the rules that actually produced it rather than against today's.
 

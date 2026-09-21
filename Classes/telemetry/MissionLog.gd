@@ -483,6 +483,12 @@ func _mission_start_fields() -> Dictionary:
 	return {
 		"run_id": _run_id,
 		"install_id": TelemetryStore.install_id(),
+		# What the player asked to be called, or "" (#1049). Beside install_id because it QUALIFIES
+		# it rather than replacing it: the id is what joins a person's runs to each other, and this
+		# is what puts a name on the group. Stamped per RUN rather than resolved at query time,
+		# which means a rename is not retroactive -- deliberate, since the answer to "who was
+		# playing" is the one they gave then, and install_id still gathers the rest.
+		"player_name": PlayerSettings.text_of(PlayerSettings.Setting.PLAYER_NAME),
 		"session_id": session_id,
 		"build": Build.version(),
 		"checkout": Checkout.describe(),

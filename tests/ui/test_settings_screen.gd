@@ -11,6 +11,7 @@ extends GdUnitTestSuite
 
 const MAIN_SCENE := "res://Scenes/Main.tscn"
 const LEVEL_SETTING := PlayerSettings.Setting.SFX_VOLUME
+const TEXT_SETTING := PlayerSettings.Setting.PLAYER_NAME
 
 var _main: Node
 var game: Node2D
@@ -334,6 +335,65 @@ func test_the_slider_reconciles_against_a_change_made_elsewhere() -> void:
 
 	assert_float(slider.value).override_failure_message(
 		"the page did not follow a level changed underneath it").is_equal_approx(0.15, 0.001)
+
+
+# ==============================================================================
+#  The text row (#1049)
+# ==============================================================================
+
+func test_typing_in_the_name_box_writes_the_preference() -> void:
+	SettingsScreen.show_screen(game)
+	await _frames(4)
+	var screen: Node = _first_modal_of(SettingsScreen)
+	var box: LineEdit = _first_of(screen, LineEdit)
+	assert_object(box).override_failure_message(
+		"the settings page drew no text box for the name row").is_not_null()
+
+	box.text = "Jae"
+	box.text_changed.emit("Jae")
+	await _frames(2)
+
+	assert_str(PlayerSettings.text_of(TEXT_SETTING)).override_failure_message(
+		"typing in the box did not reach the store").is_equal("Jae")
+
+
+func test_a_two_word_name_survives_the_pages_own_reconcile() -> void:
+	# THE FALSIFICATION TARGET for the focused-box guard in _process. This page rewrites every
+	# control from the store each frame, and the store trims what it hands back -- so without the
+	# guard the trailing space is stripped off the box the instant it is typed and the second word
+	# can never be started. Deleting the has_focus() check reds this case and nothing else here.
+	SettingsScreen.show_screen(game)
+	await _frames(4)
+	var screen: Node = _first_modal_of(SettingsScreen)
+	var box: LineEdit = _first_of(screen, LineEdit)
+	box.grab_focus()
+	assert_bool(box.has_focus()).override_failure_message(
+		"the box never took focus, so this case cannot see the guard").is_true()
+
+	# Mid-word: what a typist has on screen after pressing space.
+	box.text = "Jae "
+	box.text_changed.emit("Jae ")
+	await _frames(3)
+
+	assert_str(box.text).override_failure_message(
+		"the reconcile rewrote the box under the caret -- a two-word name cannot be typed"
+		).is_equal("Jae ")
+
+
+func test_the_box_follows_a_name_changed_elsewhere_once_it_is_not_being_typed_in() -> void:
+	# The other side of that guard: the exemption lasts exactly as long as the typing does, or the
+	# page stops following the store at all and #647's two-surfaces rule is broken for this row.
+	SettingsScreen.show_screen(game)
+	await _frames(4)
+	var screen: Node = _first_modal_of(SettingsScreen)
+	var box: LineEdit = _first_of(screen, LineEdit)
+	box.release_focus()
+
+	PlayerSettings.set_text(TEXT_SETTING, "Torv")
+	await _frames(3)
+
+	assert_str(box.text).override_failure_message(
+		"the page did not follow a name changed underneath it").is_equal("Torv")
 
 
 func test_the_close_button_is_somewhere_a_player_can_actually_reach() -> void:

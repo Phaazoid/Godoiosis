@@ -204,7 +204,7 @@ func test_the_report_and_the_summary_name_the_build() -> void:
 	var text := BugReporter.build_report_text("stamp", "IDLE", BugReporter.Kind.BUG, "", null, null, no_units, "log")
 	assert_str(text).contains("Build: **%s**" % Build.version())
 
-	var summary := BugReporter.build_summary("stamp", "IDLE", BugReporter.Kind.BUG, "note")
+	var summary := BugReporter.build_summary("stamp", "IDLE", BugReporter.Kind.BUG, "note", "", "")
 	assert_str(summary).contains("v%s" % Build.version())
 
 # ---- which checkout produced it (#295) ----
@@ -221,7 +221,7 @@ func test_the_report_and_the_summary_name_the_checkout() -> void:
 	var text := BugReporter.build_report_text("stamp", "IDLE", BugReporter.Kind.BUG, "", null, null, no_units, "log")
 	assert_str(text).contains("Checkout: **%s**" % expected)
 
-	var summary := BugReporter.build_summary("stamp", "IDLE", BugReporter.Kind.BUG, "note")
+	var summary := BugReporter.build_summary("stamp", "IDLE", BugReporter.Kind.BUG, "note", "", "")
 	assert_str(summary).contains(expected)
 
 func test_the_checkout_does_not_displace_the_version() -> void:
@@ -387,13 +387,56 @@ func test_a_bare_data_directory_still_loses_the_account_name() -> void:
 	assert_str(text).not_contains(home)
 	assert_str(text).not_contains(dir)
 
+# ---- who sent it (#1049) ----
+
+func test_the_summary_and_the_report_both_name_the_reporter() -> void:
+	# The whole point of the ticket: a report that arrives from a stranger can be followed up on.
+	# Falsified by dropping `who` from build_summary's format, or the From line from the report.
+	var no_units: Array[Unit] = []
+	var summary := BugReporter.build_summary("stamp", "IDLE", BugReporter.Kind.BUG, "note",
+		"Jae", "abc123")
+	assert_str(summary).contains("Jae")
+	assert_str(summary).contains("abc123")
+
+	var text := BugReporter.build_report_text("stamp", "IDLE", BugReporter.Kind.BUG, "",
+		null, null, no_units, "log", "", "", "", "", "Jae", "abc123")
+	assert_str(text).contains("From: **Jae**")
+	assert_str(text).contains("Install: **abc123**")
+
+func test_an_unnamed_reporter_is_stated_rather_than_left_blank() -> void:
+	# "(nothing typed)"'s rule one field along: a line that sometimes carries a field and sometimes
+	# does not reads as a bug in the reporter itself, and anonymous is a real answer. The install id
+	# still rides, which is what lets two unnamed reports be told apart.
+	var no_units: Array[Unit] = []
+	var summary := BugReporter.build_summary("stamp", "IDLE", BugReporter.Kind.BUG, "note",
+		"", "abc123")
+	assert_str(summary).contains("anonymous")
+	assert_str(summary).contains("abc123")
+
+	var text := BugReporter.build_report_text("stamp", "IDLE", BugReporter.Kind.BUG, "",
+		null, null, no_units, "log", "", "", "", "", "", "abc123")
+	assert_str(text).contains("From: **anonymous**")
+
+func test_a_name_carrying_a_path_is_scrubbed_out_of_the_summary() -> void:
+	# THE TRAILING SCRUB IS NO LONGER UNOBSERVABLE. build_summary's own comment kept that call for
+	# "a field added to this line later"; the reporter name IS that field -- player-typed, and
+	# unlike the note it is scrubbed by nothing upstream. Falsified by deleting the trailing
+	# scrub_paths, which survived every case in this file before #1049.
+	var dir := _user_data_dir()
+
+	var summary := BugReporter.build_summary("stamp", "IDLE", BugReporter.Kind.BUG, "note",
+		"%s/reports" % dir, "abc123")
+
+	assert_str(summary).contains(BugReporter.USER_TOKEN)
+	assert_str(summary).not_contains(dir)
+
 func test_the_discord_summary_scrubs_the_note_too() -> void:
 	# The other thing that leaves the machine, and the one carrying the player's own words.
 	# Falsified by dropping the scrub from build_summary.
 	var dir := _user_data_dir()
 
 	var summary := BugReporter.build_summary("stamp", "IDLE", BugReporter.Kind.BUG,
-		"crashed while saving to %s/reports/x/" % dir)
+		"crashed while saving to %s/reports/x/" % dir, "", "")
 
 	assert_str(summary).contains("user://reports/x/")
 	assert_str(summary).not_contains(dir)
@@ -418,7 +461,7 @@ func test_a_path_straddling_the_summary_truncation_is_scrubbed_before_the_cut() 
 	var fragment := dir.substr(0, keep)
 
 	var summary := BugReporter.build_summary("stamp", "IDLE", BugReporter.Kind.BUG,
-		"%s%s/reports/x/%s" % [lead, dir, "y".repeat(100)])
+		"%s%s/reports/x/%s" % [lead, dir, "y".repeat(100)], "", "")
 
 	assert_str(summary).contains("full text in report.md")   # the cut really happened
 	assert_str(summary).not_contains(fragment)

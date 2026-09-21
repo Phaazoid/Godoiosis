@@ -118,10 +118,10 @@ func _build() -> void:
 	_report.custom_minimum_size.y = 160
 	_rows.add_child(_report)
 
-	DevWidgets.add_heading(_rows, "The first-launch notice")
+	DevWidgets.add_heading(_rows, "The launch notice")
 	var notice := Button.new()
 	notice.text = "Show the notice again"
-	notice.tooltip_text = "Forgets that this install has seen the playtest-data notice, so the next launch shows it. Leaves the anonymous install id alone, which deleting the file would not."
+	notice.tooltip_text = "Forgets which version of the playtest-data notice this install has acknowledged, so the next launch shows it. Leaves the install id and the name alone, which deleting the file would not."
 	notice.pressed.connect(_on_reset_notice)
 	_rows.add_child(notice)
 	_set_running(false)
