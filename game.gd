@@ -884,7 +884,9 @@ func enter_move_mode(unit: Unit):
 	game_state = GameState.CHOOSING_MOVE
 	if unit.has_squad():
 		draw_squad_leader_range(unit.squad, unit.squad.leader.get_projected_destination())
-	overlay_manager.show_overlay(OverlayManager.OverlayType.MOVE, get_move_range(moverange, unit), OverlayManager.ATLAS_COORDS)
+	var standable := get_move_range(moverange, unit)
+	overlay_manager.show_overlay(OverlayManager.OverlayType.MOVE, standable, OverlayManager.ATLAS_COORDS)
+	show_player_reach(unit, standable)
 	if not unit.is_leader():
 		var unreachable = moverange.squad_unreachable.keys()
 		overlay_manager.show_overlay(OverlayManager.OverlayType.INVALIDMOVE, unreachable, OverlayManager.ATLAS_COORDS)
@@ -906,6 +908,7 @@ func enter_group_move_mode(unit: Unit):
 		else:
 			red.append(cell)
 	overlay_manager.show_overlay(OverlayManager.OverlayType.MOVE, green, OverlayManager.ATLAS_COORDS)
+	show_player_reach(unit, green)   # the FOLLOWABLE set only: the red grows from the drawn blue
 	overlay_manager.show_overlay(OverlayManager.OverlayType.INVALIDMOVE, red, OverlayManager.ATLAS_COORDS)
 
 # What the aim being taken will PRODUCE (#413). Overwatch is declared through the normal targeting
@@ -1787,10 +1790,14 @@ func drop_enemy_pin(enemy: Unit) -> void:
 # THE one answer to what enemy markup is up: the STANDING set (every enemy while the ranges key is
 # on, else whoever is pinned) plus the TRANSIENT one under the pointer. Every path that can change
 # either calls this -- the pointer moving, the key, a pin, and the field being dropped -- because
-# show_danger replaces its layer wholesale, so anything that paints a subset on its own erases the
+# show_threat replaces its layer wholesale, so anything that paints a subset on its own erases the
 # rest. An EMPTY subject list with the key on means "every enemy", which is ThreatField's own
 # convention for a union.
 func _redraw_enemy_ranges(hovered: Unit = null) -> void:
+	# The pin FLASH first (#1066), deliberately ahead of the walk guard below. It writes
+	# sprite.modulate, which no board snapshot can disturb -- and the guard's own event, a plan
+	# executing, is exactly when the ranges key can clear every pin at once.
+	_sync_pin_flashes()
 	# NOT WHILE ANYBODY IS WALKING (slice 4). threat_field() stands every unit on its projected cell
 	# through MovementComponent.set_cell, which writes `position` -- and a walk is a tween ON that
 	# property, so a snapshot taken mid-pass snaps the sprite to a cell centre until the tween writes
@@ -1807,42 +1814,39 @@ func _redraw_enemy_ranges(hovered: Unit = null) -> void:
 		if hovered != null and _is_previewable_enemy(hovered) and not subjects.has(hovered):
 			subjects.append(hovered)
 		if subjects.is_empty():
-			overlay_manager.clear_enemy_move()
-			overlay_manager.clear_danger()
-			overlay_manager.clear_dim_ranges()
+			overlay_manager.clear_threat()
 			overlay_manager.clear_focus_outline()
 			overlay_manager.clear_leash()
 			return
 	var field := threat_field()
-	# THE CROWD IS SUBTRACTED FROM THE FOCUS, and only in that direction. The bright pair keeps
-	# overlapping exactly as it shipped -- the dev's move-over-reach ruling composites blue OVER red,
-	# so making those two disjoint would repaint every cell he approved. What must not happen is a
-	# dim quad UNDER a bright one: four coincident alphas read differently from two, so the focused
-	# envelope would change tone wherever somebody else's field crossed it. With nobody hovered the
-	# focus set is empty, the dim layers stay empty, and the board looks exactly as it did.
-	var focus: Array[Unit] = []
-	if hovered != null and _is_previewable_enemy(hovered) and (ranges_shown or subjects.has(hovered)):
-		focus.append(hovered)
-	var lit: Array[Unit] = focus if not focus.is_empty() else subjects
-	var bright_move := field.move_cells_of(lit)
-	var bright_reach := field.reach_cells_of(lit)
-	var dim_move: Array[Vector2i] = []
-	var dim_reach: Array[Vector2i] = []
-	if not focus.is_empty():
-		var covered := bright_move + bright_reach
-		dim_move = _without(field.move_cells_of(subjects), covered)
-		dim_reach = _without(field.reach_cells_of(subjects), covered)
-	overlay_manager.show_danger(bright_reach)
-	overlay_manager.show_enemy_move(bright_move)
-	overlay_manager.show_dim_ranges(dim_reach, dim_move)
+	# ONE UNBROKEN FIELD (#1066), at full strength for everybody: move and reach unioned into a
+	# single layer, and no crowd tier under it. The dev's two rulings meet here -- an enemy stops
+	# answering "stand" as against "hit" (that pair is the vocabulary your OWN unit speaks now), and
+	# nothing may dim ("the outline on the main one should be the only differentiator"). So the
+	# subtraction slice 4 needed is gone with the tier it protected, and the only set that still
+	# depends on who is hovered is the stroke.
+	var move_cells := field.move_cells_of(subjects)
+	var threat: Array[Vector2i] = move_cells + _without(field.reach_cells_of(subjects), move_cells)
+	overlay_manager.show_threat(threat)
 	# The stroke goes round the WHOLE footprint, move and reach together: it answers "this is the
-	# field you are pointing at", which is a different question from which tone a cell carries. Only
+	# field you are pointing at", which is a different question from which cells carry a tone. Only
 	# ever drawn for a hovered enemy -- with V on and the pointer elsewhere there is nobody to name.
 	var outline: Array[Vector2i] = []
-	if not focus.is_empty():
-		outline = bright_move + _without(bright_reach, bright_move)
+	if hovered != null and _is_previewable_enemy(hovered) and (ranges_shown or subjects.has(hovered)):
+		var focus: Array[Unit] = [hovered]
+		var focus_move := field.move_cells_of(focus)
+		outline = focus_move + _without(field.reach_cells_of(focus), focus_move)
 	overlay_manager.show_focus_outline(outline, _board())
 	overlay_manager.reveal_leash(_leash_cells_of(subjects))
+
+
+# WHICH enemies wear the pin flash (#1066). Swept over every unit rather than diffed against the
+# last pass: set_pinned is idempotent, and a pin can end three different ways -- shift+click, the
+# ranges key's OFF, or the body dying -- so one sweep is cheaper than three correct diffs.
+func _sync_pin_flashes() -> void:
+	for unit: Unit in _all_units():
+		if is_instance_valid(unit) and unit.visuals != null:
+			unit.visuals.set_pinned(pinned_enemies.has(unit.get_instance_id()))
 
 
 func _without(cells: Array[Vector2i], taken: Array[Vector2i]) -> Array[Vector2i]:
@@ -1958,6 +1962,27 @@ func get_move_range(result: Dictionary, unit: Unit) -> Array[Vector2i]:
 			continue
 		cells.append(cell)
 	return cells
+
+# YOUR unit's attack reach (#1066, dev: "Blue for movement, attack range as red, like everyone
+# else"). Grown from exactly the cells drawn BLUE plus the one the body is standing on -- get_move_range
+# drops that cell because there is nothing to say about walking where you already are, and everything
+# to say about shooting from there.
+#
+# Taking the drawn set rather than the move-range Dictionary is the rule, and it is the rule at every
+# caller: the red answers "from anywhere the blue says you may stand", so the two can never disagree
+# about what is offered. In group-move mode the blue is only the FOLLOWABLE subset, and the red
+# narrows with it for free.
+#
+# It rides ThreatField.reach_from rather than a second walk -- see there for why the origins are
+# passed in rather than looked up, which is the difference between a permission and a prediction.
+func show_player_reach(unit: Unit, standable: Array[Vector2i]) -> void:
+	if unit == null or not is_instance_valid(unit):
+		overlay_manager.clear_reach()
+		return
+	var origins: Array[Vector2i] = standable.duplicate()
+	if not origins.has(unit.movement.cell):
+		origins.append(unit.movement.cell)
+	overlay_manager.show_reach(ThreatField.reach_from(unit, _board(), origins))
 
 # Where a set of units' SPRITES are -- projected, not live (#126), so the target-pick overlay marks the
 # tile the player can actually see and click. Both no-plan callers (squad-up, join-squad) are gated on an

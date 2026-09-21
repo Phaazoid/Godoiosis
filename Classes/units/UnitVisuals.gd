@@ -19,8 +19,17 @@ var projected := false
 var visual_tween: Tween
 const HIGHLIGHT_MODULATE := Color(1.4, 1.4, 1.0)   # warm yellow-white; tune to taste
 const TARGET_PULSE_MODULATE := Color(1.6, 1.6, 1.6)   # peak of the aim-target pulse
+# ...and the peak of the PIN flash (#1066, dev: "units that are toggled need to be indicated in some
+# way. I think they should flash, too."). Deliberately shallower than the aim's: a pin is a bookmark
+# you set yourself and lives for as long as you leave it there, so it breathes rather than strobes.
+static var PIN_PULSE_MODULATE := Color(1.3, 1.3, 1.3)
 
 var pulse_tween: Tween
+# TRUE while this unit's ranges are PINNED up. Held as a flag rather than read back off pin_tween
+# because the pin OUTLIVES its own pulse: an aim pulse outranks it and takes the sprite, and the
+# flash has to come back when the aim moves on.
+var pinned := false
+var pin_tween: Tween
 
 
 var base_position: Vector2
@@ -47,18 +56,46 @@ func start_pulse() -> void:
 	if sprite == null or pulse_tween != null:
 		return
 	pulse_tween = Pulse.start(self, sprite, &"modulate", base_modulate, TARGET_PULSE_MODULATE)
+	_sync_pin_flash()   # a pin flash underneath yields -- see there
 
 func stop_pulse() -> void:
 	if pulse_tween == null:
 		return
 	Pulse.stop(pulse_tween, sprite, &"modulate", base_modulate)
 	pulse_tween = null
+	_sync_pin_flash()   # ...and comes back
+
+# The pin flash (#1066): this unit's ranges are held up by a shift+click rather than by the pointer,
+# and nothing on the board said so. Idempotent and called on every redraw rather than only on the
+# change, so a flash killed by reset_visuals is rebuilt on the next pass instead of staying dark.
+func set_pinned(value: bool) -> void:
+	pinned = value
+	_sync_pin_flash()
+
+# THE PRECEDENCE, stated once and in one place: an aim pulse OUTRANKS a pin flash. Both write
+# sprite.modulate and a live pulse owns that channel (#442), so exactly one may run -- and "this
+# unit is about to be hit" is news, where "you pinned it" is a bookmark you set yourself.
+func _sync_pin_flash() -> void:
+	var want: bool = pinned and sprite != null and pulse_tween == null
+	if want == (pin_tween != null):
+		return
+	if want:
+		pin_tween = Pulse.start(self, sprite, &"modulate", base_modulate, PIN_PULSE_MODULATE)
+	else:
+		Pulse.stop(pin_tween, sprite, &"modulate", base_modulate)
+		pin_tween = null
 
 func reset_visuals():
 	if sprite == null:
 		return
 
 	stop_pulse()
+	# The pin flash goes too, and `pinned` deliberately does NOT: this is a reset of the CHANNEL,
+	# and the one-shot alarm that follows it must own modulate outright. The next redraw's
+	# set_pinned rebuilds the flash.
+	if pin_tween != null:
+		Pulse.stop(pin_tween, sprite, &"modulate", base_modulate)
+		pin_tween = null
 	if visual_tween:
 		visual_tween.kill()
 
@@ -99,8 +136,9 @@ func set_hovered(value: bool):
 func set_highlighted(value: bool) -> void:
 	if sprite == null:
 		return
-	# A live target-pulse owns modulate; hovering a pulsing unit must not stomp it.
-	if pulse_tween == null:
+	# A live pulse owns modulate; hovering a pulsing unit must not stomp it. The pin flash counts,
+	# for the same reason and by the same rule -- and a pinned enemy is hovered constantly.
+	if pulse_tween == null and pin_tween == null:
 		sprite.modulate = HIGHLIGHT_MODULATE if value else base_modulate
 	set_hovered(value)
 

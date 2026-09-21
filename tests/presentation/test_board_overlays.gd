@@ -649,29 +649,36 @@ func test_no_overlay_layer_can_sort_over_the_flame() -> void:
 			.is_less(BoardOverlays.UNIT_RENDER_PRIORITY)
 
 
-func test_the_enemys_move_tone_draws_over_its_reach_and_under_your_own_range() -> void:
-	# A DEV RULING made structural (#710 slice 3): "a body can stand here" is the louder fact, so
-	# the move envelope draws over the reach -- and your own move range still draws over both, or
-	# the cell you are about to step on stops reading. Before this the two enemy tones shared
-	# MOVE's sort 0, where the order was unexpressible: equal render_priority and equal depth (a
-	# transparent quad writes none) leaves the winner to pool allocation order, not to the table.
-	var danger: int = BoardOverlays.LAYERS[BoardOverlays.Layer.DANGER]["sort"]
-	var envelope: int = BoardOverlays.LAYERS[BoardOverlays.Layer.ENEMY_MOVE]["sort"]
+func test_your_own_two_tones_draw_over_the_enemys_field() -> void:
+	# A DEV RULING made structural (#1066): the enemy is ONE field under BOTH of your tones, so a
+	# cell you may step onto while it is threatened composites as blue TINTED purple rather than as
+	# purple -- which is what says "both" with no third colour authored anywhere. Your reach sits
+	# between them for the same reason the enemy's pair used to be ordered this way: the louder
+	# fact draws on top, and the quieter survives as the halo past it.
+	#
+	# A sort IS a plane (_lift_of), which is what makes this expressible at all: these three
+	# overlap on nearly every cell, and at equal render_priority and equal depth (a transparent
+	# quad writes none) the winner falls to pool allocation order rather than to this table.
+	var threat: int = BoardOverlays.LAYERS[BoardOverlays.Layer.THREAT]["sort"]
+	var reach: int = BoardOverlays.LAYERS[BoardOverlays.Layer.REACH]["sort"]
 	var own: int = BoardOverlays.LAYERS[BoardOverlays.Layer.MOVE]["sort"]
-	assert_int(danger).override_failure_message(
-			"the enemy's reach sorts at %d and its move envelope at %d -- the reach would draw over the envelope" \
-			% [danger, envelope]).is_less(envelope)
-	assert_int(envelope).override_failure_message(
-			"the enemy's move envelope sorts at %d and your own move range at %d -- the enemy tone would swallow your range" \
-			% [envelope, own]).is_less(own)
-	# ...and the CROWD's twins sit under BOTH of them (slice 4), in the same reach-then-envelope
-	# order, so the enemy under the pointer is the loud one whichever tone a cell carries.
-	var dim_danger: int = BoardOverlays.LAYERS[BoardOverlays.Layer.DANGER_DIM]["sort"]
-	var dim_envelope: int = BoardOverlays.LAYERS[BoardOverlays.Layer.ENEMY_MOVE_DIM]["sort"]
-	assert_int(dim_danger).is_less(dim_envelope)
-	assert_int(dim_envelope).override_failure_message(
-			"an unhovered enemy's move tone sorts at %d and the hovered one's reach at %d -- the crowd would draw over the focus" \
-			% [dim_envelope, danger]).is_less(danger)
+	assert_int(threat).override_failure_message(
+			"the enemy's field sorts at %d and your reach at %d -- their purple would draw over your red" \
+			% [threat, reach]).is_less(reach)
+	assert_int(reach).override_failure_message(
+			"your reach sorts at %d and your move range at %d -- the red would swallow the blue" \
+			% [reach, own]).is_less(own)
+
+
+func test_the_range_readout_speaks_in_three_layers_and_no_more() -> void:
+	# Slice 4's dim pair is GONE (#1066, dev: "They shouldn't dim at all, the outline on the main
+	# one should be the only differentiator"), and so is the enemy's own move/reach split. A law
+	# over the table rather than a grep, because a layer left in LAYERS is a layer something can
+	# still draw to -- which is how a deleted tier comes back wearing a stale caller's name.
+	var names := BoardOverlays.Layer.keys()
+	for gone: String in ["DANGER", "ENEMY_MOVE", "DANGER_DIM", "ENEMY_MOVE_DIM"]:
+		assert_bool(names.has(gone)).override_failure_message(
+				"Layer.%s is back -- the range readout is three layers now" % gone).is_false()
 
 
 func test_the_lowest_markup_plane_still_clears_the_tile_it_lies_on() -> void:

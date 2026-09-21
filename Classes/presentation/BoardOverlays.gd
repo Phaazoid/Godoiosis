@@ -33,7 +33,7 @@ enum Layer {
 	ZONE_PATROL, ZONE_HIGHLIGHT, GROUND_ICONS, ATTACK_BLOCKED, SIGHT_TRACE,
 	GUARD_ICONS, GUARD_LINK, WATCH_ICONS,
 	ZONE_DEPLOYMENT, ZONE_DEFEND,
-	DANGER, ENEMY_MOVE, DANGER_DIM, ENEMY_MOVE_DIM, ENEMY_FOCUS_EDGE, INTENT_LINES, INTENT_LINES_FATAL,
+	REACH, THREAT, ENEMY_FOCUS_EDGE, INTENT_LINES, INTENT_LINES_FATAL,
 }
 enum Kind { FILL, BRACKET, SPRITE, BILLBOARD, LINE }
 
@@ -67,7 +67,11 @@ const EFFECT_RENDER_PRIORITY := 16
 const UNIT_HUD_RENDER_PRIORITY := 48
 
 const LAYERS: Dictionary[Layer, Dictionary] = {
-	Layer.MOVE: {"color": Color(1, 1, 0, 0.5), "sort": 0, "kind": Kind.FILL},
+	# BLUE since #1066, and it is the player's half of a Fire Emblem readout: your unit says where it
+	# may STAND in blue and where it could HIT from there in red, while an enemy is one undifferentiated
+	# field. Sort 0 keeps it at the TOP of the range stack, which is what makes the intersect with an
+	# enemy's purple read as tinted blue rather than as purple -- the composite the dev ruled on.
+	Layer.MOVE: {"color": Color(0.25, 0.45, 1, 0.55), "sort": 0, "kind": Kind.FILL},
 	Layer.ATTACK: {"color": Color(1, 0, 0, 0.5), "sort": 1, "kind": Kind.FILL},
 	# Reach cells past the aim's vertical tolerance (#258). Shares ATTACK's sort safely: the 2D
 	# splits the one layer by atlas coords, so the two cell sets are disjoint by construction and
@@ -99,35 +103,29 @@ const LAYERS: Dictionary[Layer, Dictionary] = {
 	# Three literals the mirror overwrites from the 2D every poll (#710), ATTACK's shape: the
 	# authored value is OverlayManager's static (or ThreatLines2D's), which a const table cannot name.
 	Layer.ZONE_HIGHLIGHT: {"color": Color(1, 1, 1, 0.45), "sort": -6, "kind": Kind.FILL},
-	# The enemy's two tones (#710 slice 3), and their ORDER IS A DEV RULING: the move envelope
-	# draws OVER the reach, so "a body can stand here" is the louder fact and the reach survives
-	# as the halo past it. Two sorts rather than one because a sort IS a plane (_lift_of), and
-	# these two overlap on nearly every cell -- a melee enemy's reach is just its envelope
-	# dilated by one. They sat at DANGER's old 0 alongside MOVE, which is why nothing could
-	# express that order: equal render_priority and equal depth leaves the winner to pool
-	# allocation order. A test pins DANGER < ENEMY_MOVE < MOVE.
-	Layer.DANGER: {"color": Color(1, 0.15, 0.1, 0.3), "sort": -2, "kind": Kind.FILL},
-	Layer.ENEMY_MOVE: {"color": Color(0.25, 0.45, 1, 0.45), "sort": -1, "kind": Kind.FILL},
-	# ...and the CROWD's two tones, under the pair above (slice 4). While the pointer is on one enemy
-	# everybody ELSE draws here, so the one you are asking about is the loud one -- and with nothing
-	# hovered every enemy goes on the bright pair, so an untouched board looks exactly as it did.
+	# The PLAYER's reach (#1066): where the hovered or selected unit could hit from anywhere in the
+	# blue above. Red, UNDER the blue, so it survives as the halo past the move envelope -- the same
+	# relationship the enemy's own two tones had before this slice collapsed them.
+	Layer.REACH: {"color": Color(1, 0.15, 0.1, 0.38), "sort": -1, "kind": Kind.FILL},
+	# ...and the ENEMY's whole field under both of yours: move and reach together, ONE unbroken
+	# reddish purple with no internal seam. That REPEALS #710 slice 3's pair and its ordering ruling,
+	# on the dev's own instruction ("let's go with what fire emblem does"): the fine grain of "where
+	# could it stand" as against "where could it hit" is a question you ask about your OWN unit.
 	#
-	# Two more sorts and there were no integers between SQUAD and MOVE, so the negative stack moved
-	# down two AGAIN (slice 3 did it first, same reason). What does not survive a shift is the FLOOR:
-	# _lift_of is fill_lift + sort * lift_step, and -7 at the old fill_lift of 0.03 lands at 0.002 --
-	# a tenth of the clearance slice 3 left over the tile's own opaque face. fill_lift moved to 0.04
-	# with this, putting the floor at 0.012, above the 0.008 the stack ran at before slice 3.
+	# The ORDER is the whole design. Yours sorts ABOVE theirs, so a cell both fields cover composites
+	# as blue TINTED purple rather than as purple -- which is what says "both" without a third colour
+	# being authored anywhere. A sort IS a plane (_lift_of), so that is a real depth relationship and
+	# not pool-allocation luck. A test pins THREAT < REACH < MOVE.
 	#
-	# The COLOURS are derived, never authored: OverlayMirror copies each bright layer's live modulate
-	# scaled by OverlayManager.ENEMY_RANGE_DIM, so a knob turned on the bright tone carries. Alpha
-	# only -- multiplying RGB the way BLOCKED_REACH_DIM does pulls both hues toward the dark board
-	# until neither reads as a hue at all.
-	Layer.DANGER_DIM: {"color": Color(1, 0.15, 0.1, 0.12), "sort": -4, "kind": Kind.FILL},
-	Layer.ENEMY_MOVE_DIM: {"color": Color(0.25, 0.45, 1, 0.18), "sort": -3, "kind": Kind.FILL},
-	# ...and a stroke round the OUTSIDE of the hovered enemy's whole footprint, so which field you
-	# are reading is legible even where the dim and the bright tones are the same hue (slice 4, the
-	# dev's addition to the mockup). One two-point segment per outward-facing cell edge; no chaining
-	# into loops, because a solid stroke draws identically either way.
+	# Sorts -3 and -4 fell vacant when slice 4's dim pair went (the dev: "they shouldn't dim at
+	# all"). They are left vacant rather than compacted: the FLOOR is what a shift threatens --
+	# _lift_of is fill_lift + sort * lift_step, and the -7 zones sit at 0.012 with fill_lift 0.04.
+	Layer.THREAT: {"color": Color(0.72, 0.15, 0.28, 0.5), "sort": -2, "kind": Kind.FILL},
+	# ...and a stroke round the OUTSIDE of the hovered enemy's whole footprint (slice 4, the dev's
+	# addition to the mockup). Since #1066 it carries the WHOLE job of saying which enemy the pointer
+	# is on -- every other enemy's field stays at full strength beside it, on his ruling that nothing
+	# may dim. One two-point segment per outward-facing cell edge; no chaining into loops, because a
+	# solid stroke draws identically either way.
 	#
 	# Sort 13 is the first free integer and it must be free: the rule in this table is that a layer
 	# may not share a sort with any layer whose CELLS it can overlap, and a board-wide outline can

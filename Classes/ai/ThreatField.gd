@@ -96,6 +96,25 @@ func _union(store: Dictionary, units: Array[Unit]) -> Array[Vector2i]:
 	return out
 
 
+# The same reach walk, for ONE unit, over origins the CALLER names (#1066). The player's own red
+# range rides this rather than a bespoke walk: it is the identical question -- which cells could this
+# body hit from anywhere in that set -- and re-deriving it beside build() is how the two would
+# eventually disagree about a counter rim or a vertical-aim refusal.
+#
+# The origins are a parameter and that is the whole point of the door. _origins_of unions `reachable`
+# with `squad_unreachable` on purpose (slice 4: cohesion clamps a follower to where its leader stands
+# NOW, while the enemy turn moves the leader first), which is right for a PREDICTION about an enemy
+# and wrong for a PERMISSION about your own unit -- your red must grow from the cells you may
+# actually be ordered to and no others. No zone either: a leash is a fact about an AI archetype's
+# aggression and says nothing about a unit you command.
+static func reach_from(unit: Unit, board: BoardContext, origins: Array[Vector2i]) -> Array[Vector2i]:
+	var out: Array[Vector2i] = []
+	if unit == null or not is_instance_valid(unit) or board == null or origins.is_empty():
+		return out
+	out.assign(_reach_of(unit, board, origins, {}).keys())
+	return out
+
+
 # A Sentry squad's painted zone; empty for every other archetype and for an unzoned sentry.
 static func leash_of(squad: Squad, board: BoardContext) -> Array[Vector2i]:
 	var out: Array[Vector2i] = []

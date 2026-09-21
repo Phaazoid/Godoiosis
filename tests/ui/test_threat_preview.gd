@@ -1,9 +1,10 @@
-# The enemy range and intent views (#710), through the REAL triggers: an enemy under the pointer
-# shows BOTH tones and its leash and none of your own movement layers, V fills every enemy,
-# Shift+click pins one past the pointer and past the key, and a queued order drops the cached
+# The range and intent views (#710, re-cut by #1066), through the REAL triggers: an enemy under
+# the pointer shows ONE unbroken field and its leash and none of your own layers, a FRIENDLY under
+# the pointer shows the two tones the enemy used to wear, V fills every enemy, Shift+click pins one
+# past the pointer and past the key and makes its sprite flash, and a queued order drops the cached
 # field. The reach LINES this suite used to pin are GONE (slice 3, dev: "a bit too much") -- the
-# two-tone fill is what answers "who can reach here" now. Fixture is #114's -- the instanced
-# root MUST be named "Main" under /root.
+# fill is what answers "who can reach here" now. Fixture is #114's -- the instanced root MUST be
+# named "Main" under /root.
 extends GdUnitTestSuite
 
 const MAIN_SCENE := "res://Scenes/Main.tscn"
@@ -61,14 +62,30 @@ func _sorted(cells: Array[Vector2i]) -> Array[Vector2i]:
 	return out
 
 
-func test_hovering_an_enemy_shows_both_tones_and_its_leash_and_leaving_clears_them() -> void:
+# The enemy's WHOLE field -- move and reach unioned -- derived rather than retyped, so a retuned
+# archetype moves the expectation with the board.
+func _field_of(units: Array[Unit]) -> Array[Vector2i]:
+	var field: ThreatField = game.threat_field()
+	var all := {}
+	for cell: Vector2i in field.move_cells_of(units):
+		all[cell] = true
+	for cell: Vector2i in field.reach_cells_of(units):
+		all[cell] = true
+	var out: Array[Vector2i] = []
+	out.assign(all.keys())
+	return _sorted(out)
+
+
+func test_hovering_an_enemy_shows_one_unbroken_field_and_its_leash_and_leaving_clears_them() -> void:
+	# ONE layer, not two (#1066, the Fire Emblem ruling): an enemy stops answering "where could I
+	# stand" as against "where could I hit". Both halves are still in it -- that is what the union
+	# below asserts -- they simply stopped being separate statements.
 	var sentry := _spawn_sentry(Vector2i(3, 2))
 	game.hover_presenter.update_hover_visuals(sentry.movement.cell)
-	var field: ThreatField = game.threat_field()
-	assert_that(_sorted(_om().danger_overlay.get_used_cells())).is_equal(_sorted(field.reach_of(sentry)))
-	assert_bool(_om().danger_overlay.get_used_cells().size() > 0).is_true()
-	assert_that(_sorted(_om().enemy_move_overlay.get_used_cells())).override_failure_message(
-			"the move tone is not the archetype's own envelope").is_equal(_sorted(field.move_of(sentry)))
+	assert_that(_sorted(_om().threat_overlay.get_used_cells())).override_failure_message(
+			"the field is not the union of where it may stand and what it may hit"
+			).is_equal(_field_of([sentry]))
+	assert_bool(_om().threat_overlay.get_used_cells().size() > 0).is_true()
 	assert_that(_sorted(_om().zone_highlight_overlay.get_used_cells())) \
 		.is_equal(_sorted(game.zone_manager.cells_in(ZONE)))
 	assert_bool(_om().zone_highlight_overlay.visible).override_failure_message(
@@ -76,8 +93,7 @@ func test_hovering_an_enemy_shows_both_tones_and_its_leash_and_leaving_clears_th
 	assert_bool(_om().zone_overlay.visible).override_failure_message(
 			"the patrol layer itself leaked into play; only the ONE leash is revealed").is_false()
 	game.hover_presenter.update_hover_visuals(Vector2i(0, 0))
-	assert_array(_om().danger_overlay.get_used_cells()).is_empty()
-	assert_array(_om().enemy_move_overlay.get_used_cells()).is_empty()
+	assert_array(_om().threat_overlay.get_used_cells()).is_empty()
 	assert_array(_om().zone_highlight_overlay.get_used_cells()).is_empty()
 	assert_bool(_om().zone_highlight_overlay.visible).is_false()
 
@@ -95,85 +111,150 @@ func test_hovering_an_enemy_never_borrows_your_own_movement_layers() -> void:
 			"hovering an enemy painted the orange cohesion bubble").is_empty()
 	assert_array(_om().invalidmove_overlay.get_used_cells()).override_failure_message(
 			"hovering an enemy painted the red unreachable fill").is_empty()
-	# ...and it is not simply drawing nothing: the enemy's own tones ARE up.
-	assert_bool(_om().danger_overlay.get_used_cells().size() > 0).is_true()
-	assert_bool(_om().enemy_move_overlay.get_used_cells().size() > 0).is_true()
+	assert_array(_om().reach_overlay.get_used_cells()).override_failure_message(
+			"hovering an enemy painted YOUR red attack reach").is_empty()
+	# ...and it is not simply drawing nothing: the enemy's own field IS up.
+	assert_bool(_om().threat_overlay.get_used_cells().size() > 0).is_true()
 
 
-func test_a_hold_enemy_casts_no_move_tone_at_all() -> void:
-	# The archetype-honest ruling, at the one archetype where it is visible: a Hold unit fires
-	# from where it stands, so the only cell it can be on is its own. Under a raw move range it
-	# would paint its whole MOV and read as a charge that is never coming.
+# --- YOUR unit's two tones (#1066) -------------------------------------------------------------
+
+# The blue cells plus the one the body is standing on -- get_move_range drops that cell because
+# there is nothing to say about walking where you already are, and everything about shooting there.
+func _with_own(standable: Array[Vector2i], unit: Unit) -> Array[Vector2i]:
+	var out: Array[Vector2i] = standable.duplicate()
+	if not out.has(unit.movement.cell):
+		out.append(unit.movement.cell)
+	return out
+
+
+# Every cell this unit's weapon could touch from `origins` BY THE GEOMETRY ALONE -- no vertical
+# gate, no counter rim -- so it is a strict superset of what the readout may legally paint. A
+# second derivation on purpose: containment against it says the red grew from those cells without
+# restating the rule that narrows it.
+func _geometric_reach(unit: Unit, origins: Array[Vector2i]) -> Dictionary:
+	var out := {}
+	for origin: Vector2i in origins:
+		for cell: Vector2i in Reach.get_all_attack_cells_from(unit, origin, unit.get_fired_attack()):
+			out[cell] = true
+	return out
+
+
+func test_a_hovered_friendly_says_where_it_may_stand_and_where_it_could_hit() -> void:
+	# The dev's opening complaint (#1066): "friendly units having different colors for showing
+	# movement and nothing for attack range is really outdated... Blue for movement, attack range
+	# as red, like everyone else." Two disjoint questions on two layers, both on HOVER.
+	var friend := _spawn(PLAYER, Vector2i(2, 2))
+	game.hover_presenter.update_hover_visuals(friend.movement.cell)
+	var moverange: Dictionary = game.compute_move_range(friend)
+	var standable: Array[Vector2i] = game.get_move_range(moverange, friend)
+	assert_that(_sorted(_om().move_overlay.get_used_cells())).override_failure_message(
+			"the blue is not this unit's move range").is_equal(_sorted(standable))
+	var red: Array[Vector2i] = _om().reach_overlay.get_used_cells()
+	assert_bool(red.size() > 0).override_failure_message(
+			"a friendly still says nothing about where it could hit").is_true()
+
+	# It reaches at least as far as standing still lets it -- you need not move to attack...
+	for cell: Vector2i in _geometric_reach(friend, [friend.movement.cell]):
+		assert_bool(red.has(cell)).override_failure_message(
+				"%s is in reach from where this unit stands and the red does not cover it" % cell).is_true()
+	# ...and no further than the whole envelope's geometry allows.
+	var envelope := _geometric_reach(friend, _with_own(standable, friend))
+	for cell: Vector2i in red:
+		assert_bool(envelope.has(cell)).override_failure_message(
+				"%s is red and no cell of the blue can reach it" % cell).is_true()
+
+	game.hover_presenter.update_hover_visuals(Vector2i(0, 0))
+	assert_array(_om().move_overlay.get_used_cells()).is_empty()
+	assert_array(_om().reach_overlay.get_used_cells()).override_failure_message(
+			"the red halo outlived the blue it belongs to").is_empty()
+
+
+func test_a_friendlys_reach_grows_only_from_cells_it_may_actually_be_ordered_to() -> void:
+	# The one thing in this slice that is not a colour. ThreatField._origins_of deliberately unions
+	# `reachable` with `squad_unreachable` (slice 4: cohesion clamps a follower to where its leader
+	# stands NOW, while the enemy turn moves the leader first) -- right for a PREDICTION about an
+	# enemy, wrong for a PERMISSION about your own unit. A mutant pointing the player's reach at
+	# ThreatField's own origins reddens here.
+	var leader := _spawn(PLAYER, Vector2i(2, 2))
+	var follower := _spawn(PLAYER, Vector2i(3, 2))
+	game.squad_manager.join_squad(follower, leader.squad)
+	var moverange: Dictionary = game.compute_move_range(follower)
+	var clamped: Dictionary = moverange["squad_unreachable"]
+	assert_int(clamped.size()).override_failure_message(
+			"fixture is vacuous: nothing is outside this follower's leash, so both origin sets agree"
+			).is_greater(0)
+
+	var permitted := _with_own(game.get_move_range(moverange, follower), follower)
+	var wider: Array[Vector2i] = permitted.duplicate()
+	for cell: Vector2i in clamped:
+		if not wider.has(cell):
+			wider.append(cell)
+	var narrow := ThreatField.reach_from(follower, game._board(), permitted)
+	var wide := ThreatField.reach_from(follower, game._board(), wider)
+	assert_int(wide.size()).override_failure_message(
+			"fixture is vacuous: the clamped ground reaches nothing the permitted ground does not"
+			).is_greater(narrow.size())
+
+	game.hover_presenter.update_hover_visuals(follower.movement.cell)
+	assert_that(_sorted(_om().reach_overlay.get_used_cells())).override_failure_message(
+			"the red grew from ground this squad may not actually be ordered onto"
+			).is_equal(_sorted(narrow))
+
+
+func test_a_hold_enemys_field_never_spreads_past_what_it_can_hit_from_where_it_stands() -> void:
+	# The archetype-honest ruling SURVIVES the merge (#710's, kept by #1066): a Hold unit fires
+	# from where it stands, so the only cell it can be on is its own, and its field is therefore
+	# exactly its reach. Under a raw move range it would paint its whole MOV and read as a charge
+	# that is never coming -- which the merged field would hide rather than fix.
 	var holder := _spawn(ENEMY, Vector2i(3, 2), AIArchetype.Type.HOLD)
 	game.toggle_enemy_ranges()
-	assert_that(_om().enemy_move_overlay.get_used_cells()).is_equal([holder.movement.cell])
-	assert_bool(_om().danger_overlay.get_used_cells().size() > 1).override_failure_message(
-			"the reach tone collapsed too -- this case would then prove nothing").is_true()
+	var field: ThreatField = game.threat_field()
+	assert_that(field.move_of(holder)).override_failure_message(
+			"a Hold unit's envelope grew past the cell it stands on").is_equal([holder.movement.cell])
+	assert_that(_sorted(_om().threat_overlay.get_used_cells())).is_equal(_field_of([holder]))
+	assert_bool(_om().threat_overlay.get_used_cells().size() > 1).override_failure_message(
+			"the field collapsed to one cell -- this case would then prove nothing").is_true()
 
 
 func test_the_ranges_key_fills_every_enemy_and_reveals_every_leash() -> void:
-	_spawn_sentry(Vector2i(3, 2))
-	_spawn(ENEMY, Vector2i(2, 3))   # a second, unleashed enemy inside the boot board
+	var sentry := _spawn_sentry(Vector2i(3, 2))
+	var other := _spawn(ENEMY, Vector2i(2, 3))   # a second, unleashed enemy inside the boot board
 	game.toggle_enemy_ranges()
 	assert_bool(game.ranges_shown).is_true()
-	var field: ThreatField = game.threat_field()
-	assert_that(_sorted(_om().danger_overlay.get_used_cells())).is_equal(_sorted(field.all_cells()))
-	assert_int(_om().danger_overlay.get_used_cells().size()).is_greater(4)   # both enemies, not one
+	assert_that(_sorted(_om().threat_overlay.get_used_cells())).is_equal(_field_of([sentry, other]))
+	assert_int(_om().threat_overlay.get_used_cells().size()).is_greater(4)   # both enemies, not one
 	assert_that(_sorted(_om().zone_highlight_overlay.get_used_cells())) \
 		.is_equal(_sorted(game.zone_manager.cells_in(ZONE)))
 	assert_bool(_om().zone_highlight_overlay.visible).is_true()
 	# Hovering elsewhere does not tear the view down -- it belongs to the key, not the pointer.
 	game.hover_presenter.update_hover_visuals(Vector2i(0, 0))
-	assert_bool(_om().danger_overlay.get_used_cells().size() > 0).is_true()
+	assert_bool(_om().threat_overlay.get_used_cells().size() > 0).is_true()
 	game.toggle_enemy_ranges()
 	assert_bool(game.ranges_shown).is_false()
-	assert_array(_om().danger_overlay.get_used_cells()).is_empty()
-	assert_array(_om().enemy_move_overlay.get_used_cells()).is_empty()
+	assert_array(_om().threat_overlay.get_used_cells()).is_empty()
 	assert_array(_om().zone_highlight_overlay.get_used_cells()).is_empty()
 
 
-# WHOSE FIELD IS THIS (slice 4, dev: "when hovering a specific unit, their grid should highlight").
-# With V on, three enemies union into one blob and the pointer changed nothing about it.
-func test_hovering_one_of_several_lit_enemies_dims_the_rest() -> void:
+# WHOSE FIELD IS THIS (slice 4's question, #1066's answer). Slice 4 dimmed the crowd; the dev
+# played it and REPEALED that: "if multiple are highlighted, and you hover one, the other ranges
+# become too dim. They shouldn't dim at all, the outline on the main one should be the only
+# differentiator." So the property is that the pointer changes the FIELD not at all -- the same
+# cells, at the same strength, with a stroke added round one of them.
+func test_hovering_one_of_several_lit_enemies_dims_nothing() -> void:
 	var focus := _spawn(ENEMY, Vector2i(3, 2))
-	_spawn(ENEMY, Vector2i(1, 4))
-	_spawn(ENEMY, Vector2i(2, 3))
+	var b := _spawn(ENEMY, Vector2i(1, 4))
+	var c := _spawn(ENEMY, Vector2i(2, 3))
 	game.toggle_enemy_ranges()
-
-	# Nothing hovered: everybody bright, and the dim layers are not merely equal -- they are unused,
-	# which is what keeps a board nobody is pointing at looking exactly as it did before slice 4.
-	assert_array(_om().danger_dim_overlay.get_used_cells()).override_failure_message(
-			"the crowd dimmed with nobody hovered").is_empty()
-	assert_array(_om().enemy_move_dim_overlay.get_used_cells()).is_empty()
-	var everyone: int = _om().danger_overlay.get_used_cells().size()
+	var everyone := _sorted(_om().threat_overlay.get_used_cells())
+	assert_that(everyone).is_equal(_field_of([focus, b, c]))
 
 	game.hover_presenter.update_hover_visuals(focus.movement.cell)
-	var field: ThreatField = game.threat_field()
-	assert_that(_sorted(_om().enemy_move_overlay.get_used_cells())).override_failure_message(
-			"the bright move tone is not the hovered enemy's own envelope"
-			).is_equal(_sorted(field.move_of(focus)))
-	assert_that(_sorted(_om().danger_overlay.get_used_cells())).is_equal(_sorted(field.reach_of(focus)))
-	assert_bool(_om().danger_dim_overlay.get_used_cells().size() > 0).override_failure_message(
-			"the other two enemies vanished instead of dimming").is_true()
-
-	# The crowd is SUBTRACTED from the focus, never stacked under it: four coincident alphas read
-	# differently from two, so a focused cell would change tone wherever a neighbour's field crossed.
-	for cell: Vector2i in _om().danger_dim_overlay.get_used_cells():
-		assert_bool(_om().danger_overlay.get_used_cells().has(cell)).override_failure_message(
-				"%s carries a dim quad UNDER a bright one" % cell).is_false()
-		assert_bool(_om().enemy_move_overlay.get_used_cells().has(cell)).is_false()
-	for cell: Vector2i in _om().enemy_move_dim_overlay.get_used_cells():
-		assert_bool(_om().danger_overlay.get_used_cells().has(cell)).is_false()
-		assert_bool(_om().enemy_move_overlay.get_used_cells().has(cell)).is_false()
-
-	# ...and nothing was lost in the split: every cell that was lit is still lit, somewhere.
-	var lit := {}
-	for cell: Vector2i in _om().danger_overlay.get_used_cells():
-		lit[cell] = true
-	for cell: Vector2i in _om().danger_dim_overlay.get_used_cells():
-		lit[cell] = true
-	assert_int(lit.size()).override_failure_message(
-			"the focus split dropped cells the un-hovered view was painting").is_equal(everyone)
+	assert_that(_sorted(_om().threat_overlay.get_used_cells())).override_failure_message(
+			"hovering one enemy changed which cells the field covers -- a dim tier is back, or " +
+			"the crowd is being subtracted from the focus again").is_equal(everyone)
+	assert_bool(_om().focus_outline.size() > 0).override_failure_message(
+			"nothing distinguishes the hovered enemy at all now that nothing dims").is_true()
 	game.toggle_enemy_ranges()
 
 
@@ -217,21 +298,24 @@ func test_the_hovered_enemys_field_is_outlined() -> void:
 	game.toggle_enemy_ranges()
 
 
-# The dim tone is DERIVED from the bright one, so a knob on either carries to both.
-func test_the_crowds_tone_follows_the_tone_it_dims() -> void:
-	_spawn(ENEMY, Vector2i(3, 2))
-	var before: Color = _om().enemy_move_dim_overlay.modulate
-	OverlayManager.ENEMY_MOVE_MODULATE = Color(0.1, 0.9, 0.2, 0.5)
-	_om().restyle_dim_ranges()
-	var after: Color = _om().enemy_move_dim_overlay.modulate
-	assert_that(after).override_failure_message(
-			"the crowd kept the hue the focus tone just left").is_not_equal(before)
-	assert_float(after.a).override_failure_message(
-			"the dim is not alpha-only -- multiplying RGB pulls the hue into the board"
-			).is_equal_approx(0.5 * OverlayManager.ENEMY_RANGE_DIM, 0.001)
-	assert_float(after.g).is_equal_approx(0.9, 0.001)
-	OverlayManager.ENEMY_MOVE_MODULATE = Color(0.25, 0.45, 1, 0.45)
-	_om().restyle_dim_ranges()
+# A tuned colour reaches the layer it tints, or the Game tab's slider is #264's born-dead one.
+# The VALUES are never pinned -- every one of them is a slider the dev may drag tomorrow -- only
+# that turning one moves the board.
+func test_a_tuned_range_colour_reaches_the_layer_it_tints() -> void:
+	var was_threat := OverlayManager.THREAT_MODULATE
+	var was_reach := OverlayManager.REACH_MODULATE
+	OverlayManager.THREAT_MODULATE = Color(0.1, 0.9, 0.2, 0.5)
+	OverlayManager.REACH_MODULATE = Color(0.2, 0.3, 0.9, 0.4)
+	_om().restyle_threat()
+	_om().restyle_reach()
+	assert_that(_om().threat_overlay.modulate).override_failure_message(
+			"the enemy field kept the hue its knob just left").is_equal(OverlayManager.THREAT_MODULATE)
+	assert_that(_om().reach_overlay.modulate).override_failure_message(
+			"your reach kept the hue its knob just left").is_equal(OverlayManager.REACH_MODULATE)
+	OverlayManager.THREAT_MODULATE = was_threat
+	OverlayManager.REACH_MODULATE = was_reach
+	_om().restyle_threat()
+	_om().restyle_reach()
 
 
 func test_the_ranges_key_going_off_drops_every_pin() -> void:
@@ -243,14 +327,13 @@ func test_the_ranges_key_going_off_drops_every_pin() -> void:
 	var pinned := _spawn(ENEMY, Vector2i(3, 2))
 	var other := _spawn(ENEMY, Vector2i(1, 4))
 	game.toggle_enemy_pin(pinned)
-	var field: ThreatField = game.threat_field()
-	assert_that(_sorted(_om().enemy_move_overlay.get_used_cells())).is_equal(_sorted(field.move_of(pinned)))
+	assert_that(_sorted(_om().threat_overlay.get_used_cells())).is_equal(_field_of([pinned]))
 
 	# ON first: the pin is still up here, which is what makes the press below an OFF rather than the
 	# first half of a round trip. Both enemies draw, so the state being cleared is non-empty.
 	game.toggle_enemy_ranges()
 	assert_bool(game.ranges_shown).is_true()
-	assert_bool(_om().enemy_move_overlay.get_used_cells().has(other.movement.cell)).override_failure_message(
+	assert_bool(_om().threat_overlay.get_used_cells().has(other.movement.cell)).override_failure_message(
 			"the key's ON did not draw the unpinned enemy, so this case starts from the wrong state"
 			).is_true()
 	assert_bool(game.pinned_enemies.has(pinned.get_instance_id())).override_failure_message(
@@ -260,10 +343,10 @@ func test_the_ranges_key_going_off_drops_every_pin() -> void:
 	assert_bool(game.ranges_shown).is_false()
 	assert_bool(game.pinned_enemies.is_empty()).override_failure_message(
 			"the key's OFF left the pin standing -- the board cannot be cleared").is_true()
-	assert_array(_om().enemy_move_overlay.get_used_cells()).override_failure_message(
+	assert_array(_om().threat_overlay.get_used_cells()).override_failure_message(
 			"the key is off and every pin is dropped, so nothing should be drawn").is_empty()
-	assert_array(_om().danger_overlay.get_used_cells()).override_failure_message(
-			"the reach tone outlived the pin its move tone was cleared with").is_empty()
+	assert_object(pinned.visuals.pin_tween).override_failure_message(
+			"the sprite is still flashing for a pin the key just dropped").is_null()
 
 
 func test_a_pinned_enemy_survives_the_pointer_leaving_it_and_an_order_being_queued() -> void:
@@ -273,13 +356,47 @@ func test_a_pinned_enemy_survives_the_pointer_leaving_it_and_an_order_being_queu
 	var pinned := _spawn(ENEMY, Vector2i(4, 1))
 	game.toggle_enemy_pin(pinned)
 	game.hover_presenter.update_hover_visuals(Vector2i(0, 0))
-	assert_bool(_om().enemy_move_overlay.get_used_cells().size() > 0).override_failure_message(
+	assert_bool(_om().threat_overlay.get_used_cells().size() > 0).override_failure_message(
 			"the pointer moving off the pinned enemy tore its ranges down").is_true()
 	game.enter_move_mode(mover)
 	game.selected_unit = mover
 	game._click_choosing_move(Vector2i(1, 2))
-	assert_bool(_om().enemy_move_overlay.get_used_cells().size() > 0).override_failure_message(
+	assert_bool(_om().threat_overlay.get_used_cells().size() > 0).override_failure_message(
 			"a queued order cleared the pinned enemy's ranges and never put them back").is_true()
+
+
+func test_a_pinned_enemys_sprite_flashes_and_an_unpinned_one_does_not() -> void:
+	# Dev (#1066): "units that are toggled need to be indicated in some way. I think they should
+	# flash, too." On the unit SPRITE, his own ruling from the same batch -- not a marker -- which
+	# is what gets the diorama it for free through UnitMirror's per-frame modulate copy.
+	var pinned := _spawn(ENEMY, Vector2i(3, 2))
+	var other := _spawn(ENEMY, Vector2i(1, 4))
+	game.toggle_enemy_pin(pinned)
+	assert_object(pinned.visuals.pin_tween).override_failure_message(
+			"a pinned enemy wears nothing at all that says so").is_not_null()
+	assert_object(other.visuals.pin_tween).override_failure_message(
+			"an enemy nobody pinned is flashing").is_null()
+	game.toggle_enemy_pin(pinned)
+	assert_object(pinned.visuals.pin_tween).override_failure_message(
+			"the flash outlived the pin").is_null()
+
+
+func test_an_aim_pulse_outranks_a_pin_flash_and_the_pin_comes_back() -> void:
+	# Both write sprite.modulate and a live pulse OWNS that channel (#442), so exactly one may run.
+	# "This unit is about to be hit" is news; "you pinned it" is a bookmark you set yourself. The
+	# second half is what a plain precedence misses: the pin has to return when the aim moves on,
+	# which is why `pinned` is a flag rather than a reading of the tween.
+	var enemy := _spawn(ENEMY, Vector2i(3, 2))
+	game.toggle_enemy_pin(enemy)
+	assert_object(enemy.visuals.pin_tween).is_not_null()
+	enemy.visuals.start_pulse()
+	assert_object(enemy.visuals.pin_tween).override_failure_message(
+			"the pin flash kept the sprite while an aim was on the body").is_null()
+	assert_object(enemy.visuals.pulse_tween).override_failure_message(
+			"the aim pulse never started").is_not_null()
+	enemy.visuals.stop_pulse()
+	assert_object(enemy.visuals.pin_tween).override_failure_message(
+			"the pin flash never came back after the aim moved on").is_not_null()
 
 
 func test_shift_clicking_an_enemy_pins_it_and_opens_no_menu() -> void:
@@ -375,12 +492,12 @@ func test_no_repaint_runs_while_a_pass_is_playing_back() -> void:
 	var enemy := _spawn(ENEMY, _clear_lane())
 	game.toggle_enemy_ranges()
 	await await_idle_frame()
-	assert_bool(_om().enemy_move_overlay.get_used_cells().size() > 0).is_true()
+	assert_bool(_om().threat_overlay.get_used_cells().size() > 0).is_true()
 
-	_om().clear_enemy_move()
+	_om().clear_threat()
 	game.order_executor.executing_plan = ResolvedPlan.new()
 	game._redraw_enemy_ranges(enemy)
-	assert_array(_om().enemy_move_overlay.get_used_cells()).override_failure_message(
+	assert_array(_om().threat_overlay.get_used_cells()).override_failure_message(
 			"a repaint ran mid-pass and would have teleported every walking sprite").is_empty()
 
 	game.order_executor.executing_plan = null

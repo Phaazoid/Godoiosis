@@ -393,7 +393,7 @@ const KNOBS: Array[Dictionary] = [
 # both from the 2D every poll) and HOVER (battle3d._sync_bracket_tint). ZONE_PATROL is excluded as
 # authoring-only -- invisible during real play, and it READS OverlayManager's constant, so a knob
 # would fork a value that is deliberately one (dev call). ZONE_HIGHLIGHT left that list at #710,
-# when the leash reveal made it a play colour: it is a `static` row now, like DANGER beside it.
+# when the leash reveal made it a play colour: it is a `static` row now, like the threat field beside it.
 #
 # `static` entries are the exception that proves it: ATTACK has no 3D-only colour to tune, because
 # the 3D mirrors the 2D's modulate rather than holding an answer. Tuning it moves BOTH stacks.
@@ -433,7 +433,7 @@ const CLASS_KNOBS: Array[Dictionary] = [
 		"tip": "Whether a readout that is up for any reason OTHER than hover -- a queued plan, or the always-show setting -- also carries the HP digits. Off by default: either one can put a bar over half the board or all of it, and pointing at any of them reveals its number anyway."},
 
 	{"group": "Board markup colours", "label": "Move fill", "layer": BoardOverlays.Layer.MOVE,
-		"tip": "The tiles a unit can reach while you are ordering a move. Alpha is the dial that matters most -- markup has to read as gameplay information without burying the terrain under it."},
+		"tip": "The tiles one of YOUR units can reach, while you hover it or order a move. Blue since #1066, and it sorts above every other range tone, so the intersect with an enemy field reads as tinted blue rather than as purple. Alpha is the dial that matters most -- markup has to read as gameplay information without burying the terrain under it."},
 	{"group": "Board markup colours", "label": "Invalid-move fill", "layer": BoardOverlays.Layer.INVALID_MOVE,
 		"tip": "Tiles inside a unit's movement range that it still may not stop on -- out of its leader's cohesion range, or already occupied. Clicking one does nothing, so this colour is the only warning."},
 	{"group": "Board markup colours", "label": "Squad fill", "layer": BoardOverlays.Layer.SQUAD,
@@ -460,20 +460,18 @@ const CLASS_KNOBS: Array[Dictionary] = [
 		"min": 0.1, "max": 1.0, "step": 0.01,
 		"tip": "How much darker a reach cell past the attack's vertical tolerance draws in 3D, relative to the live reach colour. The 2D says the same thing with a hatched tile instead."},
 
-	# The enemy RANGE view (#710 slice 3, on V): two tones and a sentry leash, all sitting against
-	# the reach fills. Tune them as a PAIR -- the move tone draws over the reach, so the reach only
-	# ever shows as the halo past it, and a move alpha set too high erases that halo entirely.
-	{"group": "Board markup colours", "label": "Enemy reach fill (2D+3D)", "static": "DANGER_MODULATE",
-		"tip": "Every cell an enemy could attack next turn. Drawn UNDER the move tone and under your own move range, so alpha is the dial: it can cover a lot of board."},
-	{"group": "Board markup colours", "label": "Enemy move fill (2D+3D)", "static": "ENEMY_MOVE_MODULATE",
-		"tip": "Where an enemy could STAND, drawn over its reach. Blue because every other tone on the board is warm; its risky neighbours are the cyan capture zone and the violet deployment zone, so check it against a board carrying those."},
-	{"group": "Board markup colours", "label": "Unhovered enemy dim (2D+3D)", "static": "ENEMY_RANGE_DIM",
-		"min": 0.05, "max": 1.0, "step": 0.01,
-		"tip": "How far both tones above fall back for every enemy the pointer is NOT on, so the one you are asking about stands out of the crowd. Alpha only. 1.0 turns the distinction off."},
+	# The three tones of the range readout (#1066): your blue above (Move fill), your red, and the
+	# enemy's one field under both. Tune them as a STACK, never one at a time -- what the player
+	# actually reads is what they composite to where they cross, and there is no fourth colour
+	# authored for that intersect anywhere.
+	{"group": "Board markup colours", "label": "Your attack reach (2D+3D)", "static": "REACH_MODULATE",
+		"tip": "Every cell your hovered or selected unit could hit from anywhere in its blue move range. Drawn UNDER the blue, so what shows is the halo past where you may stand -- an alpha set too low leaves the halo invisible against an enemy field."},
+	{"group": "Board markup colours", "label": "Enemy threat field (2D+3D)", "static": "THREAT_MODULATE",
+		"tip": "Where an enemy could go AND what it could hit, as one unbroken field. Under both of your tones, so where it crosses your blue the composite IS the intersect colour -- tune it there as well as over bare ground. Its risky neighbours are the violet deployment zone and the mauve invalid-move fill."},
 	# The exact tier (#710 slice 2): what the AI WILL do, as opposed to what it COULD. It has to
 	# read as a promise rather than a possibility, so tune it AGAINST the threat line above.
 	{"group": "Board markup colours", "label": "Enemy focus outline (2D+3D)", "static": "FOCUS_OUTLINE_COLOR",
-		"tip": "The stroke round the whole field of the enemy under the pointer, while everybody else is dimmed. It crosses both tones and the terrain, so it is the one markup colour that has to read against all of them."},
+		"tip": "The stroke round the whole field of the enemy under the pointer. Since #1066 it is the ONLY thing separating that enemy from every other one whose ranges are up -- nothing dims any more -- so it has to read against the threat field, your own two tones and the terrain alike."},
 	{"group": "Board markup colours", "label": "Intent mark (2D+3D)", "static": "INTENT_LINE_COLOR", "script": THREAT_LINES_SCRIPT,
 		"tip": "The mark from an enemy to the unit it will actually attack next turn. ONE colour for both the ordinary and the felling mark: a felling one is the same pink and flashes white instead. Pink because nothing else on the board owns that hue -- the aim footprint is yellow and the sight bead white, which is what the old amber read as."},
 	{"group": "Board markup colours", "label": "Intent mark height", "static": "MARK_HEIGHT", "script": THREAT_LINES_SCRIPT,
@@ -1399,9 +1397,8 @@ static func read_static(name: String) -> Variant:
 		"HEAL_ATTACK_MODULATE": return OverlayManager.HEAL_ATTACK_MODULATE
 		"HOVER_MODULATE": return OverlayManager.HOVER_MODULATE
 		"BLOCKED_REACH_DIM": return OverlayManager.BLOCKED_REACH_DIM
-		"DANGER_MODULATE": return OverlayManager.DANGER_MODULATE
-		"ENEMY_MOVE_MODULATE": return OverlayManager.ENEMY_MOVE_MODULATE
-		"ENEMY_RANGE_DIM": return OverlayManager.ENEMY_RANGE_DIM
+		"REACH_MODULATE": return OverlayManager.REACH_MODULATE
+		"THREAT_MODULATE": return OverlayManager.THREAT_MODULATE
 		"FOCUS_OUTLINE_COLOR": return OverlayManager.FOCUS_OUTLINE_COLOR
 		"ZONE_HIGHLIGHT_MODULATE": return OverlayManager.ZONE_HIGHLIGHT_MODULATE
 		"INTENT_LINE_COLOR": return ThreatLines2D.INTENT_LINE_COLOR
@@ -1604,9 +1601,8 @@ static func write_static(host: Node3D, name: String, value: Variant) -> void:
 		"HEAL_ATTACK_MODULATE": OverlayManager.HEAL_ATTACK_MODULATE = value
 		"HOVER_MODULATE": OverlayManager.HOVER_MODULATE = value
 		"BLOCKED_REACH_DIM": OverlayManager.BLOCKED_REACH_DIM = value   # mirror reads it per frame; the refresh below is harmless
-		"DANGER_MODULATE": OverlayManager.DANGER_MODULATE = value
-		"ENEMY_MOVE_MODULATE": OverlayManager.ENEMY_MOVE_MODULATE = value
-		"ENEMY_RANGE_DIM": OverlayManager.ENEMY_RANGE_DIM = value
+		"REACH_MODULATE": OverlayManager.REACH_MODULATE = value
+		"THREAT_MODULATE": OverlayManager.THREAT_MODULATE = value
 		"FOCUS_OUTLINE_COLOR": OverlayManager.FOCUS_OUTLINE_COLOR = value
 		"ZONE_HIGHLIGHT_MODULATE": OverlayManager.ZONE_HIGHLIGHT_MODULATE = value
 		"INTENT_LINE_COLOR": ThreatLines2D.INTENT_LINE_COLOR = value
@@ -2173,18 +2169,11 @@ static func write_static(host: Node3D, name: String, value: Variant) -> void:
 		# Re-showing the standing trace is the re-apply: it repaints the flat line and bumps the
 		# version the mirror gates on, which is exactly what a fresh hover does (#506).
 		"CLEAR_COLOR", "BLOCKED_COLOR": manager.restyle_sight_trace()
-		# The threat view's three (#710): the two fills re-tint their 2D layer, which the mirror
-		# copies; the lines re-show the standing set, the sight trace's own re-apply.
-		# Each bright tone re-tints its DIM twin too, because that twin is derived from it -- leave it
-		# out and dragging the reach colour repaints the focused enemy and strands the crowd on the
-		# hue it had before, which is the born-dead-slider failure wearing a second layer.
-		"DANGER_MODULATE":
-			manager.restyle_danger()
-			manager.restyle_dim_ranges()
-		"ENEMY_MOVE_MODULATE":
-			manager.restyle_enemy_move()
-			manager.restyle_dim_ranges()
-		"ENEMY_RANGE_DIM": manager.restyle_dim_ranges()
+		# The range readout's three (#710, #1066): the two fills re-tint their 2D layer, which the
+		# mirror copies; the lines re-show the standing set, the sight trace's own re-apply. Nothing
+		# is derived from either tone any more -- slice 4's dim twins went with the tier they served.
+		"REACH_MODULATE": manager.restyle_reach()
+		"THREAT_MODULATE": manager.restyle_threat()
 		"FOCUS_OUTLINE_COLOR": manager.restyle_focus_outline()
 		"ZONE_HIGHLIGHT_MODULATE": manager.restyle_leash()
 		"INTENT_LINE_COLOR", "MARK_HEIGHT", "MARK_BOW_PER_CELL", "MARK_INSET", "CONE_LENGTH", "CONE_WIDTH_SCALE":
