@@ -2,9 +2,13 @@ extends Control
 class_name MissionStatusPanel
 
 # The mission-status HUD (#134) -- the first always-on element in the game viewport. One row per
-# DECLARED objective, with its progress ("Capture -- 1/2 zones"), plus the build version stamp in
-# the top-right corner. Shows the declared list ONLY -- never an implied "kill everyone" line,
-# because an authored objective is the only way to win (docs/design/missions.md).
+# DECLARED objective, with its progress ("Capture -- 1/2 zones"). Shows the declared list ONLY --
+# never an implied "kill everyone" line, because an authored objective is the only way to win
+# (docs/design/missions.md).
+#
+# IT ALSO OWNS THE TOP-RIGHT STRIP: the build version stamp, and since #1051 the report sign beside
+# it. Neither of those is mission status; both are always-on corner furniture, and one owner of
+# that band is what stops a second node restating where the first one ends.
 #
 # A declared second REPRESENTATION of what the board's zone tint already shows (Law #4):
 # MissionController stays authoritative, this panel only draws what it is handed on refresh, and
@@ -18,6 +22,18 @@ class_name MissionStatusPanel
 
 const CORNER_MARGIN := 8
 const BUTTON_CLEARANCE := 44   # the End Turn button's reserved corner slot below us: 36 high + its 8 margin (#189)
+# The top-right metadata strip: the build stamp, and since #1051 the report sign beside it. A
+# tighter inset than CORNER_MARGIN because these are furniture rather than a panel, and the gap is
+# the only spacing either one declares -- where the sign SITS is measured off the stamp, never
+# restated as a number here.
+const STRIP_INSET := 6
+const HINT_GAP := 10
+
+# The sign's own two facts: WHICH binding it names, and how it words it. The key itself is not
+# here -- Controls.key_for_action fills that in from the registry.
+const REPORT_ACTION := "report_bug"
+const REPORT_HINT := "%s: Report a bug"   # PLACEHOLDER, like every line a player reads
+
 const MET_COLOR := Color(0.55, 0.95, 0.55)
 const PENDING_COLOR := Color(0.92, 0.92, 0.92)
 const UNWINNABLE_COLOR := Color(1, 0.45, 0.35)   # the Scenario tab's warning colour
@@ -32,14 +48,48 @@ static var URGENT_COLOR := Color(1, 0.55, 0.3)
 @onready var _panel: PanelContainer = $ObjectivePanel
 @onready var _rows: VBoxContainer = $ObjectivePanel/Rows
 @onready var _version_label: Label = $VersionLabel
+@onready var _report_hint: Label = $ReportHint
 
 func _ready() -> void:
 	z_index = UiLayers.MISSION_STATUS
 	_panel.visible = false
 	_version_label.text = "v" + Build.version()
-	_version_label.set_anchors_and_offsets_preset(Control.PRESET_TOP_RIGHT, Control.PRESET_MODE_MINSIZE, 6)
+	_version_label.set_anchors_and_offsets_preset(Control.PRESET_TOP_RIGHT, Control.PRESET_MODE_MINSIZE, STRIP_INSET)
+	_build_report_hint()
 
-# No mission on this board (sandbox, cleared) -- nothing to say. The version stamp stays.
+# THE REPORT SIGN (#1051) -- a player is TOLD the key, not handed another button. The ticket was
+# built once as a clickable mark and that was the wrong answer (dev, 2026-09-21): a fourth door to
+# the same card left three of them undiscoverable and named none, where one line of text makes the
+# cheapest door the one on screen. So it takes no input, and the case asserting that is the rule.
+#
+# It lives HERE rather than in a scene of its own because this panel already owns the top-right
+# strip and already lays the stamp out in code. A second node reaching into that band needed a
+# constant restating where the stamp ends, which is the duplicate-seam shape (Law #4) and is what
+# the first build had.
+#
+# The key is READ FROM THE REGISTRY, never spelled: `tests/law/test_controls_coverage.gd` pins that
+# registry against the live Input Map in both directions, so the sign cannot name a key the game
+# does not have, and #691's rebinding lands on it for free.
+#
+# THE WORDING IS A PLACEHOLDER awaiting the dev, as all player-facing prose is his -- though this
+# one he picked from three on 2026-09-21.
+func _build_report_hint() -> void:
+	var key := Controls.key_for_action(REPORT_ACTION)
+	# Nothing documents the binding: say nothing rather than print ": Report a bug" at a player.
+	# The coverage law reds long before a build gets here, so this is a floor, not a fix.
+	_report_hint.visible = key != ""
+	if not _report_hint.visible:
+		return
+	_report_hint.text = REPORT_HINT % key
+	_report_hint.set_anchors_and_offsets_preset(Control.PRESET_TOP_RIGHT, Control.PRESET_MODE_MINSIZE, STRIP_INSET)
+	# Stepped left by the stamp's OWN measured width, so a longer version string pushes the sign
+	# along instead of sliding under it. Pure post-preset translation, as the objective panel's is.
+	var step := _version_label.get_combined_minimum_size().x + HINT_GAP
+	_report_hint.offset_left -= step
+	_report_hint.offset_right -= step
+
+# No mission on this board (sandbox, cleared) -- nothing to say. The corner strip stays: the build
+# stamp and the report sign are not mission status and never go down with the objective list.
 func clear() -> void:
 	_panel.visible = false
 

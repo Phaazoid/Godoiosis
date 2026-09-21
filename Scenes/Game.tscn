@@ -18,7 +18,6 @@
 [ext_resource type="PackedScene" uid="uid://cqf51nnsk42dv" path="res://Scenes/SquadActionQueueControl.tscn" id="16_ewbju"]
 [ext_resource type="PackedScene" path="res://Scenes/MissionStatusPanel.tscn" id="17_msp01"]
 [ext_resource type="PackedScene" path="res://Scenes/EndTurnButton.tscn" id="18_etb01"]
-[ext_resource type="PackedScene" path="res://Scenes/ReportButton.tscn" id="19_rpt01"]
 
 [sub_resource type="TileSetAtlasSource" id="TileSetAtlasSource_o5yvi"]
 texture = ExtResource("4_ldgsr")
@@ -174,5 +173,3 @@ tile_set = ExtResource("4_v158k")
 [node name="MissionStatusPanel" parent="UILayer" instance=ExtResource("17_msp01")]
 
 [node name="EndTurnButton" parent="UILayer" instance=ExtResource("18_etb01")]
-
-[node name="ReportButton" parent="UILayer" instance=ExtResource("19_rpt01")]
