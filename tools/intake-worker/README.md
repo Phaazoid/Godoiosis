@@ -1,11 +1,15 @@
 # Iosis intake Worker (#131, #53 slice 5)
 
-One Cloudflare Worker with two tenants, routed on path:
+One Cloudflare Worker with three tenants, routed on path:
 
-| Path | What it does | Where it lands |
-| --- | --- | --- |
-| `` (the root) | relays a bug report, untouched | a Discord webhook |
-| `/telemetry` | writes one recorded playtest run | the `iosis-telemetry` D1 database |
+| Path | Method | What it does | Where it lands |
+| --- | --- | --- | --- |
+| `` (the root) | POST | relays a bug report, untouched | a Discord webhook |
+| `/telemetry` | POST | writes one recorded playtest run | the `iosis-telemetry` D1 database |
+| `/version` | GET | answers "what is the newest build, and where" | the `release` row, same database |
+
+The method check belongs to the **route**, not to the door (#1060). A blanket `POST only` used to
+sit above the dispatch, which was right while every route was a POST.
 
 An unmatched path is a **404**, never a fall-through — Cloudflare normalizes doubled slashes and
 nothing else, so `/telemetry/` is a string a client can really send, and under a default-to-report
@@ -215,7 +219,9 @@ Clean it up afterwards with
 | `DISCORD_WEBHOOK secret is not set` | The secret was never set, or was set outside `tools/intake-worker/` |
 | `discord 401` / `discord 404` | The webhook was deleted, or the URL was pasted truncated |
 | `expected multipart/form-data` | `curl -d` was used instead of `-F` |
-| `no such route: /report` | Only `` and `/telemetry` exist; anything else is a 404 by design |
+| `no such route: /report` | Only ``, `/telemetry` and `/version` exist; anything else is a 404 by design |
+| `POST only` / `GET only` | Right path, wrong verb — see the route table at the top |
+| `no release recorded` | `/version` before any release was announced. Apply `alter-2026-09-20-release.sql`, or run `archive-build.ps1` |
 | `DB (D1) binding is not set` | Step 2 was skipped — `database_id` is still `REPLACE_ME` |
 | `no such table: runs` | Step 3 was run **without `--remote`** |
 | `summary carries no run_id` | A run recorded before slice 5. Refused on purpose — see `schema.sql` |
@@ -352,11 +358,22 @@ tools/intake-worker/pull-runs.ps1
 **every run that is not already on disk**; `-RunId <id>` takes exactly one, and `-Force` overwrites.
 Runs land in `user://telemetry/sent/<run_id>/` and appear in **Session > Replay** with no relaunch.
 
-**There is deliberately no read route on the Worker.** `Uploader.ENDPOINT` is a `const` in the
+**There is deliberately no route that hands RUNS back.** `Uploader.ENDPOINT` is a `const` in the
 shipped game, so that URL is effectively public — harmless while the endpoint only *accepts*
 uploads, and not harmless at all the moment it hands runs back. A read route would need auth of its
 own, and a secret compiled into a dev build is not a secret. `wrangler` is already authenticated as
 the account owner, so the query is the whole mechanism: no route, no new surface, nothing to leak.
+
+**Run every `wrangler` command from this folder.** It writes `.wrangler/cache` into the CURRENT
+directory, not beside `--config`, and that cache holds the account id and owner email — so running it
+from the repo root leaves a second copy somewhere nobody is looking. `.gitignore` no longer anchors
+on this path, so a stray one cannot be committed, but one folder is still the intent.
+
+`/version` (#1060) is a read route and does not weaken that rule. It hands back one row that is
+public by intention — the newest version number and the download page — holds nothing anybody
+submitted, and needs no auth for the same reason the endpoint itself needs none. The rule is about
+**player data**, not about the verb. Its WRITE half obeys the paragraph above exactly: there is no
+write route either, and `tools/archive-build.ps1` announces a release with `wrangler` as the owner.
 
 **Runs land in `sent/`, never `pending/`** — `TelemetryUploader` walks `pending_runs()`, so a run
 dropped there would be shipped straight back up to the intake it just came from. There is also no

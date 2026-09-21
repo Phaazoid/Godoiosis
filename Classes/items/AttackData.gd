@@ -40,8 +40,10 @@ extends Resource
 # from the attacker, stopping at the first wall/unit/edge. 0 = no displacement (every attack
 # today). Generic on purpose — a future air-blast rune could carry it too. Resolved by
 # PlanResolver, applied on execute; the Kinetic Mace's Blowback is the first user.
-# How this attack answers the height question at aim time (#258; judged by Reach.vertical_aim_ok,
-# directional spreads exempt in v1 — their per-cell height question is the deferred footprint one):
+# How this attack answers the height question at aim time (#258; judged by Reach.vertical_aim_ok.
+# A directional spread was exempt in v1 and is not since #756 — it asks this per LANE — and since
+# #805 a PLACED footprint asks this same gate per cell, with the IMPACT standing in for the shooter,
+# so these three fields describe a blast's own reach as readily as a shot's):
 #   RANGED — the target may sit up to up_tolerance above / down_tolerance below the attacker
 #            (-1 = unlimited). A lob's climb ceiling is its up_tolerance; a gun stays -1.
 #   MELEE  — dev ruling 2026-08-20: same step, or a facing half step — same elevation, or adjacent

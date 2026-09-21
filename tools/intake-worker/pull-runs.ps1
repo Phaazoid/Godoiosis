@@ -2,11 +2,13 @@
   pull-runs.ps1 (#865) - copies a recorded playtest run OUT of the D1 intake and onto this machine,
   in the shape `Session > Replay` already reads, so a run somebody else played can be replayed here.
 
-  THE PIPE IS WRITE-ONLY BY CONSTRUCTION and this script does not change that: the Worker has two
-  routes and both are POST, and ReplayRun reads local disk only. A read route on the Worker was the
-  obvious design and is the dangerous one - ENDPOINT is a const in the shipped game, so the URL is
-  effectively public, which is fine for something that only ACCEPTS uploads and stops being fine the
-  moment it hands runs back. It would need auth of its own, and a secret compiled into a dev build is
+  THE RUN PIPE IS WRITE-ONLY BY CONSTRUCTION and this script does not change that: no route hands a
+  run back, and ReplayRun reads local disk only. (#1060 added a third route, GET /version, which
+  serves one row holding the newest build number and the download page - public by intention, and
+  nothing anybody submitted. What the rule protects is PLAYER DATA, not the verb.) A route that
+  returned runs was the obvious design and is the dangerous one - ENDPOINT is a const in the shipped
+  game, so the URL is effectively public, which is fine for something that never hands a run back and
+  stops being fine the moment it does. It would need auth of its own, and a secret compiled into a dev build is
   not a secret. wrangler is already authenticated as the account owner, so the query IS the mechanism.
 
   RUNS LAND IN sent/, NEVER pending/. TelemetryUploader._send_round walks TelemetryStore.pending_runs(),
