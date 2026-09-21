@@ -215,3 +215,19 @@ static func documented_actions() -> Array[String]:
 		if action != HARDCODED and not result.has(action):
 			result.append(action)
 	return result
+
+
+# What a player PRESSES for an action, as this registry prints it -- "" if nothing documents one.
+#
+# For a readout that names a key. A sign spelling its own "F3" would be a second binding with no
+# law able to see it drift (Law #4), and #691's rebinding turns that copy into a lie the moment it
+# ships; reading it here means the sign follows the registry the coverage test already pins against
+# the live Input Map. HARDCODED is refused rather than matched: it is the DECLARED "no action" and
+# every entry carrying it would answer to it.
+static func key_for_action(action: String) -> String:
+	if action == HARDCODED:
+		return HARDCODED
+	for entry: Dictionary in ENTRIES:
+		if entry["action"] == action:
+			return entry["key"]
+	return ""
