@@ -9,6 +9,11 @@ class_name Uploader
 # live on the subclasses rather than here: adding a file to a report is one line in ReportUploader
 # and no change anywhere else.
 #
+# VersionCheck (#1060) IS DELIBERATELY NOT A SUBCLASS. It asks the same server one question and
+# sends nothing at all, so what it shares is the ADDRESS below -- one answer to "where is our
+# server" -- and none of this transport. Bending submit() around a GET with no payload would blur
+# what this class is for.
+#
 # ENDPOINT is a Cloudflare Worker (tools/intake-worker/) which routes on PATH -- "" is the report
 # relay to Discord, "/telemetry" is the run intake. The game holds neither the Discord token nor a
 # database credential, so both rotate without re-exporting a build.

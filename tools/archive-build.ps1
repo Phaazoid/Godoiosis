@@ -37,13 +37,25 @@
   the build's own name from export_presets.cfg - so an editor export and a scripted one land in the
   same place by construction rather than by agreement.
 
+  IT ALSO PUTS THE BUILD OUT (#1060). butler uploads the zip to itch, and the last thing the script
+  does is ANNOUNCE the new version into the intake Worker's `release` row, which is what the game's
+  own update nag reads on every launch.
+
+  THE ORDER GREW A STEP AND ITS MEANING HELD. Once "a build that goes out" means one that is ON
+  itch, the tag's claim is only true after the upload - so the push goes BEFORE the tag, and the
+  announce goes after everything. Each prefix fails safe: a failed push leaves no tag and nobody
+  nagged; a failed tag or announce leaves a build up that nobody has been pointed at yet. All three
+  recover by re-running at the same commit, which section 4 already allows.
+
   Usage:
-    powershell -File tools\archive-build.ps1            # export, zip, tag, push the tag
-    powershell -File tools\archive-build.ps1 -NoPush    # everything but the push
+    powershell -File tools\archive-build.ps1             # export, zip, upload, tag, announce
+    powershell -File tools\archive-build.ps1 -NoPush     # everything but pushing the git tag
+    powershell -File tools\archive-build.ps1 -NoUpload   # everything but itch and the announce
 #>
 
 param(
-    [switch]$NoPush
+    [switch]$NoPush,
+    [switch]$NoUpload
 )
 
 $ErrorActionPreference = 'Stop'
@@ -53,7 +65,26 @@ $ErrorActionPreference = 'Stop'
 $ZIP_ATTEMPTS = 5
 $ZIP_RETRY_SECONDS = 2
 
+# WHERE A BUILD GOES (#1060). user/game:channel -- the CHANNEL NAME carries the platform, so
+# "windows" in it is what tags the upload as a Windows executable on the itch page.
+$ITCH_TARGET = 'phlogistongames/iosis:windows'
+
+# Where the in-game nag sends somebody on an old build. THE AUTHORITY IS THE `release` ROW, not
+# this line: the game reads the row, and this is what overwrites it each release. The seed value in
+# alter-2026-09-20-release.sql exists only so the route can answer before the first push.
+$DOWNLOAD_URL = 'https://phlogistongames.itch.io/iosis'
+
+# The intake Worker's database. Its config path is built from $root below, not from here.
+$TELEMETRY_DB = 'iosis-telemetry'
+
 $root = Split-Path $PSScriptRoot -Parent
+
+# --config is needed because wrangler looks for a wrangler.toml in the CURRENT DIRECTORY, and this
+# script does not run in the Worker's folder -- pull-runs.ps1 gets away without it only because it
+# sits there. ABSOLUTE, off $root, for the reason every other path in this file is: nothing here may
+# depend on where it was invoked from, and a relative path would work from the repo root and fail
+# silently-looking ("no config file found") from anywhere else.
+$WORKER_CONFIG = Join-Path $root 'tools\intake-worker\wrangler.toml'
 
 # One reader for "what does this config file say", used for the version and for both halves of the
 # export path. Refuses rather than returning empty: every one of these is load-bearing downstream,
@@ -249,7 +280,31 @@ if (-not $embedded) { $files += $pck }
 if (Test-Path $console) { $files += $console }
 New-Zip $files $zip
 
-# ---- 7. the tag, last --------------------------------------------------------------------------
+# ---- 7. the upload -----------------------------------------------------------------------------
+# THE ZIP, not the directory. butler takes a .zip directly and unpacks it on the far side, so what
+# goes up is the artifact this script already made and checked -- where pushing builds\ would sweep
+# up every previous version's zip sitting beside it.
+#
+# --userversion is the version read in section 3, so the itch page and the game cannot disagree
+# about what this build is called. It is also what makes itch's own latest-version endpoint work,
+# which we do not use but which costs nothing to keep true.
+
+if (-not $NoUpload) {
+    if (-not (Get-Command butler -ErrorAction SilentlyContinue)) {
+        throw ("butler is not on PATH, so this build cannot go out. Download it from" +
+               " https://itchio.itch.io/butler, extract to e.g. C:\butler, add that to PATH," +
+               " and run 'butler login' once. Then run this again, or use -NoUpload to build" +
+               " without publishing.")
+    }
+    Write-Host "Uploading $tag to $ITCH_TARGET..." -ForegroundColor Cyan
+    # No 2>&1 -- see the announce below for why.
+    & butler push $zip $ITCH_TARGET --userversion $version
+    if ($LASTEXITCODE -ne 0) {
+        throw "butler exited $LASTEXITCODE - no tag created, nothing announced."
+    }
+}
+
+# ---- 8. the tag --------------------------------------------------------------------------------
 
 if (-not $tagAtHead) {
     Invoke-Git @('tag', '-a', $tag, '-m', "Build $tag -- $branch @ $sha") | Out-Null
@@ -260,10 +315,46 @@ if (-not $tagAtHead) {
     }
 }
 
+# ---- 9. the announce, last ---------------------------------------------------------------------
+# WHAT THE IN-GAME NAG READS (#1060). Last of everything, so the game can never point somebody at a
+# build that is not up yet -- the failure this ordering makes impossible.
+#
+# wrangler IS THE AUTH. pull-runs.ps1 ruled this for the read side and it holds for a write: "a
+# secret compiled into a dev build is not a secret. wrangler is already authenticated as the account
+# owner, so the query IS the mechanism." So the Worker has no write route, this needs no token, and
+# there is nothing here that could leak into a build.
+#
+# NO 2>&1 on wrangler: redirecting a native command's stderr in PowerShell 5.1 wraps each line in an
+# ErrorRecord and sets $? false on exit 0.
+
+if (-not $NoUpload) {
+    $announcedAt = (Get-Date).ToUniversalTime().ToString('yyyy-MM-ddTHH:mm:ssZ')
+    $sql = ("UPDATE release SET version = '$version', url = '$DOWNLOAD_URL'," +
+            " announced_at = '$announcedAt' WHERE id = 1;")
+    Write-Host "Announcing $tag to the update check..." -ForegroundColor Cyan
+    & wrangler d1 execute $TELEMETRY_DB --remote --config $WORKER_CONFIG --command $sql
+    if ($LASTEXITCODE -ne 0) {
+        # The build IS up and tagged at this point, so this is recoverable rather than fatal to what
+        # already happened -- and re-running the whole script would re-export for one statement.
+        Write-Host ""
+        Write-Host ("The build is up and tagged, but the announce failed - nobody's game knows" +
+                    " about $tag yet. Re-run just this:") -ForegroundColor Yellow
+        Write-Host "  wrangler d1 execute $TELEMETRY_DB --remote --config $WORKER_CONFIG --command `"$sql`""
+        throw "wrangler exited $LASTEXITCODE"
+    }
+}
+
 $size = [Math]::Round((Get-Item $zip).Length / 1MB, 1)
 Write-Host ""
 Write-Host ("Built $tag in {0:N0}s" -f $sw.Elapsed.TotalSeconds) -ForegroundColor Green
 Write-Host "  $zip  (${size} MB, $($files.Count) files)"
 Write-Host "  tagged $tag at $branch @ $sha$(if ($NoPush -and -not $tagAtHead) { ' (not pushed)' })"
-Write-Host ""
-Write-Host "Hand out that zip." -ForegroundColor Green
+if ($NoUpload) {
+    Write-Host "  NOT uploaded and NOT announced (-NoUpload)" -ForegroundColor Yellow
+    Write-Host ""
+    Write-Host "Hand out that zip." -ForegroundColor Green
+} else {
+    Write-Host "  pushed to $ITCH_TARGET, announced as the newest build"
+    Write-Host ""
+    Write-Host "It is live. Anyone on an older build gets told on their next launch." -ForegroundColor Green
+}
