@@ -399,9 +399,13 @@ func test_dev_controls_outlive_the_modal_lock() -> void:
 
 
 func test_the_report_hotkey_fires_behind_a_modal() -> void:
-	# The reported symptom itself: F3 did nothing while a menu was up. Real InputEvents are never
-	# delivered headless, so the event goes to _input directly -- that is the handler either way,
-	# and can_process above is what pins the delivery half.
+	# The reported symptom itself: the instant report did nothing while a menu was up. Real
+	# InputEvents are never delivered headless, so the event goes to _input directly -- that is the
+	# handler either way, and can_process above is what pins the delivery half.
+	#
+	# THE RULE THIS PINS IS THE DEV KEY'S, which is why it moved to dev_report_instant with #1050
+	# rather than to the player's F3: DevController is PROCESS_MODE_ALWAYS and fires behind a card,
+	# where game.gd._input receives nothing while one is up (see the player case below).
 	assert_bool(DevTools.enabled()).is_true()   # the gate; without this the case passes vacuously
 	var before: int = _report_dirs().size()
 
@@ -410,7 +414,7 @@ func test_the_report_hotkey_fires_behind_a_modal() -> void:
 	assert_object(_first_modal_of(PauseMenu)).is_not_null()   # the board really is locked
 
 	var press := InputEventAction.new()
-	press.action = "dev_report_bug"
+	press.action = "dev_report_instant"
 	press.pressed = true
 	game.dev_controller._input(press)
 	await _frames(4)
@@ -419,6 +423,86 @@ func test_the_report_hotkey_fires_behind_a_modal() -> void:
 	assert_int(after.size()).is_equal(before + 1)
 	for dir: String in after:
 		_written.append("user://reports/".path_join(dir))
+
+
+# ==============================================================================
+#  The player's own key (#1050)
+# ==============================================================================
+
+func test_f3_opens_the_card_for_a_player() -> void:
+	# The whole ticket: plain F3 is a player binding now, and it opens the CARD rather than filing
+	# blind -- a stranger's note is the entire value of their report.
+	var press := InputEventAction.new()
+	press.action = "report_bug"
+	press.pressed = true
+	game._input(press)
+	await _frames(4)
+
+	assert_object(_first_modal_of(ReportPanel)).override_failure_message(
+		"F3 did not reach the report card").is_not_null()
+	_first_modal_of(ReportPanel).finished.emit(false)
+	await _frames(4)
+
+
+func test_shift_f3_does_not_also_open_the_players_card() -> void:
+	# THE FALSIFICATION TARGET for the exact_match argument in game.gd._input.
+	# is_action_pressed(action, allow_echo, exact_match) IGNORES additional modifiers by default, so
+	# a Shift+F3 press matches the plain-F3 binding too -- and Shift+F3 is the dev's note-less
+	# instant report. Without the third argument, one keypress opens the card AND files a report
+	# behind it. Dropping `true` from that call reds this case and nothing else.
+	#
+	# A real InputEventKey rather than an InputEventAction, because a synthesized ACTION carries no
+	# modifiers at all and so cannot express the collision.
+	var press := InputEventKey.new()
+	press.physical_keycode = KEY_F3
+	press.shift_pressed = true
+	press.pressed = true
+	# The premise: this event really does match the player's action under the loose comparison that
+	# every other check on that page uses. Without this the case would pass on a typo.
+	assert_bool(press.is_action_pressed("report_bug")).override_failure_message(
+		"Shift+F3 no longer collides with the plain action -- this case is now vacuous").is_true()
+
+	game._input(press)
+	await _frames(4)
+
+	assert_object(_first_modal_of(ReportPanel)).override_failure_message(
+		"Shift+F3 opened the player's card as well as firing the dev's instant report").is_null()
+
+
+func test_the_card_leaves_a_live_board_as_it_found_it() -> void:
+	# F3 takes the title-screen door (open_report_card), which writes no game_state -- where the
+	# pause path writes MENU and restores it. ModalLock's freeze SHOULD carry an in-progress
+	# selection through untouched, but that is a belief until something asserts it.
+	# This suite's fixture boots to the TITLE SCREEN, which has no board -- so this case makes one.
+	# The sandbox is the cheapest board in the project and needs no mission load.
+	game.spawn_sandbox()
+	await _frames(2)
+	var units: Array[Unit] = game._all_units()
+	if units.is_empty():
+		fail("the sandbox spawned no units -- this case cannot see what it is about")
+		return
+	game.select_unit(units[0], units[0].movement.cell)
+	await _frames(2)
+	var state_before: int = game.game_state
+
+	game._input(_action("report_bug"))
+	await _frames(4)
+	var card: Node = _first_modal_of(ReportPanel)
+	assert_object(card).is_not_null()
+	card.finished.emit(false)
+	await _frames(4)
+
+	assert_int(game.game_state).override_failure_message(
+		"the report card moved the board's state").is_equal(state_before)
+	assert_object(game.selected_unit).override_failure_message(
+		"the report card dropped the player's selection").is_same(units[0])
+
+
+func _action(name: String) -> InputEventAction:
+	var press := InputEventAction.new()
+	press.action = name
+	press.pressed = true
+	return press
 
 
 func _report_dirs() -> Array[String]:

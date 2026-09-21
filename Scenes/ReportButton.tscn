@@ -1,0 +1,36 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" path="res://Classes/ui/ReportButton.gd" id="1_rpt01"]
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_rpt01"]
+content_margin_left = 10.0
+content_margin_top = 4.0
+content_margin_right = 10.0
+content_margin_bottom = 4.0
+bg_color = Color(0.08, 0.08, 0.12, 0.82)
+border_width_left = 2
+border_width_top = 2
+border_width_right = 2
+border_width_bottom = 2
+border_color = Color(0, 0, 0, 1)
+
+[node name="ReportButton" type="Control"]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+script = ExtResource("1_rpt01")
+
+[node name="Button" type="Button" parent="."]
+layout_mode = 1
+anchors_preset = 1
+anchor_left = 1.0
+anchor_right = 1.0
+grow_horizontal = 0
+theme_override_styles/normal = SubResource("StyleBoxFlat_rpt01")
+theme_override_styles/hover = SubResource("StyleBoxFlat_rpt01")
+theme_override_styles/pressed = SubResource("StyleBoxFlat_rpt01")
+text = "Report"
