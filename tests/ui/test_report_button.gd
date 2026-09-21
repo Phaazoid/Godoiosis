@@ -96,8 +96,15 @@ func test_the_mark_does_not_sit_under_the_action_queue_dock() -> void:
 
 
 func test_the_mark_does_not_sit_under_the_version_stamp() -> void:
-	# The other neighbour in that corner. Widening the version stamp reds this rather than quietly
-	# drawing one control over the other.
+	# The other neighbour in that corner -- and DECLARED AS A TRIPWIRE, not a live guard. Measured:
+	# the stamp sits at x 1230..1274 and the mark at x 968..1041, so nothing short of a deliberate
+	# relocation can bring them together, and three attempts to mutate this case red all failed
+	# (widening the .tscn offsets does nothing, because MissionStatusPanel.gd:40 repositions the
+	# label in code; growing that margin moves it diagonally out of reach instead).
+	#
+	# It is kept because it costs one rect compare and it is the guard that would catch someone
+	# moving this mark INTO the corner later -- which is exactly the obvious thing to try. The guard
+	# with real teeth is the dock one above.
 	var mark: ReportButton = game.report_button
 	var stamp: Control = game.mission_status_panel.get_node("VersionLabel")
 	var stamp_rect := Rect2(stamp.global_position, stamp.size)

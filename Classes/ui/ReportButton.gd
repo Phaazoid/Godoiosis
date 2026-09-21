@@ -27,13 +27,16 @@ const CORNER_MARGIN := 8
 # past -223 is under it. 231 is that plus a gap.
 #
 # The corner ITSELF cannot hold this button, which is worth writing down because it is the obvious
-# place to reach for: MissionStatusPanel's VersionLabel occupies the top-right 54px, and the dock
-# begins at y 25 -- so the free band beside the version stamp is 25px tall, while a Button carrying
-# one word measures 61x31. It does not fit, at any margin.
+# place to reach for and the numbers are the whole argument. MEASURED in the 1280x720 design space:
+# MissionStatusPanel's VersionLabel sits at x 1230..1274, y 6..22 (it is repositioned in code at
+# MissionStatusPanel.gd:40, so the offsets in that .tscn are dead and must not be read as the
+# answer), and the dock's panel begins at y 25 -- so the free band beside the stamp is 25px tall,
+# while this button measures 73x31. It does not fit there at any margin.
 #
 # This clearance is a second spelling of where the dock's edge is, so it is pinned rather than
-# trusted: tests/ui/test_report_button.gd asserts this rect overlaps neither the dock nor the
-# version stamp in the live tree, and widening either of those reds it.
+# trusted: tests/ui/test_report_button.gd measures the LIVE rects. Note which of those two guards
+# actually bites -- the DOCK one does (16px of gap, and it reds at clearance 0), while the version
+# stamp sits ~190px away and its case is a tripwire against a future move rather than a live guard.
 const DOCK_CLEARANCE := 231
 
 @onready var _button: Button = $Button
