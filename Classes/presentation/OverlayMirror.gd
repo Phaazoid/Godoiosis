@@ -54,7 +54,7 @@ var _last_staging_version := -1
 var _staging_moved := false
 
 var _last_trace_version := -1   # OverlayManager.sight_trace_version -- the store's own signal (#308)
-var _last_intent_version := -1   # ...and the exact tier's own (#710 slice 2)
+var _last_reach_line_version := -1   # ...and the reach lines, #710 slice 1 by way of #1069
 var _last_outline_version := -1  # ...and the focus stroke's (slice 4)
 
 # How far the drop pointer stands off the cliff face it hangs on (#431), in cells. A depth-buffer
@@ -116,7 +116,7 @@ func _process(_delta: float) -> void:
 	_attack(om)
 	_sight_trace(om)
 	overlays.poll_beam_motion()   # #217 has no changed signal; this is the one composed read (#1042)
-	_threat_intents(om)
+	_reach_lines(om)
 	_focus_outline(om)
 	_arrows(om)
 
@@ -278,46 +278,51 @@ func _sight_trace(om: OverlayManager) -> void:
 	overlays.set_line(BoardOverlays.Layer.SIGHT_TRACE, points, tint)
 
 
-# The exact tier (#710 slice 2), gated on one version. The colour is COPIED from the 2D renderer,
-# as the trace's is -- ONE colour now, both layers (#1042).
+# Who reaches the hovered cell (#1069), gated on one version. The colour is COPIED from the 2D
+# renderer, as the trace's is.
 #
-# STILL SPLIT BY LETHALITY across two layers, for a THIRD reason. Slice 2 refused the split (the
-# damage number carried the distinction); slice 3 made it (the number moved to the health bar, so
-# the beam had to say it, in a second hue); #1042 keeps it because the dev ruled lethality is not a
-# colour at all -- the mark FLASHES -- and a flash is a shader time term, which is per MATERIAL and
-# therefore per layer. The layers are what makes a per-mark animation expressible.
+# ONE LAYER, where slice 2's intents were two. The split existed to carry a per-material FLASH for a
+# felling intent, and a reach line cannot know lethality -- so there is nothing left for a second
+# layer to express and #1069 deleted it rather than leaving an empty one standing.
 #
-# Marks rather than segments, so the bead measures along the arc and its cone as one run.
-func _threat_intents(om: OverlayManager) -> void:
-	if om.intent_version == _last_intent_version:
+# Marks rather than segments, so the bead measures along the arc and its cone as one run -- and the
+# CONE rides alongside as a solid's own terms (base, tip, base radius), because the diorama draws it
+# as geometry rather than as the tapering ribbon the flat view still uses. The radius is composed
+# HERE and not in ThreatLines2D: the scale is a multiple of the shaft's width, and the shaft's width
+# is a BoardOverlays export that a 2D node has no way to see.
+func _reach_lines(om: OverlayManager) -> void:
+	if om.reach_line_version == _last_reach_line_version:
 		return
-	_last_intent_version = om.intent_version
-	var plain: Array[Array] = []
-	var fatal: Array[Array] = []
+	_last_reach_line_version = om.reach_line_version
+	var marks: Array[Array] = []
 	# The width scales ride ALONGSIDE the strokes rather than being re-derived here: ThreatLines2D
 	# owns the mark's shape, and the flat view lays out its cone polygon off the same answer (#1059).
-	var plain_widths: Array[Array] = []
-	var fatal_widths: Array[Array] = []
-	for i in om.intent_marks.size():
+	var widths: Array[Array] = []
+	var cones: Array[Dictionary] = []
+	for i in om.reach_line_marks.size():
 		var flat: Array[PackedVector3Array] = []
-		flat.assign(om.intent_marks[i])
+		flat.assign(om.reach_line_marks[i])
 		var strokes: Array[PackedVector3Array] = []
 		for stroke: PackedVector3Array in flat:
 			var points := PackedVector3Array()
 			for p: Vector3 in stroke:
 				points.append(BoardSpace.trace_point(p))
 			strokes.append(points)
-		var widths := ThreatLines2D.mark_widths(flat)
-		if i < om.intent_fells.size() and om.intent_fells[i]:
-			fatal.append(strokes)
-			fatal_widths.append(widths)
+		marks.append(strokes)
+		widths.append(ThreatLines2D.mark_widths(flat))
+		var cone := ThreatLines2D.cone_of(flat)
+		if cone.is_empty():
+			cones.append({})
 		else:
-			plain.append(strokes)
-			plain_widths.append(widths)
-	overlays.set_marks(BoardOverlays.Layer.INTENT_LINES, plain,
-			ThreatLines2D.INTENT_LINE_COLOR, plain_widths)
-	overlays.set_marks(BoardOverlays.Layer.INTENT_LINES_FATAL, fatal,
-			ThreatLines2D.INTENT_LINE_COLOR, fatal_widths)
+			# Lifted through the same trace_point the strokes are, so the solid sits exactly where
+			# the stroke it replaces did rather than in a second space.
+			cones.append({
+				"base": BoardSpace.trace_point(cone["base"]),
+				"tip": BoardSpace.trace_point(cone["tip"]),
+				"radius": overlays.mark_width * float(cone["scale"]) * 0.5,
+			})
+	overlays.set_marks(BoardOverlays.Layer.REACH_LINES, marks,
+			ThreatLines2D.MARK_LINE_COLOR, widths, cones)
 
 
 func _target_pick_texture(om: OverlayManager) -> Texture2D:
@@ -620,7 +625,7 @@ func _terrain(om: OverlayManager) -> void:
 	_markers(BoardOverlays.Layer.TERRAIN_PREVIEW, preview)
 
 
-# Move-projection ghosts + knockback landing ghosts -> UnitMirror's ghost pool.
+# Move-projection ghosts + move-HOVER stand-ins + knockback landing ghosts -> UnitMirror's pool.
 func _ghost_sync(om: OverlayManager, kb_ghosts: Array[Dictionary]) -> void:
 	var entries: Array[Dictionary] = []
 	for sprite in om.projected_unit_sprites.values():
@@ -630,6 +635,12 @@ func _ghost_sync(om: OverlayManager, kb_ghosts: Array[Dictionary]) -> void:
 		if ghost == null or ghost.texture == null:
 			continue
 		entries.append(_marker(_anchor_px(ghost.global_position), ghost.texture, ghost.modulate))
+	# ...and the MOVE-HOVER stand-ins (#1069), which are their own store because they mean a move
+	# nobody has made. They have to be walked HERE or they are 2D-only -- this loop is the whole of
+	# how a ghost reaches the diorama, and the flat view is the dev-only one.
+	for sprite: Sprite2D in om.hover_ghost_sprites:
+		if is_instance_valid(sprite) and sprite.texture != null:
+			entries.append(_marker(_anchor_px(sprite.global_position), sprite.texture, sprite.modulate))
 	entries.append_array(kb_ghosts)
 	if _last_ghosts == entries:
 		return
@@ -695,7 +706,7 @@ func _cell_of_px(px: Vector2) -> Vector2i:
 	return Vector2i(floori(px.x / float(GridUtils.TILE_SIZE)), floori(px.y / float(GridUtils.TILE_SIZE)))
 
 
-# The stroke round the hovered enemy's footprint (slice 4). _threat_intents' shape exactly, one
+# The stroke round the hovered enemy's footprint (slice 4). _reach_lines' shape exactly, one
 # difference: an intent hangs at Reach.EYE_HEIGHT and carries its own altitude, while this LIES on
 # the ground and takes the LAYER's lift -- which for a LINE is the one thing set_lines does not add.
 func _focus_outline(om: OverlayManager) -> void:

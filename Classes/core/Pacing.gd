@@ -24,9 +24,6 @@ static var AI_PLAN_READ := 0.6     # AI squad's plan is drawn; hold before it re
 static var AI_ACTION := 0.45       # BOARD base beat on an AI pass -- an unread plan
 static var PLAYER_ACTION := 0.3    # BOARD base beat on the player's own Execute (#519)
 static var TURN_HANDOFF := 1.0     # hold at every faction turn start -- game.start_faction_turn
-# How long the plan has to sit still before the threat preview recomputes (#710). Not a beat: it
-# bounds how OFTEN the preview runs, never how long it takes -- see docs/performance.md.
-static var THREAT_PLAN_DELAY := 0.15
 
 # How long the camera takes to reach the next beat's subject, and therefore how long the action
 # WAITS for it (#520). Shorter than AI_SQUAD_PAN because that one crosses the board between squads

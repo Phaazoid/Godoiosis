@@ -20,9 +20,22 @@ var visual_tween: Tween
 const HIGHLIGHT_MODULATE := Color(1.4, 1.4, 1.0)   # warm yellow-white; tune to taste
 const TARGET_PULSE_MODULATE := Color(1.6, 1.6, 1.6)   # peak of the aim-target pulse
 # ...and the peak of the PIN flash (#1066, dev: "units that are toggled need to be indicated in some
-# way. I think they should flash, too."). Deliberately shallower than the aim's: a pin is a bookmark
-# you set yourself and lives for as long as you leave it there, so it breathes rather than strobes.
-static var PIN_PULSE_MODULATE := Color(1.3, 1.3, 1.3)
+# way. I think they should flash, too.").
+#
+# WHITE, AND IT LINGERS THERE (#1069). #1066 made this DELIBERATELY SHALLOWER than the aim's, on the
+# reasoning that a pin is a bookmark you set yourself and should breathe rather than strobe. The dev
+# played it: "the flashes are very hard to see. Instead of going dark, the flashes should be going
+# white, and linger on the white part of the flash a bit longer, to draw attention."
+#
+# So the two cues stop differing by DEPTH and differ by CADENCE instead -- the aim breathes
+# continuously, this snaps to white and sits there -- which is the distinction visual-clarity.md
+# principle 2 actually asks for, and it leaves the pin free to be the brighter of the two. The
+# PRECEDENCE is unchanged and is stated at _sync_pin_flash: an aim pulse still outranks this.
+static var PIN_PULSE_MODULATE := Color(2.2, 2.2, 2.2)
+# How long it sits at that peak, in seconds. The ramp either side is Pulse.PERIOD, so this is the
+# share of the cycle the cue actually occupies -- at 0.45 against a 0.5 ramp it is white for about a
+# third of the time rather than for one frame.
+static var PIN_PULSE_HOLD := 0.45
 
 var pulse_tween: Tween
 # TRUE while this unit's ranges are PINNED up. Held as a flag rather than read back off pin_tween
@@ -80,10 +93,22 @@ func _sync_pin_flash() -> void:
 	if want == (pin_tween != null):
 		return
 	if want:
-		pin_tween = Pulse.start(self, sprite, &"modulate", base_modulate, PIN_PULSE_MODULATE)
+		pin_tween = Pulse.start(self, sprite, &"modulate", base_modulate, PIN_PULSE_MODULATE,
+				Pulse.PERIOD, PIN_PULSE_HOLD)
 	else:
 		Pulse.stop(pin_tween, sprite, &"modulate", base_modulate)
 		pin_tween = null
+
+# Rebuild a STANDING pin flash so a turned knob reaches it (#1069). Its own door rather than a
+# clause in _sync_pin_flash, which is deliberately idempotent -- it compares "should there be one"
+# against "is there one" and does nothing when they agree, which is exactly the case here.
+func restyle_pin_flash() -> void:
+	if pin_tween == null:
+		return
+	Pulse.stop(pin_tween, sprite, &"modulate", base_modulate)
+	pin_tween = null
+	_sync_pin_flash()
+
 
 func reset_visuals():
 	if sprite == null:

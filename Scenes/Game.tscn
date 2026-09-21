@@ -11,6 +11,7 @@
 [ext_resource type="Texture2D" uid="uid://coaleb8oik4ri" path="res://Art/Board/Basic_Tile_Overlay.png" id="4_ldgsr"]
 [ext_resource type="TileSet" uid="uid://br1jl2l6yxyuf" path="res://Resources/TestTiles.tres" id="4_v158k"]
 [ext_resource type="Texture2D" uid="uid://bmsvpw377pueh" path="res://Art/Board/Basic_Hover_Tile.png" id="5_ldgsr"]
+[ext_resource type="Texture2D" uid="uid://e58jtsnewvu0" path="res://Art/Board/cell_outline.png" id="5_outln"]
 [ext_resource type="PackedScene" uid="uid://cbuid8103rdvh" path="res://Scenes/TurnBanner.tscn" id="7_1l0tm"]
 [ext_resource type="PackedScene" uid="uid://damgnt4d7qqj3" path="res://Scenes/UnitInfoPanel.tscn" id="8_v158k"]
 [ext_resource type="Texture2D" uid="uid://bcoyc0w1aws1m" path="res://Basic_Tile_Overlay.png" id="10_alh3a"]
@@ -20,7 +21,7 @@
 [ext_resource type="PackedScene" path="res://Scenes/EndTurnButton.tscn" id="18_etb01"]
 
 [sub_resource type="TileSetAtlasSource" id="TileSetAtlasSource_o5yvi"]
-texture = ExtResource("4_ldgsr")
+texture = ExtResource("5_outln")
 0:0/0 = 0
 
 [sub_resource type="TileSet" id="TileSet_rku1e"]

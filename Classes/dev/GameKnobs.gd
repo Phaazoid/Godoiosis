@@ -83,24 +83,27 @@ const KNOBS: Array[Dictionary] = [
 		"tip": "How the beam fades from its bright middle to nothing at the edge. Around 1 is a flat, even ribbon; higher pulls the brightness into a narrow core with a soft halo around it, which is what stops it reading as a solid strip of geometry."},
 	{"group": "Board markup", "node": "BoardOverlays", "prop": "beam_intensity", "label": "Sight beam glow", "min": 0.5, "max": 6.0, "step": 0.05,
 		"tip": "Brightness multiplier on the beam's colour. Past the scene's glow threshold (1.2 by default, on the Moods tab) the bloom takes over and the beam starts to burn -- which is the dial that makes it read as light rather than paint. Separate from the colour because a colour row cannot go above full white."},
-	# The intent mark's own beam set and its two motions (#1042). Neither a laser nor a stroke: it
-	# is the one piece of board markup that travels.
-	{"group": "Board markup", "node": "BoardOverlays", "prop": "intent_width", "label": "Intent mark width", "min": 0.01, "max": 0.4, "step": 0.005,
-		"tip": "How thick the mark from an enemy to its target is, in cells. Wider than the focus outline and thinner than the sight beam -- it has to read across the whole board without becoming the loudest thing on it."},
-	{"group": "Board markup", "node": "BoardOverlays", "prop": "intent_intensity", "label": "Intent mark glow", "min": 0.2, "max": 6.0, "step": 0.05,
-		"tip": "Brightness multiplier on the mark. Past the scene's glow threshold (1.2) it blooms."},
-	{"group": "Board markup", "node": "BoardOverlays", "prop": "bead_speed", "label": "Intent bead speed", "min": 0.0, "max": 12.0, "step": 0.1,
-		"tip": "How fast the bright pulse runs from the enemy to its target, in cells per second. It is what says which end is which without the cone having to be read, so it wants to be unmistakable in direction and calm in pace."},
-	{"group": "Board markup", "node": "BoardOverlays", "prop": "bead_length", "label": "Intent bead length", "min": 0.0, "max": 3.0, "step": 0.05,
+	# The reach mark's own beam set and its motion (#1042, re-pointed by #1069). Neither a laser nor
+	# a stroke: it is the one piece of board markup that travels.
+	{"group": "Board markup", "node": "BoardOverlays", "prop": "mark_width", "label": "Reach mark width", "min": 0.01, "max": 0.4, "step": 0.005,
+		"tip": "How thick the mark from an enemy to the cell you are hovering is, in cells. Wider than the focus outline and thinner than the sight beam -- it has to read across the whole board without becoming the loudest thing on it. The cone's base is a MULTIPLE of this, so widening the mark widens its head too."},
+	{"group": "Board markup", "node": "BoardOverlays", "prop": "mark_intensity", "label": "Reach mark glow", "min": 0.2, "max": 6.0, "step": 0.05,
+		"tip": "Brightness multiplier on the mark's SHAFT. Past the scene's glow threshold (1.2) it blooms. The solid cone has its own, deliberately: a ribbon fades out at its rim so it is far dimmer than this number over most of its area, where a solid is this bright everywhere."},
+	{"group": "Board markup", "node": "BoardOverlays", "prop": "bead_speed", "label": "Reach bead speed", "min": 0.0, "max": 12.0, "step": 0.1,
+		"tip": "How fast the bright pulse runs from the enemy to the hovered cell, in cells per second. It is what says which end is which without the cone having to be read, so it wants to be unmistakable in direction and calm in pace. It runs through the cone as one sweep."},
+	{"group": "Board markup", "node": "BoardOverlays", "prop": "bead_length", "label": "Reach bead length", "min": 0.0, "max": 3.0, "step": 0.05,
 		"tip": "How long that pulse is, in cells. Zero turns the bead off entirely and leaves a still mark with its cone."},
-	{"group": "Board markup", "node": "BoardOverlays", "prop": "bead_gap", "label": "Intent bead spacing", "min": 0.5, "max": 30.0, "step": 0.5,
+	{"group": "Board markup", "node": "BoardOverlays", "prop": "bead_gap", "label": "Reach bead spacing", "min": 0.5, "max": 30.0, "step": 0.5,
 		"tip": "How far apart successive pulses run, in cells. Shorter than the mark and you get a chain of them travelling at once; longer and there is exactly one at a time with a rest between."},
-	{"group": "Board markup", "node": "BoardOverlays", "prop": "flash_hz", "label": "Lethal intent flash rate", "min": 0.0, "max": 4.0, "step": 0.05,
-		"tip": "How many times a second a mark that would DOWN or KILL pulses. Lethality is not a colour here -- it is the same pink flashing white -- so this is the whole of what separates the two. Keep it slow: a felling warning that strobes is exactly what the photosensitivity setting exists to prevent, and that setting freezes this at its bright point."},
-	{"group": "Board markup", "node": "BoardOverlays", "prop": "flash_white", "label": "Lethal flash whiteness", "min": 0.0, "max": 1.0, "step": 0.05,
-		"tip": "How far toward white the flash carries the mark at its peak. 1.0 reaches white; lower keeps it a hot pink. It never holds the white with photosensitivity on, because a permanently white mark is the sight beam's own colour."},
-	{"group": "Board markup", "node": "BoardOverlays", "prop": "flash_alpha", "label": "Lethal flash strength", "min": 0.0, "max": 2.0, "step": 0.05,
-		"tip": "How much extra alpha the flash adds at its peak. It only ever rises, so at the bottom of the cycle a lethal mark is never quieter than an ordinary one."},
+	# The SOLID cone's own three (#1069). Everything else about the mark -- length, base width,
+	# colour, bow, inset -- was already tunable while it was a ribbon; these are what a volume needs
+	# and a ribbon never did.
+	{"group": "Board markup", "node": "BoardOverlays", "prop": "cone_intensity", "label": "Reach cone glow", "min": 0.2, "max": 6.0, "step": 0.05,
+		"tip": "Brightness multiplier on the cone alone. It starts LOWER than the shaft's on purpose: the shaft is a ribbon that fades to nothing at its rim, so most of it is far dimmer than its number, while the cone is a solid surface that is this bright edge to edge. Past the scene's glow threshold (1.2) the whole head blooms white and the shading below stops reading."},
+	{"group": "Board markup", "node": "BoardOverlays", "prop": "cone_shading", "label": "Reach cone shading", "min": 0.0, "max": 1.0, "step": 0.05,
+		"tip": "How dark a face pointing away from the light goes. 1.0 is flat -- a silhouette, which is what a cone looks like with no shading at all -- and 0 is hard black on the far side. This is the whole of what makes the head read as a 3D shape rather than a triangle, since board markup is never lit by the scene."},
+	{"group": "Board markup", "node": "BoardOverlays", "prop": "cone_facets", "label": "Reach cone facets", "min": 3, "max": 32, "step": 1,
+		"tip": "How many flat faces the cone is built from. Low reads as a cut gem with obvious edges, high as a smooth round cone. At the size this draws on screen, somewhere in the low teens is usually all that survives the pixels."},
 
 	# --- Dev chrome ---
 	# Filed truthfully rather than folded into the markup above it: these are the only rows on this
@@ -415,6 +418,7 @@ const QUEUE_STYLE_SCRIPT := "res://Classes/ui/queue/QueueStyle.gd"
 const BOARD_SPACE_SCRIPT := "res://Classes/presentation/BoardSpace.gd"
 const SIGHT_TRACE_SCRIPT := "res://Classes/board/SightTrace2D.gd"
 const THREAT_LINES_SCRIPT := "res://Classes/board/ThreatLines2D.gd"
+const UNIT_VISUALS_SCRIPT := "res://Classes/units/UnitVisuals.gd"
 const MUSIC_DIRECTOR_SCRIPT := "res://Classes/audio/MusicDirector.gd"
 const STAGING_DUST_SCRIPT := "res://Classes/presentation/StagingDust.gd"
 const ARC_LIGHTNING_SCRIPT := "res://Classes/presentation/ArcLightning.gd"
@@ -470,28 +474,34 @@ const CLASS_KNOBS: Array[Dictionary] = [
 		"tip": "Where an enemy could go AND what it could hit, as one unbroken field. Under both of your tones, so where it crosses your blue the composite IS the intersect colour -- tune it there as well as over bare ground. Its risky neighbours are the violet deployment zone and the mauve invalid-move fill."},
 	# The exact tier (#710 slice 2): what the AI WILL do, as opposed to what it COULD. It has to
 	# read as a promise rather than a possibility, so tune it AGAINST the threat line above.
+	# The PIN flash (#1066, re-cut by #1069). Its own two rows because a cue that says "you asked for
+	# this one" has to be findable at a glance and was tunable nowhere at all -- PIN_PULSE_MODULATE
+	# has been a static var with no row since the day it was written.
+	{"group": "Board markup colours", "label": "Pinned enemy flash", "static": "PIN_PULSE_MODULATE",
+		"script": UNIT_VISUALS_SCRIPT,
+		"tip": "What a shift+clicked enemy's sprite brightens TO. Above 1.0 on each channel washes the art toward white, which is what the dev asked for after the first version read as the unit going dark between beats. It may be brighter than the aim pulse: the two no longer differ by depth, they differ by cadence -- an aim breathes, a pin snaps and sits."},
+	{"group": "Board markup colours", "label": "Pinned enemy flash hold", "static": "PIN_PULSE_HOLD",
+		"script": UNIT_VISUALS_SCRIPT, "min": 0.0, "max": 3.0, "step": 0.05,
+		"tip": "How long it stays at that peak before easing back, in seconds. Zero is the old symmetric breathe, which spends half its cycle returning to normal and reads as a DIP rather than a flash. The ramp either side is half a second, so this is roughly how much of the cycle the cue actually occupies."},
 	{"group": "Board markup colours", "label": "Enemy focus outline (2D+3D)", "static": "FOCUS_OUTLINE_COLOR",
 		"tip": "The stroke round the whole field of the enemy under the pointer. Since #1066 it is the ONLY thing separating that enemy from every other one whose ranges are up -- nothing dims any more -- so it has to read against the threat field, your own two tones and the terrain alike."},
-	{"group": "Board markup colours", "label": "Intent mark (2D+3D)", "static": "INTENT_LINE_COLOR", "script": THREAT_LINES_SCRIPT,
-		"tip": "The mark from an enemy to the unit it will actually attack next turn. ONE colour for both the ordinary and the felling mark: a felling one is the same pink and flashes white instead. Pink because nothing else on the board owns that hue -- the aim footprint is yellow and the sight bead white, which is what the old amber read as."},
-	{"group": "Board markup colours", "label": "Intent mark height", "static": "MARK_HEIGHT", "script": THREAT_LINES_SCRIPT,
+	{"group": "Board markup colours", "label": "Reach mark (2D+3D)", "static": "MARK_LINE_COLOR", "script": THREAT_LINES_SCRIPT,
+		"tip": "The mark from an enemy to the cell you are hovering a move onto -- one per enemy that could hit you there. Pink because nothing else on the board owns that hue: the aim footprint is yellow and the sight bead white, which is what the old amber read as. The cone at the far end shares it."},
+	{"group": "Board markup colours", "label": "Reach mark height", "static": "MARK_HEIGHT", "script": THREAT_LINES_SCRIPT,
 		"min": 0.0, "max": 2.0, "step": 0.025,
 		"tip": "How high above a unit's own footing the mark hangs, in rule height units (two to a level). 0.625 is the middle of a body: a map sprite's ink stands 1.25 of these tall. Deliberately NOT the sight beam's height, which is a RULE about what a wall is and cannot move for a look."},
-	{"group": "Board markup colours", "label": "Intent mark bow", "static": "MARK_BOW_PER_CELL", "script": THREAT_LINES_SCRIPT,
+	{"group": "Board markup colours", "label": "Reach mark bow", "static": "MARK_BOW_PER_CELL", "script": THREAT_LINES_SCRIPT,
 		"min": 0.0, "max": 1.0, "step": 0.025,
 		"tip": "How far the mark arcs above the straight line between the two units, per CELL of its own length -- so a short mark and a long one bow by the same amount relative to their run. Zero draws a straight line."},
-	{"group": "Board markup colours", "label": "Intent mark inset", "static": "MARK_INSET", "script": THREAT_LINES_SCRIPT,
+	{"group": "Board markup colours", "label": "Reach mark inset", "static": "MARK_INSET", "script": THREAT_LINES_SCRIPT,
 		"min": 0.0, "max": 1.0, "step": 0.05,
 		"tip": "How far short of the victim the mark stops, in cells. Pure taste -- the crown hangs well above the mark, so nothing is being cleared. Too large and it points at open air."},
-	{"group": "Board markup colours", "label": "Intent cone length", "static": "CONE_LENGTH", "script": THREAT_LINES_SCRIPT,
+	{"group": "Board markup colours", "label": "Reach cone length", "static": "CONE_LENGTH", "script": THREAT_LINES_SCRIPT,
 		"min": 0.0, "max": 1.5, "step": 0.05,
 		"tip": "How much of the mark's far end tapers to a point, in cells, measured along the arc so a deeper bow does not shrink it. Zero leaves a bare line with nothing saying which way the blow runs but the bead."},
-	{"group": "Board markup colours", "label": "Intent cone width", "static": "CONE_WIDTH_SCALE", "script": THREAT_LINES_SCRIPT,
+	{"group": "Board markup colours", "label": "Reach cone width", "static": "CONE_WIDTH_SCALE", "script": THREAT_LINES_SCRIPT,
 		"min": 1.0, "max": 6.0, "step": 0.1,
 		"tip": "How wide the cone's base is as a MULTIPLE of the mark's own width, so widening the mark widens its cone with it. It wants to be subtle -- barely more than the shaft, converging to nothing at the victim."},
-	{"group": "Board markup colours", "label": "Threat preview delay", "static": "THREAT_PLAN_DELAY", "script": PACING_SCRIPT,
-		"min": 0.0, "max": 1.0, "step": 0.05,
-		"tip": "How long your plan sits still before the intent lines recompute. It bounds how OFTEN the preview runs, never how long it takes -- raise it if queueing orders feels sticky, lower it if the lines lag behind your thinking."},
 	{"group": "Board markup colours", "label": "Leash reveal (2D+3D)", "static": "ZONE_HIGHLIGHT_MODULATE",
 		"tip": "A sentry's patrol zone while you hover it or hold the threat view -- and the Tile Brush's picked zone, which is the same layer and the same colour."},
 
@@ -1401,13 +1411,14 @@ static func read_static(name: String) -> Variant:
 		"THREAT_MODULATE": return OverlayManager.THREAT_MODULATE
 		"FOCUS_OUTLINE_COLOR": return OverlayManager.FOCUS_OUTLINE_COLOR
 		"ZONE_HIGHLIGHT_MODULATE": return OverlayManager.ZONE_HIGHLIGHT_MODULATE
-		"INTENT_LINE_COLOR": return ThreatLines2D.INTENT_LINE_COLOR
+		"MARK_LINE_COLOR": return ThreatLines2D.MARK_LINE_COLOR
 		"MARK_HEIGHT": return ThreatLines2D.MARK_HEIGHT
 		"MARK_BOW_PER_CELL": return ThreatLines2D.MARK_BOW_PER_CELL
 		"MARK_INSET": return ThreatLines2D.MARK_INSET
 		"CONE_LENGTH": return ThreatLines2D.CONE_LENGTH
 		"CONE_WIDTH_SCALE": return ThreatLines2D.CONE_WIDTH_SCALE
-		"THREAT_PLAN_DELAY": return Pacing.THREAT_PLAN_DELAY
+		"PIN_PULSE_MODULATE": return UnitVisuals.PIN_PULSE_MODULATE
+		"PIN_PULSE_HOLD": return UnitVisuals.PIN_PULSE_HOLD
 		"SQUAD_RING_ALPHA": return OverlayManager.SQUAD_RING_ALPHA
 		"SQUAD_RING_PULSE_GAIN": return OverlayManager.SQUAD_RING_PULSE_GAIN
 		"KNOCKBACK_MODULATE": return OverlayManager.KNOCKBACK_MODULATE
@@ -1605,15 +1616,24 @@ static func write_static(host: Node3D, name: String, value: Variant) -> void:
 		"THREAT_MODULATE": OverlayManager.THREAT_MODULATE = value
 		"FOCUS_OUTLINE_COLOR": OverlayManager.FOCUS_OUTLINE_COLOR = value
 		"ZONE_HIGHLIGHT_MODULATE": OverlayManager.ZONE_HIGHLIGHT_MODULATE = value
-		"INTENT_LINE_COLOR": ThreatLines2D.INTENT_LINE_COLOR = value
+		"MARK_LINE_COLOR": ThreatLines2D.MARK_LINE_COLOR = value
 		"MARK_HEIGHT": ThreatLines2D.MARK_HEIGHT = value
 		"MARK_BOW_PER_CELL": ThreatLines2D.MARK_BOW_PER_CELL = value
 		"MARK_INSET": ThreatLines2D.MARK_INSET = value
 		"CONE_LENGTH": ThreatLines2D.CONE_LENGTH = value
 		"CONE_WIDTH_SCALE": ThreatLines2D.CONE_WIDTH_SCALE = value
-		"THREAT_PLAN_DELAY":
-			Pacing.THREAT_PLAN_DELAY = value
-			return   # read when the debounce STARTS; there is no standing preview to re-apply it to
+		# Both need a REBUILD rather than a re-push: a running Tween holds the endpoints it was
+		# STARTED with, so a turned value reaches a standing flash only by the flash being rebuilt.
+		# That is #591's lesson from the aim pulse, which breathed back to its old colour twice a
+		# second after a knob moved -- right in a screenshot and wrong in motion.
+		"PIN_PULSE_MODULATE":
+			UnitVisuals.PIN_PULSE_MODULATE = value
+			_restyle_pin_flashes(host)
+			return
+		"PIN_PULSE_HOLD":
+			UnitVisuals.PIN_PULSE_HOLD = value
+			_restyle_pin_flashes(host)
+			return
 		"SQUAD_RING_ALPHA": OverlayManager.SQUAD_RING_ALPHA = value
 		"SQUAD_RING_PULSE_GAIN": OverlayManager.SQUAD_RING_PULSE_GAIN = value
 		"KNOCKBACK_MODULATE": OverlayManager.KNOCKBACK_MODULATE = value
@@ -2176,8 +2196,8 @@ static func write_static(host: Node3D, name: String, value: Variant) -> void:
 		"THREAT_MODULATE": manager.restyle_threat()
 		"FOCUS_OUTLINE_COLOR": manager.restyle_focus_outline()
 		"ZONE_HIGHLIGHT_MODULATE": manager.restyle_leash()
-		"INTENT_LINE_COLOR", "MARK_HEIGHT", "MARK_BOW_PER_CELL", "MARK_INSET", "CONE_LENGTH", "CONE_WIDTH_SCALE":
-			manager.restyle_threat_intents()
+		"MARK_LINE_COLOR", "MARK_HEIGHT", "MARK_BOW_PER_CELL", "MARK_INSET", "CONE_LENGTH", "CONE_WIDTH_SCALE":
+			manager.restyle_reach_lines()
 		# No bespoke sweep for the three planned-move tints: redraw_planned_paths already tears
 		# every arrow down and rebuilds it through _arrow_modulate, so it IS the re-apply.
 		"MOVE_ARROW_MODULATE", "INVALID_ARROW_MODULATE", "TRAILING_ARROW_MODULATE":
@@ -2202,6 +2222,14 @@ static func _refresh_mission_status(host: Node3D) -> void:
 # The action queue's re-apply (#685). Deliberately NOT game.refresh_action_queue, which is the
 # mission-status precedent's shape: that door re-RESOLVES the plan, and an element colour is a UI
 # fact the panel can repaint from its own cached entries.
+static func _restyle_pin_flashes(host: Node3D) -> void:
+	if host == null:
+		return
+	var game_2d: Node2D = host.game
+	if game_2d != null:
+		game_2d.restyle_pin_flashes()
+
+
 static func _restyle_action_queue(host: Node3D) -> void:
 	if host == null:
 		return

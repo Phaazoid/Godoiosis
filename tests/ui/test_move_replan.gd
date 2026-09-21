@@ -142,7 +142,7 @@ func _group_move_to(leader: Unit, dest: Vector2i) -> bool:
 	assert_int(game.game_state) \
 		.override_failure_message("pressing Group Move did not enter its mode") \
 		.is_equal(game.GameState.CHOOSING_GROUP_MOVE)
-	assert_bool(game.group_move_followable.has(dest)) \
+	assert_bool(game.leader_followable.has(dest)) \
 		.override_failure_message("fixture: the squad cannot follow to %s" % str(dest)).is_true()
 	game._click_choosing_group_move(dest)
 	return true

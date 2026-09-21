@@ -162,13 +162,16 @@ func _hover_idle(cell: Vector2i) -> Dictionary:
 	if hovered.has_squad():
 		game.draw_squad_leader_range(hovered.squad, hovered.squad.leader.get_projected_destination())
 
-	# Blue where it may stand, red where it could hit from there (#1066) -- the two halves of a Fire
-	# Emblem readout, and the answer to the dev's "nothing for attack range is really outdated". The
-	# red is drawn on HOVER as well as on selection, on his ruling: deciding who to move is when you
-	# want to know who they can touch.
+	# BLUE ALONE ON HOVER (#1069), where #1066 drew blue and red both. The dev, on 3D FE: "hovering a
+	# unit doesn't show the attack range at all, actually. Selecting a unit, though... brings up the
+	# unit's attack radius from the unit's tile." That repeals his own earlier ruling here -- the red
+	# WAS on hover deliberately -- and the reason it moves is what the red now means: it grew from
+	# everywhere the unit could walk, which is most of the board and worth little, and it now grows
+	# from one cell, which is worth something only once you have said which cell. Hover is before
+	# that; the ring and the move gesture are after it. Painted by game._click_idle and by
+	# HoverPresenter's own move-hover branches respectively.
 	var standable: Array[Vector2i] = game.get_move_range(moverange, hovered)
 	game.overlay_manager.show_overlay(OverlayManager.OverlayType.MOVE, standable, OverlayManager.ATLAS_COORDS)
-	game.show_player_reach(hovered, standable)
 	_show_hover_panel(hovered, cell)
 	game.overlay_manager.show_overlay(OverlayManager.OverlayType.INVALIDMOVE, moverange.squad_unreachable.keys(), OverlayManager.ATLAS_COORDS)
 
@@ -200,9 +203,18 @@ func _hover_choosing_group_move(cell: Vector2i) -> void:
 	# Reads what enter_group_move_mode computed: per hovered cell it cost 6.8 ms of a 16.7 ms frame
 	# (docs/performance.md). Same two questions, same order, as game._click_choosing_group_move.
 	var followable: bool = game.compute_move_range(leader).reachable.keys().has(cell) \
-		and game.group_move_followable.has(cell)
+		and game.leader_followable.has(cell)
 	if followable:
-		game.overlay_manager.show_hover_move_paths(GroupMoveSolver.plan(leader.squad, cell, game._board()))
+		var formation := GroupMoveSolver.plan(leader.squad, cell, game._board())
+		game.overlay_manager.show_hover_move_paths(formation)
+		# ...and a stand-in for every member the formation places, not just the leader: what the
+		# player is choosing here is where the whole squad lands.
+		game.overlay_manager.show_hover_ghosts(formation)
+		# ...and what the LEADER would threaten there, and who reaches it (#1069). Only on a
+		# followable cell, unlike the single-unit branch above: an unfollowable one is not a
+		# destination this squad has, so there is no "if you stop here" to answer.
+		game.show_player_reach(leader, cell)
+		game.show_reach_lines_at(cell)
 	_set_cursor_for_preview(cell, followable)
 
 func _hover_attack_targeting(cell: Vector2i) -> void:
@@ -262,6 +274,31 @@ func _hover_choosing_move(cell: Vector2i) -> void:
 		_set_cursor_for_preview(cell, false)
 		return
 
+	# ...and a LEADER's destination its squad cannot follow to is refused the same way (#1069).
+	# Asked HERE as well as at the click, and off the same cache, because the cursor and the click
+	# disagreeing about which cells are legal is the shape _hover_choosing_group_move already
+	# avoids -- it asks the identical two questions in the identical order.
+	var strands: bool = unit.is_leader() and unit.has_squad() and not game.leader_followable.has(cell)
+	if strands:
+		# The reach still moves: what a tile would cost you is worth knowing about one you are being
+		# stopped from taking. What does NOT happen is the path preview and the plan re-validation,
+		# which would describe an order this click cannot author.
+		game.show_player_reach(unit, cell)
+		game.show_reach_lines_at(cell)
+		_set_cursor_for_preview(cell, false)
+		return
+
+	# WHAT YOU WOULD THREATEN FROM THERE, and WHO REACHES YOU THERE (#1069) -- the two halves of
+	# "what happens if I stop here", both re-aimed at the cell under the pointer rather than at the
+	# body. The red is the same layer enter_move_mode painted from the unit's own cell; it simply
+	# follows the candidate now.
+	#
+	# Drawn for any cell inside the move footprint, refused ones included (see the leader clause
+	# above): what a tile costs you is worth knowing about one you are being stopped from taking,
+	# and it is the same sentence either way.
+	game.show_player_reach(unit, cell)
+	game.show_reach_lines_at(cell)
+
 	# Live preview: build the move this click WOULD queue and validate the plan against it, so
 	# the arrow and the queue panel show the real consequence before anything is committed.
 	var path := RulesService.reconstruct_path(moverange.came_from, unit.movement.cell, cell)
@@ -271,6 +308,12 @@ func _hover_choosing_move(cell: Vector2i) -> void:
 	var squad = unit.squad
 	game.squad_manager.validate_squad_plan_preview(squad, move)
 	game.overlay_manager.show_hover_move_path(move)
+	# ...and the body that would stand there (#1069). After show_hover_move_path, which clears the
+	# whole hover store: drawn before it, the ghost would be swept away by the arrows. The typed
+	# local is required -- a bare literal passed through the untyped `game` ref is not coerced and
+	# fails at RUNTIME (see CLAUDE.md's note on clear_selection_icons).
+	var one: Array[MoveAction] = [move]
+	game.overlay_manager.show_hover_ghosts(one)
 
 	if unit.has_squad():
 		game.overlay_manager.redraw_squad_unit_icons(squad)
@@ -327,8 +370,16 @@ func _on_hovered_unit_changed(previous_unit: Unit, new_unit: Unit) -> void:
 # cleared here and must not be -- game._redraw_enemy_ranges owns them, and a pinned enemy has to
 # survive the pointer moving off it. Every arm of update_hover_visuals that does not draw them
 # calls that door with no hovered enemy, which is what puts the transient half down.
+#
+# The REACH LINES are cleared here outright, which is the opposite treatment and the right one
+# (#1069): they answer about the cell under the pointer, so there is no version of them that
+# survives the pointer moving. Clearing unconditionally and letting the two move-hover branches
+# draw them back is what makes "these exist only while you are choosing a move" true by
+# construction rather than by every other branch remembering to say so. At rest both calls are
+# free -- an empty clear over an empty store early-outs without touching the version.
 func _clear_threat_markup() -> void:
 	game._redraw_enemy_ranges(null)
+	game.overlay_manager.clear_reach_lines()
 
 # ==============================================================================
 #  Shared helpers

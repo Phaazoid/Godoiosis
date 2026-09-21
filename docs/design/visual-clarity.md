@@ -7,7 +7,7 @@ its child [#49 Action Queue UX](https://github.com/Phaazoid/Godoiosis/issues/49)
 This is a *guidelines* doc, not a spec — it captures the principles we're holding the work to,
 plus the running order of the queue-UX checklist. Update it as items land.
 
-**Canon checked through #1066 (2026-09-21).**
+**Canon checked through #1070 (2026-09-21).**
 
 ## Principles
 
@@ -3441,6 +3441,8 @@ A recompute skips any squad whose reach envelope holds no hostile unit -- exact,
 
 **One MARK per intent, and its LETHALITY rides the mark.** `Layer.INTENT_LINES` and `Layer.INTENT_LINES_FATAL` are two LINE layers at their own sorts, because two marks can cross. **That split has now been justified three times by three different arguments, which is worth knowing before anyone tidies it away.** Slice 2 refused it (the damage NUMBER carried the distinction, so a second layer differing only in hue was a duplicate seam). Slice 3 made it (the number moved to the health bar, so the beam had to say it, in a second hue). [#1042](https://github.com/Phaazoid/Godoiosis/issues/1042) kept it and deleted the hue: a flash is a shader TIME TERM, a term is per material, and a material is per layer -- so the layers are what makes a per-mark animation expressible at all.
 
+> **REPEALED by [#1069](https://github.com/Phaazoid/Godoiosis/issues/1069) (2026-09-21), and the FOURTH argument is that the question stopped being asked.** The pair collapsed into one `Layer.REACH_LINES` when the marks stopped answering about intent: a reach line says who could reach a cell, which cannot know lethality without running the ladder, so there is nothing left for a second layer to express. The flash channel went with it -- uniforms, setters, knob rows and the shader branch -- because that layer was its only tenant. Worth keeping the three arguments above anyway: each was right about the *mechanism* at the time, and a future readout that does know lethality inherits #1042's answer (a flash is per material, so it is per layer) rather than having to rediscover it.
+
 ### ...and what #1042 re-dressed it as (2026-09-19)
 
 **The dev watched a first-time player read a threat line as a way of aiming a fireball**, and asked for three things: *"They need to pulsate from the enemy to the unit the enemy targets, they need an arrow indicating direction, and they need to be visually different from the targeting lines."*
@@ -3483,6 +3485,8 @@ He played it and reported three things: *"They should be shallow arcs rather tha
 
 ## The threat view is a CYCLE, and the damage rides the health bar ([#710](https://github.com/Phaazoid/Godoiosis/issues/710) slice 3, BUILT 2026-09-17)
 
+> **REPEALED by [#1069](https://github.com/Phaazoid/Godoiosis/issues/1069) (2026-09-21).** The whole cycle is gone -- `ThreatView`, the `T` binding, the debounce and the damage span -- because the readout it gated retired. The record below is kept because its *diagnosis* generalizes and outlived its own subject: a gate that owns one channel and is read nowhere by a second is how "it never turns off again" gets shipped, and that shape is worth recognising the next time two channels share a key. What it predicted about the enemy RANGES held: they stayed on V, they are still there, and they were never in this cycle.
+
 **The report (dev, 2026-09-17):** *"when I hit 'T', it cycles on the damage number. That's fine, but it never turns off again."*
 
 **The cause was a missing gate rather than a missing state.** `toggle_threat_view` owned the fills; the intent channel was driven by the debounce from turn start and read the flag **nowhere at all**. So `game.threat_view` is `ThreatView {NONE, INTENTS, EVERYTHING}` and gates the whole channel. **At NONE no preview runs** -- the point is the work, not the picture, since a recompute is a real AI turn per engaged squad; `AIController.previewed_squad_count` is what a test reads to prove it.
@@ -3497,3 +3501,99 @@ He played it and reported three things: *"They should be shallow arcs rather tha
 
 **The gate belongs to `game`, never to `OverlayManager`.** The harvest is kept at INTENTS because the LINES draw from it; only the BARS are gated. Wiring `battle3d` to the store directly instead of through `game.threat_forecast()` reintroduced the reported bug one layer down, and a case caught it.
 
+
+## ...and what #1069 re-cut about the GRAMMAR ([#1069](https://github.com/Phaazoid/Godoiosis/issues/1069), BUILT 2026-09-21)
+
+**#1066 gave the three range layers Fire Emblem's COLOURS. This gave them its GRAMMAR** -- when each piece appears, what shape it is, and what it is about. The dev played #1066, tuned the alphas, said the tiles were "in a good place", and came back with six items after looking at 3D FE again. Five of them repeal something, and four of the five repeal one of his own rulings from ten days earlier, which is worth stating plainly: this arc is being steered by playing it.
+
+### The movement range draws as GRIDLINES
+
+> the player movement tiles don't actually flood fill, only the gridlines of the tiles get the color highlights. So what we have now, but with the centers removed.
+
+**`Kind.FILL`'s entire flood-fill look was one shared texture**, so this is a per-layer `"texture"` key on `LAYERS` and NOT a new render kind. `MOVE` is still a FILL, which is what keeps the sort, the lift, the ramp tilt, the corner-cell fold, `set_layer_modulate` and the mirror's per-frame tint copy applying to it untouched. The key is declared LAST on its line, because `KnobSource.LAYER_COLOR_LINE` is a regex requiring `"color"` to be an entry's FIRST key -- a key ahead of it makes every colour save in the dev panel fail silently.
+
+**Only YOUR movement range**, on his ruling. The reach under it and the enemy's field under that stay washes, so the readout is line art over two tints rather than three grids.
+
+**Two traps, both paid.** `reach_overlay` and `threat_overlay` are `move_overlay.duplicate()` -- for the tree position and the cell metric -- so they inherit its tileset and had to be handed a fill one back explicitly; a silent inheritance would have drawn the enemy's whole field as an empty grid. And the 3D outline const has to be declared ABOVE `LAYERS`, since a const table may only read a const already declared.
+
+**The two textures are authored in two places and that is each folder's own convention, not a fork.** The 3D one is generated beside `cell_fill.png` in `tools/lookdev/gen_lookdev_assets.gd`, which authored its sibling and is the only place the two can be kept in step (the run is byte-stable over the existing textures -- verified, nothing else moved). The 2D one is a hand-authored PNG in `Art/Board/` like every other tile there, minted by a throwaway script on the `LookPresets` precedent: the artifact is the committed thing, not the generator.
+
+### The reach grows from ONE cell, and appears once you have named one
+
+> it doesn't show the attack range as the total possible attack range. Hovering a unit doesn't show the attack range at all, actually. Selecting a unit, though (for us, bringing up the radial menu, and also choosing a move, etc), brings up the unit's attack radius from the unit's tile.
+
+**That repeals #1066's own rule** -- *"the red grows from exactly the cells drawn BLUE plus the one the body is standing on"* -- and his ruling that the red belongs on hover. Both for one reason, which is worth having written down because the union looked like the more informative answer and is not: **a union answers "could this unit ever hit that square", which is true of most of the board and tells you nothing, while one origin answers "what do I threaten if I stand HERE"**. Hover is before you have said which cell. The ring and the move gesture are after it.
+
+| moment | blue | red |
+|---|---|---|
+| hover a friendly | gridlines | **none** |
+| ring opens (battle or pre-mission) | as hover left it | from the unit's **projected** cell |
+| enter move / group move | gridlines over standable | from the body's own cell |
+| hover a destination | unchanged | **from that cell** |
+
+**The ring's origin is the PROJECTED cell, not the body's**, because `enter_attack_mode` already reads `get_projected_destination()` as its reach origin: a unit with a queued move attacks from where it will stand, and the ring's red and the aim's red have to be one answer about one unit.
+
+**Painted at the CLICK rather than by the ring**, because opening the ring draws no overlays of its own -- `TILE_SELECTED`'s hover branch clears nothing and draws nothing, so what is on screen while it is up is whatever the last hover left. Taking it down needed no new door: every close, pick or back-out, already runs `clear_selection_overlays`.
+
+### A stand-in on the cell you are hovering
+
+> we currently don't show the unit's plan ghost until a new tile is selected, but I think we should show it on move hover, along with the attack radius from each tile.
+
+Measured before building: **there was no code path at all.** `show_hover_move_path` draws ARROWS, and `redraw_projected_units` rebuilds exclusively from `planned_move_by_unit`, whose sole writer runs *after* `queue_action` has accepted the move.
+
+A **declared second store** on `knockback_ghost_by_unit`'s precedent, because `projected_unit_sprites` means *a move is QUEUED* to `has_projected_unit` and to the queue-row hover -- and this is a move nobody has made. **It does NOT hide the real sprite**, which every other ghost here does: both of those pair "hide the real one" with "draw a stand-in" because `unit_at_pointer` leans on that identity, and a preview of a move you have not made must not take the cell the unit is on. The formation branch stands one per MEMBER, since what is being chosen there is where the whole squad lands.
+
+**It had to be taught to the mirror.** `OverlayMirror._ghost_sync` walks the queued store alone, so a ghost in its own store is 2D-only -- the dev-only flat view -- and **nothing in 2D can see that omission**, which is what its own mirror case exists for.
+
+### The lines answer who can REACH you, and only while you choose a move
+
+> the threat lines are handled a bit differently than I'd thought. They aren't conveying enemy intent at all, just who can reach who. And they don't show all the time, just during move hover mode, to let the player know, if they drop in that spot, they're in range of this set of enemies.
+
+**This is slice 1's channel coming back, and the reason slice 3 deleted it is the reason the new trigger works.** "A bit too much" was about a board-wide beam channel standing up AT REST beside the range fill, not about the channel itself. Bound to move hover the lines answer something the fill cannot: not *who can reach here* for the whole board, but **who reaches ME if I stop on this tile**, which is the question a player is actually asking with the cursor on a destination.
+
+**Slice 2's intent READOUT retires with it** -- `ThreatView` and the `T` binding, the debounce and `Pacing.THREAT_PLAN_DELAY`, `OverlayManager.threat_forecast`, and `UnitMirror`'s second predicted span, which was that channel's first and only case of two writers. **The prediction does NOT** (dev: *"don't get rid of the intent logic, we might end up using it somewhere else"*): `ThreatIntent`, `AIController.preview_turn`/`preview_faction_turn` and `_merged` stay live, keep their own cases, and are stated in their headers as having no production caller -- because a seam nobody draws is the kind that rots quietly.
+
+**Cost:** one `attackers_of` dictionary lookup per hovered cell against the already-cached `ThreatField`, so the 77 ms per engaged squad `performance.md` prices for a recompute is not paid at any cadence.
+
+**No FATAL variant.** Reachability cannot know lethality without running the ladder, and slice 1's lines had none either. Declared rather than forgotten.
+
+### The cone becomes a SOLID
+
+The [#1061](https://github.com/Phaazoid/Godoiosis/issues/1061) residual, folded in on his ruling: *"I don't want the cone to be its own PR because lots of separate small PRs cost me more than jumbo ones, between the increased shard testing time and other factors."*
+
+**Why no knob could have fixed it.** `sight_beam.gdshader`'s whole look is `falloff = pow(1.0 - edge, beam_softness)` -- a bright core reaching **zero alpha at both rims by construction**, so every ribbon is translucent and edgeless and no width or intensity can make one read as a volume. That is exactly right for a beam and exactly what the dev reported as "a see through triangle". Forcing the falloff to 1.0 would make it an opaque TRIANGLE: still flat, still camera-facing.
+
+**So the cone is real geometry on its own shader**, and the second file is forced rather than stylistic: the beam's `render_mode` carries `depth_draw_never` -- load-bearing for a translucent ribbon that overlaps itself -- so an opaque surface drawn through it resolves its own back faces by EMISSION ORDER and flickers as the rig orbits, and `render_mode` is per shader FILE. `reach_cone.gdshader` writes **no `ALPHA` at all**, which is what makes it opaque: it lands in the opaque pass, writes depth and depth-tests like any object, which is also why `cull_disabled` is safe there where it would be fatal with blending. A closed convex solid resolves front-over-back by DEPTH, so the cone cannot be turned inside out by a mis-wound triangle and needs no `render_priority`.
+
+**Still no new `Kind`, no new layer, no new sort, no 2D fork.** The facet shade is baked into the vertex colour -- the only channel that can vary inside one unshaded draw, `UnitHealthBar._build_cube_mesh`'s trick one surface along, and the reason this is not a lit `StandardMaterial3D` (which `test_board_overlays` refuses outright). `UV2.x` carries the same world measure, so the bead runs off the shaft and through the cone as one sweep. The flat twin already drew a filled polygon and is unchanged.
+
+**The bake is against a fixed WORLD direction, not the camera, and that is the design**: vertex colour is baked when a mark is rebuilt, on a hover change, so a camera-relative bake is stale the moment the rig orbits. A world-fixed one holds still, which is what lets the shape read as a volume while you turn.
+
+**Knobs: everything he had set is kept, and exactly one number is not carried over.** Length, base width, colour, bow, inset and the bead are existing rows at their existing values, relabelled *Reach*. Three are new, because a solid has a property a ribbon does not -- which way its faces point: *Reach cone glow*, *Reach cone shading* (the floor of the baked facet shade; 1.0 is a flat silhouette), *Reach cone facets*. **The glow starts at 1.0 rather than inheriting the shaft's 2.4**: a ribbon at 2.4 is far dimmer than 2.4 over most of its area because its rim fades out, while a solid is 2.4 everywhere -- past the diorama's `glow_hdr_threshold` of 1.2 across the whole face, which blooms the head into a white blob and erases the shading. The two that bake into the MESH rebuild it; the one that is a material uniform is re-pushed. Both shapes exist on that node and only one is obvious.
+
+### A leader may not strand a squadmate
+
+> we need to block the user from even being able to make moves with a squad leader that leaves a member of their squad without any legal moves.
+
+**It could, and the hole was structural at three layers at once.** `RulesService.compute_move_range` builds a cohesion field only `if not unit.is_leader()`, so a leader's `squad_unreachable` is empty BY CONSTRUCTION; `enter_move_mode` painted `INVALID_MOVE` only for non-leaders; and `SquadPlanValidator._check_leader_range` iterates the plan's **move actions** and skips the leader by name, so a member who queues nothing is invisible to it. The leader walked to the edge of its MOV, every member stayed, the plan validated clean, Execute ran, and `enforce_contact` ejected them afterwards. **`SquadManager`'s own header claimed movement could no longer author a split "because the validator refuses it", and that sentence was false for this path for as long as it was written** -- it now says so.
+
+`GroupMoveSolver.followable_destinations` already answered exactly this, including *"stay put counts as a placement"*, and group move already ran that sweep at its own mode entry. So it is the same sweep at the same moment on the same cache -- renamed `group_move_followable` to `leader_followable`, because a store named for group move that the individual move reads is the kind of name that misleads the next reader. The hover refuses it too, off the same cache and in the same order `_hover_choosing_group_move` uses; the reach and the reach lines still move onto a refused cell, since what a tile would cost you is worth knowing about one you are being stopped from taking.
+
+**`MainActionMenu._can_move` is deliberately untouched** -- its own header says Move must stay a per-unit question and never read squadmates. This is scope at the DESTINATION, which is [#461](https://github.com/Phaazoid/Godoiosis/issues/461)'s ruling from the other side.
+
+**Declared limit:** the AI and the Play API reach `queue_action` directly and keep `enforce_contact` as their backstop. The clause belongs in a fixed-point loop `HoverPresenter` runs *per hovered cell*, and a per-member solver sweep at that cadence is a real cost for a path a human can no longer take.
+
+### The pin flash goes white and lingers
+
+> the flashes are very hard to see. Instead of going dark, the flashes should be going white, and linger on the white part of the flash a bit longer, to draw attention.
+
+**The cause was the SHAPE, not the value.** `Pulse.start` is a symmetric base-to-peak-to-base ramp: it touches its peak for one frame and spends half the cycle returning to normal, so the eye adapts to the bright state and reads the DIPS as the event -- which is literally *going dark*. It gains an optional `hold` that parks the tween at the peak, defaulting to zero so all eight existing callers are bit-identical.
+
+**That repeals #1066's "deliberately shallower than the aim's".** The two cues stop differing by DEPTH and differ by **CADENCE** -- the aim breathes continuously, the pin snaps to white and sits -- which is principle 2's actual rule about not letting two motifs collide, and it leaves the pin free to be the brighter of the two. The precedence is untouched: an aim pulse still outranks it and the pin still comes back.
+
+Both values get their first knob rows anywhere (`PIN_PULSE_MODULATE` had been a `static var` nothing could reach since the day it was written), and both **REBUILD** rather than re-push: a running `Tween` holds the endpoints it was STARTED with, which is [#591](https://github.com/Phaazoid/Godoiosis/issues/591)'s lesson from the aim pulse breathing back to its old colour twice a second after a knob moved. `_sync_pin_flashes` cannot do that job -- it is idempotent by design -- so `restyle_pin_flashes` is its own door.
+
+### Declared residuals at close
+
+- **The orange cohesion bubble and the mauve `INVALID_MOVE`** are still deferred, now FILED as [#1070](https://github.com/Phaazoid/Godoiosis/issues/1070) rather than parked on a merged PR for a third round. They matter more after this slice, not less: the squad markup is the only flood fill of the player's OWN that survives the gridline change.
+- **What the suite cannot see, and is the dev's:** whether gridlines read at speed on a busy board, whether reach-from-one-tile is informative enough after losing the union, whether the solid cone reads as a volume at the diorama's pixel scale, and whether the white pin flash is now too loud.

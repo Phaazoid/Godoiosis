@@ -282,7 +282,7 @@ func test_a_group_move_pops_as_one_gesture() -> void:
 
 	var destination := Vector2i.ZERO
 	for cell: Vector2i in game.compute_move_range(leader).reachable.keys():
-		if cell != leader.movement.cell and game.group_move_followable.has(cell):
+		if cell != leader.movement.cell and game.leader_followable.has(cell):
 			destination = cell
 			break
 	assert_that(destination).is_not_equal(Vector2i.ZERO)   # the board must offer a followable cell

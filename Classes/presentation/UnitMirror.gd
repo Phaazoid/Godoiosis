@@ -209,10 +209,12 @@ var plan_source: Callable
 # one. Unset reads as "no pass running", the same graceful absence plan_source has.
 var effect_subjects_source: Callable
 
-# What the ENEMY intends, by victim instance id (#710 slice 3). Its own source for the reason the
-# one above is: a ResolvedPlan is the PLAYER's plan, and the whole point of this channel is a
-# forecast that is not theirs. Unset reads as "nothing previewed", the same graceful absence.
-var threat_source: Callable
+# THE ENEMY-INTENT SPAN THAT LIVED HERE IS GONE (#1069). #710 slice 3 drew a second predicted span
+# on a victim's bar for what the enemy was about to do, composed with the player's own plan; the
+# readout it belonged to retired when the lines stopped answering about intent, so the channel went
+# with it rather than being left as a source nobody feeds. The prediction channel is the player's
+# plan alone again, which is what #313 built it for. `AIController.preview_turn` is still live and
+# still tested -- what was deleted is the DRAWING, not the forecast.
 
 # IS A FIGHT BEING PLAYED OUT RIGHT NOW, mirrored per frame from CameraController.playback_cinematic
 # by the same poll that feeds the rig. A plain bool rather than a `*_source` Callable because the
@@ -323,8 +325,6 @@ func reconcile() -> void:
 	# ...and who the end-of-turn effect pass is about, asked once for the same reason (#534). Empty
 	# whenever no pass is running, which is nearly always.
 	var marked: Dictionary[int, bool] = _effect_subjects()
-	# ...and what the enemy intends, asked once for the same reason (#710 slice 3).
-	var threat: Dictionary[int, Dictionary] = _threat_forecast()
 	# The player's standing preference (#350, three-valued since #418), asked once for the same
 	# reason: it cannot change mid-frame, and a static read per unit would be N reads answering one
 	# question. WHICH units it names is per-unit and belongs to _sync_bar.
@@ -371,7 +371,7 @@ func reconcile() -> void:
 				unit.unit_died.connect(_on_unit_died.bind(id))
 		_sync(unit, _mirrored[id])
 		_sync_bar(unit, _mirrored[id], _bars[id], unit == hovered, plan, marked.has(id), bars,
-				unhovered_numbers, threat)
+				unhovered_numbers)
 		_settle_health_change(unit, id, _bars[id])
 	for id: int in _mirrored.keys():
 		if not live.has(id):
@@ -575,15 +575,6 @@ func _effect_subjects() -> Dictionary[int, bool]:
 	return subjects
 
 
-# Board-wide, asked once per frame for the reason the plan is: it is one question about the whole
-# preview, and a per-unit call would rebuild the same answer for every unit on the board.
-func _threat_forecast() -> Dictionary[int, Dictionary]:
-	if not threat_source.is_valid():
-		return {}
-	var forecast: Dictionary[int, Dictionary] = threat_source.call()
-	return forecast
-
-
 # What the plan leaves this unit at, ALREADY CLAMPED for display — the raw threaded number goes
 # negative on a fatal hit, and LethalityRules.displayed_hp is the one answer to what a preview shows
 # for it, shared with the queue panel's own "before -> after" (#313). Drawn ONLY; the clamp flattens
@@ -596,7 +587,7 @@ func _predicted_hp(unit: Unit, plan: ResolvedPlan) -> int:
 
 func _sync_bar(unit: Unit, sprite: UnitSprite3D, bar: UnitHealthBar, hovered: bool,
 		plan: ResolvedPlan, marked: bool, bars: PlayerSettings.HealthBars,
-		unhovered_numbers: bool, threat: Dictionary[int, Dictionary]) -> void:
+		unhovered_numbers: bool) -> void:
 	# Two reasons to be up (#313), and the SECOND is the whole ticket: a readout stays over a unit
 	# because a plan is about to happen to it. That reaches everyone the plan touches, enemies your
 	# own attack will hit included, and nobody it doesn't.
@@ -621,12 +612,10 @@ func _sync_bar(unit: Unit, sprite: UnitSprite3D, bar: UnitHealthBar, hovered: bo
 	var damaged_or_down := unit.is_downed() or unit.get_current_hp() < unit.get_max_hp()
 	var preferred := bars == PlayerSettings.HealthBars.EVERY \
 			or (bars == PlayerSettings.HealthBars.DAMAGED and damaged_or_down)
-	# The FIFTH reason, and the first that is about a plan which is not YOURS (#710 slice 3): the
-	# enemy intends to hit this unit. It joins THE gate rather than growing a second visibility
-	# rule, exactly as `marked` did -- and it is bounded by the T view being on, so a board with
-	# the preview off is unchanged.
-	var threatened: Dictionary = threat.get(unit.get_instance_id(), {})
-	var shown := hovered or foretold or marked or preferred or not threatened.is_empty()
+	# FOUR reasons again (#1069). #710 slice 3 added a fifth -- the enemy intends to hit this unit --
+	# and it went with the intent readout it belonged to; a reach line answers who could reach a
+	# cell, which is not a claim about any particular unit's HP and so has nothing to put on a bar.
+	var shown := hovered or foretold or marked or preferred
 	bar.set_shown(shown)
 	if not shown:
 		return
@@ -658,22 +647,11 @@ func _sync_bar(unit: Unit, sprite: UnitSprite3D, bar: UnitHealthBar, hovered: bo
 		downed_turns = -1
 	bar.set_state_icons(row, state_icon_texels, state_icon_gap_texels, state_icon_spacing_texels)
 	bar.set_downed_turns(downed_turns, downed_count_gap_texels)
-	# The two forecasts COMPOSE rather than one winning, because that is the real timeline: your
-	# plan resolves, then they act. ThreatIntent.damage is already hp_before minus the DISPLAYED
-	# hp after, and displayed_hp answers 1 for a down and 0 for a kill -- so subtracting it from a
-	# unit your plan does not touch lands exactly on the rung, with no rules call here.
-	#
-	# Two declared limits, both over-warning, which is the safe direction. An intent was measured
-	# against the board BEFORE your plan, so a heal plus a lethal blow shows the alarm over a bar
-	# that is not empty; and two non-lethal bites summing past the unit's HP clamp at zero and
-	# alarm, because this readout cannot tell a down from a kill without running the ladder.
-	if foretold or not threatened.is_empty():
-		var predicted := _predicted_hp(unit, plan) if foretold else unit.get_current_hp()
-		var doomed: bool = foretold and PlanResolver.plan_fells(unit, plan.hypo)
-		if not threatened.is_empty():
-			predicted = maxi(predicted - int(threatened["damage"]), 0)
-			doomed = doomed or bool(threatened["fells"]) or predicted <= 0
-		bar.set_prediction(predicted, doomed)
+	# ONE forecast again (#1069): what YOUR plan does to this unit. #710 slice 3 composed a second
+	# span here for what the enemy intended -- the channel's first and only case of two writers --
+	# and it retired with the readout that fed it.
+	if foretold:
+		bar.set_prediction(_predicted_hp(unit, plan), PlanResolver.plan_fells(unit, plan.hypo))
 	else:
 		bar.clear_prediction()
 	bar.position = _bar_anchor(unit, sprite)

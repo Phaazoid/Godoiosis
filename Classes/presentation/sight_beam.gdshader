@@ -44,25 +44,23 @@ uniform float beam_width = 0.06;
 // Edge falloff exponent: 1.0 is a linear fade to the rim, higher concentrates a bright core.
 uniform float beam_softness = 1.5;
 
-// --- The travelling BEAD and the felling FLASH (#1042) ------------------------------------------
-// Both default to INERT, which is what keeps the sight bead and the arc's bolts exactly what they
+// --- The travelling BEAD (#1042) ---------------------------------------------------------------
+// Defaults to INERT, which is what keeps the sight bead and the arc's bolts exactly what they
 // were: BoardOverlays only feeds these on the layers that declare them.
 //
 // The bead is a window in WORLD distance along the mark (UV2.x), never in UV.x -- normalized, a
 // two-cell mark and a nine-cell one would pulse at wildly different speeds off one number.
+//
+// THE FELLING FLASH THAT LIVED HERE IS GONE (#1069). It had exactly one tenant, the fatal intent
+// layer, and that layer went with the intent readout -- a reach line answers who can reach a cell,
+// which cannot know lethality without running the ladder. reach_cone.gdshader shares the bead and
+// has no flash either, so nothing was left behind for a second layer to inherit.
 uniform float bead_length = 0.0;    // cells; 0 = no bead
 uniform float bead_speed = 3.4;     // cells per second, enemy -> victim
 uniform float bead_gap = 9.0;       // cells between successive beads
 uniform vec4 bead_color : source_color = vec4(1.0, 0.92, 0.98, 1.0);
-// The flash takes COLOUR to white as well as alpha (dev, 2026-09-19) -- so it is a white-HOT pink
-// rather than the second authored hue he refused.
-uniform float flash_hz = 0.0;       // 0 = this layer does not flash
-uniform float flash_alpha = 1.0;    // extra alpha at the peak
-uniform float flash_white = 1.0;    // how far toward white at the peak
-// #217's composed read, pushed by BoardOverlays. 0 FREEZES both: the bead stops drawing (direction
-// is still carried by the CONE, which is geometry) and the flash HOLDS AT ITS ALPHA PEAK in
-// the beam's own colour -- never at the white one, which is the aim beam's value and would leave a
-// lethal mark permanently wearing it.
+// #217's composed read, pushed by BoardOverlays. 0 FREEZES the bead -- direction is still carried
+// by the CONE, which is geometry.
 uniform float motion = 1.0;
 
 void vertex() {
@@ -112,12 +110,7 @@ void fragment() {
 	// are therefore at different brightnesses -- so the age rides in the vertex colour, which is the
 	// only channel that varies within a draw. A mesh with no colour array reads vec4(1.0) here, so
 	// the sight beam is exactly what it was.
-	// The flash: one cosine, and the FROZEN case holds it at 1.0 rather than at 0.0 -- a lethal
-	// mark must not lose its distinction the moment a player turns motion off. `live` is what keeps
-	// the white out of that held state.
 	float live = step(0.5, motion);
-	float osc = 0.5 - 0.5 * cos(TIME * 6.2831853 * max(flash_hz, 0.0));
-	float flash = flash_hz > 0.0 ? mix(1.0, osc, live) : 0.0;
 
 	// The bead: a window of `bead_length` travelling along the mark's own world measure, repeating
 	// every `bead_gap`. mod() of a negative is positive in GLSL, so a mark measured from either end
@@ -128,9 +121,8 @@ void fragment() {
 		bead = 1.0 - smoothstep(0.0, bead_length, behind);
 	}
 
-	vec3 tint = mix(beam_color.rgb, vec3(1.0), flash * flash_white * live);
-	tint = mix(tint, bead_color.rgb, bead);
-	float alpha = beam_color.a * (1.0 + flash * flash_alpha + bead * bead_color.a);
+	vec3 tint = mix(beam_color.rgb, bead_color.rgb, bead);
+	float alpha = beam_color.a * (1.0 + bead * bead_color.a);
 	ALBEDO = tint * COLOR.rgb * beam_intensity;
 	ALPHA = clamp(alpha, 0.0, 1.0) * COLOR.a * falloff;
 }

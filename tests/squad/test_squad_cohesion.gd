@@ -78,7 +78,7 @@ func _squad(leader_dex: int, member_dex: int, member_offset: Vector2i) -> Dictio
 	return {"leader": leader, "member": member, "squad": leader.squad}
 
 
-# Through the real door: enter_group_move_mode is what builds game.group_move_followable, and the
+# Through the real door: enter_group_move_mode is what builds game.leader_followable, and the
 # click reads it. Setting game_state directly skips that and refuses everything (#114's lesson —
 # a test that skips the ordering is blind to it).
 func _group_move_to(leader: Unit, destination: Vector2i) -> void:
@@ -549,3 +549,90 @@ func test_a_corridor_that_collapses_the_squad_onto_one_cell_is_refused() -> void
 
 	_group_move_to(leader, destination)
 	assert_int(squad.action_queue.size()).override_failure_message("a refused destination queued orders").is_equal(0)
+
+
+# ------------------------------------------------------------------------------
+#  A LEADER MAY NOT STRAND A SQUADMATE (#1069)
+# ------------------------------------------------------------------------------
+
+# The dev: "we need to block the user from even being able to make moves with a squad leader that
+# leaves a member of their squad without any legal moves."
+#
+# Measured before building, and the hole was structural. compute_move_range builds a cohesion field
+# only `if not unit.is_leader()`, so a leader's squad_unreachable is ALWAYS empty; enter_move_mode
+# painted INVALIDMOVE only for non-leaders; and SquadPlanValidator._check_leader_range iterates the
+# plan's MOVE ACTIONS and skips the leader by name, so a member who queued nothing was invisible to
+# it. The leader walked off, the plan validated clean, Execute ran, and enforce_contact ejected
+# everybody afterwards.
+#
+# Through the real door, like _group_move_to above: enter_move_mode is what builds the cache the
+# click reads, and a case that set game_state directly would be blind to the ordering.
+func _move_to(leader: Unit, destination: Vector2i) -> void:
+	game.selected_unit = leader
+	game.enter_move_mode(leader)
+	game._click_choosing_move(destination)
+
+
+func test_a_leaders_own_move_may_not_leave_a_member_with_nowhere_to_stand() -> void:
+	var board: Dictionary = await _squad(DEX_FAST, DEX_SLOW, Vector2i(-3, 0))
+	var leader: Unit = board.leader
+	var member: Unit = board.member
+	game.selected_unit = leader
+	game.enter_move_mode(leader)
+
+	# The far edge of the leader's own MOV, straight away from the member -- the destination the
+	# solver can place nobody at. Found by asking the cache rather than written down, so a retuned
+	# COH or MOV moves the fixture with it.
+	var standable: Array[Vector2i] = game.get_move_range(game.compute_move_range(leader), leader)
+	var stranding := GridUtils.NO_CELL
+	for cell: Vector2i in standable:
+		if not game.leader_followable.has(cell):
+			stranding = cell
+			break
+	assert_that(stranding).override_failure_message(
+			"fixture is vacuous: this leader cannot outrun its member anywhere in its own move range"
+			).is_not_equal(GridUtils.NO_CELL)
+
+	_move_to(leader, stranding)
+	assert_object(_move_for(leader)).override_failure_message(
+			"the leader queued a move that leaves its squadmate nowhere legal to stand").is_null()
+	assert_bool(member.squad == leader.squad).override_failure_message(
+			"the member was ejected, which is the after-the-fact sweep doing what the refusal "
+			+ "was supposed to prevent").is_true()
+
+
+# ...and the other direction, which is what stops this being a refusal of everything: a destination
+# the squad CAN follow to is still ordered, by the same door in the same state.
+func test_a_leader_may_still_take_a_destination_its_squad_can_follow_to() -> void:
+	var board: Dictionary = await _squad(DEX_FAST, DEX_SLOW, Vector2i(-3, 0))
+	var leader: Unit = board.leader
+	game.selected_unit = leader
+	game.enter_move_mode(leader)
+	var followable := GridUtils.NO_CELL
+	for cell: Vector2i in game.get_move_range(game.compute_move_range(leader), leader):
+		if game.leader_followable.has(cell):
+			followable = cell
+			break
+	assert_that(followable).override_failure_message(
+			"fixture is vacuous: nowhere at all is followable, so a refusal proves nothing"
+			).is_not_equal(GridUtils.NO_CELL)
+
+	_move_to(leader, followable)
+	assert_object(_move_for(leader)).override_failure_message(
+			"a destination the whole squad can follow to was refused as well").is_not_null()
+
+
+# A SOLO leader is not a leader for this purpose. The sweep is per-squad work and would be paid on
+# every single-unit move in the game; more to the point, a squad of one has nobody to strand.
+func test_a_unit_with_no_squadmates_is_refused_nothing() -> void:
+	var leader: Unit = game.spawn_unit(H.make_unit_data({}, Team.Faction.PLAYER), Vector2i(0, 0))
+	await await_idle_frame()
+	game.selected_unit = leader
+	game.enter_move_mode(leader)
+	var standable: Array[Vector2i] = game.get_move_range(game.compute_move_range(leader), leader)
+	assert_bool(standable.size() > 0).override_failure_message(
+			"fixture: this unit cannot move at all").is_true()
+	game._click_choosing_move(standable[0])
+	assert_object(_move_for(leader)).override_failure_message(
+			"a lone unit was refused its own move by a rule about squadmates it does not have") \
+		.is_not_null()

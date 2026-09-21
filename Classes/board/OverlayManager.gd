@@ -350,6 +350,17 @@ var guard_preview_icons: Array[Sprite2D] = []
 var guard_preview_links: Array[Sprite2D] = []
 var hover_move_preview: MoveAction = null
 var hover_move_previews: Array[MoveAction] = []
+# The stand-in at the cell the pointer is on while a move is being chosen (#1069, dev: "we
+# currently don't show the unit's plan ghost until a new tile is selected, but I think we should
+# show it on move hover"). A DECLARED second store rather than an entry in projected_unit_sprites
+# below, on knockback_ghost_by_unit's precedent, because that dictionary means "a move is QUEUED" to
+# has_projected_unit and to the queue-row hover -- and this is a move nobody has made.
+#
+# It also does NOT hide the real sprite, which every other ghost in this file does. Both of those
+# pair "hide the real one" with "draw a stand-in" because unit_at_pointer leans on that identity:
+# a preview of a move you have not made must not move where the unit IS. The unit stays put and
+# this is additional, which is also what FE shows.
+var hover_ghost_sprites: Array[Sprite2D] = []
 var projected_unit_sprites := {} # { Unit : Sprite2D }
 var knockback_preview_sprites: Array[Node2D] = []
 # The knockback ghosts, keyed so "which sprite stands for this unit?" has an answer for them too.
@@ -365,13 +376,9 @@ var zone_highlight_overlay: TileMapLayer = null   # the Tile Brush's picked zone
 var reach_overlay: TileMapLayer = null   # YOUR unit's attack reach (#1066); built in _ready
 var threat_overlay: TileMapLayer = null   # ...and the enemy's one undifferentiated field, under it
 # The stroke round that one enemy's footprint (slice 4), in ThreatLines2D's trace space. Versioned
-# on intent_version's shape, because OverlayMirror polls rather than listening.
+# on reach_line_version's shape, because OverlayMirror polls rather than listening.
 var focus_outline: Array[PackedVector3Array] = []
 var focus_outline_version := 0
-# What the enemy intends, keyed by VICTIM instance id: {"damage": int, "fells": bool}. Rebuilt
-# with the intent lines and read by UnitMirror, which draws it as the predicted span on that
-# unit's own health bar -- the channel #313 already built for your own plan.
-var threat_forecast: Dictionary[int, Dictionary] = {}
 var leash_revealed := false   # a play-time reveal is holding the highlight layer up (#710)
 # The two inputs to whether authoring zones draw -- see set_zone_visibility. The INTENT is what
 # a 3D mirror asks; `.visible` is the product and answers only "does the 2D draw this".
@@ -404,20 +411,17 @@ var sight_trace: Reach.SightTrace = null
 var sight_trace_version := 0
 var _sight_trace_2d: SightTrace2D
 var _threat_lines_2d: ThreatLines2D
-# What the enemy will attack (#710 slice 2), stored as DATA the way the sight trace is:
-# ThreatLines2D draws it flat, OverlayMirror lifts it, and the version is the mirror's change
-# signal. ONE ENTRY PER INTENT -- each holding that mark's strokes (the bowed arc, then the cone at
-# the victim, #1059)
-# -- so `intent_fells` pairs with INTENTS rather than with strokes, which makes slice 3's drift
-# unrepresentable rather than merely avoided.
+# WHICH ENEMIES CAN REACH THE CELL BEING HOVERED (#710 slice 1, deleted by slice 3, brought back and
+# re-pointed by #1069), stored as DATA the way the sight trace is: ThreatLines2D draws it flat,
+# OverlayMirror lifts it, and the version is the mirror's change signal. ONE ENTRY PER MARK -- each
+# holding that mark's strokes, the bowed arc then the cone at your end (#1059).
 #
-# `intent_shafts` is the SOURCE and `intent_marks` is derived from it by the one function below;
-# the chords are kept because the mark's shape is tuned values, and a knob that moves one has
+# `reach_line_shafts` is the SOURCE and `reach_line_marks` is derived from it by the one function
+# below; the chords are kept because the mark's shape is tuned values, and a knob that moves one has
 # to re-derive geometry rather than merely re-push a colour. Same reason `_reach_attack` is kept.
-var intent_shafts: Array[PackedVector3Array] = []
-var intent_marks: Array[Array] = []
-var intent_fells: Array[bool] = []
-var intent_version := 0
+var reach_line_shafts: Array[PackedVector3Array] = []
+var reach_line_marks: Array[Array] = []
+var reach_line_version := 0
 
 
 
@@ -490,13 +494,19 @@ func _ready() -> void:
 	# puts each new layer directly under the move layer and pushes the previous one further down.
 	# Tree order here is the 2D's answer to what the sort numbers say in 3D; the two must agree.
 	if move_overlay is TileMapLayer:
+		# ...and each takes a plain FILL tileset back, because MOVE's own is a hollow frame since
+		# #1069 and these two are washes (the dev's ruling: only the player's movement range loses
+		# its centres). They are duplicated off MOVE for the tree position and the cell metric, so
+		# the art has to be put back explicitly -- INVALIDMOVE's is the same sheet MOVE used to draw.
 		threat_overlay = move_overlay.duplicate() as TileMapLayer
 		threat_overlay.name = "ThreatOverlay"
+		threat_overlay.tile_set = invalidmove_overlay.tile_set
 		threat_overlay.modulate = THREAT_MODULATE
 		add_child(threat_overlay)
 		move_child(threat_overlay, move_overlay.get_index())
 		reach_overlay = move_overlay.duplicate() as TileMapLayer
 		reach_overlay.name = "ReachOverlay"
+		reach_overlay.tile_set = invalidmove_overlay.tile_set
 		reach_overlay.modulate = REACH_MODULATE
 		add_child(reach_overlay)
 		move_child(reach_overlay, move_overlay.get_index())
@@ -533,55 +543,45 @@ func restyle_sight_trace() -> void:
 	show_sight_trace(sight_trace)
 
 
-# The exact tier (#710 slice 2). Takes the INTENTS rather than geometry, so the line and what it
-# means come from one row each and can never be matched up wrongly.
-func show_threat_intents(intents: Array[ThreatIntent], board: BoardContext) -> void:
-	if intents.is_empty() and intent_shafts.is_empty():
+# WHO REACHES YOU HERE (#1069). One mark per attacker, each running from where that enemy stands to
+# the cell the player is hovering a move onto.
+#
+# Takes the ATTACKERS and the destination rather than prepared geometry, for the reason slice 2's
+# door took intents: the line and what it means then come from one place and cannot be matched up
+# wrongly. The caller's job is to ask the threat field who reaches the cell; shaping that into a
+# mark is this store's.
+func show_reach_lines(attackers: Array[Unit], cell: Vector2i, board: BoardContext) -> void:
+	if attackers.is_empty() and reach_line_shafts.is_empty():
 		return   # idempotent, like the trace -- the version only moves on real change
 	var shafts: Array[PackedVector3Array] = []
-	var fatal: Array[bool] = []
-	for intent: ThreatIntent in intents:
-		shafts.append(ThreatLines2D.segment(intent.from, intent.to, board))
-		fatal.append(intent.fells)
-	# ...and the same intents keyed by VICTIM, which is what the health bars read (#710 slice 3).
-	# SUMMED per target rather than kept per attacker: two enemies converging on one unit is one
-	# prediction as far as that unit's own readout is concerned, and a bar cannot draw two spans.
-	# Which attacker owns which part of the bite is #1012.
-	var forecast: Dictionary[int, Dictionary] = {}
-	for intent: ThreatIntent in intents:
-		if intent.target == null or not is_instance_valid(intent.target):
+	for attacker: Unit in attackers:
+		if attacker == null or not is_instance_valid(attacker):
 			continue
-		var id := intent.target.get_instance_id()
-		var row: Dictionary = forecast.get(id, {"damage": 0, "fells": false})
-		row["damage"] = int(row["damage"]) + intent.damage
-		row["fells"] = bool(row["fells"]) or intent.fells
-		forecast[id] = row
-	threat_forecast = forecast
-	intent_shafts = shafts
-	intent_fells = fatal
-	_rebuild_intent_marks()
+		shafts.append(ThreatLines2D.segment(attacker.movement.cell, cell, board))
+	reach_line_shafts = shafts
+	_rebuild_reach_line_marks()
 
 
-func clear_threat_intents() -> void:
-	var none: Array[ThreatIntent] = []
-	show_threat_intents(none, null)
+func clear_reach_lines() -> void:
+	var none: Array[Unit] = []
+	show_reach_lines(none, Vector2i.ZERO, null)
 
 
 # Re-derive the drawn marks from the shafts. The ONE derivation, so the knob path and the draw path
 # cannot disagree about what a mark looks like.
-func restyle_threat_intents() -> void:
-	if intent_shafts.is_empty():
+func restyle_reach_lines() -> void:
+	if reach_line_shafts.is_empty():
 		return
-	_rebuild_intent_marks()
+	_rebuild_reach_line_marks()
 
 
-func _rebuild_intent_marks() -> void:
+func _rebuild_reach_line_marks() -> void:
 	var built: Array[Array] = []
-	for shaft in intent_shafts:
+	for shaft in reach_line_shafts:
 		built.append(ThreatLines2D.mark(shaft))
-	intent_marks = built
-	intent_version += 1
-	_threat_lines_2d.marks = intent_marks
+	reach_line_marks = built
+	reach_line_version += 1
+	_threat_lines_2d.marks = reach_line_marks
 	_threat_lines_2d.queue_redraw()
 
 
@@ -894,6 +894,33 @@ func clear_hover_move_path():
 	for m in hover_move_previews:
 		m.clear_preview_sprites()
 	hover_move_previews.clear()
+	clear_hover_ghosts()
+
+
+# A stand-in where the pointer is, for every unit a hovered move would place (#1069) -- one for a
+# single move, one per member for a formation. Replaced wholesale on each call, like every other
+# hover-scoped markup in this file, and taken down by clear_hover_move_path, which every branch
+# that draws a candidate already calls first.
+func show_hover_ghosts(moves: Array[MoveAction]) -> void:
+	clear_hover_ghosts()
+	for move: MoveAction in moves:
+		if move == null or move.actor == null or not is_instance_valid(move.actor):
+			continue
+		var sprite := Sprite2D.new()
+		sprite.texture = move.actor.get_move_texture()
+		sprite.global_position = GridUtils.cell_world(board_tilemap, move.destination)
+		sprite.z_index = Unit.BASE_SPRITE_INDEX
+		sprite.modulate = PROJECTED_MODULATE
+		sprite.offset = Vector2i(0, -8)
+		projected_unit_overlay.add_child(sprite)
+		hover_ghost_sprites.append(sprite)
+
+
+func clear_hover_ghosts() -> void:
+	for sprite: Sprite2D in hover_ghost_sprites:
+		if is_instance_valid(sprite):
+			sprite.queue_free()
+	hover_ghost_sprites.clear()
 
 # Plan-time preview of pending deposits (Law #2 — the board shows the ignite/entrenchment BEFORE
 # you execute). Takes {"cell": Vector2i, "state": Terrain.TileState} entries (mirrors

@@ -106,9 +106,11 @@ var last_clicked_cell: Vector2i = GridUtils.NO_CELL
 # Set once at selection, never re-derived from a cell (#107). Cleared in exit_current_mode, NOT in
 # clear_selection — that runs on every menu PICK, i.e. on the way INTO a mode.
 var selected_unit: Unit = null
-# Destinations the whole squad can follow to; built by enter_group_move_mode, cleared on exit.
-# EMPTY means "nowhere", not "unset", so there is no recompute-if-empty fallback.
-var group_move_followable: Dictionary = {}
+# Destinations the whole squad can follow a leader to; built by either move mode when the selected
+# unit LEADS somebody, cleared on exit. EMPTY means "nowhere", not "unset", so there is no
+# recompute-if-empty fallback -- and the two modes ask the same question for the same reason, which
+# is why this is not named after group move any more (#1069).
+var leader_followable: Dictionary = {}
 var target_pick_cells: Array[Vector2i] = []   # candidates while PICKING_TARGET; read by HoverPresenter
 var _target_pick_callback: Callable           # func(cell: Vector2i) -> void
 # Bumped by every enter_cell_pick_mode. _click_picking_target snapshots it around the callback so a
@@ -127,21 +129,19 @@ var height_debug_overlay: HeightDebugOverlay   # F5 readout, dev builds only; de
 var zone_manager: ZoneManager
 var main_action_menu: MainActionMenu
 var hover_presenter: HoverPresenter
-# What the T key shows, in the order it cycles (#710 slice 3). EVERYTHING means the intent lines
-# PLUS the damage each one predicts, drawn on its victim's own health bar; the enemy RANGES are
-# deliberately not in this cycle at all -- they answer what an enemy COULD do rather than what it
-# WILL, and live on V. STICKY across turns (dev): a player who turned it off does not want it back
-# every hand-over. Boot sits at INTENTS, so a stranger who never finds the key still sees the
-# feature the demo bar exists for.
-enum ThreatView { NONE, INTENTS, EVERYTHING }
-var threat_view := ThreatView.INTENTS
+# THE T KEY AND ITS WHOLE CYCLE ARE GONE (#1069). #710 slice 3 gave the intent readout a
+# {NONE, INTENTS, EVERYTHING} cycle so a player could turn it off; #1069 retired the readout itself,
+# on the dev's ruling that the lines should answer who can REACH a cell rather than who intends
+# what, and should only be up while a move is being chosen. A channel that is only up during a
+# gesture needs no key to turn it off, so the cycle, its debounce timer and its Input Map action all
+# went with it. `AIController.preview_turn` and `ThreatIntent` are deliberately KEPT -- the dev:
+# "don't get rid of the intent logic, we might end up using it somewhere else" -- so what was
+# deleted is a readout, not a prediction.
 var ranges_shown := false     # the V toggle (slice 3): every enemy's move + reach tones, FE-style
 # Which enemies stay drawn once the pointer leaves them, by instance id -- see toggle_enemy_pin.
 # They outlive the pointer and a queued order, but NOT the V key going off (2026-09-18).
 var pinned_enemies: Dictionary[int, bool] = {}
 var _threat_field: ThreatField = null   # built lazily by threat_field(); dropped when the plan moves
-var _threat_plan_timer: Timer   # debounces the exact tier: a burst of orders costs ONE recompute
-var threat_plan_version := 0    # bumped on every recompute; the debounce's only observable
 var mission_controller: MissionController
 var order_executor: OrderExecutor
 var bug_reporter: BugReporter
@@ -199,14 +199,6 @@ func _build_collaborators() -> void:
 	ai_controller = AIController.new()
 	ai_controller.game = self
 	add_child(ai_controller)
-
-	# The threat preview's debounce (#710). One-shot: every plan change restarts it, so a burst of
-	# orders costs one recompute after the player stops rather than one per order.
-	_threat_plan_timer = Timer.new()
-	_threat_plan_timer.name = "ThreatPlanTimer"
-	_threat_plan_timer.one_shot = true
-	_threat_plan_timer.timeout.connect(refresh_threat_plan)
-	add_child(_threat_plan_timer)
 
 	scenario_director = ScenarioDirector.new()
 	scenario_director.game = self
@@ -287,7 +279,6 @@ func _wire_signals() -> void:
 	squad_manager.squad_action_cancelled.connect(_on_unit_action_cancelled)
 	squad_manager.squad_action_queued.connect(_on_unit_action_queued)
 	scenario_manager.board_loaded.connect(drop_threat_field)   # a new board is a new field (#710)
-	scenario_manager.board_loaded.connect(_clear_threat_plan)
 	squad_manager.squad_became_active.connect(_on_squad_became_active)
 	squad_manager.squad_became_empty.connect(_on_squad_has_no_actions)
 
@@ -357,12 +348,9 @@ func _input(event: InputEvent) -> void:
 	# stands down under a 3D host, and this key has to work from both views.
 	if event.is_action_pressed("toggle_deployment_view") and not ModalLock.any_open(get_tree()):
 		mission_controller.toggle_deployment_menu()
-	# The enemy threat view (#710). Here beside the two above for the same reason: both views.
-	if event.is_action_pressed("toggle_threat_view") and not ModalLock.any_open(get_tree()) \
-			and not _board_locked_for_player():
-		toggle_threat_view()
-	# ...and the FE range view beside it (slice 3), its own key because it answers a different
-	# question: what they COULD do, against what they INTEND to.
+	# The FE range view (#710 slice 3). Here beside the two above for the same reason: both views.
+	# Its own key and no longer beside a second one -- the reach LINES answer a question a key cannot
+	# usefully ask, so since #1069 they ride the move gesture instead (see show_reach_lines_at).
 	if event.is_action_pressed("toggle_enemy_ranges") and not ModalLock.any_open(get_tree()) \
 			and not _board_locked_for_player():
 		toggle_enemy_ranges()
@@ -606,6 +594,7 @@ func _click_pre_mission(cell: Vector2i) -> void:
 	var target := unit_at_pointer(cell)
 	if target != null:
 		select_unit(target, cell)
+		show_selected_reach(target)
 		main_action_menu.show_main_menu(target, get_viewport().get_mouse_position())
 		return
 	if mission_controller.can_deploy_another() and mission_controller.open_deployment_cells().has(cell):
@@ -619,7 +608,33 @@ func _click_idle(cell: Vector2i) -> void:
 		return
 	select_unit(target, cell)
 	game_state = GameState.TILE_SELECTED
+	show_selected_reach(target)
 	main_action_menu.show_main_menu(target, get_viewport().get_mouse_position())
+
+# WHAT A SELECTED UNIT THREATENS FROM WHERE IT STANDS (#1069, dev: "Selecting a unit, though (for
+# us, bringing up the radial menu, and also choosing a move, etc), brings up the unit's attack
+# radius from the unit's tile").
+#
+# It is painted at the CLICK rather than by the ring, because opening the ring draws no overlays of
+# its own -- what is on screen while it is up is whatever the last hover left, and TILE_SELECTED's
+# hover branch clears nothing and draws nothing. Taking it down needs no door either: every close,
+# pick or back-out, runs MainActionMenu._on_menu_cancelled -> clear_selection ->
+# clear_selection_overlays, which already owns this layer.
+#
+# THE PROJECTED CELL, NOT THE BODY'S, because enter_attack_mode already reads
+# get_projected_destination() as its own reach origin: a unit with a queued move attacks from where
+# it will stand, and the ring's red and the aim's red have to be one answer about one unit.
+func show_selected_reach(unit: Unit) -> void:
+	if unit == null or not is_instance_valid(unit):
+		return
+	# NOT FOR AN ENEMY, which a plain click also selects -- the hotseat allowance means the ring
+	# opens on anybody. #710 slice 3's ruling holds here exactly as it does on hover: an enemy is
+	# read in the ENEMY's own vocabulary, which is the one unbroken purple field, and painting your
+	# red over one would be a second picture of the same fact in the colour that means "yours".
+	if Team.is_enemy(Team.Faction.PLAYER, unit.get_faction()):
+		return
+	show_player_reach(unit, unit.get_projected_destination())
+
 
 # THE select write point (#107) -- the selection is stored, never re-derived from a cell. Two doors
 # reach it: a click on the board, and right-click re-opening a queued move's planning.
@@ -631,6 +646,13 @@ func select_unit(unit: Unit, cell: Vector2i) -> void:
 func _click_choosing_move(cell: Vector2i) -> void:
 	var unit := selected_unit
 	var moverange := compute_move_range(unit)
+	# ...and a LEADER may not take a destination its squad cannot follow to (#1069). Read off the
+	# cache enter_move_mode built, exactly as _click_choosing_group_move reads it, so the refusal
+	# and the red tile can never disagree about which cells they mean. Silently, like every other
+	# refusal on this board.
+	if unit.is_leader() and unit.has_squad() and not leader_followable.has(cell):
+		exit_current_mode()
+		return
 	# Physical reach is the click's business; whether the SQUAD permits landing there is queue_action's.
 	if moverange.reachable.keys().has(cell) or moverange.squad_unreachable.keys().has(cell):
 		var path := RulesService.reconstruct_path(moverange.came_from, unit.movement.cell, cell)
@@ -645,7 +667,7 @@ func _click_choosing_group_move(cell: Vector2i) -> void:
 	var leader := selected_unit
 	# The two questions the overlay painted, in the same order: can the leader get there, and can the
 	# squad follow. A red tile is clickable and does nothing, exactly like a squadmate's own.
-	if compute_move_range(leader).reachable.keys().has(cell) and group_move_followable.has(cell):
+	if compute_move_range(leader).reachable.keys().has(cell) and leader_followable.has(cell):
 		squad_manager.queue_group_move(leader.squad, cell, _board())
 	exit_current_mode()
 
@@ -698,11 +720,6 @@ func _click_picking_target(cell: Vector2i) -> void:
 
 func _on_turn_started(faction: Team.Faction):
 	drop_threat_field()   # the other side moved (#710)
-	# ...and only on a turn the PLAYER commands. _board_locked_for_player is not the guard here:
-	# it reads AI_TURN, which start_faction_turn sets a whole TURN_HANDOFF beat later, so a
-	# debounce armed now would fire mid-handoff and preview the enemy's turn as it begins.
-	if not ai_controller.is_ai_faction(faction):
-		_restart_threat_plan()   # the empty plan is a plan: what happens if I end turn right now
 	_run_turn_start_ticks(faction)
 	refresh_guard_markers()   # the ticks lapsed this faction's Guards -- pull their markers with them
 	refresh_watch_markers()   # ...and its untriggered watches (#413)
@@ -899,8 +916,34 @@ func enter_move_mode(unit: Unit):
 	if unit.has_squad():
 		draw_squad_leader_range(unit.squad, unit.squad.leader.get_projected_destination())
 	var standable := get_move_range(moverange, unit)
-	overlay_manager.show_overlay(OverlayManager.OverlayType.MOVE, standable, OverlayManager.ATLAS_COORDS)
-	show_player_reach(unit, standable)
+	# A LEADER MAY NOT STRAND A SQUADMATE (#1069, dev: "we need to block the user from even being
+	# able to make moves with a squad leader that leaves a member of their squad without any legal
+	# moves"). Measured: it could, and by construction rather than by oversight --
+	# compute_move_range builds a cohesion field only for a NON-leader, so a leader's
+	# squad_unreachable is always empty, and SquadPlanValidator._check_leader_range iterates the
+	# plan's MOVE ACTIONS, so a member who queues nothing is invisible to it. The leader walked off,
+	# the plan validated clean, and enforce_contact ejected everybody after the fact.
+	#
+	# Group move already asked exactly this question at its own mode entry, of the same solver, and
+	# followable_destinations already counts "stay put" as a placement -- which is the semantics an
+	# individual move needs. So this is the same sweep at the same moment, and the cache is shared.
+	var green := standable
+	if unit.is_leader() and unit.has_squad():
+		leader_followable = GroupMoveSolver.followable_destinations(unit.squad, _board(), standable)
+		green = []
+		var stranding: Array[Vector2i] = []
+		for cell: Vector2i in standable:
+			if leader_followable.has(cell):
+				green.append(cell)
+			else:
+				stranding.append(cell)
+		overlay_manager.show_overlay(OverlayManager.OverlayType.INVALIDMOVE, stranding,
+				OverlayManager.ATLAS_COORDS)
+	overlay_manager.show_overlay(OverlayManager.OverlayType.MOVE, green, OverlayManager.ATLAS_COORDS)
+	# From where the body IS, until the pointer names a candidate -- HoverPresenter moves it to each
+	# hovered destination. The mode was entered by cancelling any queued move, so the body's cell and
+	# its projected one are the same here.
+	show_player_reach(unit, unit.movement.cell)
 	if not unit.is_leader():
 		var unreachable = moverange.squad_unreachable.keys()
 		overlay_manager.show_overlay(OverlayManager.OverlayType.INVALIDMOVE, unreachable, OverlayManager.ATLAS_COORDS)
@@ -913,16 +956,16 @@ func enter_group_move_mode(unit: Unit):
 	# the same red as a squadmate's own out-of-range tiles. Swept once here — per-SQUAD work, the
 	# same cost for one destination as for forty — and the hover and click read the result.
 	var destinations := get_move_range(compute_move_range(unit), unit)
-	group_move_followable = GroupMoveSolver.followable_destinations(unit.squad, _board(), destinations)
+	leader_followable = GroupMoveSolver.followable_destinations(unit.squad, _board(), destinations)
 	var green: Array[Vector2i] = []
 	var red: Array[Vector2i] = []
 	for cell in destinations:
-		if group_move_followable.has(cell):
+		if leader_followable.has(cell):
 			green.append(cell)
 		else:
 			red.append(cell)
 	overlay_manager.show_overlay(OverlayManager.OverlayType.MOVE, green, OverlayManager.ATLAS_COORDS)
-	show_player_reach(unit, green)   # the FOLLOWABLE set only: the red grows from the drawn blue
+	show_player_reach(unit, unit.movement.cell)   # the leader's own cell; the pointer moves it
 	overlay_manager.show_overlay(OverlayManager.OverlayType.INVALIDMOVE, red, OverlayManager.ATLAS_COORDS)
 
 # What the aim being taken will PRODUCE (#413). Overwatch is declared through the normal targeting
@@ -1008,9 +1051,13 @@ func exit_current_mode():
 	overlay_manager.set_pick_flash(false)   # #116's tile-pick flash; idempotent when none is running
 	overlay_manager.clear_sight_trace()
 	overlay_manager.clear_hover_move_path()
+	# The reach lines go with the gesture that drew them (#1069). The hover sweep clears them on
+	# every cell change, but leaving a mode is not a cell change -- a click commits at the cell the
+	# pointer is already on, so nothing would come along afterwards to take them down.
+	overlay_manager.clear_reach_lines()
 	last_clicked_cell = GridUtils.NO_CELL
 	selected_unit = null
-	group_move_followable = {}
+	leader_followable = {}
 	clear_selection()
 	if squad_manager.active_squad != null:
 		squad_manager.validate_squad_plan(squad_manager.active_squad)
@@ -1122,7 +1169,6 @@ func queue_overwatch(watching_unit: Unit, cell: Vector2i) -> void:
 func _on_queue_execute_requested():
 	if _board_locked_for_player():
 		return
-	_clear_threat_plan()   # the plan is being SPENT; a pending recompute would describe a board that is moving
 	var squad := squad_manager.active_squad
 	if squad == null:
 		return
@@ -1399,7 +1445,6 @@ func _on_unit_action_queued(squad: Squad, action: BaseAction):
 	if squad_manager.previewing:
 		return   # the threat preview queues and rolls back; it draws nothing and repaints nothing (#710)
 	drop_threat_field()
-	_restart_threat_plan()
 	var unit = action.actor
 
 	# Per-UNIT and cheap: every member needs this, batch or not.
@@ -1428,7 +1473,6 @@ func _on_unit_action_cancelled(squad: Squad, unit: Unit, actiontype: BaseAction.
 	if squad_manager.previewing:
 		return
 	drop_threat_field()
-	_restart_threat_plan()
 	# Only a MOVE cancel may clear the unit's move visuals. Cancelling a main action
 	# (attack/rescue) must leave a still-queued move — arrow and projected ghost — untouched.
 	if actiontype == BaseAction.ActionType.MOVE:
@@ -1754,22 +1798,14 @@ func drop_threat_field() -> void:
 	_redraw_enemy_ranges(hover_presenter.hovered_enemy())
 
 
-func toggle_threat_view() -> void:
-	threat_view = ((threat_view + 1) % ThreatView.size()) as ThreatView
-	if threat_view == ThreatView.NONE:
-		_clear_threat_plan()
-	else:
-		refresh_threat_plan()   # the key asks for the answer NOW, not after the debounce
-	hover_presenter.refresh()
-
-
-# What the enemy intends, or nothing at all below EVERYTHING -- the gate lives here rather than in
-# OverlayManager because the view state is the game's, and the harvest is worth keeping either way
-# (the lines draw from it at INTENTS). Read by the 3D bars through battle3d.
-func threat_forecast() -> Dictionary[int, Dictionary]:
-	if threat_view != ThreatView.EVERYTHING:
-		return {}
-	return overlay_manager.threat_forecast
+# WHO REACHES YOU IF YOU STOP HERE (#1069) -- one mark per enemy whose field covers `cell`, drawn
+# while a move is being chosen and at no other time.
+#
+# The field is the SAME cached ThreatField the range tones read, so this costs a dictionary lookup
+# per hovered cell rather than a walk: whoever can reach a cell was computed once when the plan last
+# moved. That is the whole reason this can ride a per-cell hover at all.
+func show_reach_lines_at(cell: Vector2i) -> void:
+	overlay_manager.show_reach_lines(threat_field().attackers_of(cell), cell, _board())
 
 
 func toggle_enemy_ranges() -> void:
@@ -1863,6 +1899,15 @@ func _sync_pin_flashes() -> void:
 			unit.visuals.set_pinned(pinned_enemies.has(unit.get_instance_id()))
 
 
+# ...and the dev-knob door beside it (#1069). NOT the sweep above, which is idempotent by design and
+# would therefore leave a standing flash exactly as it was: a running Tween holds the endpoints it
+# was started with, so the only way a turned colour or hold reaches one is to rebuild it.
+func restyle_pin_flashes() -> void:
+	for unit: Unit in _all_units():
+		if is_instance_valid(unit) and unit.visuals != null:
+			unit.visuals.restyle_pin_flash()
+
+
 func _without(cells: Array[Vector2i], taken: Array[Vector2i]) -> Array[Vector2i]:
 	var seen := {}
 	for cell: Vector2i in taken:
@@ -1901,35 +1946,11 @@ func _leash_cells_of(subjects: Array[Unit]) -> Array[Vector2i]:
 	return out
 
 
-# ---- The exact tier (#710 slice 2): who the AI WILL attack, and for how much ------------------
-
-# Debounced, because one recompute costs a real AI turn's worth of planning per engaged squad. The
-# delay bounds how OFTEN it runs; the early-out inside preview_faction_turn bounds how MUCH it does.
-func _restart_threat_plan() -> void:
-	if _threat_plan_timer == null or _board_locked_for_player():
-		return
-	if threat_view == ThreatView.NONE:
-		return   # NOTHING means nothing is computed either -- the preview is the expensive half
-	_threat_plan_timer.wait_time = maxf(Pacing.THREAT_PLAN_DELAY, 0.01)
-	_threat_plan_timer.start()
-
-
-func _clear_threat_plan() -> void:
-	if _threat_plan_timer != null:
-		_threat_plan_timer.stop()
-	overlay_manager.clear_threat_intents()
-
-
-# Recompute now, skipping the wait. The T toggle and the tests take this door.
-func refresh_threat_plan() -> void:
-	if _threat_plan_timer != null:
-		_threat_plan_timer.stop()
-	if _board_locked_for_player() or threat_view == ThreatView.NONE:
-		return
-	threat_plan_version += 1
-	overlay_manager.show_threat_intents(
-			ai_controller.preview_faction_turn(Team.Faction.PLAYER), _board())
-
+# THE DEBOUNCED EXACT TIER THAT LIVED HERE IS GONE (#1069). #710 slice 2 ran a real AI turn per
+# engaged squad on a timer and drew what it found; the reach lines replaced that readout, and a
+# lookup into an already-cached field needs no debounce. What SURVIVES is the prediction itself --
+# `AIController.preview_faction_turn` and `ThreatIntent` are untouched and still have their own
+# cases -- because the dev asked for the logic to stay: "we might end up using it somewhere else."
 
 
 # ==============================================================================
@@ -1978,25 +1999,26 @@ func get_move_range(result: Dictionary, unit: Unit) -> Array[Vector2i]:
 	return cells
 
 # YOUR unit's attack reach (#1066, dev: "Blue for movement, attack range as red, like everyone
-# else"). Grown from exactly the cells drawn BLUE plus the one the body is standing on -- get_move_range
-# drops that cell because there is nothing to say about walking where you already are, and everything
-# to say about shooting from there.
+# else") FROM ONE CELL (#1069).
 #
-# Taking the drawn set rather than the move-range Dictionary is the rule, and it is the rule at every
-# caller: the red answers "from anywhere the blue says you may stand", so the two can never disagree
-# about what is offered. In group-move mode the blue is only the FOLLOWABLE subset, and the red
-# narrows with it for free.
+# THAT REPEALS #1066's OWN RULE, which was that the red grew from every cell drawn blue plus the
+# body's own -- the union over everywhere the unit could walk. The dev, after looking at 3D FE
+# again: "it doesn't show the attack range as the total possible attack range... Selecting a unit
+# brings up the unit's attack radius from the unit's tile." A union answers "could this unit ever
+# hit that square", which is true of most of the board and tells you nothing; one origin answers
+# "what do I threaten if I stand HERE", which is the question being asked while you choose.
+#
+# The caller names the cell and nothing is appended, so the one place that decides which cell it is
+# stays the one that knows what the player is doing: the body's own while the ring is up, the cell
+# under the pointer while a move is being chosen.
 #
 # It rides ThreatField.reach_from rather than a second walk -- see there for why the origins are
 # passed in rather than looked up, which is the difference between a permission and a prediction.
-func show_player_reach(unit: Unit, standable: Array[Vector2i]) -> void:
+func show_player_reach(unit: Unit, origin: Vector2i) -> void:
 	if unit == null or not is_instance_valid(unit):
 		overlay_manager.clear_reach()
 		return
-	var origins: Array[Vector2i] = standable.duplicate()
-	if not origins.has(unit.movement.cell):
-		origins.append(unit.movement.cell)
-	overlay_manager.show_reach(ThreatField.reach_from(unit, _board(), origins))
+	overlay_manager.show_reach(ThreatField.reach_from(unit, _board(), [origin] as Array[Vector2i]))
 
 # Where a set of units' SPRITES are -- projected, not live (#126), so the target-pick overlay marks the
 # tile the player can actually see and click. Both no-plan callers (squad-up, join-squad) are gated on an

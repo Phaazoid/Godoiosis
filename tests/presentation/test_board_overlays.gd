@@ -940,7 +940,7 @@ func test_a_sprite_with_no_corners_lies_on_nothing_and_stays_flat() -> void:
 	assert_bool(_one_marker(overlays, BoardOverlays.Layer.PATH_ARROWS).mesh is PlaneMesh).is_true()
 
 
-# --- The intent mark's own beam (#1042) ---------------------------------------------------------
+# --- The reach mark's own beam (#1042, re-pointed by #1069) -----------------------------------
 
 # One MARK is several strokes, and the bead has to measure across the WHOLE of it. Each stroke is
 # its own surface, so without a chained start every leg would begin at zero and run a little pulse
@@ -950,9 +950,9 @@ func test_a_marks_bead_measure_chains_across_its_own_strokes() -> void:
 	var shaft := PackedVector3Array([Vector3(0, 1, 0), Vector3(4, 1, 0)])
 	var leg := PackedVector3Array([Vector3(3.5, 1, 0.5), Vector3(4, 1, 0)])
 	var marks: Array[Array] = [[shaft, leg]]
-	overlays.set_marks(BoardOverlays.Layer.INTENT_LINES, marks, Color.WHITE)
+	overlays.set_marks(BoardOverlays.Layer.REACH_LINES, marks, Color.WHITE)
 
-	var mesh := _one_marker(overlays, BoardOverlays.Layer.INTENT_LINES).mesh as ImmediateMesh
+	var mesh := _one_marker(overlays, BoardOverlays.Layer.REACH_LINES).mesh as ImmediateMesh
 	assert_int(mesh.get_surface_count()).override_failure_message(
 			"the mark's strokes did not each become a surface").is_equal(2)
 	var shaft_uv2: PackedVector2Array = mesh.surface_get_arrays(0)[Mesh.ARRAY_TEX_UV2]
@@ -975,9 +975,9 @@ func test_a_strokes_width_scales_reach_the_vertices_the_shader_reads() -> void:
 	var cone := PackedVector3Array([Vector3(0, 1, 0), Vector3(1, 1, 0)])
 	var marks: Array[Array] = [[cone]]
 	var widths: Array[Array] = [[PackedFloat32Array([2.5, 0.0])]]
-	overlays.set_marks(BoardOverlays.Layer.INTENT_LINES, marks, Color.WHITE, widths)
+	overlays.set_marks(BoardOverlays.Layer.REACH_LINES, marks, Color.WHITE, widths)
 
-	var mesh := _one_marker(overlays, BoardOverlays.Layer.INTENT_LINES).mesh as ImmediateMesh
+	var mesh := _one_marker(overlays, BoardOverlays.Layer.REACH_LINES).mesh as ImmediateMesh
 	var uv2: PackedVector2Array = mesh.surface_get_arrays(0)[Mesh.ARRAY_TEX_UV2]
 	# Two vertices per point, both rims of the same width.
 	assert_float(uv2[0].y).override_failure_message(
@@ -1009,27 +1009,25 @@ func test_the_measure_restarts_between_marks() -> void:
 	var first := PackedVector3Array([Vector3(0, 1, 0), Vector3(4, 1, 0)])
 	var second := PackedVector3Array([Vector3(0, 1, 2), Vector3(3, 1, 2)])
 	var marks: Array[Array] = [[first], [second]]
-	overlays.set_marks(BoardOverlays.Layer.INTENT_LINES, marks, Color.WHITE)
+	overlays.set_marks(BoardOverlays.Layer.REACH_LINES, marks, Color.WHITE)
 
-	var mesh := _one_marker(overlays, BoardOverlays.Layer.INTENT_LINES).mesh as ImmediateMesh
+	var mesh := _one_marker(overlays, BoardOverlays.Layer.REACH_LINES).mesh as ImmediateMesh
 	var second_uv2: PackedVector2Array = mesh.surface_get_arrays(1)[Mesh.ARRAY_TEX_UV2]
 	assert_float(second_uv2[0].x).override_failure_message(
 			"the second mark inherited the first mark's measure").is_equal_approx(0.0, 0.001)
 
 
-# THE RULING (dev, 2026-09-19): lethality is not a colour. The two layers still exist because a
-# flash is a per-material time term, but they may not differ by tint -- which is the thing this
-# ticket deleted and the thing a tidy-up would put back.
-func test_both_intent_layers_draw_one_colour_and_differ_only_by_the_flash() -> void:
-	var plain: Dictionary = BoardOverlays.LAYERS[BoardOverlays.Layer.INTENT_LINES]
-	var fatal: Dictionary = BoardOverlays.LAYERS[BoardOverlays.Layer.INTENT_LINES_FATAL]
-	assert_that(fatal["color"]).override_failure_message(
-			"a felling mark is a second HUE again -- the dev ruled it flashes instead") \
-		.is_equal(plain["color"])
-	assert_bool(fatal.get("flash", false)).override_failure_message(
-			"the felling layer carries no flash, so nothing distinguishes it at all").is_true()
-	assert_bool(plain.get("flash", false)).override_failure_message(
-			"an ordinary intent flashes, so the felling one says nothing extra").is_false()
+# THE FELLING PAIR IS GONE (#1069) and nothing may quietly grow it back. A reach line answers who
+# can REACH a cell, which cannot know lethality without running the ladder -- so the second layer
+# had nothing left to express and the FLASH it existed to carry went with it. Asserted over the
+# whole table rather than at the one name, because what would reintroduce this is a new layer
+# declaring `flash`, not the old one coming back under its own name.
+func test_no_layer_declares_a_flash_now_that_lethality_is_not_drawn() -> void:
+	for layer: BoardOverlays.Layer in BoardOverlays.LAYERS:
+		var spec: Dictionary = BoardOverlays.LAYERS[layer]
+		assert_bool(spec.get("flash", false)).override_failure_message(
+				"%s declares a flash, but the channel that fed one retired with the intent readout"
+				% BoardOverlays.Layer.keys()[layer]).is_false()
 
 
 # #217's standing rule reaches the MATERIAL, not just the composer. With the setting on the mark
@@ -1038,40 +1036,172 @@ func test_both_intent_layers_draw_one_colour_and_differ_only_by_the_flash() -> v
 func test_photosensitivity_freezes_the_marks_motion_and_the_beam_still_draws() -> void:
 	var overlays := _bare_overlays()
 	var marks: Array[Array] = [[PackedVector3Array([Vector3(0, 1, 0), Vector3(4, 1, 0)])]]
-	overlays.set_marks(BoardOverlays.Layer.INTENT_LINES_FATAL, marks, Color.WHITE)
+	overlays.set_marks(BoardOverlays.Layer.REACH_LINES, marks, Color.WHITE)
 	var was := PlayerSettings.is_on(PlayerSettings.Setting.PHOTOSENSITIVITY)
 
 	PlayerSettings.set_on(PlayerSettings.Setting.PHOTOSENSITIVITY, false)
 	overlays.poll_beam_motion()
-	assert_float(overlays.beam_parameter(BoardOverlays.Layer.INTENT_LINES_FATAL, &"motion")) \
+	assert_float(overlays.beam_parameter(BoardOverlays.Layer.REACH_LINES, &"motion")) \
 		.override_failure_message("the mark is frozen with the setting OFF").is_equal_approx(1.0, 0.001)
 
 	PlayerSettings.set_on(PlayerSettings.Setting.PHOTOSENSITIVITY, true)
 	overlays.poll_beam_motion()
-	assert_float(overlays.beam_parameter(BoardOverlays.Layer.INTENT_LINES_FATAL, &"motion")) \
+	assert_float(overlays.beam_parameter(BoardOverlays.Layer.REACH_LINES, &"motion")) \
 		.override_failure_message("the photosensitivity setting never reached the beam's material") \
 		.is_equal_approx(0.0, 0.001)
-	assert_bool(_one_marker(overlays, BoardOverlays.Layer.INTENT_LINES_FATAL).visible) \
+	assert_bool(_one_marker(overlays, BoardOverlays.Layer.REACH_LINES).visible) \
 		.override_failure_message("freezing the motion stopped the mark being drawn at all").is_true()
-	assert_float(overlays.beam_parameter(BoardOverlays.Layer.INTENT_LINES_FATAL, &"flash_hz")) \
-		.override_failure_message("the felling layer stopped declaring its flash").is_greater(0.0)
 
 	PlayerSettings.set_on(PlayerSettings.Setting.PHOTOSENSITIVITY, was)
 
 
-# The bead belongs to the intent layers alone. Left on, the sight bead and the focus outline would
+# The bead belongs to the reach lines alone. Left on, the sight bead and the focus outline would
 # both acquire a travelling pulse nobody asked for -- and #674 has already ruled what the AIM's
 # motion is, which is a repeating dash pattern rather than this.
-func test_only_the_intent_layers_carry_a_bead() -> void:
+func test_only_the_reach_lines_carry_a_bead() -> void:
 	var overlays := _bare_overlays()
 	var marks: Array[Array] = [[PackedVector3Array([Vector3(0, 1, 0), Vector3(4, 1, 0)])]]
-	overlays.set_marks(BoardOverlays.Layer.INTENT_LINES, marks, Color.WHITE)
+	overlays.set_marks(BoardOverlays.Layer.REACH_LINES, marks, Color.WHITE)
 	overlays.set_marks(BoardOverlays.Layer.SIGHT_TRACE, marks, Color.WHITE)
 	overlays.set_marks(BoardOverlays.Layer.ENEMY_FOCUS_EDGE, marks, Color.WHITE)
 
-	assert_float(overlays.beam_parameter(BoardOverlays.Layer.INTENT_LINES, &"bead_length")) \
-		.override_failure_message("the intent mark has no bead").is_greater(0.0)
+	assert_float(overlays.beam_parameter(BoardOverlays.Layer.REACH_LINES, &"bead_length")) \
+		.override_failure_message("the reach mark has no bead").is_greater(0.0)
 	for layer: BoardOverlays.Layer in [BoardOverlays.Layer.SIGHT_TRACE,
 			BoardOverlays.Layer.ENEMY_FOCUS_EDGE]:
 		assert_float(overlays.beam_parameter(layer, &"bead_length")).override_failure_message(
-				"a beam that is not an intent picked up the travelling bead").is_equal_approx(0.0, 0.001)
+				"a beam that is not a reach mark picked up the travelling bead").is_equal_approx(0.0, 0.001)
+
+
+# --- The SOLID cone (#1069) ---------------------------------------------------------------------
+
+# THE DEV'S REPORT WAS "a see through triangle", and the cause was structural rather than tuned:
+# sight_beam.gdshader's falloff reaches ZERO alpha at both rims by construction, so no width or
+# intensity could make a ribbon read as a volume. The fix is geometry on a DIFFERENT shader, and
+# this is the case that refuses a tidy-up putting the cone back on the beam's material -- which
+# would compile, draw, and be translucent again.
+func test_the_cone_is_solid_geometry_on_its_own_shader_not_a_ribbon() -> void:
+	var overlays := _bare_overlays()
+	var marks: Array[Array] = [[
+		PackedVector3Array([Vector3(0, 1, 0), Vector3(3, 1, 0)]),
+		PackedVector3Array([Vector3(3, 1, 0), Vector3(3.5, 1, 0)]),
+	]]
+	var cones: Array[Dictionary] = [{"base": Vector3(3, 1, 0), "tip": Vector3(3.5, 1, 0), "radius": 0.1}]
+	overlays.set_marks(BoardOverlays.Layer.REACH_LINES, marks, Color.WHITE, [], cones)
+
+	assert_array(overlays.cone_vertices_of(BoardOverlays.Layer.REACH_LINES)).override_failure_message(
+			"the cone was never emitted as geometry").is_not_empty()
+	assert_that(overlays.cone_parameter(BoardOverlays.Layer.REACH_LINES, &"cone_intensity")) \
+		.override_failure_message("the cone is not on its own shader -- it has no cone_intensity, so it is "
+				+ "still the beam's translucent material").is_not_null()
+	# ...and the SHAFT stops where the cone starts, rather than a tapering ribbon surviving inside
+	# the solid. One stroke of the two-stroke mark reaches the strip builder.
+	var mesh := _one_marker(overlays, BoardOverlays.Layer.REACH_LINES).mesh as ImmediateMesh
+	assert_int(mesh.get_surface_count()).override_failure_message(
+			"the cone's own stroke was still drawn as a ribbon underneath the solid").is_equal(1)
+
+
+# Every facet carries a BAKED shade, which is the only way a face can differ from its neighbour on
+# an unshaded material -- and unshaded is this file's own standing law for board markup. A cone
+# whose facets all read the same value is a flat silhouette, which is what the ribbon already was.
+func test_the_cones_facets_carry_their_own_baked_shade() -> void:
+	var overlays := _bare_overlays()
+	var marks: Array[Array] = [[
+		PackedVector3Array([Vector3(0, 1, 0), Vector3(3, 1, 0)]),
+		PackedVector3Array([Vector3(3, 1, 0), Vector3(3.6, 1, 0)]),
+	]]
+	var cones: Array[Dictionary] = [{"base": Vector3(3, 1, 0), "tip": Vector3(3.6, 1, 0), "radius": 0.15}]
+	overlays.set_marks(BoardOverlays.Layer.REACH_LINES, marks, Color.WHITE, [], cones)
+
+	var shades := {}
+	for vertex: Dictionary in overlays.cone_vertices_of(BoardOverlays.Layer.REACH_LINES):
+		shades[snappedf(float(vertex["shade"]), 0.001)] = true
+	assert_int(shades.size()).override_failure_message(
+			"every facet came back at one shade -- the cone is a silhouette, not a volume") \
+		.is_greater(1)
+
+
+# The bead runs off the shaft and THROUGH the cone as one sweep, which is what the two halves
+# sharing a world measure buys. Measured at the tip: it has to continue the arc's count, not
+# restart at zero the way a second mark's would.
+func test_the_bead_measure_continues_from_the_shaft_into_the_cone() -> void:
+	var overlays := _bare_overlays()
+	var marks: Array[Array] = [[
+		PackedVector3Array([Vector3(0, 1, 0), Vector3(4, 1, 0)]),
+		PackedVector3Array([Vector3(4, 1, 0), Vector3(4.5, 1, 0)]),
+	]]
+	var cones: Array[Dictionary] = [{"base": Vector3(4, 1, 0), "tip": Vector3(4.5, 1, 0), "radius": 0.1}]
+	overlays.set_marks(BoardOverlays.Layer.REACH_LINES, marks, Color.WHITE, [], cones)
+
+	var furthest := 0.0
+	for vertex: Dictionary in overlays.cone_vertices_of(BoardOverlays.Layer.REACH_LINES):
+		furthest = maxf(furthest, float(vertex["dist"]))
+	assert_float(furthest).override_failure_message(
+			"the cone restarted the bead's measure instead of continuing the shaft's") \
+		.is_greater(4.0)
+
+
+# A knob that bakes into the MESH has to rebuild it, where one that is a material uniform only has
+# to be re-pushed. Both shapes exist on this node and only one of them is obvious, so the facet
+# count is pinned as the case that would otherwise ship as #264's born-dead slider.
+func test_turning_the_facet_count_rebuilds_a_standing_cone() -> void:
+	var overlays := _bare_overlays()
+	var marks: Array[Array] = [[
+		PackedVector3Array([Vector3(0, 1, 0), Vector3(3, 1, 0)]),
+		PackedVector3Array([Vector3(3, 1, 0), Vector3(3.5, 1, 0)]),
+	]]
+	var cones: Array[Dictionary] = [{"base": Vector3(3, 1, 0), "tip": Vector3(3.5, 1, 0), "radius": 0.1}]
+	overlays.cone_facets = 8
+	overlays.set_marks(BoardOverlays.Layer.REACH_LINES, marks, Color.WHITE, [], cones)
+	var coarse := overlays.cone_vertices_of(BoardOverlays.Layer.REACH_LINES).size()
+
+	overlays.cone_facets = 24
+	assert_int(overlays.cone_vertices_of(BoardOverlays.Layer.REACH_LINES).size()) \
+		.override_failure_message("turning the facet count left the standing cone at its old shape") \
+		.is_greater(coarse)
+
+
+# --- The movement range draws as GRIDLINES (#1069) ----------------------------------------------
+
+# The dev, on 3D FE: "the player movement tiles don't actually flood fill, only the gridlines of the
+# tiles get the color highlights." It is still a Kind.FILL -- hollow ART, not a new render kind --
+# which is what keeps the sort, the lift, the ramp tilt and the corner fold applying to it.
+#
+# Asserted as a DIFFERENCE between the three range layers rather than against a filename: what
+# would break this is somebody giving them one texture again, and the filename is a value the dev
+# may change.
+func test_your_movement_range_draws_different_art_from_the_two_washes_under_it() -> void:
+	var overlays := _bare_overlays()
+	var cells: Array[Vector3i] = [Vector3i(0, 0, 0)]
+	for layer: BoardOverlays.Layer in [BoardOverlays.Layer.MOVE, BoardOverlays.Layer.REACH,
+			BoardOverlays.Layer.THREAT]:
+		overlays.set_cells(layer, cells)
+
+	var move_art := _albedo_of(overlays, BoardOverlays.Layer.MOVE)
+	var reach_art := _albedo_of(overlays, BoardOverlays.Layer.REACH)
+	var threat_art := _albedo_of(overlays, BoardOverlays.Layer.THREAT)
+	assert_object(move_art).override_failure_message(
+			"the movement range has no art at all, so it cannot be drawing gridlines").is_not_null()
+	assert_bool(move_art == reach_art).override_failure_message(
+			"your movement range is drawing the same wash as your reach -- the centres are back") \
+		.is_false()
+	assert_bool(reach_art == threat_art).override_failure_message(
+			"the two washes stopped sharing one texture, which is a second file to keep in step") \
+		.is_true()
+
+
+# ...and the DEFAULT is untouched: a layer that names no texture goes on wearing the fill. Without
+# this the key could be read backwards -- outline by default, wash by exception -- and every other
+# markup layer in the game would quietly hollow out.
+func test_a_layer_that_names_no_texture_still_draws_the_fill() -> void:
+	var overlays := _bare_overlays()
+	var cells: Array[Vector3i] = [Vector3i(0, 0, 0)]
+	overlays.set_cells(BoardOverlays.Layer.SQUAD, cells)
+	assert_object(_albedo_of(overlays, BoardOverlays.Layer.SQUAD)).override_failure_message(
+			"a layer with no texture key came up with the wrong art").is_same(overlays.fill_texture)
+
+
+func _albedo_of(overlays: BoardOverlays, layer: BoardOverlays.Layer) -> Texture2D:
+	var marker := _one_marker(overlays, layer) as MeshInstance3D
+	var material := marker.material_override as StandardMaterial3D
+	return null if material == null else material.albedo_texture
