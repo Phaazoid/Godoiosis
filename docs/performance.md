@@ -446,6 +446,14 @@ failing. Use a board with no `dialog_beats`, or run the tool as a SCENE.
 
 ## 2026-09-17 — the threat view's OFF state actually costs nothing (#710 slice 3)
 
+> **SUPERSEDED by [#1069](https://github.com/Phaazoid/Godoiosis/issues/1069) (2026-09-21).** The
+> intent readout retired, and its debounce and `ThreatView` went with it, so there is no longer a
+> recompute for an OFF state to skip — `AIController.preview_faction_turn` has no production caller
+> at all now. **The measurement below still stands and is the reason the replacement is cheap**: the
+> reach lines run one `attackers_of` dictionary lookup against the already-cached `ThreatField` per
+> hovered cell, so the 77 ms per engaged squad this entry prices is not paid at any cadence.
+> `previewed_squad_count` survives for the cases that still drive the preview directly.
+
 The entry above prices a recompute. Slice 3 adds the state in which none happens: `T` cycles
 `ThreatView {NONE, INTENTS, EVERYTHING}` and **both `_restart_threat_plan` and
 `refresh_threat_plan` return at `NONE`**, so the debounce never arms and no squad is planned. The
