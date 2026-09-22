@@ -24,12 +24,12 @@ const ART_TEXELS := 32
 static var GRID_LINE_INSET := 0.0
 # The line's thickness per tile. Where two tiles meet their lines sit side by side, so a line BETWEEN
 # tiles draws twice this and the rim of the range once. Zero is no line at all.
-static var GRID_LINE_WIDTH := 1.0
+static var GRID_LINE_WIDTH := 2.0
 # Clear space between the line's inner edge and the inner square.
 static var GRID_FILL_GAP := 0.0
 # The inner square's strength as a fraction of the line's -- the dev's "same shade, much fainter
 # alpha". Zero is #1069's pure-gridline look.
-static var GRID_FILL_ALPHA := 0.25
+static var GRID_FILL_ALPHA := 0.57
 
 
 # One tile of the grid at `size` texels a side, as white-with-alpha for a layer to tint.
