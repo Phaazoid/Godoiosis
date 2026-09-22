@@ -63,9 +63,24 @@ uniform vec4 bead_color : source_color = vec4(1.0, 0.92, 0.98, 1.0);
 // by the CONE, which is geometry.
 uniform float motion = 1.0;
 
+// --- Marching DASHES (#1070) --------------------------------------------------------------------
+// The squad's lines: a repeating window in the same world measure the bead runs on, moving toward
+// the end a stroke runs to (a tether's leader, clockwise round a range). A zero period is a SOLID
+// stroke, which is what every other tenant reads, so they are untouched by construction. The flat
+// view cuts identical dashes on the CPU off the same SquadLines2D statics.
+uniform float dash_period = 0.0;   // world units between dash starts; 0 = solid
+uniform float dash_fill = 0.5;     // how much of each period is ink, 0-1
+uniform float dash_speed = 0.0;    // world units per second
+
+// --- The PLUCK (#1070) --------------------------------------------------------------------------
+// A refused click shakes the tether it would break. The ribbon's middle moves sideways by this much
+// (world units, signed), weighted by sin(pi * along) so both ends stay pinned -- a plucked string.
+// Pushed per frame by OverlayMirror while it rings, on the strained tethers' material alone.
+uniform float shake = 0.0;
+
 void vertex() {
-	// UV.y is the side flag as 0/1; remap to -1/+1. UV.x is the normalized position along the beam
-	// (see set_line) -- unused here, and #674's marching dashes are what would read it.
+	// UV.y is the side flag as 0/1; remap to -1/+1. UV.x is the normalized position along the stroke
+	// (see add_beam_strip), which the pluck reads to pin both ends.
 	float side_sign = UV.y * 2.0 - 1.0;
 
 	vec3 view_pos = (MODELVIEW_MATRIX * vec4(VERTEX, 1.0)).xyz;
@@ -87,6 +102,8 @@ void vertex() {
 	// on the same layer, and therefore the same material, as the shaft it grows out of.
 	float width_scale = max(1.0 + UV2.y, 0.0);
 	view_pos += side * side_sign * beam_width * width_scale * 0.5;
+	// The pluck moves BOTH rim vertices alike -- no side_sign -- so the ribbon bends rather than widens.
+	view_pos += side * shake * sin(3.14159265 * UV.x);
 	POSITION = PROJECTION_MATRIX * vec4(view_pos, 1.0);
 }
 
@@ -121,8 +138,18 @@ void fragment() {
 		bead = 1.0 - smoothstep(0.0, bead_length, behind);
 	}
 
+	// The dash: ink wherever (distance - marched) mod period falls inside the fill, with its two edges
+	// softened over one pixel's worth of distance so a dash does not crawl as it moves.
+	float dash = 1.0;
+	if (dash_period > 0.0) {
+		float ink = dash_period * clamp(dash_fill, 0.0, 1.0);
+		float phase = mod(UV2.x - TIME * dash_speed * live, dash_period);
+		float inside = phase <= ink ? min(phase, ink - phase) : -min(phase - ink, dash_period - phase);
+		dash = clamp(inside / max(fwidth(UV2.x), 0.0001) + 0.5, 0.0, 1.0);
+	}
+
 	vec3 tint = mix(beam_color.rgb, bead_color.rgb, bead);
 	float alpha = beam_color.a * (1.0 + bead * bead_color.a);
 	ALBEDO = tint * COLOR.rgb * beam_intensity;
-	ALPHA = clamp(alpha, 0.0, 1.0) * COLOR.a * falloff;
+	ALPHA = clamp(alpha, 0.0, 1.0) * COLOR.a * falloff * dash;
 }

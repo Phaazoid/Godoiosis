@@ -370,9 +370,11 @@ static func _build_entries() -> Dictionary:
 		"long": "Claims the objective zone at the unit's destination. Only available when the "
 			+ "mission declares a capture objective there."}
 	e[Term.SQUAD_UP] = {"category": Category.ACTIONS, "title": "Squad Up",
-		"short": "Form a new squad with a unit in cohesion range.",
-		"long": "Creates a squad from two solo units of the same faction within cohesion range. "
-			+ "Neither may have queued orders or an already-spent turn."}
+		"short": "Form a squad, or grow your own, with units in cohesion range.",
+		"long": "From a solo unit, forms a squad with it as leader; from a squad leader, adds to "
+			+ "that squad. Recruits must be solo units of the same faction within cohesion range, "
+			+ "and there must be room (see Squad Size). Pick as many as you like, one after another; "
+			+ "right-click to stop. Nobody involved may have queued orders or an already-spent turn."}
 	e[Term.JOIN_SQUAD] = {"category": Category.ACTIONS, "title": "Join Squad",
 		"short": "Join an existing squad whose leader is in cohesion range.",
 		"long": "Adds this unit to a formed squad with room left (see Squad Size). The joiner must "

@@ -325,6 +325,16 @@ func test_a_squad_pick_returns_into_the_phase() -> void:
 
 	game._on_left_click(standing[1].movement.cell)   # the pick itself
 	await await_idle_frame()
+	# Squad Up's pick STAYS OPEN while anyone is left who could join (#1070), so it is taken to the
+	# end the way a player finishing it would -- the last candidate closes it. What this case pins is
+	# where a closing pick RESTS the board, whichever pick is the last.
+	var guard := 0
+	while game.game_state == game.GameState.PICKING_TARGET and not game.target_pick_cells.is_empty() \
+			and guard < 8:
+		game._on_left_click(game.target_pick_cells[0])
+		await await_idle_frame()
+		guard += 1
+	assert_int(guard).override_failure_message("the Squad Up pick never closed").is_less(8)
 
 	assert_int(game.game_state).override_failure_message(
 		"the board dropped out of the phase after a squad pick -- every click after this one would "

@@ -1082,6 +1082,62 @@ func test_only_the_reach_lines_carry_a_bead() -> void:
 				"a beam that is not a reach mark picked up the travelling bead").is_equal_approx(0.0, 0.001)
 
 
+# --- The squad's lines (#1070) --------------------------------------------------------------------
+
+const SQUAD_LINE_LAYERS: Array[BoardOverlays.Layer] = [BoardOverlays.Layer.COHESION_EDGE,
+	BoardOverlays.Layer.TETHERS, BoardOverlays.Layer.TETHER_GHOST, BoardOverlays.Layer.TETHER_STRAIN]
+
+
+# The marching DASHES are the squad's lines' and nobody else's: the range's stroke and the three
+# tether layers read one dash, which is what makes them one system, and every other beam stays a
+# solid stroke. A tether ends in the reach mark's own solid cone -- and must not pick up its BEAD,
+# which _style_cone used to push to every cone it built whatever its shaft carried.
+func test_only_the_squad_lines_are_dashed_and_a_tethers_cone_carries_no_bead() -> void:
+	var overlays := _bare_overlays()
+	var marks: Array[Array] = [[
+		PackedVector3Array([Vector3(0, 1, 0), Vector3(3, 1, 0)]),
+		PackedVector3Array([Vector3(3, 1, 0), Vector3(3.5, 1, 0)]),
+	]]
+	var cones: Array[Dictionary] = [{"base": Vector3(3, 1, 0), "tip": Vector3(3.5, 1, 0), "radius": 0.1}]
+	var solid: Array[BoardOverlays.Layer] = [BoardOverlays.Layer.REACH_LINES,
+		BoardOverlays.Layer.SIGHT_TRACE, BoardOverlays.Layer.ENEMY_FOCUS_EDGE]
+	for layer: BoardOverlays.Layer in SQUAD_LINE_LAYERS + solid:
+		overlays.set_marks(layer, marks, Color.WHITE, [], cones)
+
+	for layer: BoardOverlays.Layer in SQUAD_LINE_LAYERS:
+		assert_float(overlays.beam_parameter(layer, &"dash_period")).override_failure_message(
+				"%s is a squad line and draws solid" % BoardOverlays.Layer.keys()[layer]).is_greater(0.0)
+	for layer: BoardOverlays.Layer in solid:
+		assert_float(overlays.beam_parameter(layer, &"dash_period")).override_failure_message(
+				"%s picked up the squad's dashes" % BoardOverlays.Layer.keys()[layer]) \
+			.is_equal_approx(0.0, 0.0001)
+	for layer: BoardOverlays.Layer in [BoardOverlays.Layer.TETHERS, BoardOverlays.Layer.TETHER_GHOST,
+			BoardOverlays.Layer.TETHER_STRAIN]:
+		assert_float(overlays.cone_parameter(layer, &"bead_length")).override_failure_message(
+				"a tether's arrowhead is running the reach mark's bead").is_equal_approx(0.0, 0.0001)
+	# ...and not by switching the bead off for everybody: the reach mark's own cone keeps it.
+	assert_float(overlays.cone_parameter(BoardOverlays.Layer.REACH_LINES, &"bead_length")) \
+		.override_failure_message("the reach mark's cone lost its bead").is_greater(0.0)
+
+
+# The PLUCK reaches the strained tethers and no other line (#1070): a refused click shakes the tether
+# it would break, and the solid tethers beside it hold still. That is the whole reason STRAIN is a
+# layer of its own -- a layer is one material, and the shake is a uniform.
+func test_the_pluck_reaches_only_the_strained_tethers() -> void:
+	var overlays := _bare_overlays()
+	var marks: Array[Array] = [[PackedVector3Array([Vector3(0, 1, 0), Vector3(3, 1, 0)])]]
+	overlays.set_marks(BoardOverlays.Layer.TETHERS, marks, Color.WHITE)
+	overlays.set_marks(BoardOverlays.Layer.TETHER_STRAIN, marks, Color.WHITE)
+
+	overlays.set_tether_shake(0.25)
+
+	assert_float(overlays.beam_parameter(BoardOverlays.Layer.TETHER_STRAIN, &"shake")) \
+		.override_failure_message("the pluck never reached the strained tether").is_equal_approx(0.25, 0.0001)
+	var still: Variant = overlays.beam_parameter(BoardOverlays.Layer.TETHERS, &"shake")
+	assert_float(0.0 if still == null else float(still)).override_failure_message(
+			"a tether the move does not break shook too").is_equal_approx(0.0, 0.0001)
+
+
 # --- The SOLID cone (#1069) ---------------------------------------------------------------------
 
 # THE DEV'S REPORT WAS "a see through triangle", and the cause was structural rather than tuned:
@@ -1205,9 +1261,21 @@ func test_your_movement_range_draws_different_art_from_the_two_washes_under_it()
 func test_a_layer_not_marked_grid_still_draws_the_fill() -> void:
 	var overlays := _bare_overlays()
 	var cells: Array[Vector3i] = [Vector3i(0, 0, 0)]
-	overlays.set_cells(BoardOverlays.Layer.SQUAD, cells)
-	assert_object(_albedo_of(overlays, BoardOverlays.Layer.SQUAD)).override_failure_message(
+	overlays.set_cells(BoardOverlays.Layer.ZONE_CAPTURE, cells)
+	assert_object(_albedo_of(overlays, BoardOverlays.Layer.ZONE_CAPTURE)).override_failure_message(
 			"a layer with no grid key came up with the wrong art").is_same(overlays.fill_texture)
+
+
+# ...and the OUT-OF-RANGE tiles wear the move range's own lattice (#1070): the grid switched off,
+# which is what "you could walk here, not now" is. It was a mauve wash in the enemy purple's family.
+func test_the_out_of_range_tiles_draw_the_move_ranges_grid() -> void:
+	var overlays := _bare_overlays()
+	var cells: Array[Vector3i] = [Vector3i(0, 0, 0)]
+	overlays.set_cells(BoardOverlays.Layer.MOVE, cells)
+	overlays.set_cells(BoardOverlays.Layer.INVALID_MOVE, cells)
+	assert_object(_albedo_of(overlays, BoardOverlays.Layer.INVALID_MOVE)).override_failure_message(
+			"the out-of-range tiles are not drawn with the move range's grid") \
+		.is_same(_albedo_of(overlays, BoardOverlays.Layer.MOVE))
 
 
 # --- The grid reaches the tile's EDGE, with a faint square inside (#1074) ------------------------

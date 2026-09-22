@@ -160,7 +160,7 @@ func _hover_idle(cell: Vector2i) -> Dictionary:
 
 	var moverange: Dictionary = game.compute_move_range(hovered)
 	if hovered.has_squad():
-		game.draw_squad_leader_range(hovered.squad, hovered.squad.leader.get_projected_destination())
+		game.draw_squad_cohesion(hovered.squad, hovered.squad.leader.get_projected_destination())
 
 	# BLUE ALONE ON HOVER (#1069), where #1066 drew blue and red both. The dev, on 3D FE: "hovering a
 	# unit doesn't show the attack range at all, actually. Selecting a unit, though... brings up the
@@ -171,9 +171,20 @@ func _hover_idle(cell: Vector2i) -> Dictionary:
 	# that; the ring and the move gesture are after it. Painted by game._click_idle and by
 	# HoverPresenter's own move-hover branches respectively.
 	var standable: Array[Vector2i] = game.get_move_range(moverange, hovered)
+	var blocked: Array[Vector2i] = []
+	blocked.assign(moverange.squad_unreachable.keys())
+	# A LEADER'S RANGE IS SPLIT HERE TOO (#1070, dev: "These two floodfills disagreeing is
+	# problematic"). Only Move used to ask whether the squad could follow, so hovering a leader drew
+	# his whole range blue and opening Move then cut it -- and the ring, which shows whatever hover
+	# last drew, sided with the hover. The same split through the same helper, so the three agree:
+	# about 7 ms, once, when the pointer lands on a leader (docs/performance.md).
+	if hovered.is_leader() and hovered.has_squad():
+		var split: Dictionary = game.leader_range_split(hovered, standable)
+		standable = split["green"]
+		blocked = split["blocked"]
 	game.overlay_manager.show_overlay(OverlayManager.OverlayType.MOVE, standable, OverlayManager.ATLAS_COORDS)
 	_show_hover_panel(hovered, cell)
-	game.overlay_manager.show_overlay(OverlayManager.OverlayType.INVALIDMOVE, moverange.squad_unreachable.keys(), OverlayManager.ATLAS_COORDS)
+	game.overlay_manager.show_overlay(OverlayManager.OverlayType.INVALIDMOVE, blocked, OverlayManager.ATLAS_COORDS)
 
 	# Idle only: an active squad's own markers are already up, and a second set for whoever the
 	# mouse happens to be over competes with them. The "draw them muted instead" TODO that used to
@@ -202,8 +213,8 @@ func _hover_choosing_group_move(cell: Vector2i) -> void:
 
 	# Reads what enter_group_move_mode computed: per hovered cell it cost 6.8 ms of a 16.7 ms frame
 	# (docs/performance.md). Same two questions, same order, as game._click_choosing_group_move.
-	var followable: bool = game.compute_move_range(leader).reachable.keys().has(cell) \
-		and game.leader_followable.has(cell)
+	var moverange: Dictionary = game.compute_move_range(leader)
+	var followable: bool = moverange.reachable.keys().has(cell) and game.leader_followable.has(cell)
 	if followable:
 		var formation := GroupMoveSolver.plan(leader.squad, cell, game._board())
 		game.overlay_manager.show_hover_move_paths(formation)
@@ -215,7 +226,62 @@ func _hover_choosing_group_move(cell: Vector2i) -> void:
 		# destination this squad has, so there is no "if you stop here" to answer.
 		game.show_player_reach(leader, cell)
 		game.show_reach_lines_at(cell)
+		# ...and the squad's lines follow the formation (#1070): the range round the leader's ghost,
+		# each tether from the stand-in the formation put its member on.
+		var placed := {}
+		for move: MoveAction in formation:
+			placed[move.actor] = move.destination
+		game.draw_squad_cohesion(leader.squad, cell, placed)
+	elif game.leader_stranding.has(cell):
+		_draw_stranding(leader, cell, moverange)
+	elif leader.has_squad():
+		game.draw_squad_cohesion(leader.squad, leader.get_projected_destination())
 	_set_cursor_for_preview(cell, followable)
+
+
+# The leader hovered onto a tile he could walk to and the squad could not follow him onto (#1070): his
+# ghost standing there, and the squad's lines drawn as though he had gone, with the tethers of whoever
+# would be stranded in red -- which is the reason the tile is grey, said where the player is looking.
+# A ghost authors nothing; the path preview and the plan re-validation stay withheld, as they were.
+func _draw_stranding(leader: Unit, cell: Vector2i, moverange: Dictionary) -> void:
+	_show_stand_in(leader, cell, moverange)
+	var strained: Array[Unit] = []
+	strained.assign(game.leader_stranding.get(cell, []))
+	game.draw_squad_cohesion(leader.squad, cell, {}, strained)
+
+
+# A ghost of `unit` standing on `cell` and nothing else -- no arrow, no re-validation -- for a tile the
+# player may look at but not take. The typed local is required through the untyped `game` ref.
+func _show_stand_in(unit: Unit, cell: Vector2i, moverange: Dictionary) -> void:
+	var path := RulesService.reconstruct_path(moverange.came_from, unit.movement.cell, cell)
+	var ghost := MoveAction.new()
+	ghost.init(unit, path, GridUtils.get_terrain_icon_at_cell(game.grid, path.back()))
+	var one: Array[MoveAction] = [ghost]
+	game.overlay_manager.show_hover_ghosts(one)
+
+
+# A single unit's move being chosen (#1070): the squad's lines with this unit moved onto the hovered
+# tile. A member's tether leaves its ghost, red where the tile is past the leader's range; a leader
+# carries the range with him, and every member he would strand goes red.
+func _draw_move_lines(unit: Unit, cell: Vector2i, moverange: Dictionary) -> void:
+	var squad: Squad = unit.squad
+	if unit.is_leader():
+		if not moverange.reachable.keys().has(cell):
+			game.draw_squad_cohesion(squad, unit.get_projected_destination())
+			return
+		var stranded: Array[Unit] = []
+		stranded.assign(game.leader_stranding.get(cell, []))
+		game.draw_squad_cohesion(squad, cell, {}, stranded)
+		return
+	var leader_cell := squad.leader.get_projected_destination()
+	var none: Array[Unit] = []
+	if moverange.reachable.keys().has(cell):
+		game.draw_squad_cohesion(squad, leader_cell, {unit: cell}, none)
+	elif moverange.squad_unreachable.keys().has(cell):
+		var strained: Array[Unit] = [unit]
+		game.draw_squad_cohesion(squad, leader_cell, {unit: cell}, strained)
+	else:
+		game.draw_squad_cohesion(squad, leader_cell)
 
 func _hover_attack_targeting(cell: Vector2i) -> void:
 	var attacker: Unit = game.selected_unit
@@ -263,12 +329,11 @@ func _hover_choosing_move(cell: Vector2i) -> void:
 	game.overlay_manager.clear_hover_move_path()
 	var moverange: Dictionary = game.compute_move_range(unit)
 
-	if unit.is_leader():
-		game.overlay_manager.clear_squad_range()
-	if unit.is_leader() and unit.has_squad() and moverange.reachable.keys().has(cell):
-		game.draw_squad_leader_range(unit.squad, cell)
-		game.overlay_manager.redraw_planned_paths()
-		game.overlay_manager.redraw_projected_units()
+	if unit.has_squad():
+		_draw_move_lines(unit, cell, moverange)
+		if unit.is_leader() and moverange.reachable.keys().has(cell):
+			game.overlay_manager.redraw_planned_paths()
+			game.overlay_manager.redraw_projected_units()
 
 	if not moverange.reachable.keys().has(cell) and not moverange.squad_unreachable.keys().has(cell):
 		_set_cursor_for_preview(cell, false)
@@ -282,9 +347,12 @@ func _hover_choosing_move(cell: Vector2i) -> void:
 	if strands:
 		# The reach still moves: what a tile would cost you is worth knowing about one you are being
 		# stopped from taking. What does NOT happen is the path preview and the plan re-validation,
-		# which would describe an order this click cannot author.
+		# which would describe an order this click cannot author. His GHOST does stand there (#1070),
+		# because the red tethers _draw_move_lines just drew need a body to run to.
 		game.show_player_reach(unit, cell)
 		game.show_reach_lines_at(cell)
+		if game.leader_stranding.has(cell):
+			_show_stand_in(unit, cell, moverange)
 		_set_cursor_for_preview(cell, false)
 		return
 

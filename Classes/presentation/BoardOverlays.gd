@@ -28,12 +28,13 @@ class_name BoardOverlays
 
 enum Layer {
 	MOVE, ATTACK, ZONE_CAPTURE, ZONE_EXTRACTION, HOVER,
-	INVALID_MOVE, SQUAD, SQUAD_RANGE, AIM,
+	INVALID_MOVE, AIM,
 	TARGET_PICK, PATH_ARROWS, KNOCKBACK, TERRAIN, TERRAIN_PREVIEW, ICONS,
 	ZONE_PATROL, ZONE_HIGHLIGHT, GROUND_ICONS, ATTACK_BLOCKED, SIGHT_TRACE,
 	GUARD_ICONS, GUARD_LINK, WATCH_ICONS,
 	ZONE_DEPLOYMENT, ZONE_DEFEND,
 	REACH, THREAT, ENEMY_FOCUS_EDGE, REACH_LINES,
+	COHESION_EDGE, TETHERS, TETHER_GHOST, TETHER_STRAIN,
 }
 enum Kind { FILL, BRACKET, SPRITE, BILLBOARD, LINE }
 
@@ -126,7 +127,8 @@ const LAYERS: Dictionary[Layer, Dictionary] = {
 	# not pool-allocation luck. A test pins THREAT < REACH < MOVE.
 	#
 	# Sorts -3 and -4 fell vacant when slice 4's dim pair went (the dev: "they shouldn't dim at
-	# all"). They are left vacant rather than compacted: the FLOOR is what a shift threatens --
+	# all"), and -5 when #1070 retired the orange squad fills for lines. They are left vacant rather
+	# than compacted: the FLOOR is what a shift threatens --
 	# _lift_of is fill_lift + sort * lift_step, and the -7 zones sit at 0.012 with fill_lift 0.04.
 	Layer.THREAT: {"color": Color(0.72, 0.15, 0.28, 0.5), "sort": -2, "kind": Kind.FILL},
 	# ...and a stroke round the OUTSIDE of the hovered enemy's whole footprint (slice 4, the dev's
@@ -168,9 +170,29 @@ const LAYERS: Dictionary[Layer, Dictionary] = {
 	# ICONS holds 15, both pinned by laws in test_board_overlays. A number that drew over fire
 	# would erase the flame it sits beside, which is how #245 found this rule.
 	Layer.HOVER: {"color": Color(1, 0.9, 0.3, 0.9), "sort": 2, "kind": Kind.BRACKET},
-	Layer.INVALID_MOVE: {"color": Color(0.5, 0.36, 0.4, 0.5), "sort": 0, "kind": Kind.FILL},
-	Layer.SQUAD: {"color": Color(1, 0.5, 0, 0.5), "sort": -5, "kind": Kind.FILL},
-	Layer.SQUAD_RANGE: {"color": Color(1, 0.5, 0, 0.5), "sort": -5, "kind": Kind.FILL},
+	# Tiles you could walk to that the SQUAD will not let you take -- a member's past the leader's range,
+	# a leader's that would strand somebody. GREY GRIDLINES since #1070, where they were a mauve wash in
+	# the enemy purple's own family: MOVE's lattice switched off, which is what "walkable, not now" is.
+	# Its cells never meet MOVE's (one tile is one or the other), so sharing sort 0 cannot fight.
+	Layer.INVALID_MOVE: {"color": Color(0.8, 0.82, 0.86, 0.75), "sort": 0, "kind": Kind.FILL,
+		"grid": true},
+	# THE SQUAD'S LINES (#1070), which replaced the orange SQUAD / SQUAD_RANGE fills -- see
+	# SquadLines2D. The range's stroke LIES ON THE GROUND the way the enemy focus edge does, so it names
+	# a lift_sort above every FILL; its sort is render priority only, and sits under the tethers because
+	# a line in the air should read over one on the floor. Colours arrive per draw from SquadLines2D's
+	# statics, so these entries are fallbacks; all four share the "squad" beam set, which is what makes
+	# the range and the tethers read as one system.
+	Layer.COHESION_EDGE: {"color": Color(1.0, 0.55, 0.12, 0.95), "sort": 12, "lift_sort": 6,
+		"beam": "squad", "kind": Kind.LINE},
+	# ...and the tethers, one layer per STATE because a layer is one material: the pluck is a uniform,
+	# and only the strained tethers may shake. They hang at the body's middle and a ribbon writes no
+	# depth, so the three share 14, the last free sort under ICONS.
+	Layer.TETHERS: {"color": Color(1.0, 0.55, 0.12, 0.95), "sort": 14, "beam": "squad",
+		"kind": Kind.LINE},
+	Layer.TETHER_GHOST: {"color": Color(0.72, 0.42, 0.16, 0.5), "sort": 14, "beam": "squad",
+		"kind": Kind.LINE},
+	Layer.TETHER_STRAIN: {"color": Color(1.0, 0.18, 0.14, 0.95), "sort": 14, "beam": "squad",
+		"kind": Kind.LINE},
 	Layer.AIM: {"color": Color(1, 1, 0, 1), "sort": 4, "kind": Kind.FILL},
 	Layer.TARGET_PICK: {"color": Color.WHITE, "sort": 5, "kind": Kind.SPRITE},
 	Layer.PATH_ARROWS: {"color": Color.WHITE, "sort": 6, "kind": Kind.SPRITE},
@@ -327,6 +349,21 @@ enum SelectorDepth { LEVEL, HALF }
 # Radial segments round the cone. Low reads as a cut gem, high as smooth; the base cap uses the
 # same count, so this is the whole shape's resolution.
 @export var cone_facets := 12: set = _set_cone_facets
+# The squad lines' own pair (#1070), shared by the range's stroke and the three tether layers so the
+# two read as one system. Thin and near the bloom threshold, like the outline -- these are markup. The
+# DASHES are not here: they are SquadLines2D statics, because the flat view draws them too.
+@export var squad_line_width := 0.045: set = _set_squad_line_width
+@export var squad_line_intensity := 1.2: set = _set_squad_line_intensity
+
+
+func _set_squad_line_width(value: float) -> void:
+	squad_line_width = value
+	_apply_beam_params()
+
+
+func _set_squad_line_intensity(value: float) -> void:
+	squad_line_intensity = value
+	_apply_beam_params()
 
 
 func _set_mark_width(value: float) -> void:
@@ -808,7 +845,21 @@ func _apply_beam_params() -> void:
 			_style_beam((node as MeshInstance3D).material_override as ShaderMaterial, LAYERS[layer])
 	# ...and the cones beside them, which carry the bead's own three so the pulse stays one sweep.
 	for layer: Layer in _cones:
-		_style_cone((_cones[layer] as MeshInstance3D).material_override as ShaderMaterial)
+		_style_cone((_cones[layer] as MeshInstance3D).material_override as ShaderMaterial, LAYERS[layer])
+
+
+# A squad-line knob moved (#1070) -- the dashes live on SquadLines2D, so nothing here would otherwise
+# notice. Re-pushes every beam, which is what every setter above does for its own.
+func restyle_squad_lines() -> void:
+	_apply_beam_params()
+
+
+# The pluck (#1070): how far the middle of every STRAINED tether is displaced right now, in world
+# units. Pushed each frame by OverlayMirror while a shake rings; zero stills it. Only this layer's
+# material reads it, which is the whole reason the strained tethers are a layer of their own.
+func set_tether_shake(amount: float) -> void:
+	for node: Node3D in _markers.get(Layer.TETHER_STRAIN, []):
+		((node as MeshInstance3D).material_override as ShaderMaterial).set_shader_parameter("shake", amount)
 
 
 # A LINE layer may name its own set (slice 4). The shared trio is tuned for a LASER -- the sight
@@ -830,6 +881,9 @@ func _style_beam(material: ShaderMaterial, spec: Dictionary = {}) -> void:
 		"mark":
 			width = mark_width
 			intensity = mark_intensity
+		"squad":
+			width = squad_line_width
+			intensity = squad_line_intensity
 	material.set_shader_parameter("beam_width", width)
 	material.set_shader_parameter("beam_softness", beam_softness)
 	material.set_shader_parameter("beam_intensity", intensity)
@@ -839,6 +893,13 @@ func _style_beam(material: ShaderMaterial, spec: Dictionary = {}) -> void:
 	material.set_shader_parameter("bead_length", bead_length if carries_bead else 0.0)
 	material.set_shader_parameter("bead_speed", bead_speed)
 	material.set_shader_parameter("bead_gap", maxf(bead_gap, 0.001))
+	# ...and the marching DASHES ride only the squad's lines (#1070), off the same statics the flat
+	# view cuts its dashes from. A zero period is a solid stroke, which is every other layer.
+	var dashed: bool = spec.get("beam", "") == "squad"
+	material.set_shader_parameter("dash_period",
+			SquadLines2D.dash_period() * BoardSpace.CELL_SIZE if dashed else 0.0)
+	material.set_shader_parameter("dash_fill", clampf(SquadLines2D.DASH_FILL, 0.0, 1.0))
+	material.set_shader_parameter("dash_speed", SquadLines2D.DASH_SPEED * BoardSpace.CELL_SIZE)
 	material.set_shader_parameter("motion", 1.0 if beams_animating() else 0.0)
 
 
@@ -846,11 +907,15 @@ func _style_beam(material: ShaderMaterial, spec: Dictionary = {}) -> void:
 # different push. It shares the bead's three numbers so the pulse runs off the shaft and into the
 # cone as one sweep, and takes its own intensity -- see cone_intensity's own note for why that one
 # may not be inherited.
-func _style_cone(material: ShaderMaterial) -> void:
+#
+# The bead reaches a cone ONLY on a layer whose shaft carries one (#1070): a squad tether ends in the
+# same solid cone, and handing it the reach mark's pulse would light an arrowhead whose shaft is dark.
+func _style_cone(material: ShaderMaterial, spec: Dictionary = {}) -> void:
 	if material == null:
 		return
 	material.set_shader_parameter("cone_intensity", cone_intensity)
-	material.set_shader_parameter("bead_length", bead_length)
+	var carries_bead: bool = spec.get("beam", "") == "mark"
+	material.set_shader_parameter("bead_length", bead_length if carries_bead else 0.0)
 	material.set_shader_parameter("bead_speed", bead_speed)
 	material.set_shader_parameter("bead_gap", maxf(bead_gap, 0.001))
 	material.set_shader_parameter("motion", 1.0 if beams_animating() else 0.0)
@@ -860,7 +925,10 @@ func _style_cone(material: ShaderMaterial) -> void:
 # `_flame_animating` shape: the authored rate ANDed with the player's own choice. A frozen mark is
 # not a mark with a cue missing -- the cone still says which way it runs, and the flash holds
 # at its ALPHA peak (see the shader), so a felling mark stays the louder of the two.
-func beams_animating() -> bool:
+# Static since #1070, whose flat-view squad lines are the first 2D markup that moves: they read this
+# rather than asking PlayerSettings themselves, so the two views cannot disagree about whether a dash
+# may crawl.
+static func beams_animating() -> bool:
 	return not PlayerSettings.is_on(PlayerSettings.Setting.PHOTOSENSITIVITY)
 
 
@@ -1265,7 +1333,7 @@ func _cone_for(layer: Layer) -> MeshInstance3D:
 	instance.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	instance.layers = WORLD_RENDER_LAYER
 	add_child(instance)
-	_style_cone(material)
+	_style_cone(material, LAYERS[layer])
 	_cones[layer] = instance
 	return instance
 

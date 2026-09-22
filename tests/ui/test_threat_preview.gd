@@ -111,10 +111,14 @@ func test_hovering_an_enemy_never_borrows_your_own_movement_layers() -> void:
 	game.hover_presenter.update_hover_visuals(enemy.movement.cell)
 	assert_array(_om().move_overlay.get_used_cells()).override_failure_message(
 			"hovering an enemy painted YOUR yellow move range").is_empty()
-	assert_array(_om().squadrange_overlay.get_used_cells()).override_failure_message(
-			"hovering an enemy painted the orange cohesion bubble").is_empty()
+	# The cohesion range is LINES since #1070 -- the dashed stroke and the tethers -- and an enemy's
+	# squad gets neither, for the same reason it never got the fill they replaced.
+	assert_array(_om().squad_outline).override_failure_message(
+			"hovering an enemy drew your squad's cohesion range").is_empty()
+	assert_array(_om().squad_tethers).override_failure_message(
+			"hovering an enemy drew squad tethers").is_empty()
 	assert_array(_om().invalidmove_overlay.get_used_cells()).override_failure_message(
-			"hovering an enemy painted the red unreachable fill").is_empty()
+			"hovering an enemy painted the out-of-range grid").is_empty()
 	assert_array(_om().reach_overlay.get_used_cells()).override_failure_message(
 			"hovering an enemy painted YOUR red attack reach").is_empty()
 	# ...and it is not simply drawing nothing: the enemy's own field IS up.
@@ -705,6 +709,11 @@ func test_the_flat_view_draws_your_movement_range_as_a_grid_and_the_two_washes_s
 			"the enemy's field inherited the movement range's grid tile").is_false()
 	assert_bool(om.reach_overlay.tile_set == om.threat_overlay.tile_set).override_failure_message(
 			"the two washes stopped sharing one tileset, which is a second thing to keep in step") \
+		.is_true()
+	# ...and the out-of-range tiles wear the SAME lattice as the move range (#1070): the grid switched
+	# off, grey. Sharing the tileset is what makes a grid knob reshape both at once.
+	assert_bool(om.invalidmove_overlay.tile_set == om.move_overlay.tile_set).override_failure_message(
+			"the out-of-range tiles are not drawn with the move range's grid") \
 		.is_true()
 
 

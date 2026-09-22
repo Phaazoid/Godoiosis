@@ -886,13 +886,35 @@ func _rail_markers() -> Array[Dictionary]:
 
 # --- Squad + board channels --------------------------------------------------------
 
-func test_squad_fills_and_icons_mirror() -> void:
+func test_squad_lines_and_icons_mirror() -> void:
 	var pair := _squad_pair()
-	game.draw_squad_leader_range(pair[0].squad, pair[0].movement.cell)
+	game.draw_squad_cohesion(pair[0].squad, pair[0].movement.cell)
 	_om().redraw_squad_unit_icons(pair[0].squad)
 	await _settle()
-	assert_bool(_om().squadrange_overlay.get_used_cells().size() > 0).is_true()
-	assert_that(_sorted_3d(BoardOverlays.Layer.SQUAD_RANGE)).is_equal(_lifted(_om().squadrange_overlay))
+	# The squad's range and tethers are LINES since #1070: one stroke segment per outward edge, lying
+	# on the ground at the layer's lift, and one tether per member -- mirrored off the same store.
+	assert_bool(_om().squad_outline.size() > 0).override_failure_message(
+			"no range stroke was stored -- this case cannot see the wire").is_true()
+	assert_int(_overlays.lines_of(BoardOverlays.Layer.COHESION_EDGE).size()) \
+		.is_equal(_om().squad_outline.size())
+	var lift: float = _overlays.marker_lift(BoardOverlays.Layer.COHESION_EDGE)
+	var first: Vector3 = _om().squad_outline[0][0]
+	assert_that(_overlays.lines_of(BoardOverlays.Layer.COHESION_EDGE)[0][0]).override_failure_message(
+			"the range stroke did not arrive at trace_point plus its own layer lift") \
+		.is_equal(BoardSpace.trace_point(first) + Vector3.UP * lift)
+	assert_int(_om().squad_tethers.size()).override_failure_message(
+			"a two-unit squad has one tether").is_equal(1)
+	assert_bool(_overlays.lines_of(BoardOverlays.Layer.TETHERS).size() > 0).override_failure_message(
+			"the tether never reached the diorama").is_true()
+	# ...HANGING, not lying: a tether carries its own height (the bodies' middles), so it is lifted
+	# through trace_point alone and takes no layer lift -- the reach mark's rule, not the stroke's.
+	var strokes: Array = _om().squad_tethers[0]["strokes"]
+	var tether_start: Vector3 = (strokes[0] as PackedVector3Array)[0]
+	assert_that(_overlays.lines_of(BoardOverlays.Layer.TETHERS)[0][0]).override_failure_message(
+			"the tether was not lifted through the same space its chord was measured in") \
+		.is_equal(BoardSpace.trace_point(tether_start))
+	assert_array(_overlays.cone_vertices_of(BoardOverlays.Layer.TETHERS)).override_failure_message(
+			"the tether arrived with no arrowhead").is_not_empty()
 	# Ring style is the default (#325): one GROUND decal per 2D MEMBER icon, texture AND tint
 	# copied off the 2D sprite -- the squad hue is authored 2D-side, and the mirror must never
 	# re-derive it. CROWN entries stay off the ground (the bar badge is the leader's mark).

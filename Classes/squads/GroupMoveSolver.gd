@@ -98,14 +98,32 @@ static func plan(squad: Squad, leader_destination: Vector2i, board: BoardContext
 # same answer at ~4.1 ms a cell, i.e. 176 ms to filter a 44-cell range.
 static func followable_destinations(squad: Squad, board: BoardContext, leader_destinations: Array) -> Dictionary:
 	var followable := {}
+	var stranded := stranding(squad, board, leader_destinations)
+	for destination in stranded:
+		if (stranded[destination] as Array).is_empty():
+			followable[destination] = true
+	return followable
+
+# The same sweep, answering WHO (#1070): for every leader destination, the members who could not follow
+# there -- empty exactly where followable_destinations says yes, because that function is a projection
+# of this one and the two cannot disagree. It names who rather than only whether, because the tether
+# that turns red on a refused tile is THAT member's.
+#
+# The corridor rule below is squad-wide -- too few cells for everybody, with no one member to blame --
+# so a destination it refuses strands every follower, unless somebody was already named.
+static func stranding(squad: Squad, board: BoardContext, leader_destinations: Array) -> Dictionary:
+	var stranded := {}   # destination -> Array[Unit]
 	for cell in leader_destinations:
-		followable[cell] = true
+		var nobody: Array[Unit] = []
+		stranded[cell] = nobody
 
 	var leader := squad.get_leader()
+	var followers: Array[Unit] = []
 	var union_at := {}   # destination -> {cell: true}: every cell ANY member could take there
 	for member in squad.get_members():
 		if member == leader:
 			continue
+		followers.append(member)
 
 		# reachable + squad_unreachable is the member's WHOLE standable footprint: the split is only
 		# about the clamp cell, and both are standable because occupancy is filtered first.
@@ -123,25 +141,26 @@ static func followable_destinations(squad: Squad, board: BoardContext, leader_de
 			# cell satisfies. Path distance over terrain is symmetric, so the field reads the same
 			# from either end -- one bounded walk per standable cell replaces the Manhattan dilation.
 			for destination in SquadCohesion.field(squad, cell, member, board):
-				if not followable.has(destination) or cell == destination:
+				if not stranded.has(destination) or cell == destination:
 					continue   # the leader stands on `destination`; no member may take it
 				satisfied[destination] = true
 				if not union_at.has(destination):
 					union_at[destination] = {}
 				union_at[destination][cell] = true
 
-		for destination in followable.keys():
+		for destination in stranded.keys():
 			if not satisfied.has(destination):
-				followable.erase(destination)
+				(stranded[destination] as Array).append(member)
 
 	# Each member needs its OWN cell: fewer distinct reachable cells than members means no formation
 	# exists at all (a thin corridor collapses them). Necessary, not sufficient — it never asks which
 	# member takes which — but it is the shape a corridor produces, and refused nothing on real maps.
-	var needed: int = squad.get_members().size() - 1
-	for destination in followable.keys():
-		if union_at.get(destination, {}).size() < needed:
-			followable.erase(destination)
-	return followable
+	var needed: int = followers.size()
+	for destination in stranded.keys():
+		var named: Array = stranded[destination]
+		if named.is_empty() and union_at.get(destination, {}).size() < needed:
+			named.append_array(followers)
+	return stranded
 
 # Every cell this member may legally end on -> its move cost. Staying put counts at cost 0 when it
 # clears the bubble and the allow-list on its own. `leader_field` IS the cohesion rule (#151), so
