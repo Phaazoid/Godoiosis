@@ -7,7 +7,7 @@ its child [#49 Action Queue UX](https://github.com/Phaazoid/Godoiosis/issues/49)
 This is a *guidelines* doc, not a spec — it captures the principles we're holding the work to,
 plus the running order of the queue-UX checklist. Update it as items land.
 
-**Canon checked through #1080 (2026-09-22).**
+**Canon checked through #1093 (2026-09-22).**
 
 ## Principles
 
@@ -3673,7 +3673,13 @@ He asked for "a different solution than another tile color fill". From four cand
 
 Both are orange, dashed, with the dashes slowly moving, so they read as one system. `Layer.SQUAD` and `SQUAD_RANGE`, their 2D TileMapLayers and the erase rule are deleted. `COHESION_EDGE`, `TETHERS`, `TETHER_GHOST` and `TETHER_STRAIN` replace them.
 
-**Every tether points AT THE LEADER** (dev: *"for all these tethers"*), ending in the reach mark's own solid cone (*"the same cones we used before"*). `SquadLines2D.tether` builds a mark in `ThreatLines2D.mark`'s shape, so `cone_of` and `mark_widths` read both arrows alike.
+**Every tether points AT THE LEADER** (dev: *"for all these tethers"*), ending in the reach mark's own cone SHAPE (*"the same cones we used before"*). `SquadLines2D.tether` builds a mark in `ThreatLines2D.mark`'s shape, so `cone_of` and `mark_widths` read both arrows alike.
+
+**The shape is shared; the knobs and the opacity are not** (dev's first play-check, same day):
+
+- **Size.** The arrow had read the reach mark's `CONE_LENGTH` and `CONE_WIDTH_SCALE`, so tuning one arrow moved the other. It now has its own pair, `SquadLines2D.ARROW_LENGTH` and `ARROW_WIDTH_SCALE` (*Tether arrow length/width* under Squad lines). `cone_of` and `mark_widths` take the width scale as a PARAMETER, so each caller names whose arrow it is drawing.
+- **Opacity.** He lowered the ghost tether's alpha and the shaft faded while the arrow did not, which is the residual this section had declared. The three tether layers now carry `"cone_alpha"`, which puts their arrowhead on `reach_cone_alpha.gdshader`: the same facet shading, with the colour's ALPHA, `cull_back` and the layer's sort. The reach mark's cone stays solid, #1069's ruling for an intent.
+- **Winding.** `cull_back` is what keeps one layer of blend per pixel. It exposed that `add_beam_cone` had been wound inside out: its facets ran outward by `(b-a)x(c-a)`, and Godot's front face is `(v0-v2)x(v0-v1)` (#876). A windowed render probe read the outside as a back face before the swap and a front face after. The opaque cone culls nothing, so it never showed.
 
 **Three states, one layer each**, because a layer is one material and the pluck is a uniform:
 
@@ -3737,7 +3743,7 @@ A friend of the dev's formed a squad and then tried to grow it from the leader; 
 
 ### Declared residuals
 
-- **A ghost cone is darker, not see-through.** The reach cone's shader is opaque by design and reads no alpha. If that reads wrong, the cone grows an alpha path, which is a second render mode and therefore a second shader file.
+- ~~**A ghost cone is darker, not see-through.**~~ **Built the same day**, on the dev's first look: see *The shape is shared* above. It took the second shader file this line predicted.
 - **The tether BREAKING** when a shove or melting ice ejects a member went to #423, with the correction comment's warning attached. Tethers are interaction-scoped, so at a settle point there is usually none on screen to snap, and the break has to be its own short-lived effect.
 - **What only the dev can judge:**
   - dash size and speed;

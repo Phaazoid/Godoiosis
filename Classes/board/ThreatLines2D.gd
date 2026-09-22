@@ -163,16 +163,19 @@ static func mark(chord: PackedVector3Array) -> Array[PackedVector3Array]:
 # THE SCALE, NOT A RADIUS, for CONE_WIDTH_SCALE's own reason: the shaft's width is a BoardOverlays
 # export this 2D class cannot see. Whoever draws the solid multiplies it by the width it is drawing
 # the shaft at, which is the same composition the ribbon does through UV2.y.
-static func cone_of(strokes: Array[PackedVector3Array]) -> Dictionary:
+#
+# The scale is PASSED since a squad tether's arrow (#1070) took its own knob: a reach mark hands in
+# CONE_WIDTH_SCALE, a tether SquadLines2D.ARROW_WIDTH_SCALE, and neither reaches the other's.
+static func cone_of(strokes: Array[PackedVector3Array], scale: float) -> Dictionary:
 	if strokes.size() < 2:
 		return {}
 	var tail := strokes[strokes.size() - 1]
 	if tail.size() < 2:
 		return {}
-	return {"base": tail[0], "tip": tail[tail.size() - 1], "scale": CONE_WIDTH_SCALE}
+	return {"base": tail[0], "tip": tail[tail.size() - 1], "scale": scale}
 
 
-static func mark_widths(strokes: Array[PackedVector3Array]) -> Array[PackedFloat32Array]:
+static func mark_widths(strokes: Array[PackedVector3Array], scale: float) -> Array[PackedFloat32Array]:
 	var out: Array[PackedFloat32Array] = []
 	for i in strokes.size():
 		var scales := PackedFloat32Array()
@@ -185,7 +188,7 @@ static func mark_widths(strokes: Array[PackedVector3Array]) -> Array[PackedFloat
 				if j > 0:
 					walked += points[j].distance_to(points[j - 1])
 				var t := 0.0 if total <= 0.0 else walked / total
-				scales.append(lerpf(CONE_WIDTH_SCALE, 0.0, t))
+				scales.append(lerpf(scale, 0.0, t))
 		else:
 			for _j in points.size():
 				scales.append(1.0)
@@ -245,7 +248,7 @@ func _draw() -> void:
 	for segment in outlines:
 		_polyline(segment, OverlayManager.FOCUS_OUTLINE_COLOR)
 	for strokes: Array[PackedVector3Array] in marks:
-		var widths := mark_widths(strokes)
+		var widths := mark_widths(strokes, CONE_WIDTH_SCALE)
 		for i in strokes.size():
 			# A constant-width stroke is a polyline; a tapering one has to be a polygon, because
 			# draw_polyline carries ONE width for the whole line.

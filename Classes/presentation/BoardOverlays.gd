@@ -186,13 +186,15 @@ const LAYERS: Dictionary[Layer, Dictionary] = {
 		"beam": "squad", "kind": Kind.LINE},
 	# ...and the tethers, one layer per STATE because a layer is one material: the pluck is a uniform,
 	# and only the strained tethers may shake. They hang at the body's middle and a ribbon writes no
-	# depth, so the three share 14, the last free sort under ICONS.
+	# depth, so the three share 14, the last free sort under ICONS. `cone_alpha` puts their arrowhead on
+	# the SEE-THROUGH cone, so a tether colour's alpha fades the arrow with the shaft (dev, 2026-09-22);
+	# the reach mark's stays solid, which was #1069's ruling for an intent.
 	Layer.TETHERS: {"color": Color(1.0, 0.55, 0.12, 0.95), "sort": 14, "beam": "squad",
-		"kind": Kind.LINE},
+		"kind": Kind.LINE, "cone_alpha": true},
 	Layer.TETHER_GHOST: {"color": Color(0.72, 0.42, 0.16, 0.5), "sort": 14, "beam": "squad",
-		"kind": Kind.LINE},
+		"kind": Kind.LINE, "cone_alpha": true},
 	Layer.TETHER_STRAIN: {"color": Color(1.0, 0.18, 0.14, 0.95), "sort": 14, "beam": "squad",
-		"kind": Kind.LINE},
+		"kind": Kind.LINE, "cone_alpha": true},
 	Layer.AIM: {"color": Color(1, 1, 0, 1), "sort": 4, "kind": Kind.FILL},
 	Layer.TARGET_PICK: {"color": Color.WHITE, "sort": 5, "kind": Kind.SPRITE},
 	Layer.PATH_ARROWS: {"color": Color.WHITE, "sort": 6, "kind": Kind.SPRITE},
@@ -258,6 +260,9 @@ const SIGHT_BEAM_SHADER_PATH := "res://Classes/presentation/sight_beam.gdshader"
 # what a volume must not have -- the rim falloff and `depth_draw_never` -- are a fragment constant
 # and a render_mode, and render_mode is per shader file. See that file's header.
 const REACH_CONE_SHADER_PATH := "res://Classes/presentation/reach_cone.gdshader"
+# ...and its SEE-THROUGH twin (#1070 follow-up), for a layer whose spec carries `cone_alpha`: a third
+# file for the same reason, since blending and back-face culling are render_mode too.
+const REACH_CONE_ALPHA_SHADER_PATH := "res://Classes/presentation/reach_cone_alpha.gdshader"
 # The fixed world direction the cone's facets are shaded against. NOT the camera and NOT a knob:
 # the shade is baked into vertex colour when a mark is rebuilt (on a hover change), so a
 # camera-relative bake is stale the instant the rig orbits, and a direction is three sliders nobody
@@ -733,7 +738,11 @@ static func _cone_face(mesh: ImmediateMesh, a: Vector3, b: Vector3, c: Vector3, 
 		normal = normal.normalized()
 	var lit: float = shading + (1.0 - shading) * maxf(normal.dot(light), 0.0)
 	var tint := Color(lit, lit, lit, 1.0)
-	for p: Vector3 in [a, b, c]:
+	# EMITTED a, c, b: `normal` above is the OUTWARD one, and Godot's front face is (v0-v2)x(v0-v1),
+	# the opposite turn (measured, #876) -- so emitting a, b, c made the outside a BACK face. Harmless
+	# on the opaque cone, which culls nothing; the see-through one culls back faces and would have
+	# drawn the cone's inside.
+	for p: Vector3 in [a, c, b]:
 		mesh.surface_set_color(tint)
 		mesh.surface_set_normal(normal)
 		mesh.surface_set_uv(Vector2(0.0, 0.5))
@@ -914,8 +923,10 @@ func _style_cone(material: ShaderMaterial, spec: Dictionary = {}) -> void:
 	if material == null:
 		return
 	material.set_shader_parameter("cone_intensity", cone_intensity)
-	var carries_bead: bool = spec.get("beam", "") == "mark"
-	material.set_shader_parameter("bead_length", bead_length if carries_bead else 0.0)
+	# The see-through cone declares no bead at all, so it is handed none rather than a zero.
+	if spec.get("beam", "") != "mark":
+		return
+	material.set_shader_parameter("bead_length", bead_length)
 	material.set_shader_parameter("bead_speed", bead_speed)
 	material.set_shader_parameter("bead_gap", maxf(bead_gap, 0.001))
 	material.set_shader_parameter("motion", 1.0 if beams_animating() else 0.0)
@@ -1000,6 +1011,14 @@ func cone_parameter(layer: Layer, name: StringName) -> Variant:
 		return null
 	var material := (_cones[layer] as MeshInstance3D).material_override as ShaderMaterial
 	return null if material == null else material.get_shader_parameter(name)
+
+
+# ...and the material itself, for the question a parameter cannot answer: WHICH cone a layer draws,
+# the solid or the see-through one, and at what render priority.
+func cone_material_of(layer: Layer) -> ShaderMaterial:
+	if not _cones.has(layer) or not is_instance_valid(_cones[layer]):
+		return null
+	return (_cones[layer] as MeshInstance3D).material_override as ShaderMaterial
 
 
 # A layer's cone geometry as it was actually emitted: one entry per triangle VERTEX, each
@@ -1320,15 +1339,20 @@ func _make_line(spec: Dictionary) -> MeshInstance3D:
 # different shader with different uniforms, and a pool with two kinds of node in it is exactly the
 # sort of thing the next reader gets wrong.
 #
-# No render_priority: the shader writes no ALPHA, so this is opaque geometry that depth-tests
-# against the world like any object, which is the whole point of the second shader.
+# No render_priority on the SOLID cone: its shader writes no ALPHA, so it is opaque geometry that
+# depth-tests against the world like any object, which is the whole point of the second shader. The
+# SEE-THROUGH one blends, so it takes its layer's sort exactly as the layer's ribbons do.
 func _cone_for(layer: Layer) -> MeshInstance3D:
 	if _cones.has(layer) and is_instance_valid(_cones[layer]):
 		return _cones[layer]
 	var instance := MeshInstance3D.new()
 	instance.mesh = ImmediateMesh.new()
 	var material := ShaderMaterial.new()
-	material.shader = load(REACH_CONE_SHADER_PATH) as Shader
+	if LAYERS[layer].get("cone_alpha", false):
+		material.shader = load(REACH_CONE_ALPHA_SHADER_PATH) as Shader
+		material.render_priority = LAYERS[layer]["sort"]
+	else:
+		material.shader = load(REACH_CONE_SHADER_PATH) as Shader
 	instance.material_override = material
 	instance.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	instance.layers = WORLD_RENDER_LAYER

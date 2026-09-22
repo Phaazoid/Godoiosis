@@ -19,6 +19,10 @@ extends Node2D
 # GHOST for a unit that COULD join (Squad Up's candidates, Join Squad's squads), STRAIN for the
 # tether a hovered move would break -- the one that SHAKES when that move is clicked anyway.
 #
+# The arrowhead is the reach mark's SHAPE, not its knobs: ARROW_LENGTH and ARROW_WIDTH_SCALE are the
+# tethers' own, and the diorama draws it on the see-through twin of the reach cone's shader, so a
+# tether colour's alpha fades the arrow with the shaft (dev, 2026-09-22).
+#
 # The dashes MOVE, which spends the repeating-dash motion #674 had reserved for the aim's sight line.
 # The dev ruled it SHARED, told apart by colour (2026-09-22), so this does not claim it outright.
 
@@ -31,8 +35,7 @@ const LINE_WIDTH := 2.0
 # One ORANGE for the tether and the range, which is what makes them read as one system. The cohesion
 # fill wore Color(1, 0.5, 0) for the project's whole life, so the hue is not new -- only its form is.
 static var TETHER_COLOR := Color(1.0, 0.55, 0.12, 0.95)
-# A tether that MIGHT be: dimmer in its RGB as well as its alpha, because the diorama's cone is a
-# SOLID on an opaque shader that reads no alpha at all -- a ghost there is darker, not see-through.
+# A tether that MIGHT be: dimmer and see-through, arrowhead included.
 static var TETHER_GHOST_COLOR := Color(0.72, 0.42, 0.16, 0.5)
 static var TETHER_STRAIN_COLOR := Color(1.0, 0.18, 0.14, 0.95)
 # DASHES PER TILE, not a dash length, and that is what lets the range's stroke stay one pattern
@@ -47,6 +50,11 @@ static var DASH_SPEED := 0.35
 # instead of vanishing behind it. The MEMBER end starts at its centre: the sprite draws over what it
 # covers there, which is what "connect the middle of the sprites" looks like.
 static var TETHER_INSET := 0.25
+# The arrowhead at the leader's end: its length in cells (zero leaves a bare line), and its base as a
+# MULTIPLE of the tether's own width -- ThreatLines2D.CONE_WIDTH_SCALE's reason, since the 3D width is
+# a BoardOverlays export this class cannot see.
+static var ARROW_LENGTH := 0.4
+static var ARROW_WIDTH_SCALE := 2.4
 # The refused click's pluck (#1070, dev: "if they try clicking, the tether gives a shake"). How far the
 # middle swings, in cells; how long it rings; and how many times it swings in that time.
 static var SHAKE_AMPLITUDE := 0.12
@@ -91,7 +99,7 @@ static func tether(tether_chord: PackedVector3Array) -> Array[PackedVector3Array
 	var dir := span / length
 	var tip := tether_chord[1] - dir * minf(TETHER_INSET, length)
 	var run := (tip - tether_chord[0]).length()
-	var cone := ThreatLines2D.CONE_LENGTH
+	var cone := ARROW_LENGTH
 	# No room for the arrow: the bare shaft still says who is tied to whom.
 	var shaft_end := tip if cone <= 0.0 or run <= cone else tip - dir * cone
 	var shaft_length := (shaft_end - tether_chord[0]).length()
@@ -191,7 +199,7 @@ func _draw() -> void:
 		var shaft := strokes[0]
 		var bend := shake if state == Strain.STRAIN else 0.0
 		_dashed(_flat(shaft[0]), _flat(shaft[shaft.size() - 1]), color, shift, bend)
-		var cone := ThreatLines2D.cone_of(strokes)
+		var cone := ThreatLines2D.cone_of(strokes, ARROW_WIDTH_SCALE)
 		if not cone.is_empty():
 			_cone(_flat(cone["base"]), _flat(cone["tip"]), float(cone["scale"]), color)
 

@@ -310,8 +310,8 @@ func _reach_lines(om: OverlayManager) -> void:
 				points.append(BoardSpace.trace_point(p))
 			strokes.append(points)
 		marks.append(strokes)
-		widths.append(ThreatLines2D.mark_widths(flat))
-		var cone := ThreatLines2D.cone_of(flat)
+		widths.append(ThreatLines2D.mark_widths(flat, ThreatLines2D.CONE_WIDTH_SCALE))
+		var cone := ThreatLines2D.cone_of(flat, ThreatLines2D.CONE_WIDTH_SCALE)
 		if cone.is_empty():
 			cones.append({})
 		else:
@@ -760,8 +760,8 @@ func _squad_lines(om: OverlayManager) -> void:
 					points.append(BoardSpace.trace_point(p))
 				strokes.append(points)
 			marks.append(strokes)
-			widths.append(ThreatLines2D.mark_widths(flat))
-			var cone := ThreatLines2D.cone_of(flat)
+			widths.append(ThreatLines2D.mark_widths(flat, SquadLines2D.ARROW_WIDTH_SCALE))
+			var cone := ThreatLines2D.cone_of(flat, SquadLines2D.ARROW_WIDTH_SCALE)
 			if cone.is_empty():
 				cones.append({})
 			else:

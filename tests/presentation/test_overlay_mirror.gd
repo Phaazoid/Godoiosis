@@ -941,6 +941,51 @@ func test_squad_lines_and_icons_mirror() -> void:
 	assert_int(_overlays.markers_of(BoardOverlays.Layer.ICONS).size()).is_equal(1)
 
 
+# The tether's arrowhead is sized by ITS OWN knob (dev, 2026-09-22): the diorama's cone scales with
+# SquadLines2D.ARROW_WIDTH_SCALE, and the reach mark's CONE_WIDTH_SCALE -- the enemy intent's -- does
+# not reach it. Asked as ratios against the drawn geometry, never as the widths themselves.
+func test_a_tethers_arrowhead_takes_its_own_width_not_the_reach_marks() -> void:
+	var saved_arrow := SquadLines2D.ARROW_WIDTH_SCALE
+	var saved_cone := ThreatLines2D.CONE_WIDTH_SCALE
+	var pair := _squad_pair()
+	game.draw_squad_cohesion(pair[0].squad, pair[0].movement.cell)
+	SquadLines2D.ARROW_WIDTH_SCALE = 2.0
+	ThreatLines2D.CONE_WIDTH_SCALE = 5.0
+	var narrow := await _tether_cone_radius()
+	SquadLines2D.ARROW_WIDTH_SCALE = 4.0
+	var wide := await _tether_cone_radius()
+	ThreatLines2D.CONE_WIDTH_SCALE = 1.0
+	var reach_moved := await _tether_cone_radius()
+	SquadLines2D.ARROW_WIDTH_SCALE = saved_arrow
+	ThreatLines2D.CONE_WIDTH_SCALE = saved_cone
+
+	assert_float(narrow).override_failure_message("the tether drew no arrowhead to measure") \
+		.is_greater(0.0)
+	assert_float(wide / narrow).override_failure_message(
+			"doubling the tether's arrow width did not double its cone") \
+		.is_equal_approx(2.0, 0.01)
+	assert_float(reach_moved).override_failure_message(
+			"the reach mark's cone width moved the tether's arrowhead").is_equal_approx(wide, 0.0001)
+
+
+# How wide the one tether's cone is drawn right now: its vertices' furthest reach from the axis the
+# store says it runs along. Re-derives the tethers first, which is what a knob write does.
+func _tether_cone_radius() -> float:
+	_om().restyle_squad_lines()
+	await _settle()
+	var strokes: Array = _om().squad_tethers[0]["strokes"]
+	if strokes.size() < 2:
+		return 0.0
+	var head: PackedVector3Array = strokes[strokes.size() - 1]
+	var base := BoardSpace.trace_point(head[0])
+	var axis := (BoardSpace.trace_point(head[head.size() - 1]) - base).normalized()
+	var radius := 0.0
+	for vertex: Dictionary in _overlays.cone_vertices_of(BoardOverlays.Layer.TETHERS):
+		var offset: Vector3 = vertex["point"] - base
+		radius = maxf(radius, (offset - axis * offset.dot(axis)).length())
+	return radius
+
+
 func test_the_leader_wears_the_crown_over_the_head_and_a_ring_underfoot() -> void:
 	var pair := _squad_pair()
 	_om().redraw_squad_unit_icons(pair[0].squad)

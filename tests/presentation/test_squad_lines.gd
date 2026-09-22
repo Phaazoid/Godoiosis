@@ -16,6 +16,7 @@ func before_test() -> void:
 		"speed": SquadLines2D.DASH_SPEED, "inset": SquadLines2D.TETHER_INSET,
 		"amp": SquadLines2D.SHAKE_AMPLITUDE, "secs": SquadLines2D.SHAKE_SECONDS,
 		"swings": SquadLines2D.SHAKE_SWINGS, "cone": ThreatLines2D.CONE_LENGTH,
+		"arrow": SquadLines2D.ARROW_LENGTH,
 		"photo": PlayerSettings.is_on(PlayerSettings.Setting.PHOTOSENSITIVITY),
 	}
 
@@ -29,6 +30,7 @@ func after_test() -> void:
 	SquadLines2D.SHAKE_SECONDS = _saved["secs"]
 	SquadLines2D.SHAKE_SWINGS = _saved["swings"]
 	ThreatLines2D.CONE_LENGTH = _saved["cone"]
+	SquadLines2D.ARROW_LENGTH = _saved["arrow"]
 	PlayerSettings.set_on(PlayerSettings.Setting.PHOTOSENSITIVITY, _saved["photo"])
 
 
@@ -116,7 +118,7 @@ func test_the_dashes_march_toward_the_end_of_the_stroke() -> void:
 # sampled rather than two points, or the pluck (a bend pinned at both ends) would have nothing to bend.
 func test_a_tether_runs_from_the_member_to_the_leader_and_points_at_the_leader() -> void:
 	SquadLines2D.TETHER_INSET = 0.25
-	ThreatLines2D.CONE_LENGTH = 0.4
+	SquadLines2D.ARROW_LENGTH = 0.4
 	var member := Vector3(0.5, 1.0, 0.5)
 	var leader := Vector3(3.5, 1.0, 0.5)
 	var strokes := SquadLines2D.tether(PackedVector3Array([member, leader]))
@@ -124,7 +126,7 @@ func test_a_tether_runs_from_the_member_to_the_leader_and_points_at_the_leader()
 	assert_int(strokes.size()).override_failure_message("the tether has no arrowhead").is_equal(2)
 	assert_that(strokes[0][0]).override_failure_message(
 			"the tether does not start at the member").is_equal(member)
-	var cone := ThreatLines2D.cone_of(strokes)
+	var cone := ThreatLines2D.cone_of(strokes, SquadLines2D.ARROW_WIDTH_SCALE)
 	assert_bool(cone.is_empty()).override_failure_message("the arrowhead is not a cone").is_false()
 	var tip: Vector3 = cone["tip"]
 	var base: Vector3 = cone["base"]
@@ -134,6 +136,20 @@ func test_a_tether_runs_from_the_member_to_the_leader_and_points_at_the_leader()
 			"the arrowhead points at the MEMBER").is_true()
 	assert_int(strokes[0].size()).override_failure_message(
 			"the shaft is two points, so the pluck cannot bend it").is_greater(2)
+
+
+# The arrowhead is the tether's OWN (dev, 2026-09-22): its length is ARROW_LENGTH, and the reach mark's
+# CONE_LENGTH -- the enemy intent's knob -- does not reach it. Set apart, so a tether still reading
+# the reach knob draws the wrong length.
+func test_a_tethers_arrow_is_its_own_length_not_the_reach_marks() -> void:
+	SquadLines2D.TETHER_INSET = 0.25
+	SquadLines2D.ARROW_LENGTH = 0.6
+	ThreatLines2D.CONE_LENGTH = 0.2
+	var strokes := SquadLines2D.tether(PackedVector3Array([Vector3(0.5, 1.0, 0.5), Vector3(4.5, 1.0, 0.5)]))
+	assert_int(strokes.size()).override_failure_message("the tether has no arrowhead").is_equal(2)
+	var head := strokes[1]
+	assert_float(head[0].distance_to(head[head.size() - 1])).override_failure_message(
+			"the tether's arrow is not ARROW_LENGTH long -- it is reading the reach mark's cone") 		.is_equal_approx(0.6, 0.0001)
 
 
 # The tether hangs at the MIDDLE of the bodies -- the dev's "connect the middle of the sprites" -- which

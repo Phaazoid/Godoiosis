@@ -547,6 +547,12 @@ const CLASS_KNOBS: Array[Dictionary] = [
 	{"group": "Squad lines", "label": "Tether inset", "static": "TETHER_INSET", "script": SQUAD_LINES_SCRIPT,
 		"min": 0.0, "max": 0.6, "step": 0.05,
 		"tip": "How far short of the leader's centre the arrowhead's tip stops, in tiles, so it meets the leader's body rather than disappearing behind it."},
+	{"group": "Squad lines", "label": "Tether arrow length", "static": "ARROW_LENGTH", "script": SQUAD_LINES_SCRIPT,
+		"min": 0.0, "max": 1.5, "step": 0.05,
+		"tip": "How long the arrowhead at the leader's end of a tether is, in tiles. Zero leaves a bare line. The tethers' own -- the enemy reach marks' cone has its own pair."},
+	{"group": "Squad lines", "label": "Tether arrow width", "static": "ARROW_WIDTH_SCALE", "script": SQUAD_LINES_SCRIPT,
+		"min": 1.0, "max": 6.0, "step": 0.1,
+		"tip": "How wide the arrowhead's base is, as a MULTIPLE of the tether's own width, so widening the tether widens its arrow with it."},
 	{"group": "Squad lines", "label": "Shake size", "static": "SHAKE_AMPLITUDE", "script": SQUAD_LINES_SCRIPT,
 		"min": 0.0, "max": 0.5, "step": 0.01,
 		"tip": "How far the middle of a strained tether swings when you click a tile the squad will not let you take, in tiles. Both ends stay pinned, like a plucked string."},
@@ -1514,6 +1520,8 @@ static func read_static(name: String) -> Variant:
 		"DASH_FILL": return SquadLines2D.DASH_FILL
 		"DASH_SPEED": return SquadLines2D.DASH_SPEED
 		"TETHER_INSET": return SquadLines2D.TETHER_INSET
+		"ARROW_LENGTH": return SquadLines2D.ARROW_LENGTH
+		"ARROW_WIDTH_SCALE": return SquadLines2D.ARROW_WIDTH_SCALE
 		"SHAKE_AMPLITUDE": return SquadLines2D.SHAKE_AMPLITUDE
 		"SHAKE_SECONDS": return SquadLines2D.SHAKE_SECONDS
 		"SHAKE_SWINGS": return SquadLines2D.SHAKE_SWINGS
@@ -1755,7 +1763,7 @@ static func write_static(host: Node3D, name: String, value: Variant) -> void:
 		# params (the dashes are shader uniforms) and the store, which re-derives the tethers -- the
 		# inset is geometry -- and repaints the flat line.
 		"TETHER_COLOR", "TETHER_GHOST_COLOR", "TETHER_STRAIN_COLOR", "DASHES_PER_TILE", "DASH_FILL", \
-				"DASH_SPEED", "TETHER_INSET", "SHAKE_AMPLITUDE", "SHAKE_SECONDS", "SHAKE_SWINGS":
+				"DASH_SPEED", "TETHER_INSET", "ARROW_LENGTH", "ARROW_WIDTH_SCALE", "SHAKE_AMPLITUDE", 				"SHAKE_SECONDS", "SHAKE_SWINGS":
 			_write_squad_line(name, value)
 			_restyle_squad_lines(host)
 			return
@@ -2332,16 +2340,18 @@ static func write_static(host: Node3D, name: String, value: Variant) -> void:
 
 # Split out of write_static's match so the squad-line arm can list its names once. DASHES_PER_TILE is
 # a COUNT and the slider hands over a float; the cast is what keeps the static an int, and so what
-# Save writes back as one.
+# Save writes back as one. ROUNDED, not truncated: a stepped slider's 3.0 may arrive as 2.9999.
 static func _write_squad_line(name: String, value: Variant) -> void:
 	match name:
 		"TETHER_COLOR": SquadLines2D.TETHER_COLOR = value
 		"TETHER_GHOST_COLOR": SquadLines2D.TETHER_GHOST_COLOR = value
 		"TETHER_STRAIN_COLOR": SquadLines2D.TETHER_STRAIN_COLOR = value
-		"DASHES_PER_TILE": SquadLines2D.DASHES_PER_TILE = int(value)
+		"DASHES_PER_TILE": SquadLines2D.DASHES_PER_TILE = roundi(value)
 		"DASH_FILL": SquadLines2D.DASH_FILL = value
 		"DASH_SPEED": SquadLines2D.DASH_SPEED = value
 		"TETHER_INSET": SquadLines2D.TETHER_INSET = value
+		"ARROW_LENGTH": SquadLines2D.ARROW_LENGTH = value
+		"ARROW_WIDTH_SCALE": SquadLines2D.ARROW_WIDTH_SCALE = value
 		"SHAKE_AMPLITUDE": SquadLines2D.SHAKE_AMPLITUDE = value
 		"SHAKE_SECONDS": SquadLines2D.SHAKE_SECONDS = value
 		"SHAKE_SWINGS": SquadLines2D.SHAKE_SWINGS = value

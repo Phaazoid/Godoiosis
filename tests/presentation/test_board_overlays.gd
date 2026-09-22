@@ -1090,9 +1090,9 @@ const SQUAD_LINE_LAYERS: Array[BoardOverlays.Layer] = [BoardOverlays.Layer.COHES
 
 # The marching DASHES are the squad's lines' and nobody else's: the range's stroke and the three
 # tether layers read one dash, which is what makes them one system, and every other beam stays a
-# solid stroke. A tether ends in the reach mark's own solid cone -- and must not pick up its BEAD,
-# which _style_cone used to push to every cone it built whatever its shaft carried.
-func test_only_the_squad_lines_are_dashed_and_a_tethers_cone_carries_no_bead() -> void:
+# solid stroke. (A tether's arrowhead carrying no BEAD is the see-through cone case below: its shader
+# declares none.)
+func test_only_the_squad_lines_are_dashed() -> void:
 	var overlays := _bare_overlays()
 	var marks: Array[Array] = [[
 		PackedVector3Array([Vector3(0, 1, 0), Vector3(3, 1, 0)]),
@@ -1111,11 +1111,7 @@ func test_only_the_squad_lines_are_dashed_and_a_tethers_cone_carries_no_bead() -
 		assert_float(overlays.beam_parameter(layer, &"dash_period")).override_failure_message(
 				"%s picked up the squad's dashes" % BoardOverlays.Layer.keys()[layer]) \
 			.is_equal_approx(0.0, 0.0001)
-	for layer: BoardOverlays.Layer in [BoardOverlays.Layer.TETHERS, BoardOverlays.Layer.TETHER_GHOST,
-			BoardOverlays.Layer.TETHER_STRAIN]:
-		assert_float(overlays.cone_parameter(layer, &"bead_length")).override_failure_message(
-				"a tether's arrowhead is running the reach mark's bead").is_equal_approx(0.0, 0.0001)
-	# ...and not by switching the bead off for everybody: the reach mark's own cone keeps it.
+	# ...and the reach mark's cone still carries the bead its shaft does.
 	assert_float(overlays.cone_parameter(BoardOverlays.Layer.REACH_LINES, &"bead_length")) \
 		.override_failure_message("the reach mark's cone lost its bead").is_greater(0.0)
 
@@ -1164,6 +1160,75 @@ func test_the_cone_is_solid_geometry_on_its_own_shader_not_a_ribbon() -> void:
 	var mesh := _one_marker(overlays, BoardOverlays.Layer.REACH_LINES).mesh as ImmediateMesh
 	assert_int(mesh.get_surface_count()).override_failure_message(
 			"the cone's own stroke was still drawn as a ribbon underneath the solid").is_equal(1)
+
+
+# A TETHER's arrowhead fades with its colour (dev, 2026-09-22: he lowered the ghost tether's alpha and
+# the shaft faded while the arrow did not). The three tether layers draw the SEE-THROUGH cone, at their
+# own sort because it blends like the ribbons beside it; the reach mark's stays the SOLID one, which
+# was #1069's ruling for an intent -- so the fix is per layer, not a new look for every cone.
+func test_a_tethers_arrowhead_is_see_through_and_the_reach_marks_stays_solid() -> void:
+	var overlays := _bare_overlays()
+	var marks: Array[Array] = [[
+		PackedVector3Array([Vector3(0, 1, 0), Vector3(3, 1, 0)]),
+		PackedVector3Array([Vector3(3, 1, 0), Vector3(3.5, 1, 0)]),
+	]]
+	var cones: Array[Dictionary] = [{"base": Vector3(3, 1, 0), "tip": Vector3(3.5, 1, 0), "radius": 0.1}]
+	var tethers: Array[BoardOverlays.Layer] = [BoardOverlays.Layer.TETHERS,
+		BoardOverlays.Layer.TETHER_GHOST, BoardOverlays.Layer.TETHER_STRAIN]
+	for layer: BoardOverlays.Layer in tethers + [BoardOverlays.Layer.REACH_LINES]:
+		overlays.set_marks(layer, marks, Color(1, 1, 1, 0.3), [], cones)
+
+	for layer: BoardOverlays.Layer in tethers:
+		var name: String = BoardOverlays.Layer.keys()[layer]
+		var material := overlays.cone_material_of(layer)
+		assert_str(material.shader.resource_path).override_failure_message(
+				"%s's arrowhead is on the solid cone, which reads no alpha" % name) \
+			.is_equal(BoardOverlays.REACH_CONE_ALPHA_SHADER_PATH)
+		assert_int(material.render_priority).override_failure_message(
+				"%s's see-through arrowhead is not at its layer's sort" % name) \
+			.is_equal(BoardOverlays.LAYERS[layer]["sort"])
+		assert_float((material.get_shader_parameter(&"beam_color") as Color).a).override_failure_message(
+				"%s's arrowhead never received its colour's alpha" % name).is_equal_approx(0.3, 0.001)
+		assert_that(material.get_shader_parameter(&"bead_length")).override_failure_message(
+				"%s's arrowhead was handed the reach mark's bead" % name).is_null()
+	assert_str(overlays.cone_material_of(BoardOverlays.Layer.REACH_LINES).shader.resource_path) \
+		.override_failure_message("the reach mark's cone went see-through too") \
+		.is_equal(BoardOverlays.REACH_CONE_SHADER_PATH)
+
+
+# EVERY TRIANGLE FACES OUT. The see-through cone culls back faces, which is what keeps it one layer
+# of blend per pixel -- and Godot's front face is (v0-v2)x(v0-v1) (#876), the opposite turn to the
+# outward normal the facets were first emitted by. So the cone was wound inside out, invisibly while
+# every cone culled nothing; a windowed render probe measured the outside as a BACK face before the
+# swap and a front face after. This pins the geometry the probe measured, side faces and cap alike.
+func test_every_cone_triangle_faces_out_by_godots_winding() -> void:
+	var overlays := _bare_overlays()
+	var base := Vector3(3, 1, 0)
+	var tip := Vector3(3.6, 1.2, 0.3)
+	var marks: Array[Array] = [[
+		PackedVector3Array([Vector3(0, 1, 0), base]),
+		PackedVector3Array([base, tip]),
+	]]
+	var cones: Array[Dictionary] = [{"base": base, "tip": tip, "radius": 0.15}]
+	overlays.set_marks(BoardOverlays.Layer.TETHERS, marks, Color.WHITE, [], cones)
+
+	var vertices := overlays.cone_vertices_of(BoardOverlays.Layer.TETHERS)
+	assert_int(vertices.size()).override_failure_message("no cone was emitted").is_greater(0)
+	assert_int(vertices.size() % 3).is_equal(0)
+	# A cone's centroid sits a quarter of the way up from its base: inside the solid, so every face
+	# whose front points away from it faces out.
+	var inside := base.lerp(tip, 0.25)
+	var inward := 0
+	for t in vertices.size() / 3:
+		var v0: Vector3 = vertices[t * 3]["point"]
+		var v1: Vector3 = vertices[t * 3 + 1]["point"]
+		var v2: Vector3 = vertices[t * 3 + 2]["point"]
+		var front := (v0 - v2).cross(v0 - v1)
+		if front.dot((v0 + v1 + v2) / 3.0 - inside) <= 0.0:
+			inward += 1
+	assert_int(inward).override_failure_message(
+			"%d of %d cone triangles face INTO the cone by Godot's winding, so the see-through cone "
+			% [inward, vertices.size() / 3] + "culls its outside and draws its inside").is_equal(0)
 
 
 # Every facet carries a BAKED shade, which is the only way a face can differ from its neighbour on
