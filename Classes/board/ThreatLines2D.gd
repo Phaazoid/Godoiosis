@@ -64,7 +64,7 @@ static var MARK_INSET := 0.25
 # practice... perhaps a narrow cone at the end instead?", then "about half of what it is, too. It
 # should be subtle"). Length in cells, measured in ARC LENGTH back from the tip so it cannot shrink
 # as the bow deepens.
-static var CONE_LENGTH := 0.45
+static var CONE_LENGTH := 0.4
 # ...and how wide its base is, AS A MULTIPLE OF THE SHAFT rather than as an absolute width. The shaft's
 # width is BoardOverlays.mark_width, a node export this 2D node cannot see -- and an absolute would
 # go stale anyway, since that setter re-pushes material parameters without bumping the mark version,

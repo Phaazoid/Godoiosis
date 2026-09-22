@@ -35,7 +35,7 @@ static var PIN_PULSE_MODULATE := Color(2.2, 2.2, 2.2)
 # How long it sits at that peak, in seconds. The ramp either side is Pulse.PERIOD, so this is the
 # share of the cycle the cue actually occupies -- at 0.45 against a 0.5 ramp it is white for about a
 # third of the time rather than for one frame.
-static var PIN_PULSE_HOLD := 0.45
+static var PIN_PULSE_HOLD := 0.2
 
 var pulse_tween: Tween
 # TRUE while this unit's ranges are PINNED up. Held as a flag rather than read back off pin_tween

@@ -83,7 +83,7 @@ const HOVER_PULSE_MODULATE := Color(1, 1, 0, 0.3)       # its pulsed low point -
 # itself static and reads them, so this is the only form that works. Unlike the 3D-only layer
 # colours, tuning these moves BOTH stacks -- the 3D mirrors this modulate rather than holding an
 # answer of its own, so there is no 3D-only value here to tune (dev call: acceptable).
-static var ATTACK_MODULATE := Color(1, 0, 0, .5)
+static var ATTACK_MODULATE := Color(1.0, 0.0, 0.0, 0.4902)
 static var HEAL_ATTACK_MODULATE := Color(0, 1, 0, .5)
 # Aiming a WATCH rather than a shot (#591). The two layers of the aim are repainted, because
 # declaring and firing were the same picture and the only tell was remembering which row you clicked.
@@ -163,7 +163,7 @@ const ZONE_DEFEND_MODULATE := Color(1, 0.82, 0.25, 0.45)
 static var ZONE_HIGHLIGHT_MODULATE := Color(1, 1, 1, 0.45)
 # YOUR unit's attack reach (#1066): every cell it could hit from anywhere in its move envelope.
 # Red, and it draws UNDER your blue, so what shows is the halo past where you may stand.
-static var REACH_MODULATE := Color(1, 0.15, 0.1, 0.38)
+static var REACH_MODULATE := Color(1.0, 0.15, 0.1, 1.0)
 # ...and the ENEMY's whole field, move and reach together, under both of yours. One unbroken reddish
 # purple on the dev's Fire Emblem ruling (#1066) -- it replaced a red/blue pair that asked the player
 # to read an enemy in the same two-question vocabulary as their own unit. The hue is his pick from
@@ -172,7 +172,7 @@ static var REACH_MODULATE := Color(1, 0.15, 0.1, 0.38)
 # Where it crosses your blue, the composite IS the third colour: nothing authors an intersect tint,
 # and nothing should -- a cell that is both is exactly blue-over-purple and reads as such because
 # BoardOverlays sorts MOVE above THREAT.
-static var THREAT_MODULATE := Color(0.72, 0.15, 0.28, 0.5)
+static var THREAT_MODULATE := Color(0.72, 0.15, 0.28, 1.0)
 # ...and a stroke round the outside of the hovered enemy's whole footprint. Since #1066 it is the
 # ONLY thing separating that enemy from the rest, so it has to read against the field it encircles
 # (dev: "They shouldn't dim at all, the outline on the main one should be the only differentiator").

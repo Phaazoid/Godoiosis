@@ -85,7 +85,7 @@ const LAYERS: Dictionary[Layer, Dictionary] = {
 	# untouched. Only YOUR movement range: the reach under it and the enemy's field under that stay
 	# washes, on his ruling, so the three read as line art over two tints rather than as three grids.
 	# NB `"texture"` goes LAST -- see _texture_for.
-	Layer.MOVE: {"color": Color(0.25, 0.45, 1, 0.55), "sort": 0, "kind": Kind.FILL,
+	Layer.MOVE: {"color": Color(0.25, 0.45, 1.0, 0.8863), "sort": 0, "kind": Kind.FILL,
 		"texture": OUTLINE_TEXTURE_PATH},
 	Layer.ATTACK: {"color": Color(1, 0, 0, 0.5), "sort": 1, "kind": Kind.FILL},
 	# Reach cells past the aim's vertical tolerance (#258). Shares ATTACK's sort safely: the 2D
