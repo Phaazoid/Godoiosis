@@ -672,7 +672,9 @@ h(t) = lerp(elev_origin + EYE, elev_target + EYE, t) + arc_clearance * 4t(1 - t)
   something to write) and the beam copies them. Its width, edge softness and glow are 3D-only
   `BoardOverlays` exports, the flat line having no equivalent of any of them.
 - **Everything else the look could grow is [#674](https://github.com/Phaazoid/Godoiosis/issues/674)**, filed as a declared deferral rather than
-  attempted here: motion along the beam (**marching dashes**, the dev's choice), a terminal
+  attempted here: motion along the beam (**marching dashes**, the dev's choice -- shared since
+  [#1070](https://github.com/Phaazoid/Godoiosis/issues/1070) with the squad's orange tethers, so the aim's must wear its own colours; the shader's dash
+  window already exists), a terminal
   reticule and an impact mark at the block — which is what would answer "blocked vs clear at a
   glance", since a blocked shot currently reads only as *shorter and red* — and a ground shadow
   under a lob's arc.

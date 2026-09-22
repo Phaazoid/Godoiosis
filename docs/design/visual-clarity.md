@@ -7,7 +7,7 @@ its child [#49 Action Queue UX](https://github.com/Phaazoid/Godoiosis/issues/49)
 This is a *guidelines* doc, not a spec — it captures the principles we're holding the work to,
 plus the running order of the queue-UX checklist. Update it as items land.
 
-**Canon checked through #1074 (2026-09-22).**
+**Canon checked through #1080 (2026-09-22).**
 
 ## Principles
 
@@ -832,7 +832,7 @@ tenant, so there is nothing left to stagger against.
 
 **The premise this ticket was filed on was wrong, and the correction generalises.** #325's body
 said `Layer.SQUAD` "already draws the squad's footprint" — measured false while planning: that
-layer is the Squad Up / Join Squad *candidate bubble*, `SQUAD_RANGE` is the cohesion leash, and
+layer is the Squad Up / Join Squad *candidate bubble*, `SQUAD_RANGE` is the cohesion leash (both LINES since #1070: a dashed range stroke and tethers), and
 the head-icon channel (`OverlayManager.icons_by_unit`) was the **only** membership marker in the
 game. So the build RELOCATED that one channel rather than restyling a fill, and the icon
 lifecycle never moved. Third instance of [#228](https://github.com/Phaazoid/Godoiosis/issues/228)'s
@@ -3461,6 +3461,8 @@ A recompute skips any squad whose reach envelope holds no hostile unit -- exact,
 
 **The two motions are split by SIGNATURE, not by exclusivity (dev, 2026-09-19).** The threat mark gets a single travelling BEAD; the repeating DASH pattern is reserved for player attacks, which is [#674](https://github.com/Phaazoid/Godoiosis/issues/674)'s sight-trace ruling given a second reason to exist.
 
+> **Amended by [#1070](https://github.com/Phaazoid/Godoiosis/issues/1070) (dev, 2026-09-22): the moving dash is SHARED, told apart by colour.** The squad's tethers and cohesion stroke march orange dashes now, and #674's aim line, when it is built, marches its own in the aim palette's colours. The bead stays the threat mark's alone.
+
 ### ...and what #1059 fixed about its FORM (2026-09-20)
 
 He played it and reported three things: *"They should be shallow arcs rather than straight lines, and the point of origin needs to come from the actual unit rather than over its head. The arrows also just don't look great in practice. Perhaps a narrow cone at the end instead?"*
@@ -3597,7 +3599,7 @@ Both values get their first knob rows anywhere (`PIN_PULSE_MODULATE` had been a 
 
 ### Declared residuals at close
 
-- **The orange cohesion bubble and the mauve `INVALID_MOVE`** are still deferred, now FILED as [#1070](https://github.com/Phaazoid/Godoiosis/issues/1070) rather than parked on a merged PR for a third round. They matter more after this slice, not less: the squad markup is the only flood fill of the player's OWN that survives the gridline change.
+- **The orange cohesion bubble and the mauve `INVALID_MOVE`** are still deferred, now FILED as [#1070](https://github.com/Phaazoid/Godoiosis/issues/1070) rather than parked on a merged PR for a third round. *(Built: see* The squad's LINES *below.)* They matter more after this slice, not less: the squad markup is the only flood fill of the player's OWN that survives the gridline change.
 - **What the suite cannot see, and is the dev's:** whether gridlines read at speed on a busy board, whether reach-from-one-tile is informative enough after losing the union, whether the solid cone reads as a volume at the diorama's pixel scale, and whether the white pin flash is now too loud.
 
 ## ...and what #1074 tightened ([#1074](https://github.com/Phaazoid/Godoiosis/issues/1074), BUILT 2026-09-22)
@@ -3640,3 +3642,107 @@ Asked and answered: **regroup by subject**. Markup is now the readout, in this o
 **Anchored to a live tween, never a clock.** Every pin tween pauses with the Game node (ModalLock, a hitstop's `time_scale`). A wall-clock phase drifts from the standing flashes the first time the pause menu opens, while tweens that paused together stay in step.
 
 **The plan called for a two-pass restyle** (drop every flash, then restart). It was built, then taken out as UNOBSERVABLE. The pins are always in step before a restyle, so a rebuilt flash lands on one phase whichever flash it joins, old or already rebuilt. A choice no case could tell apart from its absence is the trap `CLAUDE.md` names, so the single pass stayed.
+
+## The squad's LINES, and one answer for "walkable, not now" ([#1070](https://github.com/Phaazoid/Godoiosis/issues/1070), BUILT 2026-09-22)
+
+This is the orange cohesion bubble and the mauve `INVALID_MOVE`, deferred through #1066 and #1069 until the dev had played the new board. He had, and brought four asks and a fifth from a friend's playtest. There were four rulings from the questions (below), and one follow-up went to [#423](https://github.com/Phaazoid/Godoiosis/issues/423).
+
+### Hover and Move now answer the same question about a leader
+
+> a squad leader, when hovered, shows his full move range. When move is selected, that move range is cut if squad mates can't follow. These two floodfills disagreeing is problematic.
+
+**Measured, and it was one missing call.** The grey he asked for already existed as the Invalid-move fill. Members wore it on hover and in Move. A leader wore it only in Move, because the stranding sweep (#1069) ran only at `enter_move_mode`. Hovering painted his whole range blue, and the ring, which shows whatever hover last drew, sided with the hover.
+
+`game.leader_range_split` is now the one split. Both move modes and the idle hover call it: about 7 ms, once, when the pointer lands on a leader.
+
+**The split names WHO.** `GroupMoveSolver.stranding` records which member's `satisfied` set lacked each destination. `followable_destinations` is now a projection of it (the destinations with nobody stranded), so the two cannot disagree. The corridor count is squad-wide, so it strands every follower unless somebody was already named.
+
+**The colour is a GREY GRID** (ruled against hatched blue, amber and keeping the mauve). It is `MoveGrid`'s own lattice switched off, which is what "walkable, not now" means. The mauve was in the enemy purple's own family, which is the point #1070 was filed about.
+
+- In 2D the invalid-move layer shares MOVE's tileset outright.
+- **Trap:** the reach and threat washes had borrowed THAT tileset as their plain fill. They now take the attack sheet's (0,0) tile. Borrow a tileset only from a layer whose art is a wash by definition.
+
+### The cohesion range was not hidden, it was DELETED
+
+`OverlayManager.show_overlay` erased the squad-range cells wherever the move layer drew. That rule was left over from the yellow wash, to stop orange and yellow muddying. So the range only ever showed where you could NOT walk.
+
+He asked for "a different solution than another tile color fill". From four candidates (outline, dashed outline, dim outside, tethers) he took two:
+
+- **The range is a DASHED STROKE** round its edge, lying on the ground like the enemy focus edge.
+- **Membership is a TETHER** from each member to its leader, hung at the middle of the bodies (dev: *"connect the middle of the sprites, rather than being on the ground"*).
+
+Both are orange, dashed, with the dashes slowly moving, so they read as one system. `Layer.SQUAD` and `SQUAD_RANGE`, their 2D TileMapLayers and the erase rule are deleted. `COHESION_EDGE`, `TETHERS`, `TETHER_GHOST` and `TETHER_STRAIN` replace them.
+
+**Every tether points AT THE LEADER** (dev: *"for all these tethers"*), ending in the reach mark's own solid cone (*"the same cones we used before"*). `SquadLines2D.tether` builds a mark in `ThreatLines2D.mark`'s shape, so `cone_of` and `mark_widths` read both arrows alike.
+
+**Three states, one layer each**, because a layer is one material and the pluck is a uniform:
+
+- SOLID for a member.
+- GHOST for a unit that could join. Squad Up draws one from every candidate; Join Squad draws one from the joiner to every leader it could join.
+- STRAIN, red, for the tether a hovered move would break: a member past its leader's range, or each member a leader's destination would strand.
+
+**Tethers connect what the board is DRAWING.** Each end is the unit's projected cell, or its hover or formation ghost while a move is previewed, which is the anchor `OverlayIcon`'s ring rides. The range centres on the leader's drawn cell, so it follows the hovered destination in both move modes. Group Move's range now follows too; before this it stayed at the leader's own cell.
+
+`UnitSprite3D.body_middle()` is the hang height. It is derived from the ink rect, not tuned. `ThreatLines2D.MARK_HEIGHT` was measured to the same number and stays its own knob: a reach mark may hang elsewhere for a look, and a line joining two bodies may not.
+
+**The dashes, in both views, off one set of statics** (`SquadLines2D`):
+
+- **3D:** `sight_beam.gdshader` gained a dash window on `UV2.x` that moves on `TIME`, like the bead.
+- **2D:** the flat view cuts the same spans on the CPU in `dash_spans`, and is the first flat markup that moves.
+
+The period is set as DASHES PER TILE rather than as a length. That is what lets the range's stroke stay one pattern while it is drawn as one segment per outward edge, never chained into loops.
+
+The stroke is also WOUND now. `OverlayManager.EDGE_CORNERS` runs every edge with its region on the right, so the dashes march clockwise. LEFT and DOWN had run backwards, which a solid stroke could not show. `outline_segments` is the one builder, shared with the focus edge.
+
+On a ramp an edge is longer than a tile, so the phase slips slightly at that corner. This is declared, not solved.
+
+**The cone carries no bead.** `_style_cone` pushed the reach mark's pulse to EVERY cone it built. A tether's arrowhead would have pulsed while its shaft stayed dark, so the bead now follows the layer's own `"beam"`.
+
+### The refused click answers back
+
+The dev's addition:
+
+> when a unit tries to queue a move into an area they can normally move but is out of squad range, the tether should turn red, and if they try clicking, the tether gives a shake
+
+A click on a grey tile calls `OverlayManager.shake_tethers()` and **stays in the mode** (ruled over shake-then-leave). A click outside the whole range still leaves, as before.
+
+**It is the board's one refusal that answers back.** Every other refusal stays silent. Nothing here makes that a general rule; it is scoped to the case where the reason is on screen as a red line.
+
+The pluck is a string plucked in the middle: a perpendicular offset weighted by `sin(pi * along)`, so both ends stay pinned, with a decaying swing. One envelope drives both views:
+
+- **3D:** a `shake` uniform on `TETHER_STRAIN` alone, pushed per frame while it rings.
+- **2D:** the same envelope on the CPU.
+
+The shaft is sampled densely, because a two-point ribbon has nothing between its pinned ends to bend.
+
+**Photosensitivity (#217)** stills the dashes and the pluck. `BoardOverlays.beams_animating` became static so the flat view reads the same composed answer. The RED stays, so the message survives.
+
+### Squad Up from the leader ([#1043](https://github.com/Phaazoid/Godoiosis/issues/1043))
+
+A friend of the dev's formed a squad and then tried to grow it from the leader; a first-time player on stream had done the same. `can_create_any_squad` refused anyone with squadmates. It now refuses only a unit in somebody else's squad. `can_squad_up` never asked whether the squad being joined was solo.
+
+**The pick STAYS OPEN** while anyone could still join (ruled over one pick at a time), so a squad is built in one gesture:
+
+- `create_squad` re-enters itself from inside the pick's callback, which bumps `_pick_generation`, which is what #116 built so a pick can chain.
+- It re-asks the candidates after each join, since a join spends capacity.
+
+### Rulings (2026-09-22)
+
+| Question | Ruling |
+|---|---|
+| The moving dash, which #1042 had reserved for the aim's sight line | SHARED, told apart by colour (see the repeal note above) |
+| The out-of-range tiles | A grey grid |
+| Squad Up's pick | Stays open |
+| A refused click | Stays in Move and shakes |
+
+### Declared residuals
+
+- **A ghost cone is darker, not see-through.** The reach cone's shader is opaque by design and reads no alpha. If that reads wrong, the cone grows an alpha path, which is a second render mode and therefore a second shader file.
+- **The tether BREAKING** when a shove or melting ice ejects a member went to #423, with the correction comment's warning attached. Tethers are interaction-scoped, so at a settle point there is usually none on screen to snap, and the break has to be its own short-lived effect.
+- **What only the dev can judge:**
+  - dash size and speed;
+  - whether the range and the tethers read as one system;
+  - whether ghosts read as "maybe";
+  - the pluck's feel;
+  - whether grey reads as "walkable, not now";
+  - all of it in the flat view.
