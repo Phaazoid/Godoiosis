@@ -243,8 +243,7 @@ func _hover_attack_targeting(cell: Vector2i) -> void:
 			# say so before the click). Read against LIVE wetness, since that is what is true at the
 			# moment the player is aiming; a queued-but-unexecuted WATER order is threaded into the
 			# pass instead, and the queue row it produces is where that reading is honest.
-			var blast := Reach.get_affected_cells_from(attacker, origin, cell, aiming, board)
-			var reach := Conduction.sweep(attacker, aiming, blast, board)
+			var reach := Conduction.sweep(attacker, origin, cell, aiming, board)
 			preview_cells = reach.cells
 			# A null pick is bare fists -- unit-only by definition, so it has no hits_map/hits_units
 			# to ask and answers as UNIT.

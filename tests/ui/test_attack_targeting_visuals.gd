@@ -151,6 +151,21 @@ func test_reach_layer_is_green_for_a_healing_attack() -> void:
 #  Which channel pulses is the attack's `targets`
 # ==============================================================================
 
+# A SINGLE-TARGET swing previews only as far as its victim (#1057). The wash is the sweep's own
+# answer, so the path's tiles past the foe it stops at stay dark -- before #1057 the same path washed
+# all three, as an AoE swing still does.
+func test_a_path_swing_washes_only_as_far_as_its_victim() -> void:
+	var attacker := _armed_attacker(EquippableData.TargetMode.UNIT)
+	var main := (attacker.equipped_weapon as WeaponInstance).template.main_attack
+	main.max_range = 0
+	main.swing = true
+	var ahead: Array[Vector2i] = [Vector2i(0, -1), Vector2i(0, -2), Vector2i(0, -3)]
+	main.attack_shape = P.pathed([ahead] as Array[Array])
+	_aim_at(attacker, FOE_CELL)
+	var layer: TileMapLayer = game.overlay_manager.overlay_map[OverlayManager.OverlayType.HOVER]
+	assert_array(layer.get_used_cells()).contains_exactly([FOE_CELL])
+
+
 func test_a_unit_attack_pulses_the_unit_and_not_the_tiles() -> void:
 	var attacker := _armed_attacker(EquippableData.TargetMode.UNIT)
 

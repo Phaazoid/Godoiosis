@@ -277,6 +277,9 @@ static func get_all_attack_cells_from(unit: Unit, origin_cell: Vector2i, attack:
 #   no swing             -- a TRUE AoE: the whole stamp, through walls, each cell still asking the
 #                           attack's own vertical rule from the anchor. See _height_only.
 #
+# ...and a single-target swing (#1057) covers the tiles its paths WALK, see get_paths_from. This
+# stays one tile per entry whatever the paths revisit; who each path stops at is the gather's.
+#
 # A swing travels in parallel lanes and a blast propagates; those are different claims about what the
 # attack physically is, which is why they are two rules rather than one asked from two cells -- and
 # the third is a different claim again, that nothing between the anchor and a cell matters at all.
@@ -296,6 +299,8 @@ static func get_affected_cells_from(_unit: Unit, origin_cell: Vector2i, target_c
 			return swung
 		if not attack.swing:
 			return _height_only(swung, origin_cell, attack, board)
+		if attack.is_single_target_swing():
+			return _walked(swung, get_paths_from(_unit, origin_cell, target_cell, attack, board))
 		return _truncate(swung, origin_cell, dir, attack, board)
 	# AN ANCHORED SHAPE NEVER TURNS (#818): it lands exactly as drawn, grid-up reading as board
 	# north whatever direction the aim came from. Turning it to the attacker-to-target cardinal
@@ -313,7 +318,62 @@ static func get_affected_cells_from(_unit: Unit, origin_cell: Vector2i, target_c
 		return placed
 	if not attack.swing:
 		return _height_only(placed, target_cell, attack, board)
+	if attack.is_single_target_swing():
+		return _walked(placed, get_paths_from(_unit, origin_cell, target_cell, attack, board))
 	return _spread(placed, target_cell, attack, board)
+
+
+# THE PATHS A SINGLE-TARGET SWING WALKS (#1057), each placed and cut at the first tile the attack
+# cannot reach. Empty for any other attack, and for a facing with no cardinal.
+#
+# A tile survives when the tile before it on its path survived AND it passes the per-tile gate an
+# AoE swing of the same kind asks (dev, 2026-09-22): the lane from beside the shooter for a
+# self-anchored attack (_truncate's), the line from the impact for a placed one (_spread's). So the
+# path decides ORDER, and with it where the swing stops, never what it can reach -- a path cannot
+# curl round a wall, and a revisit past a failed tile does not resume it. A straight path forward
+# is bit-for-bit _truncate on a width-1 line, which is every shipped watch.
+#
+# Unit-blind like everything here: who stands on a tile, and so where each path is TAKEN, is
+# RulesService.gather_path_victims' question. A null board walks every tile ungated.
+static func get_paths_from(_unit: Unit, origin_cell: Vector2i, target_cell: Vector2i, attack: AttackData, board: BoardContext) -> Array[Array]:
+	var walked: Array[Array] = []
+	if attack == null or not attack.is_single_target_swing():
+		return walked
+	var anchor := target_cell
+	var dir := AttackShape.FORWARD
+	if attack.is_directional():
+		anchor = origin_cell
+		dir = GridUtils.cardinal_direction_i_between(origin_cell, target_cell)
+		if dir == Vector2i.ZERO:
+			return walked
+	for path in attack.attack_shape.place_paths(anchor, dir):
+		var kept: Array[Vector2i] = []
+		for cell: Vector2i in path:
+			if board != null and not _path_tile_ok(attack, anchor, dir, cell, board):
+				break
+			kept.append(cell)
+		if not kept.is_empty():
+			walked.append(kept)
+	return walked
+
+
+static func _path_tile_ok(attack: AttackData, anchor: Vector2i, dir: Vector2i, cell: Vector2i, board: BoardContext) -> bool:
+	if attack.is_directional():
+		return _lane_aim_ok(attack, anchor, _lane_base(cell, anchor, dir), cell, board)
+	return vertical_aim_ok(attack, anchor, cell, board)
+
+
+# The placed tiles the walked paths reach, in EMISSION order, each once -- _spread's survivors rule.
+static func _walked(cells: Array[Vector2i], paths: Array[Array]) -> Array[Vector2i]:
+	var reached: Dictionary[Vector2i, bool] = {}
+	for path in paths:
+		for cell: Vector2i in path:
+			reached[cell] = true
+	var out: Array[Vector2i] = []
+	for cell in cells:
+		if reached.has(cell):
+			out.append(cell)
+	return out
 
 
 # THE TRUNCATION (#756). A spread advances as a FRONT: each lane is judged from near to far, and the

@@ -21,7 +21,11 @@ class_name Watch
 var watcher: Unit                    # who is standing watch
 var anchor_cell: Vector2i            # the cell it was aimed FROM; leaving it drops the watch
 var aim_cell: Vector2i               # the cell it was aimed AT — the shot's target cell when it fires
-var footprint: Array[Vector2i] = []  # the watched cells, frozen
+var footprint: Array[Vector2i] = []  # the watched cells, frozen -- its paths back to back (#1057)
+# Where each path in `footprint` ends -- AttackShape's flat pair. EMPTY means ONE path, the whole
+# footprint in order, which is what a watch saved before #1057 was: every watch is single-target
+# (#1040), so a saved line reads back as the line it always was, nearest first.
+var path_lengths: Array[int] = []
 var attack: AttackData = null        # what fires; stamped at declare, never re-picked
 var spent := false                   # absorbed its one trigger
 # Broken by a blow (#810, dev 2026-09-09): the watcher was hit, so the watch is off. A SECOND fact
@@ -42,20 +46,21 @@ static var _next_sequence := 1
 # A watch with no arm stamp: the resolver's projection of an order that is still only queued.
 # Its position in the pass's list is its order, so it needs no sequence of its own.
 static func make(watching_unit: Unit, origin: Vector2i, aim: Vector2i,
-		watched_cells: Array[Vector2i], fired_attack: AttackData) -> Watch:
+		watched_cells: Array[Vector2i], fired_attack: AttackData, lengths: Array[int] = []) -> Watch:
 	var w := Watch.new()
 	w.watcher = watching_unit
 	w.anchor_cell = origin
 	w.aim_cell = aim
 	w.footprint = watched_cells.duplicate()
+	w.path_lengths = lengths.duplicate()
 	w.attack = fired_attack
 	return w
 
 
 # A watch that is actually going live on a unit, stamped with its arm order.
 static func arm(watching_unit: Unit, origin: Vector2i, aim: Vector2i,
-		watched_cells: Array[Vector2i], fired_attack: AttackData) -> Watch:
-	var w := make(watching_unit, origin, aim, watched_cells, fired_attack)
+		watched_cells: Array[Vector2i], fired_attack: AttackData, lengths: Array[int] = []) -> Watch:
+	var w := make(watching_unit, origin, aim, watched_cells, fired_attack, lengths)
 	w.sequence = _next_sequence
 	_next_sequence += 1
 	return w
@@ -64,7 +69,7 @@ static func arm(watching_unit: Unit, origin: Vector2i, aim: Vector2i,
 # The resolver's working copy for one pass. The pass marks copies spent as they fire; the live
 # watch is spent by EXECUTION, once, off the outcome that used it (GuardWard's rule).
 func copy() -> Watch:
-	var w := make(watcher, anchor_cell, aim_cell, footprint, attack)
+	var w := make(watcher, anchor_cell, aim_cell, footprint, attack, path_lengths)
 	w.spent = spent
 	w.cancelled = cancelled
 	w.sequence = sequence
@@ -120,3 +125,12 @@ func is_anchored(watcher_cell: Vector2i) -> bool:
 
 func covers(cell: Vector2i) -> bool:
 	return footprint.has(cell)
+
+
+# The footprint read back as the paths the shot walks, each in its own order.
+func paths() -> Array[Array]:
+	if not path_lengths.is_empty():
+		return AttackShape.split_paths(footprint, path_lengths)
+	var one: Array[Array] = []
+	one.append(footprint.duplicate())
+	return one

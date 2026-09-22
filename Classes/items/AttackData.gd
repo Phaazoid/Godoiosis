@@ -221,6 +221,13 @@ func targets_text() -> String:
 func is_directional() -> bool:
 	return max_range == 0
 
+
+# A SINGLE-TARGET swing (#1054): Swing on, and a shape drawn as paths. Each path takes the first
+# valid target it reaches and stops there (Reach.get_paths_from walks them). Derived from two files,
+# the flag here and the paths on the shape, so it is asked rather than stored.
+func is_single_target_swing() -> bool:
+	return swing and attack_shape != null and attack_shape.is_path_shape()
+
 # The sentence under the Attack Editor's stamp grid, which has to say what the CENTRE is -- and
 # that is the ANCHOR rule, so the attack answers it rather than the widget or the shape. The SHAPE
 # cannot: it holds no range, which is the whole reason this lives here after #808. Reads through
@@ -347,7 +354,7 @@ static func property_tips() -> Dictionary:
 		"max_range": "Placed at range OFF is max range 0, and it is a different kind of attack rather than a shorter one: the shape sits on the ATTACKER and the aim is a FACING -- the player points a direction and the whole shape TURNS to fire that way. That is what a cleave or a line is.\nON, this is the FURTHEST cell the attack can be aimed at, in Manhattan steps (no diagonals). The shape is PLACED on the aimed cell and never turns: it lands exactly as you drew it, so the grid's top is board north rather than a facing.",
 		"max_and_a_half": "Adds a half step to the outer ring, bevelling its diagonal corners -- a reach of 2 and a half rather than 2 or 3.",
 		"attack_shape": "The SHAPE this attack covers once aimed, picked from the shared library. Shapes are shared BY REFERENCE: editing one changes every attack that uses it. No shape at all = the aimed cell alone.",
-		"swing": "Does this attack STOP at what it meets?\nON, it travels: a shape on the attacker is cut short wherever a lane cannot reach, and one placed at range spreads outward from where it lands -- so a wall shields whatever stands behind it. That is what every shaped attack did before this box existed.\nOFF, it is a TRUE AoE: every cell of the shape lands at once, straight through walls.\nHeight applies either way -- a cell outside this attack's up/down tolerance is missed whichever way this is set.",
+		"swing": "Does this attack STOP at what it meets?\nON, it travels: a shape on the attacker is cut short wherever a lane cannot reach, and one placed at range spreads outward from where it lands -- so a wall shields whatever stands behind it. That is what every shaped attack did before this box existed.\nOFF, it is a TRUE AoE: every cell of the shape lands at once, straight through walls.\nON with a shape drawn as PATHS, it is a single-target swing: each path takes the first valid target it reaches and stops there.\nHeight applies either way -- a cell outside this attack's up/down tolerance is missed whichever way this is set.",
 		"can_counter": "May this attack be used when countering? A weapon always counters with its MAIN attack whatever is picked, so this only matters on a main.",
 		"hits_allies": "Splash reaches your own side too, not just enemies.",
 		"hits_self": "The attacker is a legal victim of its own attack.",

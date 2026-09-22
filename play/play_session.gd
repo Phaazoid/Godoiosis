@@ -171,8 +171,7 @@ func legal_targets(handle: String) -> Dictionary:
 			continue
 		# Through Conduction, so a shock aim whose casualties arrive by the arc is OFFERED here and
 		# ACCEPTED by queue_attack below -- the two gates are the same gate, stated twice.
-		var victims := Conduction.sweep(unit, aiming, \
-				Reach.get_affected_cells_from(unit, origin, aim, aiming, board), board).victims
+		var victims := Conduction.sweep(unit, origin, aim, aiming, board).victims
 		if victims.is_empty():
 			continue   # queue_attack refuses an aim that hits nobody; so does this
 		var names: Array[String] = []
@@ -254,9 +253,8 @@ func queue_attack(handle: String, aim: Vector2i) -> Dictionary:
 	# mirroring the player's click exactly.
 	if not Reach.can_hit_cell_from(unit, origin, aim, aiming, _board()):
 		return {"ok": false, "error": "%s cannot hit %s from %s" % [handle, str(aim), str(origin)]}
-	var affected := Reach.get_affected_cells_from(unit, origin, aim, aiming, _board())
 	# The current is reach here too, matching legal_targets and the game's own queue gate.
-	var victims := Conduction.sweep(unit, aiming, affected, _board()).victims
+	var victims := Conduction.sweep(unit, origin, aim, aiming, _board()).victims
 	if victims.is_empty():
 		return {"ok": false, "error": "no valid targets at %s" % str(aim)}
 	# Store ONE aim order (target=null); resolve_plan derives the volley/victims at resolve time

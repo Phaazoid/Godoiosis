@@ -775,11 +775,14 @@ func lapse_guard() -> void:
 #
 # `spent` carries the same fact GuardAction.resolved_spent does: a watch its own pass's shove combo
 # already fired must arm used, and OverwatchAction.execute is the only caller that can know.
+#
+# `path_lengths` splits the cells into the paths the shot walks (#1057). Empty is ONE path, which is
+# the persisted meaning too, so a caller with a single line need not spell it.
 func arm_watch(origin: Vector2i, aim_cell: Vector2i, watched_cells: Array[Vector2i],
-		attack: AttackData, spent := false, cancelled := false) -> void:
+		attack: AttackData, spent := false, cancelled := false, path_lengths: Array[int] = []) -> void:
 	if attack == null or watched_cells.is_empty():
 		return
-	watch = Watch.arm(self, origin, aim_cell, watched_cells, attack)
+	watch = Watch.arm(self, origin, aim_cell, watched_cells, attack, path_lengths)
 	watch.spent = spent
 	watch.cancelled = cancelled   # #810: a save taken after a blow broke the watch restores it broken
 

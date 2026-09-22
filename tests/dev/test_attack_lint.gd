@@ -89,6 +89,35 @@ func test_a_path_shape_with_sound_paths_is_clean() -> void:
 	assert_array(AttackLint.check(attack)).is_empty()
 
 
+# #1057: a self-anchored single-target swing with Hits Self whose path visits the attacker's own
+# tile always stops there -- the wielder is always standing on it -- so what follows never lands.
+func test_a_hits_self_swing_through_its_own_tile_degrades_and_says_where() -> void:
+	var through := [Vector2i(0, 0), Vector2i(0, -1)] as Array[Vector2i]
+	var attack := _pathed_attack([through] as Array[Array])
+	attack.max_range = 0
+	attack.swing = true
+	attack.hits_self = true
+	var found := AttackLint.check(attack)
+	assert_int(found.size()).is_equal(1)
+	assert_int(found[0]["severity"]).is_equal(AttackLint.Severity.DEGRADES)
+	var text: String = found[0]["text"]
+	assert_str(text).contains("path 1")
+	assert_str(text).contains("step 1")
+
+
+# The same path is clean without Hits Self (the wielder is passed through) and without Swing (a true
+# AoE walks no path at all).
+func test_a_swing_through_its_own_tile_is_clean_without_hits_self_or_swing() -> void:
+	var through := [Vector2i(0, 0), Vector2i(0, -1)] as Array[Vector2i]
+	var attack := _pathed_attack([through] as Array[Array])
+	attack.max_range = 0
+	attack.swing = true
+	assert_array(AttackLint.check(attack)).is_empty()
+	attack.hits_self = true
+	attack.swing = false
+	assert_array(AttackLint.check(attack)).is_empty()
+
+
 func test_a_shapeless_attack_is_fireable_rather_than_flagged() -> void:
 	# A shapeless attack covers the cell it is aimed at, and bare fists reach adjacency through
 	# Reach own fallback -- flagging either would be a false positive, and is exactly what reading

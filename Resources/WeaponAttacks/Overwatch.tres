@@ -1,8 +1,8 @@
 [gd_resource type="Resource" script_class="WeaponAttackData" format=3 uid="uid://b82qw8n45g5o2"]
 
+[ext_resource type="Resource" uid="uid://b75d7k6eeqsrt" path="res://Resources/AttackShapes/Path Line 4.tres" id="1_hdsxh"]
 [ext_resource type="Script" uid="uid://dle5ob08qngde" path="res://Classes/presentation/EffectLook.gd" id="2_hdsxh"]
 [ext_resource type="Script" uid="uid://ddqeee7njjjq2" path="res://Classes/weapons/WeaponAttackData.gd" id="2_wad"]
-[ext_resource type="Resource" uid="uid://c6rr2o2dxu4hj" path="res://Resources/AttackShapes/Line 4.tres" id="3_shape0"]
 
 [resource]
 script = ExtResource("2_wad")
@@ -15,7 +15,7 @@ consumes_readiness = true
 display_name = "Overwatch"
 power = 4
 max_range = 0
-attack_shape = ExtResource("3_shape0")
+attack_shape = ExtResource("1_hdsxh")
 swing = true
 can_overwatch = true
 damage_kind = 2

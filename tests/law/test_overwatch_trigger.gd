@@ -466,9 +466,11 @@ func test_an_older_watch_over_the_same_cell_does_not_eat_the_arm_trigger() -> vo
 	_break_volleys(plan)
 
 
-# One trigger, and the shot sweeps the frozen footprint anyway -- so a second occupant is hit
-# without spending a watch of its own, exactly as a crossing shot splashes a bystander.
-func test_an_arm_fired_shot_sweeps_the_whole_footprint() -> void:
+# One trigger, ONE target (#1040, dev 2026-09-18: "only hit the first enemy they encounter, ever").
+# Two enemies stand in the line as it arms and the shot takes the NEARER, where until #1057 it swept
+# the frozen footprint and hit both. The line is painted rather than drawn as a path, so this is also
+# the every-watch-is-single-target rule: a watch walks its whole footprint as one path, nearest first.
+func test_an_arm_fired_shot_hits_only_the_nearest_in_its_line() -> void:
 	var watcher := _line_watcher()
 	var near := H.spawn_solo(self, _sm, PLAYER, Vector2i(1, 0), {Stats.Stat.MHP: 60}, false)
 	var far := H.spawn_solo(self, _sm, PLAYER, Vector2i(3, 0), {Stats.Stat.MHP: 60}, false)
@@ -478,7 +480,9 @@ func test_an_arm_fired_shot_sweeps_the_whole_footprint() -> void:
 	var hit: Array[Unit] = []
 	for shot in plan.watch_shots:
 		hit.append(shot.target)
-	assert_array(hit).contains_exactly_in_any_order([near, far])
+	assert_array(hit).override_failure_message(
+			"the watch shot swept its footprint -- it hit %d units, not just the nearer" % hit.size()) \
+		.contains_exactly([near])
 	_break_volleys(plan)
 
 

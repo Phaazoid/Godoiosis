@@ -837,14 +837,17 @@ func _resolve_actions(squad: Squad, actions: Array[BaseAction], board: BoardCont
 			if not PlanResolver.actor_is_live(watch_order.actor, hypo):
 				watch_order.resolved_anchor = Vector2i.ZERO
 				watch_order.resolved_footprint = []
+				watch_order.resolved_path_lengths = []
 				continue
 			var watch_origin := watch_order.actor.get_projected_destination()
-			var watched := watch_order.watched_cells_from(watch_origin, board)
+			var watched := watch_order.watched_paths_from(watch_origin, board)
 			watch_order.resolved_anchor = watch_origin
-			watch_order.resolved_footprint = watched
-			if not watched.is_empty():
+			watch_order.resolved_footprint = AttackShape.joined_cells(watched)
+			watch_order.resolved_path_lengths = AttackShape.joined_lengths(watched)
+			if not watch_order.resolved_footprint.is_empty():
 				var armed := Watch.make(watch_order.actor, watch_origin, watch_order.target_cell,
-						watched, watch_order.fired_attack)
+						watch_order.resolved_footprint, watch_order.fired_attack,
+						watch_order.resolved_path_lengths)
 				plan.watches.append(armed)
 				watch_orders[armed] = watch_order
 				armed_this_pass.append(armed)
@@ -853,11 +856,10 @@ func _resolve_actions(squad: Squad, actions: Array[BaseAction], board: BoardCont
 			continue
 		var aim := action as AttackAction
 		var origin := aim.actor.get_projected_destination()
-		var blast := Reach.get_affected_cells_from(aim.actor, origin, aim.target_cell, aim.fired_attack, board)
 		# The current travels once the blast lands, judged against THIS pass's own wetness (E4): a
 		# target an earlier order in the same plan soaked conducts for this one, which is the whole
 		# of the water-then-shock combo previewing correctly.
-		var reach := Conduction.sweep(aim.actor, aim.fired_attack, blast, board, hypo)
+		var reach := Conduction.sweep(aim.actor, origin, aim.target_cell, aim.fired_attack, board, hypo)
 		var affected := reach.cells
 		var victims := reach.victims
 		var group: Array[AttackAction] = []
@@ -877,9 +879,11 @@ func _resolve_actions(squad: Squad, actions: Array[BaseAction], board: BoardCont
 			group = AttackAction.create_volley(aim.actor, origin, aim.target_cell, victims, aim.fired_attack, affected, reach.links)
 
 		# Back-link every derived action to the order that produced it -- read by the whiff clause
-		# and the queue row's tint. One place, so a new expansion branch can't forget it.
+		# and the queue row's tint -- and stamp the tiles it struck, which is where its element lands
+		# (#1057). One place, so a new expansion branch can't forget either.
 		for atk in group:
 			atk.source_aim = aim
+			atk.struck_cells = reach.struck
 		plan.attacks.append_array(group)
 
 		# Resolve THIS aim, then publish its shoves as projected positions — so the next aim's
@@ -922,13 +926,13 @@ func _resolve_actions(squad: Squad, actions: Array[BaseAction], board: BoardCont
 		# victim -- #148's bug one layer down from where it was reported. A player-AIMED heal keeps
 		# its enemy splash; that is agency, and only the derived reaction is restricted (dev call).
 		var healing := c_attack != null and c_attack.heals
-		var c_blast := Reach.get_affected_cells_from(aim.actor, c_origin, c_aim_cell, c_attack, board)
 		# A counter is an attack like any other, so a shock counter arcs (E7 -- counters are in the
 		# chain). Its current reads the hypo the attacks have already resolved into.
-		var c_reach := Conduction.sweep(aim.actor, c_attack, c_blast, board, hypo, healing)
+		var c_reach := Conduction.sweep(aim.actor, c_origin, c_aim_cell, c_attack, board, hypo, healing)
 		var c_affected := c_reach.cells
 		var c_victims := c_reach.victims
 		for ctr in CounterAttackAction.create_counter_volley(aim.actor, c_origin, c_victims, aim.source_attack, c_affected, c_reach.links):
+			ctr.struck_cells = c_reach.struck
 			plan.counters.append(ctr)
 	# Phase 2: counters, now built from post-shove positions.
 	PlanResolver.resolve_counters(plan, hypo, reactions, board, terrain_reactions)

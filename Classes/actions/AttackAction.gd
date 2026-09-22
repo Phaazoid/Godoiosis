@@ -26,6 +26,12 @@ var footprint: Array[Vector2i] = []
 # resolver's hypo and is gone by the time anything plays back. Re-deriving it at execution would
 # read the live board and quietly disagree with the volley it is drawing (R3).
 var arc_links: Array[Conduction.Link] = []
+# The tiles the attack ITSELF struck, each once (Conduction.Sweep.struck): the footprint without the
+# current, and for a single-target swing each path only as far as its victim. What its element lands
+# on -- PlanResolver._resolve_cell_effects reads this and never re-asks Reach (#1057), since the
+# victims that cut the paths are the pass's own answer and gone by the time anything re-asks.
+# Stamped beside the footprint by every site that builds a volley; empty deposits nothing.
+var struck_cells: Array[Vector2i] = []
 var target_texture: Texture2D
 var target_name := "Target"
 var is_secondary_hit := false

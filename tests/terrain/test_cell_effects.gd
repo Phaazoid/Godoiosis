@@ -48,6 +48,8 @@ func _resolve(plan: ResolvedPlan, reactions: Array[TerrainReaction], kinds: Dict
 	var no_reactions: Array[ElementalReaction] = []
 	var no_units: Array[Unit] = []
 	var board: _StubBoard = _StubBoard.new(null, no_units, null, kinds)
+	for atk in plan.attacks + plan.counters:
+		H.stamp_struck(atk, board)
 	PlanResolver.resolve(plan, no_reactions, board, reactions)
 	return plan
 

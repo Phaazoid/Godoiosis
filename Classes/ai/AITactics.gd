@@ -391,11 +391,10 @@ static func _attack_candidates(unit: Unit, board: BoardContext, origin: Vector2i
 			# a whole spread over one unreachable target.
 			if not Reach.is_directional_attack(attack) and not Reach.vertical_aim_ok(attack, origin, at, board):
 				continue
-			var affected := Reach.get_affected_cells_from(unit, origin, at, attack, board)
 			# The current counts as reach: an aim into water whose only casualties arrive by the arc
 			# is a real candidate, and one that would fry the AI's own side is priced by the ordinary
 			# score, since the arc's victims resolve as volley members like any other.
-			if Conduction.sweep(unit, attack, affected, board).victims.is_empty():
+			if Conduction.sweep(unit, origin, at, attack, board).victims.is_empty():
 				continue
 			unit.active_attack = attack
 			out.append(AttackAction.declare(unit, origin, at))

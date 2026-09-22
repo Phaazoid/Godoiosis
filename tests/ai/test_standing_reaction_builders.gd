@@ -98,7 +98,7 @@ func test_a_queued_watch_always_has_a_real_footprint() -> void:
 	assert_vector(watch.target_cell).override_failure_message(
 			"the watch aimed at its own cell -- that footprint is empty and arms nothing"
 			).is_not_equal(watcher.movement.cell)
-	assert_int(watch.watched_cells_from(watcher.movement.cell, _context(board)).size()).override_failure_message(
+	assert_int(watch.watched_paths_from(watcher.movement.cell, _context(board)).size()).override_failure_message(
 			"the queued watch covers no cells, so arm_watch will silently refuse it").is_greater(0)
 
 

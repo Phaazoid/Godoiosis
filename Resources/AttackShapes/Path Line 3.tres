@@ -1,0 +1,10 @@
+[gd_resource type="Resource" script_class="AttackShape" format=3 uid="uid://2yqqa4yxo8sq"]
+
+[ext_resource type="Script" uid="uid://cjmftk6nqeklw" path="res://Classes/weapons/patterns/AttackShape.gd" id="1_bh4w4"]
+
+[resource]
+script = ExtResource("1_bh4w4")
+display_name = "Path Line 3"
+stamp = Array[Vector2i]([])
+path_cells = Array[Vector2i]([Vector2i(0, -1), Vector2i(0, -2), Vector2i(0, -3)])
+path_lengths = Array[int]([3])

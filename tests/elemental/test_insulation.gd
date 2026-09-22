@@ -353,6 +353,7 @@ func test_the_ground_is_not_insulated() -> void:
 	var no_units: Array[Unit] = []
 	var terrain: Array[TerrainReaction] = [shock_burns_tree]
 	var board: _StubBoard = _StubBoard.new(null, no_units, null, { TREE_CELL: Terrain.Kind.TREE })
+	H.stamp_struck(atk, board)
 	PlanResolver.resolve(plan, no_reactions, board, terrain)
 
 	assert_int(plan.cell_effects.size()).is_equal(1)

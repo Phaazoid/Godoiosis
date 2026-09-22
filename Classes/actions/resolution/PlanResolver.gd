@@ -318,10 +318,10 @@ static func fire_watch_entries(entrants: Array, plan: ResolvedPlan, hypo: Dictio
 # the player just spent a main action on. The CASCADE below is deliberately unscoped — a knock-on
 # is an ordinary entry and may reach any watch.
 #
-# One entrant is enough. The shot sweeps the frozen footprint (_derive_watch_shot gathers over the
-# cells, not over the entrant), so every other occupant is hit without spending a trigger of its
-# own, and the pick only decides `triggered_by` — who the camera frames. Footprint order is the
-# same cell-first walk the volley itself uses.
+# One entrant is enough, and the pick only decides `triggered_by` — who the camera frames. The shot
+# walks the watch's own paths and takes the first valid target on each (_derive_watch_shot, #1040),
+# which need not be the unit that set it off: a body in front absorbs it, and a nearer valid ally
+# takes it. Footprint order is path order, so the first path is asked first.
 static func fire_watch_on_arm(watch: Watch, plan: ResolvedPlan, hypo: Dictionary,
 		reactions: Array[ElementalReaction], board: BoardContext, terrain_reactions: Array[TerrainReaction],
 		during: BaseAction) -> void:
@@ -412,43 +412,38 @@ static func _break_watch_on(target: Unit, plan: ResolvedPlan, outcome: ResolvedO
 		return
 
 
-# The shot itself, as an ordinary volley fired from the anchor cell. Victims are gathered over the
-# FROZEN footprint against THREADED positions, so a bystander who has not moved yet is where they
-# started — RulesService.is_attack_victim is asked the identical question the live gather asks, which
-# is exactly why it was split out of gather_attack_victims.
+# The shot itself, as an ordinary volley fired from the anchor cell. EVERY WATCH SHOT IS SINGLE-TARGET
+# (#1040, dev 2026-09-18: "only hit the first enemy they encounter, ever"): the watch's FROZEN paths
+# are walked through Conduction.sweep_paths against THREADED positions, so a bystander who has not
+# moved yet is where they started, each path stops at its first valid target, and the current is
+# seeded only from what the shot struck. RulesService.is_attack_victim is asked the identical
+# question an aim's gather asks -- this is that gather with a different answer to who stands where.
+#
+# The sweep works on copies, so the armed watch is left alone -- re-arming it over the current would
+# let the arc grow the watched cells with every trigger.
 static func _derive_watch_shot(watch: Watch, entrant: Unit, board: BoardContext, hypo: Dictionary) -> Array[AttackAction]:
-	var victims: Array[Unit] = []
-	for cell in watch.footprint:
-		var unit := _unit_threaded_at(cell, board, hypo)
-		if unit == null or victims.has(unit):
-			continue
-		if RulesService.is_attack_victim(watch.watcher, unit, watch.attack):
-			victims.append(unit)
-	# A watch shot conducts like any other attack. Its footprint is the watch's own STORED one, so the
-	# widened copy is what the shot carries and the armed watch is left alone -- re-arming it over the
-	# current would let the arc grow the watched cells with every trigger.
-	var current := Conduction.flood(watch.watcher, watch.attack, watch.footprint, board, hypo)
-	victims.append_array(Conduction.caught(current.cells, board, hypo, victims))
-	var covered := Conduction.widened(watch.footprint, current.cells)
+	var reach := Conduction.sweep_paths(watch.watcher, watch.attack, watch.paths(), board, hypo, false,
+			PlanResolver._unit_threaded_at.bind(board, hypo))
 	var group: Array[AttackAction] = []
-	if victims.is_empty():
+	if reach.victims.is_empty():
 		# #47's rule: a shot with nobody left in the footprint still resolves as a cell attack. Only
 		# reachable through a chain that shoved the crosser out before this watch fired.
 		var cell_shot := AttackAction.create(watch.watcher, watch.anchor_cell, null, watch.aim_cell)
 		cell_shot.fired_attack = watch.attack
-		cell_shot.footprint = covered
-		cell_shot.arc_links = current.links
+		cell_shot.footprint = reach.cells
+		cell_shot.arc_links = reach.links
 		group.append(cell_shot)
 	else:
-		group = AttackAction.create_volley(watch.watcher, watch.anchor_cell, watch.aim_cell, victims, watch.attack, covered, current.links)
+		group = AttackAction.create_volley(watch.watcher, watch.anchor_cell, watch.aim_cell, reach.victims, watch.attack, reach.cells, reach.links)
 	for shot in group:
 		shot.is_watch_shot = true
 		shot.triggered_by = entrant
+		shot.struck_cells = reach.struck
 	return group
 
 
-# Cell-first, matching gather_attack_victims' own iteration, so a watch shot's volley order is the
-# order every other volley uses and the HP threading inside it cannot differ.
+# Who stands on `cell` against THIS pass's threaded positions -- the occupancy a watch shot's gather
+# is handed (Conduction.sweep_paths, #1057). First unit wins, like every other cell-first lookup.
 static func _unit_threaded_at(cell: Vector2i, board: BoardContext, hypo: Dictionary) -> Unit:
 	for unit: Unit in board.units:
 		if is_instance_valid(unit) and projected_position(unit, hypo) == cell:
@@ -1169,11 +1164,11 @@ static func _resolve_cell_effects(action: AttackAction, board: BoardContext, ter
 	var elements := _source_elements(action)
 	if elements.is_empty():
 		return effects
-	# The footprint is the SAME geometry the volley fired over, because both are derived from this
-	# order's own stamped attack (#102) — not, as before, from whatever the attacker happens to
-	# have picked right now. The deposit lands exactly where the blast did — every cell, occupied
-	# or not.
-	for cell in Reach.get_affected_cells_from(attacker, action.origin_cell, action.target_cell, action.fired_attack, board):
+	# The deposit lands on the tiles the attack STRUCK -- every one, occupied or not -- as stamped by
+	# whoever built the volley (#1057). Not re-derived from Reach: a single-target swing stops at its
+	# victim, and who that was is this pass's answer, gone by the time anything could re-ask; and a
+	# watch shot's geometry was frozen when it armed. Once per tile, however often a path revisits it.
+	for cell in action.struck_cells:
 		var effect := _resolve_cell_effect_at(cell, elements, board, terrain_reactions)
 		if effect != null:
 			effects.append(effect)

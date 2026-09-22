@@ -265,6 +265,36 @@ static func gather_attack_victims(attacker: Unit, affected_cells: Array[Vector2i
 			victims.append(unit)
 	return victims
 
+
+# One path of a single-target swing, walked against who stands where: the tiles it struck, ending on
+# its victim's when it took one, and that victim -- null when it took nobody.
+class PathHit extends RefCounted:
+	var cells: Array[Vector2i] = []
+	var victim: Unit = null
+
+
+# THE SINGLE-TARGET GATHER (#1054, #1057), gather_attack_victims' sibling: each walked path takes the
+# first VALID occupant and stops there. is_attack_victim decides valid, so an ally the attack cannot
+# hit is passed through (ruling 8) and a downed enemy is an ordinary target that absorbs the swing
+# (ruling 9). No dedup across paths -- two paths reaching one unit are two hits (ruling 7).
+#
+# Occupancy is a PARAMETER (Unit.projected_cell's axes-as-parameters shape): an aim asks the board's
+# projected answer and a watch shot asks the resolver's threaded one, so one rule has two sources of
+# who is standing where and each caller states its own.
+static func gather_path_victims(attacker: Unit, paths: Array[Array], attack: AttackData,
+		occupant_at: Callable, allies_only := false) -> Array[PathHit]:
+	var hits: Array[PathHit] = []
+	for path in paths:
+		var hit := PathHit.new()
+		for cell: Vector2i in path:
+			hit.cells.append(cell)
+			var unit: Unit = occupant_at.call(cell)
+			if is_attack_victim(attacker, unit, attack, allies_only):
+				hit.victim = unit
+				break
+		hits.append(hit)
+	return hits
+
 # Would this attack hit that unit if it ended up in the footprint? Split out of the gather so
 # SquadPlanValidator asks the identical question with no board. Friendly fire is a property of the
 # ATTACK BEING FIRED, not of whatever the attacker last aimed with (#102).

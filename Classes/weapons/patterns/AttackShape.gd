@@ -45,8 +45,8 @@ class_name AttackShape
 # then each tile in the order the attack reaches it, one path per swing; a tile may be revisited but
 # never twice in a row. A path shape's tiles are exactly the tiles its paths visit, so tiles() is the
 # one answer to what a shape covers and place() lays those down; the stamp is empty on a path shape.
-# Resolving a path as a single-target swing is #1057's -- until then a path shape fires as an AoE
-# over its tiles.
+# place_paths() lays the paths down in their own order, which is what Reach walks when the attack
+# swings (#1057); with Swing off a path shape is a true AoE over its tiles.
 #
 # Stored FLAT rather than as sub-resources: path_cells holds every path back to back and
 # path_lengths says where each ends. A LibraryField copy is a shallow duplicate, which would share
@@ -87,6 +87,19 @@ func place(anchor: Vector2i, dir: Vector2i) -> Array[Vector2i]:
 	var out: Array[Vector2i] = []
 	for key in keys:
 		out.append(keyed[key])
+	return out
+
+
+# Each path turned and set down exactly as place() turns a tile, but in the path's own order and
+# with its revisits kept -- the order IS the swing. Empty for a painted shape.
+func place_paths(anchor: Vector2i, dir: Vector2i) -> Array[Array]:
+	var side := Vector2i(-dir.y, dir.x)
+	var out: Array[Array] = []
+	for path in split_paths(path_cells, path_lengths):
+		var placed: Array[Vector2i] = []
+		for offset: Vector2i in path:
+			placed.append(anchor + dir * -offset.y + side * offset.x)
+		out.append(placed)
 	return out
 
 
@@ -180,7 +193,7 @@ static func property_tips() -> Dictionary:
 	return {
 		"display_name": "What this shape is called in the Attack Editor's shape picker. Name it after the SHAPE, not the attack that first used it -- other attacks will pick it up.",
 		"stamp": "The cells the attack COVERS once aimed, as offsets from where it lands. Click them on the grid: the centre is where the attack lands, and the cell above it is one step toward the top of the grid.\nWhat the top MEANS depends on the attack's range. Max range 0 = the attacker's FACING, and the whole shape turns to wherever they point. Any other range = board NORTH, and the shape lands exactly as drawn however you aim it.\nAn empty stamp covers nothing.",
-		"path_cells": "A PATH shape: the tiles a single-target swing hits, in order, drawn in the grid's Paths mode. Pick a path, then click tiles in the order the attack reaches them; the first click is where the swing starts. Each path is its own swing. A tile may be revisited, but never twice in a row.\nA shape is either painted tiles or paths: a path shape's tiles are exactly the ones its arrows touch. Switching modes clears the other kind, after a confirm.\nUntil single-target resolution lands, a path shape fires as an AoE over its tiles.",
+		"path_cells": "A PATH shape: the tiles a single-target swing hits, in order, drawn in the grid's Paths mode. Pick a path, then click tiles in the order the attack reaches them; the first click is where the swing starts. Each path is its own swing. A tile may be revisited, but never twice in a row.\nA shape is either painted tiles or paths: a path shape's tiles are exactly the ones its arrows touch. Switching modes clears the other kind, after a confirm.\nWith Swing on, each path takes the first valid target it reaches and stops there, and a tile the attack cannot reach ends that path. With Swing off, the shape is a true AoE over its tiles.",
 		"path_lengths": "How many tiles each path holds, in path order. The grid writes it; it is what splits Path Cells into separate paths.",
 	}
 

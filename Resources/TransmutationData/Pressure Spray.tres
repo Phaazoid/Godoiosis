@@ -1,6 +1,6 @@
 [gd_resource type="Resource" script_class="TransmutationData" format=3 uid="uid://ckkjkgfexqy2u"]
 
-[ext_resource type="Resource" uid="uid://bow4n5t5o3t8v" path="res://Resources/AttackShapes/Line 3.tres" id="1_ytj11"]
+[ext_resource type="Resource" uid="uid://2yqqa4yxo8sq" path="res://Resources/AttackShapes/Path Line 3.tres" id="1_ytj11"]
 [ext_resource type="Script" uid="uid://dle5ob08qngde" path="res://Classes/presentation/EffectLook.gd" id="2_abhgi"]
 [ext_resource type="Script" uid="uid://bgbidu2bbf33l" path="res://Classes/alchemy/TransmutationData.gd" id="3_t8oom"]
 

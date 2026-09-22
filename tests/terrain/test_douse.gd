@@ -47,6 +47,7 @@ func _resolve(attacker: Unit, board: _KindBoard) -> ResolvedPlan:
 	aim.fired_attack = attacker.get_fired_attack()
 	plan.attacks.append(aim)
 	var no_reactions: Array[ElementalReaction] = []
+	H.stamp_struck(aim, board)
 	PlanResolver.resolve(plan, no_reactions, board, TerrainReactionCatalog.get_all())
 	return plan
 
