@@ -204,30 +204,53 @@ func _rebuild() -> void:
 	_notice_scales = ""
 	_setting_checks.clear()
 	_build_playback_header()
-	var group := ""
-	for knob: Dictionary in GameKnobs.KNOBS:
-		var knob_group: String = knob["group"]
-		var rows := _rows_for_group(knob_group)
-		if knob_group != group:
-			group = knob_group
-			DevWidgets.add_heading(rows, knob_group)
-			_build_group_header(rows, knob_group)
-		_remember_filter(knob, DevWidgets.add_knob_row(rows, knob, LookKnobs.read(_host, knob),
-			func(value: Variant) -> void:
-				LookKnobs.write(_host, knob, value)
-				_touch(),
-			tip_for(knob)))
-	group = ""
-	for knob: Dictionary in GameKnobs.CLASS_KNOBS:
-		var knob_group: String = knob["group"]
-		var rows := _rows_for_group(knob_group)
-		if knob_group != group:
-			group = knob_group
-			DevWidgets.add_heading(rows, knob_group)
-			_build_group_header(rows, knob_group)
-		_build_class_row(rows, knob)
+	# GROUP-MAJOR since #1074: one heading per section, then that section's node-property rows and its
+	# class-value rows together. A section is a SUBJECT, so it may draw from both tables -- the
+	# table-major loop this replaced could not, which is why the reach mark's controls sat on two
+	# tabs, and why a group whose rows were not contiguous drew its heading twice.
+	var node_rows := _bucket_by_group(GameKnobs.KNOBS)
+	var class_rows := _bucket_by_group(GameKnobs.CLASS_KNOBS)
+	for group: String in section_order():
+		var rows := _rows_for_group(group)
+		DevWidgets.add_heading(rows, group)
+		_build_group_header(rows, group)
+		for knob: Dictionary in node_rows.get(group, []):
+			_remember_filter(knob, DevWidgets.add_knob_row(rows, knob, LookKnobs.read(_host, knob),
+				func(value: Variant) -> void:
+					LookKnobs.write(_host, knob, value)
+					_touch(),
+				tip_for(knob)))
+		for knob: Dictionary in class_rows.get(group, []):
+			_build_class_row(rows, knob)
 	_apply_playback_filter()
 	_tabs.current_tab = clampi(showing, 0, maxi(0, _tabs.get_tab_count() - 1))
+
+
+# The order the sections are drawn in: GROUP_TABS' own declaration order, which is therefore both the
+# tab order and the order inside each tab. Only groups that HAVE a row are listed, and a group no tab
+# names is appended at the end rather than dropped -- _rows_for_group then says so, loudly.
+static func section_order() -> Array[String]:
+	var used := {}
+	for knob: Dictionary in GameKnobs.KNOBS + GameKnobs.CLASS_KNOBS:
+		used[knob["group"]] = true
+	var order: Array[String] = []
+	for group: String in GameKnobs.GROUP_TABS:
+		if used.has(group):
+			order.append(group)
+	for group: String in used:
+		if not order.has(group):
+			order.append(group)
+	return order
+
+
+static func _bucket_by_group(table: Array[Dictionary]) -> Dictionary:
+	var buckets := {}
+	for knob: Dictionary in table:
+		var group: String = knob["group"]
+		if not buckets.has(group):
+			buckets[group] = []
+		(buckets[group] as Array).append(knob)
+	return buckets
 
 
 # A class knob resolves through a store rather than a property path, so a failure to resolve cannot
@@ -332,10 +355,10 @@ func _refresh_setting_rows() -> void:
 
 
 # A section's own control, drawn under its heading. Actions has the picker that decides which verb's
-# rows are on the page (ObjectTool's per-type dropdown, one panel over); Board markup colours has a
-# NOTICE rather than a control -- see below.
+# rows are on the page (ObjectTool's per-type dropdown, one panel over); Aiming has a NOTICE rather
+# than a control -- see below.
 func _build_group_header(rows: VBoxContainer, group: String) -> void:
-	if group == GameKnobs.MARKUP_COLOUR_GROUP:
+	if group == GameKnobs.AIM_GROUP:
 		_build_palette_notice(rows)
 		return
 	if group == GameKnobs.CAMERA_GROUP:

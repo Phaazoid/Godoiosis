@@ -682,21 +682,27 @@ func test_an_enemy_your_plan_only_wounds_still_previews_its_attack() -> void:
 		.is_equal(1)
 
 
-# --- The movement range draws as GRIDLINES (#1069) ----------------------------------------------
+# --- The movement range draws as GRIDLINES (#1069, re-cut by #1074) -----------------------------
 
-# The flat view's half of it. MOVE's own tileset carries the hollow tile; the two washes under it
-# are duplicated off MOVE for their tree position and cell metric, so they have to be handed a fill
-# tileset back explicitly -- and a duplicate that quietly inherited the frame is exactly the bug
-# this pins, because it would leave the enemy's whole field drawn as an empty grid.
-func test_the_flat_view_draws_your_movement_range_hollow_and_the_two_washes_solid() -> void:
+# The flat view's half of it. MOVE's own tileset carries MoveGrid's generated tile; the two washes
+# under it are duplicated off MOVE for their tree position and cell metric, so they have to be handed
+# a fill tileset back explicitly -- and a duplicate that quietly inherited the grid is exactly the bug
+# this pins, because it would leave the enemy's whole field drawn as an empty lattice.
+func test_the_flat_view_draws_your_movement_range_as_a_grid_and_the_two_washes_solid() -> void:
 	var om := _om()
+	var source := om.move_overlay.tile_set.get_source(0) as TileSetAtlasSource
+	assert_object(om.move_grid_texture()).override_failure_message(
+			"the flat view never generated its grid art").is_not_null()
+	assert_object(source.texture).override_failure_message(
+			"the move tileset is still drawing Game.tscn's placeholder fill, not the generated grid") \
+		.is_same(om.move_grid_texture())
 	assert_object(om.reach_overlay).override_failure_message(
 			"the reach layer was never built, so this case cannot see its own claim").is_not_null()
 	assert_bool(om.reach_overlay.tile_set == om.move_overlay.tile_set).override_failure_message(
-			"your reach inherited the movement range's hollow tile -- the wash is drawing as a grid") \
+			"your reach inherited the movement range's grid tile -- the wash is drawing as a lattice") \
 		.is_false()
 	assert_bool(om.threat_overlay.tile_set == om.move_overlay.tile_set).override_failure_message(
-			"the enemy's field inherited the movement range's hollow tile").is_false()
+			"the enemy's field inherited the movement range's grid tile").is_false()
 	assert_bool(om.reach_overlay.tile_set == om.threat_overlay.tile_set).override_failure_message(
 			"the two washes stopped sharing one tileset, which is a second thing to keep in step") \
 		.is_true()
@@ -835,6 +841,63 @@ func test_a_held_pulse_is_still_at_its_peak_when_a_plain_one_has_started_falling
 	probe.queue_free()
 	plain_target.queue_free()
 	held_target.queue_free()
+
+
+# --- Every pin flashes on ONE timer (#1074) -----------------------------------------------------
+
+# The dev: "the flashing enemies should all flash on the same timer, rather than per enemy clicked.
+# It looks odd having them flash out of synch." Pinned at two different moments, the second must
+# JOIN the first's beat rather than start its own. Stepped by hand for the reason the hold case is:
+# custom_step asks what both flashes are doing at one moment, with no real clock on the suite.
+func test_an_enemy_pinned_later_flashes_in_step_with_the_first() -> void:
+	var first := _spawn(ENEMY, Vector2i(3, 2))
+	var second := _spawn(ENEMY, Vector2i(5, 2))
+	game.toggle_enemy_pin(first)
+	var a: Tween = first.visuals.pin_tween
+	a.pause()
+	a.custom_step(0.3)   # partway up the first ramp: a phase a fresh flash is NOT at
+	game.toggle_enemy_pin(second)
+	var b: Tween = second.visuals.pin_tween
+	b.pause()
+
+	assert_bool(first.visuals.pin_tween == a).override_failure_message(
+			"pinning the second enemy rebuilt the first one's flash, so this case lost the phase it "
+			+ "set up and cannot tell joined from coincident").is_true()
+	assert_bool(first.visuals.sprite.modulate.r > first.visuals.base_modulate.r + 0.05) \
+		.override_failure_message("the first flash is still at rest, so equality below would be vacuous") \
+		.is_true()
+	_assert_same_beat(first, second, "the second pin started its own timer")
+	a.custom_step(0.35)   # on into the hold and past it, the stretch the eye reads as the flash
+	b.custom_step(0.35)
+	_assert_same_beat(first, second, "the two flashes drifted apart once they were running")
+
+
+# ...and a flash COMING BACK after an aim pulse lets go of it joins too. That is the path a plain
+# precedence restarts from scratch, so without this every aim that crossed a pinned enemy would knock
+# it off the shared beat.
+func test_a_pin_flash_an_aim_let_go_of_rejoins_the_others() -> void:
+	var steady := _spawn(ENEMY, Vector2i(3, 2))
+	var aimed := _spawn(ENEMY, Vector2i(5, 2))
+	game.toggle_enemy_pin(steady)
+	game.toggle_enemy_pin(aimed)
+	var a: Tween = steady.visuals.pin_tween
+	a.pause()
+
+	aimed.visuals.start_pulse()   # the aim takes the sprite and the pin flash yields
+	assert_object(aimed.visuals.pin_tween).is_null()   # precondition, not the claim
+	a.custom_step(0.8)   # the steady one runs on without it -- into the fall after the hold
+	aimed.visuals.stop_pulse()   # ...and the pin comes back
+	var b: Tween = aimed.visuals.pin_tween
+	assert_object(b).override_failure_message("the pin never came back after the aim").is_not_null()
+	b.pause()
+	_assert_same_beat(steady, aimed, "the returning flash restarted on its own beat")
+
+
+func _assert_same_beat(one: Unit, other: Unit, why: String) -> void:
+	var tone: float = one.visuals.sprite.modulate.r
+	assert_float(other.visuals.sprite.modulate.r).override_failure_message(
+			"%s: %.3f against %.3f" % [why, other.visuals.sprite.modulate.r, tone]) \
+		.is_equal_approx(tone, 0.02)
 
 
 # ...and NOT for an enemy, which a plain click also selects -- the ring opens on anybody, the

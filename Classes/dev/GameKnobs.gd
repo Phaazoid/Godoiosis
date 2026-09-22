@@ -38,7 +38,7 @@ class_name GameKnobs
 # same property, and resolving it through this one entry is what stops the key and the panel row
 # holding two spellings of where the selector's depth lives. Everything else in the table below is
 # addressed only by the panel, so only this one needs a name.
-const SELECTOR_DEPTH := {"group": "Board markup", "node": "BoardOverlays", "prop": "selector_depth",
+const SELECTOR_DEPTH := {"group": "Lift, brackets & icons", "node": "BoardOverlays", "prop": "selector_depth",
 	"label": "Selector depth", "options": ["Level (whole block)", "Half (one unit)"],
 	"tip": "How much of a column the hover selector encloses. Level is one whole block, which is what it marked before a GridMap row became a half-level height unit; Half is one unit, for reading a half step apart from the level it sits in. Its top face sits on the cell's surface either way, so this only changes how far DOWN it reaches. V cycles it in play."}
 
@@ -49,60 +49,60 @@ const KNOBS: Array[Dictionary] = [
 	# --- Board markup ---
 	# fill_lift and lift_step raise every ground marker together, arrows included. A lift the
 	# ARROWS own alone (#227) needs its own export on BoardOverlays -- not in this slice.
-	{"group": "Board markup", "node": "BoardOverlays", "prop": "fill_lift", "label": "Marker lift", "min": 0.0, "max": 0.5, "step": 0.001,
+	{"group": "Lift, brackets & icons", "node": "BoardOverlays", "prop": "fill_lift", "label": "Marker lift", "min": 0.0, "max": 0.5, "step": 0.001,
 		"tip": "How far every ground marker floats above the tile's top face. Enough to beat z-fighting (the flickering where two surfaces share a plane) and no more -- too much and the markup visibly hovers."},
-	{"group": "Board markup", "node": "BoardOverlays", "prop": "lift_step", "label": "Per-layer lift step", "min": 0.0, "max": 0.05, "step": 0.0005,
+	{"group": "Lift, brackets & icons", "node": "BoardOverlays", "prop": "lift_step", "label": "Per-layer lift step", "min": 0.0, "max": 0.05, "step": 0.0005,
 		"tip": "Extra lift per sort layer, so stacked markers never land on exactly the same plane and fight. Also what keeps path arrows drawing over the move fill rather than through it."},
-	{"group": "Board markup", "node": "BoardOverlays", "prop": "bracket_arm", "label": "Bracket arm", "min": 0.05, "max": 0.5, "step": 0.005,
+	{"group": "Lift, brackets & icons", "node": "BoardOverlays", "prop": "bracket_arm", "label": "Bracket arm", "min": 0.05, "max": 0.5, "step": 0.005,
 		"tip": "Length of each arm of the corner bracket that marks the hovered cell. Short arms read as corner ticks; long ones close into a full box."},
-	{"group": "Board markup", "node": "BoardOverlays", "prop": "bracket_thickness", "label": "Bracket thickness", "min": 0.005, "max": 0.2, "step": 0.001,
+	{"group": "Lift, brackets & icons", "node": "BoardOverlays", "prop": "bracket_thickness", "label": "Bracket thickness", "min": 0.005, "max": 0.2, "step": 0.001,
 		"tip": "How chunky the hover bracket's arms are. Thin reads precise, thick reads legible at a distance."},
-	{"group": "Board markup", "node": "BoardOverlays", "prop": "bracket_scale", "label": "Bracket scale", "min": 0.9, "max": 1.3, "step": 0.005,
+	{"group": "Lift, brackets & icons", "node": "BoardOverlays", "prop": "bracket_scale", "label": "Bracket scale", "min": 0.9, "max": 1.3, "step": 0.005,
 		"tip": "Size of the whole hover bracket relative to one cell. Just above 1 makes it sit proud of the tile edge so it is not swallowed by the tile art."},
 	SELECTOR_DEPTH,
-	{"group": "Board markup", "node": "BoardOverlays", "prop": "invalid_bracket_color", "label": "Invalid bracket tint",
+	{"group": "Lift, brackets & icons", "node": "BoardOverlays", "prop": "invalid_bracket_color", "label": "Invalid bracket tint",
 		"tip": "What the hover bracket turns over a cell the 2D game calls invalid -- unwalkable, occupied, or a paint the tile brush would refuse. It mirrors the 2D cursor's own verdict rather than deciding for itself."},
-	{"group": "Board markup", "node": "BoardOverlays", "prop": "billboard_lift", "label": "Icon height", "min": 0.0, "max": 3.0, "step": 0.01,
+	{"group": "Lift, brackets & icons", "node": "BoardOverlays", "prop": "billboard_lift", "label": "Icon height", "min": 0.0, "max": 3.0, "step": 0.01,
 		"tip": "How high a selection icon floats above the cell it marks. High enough to clear the unit standing there, low enough not to read as belonging to the cell behind."},
-	{"group": "Board markup", "node": "BoardOverlays", "prop": "billboard_pixel_size", "label": "Icon pixel size", "min": 0.004, "max": 0.1, "step": 0.001,
+	{"group": "Lift, brackets & icons", "node": "BoardOverlays", "prop": "billboard_pixel_size", "label": "Icon pixel size", "min": 0.004, "max": 0.1, "step": 0.001,
 		"tip": "World size of ONE pixel of a billboard icon. 1/32 matches the tile art's density; mixing densities is the loudest amateur tell in HD-2D, so change this only with the art in view."},
 
 	# The sight beam's SHAPE (#506); its colour is two rows in CLASS_KNOBS, because the verdict hue
 	# is shared with the flat view and these three have no flat-view equivalent at all. Each one
 	# re-applies on write through its own setter, so a standing beam changes under the slider.
-	{"group": "Board markup", "node": "BoardOverlays", "prop": "beam_width", "label": "Sight beam width", "min": 0.01, "max": 0.4, "step": 0.005,
+	{"group": "Sight beam", "node": "BoardOverlays", "prop": "beam_width", "label": "Sight beam width", "min": 0.01, "max": 0.4, "step": 0.005,
 		"tip": "How thick the aim's sight beam is, in cells -- it is a ribbon turned to face the camera, so this is a real world width that gets smaller with distance like everything else in the diorama. Thin reads as a laser sight, thick as a tracer round."},
 	# The focus stroke around the hovered enemy (#710 slice 4) has its OWN width and brightness rather
 	# than the beam's: the trio above is tuned for a laser, and at that width and bloom a stroke round
 	# forty cells reads as a rope of light laid over the terrain. The edge falloff stays shared.
-	{"group": "Board markup", "node": "BoardOverlays", "prop": "outline_width", "label": "Enemy focus outline width", "min": 0.005, "max": 0.2, "step": 0.005,
+	{"group": "Enemy focus", "node": "BoardOverlays", "prop": "outline_width", "label": "Enemy focus outline width", "min": 0.005, "max": 0.2, "step": 0.005,
 		"tip": "How thick the stroke round the hovered enemy's whole field is, in cells. It says WHOSE field you are looking at while the rest of the crowd is dimmed, so it wants to be legible and quiet rather than bright."},
-	{"group": "Board markup", "node": "BoardOverlays", "prop": "outline_intensity", "label": "Enemy focus outline glow", "min": 0.2, "max": 4.0, "step": 0.05,
+	{"group": "Enemy focus", "node": "BoardOverlays", "prop": "outline_intensity", "label": "Enemy focus outline glow", "min": 0.2, "max": 4.0, "step": 0.05,
 		"tip": "Brightness multiplier on that stroke. 1.0 draws it flat, which is what board markup wants; above about 1.2 it blooms and starts reading as an effect rather than as a boundary."},
-	{"group": "Board markup", "node": "BoardOverlays", "prop": "beam_softness", "label": "Sight beam edge", "min": 0.25, "max": 6.0, "step": 0.05,
+	{"group": "Sight beam", "node": "BoardOverlays", "prop": "beam_softness", "label": "Sight beam edge", "min": 0.25, "max": 6.0, "step": 0.05,
 		"tip": "How the beam fades from its bright middle to nothing at the edge. Around 1 is a flat, even ribbon; higher pulls the brightness into a narrow core with a soft halo around it, which is what stops it reading as a solid strip of geometry."},
-	{"group": "Board markup", "node": "BoardOverlays", "prop": "beam_intensity", "label": "Sight beam glow", "min": 0.5, "max": 6.0, "step": 0.05,
+	{"group": "Sight beam", "node": "BoardOverlays", "prop": "beam_intensity", "label": "Sight beam glow", "min": 0.5, "max": 6.0, "step": 0.05,
 		"tip": "Brightness multiplier on the beam's colour. Past the scene's glow threshold (1.2 by default, on the Moods tab) the bloom takes over and the beam starts to burn -- which is the dial that makes it read as light rather than paint. Separate from the colour because a colour row cannot go above full white."},
 	# The reach mark's own beam set and its motion (#1042, re-pointed by #1069). Neither a laser nor
 	# a stroke: it is the one piece of board markup that travels.
-	{"group": "Board markup", "node": "BoardOverlays", "prop": "mark_width", "label": "Reach mark width", "min": 0.01, "max": 0.4, "step": 0.005,
+	{"group": "Reach lines: the arc", "node": "BoardOverlays", "prop": "mark_width", "label": "Reach mark width", "min": 0.01, "max": 0.4, "step": 0.005,
 		"tip": "How thick the mark from an enemy to the cell you are hovering is, in cells. Wider than the focus outline and thinner than the sight beam -- it has to read across the whole board without becoming the loudest thing on it. The cone's base is a MULTIPLE of this, so widening the mark widens its head too."},
-	{"group": "Board markup", "node": "BoardOverlays", "prop": "mark_intensity", "label": "Reach mark glow", "min": 0.2, "max": 6.0, "step": 0.05,
+	{"group": "Reach lines: the arc", "node": "BoardOverlays", "prop": "mark_intensity", "label": "Reach mark glow", "min": 0.2, "max": 6.0, "step": 0.05,
 		"tip": "Brightness multiplier on the mark's SHAFT. Past the scene's glow threshold (1.2) it blooms. The solid cone has its own, deliberately: a ribbon fades out at its rim so it is far dimmer than this number over most of its area, where a solid is this bright everywhere."},
-	{"group": "Board markup", "node": "BoardOverlays", "prop": "bead_speed", "label": "Reach bead speed", "min": 0.0, "max": 12.0, "step": 0.1,
+	{"group": "Reach lines: the arc", "node": "BoardOverlays", "prop": "bead_speed", "label": "Reach bead speed", "min": 0.0, "max": 12.0, "step": 0.1,
 		"tip": "How fast the bright pulse runs from the enemy to the hovered cell, in cells per second. It is what says which end is which without the cone having to be read, so it wants to be unmistakable in direction and calm in pace. It runs through the cone as one sweep."},
-	{"group": "Board markup", "node": "BoardOverlays", "prop": "bead_length", "label": "Reach bead length", "min": 0.0, "max": 3.0, "step": 0.05,
+	{"group": "Reach lines: the arc", "node": "BoardOverlays", "prop": "bead_length", "label": "Reach bead length", "min": 0.0, "max": 3.0, "step": 0.05,
 		"tip": "How long that pulse is, in cells. Zero turns the bead off entirely and leaves a still mark with its cone."},
-	{"group": "Board markup", "node": "BoardOverlays", "prop": "bead_gap", "label": "Reach bead spacing", "min": 0.5, "max": 30.0, "step": 0.5,
+	{"group": "Reach lines: the arc", "node": "BoardOverlays", "prop": "bead_gap", "label": "Reach bead spacing", "min": 0.5, "max": 30.0, "step": 0.5,
 		"tip": "How far apart successive pulses run, in cells. Shorter than the mark and you get a chain of them travelling at once; longer and there is exactly one at a time with a rest between."},
 	# The SOLID cone's own three (#1069). Everything else about the mark -- length, base width,
 	# colour, bow, inset -- was already tunable while it was a ribbon; these are what a volume needs
 	# and a ribbon never did.
-	{"group": "Board markup", "node": "BoardOverlays", "prop": "cone_intensity", "label": "Reach cone glow", "min": 0.2, "max": 6.0, "step": 0.05,
+	{"group": "Reach lines: the cone", "node": "BoardOverlays", "prop": "cone_intensity", "label": "Reach cone glow", "min": 0.2, "max": 6.0, "step": 0.05,
 		"tip": "Brightness multiplier on the cone alone. It starts LOWER than the shaft's on purpose: the shaft is a ribbon that fades to nothing at its rim, so most of it is far dimmer than its number, while the cone is a solid surface that is this bright edge to edge. Past the scene's glow threshold (1.2) the whole head blooms white and the shading below stops reading."},
-	{"group": "Board markup", "node": "BoardOverlays", "prop": "cone_shading", "label": "Reach cone shading", "min": 0.0, "max": 1.0, "step": 0.05,
+	{"group": "Reach lines: the cone", "node": "BoardOverlays", "prop": "cone_shading", "label": "Reach cone shading", "min": 0.0, "max": 1.0, "step": 0.05,
 		"tip": "How dark a face pointing away from the light goes. 1.0 is flat -- a silhouette, which is what a cone looks like with no shading at all -- and 0 is hard black on the far side. This is the whole of what makes the head read as a 3D shape rather than a triangle, since board markup is never lit by the scene."},
-	{"group": "Board markup", "node": "BoardOverlays", "prop": "cone_facets", "label": "Reach cone facets", "min": 3, "max": 32, "step": 1,
+	{"group": "Reach lines: the cone", "node": "BoardOverlays", "prop": "cone_facets", "label": "Reach cone facets", "min": 3, "max": 32, "step": 1,
 		"tip": "How many flat faces the cone is built from. Low reads as a cut gem with obvious edges, high as a smooth round cone. At the size this draws on screen, somewhere in the low teens is usually all that survives the pixels."},
 
 	# --- Dev chrome ---
@@ -118,85 +118,85 @@ const KNOBS: Array[Dictionary] = [
 		"tip": "Edge of the corner tool's marker cube, as a fraction of a cell. It marks the POINT a drag has hold of, so it wants to be grabbable by eye without growing large enough to read as a tile -- past about a third of a cell it starts covering the corner it is pointing at. Dev-only."},
 
 	# --- Unit HUD (#229) ---
-	{"group": "Unit HUD", "node": "UnitMirror", "prop": "hud_lift", "label": "Readout clearance", "min": 0.0, "max": 1.5, "step": 0.01,
+	{"group": "HP cubes", "node": "UnitMirror", "prop": "hud_lift", "label": "Readout clearance", "min": 0.0, "max": 1.5, "step": 0.01,
 		"tip": "Gap between the top of the unit's visible ART and the bottom of the readout, in cells. Measured from the sprite's topmost opaque pixel rather than from its feet, so units drawn with different amounts of empty space above their heads all wear it at the same apparent height. The selection icons sit higher still; keep this well under their lift or the readout climbs past them."},
-	{"group": "Unit HUD", "node": "UnitMirror", "prop": "hp_block_texels", "label": "HP cube size", "min": 2.0, "max": 16.0, "step": 1.0,
+	{"group": "HP cubes", "node": "UnitMirror", "prop": "hp_block_texels", "label": "HP cube size", "min": 2.0, "max": 16.0, "step": 1.0,
 		"tip": "Edge of one HP cube in texels, at the same pixel density as every sprite -- 32 is one cell. This INCLUDES the black cage, so the coloured core is this minus twice the cage: at 5 with a 1-texel cage the core is 3 texels, which is about the floor for still reading as a bordered square rather than a dark speck."},
-	{"group": "Unit HUD", "node": "UnitMirror", "prop": "hp_block_border_texels", "label": "HP cube cage", "min": 0.0, "max": 4.0, "step": 1.0,
+	{"group": "HP cubes", "node": "UnitMirror", "prop": "hp_block_border_texels", "label": "HP cube cage", "min": 0.0, "max": 4.0, "step": 1.0,
 		"tip": "Thickness of the black frame around every face of a cube, in texels. It is what makes a cube read as a cube with no lighting on it, and neighbouring cubes SHARE it -- so this also closes the gap between them. Zero removes it and the grid becomes a row of flat squares; push it past a third of the cube size and there is no colour left to read."},
-	{"group": "Unit HUD", "node": "UnitMirror", "prop": "hp_blocks_per_row", "label": "HP cubes per row", "min": 1.0, "max": 30.0, "step": 1.0,
+	{"group": "HP cubes", "node": "UnitMirror", "prop": "hp_blocks_per_row", "label": "HP cubes per row", "min": 1.0, "max": 30.0, "step": 1.0,
 		"tip": "How many cubes before the grid wraps to another row. Ten is what makes the readout countable at a glance -- one full row plus four reads as 14 without counting. Fewer per row trades width for height, and height is the contested axis: the state icons and the crown are stacked above."},
-	{"group": "Unit HUD", "node": "UnitMirror", "prop": "hp_block_recess_texels", "label": "Lost cube depth", "min": 0.0, "max": 8.0, "step": 1.0,
+	{"group": "HP cubes", "node": "UnitMirror", "prop": "hp_block_recess_texels", "label": "Lost cube depth", "min": 0.0, "max": 8.0, "step": 1.0,
 		"tip": "How far back a LOST cube sits, in texels. The dent is a second cue beside the colour, so the readout still reads at distance and for anyone who finds green-against-red hard. Zero makes every cube flush and hands the dent to the shrink below -- which is where it sits by default, because depth and holding the grid still are incompatible: pushed back cubes stop reading as sunk the moment you orbit behind them."},
-	{"group": "Unit HUD", "node": "UnitMirror", "prop": "hp_block_recess_shrink", "label": "Lost cube shrink", "min": 0.1, "max": 1.0, "step": 0.05,
+	{"group": "HP cubes", "node": "UnitMirror", "prop": "hp_block_recess_shrink", "label": "Lost cube shrink", "min": 0.1, "max": 1.0, "step": 0.05,
 		"tip": "How much smaller a LOST cube gets, as a fraction of a standing one. This is what actually reads as a hole: depth alone leaves a same-sized square head-on, because there is no socket wall to see, so shrinking it is what pulls it away from its neighbours' cages. 1.0 removes the effect and leaves depth and colour to carry the dent between them."},
-	{"group": "Unit HUD", "node": "UnitMirror", "prop": "hp_block_recess_shade", "label": "Lost cube shade", "min": 0.1, "max": 1.0, "step": 0.05,
+	{"group": "HP cubes", "node": "UnitMirror", "prop": "hp_block_recess_shade", "label": "Lost cube shade", "min": 0.1, "max": 1.0, "step": 0.05,
 		"tip": "How far a LOST cube's colour is dimmed, as a multiplier on Cube missing -- it reads as the sunk cube sitting in shadow. At 1.0 it is exactly the authored colour, so this MODIFIES that one answer rather than becoming a rival to it: if you want a different red, move Cube missing, not this."},
-	{"group": "Unit HUD", "node": "UnitMirror", "prop": "hp_block_top_shade", "label": "Cube top shade", "min": 0.1, "max": 1.0, "step": 0.05,
+	{"group": "HP cubes", "node": "UnitMirror", "prop": "hp_block_top_shade", "label": "Cube top shade", "min": 0.1, "max": 1.0, "step": 0.05,
 		"tip": "How far the TOP face of every cube is darkened, as a multiplier on its own colour. This is the one thing telling the top apart from the front, and it is deliberately a shade rather than the absence of the black cage: taking the cage off the other five faces instead made the whole grid read as one green mass with black painted on, rather than as separate bricks. 1.0 removes the effect and the top matches the front exactly."},
-	{"group": "Unit HUD", "node": "UnitMirror", "prop": "hp_grid_faces_camera", "label": "Grid faces camera",
+	{"group": "HP cubes", "node": "UnitMirror", "prop": "hp_grid_faces_camera", "label": "Grid faces camera",
 		"tip": "On, the whole readout turns to face the camera like a billboard. Off, it stays put on the board's own axes the way the rocks and props do, which means orbiting past one takes it edge-on and squashes it to a line. That is what keeping it in place MEANS rather than a fault; the question this dial asks is whether reading as a real 3D object is worth the angles where it stops being legible."},
-	{"group": "Unit HUD", "node": "UnitMirror", "prop": "bar_fill_color", "label": "Cube fill",
+	{"group": "HP cubes", "node": "UnitMirror", "prop": "bar_fill_color", "label": "Cube fill",
 		"tip": "The health a unit still HAS -- the colour of a standing cube, and of the cubes that fly off when it loses one. Flat: it does not shift hue as the grid empties, since the COUNT already says how hurt the unit is. Fully opaque by design, because this is a gameplay descriptor rather than scenery."},
-	{"group": "Unit HUD", "node": "UnitMirror", "prop": "bar_missing_color", "label": "Cube missing",
+	{"group": "HP cubes", "node": "UnitMirror", "prop": "bar_missing_color", "label": "Cube missing",
 		"tip": "The health a unit has LOST -- the colour of a shrunken cube. Read together, fill against missing is the whole gauge, so these two want to be as far apart as the palette allows; the shrink is what keeps it readable for anyone the pair itself does not separate."},
-	{"group": "Unit HUD", "node": "UnitMirror", "prop": "number_height_cells", "label": "Number size", "min": 0.02, "max": 0.6, "step": 0.005,
+	{"group": "HP number", "node": "UnitMirror", "prop": "number_height_cells", "label": "Number size", "min": 0.02, "max": 0.6, "step": 0.005,
 		"tip": "How tall the HP digits stand, in cells -- a size in the SCENE, not on screen, so it shrinks with the unit as you zoom out. The glyphs are rendered at a fixed high resolution and scaled down to this, so small stays crisp instead of turning to mush."},
-	{"group": "Unit HUD", "node": "UnitMirror", "prop": "number_outline_size", "label": "Number outline", "min": 0.0, "max": 24.0, "step": 1.0,
+	{"group": "HP number", "node": "UnitMirror", "prop": "number_outline_size", "label": "Number outline", "min": 0.0, "max": 24.0, "step": 1.0,
 		"tip": "Thickness of the black outline behind the number, in GLYPH units -- so it holds its proportion when Number size changes, but what lands on screen is this scaled down with the text. Around 8 is one pixel of the game's own art and 16 is two; anything under about 5 is thinner than a single art pixel and will not separate white digits from a bright bar at all. Push it far enough and neighbouring digits bleed together, and at that point a black backing plate is the better answer than more outline."},
-	{"group": "Unit HUD", "node": "UnitMirror", "prop": "number_color", "label": "Number colour",
+	{"group": "HP number", "node": "UnitMirror", "prop": "number_color", "label": "Number colour",
 		"tip": "Colour of the HP digits. The outline is always black, so this is the fill; a tint here is the cheapest way to make the number read as part of the bar rather than as separate text."},
-	{"group": "Unit HUD", "node": "UnitMirror", "prop": "number_gap", "label": "Number inset", "min": 0.0, "max": 0.5, "step": 0.005,
+	{"group": "HP number", "node": "UnitMirror", "prop": "number_gap", "label": "Number inset", "min": 0.0, "max": 0.5, "step": 0.005,
 		"tip": "How far in from the bar's left edge the digits start, in cells. The number sits ON the bar, so this is padding inside it rather than a gap beside it -- zero puts the first digit flush against the outline."},
-	{"group": "Unit HUD", "node": "UnitMirror", "prop": "number_shows_max", "label": "Number shows max",
+	{"group": "HP number", "node": "UnitMirror", "prop": "number_shows_max", "label": "Number shows max",
 		"tip": "On, the number reads '12/20'; off, just '12'. The bar already carries the fraction either way, so this is purely how much text you want floating over a head."},
 	# --- The predicted readout (#313) ---
-	{"group": "Unit HUD", "node": "UnitMirror", "prop": "bar_doomed_color", "label": "Predicted loss",
+	{"group": "Predicted change", "node": "UnitMirror", "prop": "bar_doomed_color", "label": "Predicted loss",
 		"tip": "The health the queued plan is about to TAKE -- worn by the exact cubes that will go, between where the grid stands now and where the plan leaves it. It has to read as a warning against the fill beside it without reading as damage that has already landed, and the cubes still standing PROUD are what say 'not yet'."},
-	{"group": "Unit HUD", "node": "UnitMirror", "prop": "bar_heal_color", "label": "Predicted gain",
+	{"group": "Predicted change", "node": "UnitMirror", "prop": "bar_heal_color", "label": "Predicted gain",
 		"tip": "The same span in the other direction: health a queued heal is about to give back, drawn over the missing backing. Wants to be unmistakably not-the-loss-colour, since the shape of the span is identical either way and only the colour says which."},
 	# No NOTCH rows: with one cube per point of HP, colouring the exact cubes the plan takes says
 	# where it lands more precisely than a marker beside them could, so #313's notch is gone.
-	{"group": "Unit HUD", "node": "UnitMirror", "prop": "alarm_peak_color", "label": "Alarm peak",
+	{"group": "Predicted change", "node": "UnitMirror", "prop": "alarm_peak_color", "label": "Alarm peak",
 		"tip": "What the predicted-loss span pulses TO when the plan predicts a named rung -- a down, a kill, or Crisis. It pulses back to the ordinary loss colour, so this is only the bright half of the cue; make it too close to that colour and the pulse stops registering."},
 	# (Unhovered bars show number LEFT this table in #394 -- it is a player setting now, and a value
 	# has one store. It is still tunable in play: CLASS_KNOBS below puts it on this same tab, as a
 	# control that writes the real preference rather than a knob with a copy of it.)
 	# --- The element-state row (#357) ---
-	{"group": "Unit HUD", "node": "UnitMirror", "prop": "state_icon_texels", "label": "State icon size", "min": 2.0, "max": 32.0, "step": 1.0,
+	{"group": "State icons", "node": "UnitMirror", "prop": "state_icon_texels", "label": "State icon size", "min": 2.0, "max": 32.0, "step": 1.0,
 		"tip": "Size of each element-state icon above the health bar, in texels -- 16 is one cell. The source art is 32px (wet) and 16px (the frozen-tile stand-in for chilled), so powers of two land on exact reductions and anything else will shimmer as the camera moves. This is the first dial to reach for if the icons stop reading at play distance."},
-	{"group": "Unit HUD", "node": "UnitMirror", "prop": "state_icon_gap_texels", "label": "State row clearance", "min": 0.0, "max": 16.0, "step": 1.0,
+	{"group": "State icons", "node": "UnitMirror", "prop": "state_icon_gap_texels", "label": "State row clearance", "min": 0.0, "max": 16.0, "step": 1.0,
 		"tip": "Gap between the top of the health bar's outline and the bottom of the state icons, in texels. Zero stacks them flush against the bar so the two read as one display; push it up to separate what a unit IS from how hurt it is, at the cost of climbing toward the selection icons above."},
-	{"group": "Unit HUD", "node": "UnitMirror", "prop": "state_icon_spacing_texels", "label": "State icon spacing", "min": 0.0, "max": 16.0, "step": 1.0,
+	{"group": "State icons", "node": "UnitMirror", "prop": "state_icon_spacing_texels", "label": "State icon spacing", "min": 0.0, "max": 16.0, "step": 1.0,
 		"tip": "Gap between neighbouring state icons, in texels. Only visible on a unit holding more than one state, which today means wet AND chilled at once -- with two states the row cannot crowd, and this is the dial that matters when the vocabulary grows."},
 	# --- The rescue clock beside the downed glyph (#322) ---
 	# No SIZE row on purpose: the digits are the HP number's height, which is not tunable apart from
 	# it. See UnitMirror's own note -- a dial whose readable range is only its top end is worse than
 	# none, and "Number size" already moves both.
-	{"group": "Unit HUD", "node": "UnitMirror", "prop": "downed_count_gap_texels", "label": "Downed clock inset", "min": 0.0, "max": 16.0, "step": 1.0,
+	{"group": "State icons", "node": "UnitMirror", "prop": "downed_count_gap_texels", "label": "Downed clock inset", "min": 0.0, "max": 16.0, "step": 1.0,
 		"tip": "Gap between the last icon in the row and the turns-left digits, in texels. Zero puts the number flush against the glyph so the two read as one badge; widen it and the count starts reading as its own thing floating beside the body."},
 	# --- The cubes a unit LOSES (#314) ---
-	{"group": "Unit HUD", "node": "UnitMirror", "prop": "block_burst_speed", "label": "Cube burst speed", "min": 0.0, "max": 10.0, "step": 0.1,
+	{"group": "Cube burst", "node": "UnitMirror", "prop": "block_burst_speed", "label": "Cube burst speed", "min": 0.0, "max": 10.0, "step": 0.1,
 		"tip": "How hard a lost cube is thrown out of its socket, in cells per second. This is the dial that decides whether losing health reads as an EVENT or as the grid quietly getting shorter -- too low and the cubes dribble off the bottom, too high and they are gone before the eye finds them."},
-	{"group": "Unit HUD", "node": "UnitMirror", "prop": "block_burst_spread", "label": "Cube burst spread", "min": 0.0, "max": 3.0, "step": 0.05,
+	{"group": "Cube burst", "node": "UnitMirror", "prop": "block_burst_spread", "label": "Cube burst spread", "min": 0.0, "max": 3.0, "step": 0.05,
 		"tip": "How wide the fan is when several cubes leave at once. Zero throws every cube straight up, so a nine-damage hit leaves as one clump; higher spreads them sideways so you can see how many there were. The directions are fixed per cube rather than random, so the same hit always looks the same."},
-	{"group": "Unit HUD", "node": "UnitMirror", "prop": "block_spin_speed", "label": "Cube spin", "min": 0.0, "max": 30.0, "step": 0.5,
+	{"group": "Cube burst", "node": "UnitMirror", "prop": "block_spin_speed", "label": "Cube spin", "min": 0.0, "max": 30.0, "step": 0.5,
 		"tip": "How fast a thrown cube tumbles, in radians per second. The tumble is what shows off the cage on every face and sells the cube as a solid object rather than a flat square -- at zero it is a sliding tile, and far too high it blurs into a flicker."},
-	{"group": "Unit HUD", "node": "UnitMirror", "prop": "block_gravity", "label": "Cube gravity", "min": 0.0, "max": 40.0, "step": 0.5,
+	{"group": "Cube burst", "node": "UnitMirror", "prop": "block_gravity", "label": "Cube gravity", "min": 0.0, "max": 40.0, "step": 0.5,
 		"tip": "Downward pull on a thrown cube, in cells per second squared. Read against burst speed rather than alone: the two together decide how high the arc goes and how long it hangs before the bounce."},
-	{"group": "Unit HUD", "node": "UnitMirror", "prop": "block_bounce", "label": "Cube bounce", "min": 0.0, "max": 1.0, "step": 0.05,
+	{"group": "Cube burst", "node": "UnitMirror", "prop": "block_bounce", "label": "Cube bounce", "min": 0.0, "max": 1.0, "step": 0.05,
 		"tip": "How much of its fall a cube keeps on the way back up, once, when it hits the board beneath it. Zero lands it dead; 1 would return the whole drop. Only the FIRST touch bounces -- after that it rides through, so a busy pass never fills the board with rattling cubes."},
-	{"group": "Unit HUD", "node": "UnitMirror", "prop": "block_lifetime", "label": "Cube lifetime", "min": 0.1, "max": 4.0, "step": 0.05,
+	{"group": "Cube burst", "node": "UnitMirror", "prop": "block_lifetime", "label": "Cube lifetime", "min": 0.1, "max": 4.0, "step": 0.05,
 		"tip": "How long a thrown cube lives, in seconds; it fades out over the back half so the bounce is seen at full strength and only the settle disappears. Long enough to read the burst, short enough that a nine-unit AI pass does not leave the board littered."},
-	{"group": "Unit HUD", "node": "UnitMirror", "prop": "block_burst_stagger", "label": "Cube burst stagger", "min": 0.0, "max": 0.3, "step": 0.005,
+	{"group": "Cube burst", "node": "UnitMirror", "prop": "block_burst_stagger", "label": "Cube burst stagger", "min": 0.0, "max": 0.3, "step": 0.005,
 		"tip": "Delay between one cube launching and the next, in seconds, so a multi-cube burst MARCHES through the grid instead of leaving all at once. A cube still waiting its turn sits in its own socket rather than hiding, so the grid breaks apart in sequence with no gap running ahead of the cubes. 0 fires the whole burst on a single frame, which is what a nine-damage hit used to look like."},
-	{"group": "Unit HUD", "node": "UnitMirror", "prop": "block_death_power", "label": "Death burst", "min": 1.0, "max": 5.0, "step": 0.1,
+	{"group": "Cube burst", "node": "UnitMirror", "prop": "block_death_power", "label": "Death burst", "min": 1.0, "max": 5.0, "step": 0.1,
 		"tip": "Multiplier on the burst when a unit DIES and its whole remaining grid detonates at once, rather than losing a few cubes to a hit. Going DOWN is not a death and gets the ordinary burst of everything above 1 HP, so this is only for the rarer outright kill."},
-	{"group": "Unit HUD", "node": "UnitMirror", "prop": "block_pop_time", "label": "Heal pop time", "min": 0.02, "max": 1.0, "step": 0.01,
+	{"group": "Heal pop", "node": "UnitMirror", "prop": "block_pop_time", "label": "Heal pop time", "min": 0.02, "max": 1.0, "step": 0.01,
 		"tip": "How long a healed cube takes to rise back out of its dent, in seconds. It overshoots slightly on the way so it reads as popping rather than sliding. Deliberately quicker and quieter than a burst -- being healed should not upstage being hit."},
-	{"group": "Unit HUD", "node": "UnitMirror", "prop": "hp_pop_lift_texels", "label": "Heal pop travel", "min": 0.0, "max": 12.0, "step": 0.5,
+	{"group": "Heal pop", "node": "UnitMirror", "prop": "hp_pop_lift_texels", "label": "Heal pop travel", "min": 0.0, "max": 12.0, "step": 0.5,
 		"tip": "How far a healed cube sinks before it springs back, in texels. Deliberately its OWN value rather than the lost-cube depth: tying it to that made the pop invisible the moment the depth was dialled to zero, since an animation whose distance is a knob that may legitimately be 0 has no distance at all. At 0 here the pop looks instant however long you give it."},
-	{"group": "Unit HUD", "node": "UnitMirror", "prop": "hp_pop_stagger", "label": "Heal fill stagger", "min": 0.0, "max": 0.5, "step": 0.01,
+	{"group": "Heal pop", "node": "UnitMirror", "prop": "hp_pop_stagger", "label": "Heal fill stagger", "min": 0.0, "max": 0.5, "step": 0.01,
 		"tip": "How long each restored cube waits before its own rise, so a multi-point heal FILLS IN one socket at a time instead of popping as one block. The run goes lowest socket first, which is the burst order reversed -- the last cube knocked out is the first one back. Judge this against Heal pop time rather than on its own: near zero and every cube is mid-rise at once, which is one blob however slow you make it, while something like a fifth of the pop time reads as a wave. It is separate from Burst stagger because that one races a cube's whole flight and this one races a single rise."},
 
 	# --- Camera handling ---
@@ -228,9 +228,9 @@ const KNOBS: Array[Dictionary] = [
 	#
 	# It was filed among the camera knobs and is not one of them: handling is what the PLAYER'S hand
 	# may do, and this is where a fight OPENS FROM -- authored direction, which is #520's business.
-	# Its own group rather than joining "Camera travel" one table over, on the precedent that split
-	# "Board markup" from "Board markup colours": a group name shared across KNOBS and CLASS_KNOBS
-	# draws its heading twice, once per pass.
+	# Its own group rather than joining "Camera travel" one table over. That used to be forced -- a
+	# group shared across KNOBS and CLASS_KNOBS drew its heading twice -- and since #1074 builds the
+	# panel group-major it is a choice: this is where a fight OPENS, not how the camera travels.
 	#
 	# UNTAGGED by profile on purpose, so it shows whichever column the Playback page is filtered to --
 	# it is applied ONCE as playback starts, not per beat, so no one profile owns it.
@@ -259,41 +259,41 @@ const KNOBS: Array[Dictionary] = [
 	# own furniture is drawn, matched once and constant after. flame_count is the one INT-backed
 	# knob and its range is load-bearing -- the write-back law nudges by a tenth of the range, so
 	# anything narrower than 10 rounds back to where it started and reads as a dead slider.
-	{"group": "Fire", "node": "BoardMirror", "prop": "flame_lift", "label": "Flame lift", "min": 0.0, "max": 2.0, "step": 0.01,
+	{"group": "Fire: the flames", "node": "BoardMirror", "prop": "flame_lift", "label": "Flame lift", "min": 0.0, "max": 2.0, "step": 0.01,
 		"tip": "How high the fire billboard's centre sits above a burning tile. Raising it makes fire read as standing up off the ground rather than lying on it."},
-	{"group": "Fire", "node": "BoardMirror", "prop": "flame_size:x", "label": "Flame width", "min": 0.1, "max": 2.0, "step": 0.01,
+	{"group": "Fire: the flames", "node": "BoardMirror", "prop": "flame_size:x", "label": "Flame width", "min": 0.1, "max": 2.0, "step": 0.01,
 		"tip": "Width of the fire billboard in world units, where 1.0 is exactly one cell across. Width and height share one declaration, so saving either writes both."},
-	{"group": "Fire", "node": "BoardMirror", "prop": "flame_size:y", "label": "Flame height", "min": 0.1, "max": 2.0, "step": 0.01,
+	{"group": "Fire: the flames", "node": "BoardMirror", "prop": "flame_size:y", "label": "Flame height", "min": 0.1, "max": 2.0, "step": 0.01,
 		"tip": "Height of the fire billboard in world units. Taller than wide reads as a flame; square reads as a scorch. Width and height share one declaration, so saving either writes both."},
 	# The only INT-backed knob here, and its range is load-bearing: a slider write is nudged by a
 	# tenth of the range, so anything narrower than 10 rounds back to where it started.
-	{"group": "Fire", "node": "BoardMirror", "prop": "flame_count", "label": "Flame count", "min": 1.0, "max": 12.0, "step": 1.0,
+	{"group": "Fire: the flames", "node": "BoardMirror", "prop": "flame_count", "label": "Flame count", "min": 1.0, "max": 12.0, "step": 1.0,
 		"tip": "How many separate flames a burning cell stands up. One is a sprite standing on a tile; three or more spread across the square is a tile that is on fire. Every flame is another quad and another draw, so this is the knob that costs something on a board with a lot of fire."},
-	{"group": "Fire", "node": "BoardMirror", "prop": "flame_spread", "label": "Flame spread", "min": 0.0, "max": 0.6, "step": 0.01,
+	{"group": "Fire: the flames", "node": "BoardMirror", "prop": "flame_spread", "label": "Flame spread", "min": 0.0, "max": 0.6, "step": 0.01,
 		"tip": "How far off the cell's centre the smaller flames sit, in cells -- 0.5 reaches the tile's edge. At zero they stack in the middle and the fire reads as one clump again."},
-	{"group": "Fire", "node": "BoardMirror", "prop": "flame_fps", "label": "Flame fps", "min": 0.0, "max": 30.0, "step": 0.5,
+	{"group": "Fire: the flames", "node": "BoardMirror", "prop": "flame_fps", "label": "Flame fps", "min": 0.0, "max": 30.0, "step": 0.5,
 		"tip": "How fast the flame's frames play. The art is eight looping frames, so this is the whole speed of the fire: low reads as a slow lick, high as a roar. Zero holds a frame without freezing the light."},
-	{"group": "Fire", "node": "BoardMirror", "prop": "flame_flicker", "label": "Flame flicker", "min": 0.0, "max": 0.6, "step": 0.01,
+	{"group": "Fire: the flames", "node": "BoardMirror", "prop": "flame_flicker", "label": "Flame flicker", "min": 0.0, "max": 0.6, "step": 0.01,
 		"tip": "How hard the fire's LIGHT breathes, as a fraction of its energy -- 0.2 swings it a fifth either way. This is what makes a burning tile feel lit by something alive rather than by a lamp; zero is a steady lamp."},
-	{"group": "Fire", "node": "BoardMirror", "prop": "flame_camera_offset", "label": "Flame camera push", "min": 0.0, "max": 0.5, "step": 0.005,
+	{"group": "Fire: the flames", "node": "BoardMirror", "prop": "flame_camera_offset", "label": "Flame camera push", "min": 0.0, "max": 0.5, "step": 0.005,
 		"tip": "How far each flame is pushed toward the camera, in cells. A flame and a unit sprite on one cell are the same camera-facing plane, so without this they speckle against each other wherever someone stands in fire; push too far and the fire visibly leaves its own tile. A clearance rather than a taste call -- it defends against a geometric coincidence."},
-	{"group": "Fire", "node": "BoardMirror", "prop": "flame_animated", "label": "Flame animated",
+	{"group": "Fire: the flames", "node": "BoardMirror", "prop": "flame_animated", "label": "Flame animated",
 		"tip": "Off holds the fire on one frame at steady light -- a still flame, not a missing one. This is the authored game constant; the PLAYER's photosensitivity toggle (#217) ANDs on top of it in BoardMirror._flame_animating, the one composed reader."},
-	{"group": "Fire", "node": "BoardMirror", "prop": "flame_ground_gap", "label": "Flame ground gap", "min": 0.0, "max": 0.5, "step": 0.005,
+	{"group": "Fire: the flames", "node": "BoardMirror", "prop": "flame_ground_gap", "label": "Flame ground gap", "min": 0.0, "max": 0.5, "step": 0.005,
 		"tip": "Gap between the base of the flame and the tile surface. A small gap stops the flame z-fighting the ground it stands on; too large and the fire floats."},
-	{"group": "Fire", "node": "BoardMirror", "prop": "flame_writes_depth", "label": "Flame writes depth",
+	{"group": "Fire: the flames", "node": "BoardMirror", "prop": "flame_writes_depth", "label": "Flame writes depth",
 		"tip": "Whether the flame writes into the depth buffer. On, it occludes what is behind it correctly but can cut a hard edge against overlapping sprites; off, it always draws as a soft overlay and never clips."},
-	{"group": "Fire", "node": "BoardMirror", "prop": "flame_light_energy", "label": "Flame light energy", "min": 0.0, "max": 8.0, "step": 0.05,
+	{"group": "Fire: light and glow", "node": "BoardMirror", "prop": "flame_light_energy", "label": "Flame light energy", "min": 0.0, "max": 8.0, "step": 0.05,
 		"tip": "Brightness of the real point light each fire casts. This is what makes fire LIGHT the board -- units, walls and neighbouring tiles -- rather than merely glow on its own tile."},
-	{"group": "Fire", "node": "BoardMirror", "prop": "flame_light_range", "label": "Flame light range", "min": 0.5, "max": 12.0, "step": 0.1,
+	{"group": "Fire: light and glow", "node": "BoardMirror", "prop": "flame_light_range", "label": "Flame light range", "min": 0.5, "max": 12.0, "step": 0.1,
 		"tip": "How far a fire's light reaches, in world units (roughly cells). Range and energy together decide whether a burning tile lights a room or just its own corner."},
-	{"group": "Fire", "node": "BoardMirror", "prop": "flame_light_color", "label": "Flame light colour",
+	{"group": "Fire: light and glow", "node": "BoardMirror", "prop": "flame_light_color", "label": "Flame light colour",
 		"tip": "The colour a fire casts onto everything around it. Its twin one row down is what the flame itself gives off; this one is what the neighbours are lit BY, the way Prop light colour is for lamps."},
 	# The per-source half of glow (#420). Scene-wide bloom is a Moods knob and always will be -- one
 	# Environment per board -- so what belongs here is only how hard THIS source burns.
-	{"group": "Fire", "node": "BoardMirror", "prop": "flame_glow_color", "label": "Flame glow colour",
+	{"group": "Fire: light and glow", "node": "BoardMirror", "prop": "flame_glow_color", "label": "Flame glow colour",
 		"tip": "The colour the flame itself gives off -- its emission, the thing the bloom pass picks up. Push it past white and the fire reads as hotter than its own art. This is the flame's own light, not what it throws onto the board: that is Flame light colour above."},
-	{"group": "Fire", "node": "BoardMirror", "prop": "flame_glow_energy", "label": "Flame glow strength", "min": 0.0, "max": 8.0, "step": 0.05,
+	{"group": "Fire: light and glow", "node": "BoardMirror", "prop": "flame_glow_energy", "label": "Flame glow strength", "min": 0.0, "max": 8.0, "step": 0.05,
 		"tip": "How hard the flame glows. NOTHING blooms until it clears the mood's Glow HDR threshold on the Moods tab -- so if raising this only makes the fire brighter without haloing, that threshold is what to look at, not this."},
 
 	# --- Cover (#326's bump; a Fire-shaped terrain state, moved off World by #420) ---
@@ -418,6 +418,7 @@ const QUEUE_STYLE_SCRIPT := "res://Classes/ui/queue/QueueStyle.gd"
 const BOARD_SPACE_SCRIPT := "res://Classes/presentation/BoardSpace.gd"
 const SIGHT_TRACE_SCRIPT := "res://Classes/board/SightTrace2D.gd"
 const THREAT_LINES_SCRIPT := "res://Classes/board/ThreatLines2D.gd"
+const MOVE_GRID_SCRIPT := "res://Classes/board/MoveGrid.gd"
 const UNIT_VISUALS_SCRIPT := "res://Classes/units/UnitVisuals.gd"
 const MUSIC_DIRECTOR_SCRIPT := "res://Classes/audio/MusicDirector.gd"
 const STAGING_DUST_SCRIPT := "res://Classes/presentation/StagingDust.gd"
@@ -436,31 +437,31 @@ const CLASS_KNOBS: Array[Dictionary] = [
 		"label": "Unhovered bars show number",
 		"tip": "Whether a readout that is up for any reason OTHER than hover -- a queued plan, or the always-show setting -- also carries the HP digits. Off by default: either one can put a bar over half the board or all of it, and pointing at any of them reveals its number anyway."},
 
-	{"group": "Board markup colours", "label": "Move fill", "layer": BoardOverlays.Layer.MOVE,
+	{"group": "Range readout", "label": "Move fill", "layer": BoardOverlays.Layer.MOVE,
 		"tip": "The tiles one of YOUR units can reach, while you hover it or order a move. Blue since #1066, and it sorts above every other range tone, so the intersect with an enemy field reads as tinted blue rather than as purple. Alpha is the dial that matters most -- markup has to read as gameplay information without burying the terrain under it."},
-	{"group": "Board markup colours", "label": "Invalid-move fill", "layer": BoardOverlays.Layer.INVALID_MOVE,
+	{"group": "Range readout", "label": "Invalid-move fill", "layer": BoardOverlays.Layer.INVALID_MOVE,
 		"tip": "Tiles inside a unit's movement range that it still may not stop on -- out of its leader's cohesion range, or already occupied. Clicking one does nothing, so this colour is the only warning."},
-	{"group": "Board markup colours", "label": "Squad fill", "layer": BoardOverlays.Layer.SQUAD,
+	{"group": "Squads & zones", "label": "Squad fill", "layer": BoardOverlays.Layer.SQUAD,
 		"tip": "The candidate bubble while FORMING a squad (Squad Up / Join Squad) -- the cells a recruit may be picked from. Membership itself is the ring/square markers, not this fill."},
-	{"group": "Board markup colours", "label": "Squad-range fill", "layer": BoardOverlays.Layer.SQUAD_RANGE,
+	{"group": "Squads & zones", "label": "Squad-range fill", "layer": BoardOverlays.Layer.SQUAD_RANGE,
 		"tip": "The leader's cohesion range -- how far squadmates may stray before the plan is refused. Shares its colour with Squad fill by default, since they are two halves of the same idea."},
-	{"group": "Board markup colours", "label": "Capture zone", "layer": BoardOverlays.Layer.ZONE_CAPTURE,
+	{"group": "Squads & zones", "label": "Capture zone", "layer": BoardOverlays.Layer.ZONE_CAPTURE,
 		"tip": "A painted objective zone that can be captured. Stays visible for the whole battle -- this is live objective information, not authoring scaffolding."},
-	{"group": "Board markup colours", "label": "Extraction zone", "layer": BoardOverlays.Layer.ZONE_EXTRACTION,
+	{"group": "Squads & zones", "label": "Extraction zone", "layer": BoardOverlays.Layer.ZONE_EXTRACTION,
 		"tip": "A painted zone your units must reach to extract. Also visible all battle."},
-	{"group": "Board markup colours", "label": "Deployment zone", "layer": BoardOverlays.Layer.ZONE_DEPLOYMENT,
+	{"group": "Squads & zones", "label": "Deployment zone", "layer": BoardOverlays.Layer.ZONE_DEPLOYMENT,
 		"tip": "Where the force you bring may be placed before the mission starts. Unlike the two above it is gone the moment turn 1 begins, so this colour only has to read against the map for as long as you are choosing."},
-	{"group": "Board markup colours", "label": "Attack reach (2D+3D)", "static": "ATTACK_MODULATE",
+	{"group": "Aiming", "label": "Attack reach (2D+3D)", "static": "ATTACK_MODULATE",
 		"tip": "The reach fill while aiming a damaging attack. Red reads as hostile, which is the whole reason a healing pick paints green instead."},
-	{"group": "Board markup colours", "label": "Heal reach (2D+3D)", "static": "HEAL_ATTACK_MODULATE",
+	{"group": "Aiming", "label": "Heal reach (2D+3D)", "static": "HEAL_ATTACK_MODULATE",
 		"tip": "The same reach fill when the pick HEALS. Forked off the attack's own heals flag, so an attack cannot paint the wrong colour for what it does."},
 	# The footprint the reach pair above is aimed THROUGH -- the cells the current pick would actually
 	# hit. A const with no row until #422 made it a static var: it is the third channel a player's aim
 	# palette repaints, and a value a palette can move has to be one the dev can author. Its pulsed low
 	# point follows it (aim_pulse_color borrows the fill's RGB), so there is no second colour to chase.
-	{"group": "Board markup colours", "label": "Aim footprint (2D+3D)", "static": "HOVER_MODULATE",
+	{"group": "Aiming", "label": "Aim footprint (2D+3D)", "static": "HOVER_MODULATE",
 		"tip": "The cells your current pick would actually hit, drawn on top of the reach fill. Yellow-on-red out of the box, which is the contrast that makes an aim readable -- tune it against whichever reach colour it sits over, not on its own."},
-	{"group": "Board markup colours", "label": "Blocked-reach dim (3D)", "static": "BLOCKED_REACH_DIM",
+	{"group": "Aiming", "label": "Blocked-reach dim (3D)", "static": "BLOCKED_REACH_DIM",
 		"min": 0.1, "max": 1.0, "step": 0.01,
 		"tip": "How much darker a reach cell past the attack's vertical tolerance draws in 3D, relative to the live reach colour. The 2D says the same thing with a hatched tile instead."},
 
@@ -468,50 +469,66 @@ const CLASS_KNOBS: Array[Dictionary] = [
 	# enemy's one field under both. Tune them as a STACK, never one at a time -- what the player
 	# actually reads is what they composite to where they cross, and there is no fourth colour
 	# authored for that intersect anywhere.
-	{"group": "Board markup colours", "label": "Your attack reach (2D+3D)", "static": "REACH_MODULATE",
+	{"group": "Range readout", "label": "Your attack reach (2D+3D)", "static": "REACH_MODULATE",
 		"tip": "Every cell your hovered or selected unit could hit from anywhere in its blue move range. Drawn UNDER the blue, so what shows is the halo past where you may stand -- an alpha set too low leaves the halo invisible against an enemy field."},
-	{"group": "Board markup colours", "label": "Enemy threat field (2D+3D)", "static": "THREAT_MODULATE",
+	{"group": "Range readout", "label": "Enemy threat field (2D+3D)", "static": "THREAT_MODULATE",
 		"tip": "Where an enemy could go AND what it could hit, as one unbroken field. Under both of your tones, so where it crosses your blue the composite IS the intersect colour -- tune it there as well as over bare ground. Its risky neighbours are the violet deployment zone and the mauve invalid-move fill."},
+
+	# THE GRID YOUR MOVEMENT RANGE IS DRAWN WITH (#1074). Four placement values in pixels of the
+	# 32-pixel tile, generated into one texture both views draw -- no colour here, because the line and
+	# the inner square wear Move fill above. Defaults are the dev's own, picked off a slider mockup.
+	{"group": "Movement grid", "label": "Grid line inset (2D+3D)", "static": "GRID_LINE_INSET",
+		"script": MOVE_GRID_SCRIPT, "min": 0.0, "max": 12.0, "step": 1.0,
+		"tip": "How far in from the tile's edge the line starts, in pixels of the 32-pixel tile. At 0 two neighbouring tiles' lines touch and read as one continuous lattice; above it every tile is its own framed square again, with a gap between neighbours."},
+	{"group": "Movement grid", "label": "Grid line width (2D+3D)", "static": "GRID_LINE_WIDTH",
+		"script": MOVE_GRID_SCRIPT, "min": 0.0, "max": 16.0, "step": 1.0,
+		"tip": "How thick the line is on each tile. Where two tiles meet their lines sit side by side, so a line BETWEEN tiles draws twice this and the rim of the range once. At 1 the rim is a single pixel, which can shimmer at the farthest zoom. 0 is no line at all."},
+	{"group": "Movement grid", "label": "Grid inner gap (2D+3D)", "static": "GRID_FILL_GAP",
+		"script": MOVE_GRID_SCRIPT, "min": 0.0, "max": 12.0, "step": 1.0,
+		"tip": "Clear space between the line's inner edge and the inner square, in the same pixels."},
+	{"group": "Movement grid", "label": "Grid inner fill (2D+3D)", "static": "GRID_FILL_ALPHA",
+		"script": MOVE_GRID_SCRIPT, "min": 0.0, "max": 1.0, "step": 0.01,
+		"tip": "The inner square's strength as a fraction of the line's. It wears the same colour as the line (Move fill), so this is only how faint. 0 is the pure-gridline look, with nothing inside the tiles."},
 	# The exact tier (#710 slice 2): what the AI WILL do, as opposed to what it COULD. It has to
 	# read as a promise rather than a possibility, so tune it AGAINST the threat line above.
 	# The PIN flash (#1066, re-cut by #1069). Its own two rows because a cue that says "you asked for
 	# this one" has to be findable at a glance and was tunable nowhere at all -- PIN_PULSE_MODULATE
 	# has been a static var with no row since the day it was written.
-	{"group": "Board markup colours", "label": "Pinned enemy flash", "static": "PIN_PULSE_MODULATE",
+	{"group": "Enemy focus", "label": "Pinned enemy flash", "static": "PIN_PULSE_MODULATE",
 		"script": UNIT_VISUALS_SCRIPT,
 		"tip": "What a shift+clicked enemy's sprite brightens TO. Above 1.0 on each channel washes the art toward white, which is what the dev asked for after the first version read as the unit going dark between beats. It may be brighter than the aim pulse: the two no longer differ by depth, they differ by cadence -- an aim breathes, a pin snaps and sits."},
-	{"group": "Board markup colours", "label": "Pinned enemy flash hold", "static": "PIN_PULSE_HOLD",
+	{"group": "Enemy focus", "label": "Pinned enemy flash hold", "static": "PIN_PULSE_HOLD",
 		"script": UNIT_VISUALS_SCRIPT, "min": 0.0, "max": 3.0, "step": 0.05,
 		"tip": "How long it stays at that peak before easing back, in seconds. Zero is the old symmetric breathe, which spends half its cycle returning to normal and reads as a DIP rather than a flash. The ramp either side is half a second, so this is roughly how much of the cycle the cue actually occupies."},
-	{"group": "Board markup colours", "label": "Enemy focus outline (2D+3D)", "static": "FOCUS_OUTLINE_COLOR",
+	{"group": "Enemy focus", "label": "Enemy focus outline (2D+3D)", "static": "FOCUS_OUTLINE_COLOR",
 		"tip": "The stroke round the whole field of the enemy under the pointer. Since #1066 it is the ONLY thing separating that enemy from every other one whose ranges are up -- nothing dims any more -- so it has to read against the threat field, your own two tones and the terrain alike."},
-	{"group": "Board markup colours", "label": "Reach mark (2D+3D)", "static": "MARK_LINE_COLOR", "script": THREAT_LINES_SCRIPT,
+	{"group": "Reach lines: the arc", "label": "Reach mark (2D+3D)", "static": "MARK_LINE_COLOR", "script": THREAT_LINES_SCRIPT,
 		"tip": "The mark from an enemy to the cell you are hovering a move onto -- one per enemy that could hit you there. Pink because nothing else on the board owns that hue: the aim footprint is yellow and the sight bead white, which is what the old amber read as. The cone at the far end shares it."},
-	{"group": "Board markup colours", "label": "Reach mark height", "static": "MARK_HEIGHT", "script": THREAT_LINES_SCRIPT,
+	{"group": "Reach lines: the arc", "label": "Reach mark height", "static": "MARK_HEIGHT", "script": THREAT_LINES_SCRIPT,
 		"min": 0.0, "max": 2.0, "step": 0.025,
 		"tip": "How high above a unit's own footing the mark hangs, in rule height units (two to a level). 0.625 is the middle of a body: a map sprite's ink stands 1.25 of these tall. Deliberately NOT the sight beam's height, which is a RULE about what a wall is and cannot move for a look."},
-	{"group": "Board markup colours", "label": "Reach mark bow", "static": "MARK_BOW_PER_CELL", "script": THREAT_LINES_SCRIPT,
+	{"group": "Reach lines: the arc", "label": "Reach mark bow", "static": "MARK_BOW_PER_CELL", "script": THREAT_LINES_SCRIPT,
 		"min": 0.0, "max": 1.0, "step": 0.025,
 		"tip": "How far the mark arcs above the straight line between the two units, per CELL of its own length -- so a short mark and a long one bow by the same amount relative to their run. Zero draws a straight line."},
-	{"group": "Board markup colours", "label": "Reach mark inset", "static": "MARK_INSET", "script": THREAT_LINES_SCRIPT,
+	{"group": "Reach lines: the arc", "label": "Reach mark inset", "static": "MARK_INSET", "script": THREAT_LINES_SCRIPT,
 		"min": 0.0, "max": 1.0, "step": 0.05,
 		"tip": "How far short of the victim the mark stops, in cells. Pure taste -- the crown hangs well above the mark, so nothing is being cleared. Too large and it points at open air."},
-	{"group": "Board markup colours", "label": "Reach cone length", "static": "CONE_LENGTH", "script": THREAT_LINES_SCRIPT,
+	{"group": "Reach lines: the cone", "label": "Reach cone length", "static": "CONE_LENGTH", "script": THREAT_LINES_SCRIPT,
 		"min": 0.0, "max": 1.5, "step": 0.05,
 		"tip": "How much of the mark's far end tapers to a point, in cells, measured along the arc so a deeper bow does not shrink it. Zero leaves a bare line with nothing saying which way the blow runs but the bead."},
-	{"group": "Board markup colours", "label": "Reach cone width", "static": "CONE_WIDTH_SCALE", "script": THREAT_LINES_SCRIPT,
+	{"group": "Reach lines: the cone", "label": "Reach cone width", "static": "CONE_WIDTH_SCALE", "script": THREAT_LINES_SCRIPT,
 		"min": 1.0, "max": 6.0, "step": 0.1,
 		"tip": "How wide the cone's base is as a MULTIPLE of the mark's own width, so widening the mark widens its cone with it. It wants to be subtle -- barely more than the shaft, converging to nothing at the victim."},
-	{"group": "Board markup colours", "label": "Leash reveal (2D+3D)", "static": "ZONE_HIGHLIGHT_MODULATE",
+	{"group": "Squads & zones", "label": "Leash reveal (2D+3D)", "static": "ZONE_HIGHLIGHT_MODULATE",
 		"tip": "A sentry's patrol zone while you hover it or hold the threat view -- and the Tile Brush's picked zone, which is the same layer and the same colour."},
 
 	# The watched footprint (#413). It has to read as a THREAT while every range overlay is off, and
 	# it is on screen for both sides at once, so its loudness is the one dial that decides whether
 	# the board is legible or a christmas tree. Tune it against the reach fills, not away from white:
 	# red already means a damaging reach, and a watch is a promise of exactly that.
-	{"group": "Board markup colours", "label": "Watch footprint (2D+3D)", "static": "WATCH_MARK_COLOR",
+	{"group": "Watch", "label": "Watch footprint (2D+3D)", "static": "WATCH_MARK_COLOR",
 		"tip": "The mark on every cell a standing Overwatch covers, yours and the enemy's alike. Always on screen while a watch is live, so this is the dial between 'unmissable' and 'noise'."},
-	{"group": "Board markup colours", "label": "Watch mark size", "static": "WATCH_MARK_SCALE",
+	{"group": "Watch", "label": "Watch mark size", "static": "WATCH_MARK_SCALE",
 		"min": 0.25, "max": 2.0, "step": 0.05,
 		"tip": "How big the watch mark draws relative to its cell. 1.0 is one cell exactly, which is what the art is authored at; smaller reads as a tick in the middle of the tile."},
 
@@ -519,48 +536,48 @@ const CLASS_KNOBS: Array[Dictionary] = [
 	# while the player is declaring, and what they have to say is "this is not an ordinary shot".
 	# Tune them as a PAIR and against the reach fills -- the wash carries the glance and the footprint
 	# has to stay legible on top of it, which is what the yellow-on-red pair does for a shot.
-	{"group": "Board markup colours", "label": "Watch aim reach (2D+3D)", "static": "WATCH_REACH_MODULATE",
+	{"group": "Watch", "label": "Watch aim reach (2D+3D)", "static": "WATCH_REACH_MODULATE",
 		"tip": "The reach fill while DECLARING an overwatch rather than firing. It replaces the red/green heal fork outright, on the grounds that you already know what you picked and cannot otherwise tell you are aiming a watch."},
-	{"group": "Board markup colours", "label": "Watch aim footprint (2D+3D)", "static": "WATCH_HOVER_MODULATE",
+	{"group": "Watch", "label": "Watch aim footprint (2D+3D)", "static": "WATCH_HOVER_MODULATE",
 		"tip": "The cells a watch aim would actually cover, drawn over the reach fill above -- the watch's answer to the yellow an ordinary aim uses. Its pulsed low point is derived from this, so there is no third colour to chase."},
 
 	# The shove trail (2026-08-21). A predicted shove and an authored move drew identically -- both
 	# plain white -- so this is what separates "what is about to be done to this unit" from "what it
 	# chose". Tune it AGAINST the arrow palette, not just away from white: red already means a
 	# refused order and green a member falling behind.
-	{"group": "Board markup colours", "label": "Shove trail (2D+3D)", "static": "KNOCKBACK_MODULATE",
+	{"group": "Arrows & trails", "label": "Shove trail (2D+3D)", "static": "KNOCKBACK_MODULATE",
 		"tip": "The knockback trail a predicted shove draws, and the drop pointer that hangs off it in 3D. Distinct from a planned move's arrow, which is an order the player authored -- a shove is a consequence. Takes effect on a preview already up."},
 
 	# The three planned-move tints. They were hardcoded literals inside _arrow_modulate until the
 	# trail art was desaturated (2026-08-21) -- while the art was cyan it carried most of the hue
 	# and these only shaded it, so tuning them was near-pointless. On greyscale art they ARE the
 	# colour, which is what makes them knobs.
-	{"group": "Board markup colours", "label": "Move arrow", "static": "MOVE_ARROW_MODULATE",
+	{"group": "Arrows & trails", "label": "Move arrow", "static": "MOVE_ARROW_MODULATE",
 		"tip": "A queued move's path arrow. Pre-set to the cyan the old art baked in, so this is what moves have always looked like -- now as a value you can move rather than a colour hidden in a PNG."},
-	{"group": "Board markup colours", "label": "Refused-move arrow", "static": "INVALID_ARROW_MODULATE",
+	{"group": "Arrows & trails", "label": "Refused-move arrow", "static": "INVALID_ARROW_MODULATE",
 		"tip": "A queued move the plan has since refused -- out of the leader's cohesion range, or its destination taken. Reads brighter than before the art was desaturated, because the cyan used to multiply it down."},
-	{"group": "Board markup colours", "label": "Trailing-move arrow", "static": "TRAILING_ARROW_MODULATE",
+	{"group": "Arrows & trails", "label": "Trailing-move arrow", "static": "TRAILING_ARROW_MODULATE",
 		"tip": "A Group Move member that stays in range but ends FURTHER from its leader than it started (Case 1) -- legal, but worth seeing. Same brightening as the refused colour above."},
 
 	# The armed-Guard pair (#414 shield, #450 arrow). The statics existed from #414 and their own
 	# comment called them the loudness knobs, but neither had ever had a row in any panel -- so the
 	# one knob the dev asked for brought its two siblings with it rather than leaving a mark half
 	# tunable. The arrow ships WHITE deliberately: see GUARD_LINK_MODULATE's declaration.
-	{"group": "Board markup colours", "label": "Guard link arrow", "static": "GUARD_LINK_MODULATE",
+	{"group": "Guard", "label": "Guard link arrow", "static": "GUARD_LINK_MODULATE",
 		"tip": "The arrow running from a bodyguard to the unit it is covering. Starts neutral white, so this picker is the whole colour rather than a shade over one baked into the art. Tune it against the arrow palette -- cyan already means a queued move, red a refused one, green a member falling behind. Takes effect on links already on the board."},
-	{"group": "Board markup colours", "label": "Guard link head inset", "static": "GUARD_LINK_HEAD_INSET",
+	{"group": "Guard", "label": "Guard link head inset", "static": "GUARD_LINK_HEAD_INSET",
 		"min": 0.0, "max": 1.0, "step": 0.05,
 		"tip": "How far back from the ward's cell centre the link's arrowhead stops, in cells. 0 puts it on the shield, which is what the dev reported as unreadable; 0.5 parks it on the edge the pair shares and leaves three columns of overlap; about 0.7 clears the shield outright. Redraws links already on the board."},
-	{"group": "Board markup colours", "label": "Guard ward shield", "static": "GUARD_RING_COLOR",
+	{"group": "Guard", "label": "Guard ward shield", "static": "GUARD_RING_COLOR",
 		"tip": "The shield decal under the unit a Guard is protecting -- the other half of the mark the arrow above points at. Neutral white by default now the art is real."},
 
 	# The tile-pick flash (#116). A PERIOD and a peak ALPHA rather than a colour: the pick borrows
 	# the reach layer, whose hue is already the two knobs above, so a flash that set its own colour
 	# would be a second answer to what that layer looks like.
-	{"group": "Board markup colours", "label": "Tile-pick flash alpha", "static": "PICK_FLASH_ALPHA",
+	{"group": "Tile pick", "label": "Tile-pick flash alpha", "static": "PICK_FLASH_ALPHA",
 		"min": 0.1, "max": 1.0, "step": 0.01,
 		"tip": "How opaque the candidate tiles go at the top of their flash while a rescue is asking which bank to pull a body onto. It breathes between the layer's own alpha and this one, so the hue never changes. Takes effect on the next pick."},
-	{"group": "Board markup colours", "label": "Tile-pick flash period", "static": "PICK_FLASH_PERIOD",
+	{"group": "Tile pick", "label": "Tile-pick flash period", "static": "PICK_FLASH_PERIOD",
 		"min": 0.05, "max": 2.0, "step": 0.05,
 		"tip": "Seconds for HALF a flash cycle -- the time from the layer's own alpha up to the peak, then the same back down. Smaller is a faster blink. Takes effect on the next pick."},
 
@@ -569,19 +586,19 @@ const CLASS_KNOBS: Array[Dictionary] = [
 	# never disagree about what a blocked shot looks like. Statics rather than LAYERS entries for
 	# the same reason: BoardOverlays' SIGHT_TRACE colour is only the no-mirror fallback, so a knob
 	# pointed at it would be a slider nothing reads. HOW BRIGHT the 3D beam burns is a separate row
-	# on the Board markup group, since a colour row here tops out at full white.
-	{"group": "Board markup colours", "label": "Sight beam, clear", "static": "CLEAR_COLOR", "script": SIGHT_TRACE_SCRIPT,
+	# in the same section (a node property, one table over), since a colour row tops out at white.
+	{"group": "Sight beam", "label": "Sight beam, clear", "static": "CLEAR_COLOR", "script": SIGHT_TRACE_SCRIPT,
 		"tip": "The aim's sight beam when the shot has a clear line. Reads on top of the terrain rather than as part of it, so it wants to be a colour nothing on the board is -- the default is plain white and lets the glow knob do the work. Takes effect on a beam already up. Unlike the reach and footprint rows, the player's Aim colours palette does NOT repaint this -- the beam is outside #422's vocabulary, so what you tune here is what every player sees."},
-	{"group": "Board markup colours", "label": "Sight beam, blocked", "static": "BLOCKED_COLOR", "script": SIGHT_TRACE_SCRIPT,
+	{"group": "Sight beam", "label": "Sight beam, blocked", "static": "BLOCKED_COLOR", "script": SIGHT_TRACE_SCRIPT,
 		"tip": "The same beam when terrain stops the shot -- it is drawn only as far as the block, so this colour and the length are together the whole verdict. Wants to be unmistakable against the clear colour at a glance, since the two are never on screen at the same time to compare. Takes effect on a beam already up. Not palette-driven either, so this colour stands whatever Aim colours is set to."},
 
 	# The #325 rings. A float rather than a colour, and the reason this table is named for WHERE a
 	# value lives rather than for what type it is: ring alpha is a static on OverlayManager, exactly
 	# like the two reach colours above, and both stacks read it.
-	{"group": "Squad markers", "label": "Ring opacity", "static": "SQUAD_RING_ALPHA",
+	{"group": "Squads & zones", "label": "Ring opacity", "static": "SQUAD_RING_ALPHA",
 		"min": 0.1, "max": 1.0, "step": 0.01,
 		"tip": "Alpha of the per-squad membership rings under each member (the leader's crown, over the head, stays opaque). Takes effect on markers already up."},
-	{"group": "Squad markers", "label": "Ring pulse brightness", "static": "SQUAD_RING_PULSE_GAIN",
+	{"group": "Squads & zones", "label": "Ring pulse brightness", "static": "SQUAD_RING_PULSE_GAIN",
 		"min": 1.0, "max": 3.0, "step": 0.05,
 		"tip": "How much brighter a squad ring goes at the top of its pulse while Join Squad is picking a squad. A gain on the ring's own hue, so a pulsing ring still reads as its squad's colour. 1.0 is no pulse at all. Takes effect on the next pick."},
 
@@ -938,60 +955,60 @@ const CLASS_KNOBS: Array[Dictionary] = [
 	# before tuning: a jolt is matched to the health cubes bursting on their own real-time clock, so
 	# it is flat and applies with the battle zoom off too; a sway is anticipation, so it dials out
 	# with everything else on the plain board.
-	{"group": "Camera flourish", "label": "Jolt: a hit lands", "static": "SHAKE_HIT",
+	{"group": "Flourish: jolt", "label": "Jolt: a hit lands", "static": "SHAKE_HIT",
 		"script": PACING_SCRIPT, "min": 0.0, "max": 1.0, "step": 0.01,
 		"tip": "How hard the camera is knocked when a blow takes health off someone, in cells. Fires on the health-cube burst itself, so the jolt and the cubes always agree about when the hit landed. Applies in BOTH profiles -- it is matched to an animation, not to the drama. Zero is no shake."},
-	{"group": "Camera flourish", "label": "Jolt: a unit goes down", "static": "SHAKE_DOWN",
+	{"group": "Flourish: jolt", "label": "Jolt: a unit goes down", "static": "SHAKE_DOWN",
 		"script": PACING_SCRIPT, "min": 0.0, "max": 2.0, "step": 0.01,
 		"tip": "How hard the camera is knocked when a unit is killed or removed, in cells. A killing hit fires ONLY this one, never the hit jolt above -- so this is the whole of what a death feels like, not an extra on top."},
-	{"group": "Camera flourish", "label": "Jolt: how fast it dies", "static": "SHAKE_DECAY",
+	{"group": "Flourish: jolt", "label": "Jolt: how fast it dies", "static": "SHAKE_DECAY",
 		"script": PACING_SCRIPT, "min": 1.0, "max": 40.0, "step": 0.5,
 		"tip": "How quickly a jolt fades out. Higher is snappier -- a sharp rap rather than a wobble. Shared by both jolts above, so they read as one camera with one weight."},
-	{"group": "Camera flourish", "label": "Jolt: how fast it shakes", "static": "SHAKE_FREQUENCY",
+	{"group": "Flourish: jolt", "label": "Jolt: how fast it shakes", "static": "SHAKE_FREQUENCY",
 		"script": PACING_SCRIPT, "min": 4.0, "max": 90.0, "step": 1.0,
 		"tip": "How fast the jolt oscillates. Low reads as a heave, high as a rattle. With the decay above, these two are the whole character of an impact."},
-	{"group": "Camera flourish", "label": "Sway: how far", "static": "SWAY_AMPLITUDE",
+	{"group": "Flourish: sway", "label": "Sway: how far", "static": "SWAY_AMPLITUDE",
 		"script": PACING_SCRIPT, "min": 0.0, "max": 0.5, "step": 0.01,
 		"tip": "How far the camera drifts while it is resting on a shot, in cells -- the hand-held breath that keeps a held frame from reading as a screenshot. Zero is a locked-off camera."},
-	{"group": "Camera flourish", "label": "Sway: how fast", "static": "SWAY_SPEED",
+	{"group": "Flourish: sway", "label": "Sway: how fast", "static": "SWAY_SPEED",
 		"script": PACING_SCRIPT, "min": 0.1, "max": 5.0, "step": 0.05,
 		"tip": "How fast that drift breathes. It is two waves at an irrational ratio rather than one, so the bob never quite repeats -- this sets the slower of them."},
-	{"group": "Camera flourish", "label": "Sway strength (zoom off)", "static": "BOARD_SWAY",
+	{"group": "Flourish: sway", "label": "Sway strength (zoom off)", "static": "BOARD_SWAY",
 		"profile": "board", "script": PACING_SCRIPT, "min": 0.0, "max": 1.0, "step": 0.05,
 		"tip": "How much of the sway applies on the plain board. Ships at 0 -- the board is as still as it has always been -- so wanting some breath down here later is this one number rather than a restructure."},
-	{"group": "Camera flourish", "label": "Sway strength (zoom on)", "static": "CINEMATIC_SWAY",
+	{"group": "Flourish: sway", "label": "Sway strength (zoom on)", "static": "CINEMATIC_SWAY",
 		"profile": "cinematic", "script": PACING_SCRIPT, "min": 0.0, "max": 1.0, "step": 0.05,
 		"tip": "How much of the sway applies with the battle zoom on."},
 	# Lethality-aware direction (#520 diff 2c). The push-in leans on the player's own zoom rather
 	# than replacing it, so these move how far the director may lean -- never where the wheel sits.
-	{"group": "Camera flourish", "label": "Shot: push-in on the loudest beat", "static": "DOLLY_IN",
+	{"group": "Flourish: shots", "label": "Shot: push-in on the loudest beat", "static": "DOLLY_IN",
 		"profile": "cinematic", "script": PACING_SCRIPT, "min": 0.0, "max": 10.0, "step": 0.1,
 		"tip": "How much closer the camera sits on a killing blow, in world units, at full emphasis. SUBTRACTED from wherever you have left the zoom, so the wheel keeps working underneath and the push-in comes off when the beat ends. Scaled by the directed-shot strength, so it is dead on the plain board."},
-	{"group": "Camera flourish", "label": "Shot: how close the push-in may get", "static": "DOLLY_FLOOR",
+	{"group": "Flourish: shots", "label": "Shot: how close the push-in may get", "static": "DOLLY_FLOOR",
 		"script": PACING_SCRIPT, "min": 0.5, "max": 20.0, "step": 0.5,
 		"tip": "The nearest the push-in may bring the directed shot. During playback the camera is fully directed -- your own zoom is stashed and handed back after -- so this floors the director against flying through a unit. It caps the push-in's contribution, never the total: a shot already sitting closer just gets no push-in rather than being shoved back out. No floor on the wheel outside playback, by design."},
-	{"group": "Camera flourish", "label": "Shot: trained on a unit", "static": "TRAINED_DISTANCE",
+	{"group": "Flourish: shots", "label": "Shot: trained on a unit", "static": "TRAINED_DISTANCE",
 		"script": PACING_SCRIPT, "min": 2.0, "max": 20.0, "step": 0.25,
 		"tip": "How far out the camera sits while the shot is following one unit -- a beat's subject, a body mid-tumble. The close-up of the pair: the wide establishing shot fits the whole stage, and this is what it cuts in to. The push-in still leans in from here on a killing blow, so keep it a little above its floor."},
-	{"group": "Camera flourish", "label": "Emphasis: a unit goes down", "static": "EMPHASIS_DOWN",
+	{"group": "Flourish: emphasis", "label": "Emphasis: a unit goes down", "static": "EMPHASIS_DOWN",
 		"script": PACING_SCRIPT, "min": 0.0, "max": 1.0, "step": 0.05,
 		"tip": "How big a moment a death is, 0 to 1 -- the weight that drives the push-in. Loudest rung wins, so this is the top of the ladder. An ordinary hit earns 0 and is the baseline the rest are read against."},
-	{"group": "Camera flourish", "label": "Emphasis: someone stands up surged", "static": "EMPHASIS_CRISIS",
+	{"group": "Flourish: emphasis", "label": "Emphasis: someone stands up surged", "static": "EMPHASIS_CRISIS",
 		"script": PACING_SCRIPT, "min": 0.0, "max": 1.0, "step": 0.05,
 		"tip": "How big a Crisis is. Its own number rather than a share of the death rung: the two rankings may legitimately disagree, since a hold and a kill want different shots."},
-	{"group": "Camera flourish", "label": "Emphasis: that should have killed them", "static": "EMPHASIS_IRON_WILL",
+	{"group": "Flourish: emphasis", "label": "Emphasis: that should have killed them", "static": "EMPHASIS_IRON_WILL",
 		"script": PACING_SCRIPT, "min": 0.0, "max": 1.0, "step": 0.05,
 		"tip": "How big a capped hit is -- the blow that should have been lethal and was not. It earns a long PAUSE from the holds table already; this is separately how much of a push-in it earns."},
-	{"group": "Camera flourish", "label": "Freeze: a killing blow", "static": "HITSTOP_DOWN",
+	{"group": "Flourish: freeze", "label": "Freeze: a killing blow", "static": "HITSTOP_DOWN",
 		"profile": "cinematic", "script": PACING_SCRIPT, "min": 0.0, "max": 0.5, "step": 0.01,
 		"tip": "How long EVERYTHING stops when a unit is killed, in real seconds -- the whole world, not just the camera. Zero is no freeze. The health cubes stop with it and resume with it, so the pause after a death still covers the burst exactly."},
-	{"group": "Camera flourish", "label": "Freeze strength (zoom off)", "static": "BOARD_HITSTOP",
+	{"group": "Flourish: freeze", "label": "Freeze strength (zoom off)", "static": "BOARD_HITSTOP",
 		"profile": "board", "script": PACING_SCRIPT, "min": 0.0, "max": 1.0, "step": 0.05,
 		"tip": "How much of that freeze the plain board gets. Ships at 0 -- a freeze CREATES time rather than matching an animation, so unlike the jolt it is drama and dials out with everything else down here."},
-	{"group": "Camera flourish", "label": "Freeze strength (zoom on)", "static": "CINEMATIC_HITSTOP",
+	{"group": "Flourish: freeze", "label": "Freeze strength (zoom on)", "static": "CINEMATIC_HITSTOP",
 		"profile": "cinematic", "script": PACING_SCRIPT, "min": 0.0, "max": 1.0, "step": 0.05,
 		"tip": "How much of that freeze applies with the battle zoom on."},
-	{"group": "Camera flourish", "label": "Shot: how far the camera stoops", "static": "PITCH_DIVE",
+	{"group": "Flourish: shots", "label": "Shot: how far the camera stoops", "static": "PITCH_DIVE",
 		"profile": "cinematic", "script": PACING_SCRIPT, "min": 0.0, "max": 40.0, "step": 0.5,
 		"tip": "How many degrees SHALLOWER than the board's own angle a directed shot sits, so the fight looms instead of being read from overhead. Clamped by the same tilt band the player's drag uses. Scaled by the directed-shot strength, so it is dead on the plain board for the same reason the side-on angle is."},
 
@@ -1120,71 +1137,71 @@ const CLASS_KNOBS: Array[Dictionary] = [
 	# centre is FOR, and thin rings read as a menu rather than as a pie chart. Paint fraction is the
 	# other half of that -- it narrows the drawn wedge WITHOUT moving a single hit boundary, since
 	# the sectors always tile the full circle whatever they paint.
-	{"group": "Action ring", "label": "Centre gap", "static": "RING_INNER_RADIUS",
+	{"group": "Ring: shape", "label": "Centre gap", "static": "RING_INNER_RADIUS",
 		"script": ACTION_MENU_SCRIPT, "min": 30.0, "max": 200.0, "step": 1.0,
 		"tip": "Radius from the unit's sprite out to the first ring of options. Wide enough that the sprite in the middle reads as the subject rather than as decoration."},
-	{"group": "Action ring", "label": "Ring thickness", "static": "RING_THICKNESS",
+	{"group": "Ring: shape", "label": "Ring thickness", "static": "RING_THICKNESS",
 		"script": ACTION_MENU_SCRIPT, "min": 12.0, "max": 90.0, "step": 1.0,
 		"tip": "How deep each ring of options is. Thin reads as a menu; thick starts reading as a pie chart, which is the thing this menu is trying not to be."},
-	{"group": "Action ring", "label": "Ring gap", "static": "RING_GAP",
+	{"group": "Ring: shape", "label": "Ring gap", "static": "RING_GAP",
 		"script": ACTION_MENU_SCRIPT, "min": 0.0, "max": 40.0, "step": 1.0,
 		"tip": "Empty space between one ring and the next one out. Enough to read as two rings, not so much that a submenu looks unrelated to what opened it."},
-	{"group": "Action ring", "label": "Dead zone", "static": "DEAD_ZONE_RADIUS",
+	{"group": "Ring: shape", "label": "Dead zone", "static": "DEAD_ZONE_RADIUS",
 		"script": ACTION_MENU_SCRIPT, "min": 10.0, "max": 200.0, "step": 1.0,
 		"tip": "Radius around the centre that selects NOTHING -- the only place a click cancels, since every other point on the screen belongs to some slice. Keep it inside the centre gap."},
 	# The name under the sprite (#560) and the lift that makes room for it. Two knobs because both are
 	# taste: the dev asked to bump the sprite "slightly", which is not a number anyone can derive. The
 	# name's WIDTH is not here on purpose -- it is the disc's own chord at the baseline, so it follows
 	# Dead zone rather than being a third value to keep in sync.
-	{"group": "Action ring", "label": "Sprite lift", "static": "CENTRE_SPRITE_LIFT",
+	{"group": "Ring: shape", "label": "Sprite lift", "static": "CENTRE_SPRITE_LIFT",
 		"script": ACTION_MENU_SCRIPT, "min": 0.0, "max": 60.0, "step": 1.0,
 		"tip": "How far the unit's sprite rises off centre to make room for its name. Every unit's art sits on the bottom of its own texture, so one lift moves every unit's feet together."},
-	{"group": "Action ring", "label": "Name baseline", "static": "CENTRE_NAME_BASELINE",
+	{"group": "Ring: shape", "label": "Name baseline", "static": "CENTRE_NAME_BASELINE",
 		"script": ACTION_MENU_SCRIPT, "min": 0.0, "max": 80.0, "step": 1.0,
 		"tip": "How far below centre the unit's name sits. Lower is roomier under the sprite but NARROWER, since the disc is round -- push it far enough down and long names start shrinking to fit."},
-	{"group": "Action ring", "label": "Wedge fill", "static": "PAINT_FRACTION",
+	{"group": "Ring: slices", "label": "Wedge fill", "static": "PAINT_FRACTION",
 		"script": ACTION_MENU_SCRIPT, "min": 0.15, "max": 1.0, "step": 0.01,
 		"tip": "How much of its own slice a wedge actually paints, on the first ring. Below 1.0 leaves air between wedges. Purely a look: the slice you are pointing at does not change, only how much of it is drawn."},
-	{"group": "Action ring", "label": "Readout panel", "static": "READOUT_BACKGROUND",
+	{"group": "Ring: readout", "label": "Readout panel", "static": "READOUT_BACKGROUND",
 		"script": ACTION_MENU_SCRIPT,
 		"tip": "The block behind the hovered slice's name and explanation, under the ring. It sits over a live board, so opacity here is legibility -- the first version had none and was painful to read."},
-	{"group": "Action ring", "label": "Readout border", "static": "READOUT_BORDER",
+	{"group": "Ring: readout", "label": "Readout border", "static": "READOUT_BORDER",
 		"script": ACTION_MENU_SCRIPT,
 		"tip": "The outline around that block. Enough to separate it from whatever is behind it."},
-	{"group": "Action ring", "label": "Readout border width", "static": "READOUT_BORDER_WIDTH",
+	{"group": "Ring: readout", "label": "Readout border width", "static": "READOUT_BORDER_WIDTH",
 		"script": ACTION_MENU_SCRIPT, "min": 0.0, "max": 8.0, "step": 0.5,
 		"tip": "How thick that outline is drawn. Zero removes it."},
-	{"group": "Action ring", "label": "Readout name", "static": "READOUT_TITLE_COLOR",
+	{"group": "Ring: readout", "label": "Readout name", "static": "READOUT_TITLE_COLOR",
 		"script": ACTION_MENU_SCRIPT,
 		"tip": "The hovered slice's NAME, and every wedge label too. Kept fully opaque on purpose: the hierarchy against the explanation below is brightness, never transparency."},
-	{"group": "Action ring", "label": "Readout detail", "static": "READOUT_DETAIL_COLOR",
+	{"group": "Ring: readout", "label": "Readout detail", "static": "READOUT_DETAIL_COLOR",
 		"script": ACTION_MENU_SCRIPT,
 		"tip": "The explanation under that name -- what the option does, and why it is greyed when it is. Dimmer than the name, but still solid."},
-	{"group": "Action ring", "label": "Widest wedge", "static": "MAX_WEDGE_DEGREES",
+	{"group": "Ring: shape", "label": "Widest wedge", "static": "MAX_WEDGE_DEGREES",
 		"script": ACTION_MENU_SCRIPT, "min": 20.0, "max": 360.0, "step": 1.0,
 		"tip": "Ceiling on how many degrees any one wedge PAINTS. Without it a submenu holding a single option balloons into a whole donut. It never moves a hit boundary -- the sectors still tile the circle, so the leftover angle belongs to the nearest wedge and the highlight says which."},
-	{"group": "Action ring", "label": "Centre disc", "static": "CENTRE_COLOR",
+	{"group": "Ring: centre", "label": "Centre disc", "static": "CENTRE_COLOR",
 		"script": ACTION_MENU_SCRIPT,
 		"tip": "The disc the unit's sprite sits on. It is exactly the DEAD ZONE drawn, so its edge is a promise about where clicking selects nothing -- opaque enough to lift the sprite off the board behind it."},
-	{"group": "Action ring", "label": "Centre rim", "static": "CENTRE_RIM_COLOR",
+	{"group": "Ring: centre", "label": "Centre rim", "static": "CENTRE_RIM_COLOR",
 		"script": ACTION_MENU_SCRIPT,
 		"tip": "The ring around that disc. Reads as the boundary between the unit and its options."},
-	{"group": "Action ring", "label": "Centre rim width", "static": "CENTRE_RIM_WIDTH",
+	{"group": "Ring: centre", "label": "Centre rim width", "static": "CENTRE_RIM_WIDTH",
 		"script": ACTION_MENU_SCRIPT, "min": 0.0, "max": 12.0, "step": 0.5,
 		"tip": "How thick that rim is drawn. Zero removes it and leaves the bare disc."},
-	{"group": "Action ring", "label": "Wedge fill falloff", "static": "PAINT_FRACTION_FALLOFF",
+	{"group": "Ring: slices", "label": "Wedge fill falloff", "static": "PAINT_FRACTION_FALLOFF",
 		"script": ACTION_MENU_SCRIPT, "min": 0.0, "max": 0.4, "step": 0.01,
 		"tip": "How much less each ring further out paints than the one inside it, so a submenu builds out lighter instead of stacking full circles. Zero paints every ring the same."},
-	{"group": "Action ring", "label": "Preview opacity", "static": "GHOST_ALPHA",
+	{"group": "Ring: slices", "label": "Preview opacity", "static": "GHOST_ALPHA",
 		"script": ACTION_MENU_SCRIPT, "min": 0.05, "max": 1.0, "step": 0.01,
 		"tip": "Opacity of the ring PREVIEWED under the category you are hovering -- what you would open if you clicked. Faint enough to read as not-open-yet, solid enough to read at all."},
-	{"group": "Action ring", "label": "Slice", "static": "SLICE_COLOR",
+	{"group": "Ring: slices", "label": "Slice", "static": "SLICE_COLOR",
 		"script": ACTION_MENU_SCRIPT,
 		"tip": "An ordinary option's wedge. It sits over the board, so its alpha is what decides whether you can still see what you are acting on."},
-	{"group": "Action ring", "label": "Slice (pointed at)", "static": "SLICE_SELECTED_COLOR",
+	{"group": "Ring: slices", "label": "Slice (pointed at)", "static": "SLICE_SELECTED_COLOR",
 		"script": ACTION_MENU_SCRIPT,
 		"tip": "The one slice your angle currently picks. The pointer is routinely nowhere near the ring, so this highlight is the only feedback saying what a click would do."},
-	{"group": "Action ring", "label": "Slice (unavailable)", "static": "SLICE_DISABLED_COLOR",
+	{"group": "Ring: slices", "label": "Slice (unavailable)", "static": "SLICE_DISABLED_COLOR",
 		"script": ACTION_MENU_SCRIPT,
 		"tip": "An option the unit owns but cannot use right now -- a dry magazine, a carving it cannot pay for. It stays listed and says why, so this must read as present-but-dead, not as absent."},
 
@@ -1208,7 +1225,9 @@ const PROFILE_TAB := "Playback"
 const ACTION_GROUP := "Actions"
 # The group whose three aim rows a player's palette can override (#422). Named for the same reason
 # ACTION_GROUP is: the table rows spell the string, and the PANEL needs one place to recognise it.
-const MARKUP_COLOUR_GROUP := "Board markup colours"
+# It was "Board markup colours" until #1074 cut that group by subject -- the notice now sits under
+# the section holding exactly the rows it talks about.
+const AIM_GROUP := "Aiming"
 # The group whose rows a player's camera steps SCALE (#394). Named for the panel's benefit, exactly
 # as the two above are: the table rows spell the string, this is what recognises it.
 const CAMERA_GROUP := "Camera handling"
@@ -1245,12 +1264,37 @@ static func action_for_label(label: String) -> BaseAction.ActionType:
 	return BaseAction.ActionType.ATTACK
 
 
+# DECLARATION ORDER IS BOTH ORDERS since #1074: a tab appears where its first group does, and the
+# sections inside a tab run in the order their groups are listed here. GameTool builds GROUP-major --
+# each section's KNOBS rows then its CLASS_KNOBS rows -- so a section is a SUBJECT and may hold rows
+# from either table. Before that the builder was table-major, which is why the Markup and Colours
+# tabs were split by how a value is STORED (a node property vs a class value) and the reach mark's
+# controls lived on two tabs at once; the dev: "the dev tools need more headers in the Game area.
+# Those sets of controls are a bit dense right now."
 const GROUP_TABS: Dictionary[String, String] = {
-	"Board markup": "Markup",
-	"Dev chrome": "Markup",
-	"Board markup colours": "Colours",
-	"Squad markers": "Colours",
-	"Unit HUD": "Unit HUD",
+	# THE READOUT -- what the board says while you plan. The three range tones first, since they are
+	# tuned as a stack, then the grid your own tones are drawn with.
+	"Range readout": "Markup",
+	"Movement grid": "Markup",
+	"Enemy focus": "Markup",
+	"Reach lines: the arc": "Markup",
+	"Reach lines: the cone": "Markup",
+	"Aiming": "Markup",
+	"Sight beam": "Markup",
+	"Watch": "Markup",
+	# EVERYTHING ELSE LAID ON THE BOARD -- was "Colours", which named how the values were stored.
+	"Arrows & trails": "Markers",
+	"Guard": "Markers",
+	"Squads & zones": "Markers",
+	"Tile pick": "Markers",
+	"Lift, brackets & icons": "Markers",
+	"Dev chrome": "Markers",
+	"HP cubes": "Unit HUD",
+	"HP number": "Unit HUD",
+	"Predicted change": "Unit HUD",
+	"State icons": "Unit HUD",
+	"Cube burst": "Unit HUD",
+	"Heal pop": "Unit HUD",
 	# Its OWN heading on the Unit HUD tab rather than joining the knobs above it (#394): these rows
 	# write a player's real preference and their Save writes a different value again, which is worth
 	# a line of separation from the knobs that simply are what they say.
@@ -1272,7 +1316,8 @@ const GROUP_TABS: Dictionary[String, String] = {
 	# Elemental VFX, not just fire (#420). Ice draws as a flat Layer.TERRAIN icon with no 3D effect
 	# and so has nothing to put here yet; Cover arrives with fire because #326 ruled it the same
 	# kind of thing -- a terrain STATE whose art draws objects. A new element is one line.
-	"Fire": "Elemental",
+	"Fire: the flames": "Elemental",
+	"Fire: light and glow": "Elemental",
 	"Cover": "Elemental",
 	# ...and what an element looks like in 2D UI (#685), beside what it looks like on the board.
 	"Element colours": "Elemental",
@@ -1289,16 +1334,18 @@ const GROUP_TABS: Dictionary[String, String] = {
 	"Action queue": "Elemental",
 	# Playback is SIX groups on one tab (dev, 2026-08-27) -- thirty flat rows was unreadable, and a
 	# group is what draws a heading. Same two-groups-one-tab shape Water uses, three sections further.
-	# Declaration order here is only the TAB order; the section order inside the tab is the KNOBS
-	# table's own, which is why those rows are kept contiguous and in this same sequence.
 	"The profile": "Playback",
 	"Actions": "Playback",
 	"Outcomes": "Playback",
 	"Camera travel": "Playback",
 	# ...and a SEVENTH since #520 diff 2b. Its own group rather than more rows under the travel one
 	# because they answer different questions: that section is how long the camera takes to GET
-	# somewhere, this is what it does once it is there.
-	"Camera flourish": "Playback",
+	# somewhere, this is what it does once it is there. Cut five ways by #1074, one per kind of move.
+	"Flourish: jolt": "Playback",
+	"Flourish: sway": "Playback",
+	"Flourish: shots": "Playback",
+	"Flourish: emphasis": "Playback",
+	"Flourish: freeze": "Playback",
 	"The tear-out": "Playback",
 	# ...and its dust (#656), beside it rather than in it -- the Water split's shape, one tab along.
 	"The tear-out: dust": "Playback",
@@ -1307,7 +1354,10 @@ const GROUP_TABS: Dictionary[String, String] = {
 	# and only the first is cinematic-only.
 	"The cliff follow": "Playback",
 	"Motion": "Playback",
-	"Action ring": "Action ring",
+	"Ring: shape": "Action ring",
+	"Ring: slices": "Action ring",
+	"Ring: centre": "Action ring",
+	"Ring: readout": "Action ring",
 }
 
 
@@ -1417,6 +1467,10 @@ static func read_static(name: String) -> Variant:
 		"MARK_INSET": return ThreatLines2D.MARK_INSET
 		"CONE_LENGTH": return ThreatLines2D.CONE_LENGTH
 		"CONE_WIDTH_SCALE": return ThreatLines2D.CONE_WIDTH_SCALE
+		"GRID_LINE_INSET": return MoveGrid.GRID_LINE_INSET
+		"GRID_LINE_WIDTH": return MoveGrid.GRID_LINE_WIDTH
+		"GRID_FILL_GAP": return MoveGrid.GRID_FILL_GAP
+		"GRID_FILL_ALPHA": return MoveGrid.GRID_FILL_ALPHA
 		"PIN_PULSE_MODULATE": return UnitVisuals.PIN_PULSE_MODULATE
 		"PIN_PULSE_HOLD": return UnitVisuals.PIN_PULSE_HOLD
 		"SQUAD_RING_ALPHA": return OverlayManager.SQUAD_RING_ALPHA
@@ -1633,6 +1687,23 @@ static func write_static(host: Node3D, name: String, value: Variant) -> void:
 		"PIN_PULSE_HOLD":
 			UnitVisuals.PIN_PULSE_HOLD = value
 			_restyle_pin_flashes(host)
+			return
+		# The movement grid (#1074). All four regenerate the one texture each view already holds.
+		"GRID_LINE_INSET":
+			MoveGrid.GRID_LINE_INSET = value
+			_restyle_move_grid(host)
+			return
+		"GRID_LINE_WIDTH":
+			MoveGrid.GRID_LINE_WIDTH = value
+			_restyle_move_grid(host)
+			return
+		"GRID_FILL_GAP":
+			MoveGrid.GRID_FILL_GAP = value
+			_restyle_move_grid(host)
+			return
+		"GRID_FILL_ALPHA":
+			MoveGrid.GRID_FILL_ALPHA = value
+			_restyle_move_grid(host)
 			return
 		"SQUAD_RING_ALPHA": OverlayManager.SQUAD_RING_ALPHA = value
 		"SQUAD_RING_PULSE_GAIN": OverlayManager.SQUAD_RING_PULSE_GAIN = value
@@ -2203,6 +2274,17 @@ static func write_static(host: Node3D, name: String, value: Variant) -> void:
 		"MOVE_ARROW_MODULATE", "INVALID_ARROW_MODULATE", "TRAILING_ARROW_MODULATE":
 			manager.redraw_planned_paths()
 		_: manager.refresh_aim_colors()
+
+
+# The movement grid's re-apply (#1074): BOTH views, because MoveGrid is one rule each of them
+# rasterizes into a texture of its own. Missing either half is a slider that moves one view only.
+static func _restyle_move_grid(host: Node3D) -> void:
+	var overlays := overlays_of(host)
+	if overlays != null:
+		overlays.restyle_grid()
+	var manager := overlay_manager_of(host)
+	if manager != null:
+		manager.restyle_move_grid()
 
 
 # The mission-status HUD's re-apply. Its one door is game.refresh_mission_status (#134), which is

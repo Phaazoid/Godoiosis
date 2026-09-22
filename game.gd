@@ -1902,6 +1902,10 @@ func _sync_pin_flashes() -> void:
 # ...and the dev-knob door beside it (#1069). NOT the sweep above, which is idempotent by design and
 # would therefore leave a standing flash exactly as it was: a running Tween holds the endpoints it
 # was started with, so the only way a turned colour or hold reaches one is to rebuild it.
+#
+# One pass is enough to keep them in step (#1074): a rebuilt flash joins whichever flash is still
+# running, and every running flash -- old or already rebuilt -- sits at the same point of the same
+# elapsed time, so fposmod against the NEW cycle length lands them all on one phase either way.
 func restyle_pin_flashes() -> void:
 	for unit: Unit in _all_units():
 		if is_instance_valid(unit) and unit.visuals != null:

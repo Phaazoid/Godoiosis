@@ -28,13 +28,23 @@ const PERIOD := 0.5
 # That also makes CADENCE a way for two cues on one property to differ, which is visual-clarity.md
 # principle 2's rule about not letting two motifs collide -- see UnitVisuals, where the aim pulse
 # breathes and the pin flash sits.
+#
+# `in_step_with` JOINS a pulse that is already running (#1074): the new one is stepped forward to the
+# same point in its cycle, so several cues of one kind beat together however far apart they began.
+# The dev, on the pin flash: "the flashing enemies should all flash on the same timer, rather than per
+# enemy clicked." Anchored to a LIVE tween rather than a clock on purpose: a tween pauses with
+# whatever pauses its host (ModalLock, a hitstop's time_scale), so a wall-clock phase drifts from the
+# standing pulses the first time the pause menu opens, while two tweens that paused together are
+# still in step. The caller passes one built with the same period and hold.
 static func start(host: Node, target: Object, property: StringName, base: Variant, peak: Variant,
-		period := PERIOD, hold := 0.0) -> Tween:
+		period := PERIOD, hold := 0.0, in_step_with: Tween = null) -> Tween:
 	var tween := host.create_tween().set_loops()
 	tween.tween_property(target, NodePath(property), peak, period)
 	if hold > 0.0:
 		tween.tween_interval(hold)
 	tween.tween_property(target, NodePath(property), base, period)
+	if in_step_with != null and in_step_with.is_valid():
+		tween.custom_step(fposmod(in_step_with.get_total_elapsed_time(), 2.0 * period + hold))
 	return tween
 
 static func stop(tween: Tween, target: Object, property: StringName, base: Variant) -> void:

@@ -411,6 +411,9 @@ var sight_trace: Reach.SightTrace = null
 var sight_trace_version := 0
 var _sight_trace_2d: SightTrace2D
 var _threat_lines_2d: ThreatLines2D
+# The move tileset's generated art and the texel size it was cut at (#1074) -- see _install_move_grid.
+var _move_grid_texture: ImageTexture
+var _move_grid_size := 16
 # WHICH ENEMIES CAN REACH THE CELL BEING HOVERED (#710 slice 1, deleted by slice 3, brought back and
 # re-pointed by #1069), stored as DATA the way the sight trace is: ThreatLines2D draws it flat,
 # OverlayMirror lifts it, and the version is the mirror's change signal. ONE ENTRY PER MARK -- each
@@ -494,10 +497,12 @@ func _ready() -> void:
 	# puts each new layer directly under the move layer and pushes the previous one further down.
 	# Tree order here is the 2D's answer to what the sort numbers say in 3D; the two must agree.
 	if move_overlay is TileMapLayer:
-		# ...and each takes a plain FILL tileset back, because MOVE's own is a hollow frame since
-		# #1069 and these two are washes (the dev's ruling: only the player's movement range loses
-		# its centres). They are duplicated off MOVE for the tree position and the cell metric, so
-		# the art has to be put back explicitly -- INVALIDMOVE's is the same sheet MOVE used to draw.
+		_install_move_grid()
+		# ...and each takes a plain FILL tileset back, because MOVE's own draws MoveGrid's lattice
+		# since #1069/#1074 and these two are washes (the dev's ruling: only the player's movement
+		# range loses its flood). They are duplicated off MOVE for the tree position and the cell
+		# metric, so the art has to be put back explicitly -- INVALIDMOVE's is the sheet MOVE's
+		# tileset still names in Game.tscn, as the placeholder _install_move_grid replaces.
 		threat_overlay = move_overlay.duplicate() as TileMapLayer
 		threat_overlay.name = "ThreatOverlay"
 		threat_overlay.tile_set = invalidmove_overlay.tile_set
@@ -514,6 +519,33 @@ func _ready() -> void:
 	_threat_lines_2d.name = "ThreatLines2D"
 	_threat_lines_2d.z_index = TERRAIN_Z_INDEX
 	add_child(_threat_lines_2d)
+
+
+# The flat view's half of MoveGrid (#1074): the move tileset's one tile, drawn from the same rule the
+# diorama draws at 32 texels, at whatever size this tileset cuts a cell to. Game.tscn keeps a plain
+# fill sheet there as a placeholder, because an atlas source needs a texture to hold its tile at all;
+# this replaces it before anything is painted. Asked of the source rather than assumed at 16, so the
+# grid can never come out a different size from the cell it sits in.
+func _install_move_grid() -> void:
+	var source := move_overlay.tile_set.get_source(0) as TileSetAtlasSource
+	if source == null:
+		return
+	_move_grid_size = source.texture_region_size.x
+	_move_grid_texture = ImageTexture.create_from_image(MoveGrid.image(_move_grid_size))
+	source.texture = _move_grid_texture
+
+
+# A turned MoveGrid knob, flat-view half: a fresh texture on the tileset, which every painted cell
+# reads, so the standing range changes in place. BoardOverlays.restyle_grid is the diorama's twin and
+# says why it is a new object rather than an in-place update().
+func restyle_move_grid() -> void:
+	if _move_grid_texture == null:
+		return
+	_install_move_grid()
+
+
+func move_grid_texture() -> Texture2D:
+	return _move_grid_texture
 
 
 func show_sight_trace(trace: Reach.SightTrace) -> void:
