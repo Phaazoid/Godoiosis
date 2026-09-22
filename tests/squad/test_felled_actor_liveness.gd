@@ -38,7 +38,10 @@ func _board() -> BoardContext:
 func _watcher() -> Unit:
 	var unit := H.spawn_solo(self, _sm, ENEMY, Vector2i(8, 8), {Stats.Stat.STR: 5})
 	var attack: WeaponAttackData = (unit.get_equipped_weapon() as WeaponInstance).template.main_attack
-	unit.arm_watch(unit.movement.cell, CROSSING, FOOTPRINT, attack)
+	# Two one-tile paths, so the shot takes the crosser AND the bystander (#1054 ruling 7). As ONE path
+	# it would stop at the crosser, the nearer of the two (#1040), and fell nobody the fixture needs.
+	var one_tile_each: Array[int] = [1, 1]
+	unit.arm_watch(unit.movement.cell, CROSSING, FOOTPRINT, attack, false, false, one_tile_each)
 	return unit
 
 

@@ -255,6 +255,11 @@ static func aim_finds_a_target(aim: AttackAction, actions: Array[BaseAction], un
 	# somebody a not-yet-executed order in this same plan soaks is refused at the gate. An over-read
 	# would be the harmful direction (a victimless aim still resolves as a cell attack, #47); this
 	# way costs one exotic order and never queues a shot that finds nobody.
+	#
+	# PATH-BLIND ON PURPOSE for a single-target swing (#1057), and exactly right rather than close: a
+	# path is only ever cut AT a valid victim, so if any path has one this already answers true, and
+	# if none does nothing was cut -- the footprint here and the struck tiles the sweep floods from
+	# are then the same cells. Whether anybody is found cannot differ; only who, which is the resolve's.
 	var arc := Conduction.arc_cells(aim.actor, aim.fired_attack, footprint, board)
 	for unit in units:
 		if not is_instance_valid(unit):

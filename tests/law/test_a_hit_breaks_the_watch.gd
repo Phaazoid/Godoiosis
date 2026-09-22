@@ -29,14 +29,14 @@ func _main_of(unit: Unit) -> WeaponAttackData:
 
 # A watcher standing on `cell`, watching exactly `cells`. The footprint is passed in because these
 # cases are entirely about one watch's blast reaching another watcher.
-func _watcher_at(cell: Vector2i, cells: Array) -> Unit:
+func _watcher_at(cell: Vector2i, cells: Array, lengths: Array[int] = []) -> Unit:
 	# MHP well clear of a watch shot: a watcher DOWNED by the blast stops firing for lifecycle
 	# reasons (_watch_triggered_by refuses a non-ACTIVE watcher), which would let this suite pass
 	# with the cancel deleted. Caught by a surviving mutant, not by reading.
 	var unit := H.spawn_solo(self, _sm, ENEMY, cell, {Stats.Stat.STR: 4, Stats.Stat.MHP: 200}, true, 6)
 	var footprint: Array[Vector2i] = []
 	footprint.assign(cells)
-	unit.arm_watch(cell, footprint[0], footprint, _main_of(unit))
+	unit.arm_watch(cell, footprint[0], footprint, _main_of(unit), false, false, lengths)
 	return unit
 
 
@@ -82,13 +82,14 @@ func _break_volleys(plan: ResolvedPlan) -> void:
 # THE HEADLINE, and the ordering the pass actually has: the MOVE phase resolves as a block ahead of
 # every attack, so a queued blow can never precede a queued walk. What CAN is another watch's shot.
 #
-# Watcher A's footprint covers the walker's first step AND the cell watcher B stands on, and A's
-# attack hits allies -- so A's volley catches B, breaking B's watch mid-walk, before the walker
-# reaches the cell B was watching. Everything else in this suite passes if the cancel is applied at
+# Watcher A's footprint covers the walker's first step AND the cell watcher B stands on, as two
+# one-tile PATHS so its shot takes one on each (#1057 -- as one path it would stop at the walker),
+# and A's attack hits allies -- so A's volley catches B, breaking B's watch mid-walk, before the
+# walker reaches the cell B was watching. Everything else in this suite passes if the cancel is applied at
 # execution instead of threaded through the pass; only this case can see the difference.
 func test_a_watch_shot_breaks_a_second_watch_before_the_walker_reaches_it() -> void:
 	var walker := _walker()
-	var a := _watcher_at(Vector2i(1, 1), [Vector2i(1, 0), Vector2i(2, 1)])
+	var a := _watcher_at(Vector2i(1, 1), [Vector2i(1, 0), Vector2i(2, 1)], [1, 1] as Array[int])
 	_main_of(a).hits_allies = true          # A's volley catches B, who is standing in its footprint
 	var b := _watcher_at(Vector2i(2, 1), [Vector2i(3, 0)])
 	walker.squad._queue_action(_walk(walker))

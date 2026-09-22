@@ -39,6 +39,7 @@ static func check(attack: AttackData) -> Array[Dictionary]:
 	_check_reaches_anything(attack, found)
 	_check_affects_anything(attack, found)
 	_check_paths_are_sound(attack, found)
+	_check_swing_spares_its_wielder(attack, found)
 	_check_blend_totals(attack, found)
 	_check_kind_is_authored(attack, found)
 	_check_empowered_form_is_flat(attack, found)
@@ -157,8 +158,8 @@ static func _check_affects_anything(attack: AttackData, found: Array[Dictionary]
 
 # A shape's path pair that is not sound (#1056, #1079). Only a hand edit can do
 # it -- the grid keeps every rule -- and AttackShape.path_fault is the one judge, so this asks
-# rather than restating. BLOCKS, unlike a look or a blend: #1057 will walk these paths, and a pair
-# that cannot be split says nothing a rule could act on.
+# rather than restating. BLOCKS, unlike a look or a blend: Reach walks these paths (#1057), and a
+# pair that cannot be split says nothing a rule could act on.
 static func _check_paths_are_sound(attack: AttackData, found: Array[Dictionary]) -> void:
 	var shape := attack.attack_shape
 	if shape == null:
@@ -168,6 +169,26 @@ static func _check_paths_are_sound(attack: AttackData, found: Array[Dictionary])
 		return
 	var name := shape.display_name if shape.display_name != "" else "This attack's shape"
 	_add(found, Severity.BLOCKS, "%s has malformed paths: %s. Redraw them on the grid." % [name, fault])
+
+
+# A self-anchored single-target swing with Hits Self whose path visits the attacker's own tile
+# (#1057). The wielder always stands there and is always a valid target, so the path always stops on
+# them and nothing after that tile lands. DEGRADES: it fires, just not the way the arrows say, and a
+# swing that hits its wielder can be meant.
+static func _check_swing_spares_its_wielder(attack: AttackData, found: Array[Dictionary]) -> void:
+	if not attack.hits_self or not attack.is_directional() or not attack.is_single_target_swing():
+		return
+	var shape := attack.attack_shape
+	if shape.path_fault() != "":
+		return   # _check_paths_are_sound has already refused it
+	var name := attack.display_name if attack.display_name != "" else "This attack"
+	for i in shape.path_count():
+		var path := shape.path_at(i)
+		var step := path.find(Vector2i.ZERO)
+		if step < 0:
+			continue
+		var rest := "" if step == path.size() - 1 else ", and the tiles after it never land"
+		_add(found, Severity.DEGRADES, "%s hits its wielder: path %d reaches the attacker's own tile at step %d and Hits Self is on, so it always stops there%s." % [name, i + 1, step + 1, rest])
 
 
 static func _add(found: Array[Dictionary], severity: Severity, text: String) -> void:

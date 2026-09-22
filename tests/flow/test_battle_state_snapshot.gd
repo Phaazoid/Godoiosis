@@ -499,6 +499,29 @@ func test_an_armed_watch_round_trips_with_the_attack_it_was_aimed_with() -> void
 	assert_int(loaded.watch.aim_cell.x).is_equal(2)
 
 
+# A watch's PATHS survive the save (#1057): the cells alone read back as ONE path, so a two-path
+# watch that lost its lengths would come back as one long line and stop at the first unit on it
+# where it used to take one on each path.
+func test_a_watchs_paths_round_trip() -> void:
+	var a: Unit = H.spawn_unit(self, Team.Faction.PLAYER, Vector2i.ZERO, {}, false)
+	var weapon := _family_weapon(WeaponData.WeaponType.CARBINE)
+	var watch := WeaponAttackData.new()
+	watch.can_overwatch = true
+	weapon.template.extra_attacks = [watch]
+	a.add_item(weapon)
+
+	var footprint: Array[Vector2i] = [Vector2i(1, 0), Vector2i(2, 0), Vector2i(0, 1)]
+	var lengths: Array[int] = [2, 1]
+	a.arm_watch(Vector2i.ZERO, Vector2i(1, 0), footprint, watch, false, false, lengths)
+
+	var loaded := _round_trip(a)
+
+	assert_object(loaded.watch).is_not_null()
+	assert_array(loaded.watch.footprint).is_equal(footprint)
+	assert_array(loaded.watch.path_lengths).override_failure_message(
+			"the watch came back without its path lengths -- it would fire as one path").is_equal(lengths)
+
+
 # --- what the pipe CARRIES (#697) ----------------------------------------------------------------
 
 # capture_unit_state used to drop any inventory entry that was not an EquippableData, with a

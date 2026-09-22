@@ -897,9 +897,9 @@ func test_a_mid_walk_shot_is_a_volley_beat_of_its_own_after_the_moves_beat() -> 
 	_break_shots(plan)
 
 
-# ...and the subject rule is not "the first victim". Splash is gathered CELL-FIRST over the
-# footprint, so a bystander standing on an earlier cell leads the volley while the crosser is the
-# one the moment is about.
+# ...and the subject rule is not "the victim". A watch shot takes the FIRST valid target along its
+# line (#1040), so a bystander standing nearer than the crosser takes the shot the crosser set off --
+# the one it hits is not the one the moment is about.
 func test_a_splashed_bystander_does_not_steal_the_shot_s_subject() -> void:
 	var watched: Array[Vector2i] = [Vector2i(1, 0), Vector2i(2, 0)]
 	var watcher := H.spawn_solo(self, _sm, ENEMY, Vector2i(3, 4), {Stats.Stat.STR: 4}, true, 5)
@@ -915,16 +915,16 @@ func test_a_splashed_bystander_does_not_steal_the_shot_s_subject() -> void:
 
 	var plan := _sm.resolve_plan(crosser.squad, _board_with([watcher, bystander, crosser]))
 	assert_int(plan.watch_shots.size()).override_failure_message(
-			"the shot did not splash both cells -- the fixture proves nothing").is_equal(2)
+			"the shot did not stop at the nearer unit -- the fixture proves nothing").is_equal(1)
 	var sheet := BeatSheet.read(crosser.squad, plan)
 
 	var volleys := sheet.volleys(false)
 	assert_int(volleys.size()).is_equal(1)
 	assert_object(volleys[0].actions[0].aimed_at()).override_failure_message(
-			"fixture: the crosser leads the volley, so the subject rule is not under test") \
+			"fixture: the shot hit the crosser, so the subject rule is not under test") \
 		.is_same(bystander)
 	assert_object(volleys[0].subject()).override_failure_message(
-			"the camera framed the splashed bystander instead of the unit that walked into the line") \
+			"the camera framed the bystander the shot hit instead of the unit that walked into the line") \
 		.is_same(crosser)
 	_break_shots(plan)
 

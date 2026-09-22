@@ -131,8 +131,8 @@ func test_the_current_does_not_check_tags() -> void:
 	assert_bool(attack.hits_allies).is_false()      # the ordinary rule this deliberately ignores
 	assert_bool(attack.hits_self).is_false()
 
-	var struck: Array[Vector2i] = [Vector2i(2, 0)]
-	var reach := Conduction.sweep(shooter, attack, struck, board)
+	# A one-cell aim, so the footprint is exactly the struck cell.
+	var reach := Conduction.sweep(shooter, shooter.movement.cell, Vector2i(2, 0), attack, board)
 	assert_bool(reach.victims.has(enemy)).is_true()
 	assert_bool(reach.victims.has(ally)).is_true()
 	assert_bool(reach.victims.has(shooter)).is_true()
@@ -270,7 +270,7 @@ func test_the_sweep_hands_back_the_tree_the_flood_built() -> void:
 	var struck: Array[Vector2i] = [Vector2i(0, 0)]
 	var attack := shooter.get_fired_attack()
 
-	var reach := Conduction.sweep(shooter, attack, struck, board)
+	var reach := Conduction.sweep(shooter, shooter.movement.cell, struck[0], attack, board)
 	var current := Conduction.flood(shooter, attack, struck, board)
 	assert_int(reach.links.size()).is_equal(current.links.size())
 	for link in current.links:

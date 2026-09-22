@@ -76,6 +76,7 @@ func test_fire_transmutation_ignites_a_tree() -> void:
 	var no_units: Array[Unit] = []
 	var reactions: Array[TerrainReaction] = [_fire_burns_tree()]
 	var board: _StubBoard = _StubBoard.new(null, no_units, null, { TREE_CELL: Terrain.Kind.TREE })
+	H.stamp_struck(atk, board)
 	PlanResolver.resolve(plan, no_reactions, board, reactions)
 
 	assert_int(plan.cell_effects.size()).is_equal(1)

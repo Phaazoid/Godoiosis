@@ -198,25 +198,72 @@ class Sweep extends RefCounted:
 	# is not a spread. Carried on the sweep rather than fetched separately so the volley sites stamp
 	# what they already asked for -- see AttackAction.arc_links for why playback may not re-derive it.
 	var links: Array[Link] = []
+	# The tiles the attack ITSELF struck, each once: `cells` without the current. What its element
+	# lands on (AttackAction.struck_cells, #1057) -- the current travels through the water without
+	# changing it, and a single-target swing stops at its victim, so neither the widened footprint
+	# nor a fresh Reach of the whole shape is the right answer for the ground.
+	var struck: Array[Vector2i] = []
 
 
 # THE ONE ANSWER to "what does this aim reach", asked by every site that has to agree about it: the
-# three that build volleys (aims, counters, watch shots) and the four that must not contradict them
-# (the hover preview, the AI's candidate filter, and the headless twin's two). A site pairing the two
+# two that build volleys from an aim (aims and counters) and the four that must not contradict them
+# (the hover preview, the AI's candidate filter, and the headless twin's two). A site pairing the
 # gathers itself is the drift this exists to prevent -- and the pairing is the part that is easy to
 # get wrong, since the base gather applies hits_allies and the arc deliberately does not.
 #
-# `cells` is what the volley records as its footprint, so the camera stages the whole current rather
-# than framing the blast and leaving half the casualties off screen. It is NOT what the resolver
-# deposits terrain states over -- _resolve_cell_effects re-derives the blast from Reach, and that
-# stays right: the current travels through the water without changing it.
+# It takes the AIM rather than a footprint since #1057 and asks Reach itself, because the aim now
+# carries two answers -- the tiles, and a single-target swing's paths -- and a site handing in only
+# the tiles would silently fire a path swing as an AoE. The watch, which holds stored geometry
+# rather than an aim, calls sweep_paths.
+static func sweep(actor: Unit, origin_cell: Vector2i, target_cell: Vector2i, attack: AttackData,
+		board: BoardContext, hypo: Dictionary = {}, allies_only := false) -> Sweep:
+	if attack != null and attack.is_single_target_swing():
+		return sweep_paths(actor, attack, Reach.get_paths_from(actor, origin_cell, target_cell, attack, board),
+				board, hypo, allies_only)
+	return _sweep_area(actor, attack, Reach.get_affected_cells_from(actor, origin_cell, target_cell, attack, board),
+			board, hypo, allies_only)
+
+
+# A SINGLE-TARGET swing's sweep (#1057), and its order is the area sweep's INVERTED: victims first,
+# then each path cut at its victim, then the current seeded from those struck tiles alone -- "conduct
+# normally from the one victim" (dev, 2026-09-20). Flooding the whole footprint first would light
+# water the swing never reached.
 #
-# Non-mutating on purpose: one caller hands in a WATCH's own stored footprint, and appending to that
-# would rewrite the armed watch.
-static func sweep(actor: Unit, attack: AttackData, footprint: Array[Vector2i], board: BoardContext,
-		hypo: Dictionary = {}, allies_only := false) -> Sweep:
+# Victims come STEP-MAJOR (dev, 2026-09-22: paths travel at once -- step 1 of every path, then step
+# 2), ties by path index, and a unit two paths reach is in the list twice (ruling 7).
+#
+# `occupant_at` is who stands on a cell; empty means the board's projected answer, which is every
+# aim site's. The watch passes the resolver's threaded positions (PlanResolver._unit_threaded_at).
+static func sweep_paths(actor: Unit, attack: AttackData, paths: Array[Array], board: BoardContext,
+		hypo: Dictionary = {}, allies_only := false, occupant_at := Callable()) -> Sweep:
+	var result := Sweep.new()
+	if board == null:
+		result.struck = _tiles_of(paths)
+		result.cells = result.struck.duplicate()
+		return result
+	var occupancy: Callable = occupant_at if occupant_at.is_valid() else board.projected_unit_at_cell
+	var hits := RulesService.gather_path_victims(actor, paths, attack, occupancy, allies_only)
+	result.victims = _step_major(hits)
+	var struck_paths: Array[Array] = []
+	for hit in hits:
+		struck_paths.append(hit.cells)
+	result.struck = _tiles_of(struck_paths)
+	var current := flood(actor, attack, result.struck, board, hypo)
+	result.victims.append_array(caught(current.cells, board, hypo, result.victims))
+	result.cells = widened(result.struck, current.cells)
+	result.links = current.links
+	return result
+
+
+# The AREA sweep -- every other kind of attack: gather the whole footprint, then flood it.
+#
+# Non-mutating on purpose: `footprint` is Reach's fresh answer today, and appending to a caller's
+# array is how a stored footprint would grow with every sweep.
+static func _sweep_area(actor: Unit, attack: AttackData, footprint: Array[Vector2i], board: BoardContext,
+		hypo: Dictionary, allies_only: bool) -> Sweep:
 	var result := Sweep.new()
 	result.cells = footprint.duplicate()
+	result.struck = footprint.duplicate()
 	if board == null:
 		return result
 	result.victims = RulesService.gather_attack_victims(actor, footprint, board, attack, allies_only)
@@ -225,3 +272,28 @@ static func sweep(actor: Unit, attack: AttackData, footprint: Array[Vector2i], b
 	result.cells = widened(footprint, current.cells)
 	result.links = current.links
 	return result
+
+
+# Every tile the paths cover, each once, in the order they are first reached.
+static func _tiles_of(paths: Array[Array]) -> Array[Vector2i]:
+	var tiles: Array[Vector2i] = []
+	for path in paths:
+		for cell: Vector2i in path:
+			if not tiles.has(cell):
+				tiles.append(cell)
+	return tiles
+
+
+static func _step_major(hits: Array[RulesService.PathHit]) -> Array[Unit]:
+	var taken: Array[int] = []
+	for i in hits.size():
+		if hits[i].victim != null:
+			taken.append(i)
+	taken.sort_custom(func(a: int, b: int) -> bool:
+		var step_a := hits[a].cells.size()
+		var step_b := hits[b].cells.size()
+		return step_a < step_b if step_a != step_b else a < b)
+	var victims: Array[Unit] = []
+	for i in taken:
+		victims.append(hits[i].victim)
+	return victims

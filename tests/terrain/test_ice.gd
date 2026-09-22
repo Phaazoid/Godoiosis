@@ -58,6 +58,7 @@ func _resolve(attacker: Unit, cell: Vector2i, reactions: Array[TerrainReaction],
 	aim.fired_attack = attacker.get_fired_attack()
 	plan.attacks.append(aim)
 	var no_reactions: Array[ElementalReaction] = []
+	H.stamp_struck(aim, board)
 	PlanResolver.resolve(plan, no_reactions, board, reactions)
 	return plan
 

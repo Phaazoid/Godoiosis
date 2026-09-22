@@ -164,3 +164,13 @@ static func make_manager(suite: GdUnitTestSuite, heights: BoardHeights = null) -
 	suite.auto_free(root)
 	suite.add_child(root)   # enters tree -> every @onready resolves cleanly
 	return manager
+
+
+# A HAND-BUILT attack handed straight to PlanResolver.resolve has no volley builder behind it, so
+# nothing stamped the tiles it struck -- and cell effects read only that stamp (#1057). This stamps
+# what an area aim struck, its whole footprint off the order's own attack. Production never needs it:
+# every site that builds a volley stamps Conduction.Sweep.struck itself.
+static func stamp_struck(action: AttackAction, board: BoardContext) -> AttackAction:
+	action.struck_cells = Reach.get_affected_cells_from(action.actor, action.origin_cell,
+			action.target_cell, action.fired_attack, board)
+	return action

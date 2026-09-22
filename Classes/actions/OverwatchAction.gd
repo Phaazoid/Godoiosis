@@ -32,8 +32,12 @@ var resolved_spent := false
 # spread is truncated by the terrain) and no action can reach one at execute time: an order applies
 # what the pass decided, exactly as AttackAction applies the knockback landing the resolve stamped.
 # An EMPTY footprint is the "nothing to arm" sentinel, which is already Unit.arm_watch's own refusal.
+#
+# The footprint is the watch's PATHS back to back and resolved_path_lengths says where each ends --
+# AttackShape's own flat pair (#1057), so a revisit is kept and the shot walks the order it was drawn.
 var resolved_anchor: Vector2i = Vector2i.ZERO
 var resolved_footprint: Array[Vector2i] = []
+var resolved_path_lengths: Array[int] = []
 
 
 func init(watching_unit: Unit, aim_cell: Vector2i, attack: AttackData) -> void:
@@ -49,13 +53,26 @@ func init(watching_unit: Unit, aim_cell: Vector2i, attack: AttackData) -> void:
 # now that the geometry reads the board (#756), where before this took two positional sources and
 # execution re-derived from where the actor had landed. The resolve runs immediately before the
 # orders execute (OrderExecutor.execute_orders), so the stamp is this pass's own.
-func watched_cells_from(origin: Vector2i, board: BoardContext) -> Array[Vector2i]:
-	return Reach.get_affected_cells_from(actor, origin, target_cell, fired_attack, board)
+#
+# EVERY WATCH IS SINGLE-TARGET (#1040; dev 2026-09-22 -- "only hit the first enemy they encounter,
+# ever"). The answer is always PATHS: a single-target swing's own walked paths, and for any other
+# attack its whole footprint as ONE path, nearest first -- Reach emits a self-anchored shape near to
+# far along the facing, and a lone cell is a path of one. So a mod that turns a cleave into a watch
+# attack is single-target too, and a watch never needs to ask what kind of attack it holds.
+func watched_paths_from(origin: Vector2i, board: BoardContext) -> Array[Array]:
+	if fired_attack != null and fired_attack.is_single_target_swing():
+		return Reach.get_paths_from(actor, origin, target_cell, fired_attack, board)
+	var one: Array[Array] = []
+	var cells := Reach.get_affected_cells_from(actor, origin, target_cell, fired_attack, board)
+	if not cells.is_empty():
+		one.append(cells)
+	return one
 
 
 func execute() -> void:
 	begin_execution()
-	actor.arm_watch(resolved_anchor, target_cell, resolved_footprint, fired_attack, resolved_spent)
+	actor.arm_watch(resolved_anchor, target_cell, resolved_footprint, fired_attack, resolved_spent,
+			false, resolved_path_lengths)
 	finish_execution()
 
 

@@ -245,11 +245,13 @@ func test_a_priest_the_watch_downs_mid_pass_does_not_heal_itself() -> void:
 	mend.hits_self = true
 
 	# The watch spans the cell the leader walks onto AND the one the priest is standing on, which
-	# is the board the report was made on -- the shot sweeps its whole footprint, so the bystander
-	# eats the shot somebody else set off.
+	# is the board the report was made on, and the bystander eats a shot somebody else set off. The
+	# report predates #1040, when the shot swept its whole footprint; a line now takes one target,
+	# so the two cells are two one-tile PATHS (#1054 ruling 7) and each takes its own.
 	var watched: Array[Vector2i] = [Vector2i(3, 0), Vector2i(4, 0)]
+	var one_tile_each: Array[int] = [1, 1]
 	watcher.arm_watch(watcher.movement.cell, Vector2i(3, 0), watched,
-			(watcher.equipped_weapon as WeaponInstance).template.main_attack)
+			(watcher.equipped_weapon as WeaponInstance).template.main_attack, false, false, one_tile_each)
 
 	priest.take_damage(priest.get_current_hp() - 1)   # one hit from going down
 	var walk: Array[Vector2i] = [Vector2i(2, 0), Vector2i(3, 0)]

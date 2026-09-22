@@ -23,9 +23,9 @@ func _main_of(unit: Unit) -> WeaponAttackData:
 	return (unit.get_equipped_weapon() as WeaponInstance).template.main_attack
 
 
-func _watcher(footprint: Array[Vector2i], cell := Vector2i(2, 5), power := 6) -> Unit:
+func _watcher(footprint: Array[Vector2i], cell := Vector2i(2, 5), power := 6, lengths: Array[int] = []) -> Unit:
 	var unit := H.spawn_solo(self, _sm, ENEMY, cell, {Stats.Stat.STR: 4}, true, power)
-	unit.arm_watch(cell, footprint[0], footprint, _main_of(unit))
+	unit.arm_watch(cell, footprint[0], footprint, _main_of(unit), false, false, lengths)
 	return unit
 
 
@@ -105,8 +105,9 @@ func test_reordering_the_move_rows_changes_who_eats_the_shot() -> void:
 # mover's own starting cell is inside the blast, and it is hit there — an order-blind walk (everyone
 # already at their destination) would find that cell empty and miss it entirely.
 func test_a_later_mover_is_still_at_its_origin_when_an_earlier_shot_lands() -> void:
+	# Two one-tile PATHS, one per cell: a single-target watch takes one unit per path (#1057).
 	var watched: Array[Vector2i] = [Vector2i(2, 0), Vector2i(0, 1)]
-	var watcher := _watcher(watched)
+	var watcher := _watcher(watched, Vector2i(2, 5), 6, [1, 1] as Array[int])
 	var crosser := H.spawn_solo(self, _sm, PLAYER, Vector2i(0, 0), {Stats.Stat.MHP: 60}, false)
 	var straggler := H.spawn_solo(self, _sm, PLAYER, Vector2i(0, 1), {Stats.Stat.MHP: 60}, false)
 	_sm.join_squad(straggler, crosser.squad)
@@ -115,8 +116,8 @@ func test_a_later_mover_is_still_at_its_origin_when_an_earlier_shot_lands() -> v
 
 	var plan := _sm.resolve_plan(crosser.squad, _board_with([watcher, crosser, straggler]))
 
-	# One trigger, two victims: the crosser at the cell it walked into and the straggler on the
-	# cell it has not left yet.
+	# One trigger, two paths, two victims: the crosser at the cell it walked into and the straggler
+	# on the cell it has not left yet.
 	assert_int(plan.watch_shots.size()).is_equal(2)
 	var hit: Array = []
 	for shot in plan.watch_shots:

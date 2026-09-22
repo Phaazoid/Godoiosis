@@ -131,6 +131,8 @@ static func _check_battle_state(entry: ScenarioUnitEntry, index: int, found: Arr
 		set_fields.append("guard_ward_index")
 	if not entry.watch_cells.is_empty():
 		set_fields.append("watch_cells")
+	if not entry.watch_path_lengths.is_empty():
+		set_fields.append("watch_path_lengths")
 	if entry.squad_has_acted:
 		set_fields.append("squad_has_acted")
 	if set_fields.is_empty():
