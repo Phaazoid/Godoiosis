@@ -62,11 +62,17 @@ func test_a_stamp_beyond_the_aimed_cell_is_clean() -> void:
 	assert_array(AttackLint.check(attack)).is_empty()
 
 
+# A PATH shape at range (#1056, #1079): its stamp is empty and its tiles are the ones its paths visit.
+func _pathed_attack(paths: Array[Array]) -> WeaponAttackData:
+	var attack := _manhattan(2, 1)
+	attack.attack_shape = P.pathed(paths)
+	attack.attack_shape.display_name = "Probe Shape"
+	return attack
+
+
 func test_a_shape_with_malformed_paths_is_blocked_and_named() -> void:
 	# #1056. Only a hand edit breaks the pair, and #1057 will walk it, so it refuses the save.
-	var attack := P.stamped(WeaponAttackData.new(), 0, [Vector2i(0, -1)] as Array[Vector2i])
-	attack.attack_shape.display_name = "Probe Shape"
-	attack.attack_shape.path_cells = [Vector2i(0, -1), Vector2i(0, -1)] as Array[Vector2i]
+	var attack := _pathed_attack([[Vector2i(0, -1), Vector2i(0, -2)] as Array[Vector2i]] as Array[Array])
 	attack.attack_shape.path_lengths = [3] as Array[int]
 	var blocks := AttackLint.check(attack).filter(func(f: Dictionary) -> bool:
 		return f["severity"] == AttackLint.Severity.BLOCKS)
@@ -76,14 +82,11 @@ func test_a_shape_with_malformed_paths_is_blocked_and_named() -> void:
 	assert_str(text).contains("malformed paths")
 
 
-func test_a_shape_with_sound_paths_is_not_flagged() -> void:
-	var attack := P.stamped(WeaponAttackData.new(), 0, [Vector2i(0, -1)] as Array[Vector2i])
-	attack.attack_shape.path_cells = [Vector2i(0, -1), Vector2i(0, -1)] as Array[Vector2i]
-	attack.attack_shape.path_lengths = [2] as Array[int]
-	var texts: Array[String] = []
-	for finding in AttackLint.check(attack):
-		texts.append(finding["text"])
-	assert_array(texts.filter(func(t: String) -> bool: return t.contains("paths"))).is_empty()
+func test_a_path_shape_with_sound_paths_is_clean() -> void:
+	# Its stamp is EMPTY, so this is also the case that the lands-anywhere check asks the shape's
+	# tiles rather than its stamp -- asked of the stamp, every path shape would be blocked.
+	var attack := _pathed_attack([[Vector2i(0, -1), Vector2i(0, -2), Vector2i(0, -1)] as Array[Vector2i]] as Array[Array])
+	assert_array(AttackLint.check(attack)).is_empty()
 
 
 func test_a_shapeless_attack_is_fireable_rather_than_flagged() -> void:
