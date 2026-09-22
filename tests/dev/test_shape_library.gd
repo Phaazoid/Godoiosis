@@ -94,15 +94,23 @@ func test_the_grid_edits_a_copy_and_leaves_the_library_object_alone() -> void:
 		"a grid edit reached the shared shape before Update").is_equal(1)
 
 
-# The same rule for PATHS (#1056), driven through the editor's real grid rather than by assigning
-# the field: the path pair is written by the widget, so the widget is what has to leave the
-# library object alone.
+# The same rule for PATHS (#1056, #1079), driven through the editor's real grid rather than by
+# assigning the field: the conversion and the path pair are both written by the widget, so the widget
+# is what has to leave the library object alone.
 func test_a_path_drawn_on_the_grid_leaves_the_library_object_alone() -> void:
 	var library := _with_named_shape()
 	var paths_mode := _editor_button("Paths")
 	assert_object(paths_mode).override_failure_message(
 		"the Attack Editor's shape grid has no Paths mode").is_not_null()
 	paths_mode.button_pressed = true
+	var asked := _open_dialogs()
+	assert_int(asked.size()).override_failure_message(
+		"switching a painted shape to Paths did not ask before clearing its tiles").is_equal(1)
+	asked[0].confirmed.emit()
+	asked[0].hide()
+	assert_array(_staged().stamp).is_empty()
+	assert_array(library.stamp).override_failure_message(
+		"the conversion cleared the shared shape's tiles before Update").contains_exactly([Vector2i(0, -1)])
 	var cell := _editor_cell(Vector2i(0, -1))
 	cell.button_pressed = not cell.button_pressed
 	assert_int(_staged().path_count()).override_failure_message(
@@ -110,6 +118,15 @@ func test_a_path_drawn_on_the_grid_leaves_the_library_object_alone() -> void:
 	assert_int(library.path_count()).override_failure_message(
 		"a path drawn on the grid reached the shared shape before Update").is_equal(0)
 	assert_array(library.path_cells).is_empty()
+
+
+func _open_dialogs() -> Array[ConfirmationDialog]:
+	var open: Array[ConfirmationDialog] = []
+	for node in _all_class(_editor, "ConfirmationDialog", []):
+		var dialog := node as ConfirmationDialog
+		if dialog.visible:
+			open.append(dialog)
+	return open
 
 
 func _editor_button(text: String) -> Button:
@@ -120,14 +137,16 @@ func _editor_button(text: String) -> Button:
 	return null
 
 
-# The shape grid's cell at an offset: the GridContainer drawn after the Paths mode row.
+# The shape grid's cell at an offset: the GridContainer drawn after the Paths mode row, inside the
+# wrapper it shares with the arrow layer.
 func _editor_cell(offset: Vector2i) -> Button:
 	var modes := _editor_button("Paths").get_parent()
 	var container := modes.get_parent()
 	var grid: GridContainer = null
 	for i in range(modes.get_index() + 1, container.get_child_count()):
-		grid = container.get_child(i) as GridContainer
-		if grid != null:
+		var found := _all_class(container.get_child(i), "GridContainer", [])
+		if not found.is_empty():
+			grid = found[0] as GridContainer
 			break
 	var half := (grid.columns - 1) / 2
 	return grid.get_child((offset.y + half) * grid.columns + (offset.x + half)) as Button

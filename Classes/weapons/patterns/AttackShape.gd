@@ -40,17 +40,20 @@ class_name AttackShape
 #
 # Board-blind on purpose: this emits the shape and Reach decides what the terrain leaves standing.
 #
-# PATHS (#1056): the order a SINGLE-TARGET swing hits its tiles -- a start tile, then each tile in
-# turn, one path per swing, a tile visited twice allowed (dev, 2026-09-22). Every path tile is also
-# a stamp tile: the stamp stays the one answer to which tiles the shape has, and the paths only
-# order them. INERT until #1057 -- nothing reads them yet, so an attack fires as if they were absent.
+# A shape is EITHER painted tiles OR PATHS, never both (#1079, dev 2026-09-22: "should the arrows be
+# the thing making the shape?"). A path is how a SINGLE-TARGET swing is authored -- a start tile,
+# then each tile in the order the attack reaches it, one path per swing; a tile may be revisited but
+# never twice in a row. A path shape's tiles are exactly the tiles its paths visit, so tiles() is the
+# one answer to what a shape covers and place() lays those down; the stamp is empty on a path shape.
+# Resolving a path as a single-target swing is #1057's -- until then a path shape fires as an AoE
+# over its tiles.
 #
 # Stored FLAT rather than as sub-resources: path_cells holds every path back to back and
 # path_lengths says where each ends. A LibraryField copy is a shallow duplicate, which would share
 # sub-resource objects with the library file, and a minted sub-resource id churns the .tres on every
 # edit; two typed arrays behave exactly as `stamp` does. The pair is a DECLARED second
-# representation: path_fault() is the one check that they agree, and AttackLint blocks a shape that
-# fails it.
+# representation: path_fault() is the one check that it is sound, and AttackLint blocks a shape
+# that fails it.
 
 # Grid space: the stamp is authored facing this way.
 const FORWARD := Vector2i.UP
@@ -74,7 +77,7 @@ const FORWARD := Vector2i.UP
 func place(anchor: Vector2i, dir: Vector2i) -> Array[Vector2i]:
 	var side := Vector2i(-dir.y, dir.x)
 	var keyed: Dictionary[Vector2i, Vector2i] = {}   # (forward, across) -> world cell; a set, so a duplicate folds
-	for offset in stamp:
+	for offset in tiles():
 		var forward := -offset.y
 		var across := offset.x
 		keyed[Vector2i(forward, across)] = anchor + dir * forward + side * across
@@ -85,6 +88,27 @@ func place(anchor: Vector2i, dir: Vector2i) -> Array[Vector2i]:
 	for key in keys:
 		out.append(keyed[key])
 	return out
+
+
+# Which tiles this shape covers, as grid-space offsets: its paths' tiles, each once in the order
+# they are first visited, for a path shape; its stamp otherwise.
+func tiles() -> Array[Vector2i]:
+	return tiles_of(stamp, path_cells, path_lengths)
+
+
+# tiles() over bare fields, so the grid can ask it by field name.
+static func tiles_of(stamp_cells: Array[Vector2i], cells: Array[Vector2i], lengths: Array[int]) -> Array[Vector2i]:
+	if lengths.is_empty():
+		return stamp_cells
+	var seen: Array[Vector2i] = []
+	for cell in cells:
+		if not seen.has(cell):
+			seen.append(cell)
+	return seen
+
+
+func is_path_shape() -> bool:
+	return not path_lengths.is_empty()
 
 
 func path_count() -> int:
@@ -131,7 +155,7 @@ static func joined_lengths(paths: Array[Array]) -> Array[int]:
 
 
 # "" when the path pair is sound, otherwise what is wrong with it. Only a hand edit can break it --
-# the grid keeps all three rules -- so this is the check a malformed file meets, not a live one.
+# the grid keeps every rule -- so this is the check a malformed file meets, not a live one.
 func path_fault() -> String:
 	var total := 0
 	for length in path_lengths:
@@ -140,9 +164,13 @@ func path_fault() -> String:
 		total += length
 	if total != path_cells.size():
 		return "its path lengths add up to %d tiles but %d are stored" % [total, path_cells.size()]
-	for cell in path_cells:
-		if not stamp.has(cell):
-			return "a path visits %d,%d, which is not one of its tiles" % [cell.x, cell.y]
+	if is_path_shape() and not stamp.is_empty():
+		return "it has both painted tiles and paths"
+	for path in split_paths(path_cells, path_lengths):
+		for i in range(1, path.size()):
+			if path[i] == path[i - 1]:
+				var cell: Vector2i = path[i]
+				return "a path visits %d,%d twice in a row" % [cell.x, cell.y]
 	return ""
 
 
@@ -152,7 +180,7 @@ static func property_tips() -> Dictionary:
 	return {
 		"display_name": "What this shape is called in the Attack Editor's shape picker. Name it after the SHAPE, not the attack that first used it -- other attacks will pick it up.",
 		"stamp": "The cells the attack COVERS once aimed, as offsets from where it lands. Click them on the grid: the centre is where the attack lands, and the cell above it is one step toward the top of the grid.\nWhat the top MEANS depends on the attack's range. Max range 0 = the attacker's FACING, and the whole shape turns to wherever they point. Any other range = board NORTH, and the shape lands exactly as drawn however you aim it.\nAn empty stamp covers nothing.",
-		"path_cells": "The ORDER a single-target swing hits its tiles, drawn in the grid's Paths mode: pick a path, then click tiles in the order the attack reaches them. The first click is where the swing starts. Each path is its own swing, and a tile may be visited twice.\nA path tile is always one of the shape's tiles, so clicking an empty tile here adds it to the stamp, and removing a tile from the stamp removes it from every path.\nNot read by any rule yet: an attack fires exactly as it would without paths.",
+		"path_cells": "A PATH shape: the tiles a single-target swing hits, in order, drawn in the grid's Paths mode. Pick a path, then click tiles in the order the attack reaches them; the first click is where the swing starts. Each path is its own swing. A tile may be revisited, but never twice in a row.\nA shape is either painted tiles or paths: a path shape's tiles are exactly the ones its arrows touch. Switching modes clears the other kind, after a confirm.\nUntil single-target resolution lands, a path shape fires as an AoE over its tiles.",
 		"path_lengths": "How many tiles each path holds, in path order. The grid writes it; it is what splits Path Cells into separate paths.",
 	}
 

@@ -431,8 +431,10 @@ static func _pattern_str(a: AttackData) -> String:
 	if a.is_directional():
 		return "Facing[%s]" % (_stamp_str(shape) if shape != null else "@")
 	var s := "Manhattan[%d-%d%s]" % [a.min_range, a.max_range, ("+" if a.max_and_a_half else "")]
-	if shape != null and (shape.stamp.size() != 1 or shape.stamp[0] != Vector2i.ZERO):
-		s += " " + _stamp_str(shape)
+	if shape != null:
+		var covered := shape.tiles()
+		if covered.size() != 1 or covered[0] != Vector2i.ZERO:
+			s += " " + _stamp_str(shape)
 	return s
 
 
@@ -442,7 +444,8 @@ static func _pattern_str(a: AttackData) -> String:
 static func _stamp_str(p: AttackShape) -> String:
 	var lo := Vector2i.ZERO
 	var hi := Vector2i.ZERO
-	for c in p.stamp:
+	var covered := p.tiles()
+	for c in covered:
 		lo = Vector2i(mini(lo.x, c.x), mini(lo.y, c.y))
 		hi = Vector2i(maxi(hi.x, c.x), maxi(hi.y, c.y))
 	var rows: PackedStringArray = []
@@ -450,7 +453,7 @@ static func _stamp_str(p: AttackShape) -> String:
 		var row := ""
 		for x in range(lo.x, hi.x + 1):
 			var c := Vector2i(x, y)
-			var filled := p.stamp.has(c)
+			var filled := covered.has(c)
 			if c == Vector2i.ZERO:
 				row += "@" if filled else "+"
 			else:
