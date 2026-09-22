@@ -225,7 +225,18 @@ func _board(heights: Dictionary) -> BoardContext:
 # shooter, so a blast's vertical reach is the same three fields a shot's is, measured from where it
 # landed. The attacker is parked far away to make the point that nothing reads it.
 func _blast(offsets: Array[Vector2i], target: Vector2i, board: BoardContext, tolerance := -1) -> Array[Vector2i]:
+	return _placed(offsets, target, board, tolerance, true)
+
+
+# The SAME aim with Swing off -- a TRUE AoE (#1055). Beside _blast rather than folded into it so a
+# case can put the two answers on one board and show the flag is the only difference between them.
+func _aoe(offsets: Array[Vector2i], target: Vector2i, board: BoardContext, tolerance := -1) -> Array[Vector2i]:
+	return _placed(offsets, target, board, tolerance, false)
+
+
+func _placed(offsets: Array[Vector2i], target: Vector2i, board: BoardContext, tolerance: int, swinging: bool) -> Array[Vector2i]:
 	var attack := P.stamped(_attack(), 4, offsets)
+	attack.swing = swinging
 	attack.up_tolerance = tolerance
 	attack.down_tolerance = tolerance
 	return Reach.get_affected_cells_from(null, Vector2i(9, 9), target, attack, board)
@@ -331,3 +342,70 @@ func test_a_swung_shape_is_still_truncated_from_the_shooter_and_not_from_its_own
 	var board := _board({Vector2i(0, -2): 2})
 	var hit := Reach.get_affected_cells_from(null, Vector2i.ZERO, Vector2i(0, -1), swung, board)
 	assert_array(hit).contains_exactly([Vector2i(0, -1)])
+
+
+# --- Swing off: a TRUE AoE covers its whole stamp (#1055) ---------------------------------------
+#
+# The modifier's own cases. Each one puts the two answers on ONE board, because what is being pinned
+# is the FORK -- an assertion about the true AoE alone would pass just as well against a build where
+# the flag reached nothing and the propagation had simply been deleted.
+
+
+func test_a_true_aoe_lands_straight_through_the_wall_a_swing_stops_at() -> void:
+	# The wall case above, with the modifier off. Same shape, same board, same aim: a blast stops at
+	# the column and a true AoE does not notice it. "Attacks which just hit all of their tiles at
+	# once" (dev, 2026-09-20).
+	var east: Array[Vector2i] = [Vector2i(1, 0), Vector2i(3, 0)]
+	var board := _board({Vector2i(2, 0): 2})
+	assert_array(_blast(east, Vector2i.ZERO, board)).override_failure_message(
+		"the swing half moved -- #756/#805 are meant to be untouched by the flag"
+	).contains_exactly([Vector2i(1, 0)])
+	assert_array(_aoe(east, Vector2i.ZERO, board)).override_failure_message(
+		"a true AoE was stopped by a wall, so the propagation is still unconditional"
+	).contains_exactly([Vector2i(1, 0), Vector2i(3, 0)])
+
+
+func test_a_true_aoe_reaches_a_cell_no_blast_could_propagate_to() -> void:
+	# CONNECTIVITY, which the wall case cannot separate from the trace: past a dip deeper than the
+	# tolerance, the far cell sits back at the impact's own height and has a clean flat line of its
+	# own -- so a blast loses it only because it could not travel THROUGH the dip. A true AoE
+	# propagates through nothing, so it is there.
+	var east: Array[Vector2i] = [Vector2i(1, 0), Vector2i(2, 0)]
+	var board := _board({Vector2i.ZERO: 4, Vector2i(2, 0): 4})
+	assert_array(_blast(east, Vector2i.ZERO, board, 2)).is_empty()
+	assert_array(_aoe(east, Vector2i.ZERO, board, 2)).override_failure_message(
+		"the connectivity clause survived the flag -- a true AoE walks through nothing"
+	).contains_exactly([Vector2i(2, 0)])
+
+
+func test_a_true_aoe_still_misses_what_its_own_height_rule_refuses() -> void:
+	# THE HALF THE FLAG DOES NOT TOUCH, and the dev's ruling over a fully terrain-blind AoE: each
+	# cell still asks this attack's own vertical rule from the anchor. The near cell in the case
+	# above is the one that shows it -- a dip past the tolerance, reached by nothing and refused on
+	# its own account, so it is absent from BOTH answers while the far cell is not.
+	var east: Array[Vector2i] = [Vector2i(1, 0), Vector2i(2, 0)]
+	var board := _board({Vector2i.ZERO: 4, Vector2i(2, 0): 4})
+	assert_array(_aoe(east, Vector2i.ZERO, board, 2)).override_failure_message(
+		"a true AoE reached a cell outside its own tolerance -- the height clause went with the trace"
+	).not_contains([Vector2i(1, 0)])
+	# The control: lift the tolerance and that same cell lands, so its absence above is the RULE
+	# rather than the shape or the board.
+	assert_array(_aoe(east, Vector2i.ZERO, board)).contains_exactly_in_any_order(east)
+
+
+func test_the_flag_forks_a_self_anchored_swing_too() -> void:
+	# The other anchor. A one-level step two cells ahead ends the lane under a melee rule (the
+	# truncation case below asserts exactly that); with the modifier off the whole line lands, step
+	# and all -- so one flag covers both propagations, which is what max_range already deciding the
+	# anchor is what buys.
+	var swung := P.line(_attack(), 3)
+	swung.vertical_rule = AttackData.VerticalRule.MELEE
+	var board := _board({Vector2i(0, -2): 2})
+	assert_array(Reach.get_affected_cells_from(null, Vector2i.ZERO, Vector2i(0, -1), swung, board)) \
+		.contains_exactly([Vector2i(0, -1)])
+	swung.swing = false
+	# The raised cell is refused by the MELEE rule on its own account (a sheer step at range), and
+	# the cell BEHIND it -- flat, and unreachable for a swing because the lane ended -- comes back.
+	assert_array(Reach.get_affected_cells_from(null, Vector2i.ZERO, Vector2i(0, -1), swung, board)) \
+		.override_failure_message("the directional branch never asks the flag") \
+		.contains_exactly([Vector2i(0, -1), Vector2i(0, -3)])

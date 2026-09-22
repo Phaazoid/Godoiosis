@@ -46,8 +46,14 @@ class_name Reach
 # outward from the impact and each cell asks this SAME gate, with the impact standing in for the
 # shooter. So a blast's vertical reach and what blocks it are the attack's own three fields read from
 # where it landed, not a second vocabulary: one rule, two anchors, and which anchor applies is the
-# question max_range already answers. No footprint is board-blind any more; what #218 still defers is
-# a blast covering a VOLUME rather than a heightmap's surface.
+# question max_range already answers. What #218 still defers is a blast covering a VOLUME rather
+# than a heightmap's surface.
+#
+# ...AND WHETHER EITHER PROPAGATION RUNS AT ALL IS AUTHORED SINCE #1055, on AttackData.swing. Both
+# were unconditional until then, which left a TRUE AoE -- one that covers its whole stamp through
+# walls -- unauthorable. Swing off takes a third path (_height_only) that keeps the vertical clause
+# and drops connectivity and the trace, so nothing is board-blind even there: what a true AoE ignores
+# is what STANDS BETWEEN, never how high its cells sit.
 #
 # THE DRAWN PATH IS THE RULE (dev, 2026-08-20): sight_trace's trajectory is one function that both
 # the legality check and the in-game bead readout evaluate, so what the player sees can never
@@ -262,11 +268,18 @@ static func get_all_attack_cells_from(unit: Unit, origin_cell: Vector2i, attack:
 				cells.append(cell)
 	return cells
 
-# The AoE footprint an aim at target_cell actually lands on, and BOTH kinds read the terrain. A
-# directional SPREAD is TRUNCATED lane by lane from the shooter (#756, dev 2026-09-04: "truncate, and
-# all 8") -- see _truncate. A PLACED one spreads outward from where it landed (#805) -- see _spread.
+# The AoE footprint an aim at target_cell actually lands on. THREE PATHS, forked by AttackData.swing
+# and then by the anchor max_range already decides (#1055):
+#
+#   swing, self-anchored -- TRUNCATED lane by lane from the shooter (#756, dev 2026-09-04:
+#                           "truncate, and all 8"). See _truncate.
+#   swing, placed        -- SPREADS outward from where it landed (#805). See _spread.
+#   no swing             -- a TRUE AoE: the whole stamp, through walls, each cell still asking the
+#                           attack's own vertical rule from the anchor. See _height_only.
+#
 # A swing travels in parallel lanes and a blast propagates; those are different claims about what the
-# attack physically is, which is why they are two rules rather than one asked from two cells.
+# attack physically is, which is why they are two rules rather than one asked from two cells -- and
+# the third is a different claim again, that nothing between the anchor and a cell matters at all.
 #
 # The board is REQUIRED, not optional -- the movement_cost precedent an optional board would break,
 # since a footprint answered without one is a different answer to the same question. A null board
@@ -281,6 +294,8 @@ static func get_affected_cells_from(_unit: Unit, origin_cell: Vector2i, target_c
 		var swung := _place(attack, origin_cell, dir)
 		if board == null:
 			return swung
+		if not attack.swing:
+			return _height_only(swung, origin_cell, attack, board)
 		return _truncate(swung, origin_cell, dir, attack, board)
 	# AN ANCHORED SHAPE NEVER TURNS (#818): it lands exactly as drawn, grid-up reading as board
 	# north whatever direction the aim came from. Turning it to the attacker-to-target cardinal
@@ -296,6 +311,8 @@ static func get_affected_cells_from(_unit: Unit, origin_cell: Vector2i, target_c
 	var placed := _place(attack, target_cell, AttackShape.FORWARD)
 	if board == null:
 		return placed
+	if not attack.swing:
+		return _height_only(placed, target_cell, attack, board)
 	return _spread(placed, target_cell, attack, board)
 
 
@@ -391,6 +408,36 @@ static func _spread(cells: Array[Vector2i], impact_cell: Vector2i, attack: Attac
 	var out: Array[Vector2i] = []
 	for cell in cells:
 		if reached.has(cell):
+			out.append(cell)
+	return out
+
+
+# THE TRUE AoE (#1055). Every cell of the stamp lands at once, and the only thing that can take one
+# away is the attack's own VERTICAL RULE, judged from the anchor -- the attacker for a self-anchored
+# shape, the impact for a placed one, which is the anchor each propagation above already measures
+# from. "Attacks which just hit all of their tiles at once" (dev, 2026-09-20).
+#
+# NO CONNECTIVITY AND NO TRACE, which is the whole difference from the two above: a wall between the
+# anchor and a cell does not shield it, and neither does a cell the blast could not have propagated
+# through. A shape whose cells do not touch lands in full over any ground.
+#
+# THE HEIGHT CLAUSE SURVIVES BY RULING, not by oversight -- the dev chose this over a fully
+# terrain-blind AoE the same day. Each propagation carries TWO clauses, the vertical rule and the
+# trace-plus-connectivity, so terrain-blind drops the second and keeps the first: a MELEE cleave
+# whose rule refuses a one-level step must not reach a unit three levels up merely because nothing
+# stands between them. That is what makes this a THIRD path through the same pair rather than either
+# of the other two switched off.
+#
+# _vertical_rule_ok rather than vertical_aim_ok, and the difference IS the trace: the latter is the
+# pair, this is the clause. Callers reach here only past get_affected_cells_from's null-board guard,
+# which is what lets it dereference the board the way _vertical_rule_ok's other caller does.
+#
+# Survivors keep EMISSION order, exactly as the two propagations do -- victim order is volley order,
+# and that is AttackShape.place's rule to make rather than this filter's.
+static func _height_only(cells: Array[Vector2i], anchor_cell: Vector2i, attack: AttackData, board: BoardContext) -> Array[Vector2i]:
+	var out: Array[Vector2i] = []
+	for cell in cells:
+		if _vertical_rule_ok(attack, anchor_cell, cell, board):
 			out.append(cell)
 	return out
 

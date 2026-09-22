@@ -31,6 +31,26 @@ extends Resource
 @export var max_range := 1
 @export var max_and_a_half := false   # .5 step: bevel in the diagonal corners of the max ring
 @export var attack_shape: AttackShape
+# DOES THIS ATTACK STOP AT WHAT IT MEETS, or cover its whole stamp? (#1055 -- the MODIFIER half of
+# the dev's 2026-09-20 vocabulary: "2 kinds of attacks - Single target, AoE, and then we have a
+# modifier - swings".)
+#
+# ON is what every shaped attack did before this field existed, and it is TWO physical claims rather
+# than one: a self-anchored shape travels in parallel lanes and is cut at the first cell each lane
+# cannot reach (#756), while a placed one PROPAGATES outward from its impact (#805). Which of the two
+# applies is the question max_range already answers, so one flag covers both.
+#
+# OFF is a TRUE AoE -- every cell of the stamp lands at once, straight through walls and through
+# bodies. Until this field there was no way to author one, because neither propagation was optional.
+#
+# IT IS NOT BOARD-BLIND EITHER WAY (dev ruling, 2026-09-20, choosing this over a fully terrain-blind
+# AoE): a true AoE still asks this attack's own VERTICAL rule per cell, from the anchor. What OFF
+# drops is connectivity and the sight trace, not height -- a melee cleave must not reach a unit three
+# levels up merely because nothing stands between them.
+#
+# READS NOTHING WITHOUT A SHAPE: a null shape is the anchor cell alone, and one cell has nothing to
+# stop at, which is why hidden_fields drops the row there rather than offering an inert tick.
+@export var swing := false
 @export var can_counter := true
 @export var hits_allies := false
 @export var hits_self := false
@@ -235,7 +255,7 @@ func grid_up_label(_field: String) -> String:
 static func property_sections() -> Array[Dictionary]:
 	var sections: Array[Dictionary] = [
 		{"title": "Identity", "fields": PackedStringArray(["display_name"])},
-		{"title": "Range and shape", "fields": PackedStringArray(["max_range", "min_range", "max_and_a_half", "attack_shape"])},
+		{"title": "Range and shape", "fields": PackedStringArray(["max_range", "min_range", "max_and_a_half", "attack_shape", "swing"])},
 		{"title": "Who it can hit", "fields": PackedStringArray(["targets", "hits_allies", "hits_self", "pierces_guard"])},
 		{"title": "Height", "fields": PackedStringArray(["vertical_rule", "up_tolerance", "down_tolerance", "arc_clearance"])},
 		{"title": "Payload", "fields": PackedStringArray(["heals", "deals_no_damage", "power", "damage_kind", "knockback", "sound"])},
@@ -273,6 +293,8 @@ static func in_section(sections: Array[Dictionary], title: String, fields: Packe
 # EVERY ENTRY IS DERIVED FROM WHAT THE RULE ACTUALLY READS, never from what looks irrelevant:
 #   is_directional()     -- min_range and max_and_a_half reach nothing, being read only through the
 #                           ring (GridUtils.cells_within_blended_range), and a facing aim has none.
+#   no attack_shape      -- swing reaches nothing: Reach._place answers the anchor cell alone for a
+#                           null shape, and one cell has nothing to stop at.
 #   MELEE                -- Reach._vertical_rule_ok returns before either tolerance. arc_clearance
 #                           is deliberately NOT here: the lane trace reads it whatever the rule.
 #   deals_no_damage      -- both base_damage implementations return 0 before power or the blend.
@@ -290,6 +312,8 @@ func hidden_fields() -> PackedStringArray:
 	var hidden: PackedStringArray = []
 	if is_directional():
 		hidden.append_array(["min_range", "max_and_a_half"])
+	if attack_shape == null:
+		hidden.append("swing")
 	if vertical_rule == VerticalRule.MELEE:
 		hidden.append_array(["up_tolerance", "down_tolerance"])
 	if deals_no_damage:
@@ -323,6 +347,7 @@ static func property_tips() -> Dictionary:
 		"max_range": "Placed at range OFF is max range 0, and it is a different kind of attack rather than a shorter one: the shape sits on the ATTACKER and the aim is a FACING -- the player points a direction and the whole shape TURNS to fire that way. That is what a cleave or a line is.\nON, this is the FURTHEST cell the attack can be aimed at, in Manhattan steps (no diagonals). The shape is PLACED on the aimed cell and never turns: it lands exactly as you drew it, so the grid's top is board north rather than a facing.",
 		"max_and_a_half": "Adds a half step to the outer ring, bevelling its diagonal corners -- a reach of 2 and a half rather than 2 or 3.",
 		"attack_shape": "The SHAPE this attack covers once aimed, picked from the shared library. Shapes are shared BY REFERENCE: editing one changes every attack that uses it. No shape at all = the aimed cell alone.",
+		"swing": "Does this attack STOP at what it meets?\nON, it travels: a shape on the attacker is cut short wherever a lane cannot reach, and one placed at range spreads outward from where it lands -- so a wall shields whatever stands behind it. That is what every shaped attack did before this box existed.\nOFF, it is a TRUE AoE: every cell of the shape lands at once, straight through walls.\nHeight applies either way -- a cell outside this attack's up/down tolerance is missed whichever way this is set.",
 		"can_counter": "May this attack be used when countering? A weapon always counters with its MAIN attack whatever is picked, so this only matters on a main.",
 		"hits_allies": "Splash reaches your own side too, not just enemies.",
 		"hits_self": "The attacker is a legal victim of its own attack.",

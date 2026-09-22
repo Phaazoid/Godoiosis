@@ -1,20 +1,22 @@
-[gd_resource type="Resource" script_class="WeaponAttackData" format=3]
+[gd_resource type="Resource" script_class="WeaponAttackData" format=3 uid="uid://bheqv4d8bsu2b"]
 
+[ext_resource type="Script" uid="uid://dle5ob08qngde" path="res://Classes/presentation/EffectLook.gd" id="2_rgq2s"]
 [ext_resource type="Script" uid="uid://ddqeee7njjjq2" path="res://Classes/weapons/WeaponAttackData.gd" id="2_wad"]
 [ext_resource type="Resource" uid="uid://jr2ije4dp1td" path="res://Resources/AttackShapes/Line 2.tres" id="3_shape0"]
 
 [resource]
 script = ExtResource("2_wad")
-display_name = "Spring"
-damage_kind = 2
-power = 5
-max_range = 0
-attack_shape = ExtResource("3_shape0")
-hits_allies = true
-requires_readiness = true
-consumes_readiness = true
 scaling_blend = Dictionary[int, int]({
 1: 70,
 4: 30
 })
+requires_readiness = true
+consumes_readiness = true
+display_name = "Spring"
+power = 5
+max_range = 0
+attack_shape = ExtResource("3_shape0")
+swing = true
+hits_allies = true
+damage_kind = 2
 metadata/_custom_type_script = "uid://ddqeee7njjjq2"

@@ -37,10 +37,16 @@ static func wide(attack: AttackData, length := 1, width := 3) -> AttackData:
 
 
 # Any range with any stamp -- offsets in grid space, UP forward.
+#
+# SWINGS BY DEFAULT (#1055), which is what keeps every pre-existing case unchanged: the three named
+# shapes above are the retired classes' vocabulary and all of them travelled, so a fixture that did
+# not set the flag would hand the whole suite true AoEs and quietly delete the truncation. A case
+# that wants the new kind clears it on the attack it just built, which reads as the thing under test.
 static func stamped(attack: AttackData, max_range: int, offsets: Array[Vector2i], min_range := 1) -> AttackData:
 	attack.max_range = max_range
 	attack.min_range = min_range
 	attack.attack_shape = shape(offsets)
+	attack.swing = true
 	return attack
 
 

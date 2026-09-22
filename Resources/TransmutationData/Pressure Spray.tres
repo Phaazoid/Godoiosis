@@ -12,6 +12,7 @@ display_name = "Pressure Spray"
 power = 5
 max_range = 0
 attack_shape = ExtResource("1_ytj11")
+swing = true
 hits_allies = true
 can_overwatch = true
 damage_kind = 2

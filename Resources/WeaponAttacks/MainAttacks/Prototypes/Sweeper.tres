@@ -1,6 +1,7 @@
-[gd_resource type="Resource" script_class="WeaponAttackData" format=3]
+[gd_resource type="Resource" script_class="WeaponAttackData" format=3 uid="uid://danvk3cr8o0ac"]
 
 [ext_resource type="Script" uid="uid://ddqeee7njjjq2" path="res://Classes/weapons/WeaponAttackData.gd" id="2_ij5xu"]
+[ext_resource type="Script" uid="uid://dle5ob08qngde" path="res://Classes/presentation/EffectLook.gd" id="2_mi8t5"]
 [ext_resource type="Resource" uid="uid://dvheq8kre3rrk" path="res://Resources/AttackShapes/Wide 3.tres" id="3_shape0"]
 
 [resource]
@@ -10,7 +11,8 @@ scaling_blend = Dictionary[int, int]({
 4: 40
 })
 display_name = "Cleave"
-damage_kind = 1
 power = 3
 max_range = 0
 attack_shape = ExtResource("3_shape0")
+swing = true
+damage_kind = 1
