@@ -1030,6 +1030,10 @@ static func _paths_of(resource: Resource, state: Dictionary) -> Array[Array]:
 
 # The path pair and anything riding with it (the stamp, when a click paints), set together and
 # announced ONCE: a listener hearing the cells before the lengths would read a pair that disagrees.
+#
+# NEW arrays, never the ones already on the resource, and that is load-bearing: a LibraryField copy
+# is a shallow duplicate whose Array fields are the library file's OWN objects. Measured (#1056):
+# clearing and refilling them in place reached the shared shape before Update.
 static func _write_paths(resource: Resource, state: Dictionary, paths: Array[Array], also: Dictionary) -> void:
 	var values := also.duplicate()
 	values[state["cells_prop"]] = AttackShape.joined_cells(paths)
