@@ -7,7 +7,7 @@ its child [#49 Action Queue UX](https://github.com/Phaazoid/Godoiosis/issues/49)
 This is a *guidelines* doc, not a spec — it captures the principles we're holding the work to,
 plus the running order of the queue-UX checklist. Update it as items land.
 
-**Canon checked through #1070 (2026-09-21).**
+**Canon checked through #1074 (2026-09-22).**
 
 ## Principles
 
@@ -3518,6 +3518,8 @@ He played it and reported three things: *"They should be shallow arcs rather tha
 
 **The two textures are authored in two places and that is each folder's own convention, not a fork.** The 3D one is generated beside `cell_fill.png` in `tools/lookdev/gen_lookdev_assets.gd`, which authored its sibling and is the only place the two can be kept in step (the run is byte-stable over the existing textures -- verified, nothing else moved). The 2D one is a hand-authored PNG in `Art/Board/` like every other tile there, minted by a throwaway script on the `LookPresets` precedent: the artifact is the committed thing, not the generator.
 
+> **Re-cut by [#1074](https://github.com/Phaazoid/Godoiosis/issues/1074) (2026-09-22).** Both PNGs and the `"texture"` key are gone. The art is GENERATED at runtime by `MoveGrid` from four Game-tab knobs, in both views, and `Layer.MOVE` says `"grid": true`. The softened outer ring described above is what the dev read as the tiles being disconnected -- see *what #1074 tightened* at the end of this file.
+
 ### The reach grows from ONE cell, and appears once you have named one
 
 > it doesn't show the attack range as the total possible attack range. Hovering a unit doesn't show the attack range at all, actually. Selecting a unit, though (for us, bringing up the radial menu, and also choosing a move, etc), brings up the unit's attack radius from the unit's tile.
@@ -3597,3 +3599,44 @@ Both values get their first knob rows anywhere (`PIN_PULSE_MODULATE` had been a 
 
 - **The orange cohesion bubble and the mauve `INVALID_MOVE`** are still deferred, now FILED as [#1070](https://github.com/Phaazoid/Godoiosis/issues/1070) rather than parked on a merged PR for a third round. They matter more after this slice, not less: the squad markup is the only flood fill of the player's OWN that survives the gridline change.
 - **What the suite cannot see, and is the dev's:** whether gridlines read at speed on a busy board, whether reach-from-one-tile is informative enough after losing the union, whether the solid cone reads as a volume at the diorama's pixel scale, and whether the white pin flash is now too loud.
+
+## ...and what #1074 tightened ([#1074](https://github.com/Phaazoid/Godoiosis/issues/1074), BUILT 2026-09-22)
+
+The dev's second look at the #1069 board. There were three asks, and all three shipped in one PR on his standing ruling.
+
+### The grid runs to the tile's edge, with a faint square inside
+
+> having just the interior of each square outlined, and not to the edge, makes the lattice look really odd. that space between tiles should be highlighted too, so the range doesn't look as disconnected.
+
+**The cause was the art's softened outer ring.** #1069's outline PNG graded its rings 0.7 / 1.0 / 1.0 / 0.45, with the outermost texel dimmed to fight aliasing. Two neighbouring tiles therefore put two dim rings side by side between two bright bands, and a dim seam reads as a gap. The fix removes the softening rather than retuning it: at an inset of 0, a tile's line runs to its last texel at full strength and meets the neighbour's.
+
+**He also asked for a second, much fainter wash of the same blue over each tile's centre** (*"same shade, much fainter alpha"*). It is the same texture carrying an inner square at a fraction of the line's alpha, tinted by the one `Move fill` colour. That makes it the same blue by construction, with no second colour authored anywhere.
+
+**Both are GENERATED, from four knobs** -- `MoveGrid` (`Classes/board/`), `ThreatLines2D`'s shape: a `board/` class whose statics both views read and `CLASS_KNOBS` tunes. The four knobs are line inset, line width, inner gap and inner fill. The first three are in pixels of the diorama's 32-texel tile. The dev picked the defaults off a slider mockup before anything was built: inset 0, width 1, gap 0, fill 0.25. `MoveGrid.image(size)` is the one rule, and each view rasterizes it at its own size -- the diorama at 32, the flat view at 16, asked of its own tileset. `Layer.MOVE` says `"grid": true`, and #1069's `"texture"` key went with its only user.
+
+**A texel is judged by the span it covers, not by its centre**, and the dev's width is why. A one-pixel line sampled at texel centres lands outside every texel of the flat view's 16-texel tile and vanishes. Judging the span `[ring, ring+1)` is exactly centre sampling at 32 texels for whole-pixel knobs, and it keeps the line at 16.
+
+**Declared consequence of edge-to-edge lines:** a line BETWEEN two tiles is two tiles' lines side by side, so it draws twice as thick as the rim of the range. Matching them needs each tile's art to know which neighbours are in range, a per-cell mask. That is a known follow-up, left unbuilt until the dev says the doubling reads wrong.
+
+**Two things a future edit must not undo:**
+
+- **A restyle builds a NEW texture and hands it to every grid marker.** `ImageTexture.update()` on the shared object would have spared the pool walk, but the suite runs on the dummy renderer, where `update()` never reaches the pixels a read sees. Measured: both cases pinning the restyle went red against a correct `update()` and green against the rebuild.
+- **`Game.tscn` keeps a plain fill sheet on the move tileset as a PLACEHOLDER.** An atlas source needs a texture to hold its tile at all. `OverlayManager._install_move_grid` replaces it before anything is painted, and a case asserts the tileset holds the generated texture, so the placeholder can never be the thing that draws.
+
+### The Game tab is cut by subject
+
+> the dev tools need more headers in the Game area. Those sets of controls are a bit dense right now.
+
+**The panel builds GROUP-major now.** `GameTool` walks `GameKnobs.GROUP_TABS` in declaration order and draws one heading per section: that section's node-property rows, then its class-value rows. So `GROUP_TABS` order is both the tab order and the order inside a tab. The table-major builder it replaced could not put rows from the two tables under one heading, which is why the Markup and Colours tabs were split by how a value is STORED. The reach mark's controls lived on both tabs at once. That builder also drew "The tear-out" heading twice, because its rows were not contiguous.
+
+Asked and answered: **regroup by subject**. Markup is now the readout, in this order: range readout, movement grid, enemy focus, reach lines (arc, cone), aiming, sight beam, watch. Markers (was Colours) is everything else laid on the board. The dense groups on other tabs got sub-sections too: Unit HUD, Action ring, Fire and Camera flourish. No row moved in either table and no value changed; only group names and `GROUP_TABS` did. `MARKUP_COLOUR_GROUP` became `AIM_GROUP`, so the palette notice sits over the three rows it talks about.
+
+### Every pinned enemy flashes on one timer
+
+> the flashing enemies should all flash on the same timer, rather than per enemy clicked. It looks odd having them flash out of synch.
+
+**A flash that starts JOINS one already running**: `Pulse.start`'s optional `in_step_with` steps the new tween to `fposmod(anchor elapsed, cycle)`. That covers both a fresh pin and one coming back after an aim pulse lets go of it; the second is the path a plain precedence restarts from scratch. `UnitVisuals.PIN_FLASH_GROUP` is the set a starting flash looks in, and `drop_pin_flash` is the one door a pin tween closes through.
+
+**Anchored to a live tween, never a clock.** Every pin tween pauses with the Game node (ModalLock, a hitstop's `time_scale`). A wall-clock phase drifts from the standing flashes the first time the pause menu opens, while tweens that paused together stay in step.
+
+**The plan called for a two-pass restyle** (drop every flash, then restart). It was built, then taken out as UNOBSERVABLE. The pins are always in step before a restyle, so a rebuilt flash lands on one phase whichever flash it joins, old or already rebuilt. A choice no case could tell apart from its absence is the trap `CLAUDE.md` names, so the single pass stayed.

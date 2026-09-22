@@ -83,7 +83,8 @@ func _gen_textures() -> int:
 	_save(_flame(rng), "torch_flame.png")
 	_save(_fire_sheet(), "fire_flame.png")
 	_save(_cell_fill(), "cell_fill.png")
-	_save(_cell_outline(), "cell_outline.png")
+	# No outline beside it any more: the movement grid is generated at runtime from its knobs
+	# (MoveGrid, #1074), and a baked copy here would be a second answer that goes stale on a drag.
 	_save(_speckled(rng, Color8(118, 86, 58), 0.10), "dirt_top.png")
 	_save(_speckled(rng, Color8(74, 58, 44), 0.14), "mud_top.png")
 	_save(_water_top(rng), "water_top.png")
@@ -150,31 +151,6 @@ func _cell_fill() -> Image:
 			img.set_pixel(x, y, Color(1, 1, 1, alpha))
 	return img
 
-
-# ...and its HOLLOW twin (#1069): the same square with the middle taken out, so a FILL layer can
-# draw as gridlines instead of a wash by naming a different texture. The dev, on 3D FE: "the player
-# movement tiles don't actually flood fill, only the gridlines of the tiles get the color
-# highlights. So what we have now, but with the centers removed."
-#
-# Its sibling above is why this lives here rather than being hand-authored: one texture serves every
-# fill colour because layers tint it, and the same has to be true of this one or a second hue means
-# a second file. The outermost pixel is softened and the inner edge feathered for the reason the
-# fill's rings are graded -- a hard 1px border on a 32px cell aliases into a dashed line at any
-# distance, and this is markup that has to survive being read at a glance across a whole board.
-func _cell_outline() -> Image:
-	var img := Image.create_empty(TILE, TILE, false, Image.FORMAT_RGBA8)
-	for y in TILE:
-		for x in TILE:
-			var edge := mini(mini(x, TILE - 1 - x), mini(y, TILE - 1 - y))
-			var alpha := 0.0
-			if edge == 0:
-				alpha = 0.7
-			elif edge <= 2:
-				alpha = 1.0
-			elif edge == 3:
-				alpha = 0.45
-			img.set_pixel(x, y, Color(1, 1, 1, alpha))
-	return img
 
 
 func _save(img: Image, file_name: String) -> void:

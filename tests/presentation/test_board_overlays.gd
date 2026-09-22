@@ -11,15 +11,24 @@ const SCENE: PackedScene = preload("res://Scenes/LookDev/LookDev.tscn")
 const UnitWalkDemo := preload("res://Scenes/LookDev/unit_walk_demo.gd")
 
 var _scene: Node3D
+# MoveGrid's four statics as they stood before the case (#1074). The grid cases set them explicitly
+# so they assert the RULE rather than the dev's tuned defaults, and a static outlives its case.
+var _grid_saved: Array[float] = []
 
 
 func before_test() -> void:
+	_grid_saved = [MoveGrid.GRID_LINE_INSET, MoveGrid.GRID_LINE_WIDTH, MoveGrid.GRID_FILL_GAP,
+		MoveGrid.GRID_FILL_ALPHA]
 	_scene = SCENE.instantiate() as Node3D
 	get_tree().root.add_child(_scene)
 	await await_idle_frame()
 
 
 func after_test() -> void:
+	MoveGrid.GRID_LINE_INSET = _grid_saved[0]
+	MoveGrid.GRID_LINE_WIDTH = _grid_saved[1]
+	MoveGrid.GRID_FILL_GAP = _grid_saved[2]
+	MoveGrid.GRID_FILL_ALPHA = _grid_saved[3]
 	get_tree().root.remove_child(_scene)
 	_scene.free()
 
@@ -1161,10 +1170,10 @@ func test_turning_the_facet_count_rebuilds_a_standing_cone() -> void:
 		.is_greater(coarse)
 
 
-# --- The movement range draws as GRIDLINES (#1069) ----------------------------------------------
+# --- The movement range draws as GRIDLINES (#1069, generated since #1074) -----------------------
 
 # The dev, on 3D FE: "the player movement tiles don't actually flood fill, only the gridlines of the
-# tiles get the color highlights." It is still a Kind.FILL -- hollow ART, not a new render kind --
+# tiles get the color highlights." It is still a Kind.FILL -- different ART, not a new render kind --
 # which is what keeps the sort, the lift, the ramp tilt and the corner fold applying to it.
 #
 # Asserted as a DIFFERENCE between the three range layers rather than against a filename: what
@@ -1190,15 +1199,100 @@ func test_your_movement_range_draws_different_art_from_the_two_washes_under_it()
 		.is_true()
 
 
-# ...and the DEFAULT is untouched: a layer that names no texture goes on wearing the fill. Without
-# this the key could be read backwards -- outline by default, wash by exception -- and every other
-# markup layer in the game would quietly hollow out.
-func test_a_layer_that_names_no_texture_still_draws_the_fill() -> void:
+# ...and the DEFAULT is untouched: a layer not marked `"grid"` goes on wearing the fill. Without this
+# the key could be read backwards -- grid by default, wash by exception -- and every other markup
+# layer in the game would quietly hollow out.
+func test_a_layer_not_marked_grid_still_draws_the_fill() -> void:
 	var overlays := _bare_overlays()
 	var cells: Array[Vector3i] = [Vector3i(0, 0, 0)]
 	overlays.set_cells(BoardOverlays.Layer.SQUAD, cells)
 	assert_object(_albedo_of(overlays, BoardOverlays.Layer.SQUAD)).override_failure_message(
-			"a layer with no texture key came up with the wrong art").is_same(overlays.fill_texture)
+			"a layer with no grid key came up with the wrong art").is_same(overlays.fill_texture)
+
+
+# --- The grid reaches the tile's EDGE, with a faint square inside (#1074) ------------------------
+
+# The dev's second look: "that space between tiles should be highlighted too, so the range doesn't
+# look as disconnected" -- the #1069 art softened its outermost ring, so two neighbours put a dim seam
+# between two bright bands. So at an inset of 0 the line must reach the LAST texel on every side at
+# full strength, where it meets the neighbour's. The four values are set here rather than read, so
+# this is the rule and not the dev's tuning.
+func test_at_no_inset_the_grid_line_runs_to_the_tiles_edge_on_every_side() -> void:
+	_grid(0.0, 2.0, 0.0, 0.3)
+	var img := MoveGrid.image(MoveGrid.ART_TEXELS)
+	var last := MoveGrid.ART_TEXELS - 1
+	var mid := MoveGrid.ART_TEXELS / 2
+	for texel: Vector2i in [Vector2i(0, mid), Vector2i(last, mid), Vector2i(mid, 0), Vector2i(mid, last)]:
+		assert_float(img.get_pixelv(texel).a).override_failure_message(
+				"the edge texel at %s is not full line -- the seam between tiles is back" % texel) \
+			.is_equal_approx(1.0, 0.01)
+	assert_float(img.get_pixel(mid, mid).a).override_failure_message(
+			"the centre of the tile is not the inner square's strength") \
+		.is_equal_approx(0.3, 0.01)
+
+
+# ...and each knob MOVES something, in the place its name says. An inset clears the edge, a gap
+# clears the ring inside the line, and a line-width of zero draws no line at all.
+func test_each_grid_value_moves_the_part_it_names() -> void:
+	_grid(3.0, 2.0, 2.0, 0.3)
+	var img := MoveGrid.image(MoveGrid.ART_TEXELS)
+	var mid := MoveGrid.ART_TEXELS / 2
+	assert_float(img.get_pixel(0, mid).a).override_failure_message(
+			"an inset left the tile's edge drawn").is_equal_approx(0.0, 0.01)
+	assert_float(img.get_pixel(3, mid).a).override_failure_message(
+			"the line did not start where the inset ends").is_equal_approx(1.0, 0.01)
+	assert_float(img.get_pixel(5, mid).a).override_failure_message(
+			"the gap between the line and the inner square is drawn").is_equal_approx(0.0, 0.01)
+	assert_float(img.get_pixel(7, mid).a).override_failure_message(
+			"the inner square does not start after the gap").is_equal_approx(0.3, 0.01)
+	_grid(0.0, 0.0, 0.0, 0.3)
+	assert_float(MoveGrid.image(MoveGrid.ART_TEXELS).get_pixel(0, mid).a).override_failure_message(
+			"a zero-width line still drew a line").is_equal_approx(0.3, 0.01)
+
+
+# The flat view cuts a tile at HALF the texels, and a one-pixel line must not vanish there. A texel
+# judged by its centre would miss a band that narrow entirely -- which is the width the dev picked.
+func test_a_one_pixel_line_survives_the_flat_views_half_size_tile() -> void:
+	_grid(0.0, 1.0, 0.0, 0.3)
+	var half := MoveGrid.ART_TEXELS / 2
+	var img := MoveGrid.image(half)
+	assert_float(img.get_pixel(0, half / 2).a).override_failure_message(
+			"a one-pixel line vanished at the flat view's tile size").is_equal_approx(1.0, 0.01)
+	assert_float(img.get_pixel(1, half / 2).a).override_failure_message(
+			"the flat view's line is thicker than one of its texels").is_equal_approx(0.3, 0.01)
+
+
+# A turned knob reaches the range ALREADY STANDING, the born-dead-slider rule -- every marker in it,
+# and a marker the pool grows afterwards too.
+func test_restyling_the_grid_repaints_every_standing_move_marker() -> void:
+	_grid(0.0, 2.0, 0.0, 0.3)
+	var overlays := _bare_overlays()
+	var cells: Array[Vector3i] = [Vector3i(0, 0, 0), Vector3i(1, 0, 0)]
+	overlays.set_cells(BoardOverlays.Layer.MOVE, cells)
+	var mid := MoveGrid.ART_TEXELS / 2
+	assert_float(_albedo_of(overlays, BoardOverlays.Layer.MOVE).get_image().get_pixel(mid, mid).a) \
+		.is_equal_approx(0.3, 0.01)   # precondition, not the claim
+
+	_grid(0.0, 2.0, 0.0, 0.8)
+	overlays.restyle_grid()
+	for node: Node3D in overlays._markers[BoardOverlays.Layer.MOVE]:
+		var art := ((node as MeshInstance3D).material_override as StandardMaterial3D).albedo_texture
+		assert_float(art.get_image().get_pixel(mid, mid).a).override_failure_message(
+				"a standing move marker still shows the old inner fill after the knob moved") \
+			.is_equal_approx(0.8, 0.01)
+	var grown: Array[Vector3i] = [Vector3i(0, 0, 0), Vector3i(1, 0, 0), Vector3i(2, 0, 0)]
+	overlays.set_cells(BoardOverlays.Layer.MOVE, grown)
+	var newest := (overlays._markers[BoardOverlays.Layer.MOVE][2] as MeshInstance3D)
+	assert_float((newest.material_override as StandardMaterial3D).albedo_texture.get_image() \
+			.get_pixel(mid, mid).a).override_failure_message(
+			"a marker built after the restyle came up with the old grid").is_equal_approx(0.8, 0.01)
+
+
+func _grid(inset: float, width: float, gap: float, fill: float) -> void:
+	MoveGrid.GRID_LINE_INSET = inset
+	MoveGrid.GRID_LINE_WIDTH = width
+	MoveGrid.GRID_FILL_GAP = gap
+	MoveGrid.GRID_FILL_ALPHA = fill
 
 
 func _albedo_of(overlays: BoardOverlays, layer: BoardOverlays.Layer) -> Texture2D:

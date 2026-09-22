@@ -66,27 +66,20 @@ const EFFECT_RENDER_PRIORITY := 16
 # and its glyphs.
 const UNIT_HUD_RENDER_PRIORITY := 48
 
-# The hollow twin of the overlay fill, for markup that draws as GRIDLINES rather than as a wash
-# (#1069). Generated beside the fill by tools/lookdev/gen_lookdev_assets.gd, which is where its
-# sibling came from and the only place the two can be kept in step. Declared up here rather than
-# beside FILL_TEXTURE_PATH because LAYERS names it, and a const table may only read a const already
-# declared above it.
-const OUTLINE_TEXTURE_PATH := "res://Art/LookDev/cell_outline.png"
-
 const LAYERS: Dictionary[Layer, Dictionary] = {
 	# BLUE since #1066, and it is the player's half of a Fire Emblem readout: your unit says where it
 	# may STAND in blue and where it could HIT from there in red, while an enemy is one undifferentiated
 	# field. Sort 0 keeps it at the TOP of the range stack, which is what makes the intersect with an
 	# enemy's purple read as tinted blue rather than as purple -- the composite the dev ruled on.
 	# GRIDLINES rather than a wash since #1069 (dev, on 3D FE: "the player movement tiles don't
-	# actually flood fill, only the gridlines of the tiles get the color highlights. So what we have
-	# now, but with the centers removed"). It is STILL a Kind.FILL -- the hollow art is the whole
-	# change -- so the sort, the lift, the ramp tilt, the corner fold and the mirror's tint copy are
-	# untouched. Only YOUR movement range: the reach under it and the enemy's field under that stay
-	# washes, on his ruling, so the three read as line art over two tints rather than as three grids.
-	# NB `"texture"` goes LAST -- see _texture_for.
+	# actually flood fill, only the gridlines of the tiles get the color highlights"), and since #1074
+	# a line that runs to the tile's EDGE plus a faint square of the same blue inside it -- MoveGrid's
+	# art, generated from four Game-tab knobs. It is STILL a Kind.FILL, so the sort, the lift, the
+	# ramp tilt, the corner fold and the mirror's tint copy are untouched. Only YOUR movement range:
+	# the reach under it and the enemy's field under that stay washes, on his ruling.
+	# NB `"grid"` goes LAST -- see _texture_for.
 	Layer.MOVE: {"color": Color(0.25, 0.45, 1.0, 0.8863), "sort": 0, "kind": Kind.FILL,
-		"texture": OUTLINE_TEXTURE_PATH},
+		"grid": true},
 	Layer.ATTACK: {"color": Color(1, 0, 0, 0.5), "sort": 1, "kind": Kind.FILL},
 	# Reach cells past the aim's vertical tolerance (#258). Shares ATTACK's sort safely: the 2D
 	# splits the one layer by atlas coords, so the two cell sets are disjoint by construction and
@@ -402,10 +395,9 @@ func _set_beam_intensity(value: float) -> void:
 
 var fill_texture: Texture2D
 
-# The textures a FILL layer may name through its `"texture"` key (#1069), cached by PATH so the two
-# layers that share one share the object. Lazy, and deliberately not preloaded in _ready beside
-# fill_texture: a layer that never comes up should not pay for its art.
-var _fill_textures: Dictionary[String, Texture2D] = {}
+# MoveGrid's art at the diorama's resolution (#1074), shared by every marker on a `"grid"` layer and
+# replaced wholesale by restyle_grid. Lazy -- a board that never shows a move range pays nothing.
+var _grid_texture: ImageTexture
 
 var _beams_animating := true   # the last composed photosensitivity read; see poll_beam_motion
 
@@ -435,22 +427,45 @@ func _ready() -> void:
 		fill_texture = load(FILL_TEXTURE_PATH) as Texture2D
 
 
-# What art a FILL layer draws with (#1069). The default is the wash every markup layer has always
-# worn; a layer that names a `"texture"` gets that instead, which is how MOVE draws as GRIDLINES
-# without becoming a second render Kind -- every law this table already carries (the sort, the lift,
-# the ramp tilt, the corner-cell fold, set_layer_modulate, the mirror's per-frame tint copy) goes on
-# applying to it untouched, because it IS still a fill.
+# What art a FILL layer draws with. The default is the wash every markup layer has always worn; a
+# layer marked `"grid"` wears MoveGrid's generated lattice instead (#1069, re-cut by #1074), which is
+# how MOVE draws as GRIDLINES without becoming a second render Kind -- every law this table already
+# carries (the sort, the lift, the ramp tilt, the corner-cell fold, set_layer_modulate, the mirror's
+# per-frame tint copy) goes on applying to it untouched, because it IS still a fill.
 #
 # The key is declared LAST on its LAYERS line, and that is not style: KnobSource's colour rewriter
 # is a regex requiring `"color"` to be an entry's FIRST key, so a key ahead of it would make every
 # colour save in the dev panel fail silently.
 func _texture_for(spec: Dictionary) -> Texture2D:
-	var path: String = spec.get("texture", "")
-	if path.is_empty():
-		return fill_texture
-	if not _fill_textures.has(path):
-		_fill_textures[path] = load(path) as Texture2D
-	return _fill_textures[path]
+	if spec.get("grid", false):
+		return grid_texture()
+	return fill_texture
+
+
+func grid_texture() -> Texture2D:
+	if _grid_texture == null:
+		_grid_texture = ImageTexture.create_from_image(MoveGrid.image(MoveGrid.ART_TEXELS))
+	return _grid_texture
+
+
+# A turned MoveGrid knob (#1074): a fresh texture, handed to every standing grid marker, so the range
+# already on the board changes this frame -- a knob that only took effect on the next hover would be
+# a slider the dev drags with nothing moving.
+#
+# A NEW object rather than ImageTexture.update() on the old one, which would have spared the pool
+# walk: the suite runs on the dummy renderer, where update() never reaches the pixels a read sees, so
+# an in-place write is a wire no headless case can observe. Measured -- both cases that pin this went
+# red against a correct update() and green against this.
+func restyle_grid() -> void:
+	if _grid_texture == null:
+		return
+	_grid_texture = ImageTexture.create_from_image(MoveGrid.image(MoveGrid.ART_TEXELS))
+	for layer: Layer in LAYERS:
+		if not LAYERS[layer].get("grid", false):
+			continue
+		for node: Node3D in _pool_for(layer):
+			var material := (node as MeshInstance3D).material_override as StandardMaterial3D
+			material.albedo_texture = _grid_texture
 
 
 # Replaces the layer's cells wholesale (idempotent — calling twice with the same

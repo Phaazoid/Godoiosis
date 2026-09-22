@@ -30,12 +30,15 @@ const TARGET_PULSE_MODULATE := Color(1.6, 1.6, 1.6)   # peak of the aim-target p
 # So the two cues stop differing by DEPTH and differ by CADENCE instead -- the aim breathes
 # continuously, this snaps to white and sits there -- which is the distinction visual-clarity.md
 # principle 2 actually asks for, and it leaves the pin free to be the brighter of the two. The
-# PRECEDENCE is unchanged and is stated at _sync_pin_flash: an aim pulse still outranks this.
+# PRECEDENCE is unchanged and is stated at sync_pin_flash: an aim pulse still outranks this.
 static var PIN_PULSE_MODULATE := Color(2.2, 2.2, 2.2)
 # How long it sits at that peak, in seconds. The ramp either side is Pulse.PERIOD, so this is the
-# share of the cycle the cue actually occupies -- at 0.45 against a 0.5 ramp it is white for about a
-# third of the time rather than for one frame.
+# share of the cycle the cue actually occupies rather than one frame at the top of a ramp.
 static var PIN_PULSE_HOLD := 0.2
+# Every unit whose pin flash is RUNNING right now (#1074) -- the set a new flash looks in for a beat to
+# join, so every pinned enemy flashes on one timer. Membership is maintained at the two doors a pin
+# tween opens and closes through, sync_pin_flash and drop_pin_flash.
+const PIN_FLASH_GROUP := &"pin_flashing"
 
 var pulse_tween: Tween
 # TRUE while this unit's ranges are PINNED up. Held as a flag rather than read back off pin_tween
@@ -69,45 +72,67 @@ func start_pulse() -> void:
 	if sprite == null or pulse_tween != null:
 		return
 	pulse_tween = Pulse.start(self, sprite, &"modulate", base_modulate, TARGET_PULSE_MODULATE)
-	_sync_pin_flash()   # a pin flash underneath yields -- see there
+	sync_pin_flash()   # a pin flash underneath yields -- see there
 
 func stop_pulse() -> void:
 	if pulse_tween == null:
 		return
 	Pulse.stop(pulse_tween, sprite, &"modulate", base_modulate)
 	pulse_tween = null
-	_sync_pin_flash()   # ...and comes back
+	sync_pin_flash()   # ...and comes back
 
 # The pin flash (#1066): this unit's ranges are held up by a shift+click rather than by the pointer,
 # and nothing on the board said so. Idempotent and called on every redraw rather than only on the
 # change, so a flash killed by reset_visuals is rebuilt on the next pass instead of staying dark.
 func set_pinned(value: bool) -> void:
 	pinned = value
-	_sync_pin_flash()
+	sync_pin_flash()
 
 # THE PRECEDENCE, stated once and in one place: an aim pulse OUTRANKS a pin flash. Both write
 # sprite.modulate and a live pulse owns that channel (#442), so exactly one may run -- and "this
 # unit is about to be hit" is news, where "you pinned it" is a bookmark you set yourself.
-func _sync_pin_flash() -> void:
+#
+# A flash that starts JOINS any already running (#1074) -- a fresh pin, and equally one coming back
+# when an aim pulse lets go of it, which would otherwise restart on its own beat every time.
+func sync_pin_flash() -> void:
 	var want: bool = pinned and sprite != null and pulse_tween == null
 	if want == (pin_tween != null):
 		return
 	if want:
 		pin_tween = Pulse.start(self, sprite, &"modulate", base_modulate, PIN_PULSE_MODULATE,
-				Pulse.PERIOD, PIN_PULSE_HOLD)
+				Pulse.PERIOD, PIN_PULSE_HOLD, _running_pin_flash())
+		add_to_group(PIN_FLASH_GROUP)
 	else:
-		Pulse.stop(pin_tween, sprite, &"modulate", base_modulate)
-		pin_tween = null
+		drop_pin_flash()
 
-# Rebuild a STANDING pin flash so a turned knob reaches it (#1069). Its own door rather than a
-# clause in _sync_pin_flash, which is deliberately idempotent -- it compares "should there be one"
-# against "is there one" and does nothing when they agree, which is exactly the case here.
-func restyle_pin_flash() -> void:
+# Stop a standing pin flash WITHOUT forgetting the pin -- `pinned` survives, so the next sync brings
+# it back. The one door a pin tween closes through, which is what keeps the group honest.
+func drop_pin_flash() -> void:
 	if pin_tween == null:
 		return
 	Pulse.stop(pin_tween, sprite, &"modulate", base_modulate)
 	pin_tween = null
-	_sync_pin_flash()
+	if is_in_group(PIN_FLASH_GROUP):
+		remove_from_group(PIN_FLASH_GROUP)
+
+# Rebuild a STANDING pin flash so a turned knob reaches it (#1069) -- a running Tween holds the
+# endpoints it was started with. sync_pin_flash alone would do nothing here: it is idempotent, and
+# "should there be one" and "is there one" already agree.
+func restyle_pin_flash() -> void:
+	if pin_tween == null:
+		return
+	drop_pin_flash()
+	sync_pin_flash()
+
+# Another unit's running pin flash to beat in step with, or null when this is the first.
+func _running_pin_flash() -> Tween:
+	if not is_inside_tree():
+		return null
+	for node: Node in get_tree().get_nodes_in_group(PIN_FLASH_GROUP):
+		var other := node as UnitVisuals
+		if other != null and other != self and other.pin_tween != null and other.pin_tween.is_valid():
+			return other.pin_tween
+	return null
 
 
 func reset_visuals():
@@ -118,9 +143,7 @@ func reset_visuals():
 	# The pin flash goes too, and `pinned` deliberately does NOT: this is a reset of the CHANNEL,
 	# and the one-shot alarm that follows it must own modulate outright. The next redraw's
 	# set_pinned rebuilds the flash.
-	if pin_tween != null:
-		Pulse.stop(pin_tween, sprite, &"modulate", base_modulate)
-		pin_tween = null
+	drop_pin_flash()
 	if visual_tween:
 		visual_tween.kill()
 

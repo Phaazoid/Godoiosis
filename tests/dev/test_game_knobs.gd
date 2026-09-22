@@ -1039,12 +1039,68 @@ func _global(prop: String) -> Dictionary:
 	return {}
 
 
+# --- Sections by subject (#1074) -------------------------------------------------------------
+
+# A SECTION IS DRAWN ONCE, whichever table its rows are stored in. The dev: "the dev tools need more
+# headers in the Game area. Those sets of controls are a bit dense right now." So the panel builds
+# GROUP-major, and a section may gather node-property rows and class-value rows under one heading --
+# the reach mark's width and its colour, say. The table-major builder this replaced drew such a
+# section twice, and already drew "The tear-out" twice because its rows were not contiguous.
+func test_every_section_heading_is_drawn_exactly_once() -> void:
+	var counts := {}
+	_count_headings(_game, counts)
+	var wrong: Array[String] = []
+	for group: String in GameTool.section_order():
+		var drawn: int = counts.get(group, 0)
+		if drawn != 1:
+			wrong.append("%s x%d" % [group, drawn])
+	assert_array(wrong).override_failure_message(
+			"Sections not drawn exactly once: %s" % ", ".join(wrong)).is_empty()
+
+
+func _count_headings(node: Node, counts: Dictionary) -> void:
+	for child in node.get_children():
+		var label := child as Label
+		if label != null and label.has_theme_color_override("font_color") \
+				and label.get_theme_color("font_color") == DevWidgets.HEADING_COLOR:
+			counts[label.text] = int(counts.get(label.text, 0)) + 1
+		_count_headings(child, counts)
+
+
+# --- The movement grid (#1074) -----------------------------------------------------------------
+
+# A grid knob regenerates the art in BOTH views. MoveGrid is one rule each view rasterizes into a
+# texture of its own, so a re-apply that reached only one would be a slider that moves the diorama
+# and leaves the flat view (or the reverse) on the old grid -- and nothing in either view's own case
+# could see it, because each is right about itself.
+func test_a_movement_grid_knob_repaints_both_views() -> void:
+	var overlays := GameKnobs.overlays_of(_scene)
+	var manager := GameKnobs.overlay_manager_of(_scene)
+	overlays.grid_texture()   # the diorama builds its grid lazily -- stand one up to be restyled
+	assert_object(manager.move_grid_texture()).override_failure_message(
+			"the flat view generated no grid, so this case cannot see its claim").is_not_null()
+	var knob := _class_knob("static", "GRID_FILL_ALPHA")
+
+	GameKnobs.write_class(_scene, knob, 0.1)
+	GameKnobs.write_class(_scene, knob, 0.9)
+	assert_float(_centre_alpha(overlays.grid_texture())).override_failure_message(
+			"the diorama's grid kept its old inner fill").is_equal_approx(0.9, 0.01)
+	var source := manager.move_overlay.tile_set.get_source(0) as TileSetAtlasSource
+	assert_float(_centre_alpha(source.texture)).override_failure_message(
+			"the flat view's tileset kept its old inner fill").is_equal_approx(0.9, 0.01)
+
+
+func _centre_alpha(texture: Texture2D) -> float:
+	var img := texture.get_image()
+	return img.get_pixel(img.get_width() / 2, img.get_height() / 2).a
+
+
 # --- The aim-palette notice (#422) ---------------------------------------------------------
 
 func test_the_panel_says_when_a_palette_has_made_the_aim_knobs_inert() -> void:
 	# The dev's colour knobs write the DEFAULT palette (his call, 2026-09-01: the alternatives are
 	# authored in source and nowhere else). So while the player is on another palette, the three aim
-	# rows in Board markup colours move a value the board is not currently reading -- #264's
+	# rows in the Aiming section move a value the board is not currently reading -- #264's
 	# born-dead slider, except CORRECT, which is exactly why it has to be said rather than fixed.
 	#
 	# POLLED, not latched, and that is the half worth pinning: the settings page is a SECOND OS
@@ -1053,7 +1109,7 @@ func test_the_panel_says_when_a_palette_has_made_the_aim_knobs_inert() -> void:
 	PlayerSettings.reset_for_test()
 	var notice: Label = _game._palette_notice
 	assert_object(notice).override_failure_message(
-			"the Board markup colours group built no palette notice at all").is_not_null()
+			"the Aiming section built no palette notice at all").is_not_null()
 	assert_bool(notice.visible).override_failure_message(
 			"the notice is showing while the player is on the Default palette, which the knobs DO reach"
 			).is_false()
