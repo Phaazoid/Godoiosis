@@ -26,6 +26,11 @@ class_name ExportSmoke
 # TELEMETRY WRITES NOTHING HERE, by construction rather than by a flag: TelemetryStore's
 # _static_init disables persistence whenever DisplayServer is headless, so these runs never reach
 # disk and can never be uploaded as if a stranger had played them.
+#
+# IT ALSO PROVES WHAT THE FILTERS LET THROUGH (#1075). CHANGELOG.md is the first non-resource file the
+# game ships, carried by include_filter, and `*.md` left exclude_filter to make room for it. So the
+# pack must hold the release notes and must NOT hold CLAUDE.md: the first is the feature, the second
+# is what widening the filter could have cost.
 
 # Per-mission budget. A mission that neither loads nor fails inside this many frames is a FAILURE,
 # not a wait -- the whole point is that a headless hang must redden CI rather than run out its job.
@@ -66,6 +71,9 @@ func _ready() -> void:
 		if not await _mission_loads(game, path):
 			return
 
+	if not _release_notes_shipped():
+		return
+
 	print("%s -- %d mission(s)" % [OK_LINE, missions.size()])
 	get_tree().quit(0)
 
@@ -101,3 +109,15 @@ func _fail(reason: String) -> void:
 	printerr("%s: %s" % [FAIL_LINE, reason])
 	print("%s: %s" % [FAIL_LINE, reason])   # stdout too: the runner reads one stream
 	get_tree().quit(1)
+
+
+# The ledger arrived and parses (#1075), and the filter change that let it in let nothing else past.
+func _release_notes_shipped() -> bool:
+	if ReleaseNotes.entries().is_empty():
+		_fail("no release notes in the pack -- %s is missing or has no release heading" % ReleaseNotes.path)
+		return false
+	if FileAccess.file_exists("res://CLAUDE.md"):
+		_fail("CLAUDE.md is in the pack -- export_presets.cfg's filters are shipping internal notes")
+		return false
+	print("  smoke: %d release(s) in the notes" % ReleaseNotes.entries().size())
+	return true

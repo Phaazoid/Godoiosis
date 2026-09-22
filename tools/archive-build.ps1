@@ -47,6 +47,11 @@
   nagged; a failed tag or announce leaves a build up that nobody has been pointed at yet. All three
   recover by re-running at the same commit, which section 4 already allows.
 
+  AND IT REFUSES A VERSION WITH NO NOTES (#1075). Every build that goes out has an entry in
+  CHANGELOG.md, which the game ships and reads for its what's-new card, so the check sits with the
+  others before anything durable is written. The entry arrives by a release PR merged last; the
+  procedure is at the top of CHANGELOG.md.
+
   Usage:
     powershell -File tools\archive-build.ps1             # export, zip, upload, tag, announce
     powershell -File tools\archive-build.ps1 -NoPush     # everything but pushing the git tag
@@ -229,6 +234,33 @@ if ($tagExists) {
     # Same commit, so this is a re-export of a build that already exists. Legitimate - the zip is
     # overwritten and the tag is left exactly where it is.
     Write-Host "$tag already tags this commit - re-exporting and overwriting the zip." -ForegroundColor Yellow
+}
+
+# ---- 4b. the release notes ---------------------------------------------------------------------
+# A BUILD THAT GOES OUT HAS AN ENTRY (#1075). CHANGELOG.md is the one record of what each build
+# changed, and the game's what's-new card reads it out of the pack -- so a build with no entry tells
+# its players nothing and leaves the ledger a hole exactly where a build went out.
+#
+# Before the export, so a refusal writes nothing. It reads the TREE, which section 2 has just proved
+# clean, so the file checked here is the file the pack will carry.
+#
+# THE HEADING FORMAT HAS A SECOND READER, declared: ReleaseNotes.parse. test_release_notes lints
+# every `## ` heading in the file, so a heading this accepts is one the card can parse. -CaseSensitive
+# because Select-String is not by default, and the card would not read `## V0.1.0`.
+
+$notes = Join-Path $root 'CHANGELOG.md'
+if (-not (Test-Path $notes)) {
+    throw "Cannot find $notes - it is the release ledger, and every build needs an entry in it."
+}
+$notesHeading = '^## v' + [regex]::Escape($version) + '(\s|$)'
+if (-not (Select-String -Path $notes -Pattern $notesHeading -CaseSensitive -Quiet)) {
+    $newest = Select-String -Path $notes -Pattern '^## v(\S+)' -CaseSensitive | Select-Object -First 1
+    $newestText = 'none'
+    if ($newest) { $newestText = "v$($newest.Matches[0].Groups[1].Value)" }
+    throw ("CHANGELOG.md has no entry for $tag (its newest is $newestText). Add a '## $tag' heading" +
+           " with this build's notes. If a release PR named the version main was at before a later" +
+           " merge moved it on, retitle that heading directly on main - another PR would bump the" +
+           " version again - and run this again.")
 }
 
 # ---- 5. the export -----------------------------------------------------------------------------

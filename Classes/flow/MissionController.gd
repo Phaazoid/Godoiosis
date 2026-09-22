@@ -251,6 +251,10 @@ func _open_mission_select(dev: bool) -> void:
 	# comes off the network, and the title screen may not wait for it. Called BEFORE the notice so
 	# that when both are due on one launch, the notice is the later sibling and sits on top.
 	_nag_if_outdated()
+	# What changed since this install last looked (#1075). A child of the title screen rather than
+	# of ui_layer, so it cannot follow a mission out. Before the notice, which needs an answer and
+	# so belongs on top when both are due.
+	WhatsNewCard.show_if_needed(_select_screen)
 	# The first-launch notice (#53 slice 3), stacked over the screen we just built. Here rather
 	# than in game._ready because this is the ONE door to the title screen, so the card is
 	# guaranteed something to sit on; it costs nothing on the later returns through here, since
