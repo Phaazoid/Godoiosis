@@ -4,10 +4,16 @@ name: Tests
 # suite reads a tracked .md: every .md mention under tests/ and Classes/ is a comment
 # pointing at canon, and the only real read is report.md, which BugReporter GENERATES at
 # runtime under user://. Verified before this filter went in -- recheck it before widening
-# the list. GitHub matches paths-ignore against the WHOLE PR diff, so a PR touching docs
+# the list. GitHub matches the filter against the WHOLE PR diff, so a PR touching docs
 # AND code still runs; only an all-docs change is skipped. If a docs lint ever lands (a
 # canon-marker check, a link checker), it needs its OWN workflow with the inverse filter
 # (paths: ['docs/**']) -- this one would skip exactly the change it exists to catch.
+#
+# ONE .md IS NOT DOCS: CHANGELOG.md (#1075). The game ships it and reads it for the what's-new card,
+# and tests/core/test_release_notes.gd lints it, so the premise above is false for that one file and
+# a release PR (which touches nothing else) must run. Hence `paths` with negations rather than
+# `paths-ignore`, which cannot re-include: LATER patterns win, so the list skips docs/ and every
+# .md, then lets CHANGELOG.md back in.
 
 # A SUPERSEDED PR RUN HAS NO VALUE, and sharding multiplied the cost of one push by five.
 # Keyed on the ref, so a PR yields its older run to its newer one. main NEVER cancels:
@@ -19,10 +25,10 @@ concurrency:
 on:
   push:
     branches: [main]
-    paths-ignore: ['docs/**', '**.md']
+    paths: ['**', '!docs/**', '!**.md', 'CHANGELOG.md']
   pull_request:
     branches: [main]
-    paths-ignore: ['docs/**', '**.md']
+    paths: ['**', '!docs/**', '!**.md', 'CHANGELOG.md']
   # BY HAND, for measuring a runner change without a throwaway commit (2026-09-14).
   workflow_dispatch:
 
