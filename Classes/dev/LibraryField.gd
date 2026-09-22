@@ -59,6 +59,10 @@ func _init(p_host: Control, p_status: Label) -> void:
 
 # Re-derive what the form edits from what is held. Called after every pick, every fork and every
 # load; the one place the copy-vs-in-place rule is spelled.
+#
+# The copy is SHALLOW, and its Array fields are the held resource's own objects (measured, #1056):
+# an editor must REPLACE an array on the copy, never clear or append to it, or the edit reaches the
+# library file before Update. Every grid write already replaces.
 func stage() -> void:
 	staged = null
 	var current := _held()

@@ -56,3 +56,12 @@ static func shape(offsets: Array[Vector2i], shape_name := "") -> AttackShape:
 	s.display_name = shape_name
 	s.stamp = offsets
 	return s
+
+
+# A bare shape carrying PATHS (#1056): each entry of `paths` one Array[Vector2i], in hit order.
+# Written through AttackShape's own join, so a fixture cannot encode the pair differently.
+static func pathed(offsets: Array[Vector2i], paths: Array[Array]) -> AttackShape:
+	var s := shape(offsets)
+	s.path_cells = AttackShape.joined_cells(paths)
+	s.path_lengths = AttackShape.joined_lengths(paths)
+	return s

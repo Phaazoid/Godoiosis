@@ -39,6 +39,18 @@ class_name AttackShape
 # a VICTIM stays hits_self's question (RulesService).
 #
 # Board-blind on purpose: this emits the shape and Reach decides what the terrain leaves standing.
+#
+# PATHS (#1056): the order a SINGLE-TARGET swing hits its tiles -- a start tile, then each tile in
+# turn, one path per swing, a tile visited twice allowed (dev, 2026-09-22). Every path tile is also
+# a stamp tile: the stamp stays the one answer to which tiles the shape has, and the paths only
+# order them. INERT until #1057 -- nothing reads them yet, so an attack fires as if they were absent.
+#
+# Stored FLAT rather than as sub-resources: path_cells holds every path back to back and
+# path_lengths says where each ends. A LibraryField copy is a shallow duplicate, which would share
+# sub-resource objects with the library file, and a minted sub-resource id churns the .tres on every
+# edit; two typed arrays behave exactly as `stamp` does. The pair is a DECLARED second
+# representation: path_fault() is the one check that they agree, and AttackLint blocks a shape that
+# fails it.
 
 # Grid space: the stamp is authored facing this way.
 const FORWARD := Vector2i.UP
@@ -48,6 +60,8 @@ const FORWARD := Vector2i.UP
 # "Line 6" is the shape it fires, and Line Snipe fires the same one.
 @export var display_name: String = ""
 @export var stamp: Array[Vector2i] = [Vector2i.ZERO]
+@export var path_cells: Array[Vector2i] = []
+@export var path_lengths: Array[int] = []
 
 
 # The stamp turned to face `dir` and set down on `anchor`, in emission order. Grid space reads
@@ -73,12 +87,73 @@ func place(anchor: Vector2i, dir: Vector2i) -> Array[Vector2i]:
 	return out
 
 
+func path_count() -> int:
+	return path_lengths.size()
+
+
+# One path's tiles in the order they are hit, as offsets in grid space. Empty for an index past the
+# end, and truncated rather than erroring on a malformed pair -- path_fault() is where that is judged.
+func path_at(index: int) -> Array[Vector2i]:
+	var path: Array[Vector2i] = []
+	var paths := split_paths(path_cells, path_lengths)
+	if index >= 0 and index < paths.size():
+		path.assign(paths[index])
+	return path
+
+
+# The flat pair read back as one Array[Vector2i] per path. Static, so the grid can edit the pair by
+# field name without a second decoder.
+static func split_paths(cells: Array[Vector2i], lengths: Array[int]) -> Array[Array]:
+	var paths: Array[Array] = []
+	var start := 0
+	for length in lengths:
+		var path: Array[Vector2i] = []
+		for i in maxi(length, 0):
+			if start + i < cells.size():
+				path.append(cells[start + i])
+		paths.append(path)
+		start += maxi(length, 0)
+	return paths
+
+
+static func joined_cells(paths: Array[Array]) -> Array[Vector2i]:
+	var cells: Array[Vector2i] = []
+	for path in paths:
+		cells.append_array(path)
+	return cells
+
+
+static func joined_lengths(paths: Array[Array]) -> Array[int]:
+	var lengths: Array[int] = []
+	for path in paths:
+		lengths.append(path.size())
+	return lengths
+
+
+# "" when the path pair is sound, otherwise what is wrong with it. Only a hand edit can break it --
+# the grid keeps all three rules -- so this is the check a malformed file meets, not a live one.
+func path_fault() -> String:
+	var total := 0
+	for length in path_lengths:
+		if length < 1:
+			return "it has a path with no tiles"
+		total += length
+	if total != path_cells.size():
+		return "its path lengths add up to %d tiles but %d are stored" % [total, path_cells.size()]
+	for cell in path_cells:
+		if not stamp.has(cell):
+			return "a path visits %d,%d, which is not one of its tiles" % [cell.x, cell.y]
+	return ""
+
+
 # Per-field text for the dev tools' reflective editor (#473) -- see AttackData.property_tips for
 # why this is a function rather than a table.
 static func property_tips() -> Dictionary:
 	return {
 		"display_name": "What this shape is called in the Attack Editor's shape picker. Name it after the SHAPE, not the attack that first used it -- other attacks will pick it up.",
 		"stamp": "The cells the attack COVERS once aimed, as offsets from where it lands. Click them on the grid: the centre is where the attack lands, and the cell above it is one step toward the top of the grid.\nWhat the top MEANS depends on the attack's range. Max range 0 = the attacker's FACING, and the whole shape turns to wherever they point. Any other range = board NORTH, and the shape lands exactly as drawn however you aim it.\nAn empty stamp covers nothing.",
+		"path_cells": "The ORDER a single-target swing hits its tiles, drawn in the grid's Paths mode: pick a path, then click tiles in the order the attack reaches them. The first click is where the swing starts. Each path is its own swing, and a tile may be visited twice.\nA path tile is always one of the shape's tiles, so clicking an empty tile here adds it to the stamp, and removing a tile from the stamp removes it from every path.\nNot read by any rule yet: an attack fires exactly as it would without paths.",
+		"path_lengths": "How many tiles each path holds, in path order. The grid writes it; it is what splits Path Cells into separate paths.",
 	}
 
 

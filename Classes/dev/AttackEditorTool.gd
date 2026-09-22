@@ -649,7 +649,7 @@ func _populate_shape() -> void:
 		return
 	_shape.draw_users(editor_container, "Unnamed shape -- this attack alone. Save it to share it.")
 	var first := editor_container.get_child_count()
-	DevWidgets.add_cell_grid(editor_container, "Stamp", _shape.staged, "stamp", current)
+	DevWidgets.add_cell_grid(editor_container, "Stamp", _shape.staged, "stamp", current, "path_cells", "path_lengths")
 	DevWidgets._tip_rows_from(editor_container, first, tip)
 	_shape.draw_save_row(editor_container)
 
