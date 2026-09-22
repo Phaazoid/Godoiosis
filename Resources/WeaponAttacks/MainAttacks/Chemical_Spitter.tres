@@ -17,6 +17,7 @@ display_name = "Spray"
 power = 4
 max_range = 0
 attack_shape = ExtResource("1_y1dfg")
+swing = true
 hits_allies = true
 vertical_rule = 1
 pierces_guard = true

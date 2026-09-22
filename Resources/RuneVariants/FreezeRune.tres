@@ -1,10 +1,11 @@
-[gd_resource type="Resource" script_class="RuneData" format=3]
+[gd_resource type="Resource" script_class="RuneData" format=3 uid="uid://dk136huv8a4cx"]
 
-[ext_resource type="Script" path="res://Classes/alchemy/TransmutationData.gd" id="1_vjyh4"]
-[ext_resource type="Script" path="res://Classes/alchemy/RuneData.gd" id="3_6tkkv"]
-[ext_resource type="Texture2D" path="res://Art/Icons/StateIcons/WetIcon.png" id="4_yyaq7"]
-[ext_resource type="Resource" uid="uid://bow4n5t5o3t8v" path="res://Resources/AttackShapes/Line 3.tres" id="5_shape1"]
+[ext_resource type="Script" uid="uid://bgbidu2bbf33l" path="res://Classes/alchemy/TransmutationData.gd" id="1_vjyh4"]
+[ext_resource type="Script" uid="uid://ckrp1phgirys0" path="res://Classes/alchemy/RuneData.gd" id="3_6tkkv"]
+[ext_resource type="Script" uid="uid://dle5ob08qngde" path="res://Classes/presentation/EffectLook.gd" id="3_bmqwi"]
+[ext_resource type="Texture2D" uid="uid://c0sxhv5hl83yc" path="res://Art/Icons/StateIcons/WetIcon.png" id="4_yyaq7"]
 [ext_resource type="Resource" uid="uid://cu0du4b08ervn" path="res://Resources/AttackShapes/Wide 3 Deep 2.tres" id="5_shape0"]
+[ext_resource type="Resource" uid="uid://bow4n5t5o3t8v" path="res://Resources/AttackShapes/Line 3.tres" id="5_shape1"]
 
 [sub_resource type="Resource" id="Resource_g65og"]
 script = ExtResource("1_vjyh4")
@@ -14,6 +15,7 @@ display_name = "Freeze"
 power = 4
 max_range = 0
 attack_shape = ExtResource("5_shape1")
+swing = true
 hits_allies = true
 targets = 2
 
@@ -26,6 +28,7 @@ display_name = "Splash"
 power = 2
 max_range = 0
 attack_shape = ExtResource("5_shape0")
+swing = true
 hits_allies = true
 targets = 2
 deals_no_damage = true

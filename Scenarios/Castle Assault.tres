@@ -11,6 +11,7 @@
 [ext_resource type="Texture2D" uid="uid://5j5clrlw0olr" path="res://Art/Units/Portraits/faceless_one.png" id="7_qfk2f"]
 [ext_resource type="Script" uid="uid://cvvknuw621ar2" path="res://Classes/units/UnitData.gd" id="8_1v4i7"]
 [ext_resource type="Texture2D" uid="uid://c6r5capep2p0x" path="res://Art/Units/MapSprites/Warlock_Moving.png" id="8_l5o8g"]
+[ext_resource type="Script" uid="uid://dle5ob08qngde" path="res://Classes/presentation/EffectLook.gd" id="9_4ji6m"]
 [ext_resource type="Texture2D" uid="uid://dhug452laj63b" path="res://Art/Units/MapSprites/Black Knight_B.png" id="9_sclll"]
 [ext_resource type="Texture2D" uid="uid://bu5m2fk2c8n68" path="res://Art/Units/MapSprites/Warlock.png" id="10_05mom"]
 [ext_resource type="Script" uid="uid://6vu10nf3p58m" path="res://Classes/units/StatEffect.gd" id="10_jydfm"]
@@ -34,9 +35,9 @@
 [ext_resource type="Script" uid="uid://ckrp1phgirys0" path="res://Classes/alchemy/RuneData.gd" id="28_8jbv5"]
 [ext_resource type="Resource" uid="uid://fx3dcqyslgbe" path="res://Resources/Weapons/MainVarieties/Springspear.tres" id="32_8ihxj"]
 [ext_resource type="Script" uid="uid://jytv7xrjv6l1" path="res://Classes/items/Item.gd" id="90_equipdata"]
+[ext_resource type="Resource" uid="uid://cv1sjjfg45guk" path="res://Resources/AttackShapes/Line 5.tres" id="91_shape0"]
 [ext_resource type="Script" uid="uid://bsnik7hj876qc" path="res://Classes/weapons/instances/ChainswordWeaponInstance.gd" id="wi_chainsword"]
 [ext_resource type="Script" uid="uid://dro6dvoog6jyi" path="res://Classes/weapons/instances/SpringspearWeaponInstance.gd" id="wi_springspear"]
-[ext_resource type="Resource" uid="uid://cv1sjjfg45guk" path="res://Resources/AttackShapes/Line 5.tres" id="91_shape0"]
 
 [sub_resource type="Resource" id="Resource_4ji6m"]
 script = ExtResource("1_gscw2")
@@ -51,6 +52,7 @@ display_name = "Zap Cannon"
 power = 7
 max_range = 0
 attack_shape = ExtResource("91_shape0")
+swing = true
 hits_allies = true
 
 [sub_resource type="Resource" id="Resource_3peij"]

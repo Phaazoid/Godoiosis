@@ -1,6 +1,7 @@
-[gd_resource type="Resource" script_class="WeaponAttackData" format=3]
+[gd_resource type="Resource" script_class="WeaponAttackData" format=3 uid="uid://dsebo7magq816"]
 
 [ext_resource type="Script" uid="uid://ddqeee7njjjq2" path="res://Classes/weapons/WeaponAttackData.gd" id="2_c5p18"]
+[ext_resource type="Script" uid="uid://dle5ob08qngde" path="res://Classes/presentation/EffectLook.gd" id="2_ti1s3"]
 [ext_resource type="Resource" uid="uid://d1jjr7scvgdqe" path="res://Resources/AttackShapes/Line 6.tres" id="3_shape0"]
 
 [resource]
@@ -10,8 +11,9 @@ scaling_blend = Dictionary[int, int]({
 4: 30
 })
 display_name = "Lance"
-damage_kind = 2
 power = 5
 max_range = 0
 attack_shape = ExtResource("3_shape0")
+swing = true
 hits_allies = true
+damage_kind = 2

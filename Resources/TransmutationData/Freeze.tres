@@ -12,6 +12,7 @@ display_name = "Freeze"
 power = 4
 max_range = 0
 attack_shape = ExtResource("3_shape0")
+swing = true
 hits_allies = true
 targets = 2
 damage_kind = 5

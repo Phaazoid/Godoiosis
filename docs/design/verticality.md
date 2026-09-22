@@ -450,6 +450,12 @@ gets. The fork was put to the dev rendered as two board diagrams rather than des
 placed footprint spreads outward from where it lands. Nothing is board-blind now except a blast's
 third dimension, which is all the deferral below was ever really about.
 
+**...and [#1055](https://github.com/Phaazoid/Godoiosis/issues/1055) (2026-09-20) made both of those
+propagations AUTHORED rather than automatic**, which does not reopen this: swing off is a TRUE AoE
+and still asks the vertical rule per cell. What it drops is connectivity and the trace -- what
+STANDS BETWEEN -- never how high a cell sits. The dev chose that over a fully terrain-blind AoE the
+same day, on the grounds that a melee cleave must not reach a unit three levels up.
+
 ### Why it is a separate check and not added to distance
 
 The first proposal was "add the height difference to the distance cost". The weapon roster kills it.
@@ -496,8 +502,10 @@ board now (`get_affected_cells_from` takes it as a REQUIRED parameter, the `move
 precedent), because a spread has no single aim cell to attach the check to: its cells *are* the
 question. **And [#805](https://github.com/Phaazoid/Godoiosis/issues/805) repealed the other half**:
 a placed footprint reads the board too, spreading from its impact cell. So the split is gone
-entirely — every footprint question is a board question now. What keeps the scope honest instead is
-that shapes stay pure geometry: both filters live in `Reach`, which already owned the sight trace.
+entirely — every footprint question is a board question now, including a TRUE AoE's
+([#1055](https://github.com/Phaazoid/Godoiosis/issues/1055)), which drops the trace and keeps the
+height rule. What keeps the scope honest instead is that shapes stay pure geometry: all three
+filters live in `Reach`, which already owned the sight trace.
 
 ### What this buys, all from one rule
 
@@ -1454,6 +1462,9 @@ itself.
   reach is a PROPAGATION rather than a filter, so a cell whose own line is clear is still cut when
   the cell the blast had to cross was not. What remains genuinely deferred is a blast that covers a
   VOLUME rather than a heightmap's surface, which is all this was ever really about.
+  **And the propagation became OPTIONAL at
+  [#1055](https://github.com/Phaazoid/Godoiosis/issues/1055)** (`AttackData.swing`): both of those
+  two things are what an attack gives up by ticking Swing off, and the height rule is what it keeps.
 - **A projectile graphic riding the sight line** — dev, 2026-08-20: *"we can add a little graphic
   of a fire following it when it goes off, for when the advanced battle zoom is disabled"*. The
   trajectory function is already the one home the flight path would read.
