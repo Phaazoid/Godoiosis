@@ -38,6 +38,7 @@ static func check(attack: AttackData) -> Array[Dictionary]:
 		return found
 	_check_reaches_anything(attack, found)
 	_check_affects_anything(attack, found)
+	_check_paths_are_sound(attack, found)
 	_check_blend_totals(attack, found)
 	_check_kind_is_authored(attack, found)
 	_check_empowered_form_is_flat(attack, found)
@@ -152,6 +153,21 @@ static func _check_affects_anything(attack: AttackData, found: Array[Dictionary]
 		return
 	var name := attack.display_name if attack.display_name != "" else "This attack"
 	_add(found, Severity.BLOCKS, "%s can be aimed but its stamp is empty, so it lands on no cells at all -- add at least 0,0." % name)
+
+
+# A shape's path pair that disagrees with itself or with its stamp (#1056). Only a hand edit can do
+# it -- the grid keeps all three rules -- and AttackShape.path_fault is the one judge, so this asks
+# rather than restating. BLOCKS, unlike a look or a blend: #1057 will walk these paths, and a pair
+# that cannot be split says nothing a rule could act on.
+static func _check_paths_are_sound(attack: AttackData, found: Array[Dictionary]) -> void:
+	var shape := attack.attack_shape
+	if shape == null:
+		return
+	var fault := shape.path_fault()
+	if fault == "":
+		return
+	var name := shape.display_name if shape.display_name != "" else "This attack's shape"
+	_add(found, Severity.BLOCKS, "%s has malformed paths: %s. Redraw them on the grid." % [name, fault])
 
 
 static func _add(found: Array[Dictionary], severity: Severity, text: String) -> void:

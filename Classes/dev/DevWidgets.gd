@@ -247,7 +247,14 @@ static func _write_channel(state: Dictionary, index: int, value_255: float,
 # Godot's tooltip does NOT reliably walk up to a parent -- a slider or SpinBox under the cursor
 # has mouse_filter STOP and answers for itself -- so a row's tooltip has to be set on every
 # control in it, or hovering the handle (the thing you are actually dragging) shows nothing.
+#
+# A node marked OWN_TIP_META keeps its own text, subtree included: a row nested inside a larger
+# tipped row (#1056's path controls, inside the shape row) would otherwise wear its parent's tip.
+const OWN_TIP_META := &"own_tip"
+
 static func apply_tooltip(node: Node, text: String) -> void:
+	if node.has_meta(OWN_TIP_META):
+		return
 	var control := node as Control
 	if control != null:
 		control.tooltip_text = text
@@ -676,7 +683,14 @@ static func _add_property_control(container: Node, resource: Resource, prop: Dic
 # signal -- a bespoke control setting the property itself would be a second write door whose edits
 # nothing hears.
 static func write(resource: Resource, prop_name: String, value: Variant) -> void:
-	resource.set(prop_name, value)
+	write_many(resource, {prop_name: value})
+
+
+# The same door for fields that must land TOGETHER (#1056, a shape's path pair): every value is set
+# before `changed` fires once, so no listener reads a half-written pair.
+static func write_many(resource: Resource, values: Dictionary) -> void:
+	for prop_name: String in values:
+		resource.set(prop_name, values[prop_name])
 	resource.emit_changed()
 
 
@@ -728,6 +742,15 @@ const CELL_FILLED_HOVER := Color("5b90ce")
 const CELL_EDGE := Color("3a3d45")
 const CELL_FILLED_EDGE := Color("649ada")
 const CELL_CENTRE_EDGE := Color("8b909c")
+const CELL_PATH := Color("a8662e")
+const CELL_PATH_HOVER := Color("b9773f")
+const CELL_PATH_EDGE := Color("e0a868")
+const CELL_TEXT_SIZE := 11
+const CELL_OFFSET_META := &"cell_offset"
+const STAMP_TIP_META := &"stamp_tip"
+
+# What a click on the grid writes (#1056). PATHS exists only when the caller names the path fields.
+enum GridMode { STAMP, PATHS }
 
 
 # Does this resource call this field a CENTRED stamp -- offsets around 0,0 (#804)? Asked of the
@@ -796,11 +819,28 @@ static func _stamp_span(cells: Array[Vector2i]) -> int:
 # NOTHING here rebuilds the form. A cell restyles itself in place; the stepper and the line rebuild
 # only the cells, and neither is a cell. That is #741's rule -- a redraw run inside a row's own
 # signal tries to free the node that emitted it -- and it is why no path needs a deferral.
+#
+# PATHS (#1056): naming a shape's two path fields adds a second MODE. In it a click APPENDS the tile
+# to the selected path, in click order -- never the stamp's reading order, since a path's order is
+# the whole of what it says. A path tile is always a stamp tile, so a path click paints and an
+# un-paint in Stamp mode takes the tile out of every path; the coordinate line goes read-only while
+# paths exist, because it applies per keystroke and a half-typed edit would drop visits for good.
 static func add_cell_grid(container: Node, label_text: String, resource: Resource, prop_name: String,
-		caption_source: Resource = null) -> void:
+		caption_source: Resource = null, path_cells_prop := "", path_lengths_prop := "") -> void:
 	add_label(container, label_text)
 	var captioner: Resource = caption_source if caption_source != null else resource
-	var state := {"span": _stamp_span(_cells_of(resource, prop_name))}
+	var nothing := func() -> void:
+		pass
+	var state := {
+		"span": _stamp_span(_cells_of(resource, prop_name)),
+		"mode": GridMode.STAMP,
+		"path": 0,
+		"stamp_prop": prop_name,
+		"cells_prop": path_cells_prop,
+		"lengths_prop": path_lengths_prop,
+		"relabel": nothing,
+		"sync_paths": nothing,
+	}
 
 	var stepper := HBoxContainer.new()
 	var minus := Button.new()
@@ -812,6 +852,9 @@ static func add_cell_grid(container: Node, label_text: String, resource: Resourc
 	stepper.add_child(size_label)
 	stepper.add_child(plus)
 	container.add_child(stepper)
+
+	if _has_path_fields(state):
+		_add_path_controls(container, resource, state)
 
 	# ASCII on purpose: the dev window runs Godot's default theme font, and a missing arrow glyph
 	# would draw as a box in the one place the direction has to be unambiguous.
@@ -838,12 +881,16 @@ static func add_cell_grid(container: Node, label_text: String, resource: Resourc
 			state["redraw"].call())
 	var edit: LineEdit = line.get_child(1) as LineEdit
 
+	state["relabel"] = func() -> void:
+		_relabel_cells(grid, resource, state, edit)
+
 	state["redraw"] = func() -> void:
 		var span: int = state["span"]
 		size_label.text = "%d x %d" % [span, span]
 		minus.disabled = span - GRID_STEP < _stamp_span(_cells_of(resource, prop_name))
 		plus.disabled = span >= GRID_MAX_SPAN
-		_fill_cell_grid(grid, resource, prop_name, span, edit)
+		_fill_cell_grid(grid, resource, prop_name, span, edit, state)
+		state["relabel"].call()
 
 	minus.pressed.connect(func() -> void:
 		state["span"] = maxi(GRID_MIN_SPAN, int(state["span"]) - GRID_STEP)
@@ -870,11 +917,191 @@ static func add_cell_grid(container: Node, label_text: String, resource: Resourc
 				captioner.changed.disconnect(sync))
 
 	state["redraw"].call()
+	state["sync_paths"].call()
+
+
+# The mode row and the path row (#1056), built only when the caller names the path fields. Neither
+# is ever rebuilt: the picker's items are refilled in place, so no control here is freed by its own
+# signal (#741).
+static func _add_path_controls(container: Node, resource: Resource, state: Dictionary) -> void:
+	var modes := HBoxContainer.new()
+	var group := ButtonGroup.new()
+	var stamp_mode := Button.new()
+	stamp_mode.text = "Stamp"
+	var paths_mode := Button.new()
+	paths_mode.text = "Paths"
+	for button: Button in [stamp_mode, paths_mode]:
+		button.toggle_mode = true
+		button.button_group = group
+		modes.add_child(button)
+	stamp_mode.button_pressed = true
+	container.add_child(modes)
+
+	var row := HBoxContainer.new()
+	var picker := OptionButton.new()
+	var add := Button.new()
+	add.text = "+ New path"
+	var undo := Button.new()
+	undo.text = "Undo step"
+	var drop := Button.new()
+	drop.text = "Delete path"
+	for control: Control in [picker, add, undo, drop]:
+		row.add_child(control)
+	container.add_child(row)
+
+	# Tipped and then marked, in that order: apply_tooltip stops at a marked node, and the shape row
+	# the Attack Editor tips afterwards would otherwise paint its own text over these.
+	var tip := property_tip(resource, state["cells_prop"])
+	for control: Control in [modes, row]:
+		apply_tooltip(control, tip)
+		control.set_meta(OWN_TIP_META, true)
+
+	state["sync_paths"] = func() -> void:
+		var count := _paths_of(resource, state).size()
+		var selected := clampi(int(state["path"]), 0, count)
+		state["path"] = selected
+		picker.clear()
+		for i in count:
+			picker.add_item("Path %d" % (i + 1))
+		if selected == count:
+			picker.add_item("Path %d (new)" % (count + 1))
+		picker.select(selected)
+		var pending := selected == count
+		add.disabled = pending
+		undo.disabled = pending
+		drop.disabled = pending
+		row.visible = state["mode"] == GridMode.PATHS
+
+	var refresh := func() -> void:
+		state["relabel"].call()
+		state["sync_paths"].call()
+
+	stamp_mode.toggled.connect(func(on: bool) -> void:
+		if not on:
+			return
+		state["mode"] = GridMode.STAMP
+		refresh.call())
+	paths_mode.toggled.connect(func(on: bool) -> void:
+		if not on:
+			return
+		state["mode"] = GridMode.PATHS
+		refresh.call())
+	picker.item_selected.connect(func(index: int) -> void:
+		state["path"] = index
+		refresh.call())
+	add.pressed.connect(func() -> void:
+		state["path"] = _paths_of(resource, state).size()
+		refresh.call())
+	undo.pressed.connect(func() -> void:
+		var paths := _paths_of(resource, state)
+		var index := int(state["path"])
+		if index >= paths.size():
+			return
+		var path: Array[Vector2i] = []
+		path.assign(paths[index])
+		path.pop_back()
+		if path.is_empty():
+			paths.remove_at(index)
+		else:
+			paths[index] = path
+		_write_paths(resource, state, paths, {})
+		refresh.call())
+	drop.pressed.connect(func() -> void:
+		var paths := _paths_of(resource, state)
+		var index := int(state["path"])
+		if index >= paths.size():
+			return
+		paths.remove_at(index)
+		_write_paths(resource, state, paths, {})
+		refresh.call())
+
+
+static func _has_path_fields(state: Dictionary) -> bool:
+	return state["cells_prop"] != "" and state["lengths_prop"] != ""
+
+
+static func _paths_of(resource: Resource, state: Dictionary) -> Array[Array]:
+	var cells: Array[Vector2i] = []
+	cells.assign(resource.get(state["cells_prop"]))
+	var lengths: Array[int] = []
+	lengths.assign(resource.get(state["lengths_prop"]))
+	return AttackShape.split_paths(cells, lengths)
+
+
+# The path pair and anything riding with it (the stamp, when a click paints), set together and
+# announced ONCE: a listener hearing the cells before the lengths would read a pair that disagrees.
+static func _write_paths(resource: Resource, state: Dictionary, paths: Array[Array], also: Dictionary) -> void:
+	var values := also.duplicate()
+	values[state["cells_prop"]] = AttackShape.joined_cells(paths)
+	values[state["lengths_prop"]] = AttackShape.joined_lengths(paths)
+	write_many(resource, values)
+
+
+# Reading order, so the stored array and the .tres it saves into stay stable rather than following
+# whatever order the cells were clicked in. The STAMP's rule, and only the stamp's.
+static func _sorted_stamp(cells: Array[Vector2i]) -> Array[Vector2i]:
+	cells.sort_custom(func(a: Vector2i, b: Vector2i) -> bool:
+		return a.y < b.y if a.y != b.y else a.x < b.x)
+	return cells
+
+
+# A Stamp-mode click. Clearing a tile also takes it out of every path, and a path left with nothing
+# in it goes -- the selection shifting down past any that went before it.
+static func _toggle_stamp_cell(resource: Resource, state: Dictionary, offset: Vector2i, on: bool) -> void:
+	var stamp_prop: String = state["stamp_prop"]
+	var next: Array[Vector2i] = []
+	for c in _cells_of(resource, stamp_prop):
+		if c != offset:
+			next.append(c)
+	if on:
+		next.append(offset)
+	var values := {stamp_prop: _sorted_stamp(next)}
+	if on or not _has_path_fields(state):
+		write_many(resource, values)
+		return
+	var kept: Array[Array] = []
+	var selected := int(state["path"])
+	var shifted := selected
+	var paths := _paths_of(resource, state)
+	for i in paths.size():
+		var trimmed: Array[Vector2i] = []
+		for c: Vector2i in paths[i]:
+			if c != offset:
+				trimmed.append(c)
+		if trimmed.is_empty():
+			if i < selected:
+				shifted -= 1
+			continue
+		kept.append(trimmed)
+	state["path"] = shifted
+	_write_paths(resource, state, kept, values)
+
+
+# A Paths-mode click: the tile joins the end of the selected path -- or starts one, when the
+# selection is the pending "(new)" row -- and is painted into the stamp if it was not already.
+static func _append_visit(resource: Resource, state: Dictionary, offset: Vector2i) -> void:
+	var paths := _paths_of(resource, state)
+	var index := int(state["path"])
+	if index >= paths.size():
+		paths.append([] as Array[Vector2i])
+		index = paths.size() - 1
+		state["path"] = index
+	var path: Array[Vector2i] = []
+	path.assign(paths[index])
+	path.append(offset)
+	paths[index] = path
+	var also := {}
+	var stamp_prop: String = state["stamp_prop"]
+	var stamp := _cells_of(resource, stamp_prop)
+	if not stamp.has(offset):
+		stamp.append(offset)
+		also[stamp_prop] = _sorted_stamp(stamp)
+	_write_paths(resource, state, paths, also)
 
 
 # One toggle button per cell of the span, row-major from the FORWARD row (-y) down. Rebuilt whole
 # by the stepper and the coordinate line; a click never comes through here.
-static func _fill_cell_grid(grid: GridContainer, resource: Resource, prop_name: String, span: int, line: LineEdit) -> void:
+static func _fill_cell_grid(grid: GridContainer, resource: Resource, prop_name: String, span: int, line: LineEdit, state: Dictionary) -> void:
 	for child in grid.get_children():
 		grid.remove_child(child)
 		child.queue_free()
@@ -885,42 +1112,86 @@ static func _fill_cell_grid(grid: GridContainer, resource: Resource, prop_name: 
 	var cells := _cells_of(resource, prop_name)
 	for y in range(-half, half + 1):
 		for x in range(-half, half + 1):
-			grid.add_child(_cell_button(Vector2i(x, y), cells.has(Vector2i(x, y)), resource, prop_name, line))
+			grid.add_child(_cell_button(Vector2i(x, y), cells.has(Vector2i(x, y)), resource, prop_name, line, state))
 
 
-static func _cell_button(offset: Vector2i, filled: bool, resource: Resource, prop_name: String, line: LineEdit) -> Button:
+static func _cell_button(offset: Vector2i, filled: bool, resource: Resource, prop_name: String, line: LineEdit, state: Dictionary) -> Button:
 	var cell := Button.new()
 	cell.toggle_mode = true
 	cell.button_pressed = filled
+	cell.set_meta(CELL_OFFSET_META, offset)
 	# Out of the focus chain: a 15x15 grid is 225 stops between two spinboxes, and a stamp is a
 	# mouse gesture.
 	cell.focus_mode = Control.FOCUS_NONE
 	cell.custom_minimum_size = Vector2(GRID_CELL_PX, GRID_CELL_PX)
+	# A path's step numbers must never widen a cell, or the grid stops being square.
+	cell.clip_text = true
+	cell.add_theme_font_size_override("font_size", CELL_TEXT_SIZE)
 	_style_cell(cell, filled, offset == Vector2i.ZERO)
 	cell.toggled.connect(func(on: bool) -> void:
-		var next: Array[Vector2i] = []
-		for c in _cells_of(resource, prop_name):
-			if c != offset:
-				next.append(c)
-		if on:
-			next.append(offset)
-		# Reading order, so the stored array and the .tres it saves into stay stable rather than
-		# following whatever order the cells were clicked in.
-		next.sort_custom(func(a: Vector2i, b: Vector2i) -> bool:
-			return a.y < b.y if a.y != b.y else a.x < b.x)
-		write(resource, prop_name, next)
-		_style_cell(cell, on, offset == Vector2i.ZERO)
-		line.text = cells_to_text(next))
+		if state["mode"] == GridMode.PATHS:
+			_append_visit(resource, state, offset)
+		else:
+			_toggle_stamp_cell(resource, state, offset, on)
+		state["relabel"].call()
+		state["sync_paths"].call()
+		line.text = cells_to_text(_cells_of(resource, prop_name)))
 	return cell
 
 
+# Every cell restyled and relabelled from the resource, in place. In Paths mode a tile shows its
+# step numbers on the SELECTED path ("2,5" for a revisit), a tile only another path visits shows a
+# dot, and the tooltip names every visit; Stamp mode shows no text and gets its own tooltip back.
+static func _relabel_cells(grid: GridContainer, resource: Resource, state: Dictionary, line: LineEdit) -> void:
+	var stamp := _cells_of(resource, state["stamp_prop"])
+	var has_paths := _has_path_fields(state)
+	var paths: Array[Array] = _paths_of(resource, state) if has_paths else ([] as Array[Array])
+	var showing_paths: bool = has_paths and state["mode"] == GridMode.PATHS
+	var selected := int(state["path"])
+	for child in grid.get_children():
+		var cell := child as Button
+		var offset: Vector2i = cell.get_meta(CELL_OFFSET_META)
+		var filled := stamp.has(offset)
+		cell.set_pressed_no_signal(filled)
+		var steps := PackedStringArray()
+		var visits := PackedStringArray()
+		if showing_paths:
+			for p in paths.size():
+				var hits := PackedStringArray()
+				var path: Array = paths[p]
+				for i in path.size():
+					if path[i] == offset:
+						hits.append(str(i + 1))
+				if hits.is_empty():
+					continue
+				visits.append("Path %d: step %s" % [p + 1, ", ".join(hits)])
+				if p == selected:
+					steps = hits
+		if showing_paths:
+			if not cell.has_meta(STAMP_TIP_META):
+				cell.set_meta(STAMP_TIP_META, cell.tooltip_text)
+			cell.tooltip_text = "\n".join(visits) if not visits.is_empty() else "No path visits this tile."
+			if not steps.is_empty():
+				cell.text = ",".join(steps)
+			else:
+				cell.text = "." if not visits.is_empty() else ""
+		else:
+			cell.text = ""
+			if cell.has_meta(STAMP_TIP_META):
+				cell.tooltip_text = cell.get_meta(STAMP_TIP_META)
+		_style_cell(cell, filled, offset == Vector2i.ZERO, not steps.is_empty())
+	if has_paths:
+		line.editable = paths.is_empty()
+
+
 # Every state is painted explicitly rather than leaning on the theme's pressed look: a stamp cell
-# has to read as filled or empty at a glance, and the CENTRE has to read as the centre in both.
-static func _style_cell(cell: Button, filled: bool, centre: bool) -> void:
-	var edge := CELL_CENTRE_EDGE if centre else (CELL_FILLED_EDGE if filled else CELL_EDGE)
+# has to read as filled or empty at a glance, and the CENTRE has to read as the centre in both. A
+# tile on the path being written wears its own fill, so the path reads apart from the stamp.
+static func _style_cell(cell: Button, filled: bool, centre: bool, on_path := false) -> void:
+	var edge := CELL_CENTRE_EDGE if centre else (CELL_PATH_EDGE if on_path else (CELL_FILLED_EDGE if filled else CELL_EDGE))
 	var width := 2 if centre else 1
-	var base := CELL_FILLED if filled else CELL_EMPTY
-	var hover := CELL_FILLED_HOVER if filled else CELL_EMPTY_HOVER
+	var base := CELL_PATH if on_path else (CELL_FILLED if filled else CELL_EMPTY)
+	var hover := CELL_PATH_HOVER if on_path else (CELL_FILLED_HOVER if filled else CELL_EMPTY_HOVER)
 	cell.add_theme_stylebox_override("normal", _cell_box(base, edge, width))
 	cell.add_theme_stylebox_override("pressed", _cell_box(base, edge, width))
 	cell.add_theme_stylebox_override("hover", _cell_box(hover, edge, width))

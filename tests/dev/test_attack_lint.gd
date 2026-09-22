@@ -62,6 +62,30 @@ func test_a_stamp_beyond_the_aimed_cell_is_clean() -> void:
 	assert_array(AttackLint.check(attack)).is_empty()
 
 
+func test_a_shape_with_malformed_paths_is_blocked_and_named() -> void:
+	# #1056. Only a hand edit breaks the pair, and #1057 will walk it, so it refuses the save.
+	var attack := P.stamped(WeaponAttackData.new(), 0, [Vector2i(0, -1)] as Array[Vector2i])
+	attack.attack_shape.display_name = "Probe Shape"
+	attack.attack_shape.path_cells = [Vector2i(0, -1), Vector2i(0, -1)] as Array[Vector2i]
+	attack.attack_shape.path_lengths = [3] as Array[int]
+	var blocks := AttackLint.check(attack).filter(func(f: Dictionary) -> bool:
+		return f["severity"] == AttackLint.Severity.BLOCKS)
+	assert_int(blocks.size()).is_equal(1)
+	var text: String = blocks[0]["text"]
+	assert_str(text).contains("Probe Shape")
+	assert_str(text).contains("malformed paths")
+
+
+func test_a_shape_with_sound_paths_is_not_flagged() -> void:
+	var attack := P.stamped(WeaponAttackData.new(), 0, [Vector2i(0, -1)] as Array[Vector2i])
+	attack.attack_shape.path_cells = [Vector2i(0, -1), Vector2i(0, -1)] as Array[Vector2i]
+	attack.attack_shape.path_lengths = [2] as Array[int]
+	var texts: Array[String] = []
+	for finding in AttackLint.check(attack):
+		texts.append(finding["text"])
+	assert_array(texts.filter(func(t: String) -> bool: return t.contains("paths"))).is_empty()
+
+
 func test_a_shapeless_attack_is_fireable_rather_than_flagged() -> void:
 	# A shapeless attack covers the cell it is aimed at, and bare fists reach adjacency through
 	# Reach own fallback -- flagging either would be a false positive, and is exactly what reading

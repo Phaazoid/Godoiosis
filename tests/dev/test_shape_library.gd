@@ -94,6 +94,45 @@ func test_the_grid_edits_a_copy_and_leaves_the_library_object_alone() -> void:
 		"a grid edit reached the shared shape before Update").is_equal(1)
 
 
+# The same rule for PATHS (#1056), driven through the editor's real grid rather than by assigning
+# the field: the path pair is written by the widget, so the widget is what has to leave the
+# library object alone.
+func test_a_path_drawn_on_the_grid_leaves_the_library_object_alone() -> void:
+	var library := _with_named_shape()
+	var paths_mode := _editor_button("Paths")
+	assert_object(paths_mode).override_failure_message(
+		"the Attack Editor's shape grid has no Paths mode").is_not_null()
+	paths_mode.button_pressed = true
+	var cell := _editor_cell(Vector2i(0, -1))
+	cell.button_pressed = not cell.button_pressed
+	assert_int(_staged().path_count()).override_failure_message(
+		"the click drew no path on the staged copy").is_equal(1)
+	assert_int(library.path_count()).override_failure_message(
+		"a path drawn on the grid reached the shared shape before Update").is_equal(0)
+	assert_array(library.path_cells).is_empty()
+
+
+func _editor_button(text: String) -> Button:
+	for node in _all_class(_editor, "Button", []):
+		var button := node as Button
+		if button.text == text:
+			return button
+	return null
+
+
+# The shape grid's cell at an offset: the GridContainer drawn after the Paths mode row.
+func _editor_cell(offset: Vector2i) -> Button:
+	var modes := _editor_button("Paths").get_parent()
+	var container := modes.get_parent()
+	var grid: GridContainer = null
+	for i in range(modes.get_index() + 1, container.get_child_count()):
+		grid = container.get_child(i) as GridContainer
+		if grid != null:
+			break
+	var half := (grid.columns - 1) / 2
+	return grid.get_child((offset.y + half) * grid.columns + (offset.x + half)) as Button
+
+
 # An UNNAMED shape has no other holder, so there is nothing to protect and the attack points
 # straight at what the grid edits -- otherwise a new shape could never be drawn at all.
 func test_an_unnamed_shape_is_edited_in_place() -> void:
