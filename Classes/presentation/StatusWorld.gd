@@ -245,15 +245,12 @@ func _paint_blot(decal: Decal, wearer: Wearer, clock: float) -> void:
 	var body := Color.BLACK.lerp(ElementPalette.color_for_state(Elemental.State.WET), StatusLook.wet_blot_tint)
 	var variant := int(wearer.seed * 997.0) % BLOT_VARIANTS
 	var key := str([variant, body, rings])
-	if key == wearer.painted and decal.texture_albedo != null:
+	if key == wearer.painted:
 		return
 	wearer.painted = key
-	var image := paint_blot(_blot_shapes[variant], body, rings)
-	var texture := decal.texture_albedo as ImageTexture
-	if texture == null:
-		decal.texture_albedo = ImageTexture.create_from_image(image)
-	else:
-		texture.update(image)
+	# A NEW texture every paint, never ImageTexture.update(): a decal draws from the renderer's decal
+	# atlas, which copies a texture when it is assigned and never again (measured, 4.7.1 -- the probe).
+	decal.texture_albedo = ImageTexture.create_from_image(paint_blot(_blot_shapes[variant], body, rings))
 
 
 # A drip landed at `at`. If it fell inside this unit's patch, a ring starts there.

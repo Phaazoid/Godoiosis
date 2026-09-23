@@ -562,6 +562,7 @@ func test_a_drip_that_lands_in_the_patch_rings_it() -> void:
 			.is_true()
 	assert_int(world.ripples_for(id).size()).override_failure_message("a ring began before the drip landed") \
 			.is_equal(0)
+	var plain := blot.texture_albedo
 	# The status clock runs in _process alone; reconcile moves the levels, not the time.
 	_unit_mirror._process(0.3)
 	var rings := world.ripples_for(id)
@@ -570,6 +571,12 @@ func test_a_drip_that_lands_in_the_patch_rings_it() -> void:
 	assert_float(Vector2(rings[0].x, rings[0].y).distance_to(expected)).override_failure_message(
 			"the ring began at %s, not where the drip landed (%s)" % [Vector2(rings[0].x, rings[0].y), expected]) \
 			.is_less(0.0001)
+	# A decal draws from the renderer's atlas, which copies a texture when it is assigned and never
+	# again: a ring written into the same texture object is never seen (the render probe measured it).
+	_unit_mirror._process(0.01)
+	assert_object(blot.texture_albedo).override_failure_message(
+			"the ring was painted into the texture the decal already had, which the renderer never re-reads") \
+			.is_not_same(plain)
 	_unit_mirror._process(0.7)
 	assert_int(world.ripples_for(id).size()).override_failure_message("the ring never ran its course") \
 			.is_equal(0)
