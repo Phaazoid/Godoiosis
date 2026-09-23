@@ -3757,7 +3757,7 @@ This repeals #1069's "the reach still moves onto a refused cell", above.
 
 > when we're picking squad members from the squad up button, as we start picking, there's no real way to know how many we can pick.
 
-- **Squad Up wears a count beside the leader's crown**, "0/3" going to "1/3" and so on. It counts recruits over the room for them; the leader is not counted.
+- **Squad Up wears a count beside the leader's crown**: the squad's size over its capacity, LEADER INCLUDED, so a solo leader opens at "1/3" and a full squad reads "3/3". It first counted recruits only ("0/2"); the dev corrected it on play: *"how many people can be in the squad, total. So we'd always start with a 1/X, because of the leader."*
   - It sits at the crown's point even before the first join, when there is no crown yet, so the number never jumps as the crown arrives.
   - `OverlayManager` is the one store and its three verbs are the lifecycle. `create_squad` SHOWS the count on every entry. The join that closes the pick SETTLES it: a brief last number, then a fade (`SQUAD_COUNT_HOLD` / `SQUAD_COUNT_FADE`). Leaving the pick any other way CLEARS it at once, since a cancel changed nothing.
   - A pick that ends early with room left settles the same way (dev: *"we don't need to fill up the squad every time"*).

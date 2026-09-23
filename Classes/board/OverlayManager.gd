@@ -822,12 +822,14 @@ func squad_count_leader() -> Unit:
 	return instance_from_id(_squad_count_leader_id) as Unit
 
 
-# Recruits over the room for them: the leader is not counted, so a fresh squad opens at 0.
+# The squad's size over its capacity, LEADER INCLUDED (dev, 2026-09-23: "how many people can be in the
+# squad, total. So we'd always start with a 1/X, because of the leader"). The same two numbers the
+# capacity rule itself compares -- members.size() against max_size().
 func squad_count_text() -> String:
 	var leader := squad_count_leader()
 	if leader == null or leader.squad == null:
 		return ""
-	return "%d/%d" % [leader.squad.get_members().size() - 1, leader.squad.max_size() - 1]
+	return "%d/%d" % [leader.squad.get_members().size(), leader.squad.max_size()]
 
 
 func show_squad_count(leader: Unit) -> void:

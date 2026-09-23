@@ -397,26 +397,28 @@ func test_a_leader_squads_up_and_the_pick_stays_open_until_nobody_is_left() -> v
 # --- The count beside the crown (#1070) ----------------------------------------------------------
 
 # The dev: "as we start picking, there's no real way to know how many we can pick... we should have a
-# 0/3 -> 1/3 etc over the squad leader's head, as we pick, only while picking like that." Recruits over
-# the room for them -- the leader is not counted -- and it moves one per pick.
-func test_squad_up_counts_its_recruits_against_the_room_for_them() -> void:
+# 0/3 -> 1/3 etc over the squad leader's head, as we pick, only while picking like that." Then, on
+# playing it: "how many people can be in the squad, total. So we'd always start with a 1/X, because of
+# the leader." The squad's size over its capacity, and it moves one per pick.
+func test_squad_up_counts_the_squad_against_its_capacity() -> void:
 	var board: Dictionary = await _squad(5, [])
 	var leader: Unit = board.leader
 	var first := _spawn(5, Vector2i(1, 0))
 	_spawn(5, Vector2i(0, 1))
 	await await_idle_frame()
-	var room: int = leader.squad.max_size() - 1
-	assert_int(room).override_failure_message("fixture: no room for both candidates and one more, so "
-			+ "the pick would close on the first join").is_greater(2)
+	var room: int = leader.squad.max_size()
+	assert_int(room).override_failure_message("fixture: no room for the leader, both candidates and one more, so "
+			+ "the pick would close on the first join").is_greater(3)
 
 	game.create_squad(leader)
 	assert_object(_om().squad_count_leader()).override_failure_message(
 			"opening Squad Up put no count on the leader").is_same(leader)
-	assert_str(_om().squad_count_text()).is_equal("0/%d" % room)
+	assert_str(_om().squad_count_text()).override_failure_message(
+			"a solo leader's count does not start at 1 -- the leader is part of the squad").is_equal("1/%d" % room)
 
 	game._click_picking_target(first.movement.cell)
 	assert_str(_om().squad_count_text()).override_failure_message(
-			"the count did not follow the pick").is_equal("1/%d" % room)
+			"the count did not follow the pick").is_equal("2/%d" % room)
 	assert_float(_om().squad_count_alpha).is_equal(1.0)
 
 
@@ -462,7 +464,7 @@ func test_the_join_that_fills_the_squad_holds_its_count_then_fades_it() -> void:
 			"fixture: the pick stayed open on a full squad").is_not_equal(game.GameState.PICKING_TARGET)
 	assert_object(_om().squad_count_leader()).override_failure_message(
 			"closing the pick took the full count with it").is_same(leader)
-	assert_str(_om().squad_count_text()).is_equal("2/2")
+	assert_str(_om().squad_count_text()).is_equal("3/3")
 	assert_float(_om().squad_count_alpha).is_equal(1.0)
 
 	await await_millis(400)
