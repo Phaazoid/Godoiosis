@@ -38,7 +38,7 @@ enum Layer {
 	GUARD_ICONS, GUARD_LINK, WATCH_ICONS,
 	ZONE_DEPLOYMENT, ZONE_DEFEND,
 	REACH, THREAT, ENEMY_FOCUS_EDGE, REACH_LINES,
-	COHESION_EDGE, TETHERS, TETHER_GHOST, TETHER_STRAIN,
+	COHESION_EDGE, TETHERS, TETHER_GHOST, TETHER_STRAIN, TETHER_MOMENT,
 }
 enum Kind { FILL, BRACKET, SPRITE, BILLBOARD, LINE }
 
@@ -201,6 +201,10 @@ const LAYERS: Dictionary[Layer, Dictionary] = {
 		"kind": Kind.LINE, "cone_alpha": true},
 	Layer.TETHER_STRAIN: {"color": Color(1.0, 0.18, 0.14, 0.95), "sort": 14, "beam": "squad",
 		"kind": Kind.LINE, "cone_alpha": true},
+	# ...and a membership MOMENT (#367): a tether drawing in on a join, reeling in on a leave. WHITE,
+	# because each moment's own colour and fade ride its vertex colour -- several play at once, at
+	# different ages, on one material. Rebuilt per frame while one is in the air (ArcLightning's shape).
+	Layer.TETHER_MOMENT: {"color": Color(1, 1, 1, 1), "sort": 14, "beam": "squad", "kind": Kind.LINE, "cone_alpha": true},
 	Layer.AIM: {"color": Color(1, 1, 0, 1), "sort": 4, "kind": Kind.FILL},
 	Layer.TARGET_PICK: {"color": Color.WHITE, "sort": 5, "kind": Kind.SPRITE},
 	Layer.PATH_ARROWS: {"color": Color.WHITE, "sort": 6, "kind": Kind.SPRITE},
@@ -679,8 +683,14 @@ func set_lines(layer: Layer, segments: Array[PackedVector3Array], color: Color) 
 #
 # `widths` is shaped like `marks` -- a per-point scale for each stroke -- and empty means every
 # stroke is drawn at the layer's own width, which is what `set_lines` and its three other layers want.
+#
+# `tints` (one per mark, empty = white = unchanged) ride the vertex colour, so one layer can draw marks
+# of different colours and fades at once (#367's moments). `starts` (one per mark, empty = 0) is how
+# far along its line a mark BEGINS, so a part-drawn tether's dashes sit where the whole one's would.
+# A cone entry may carry its own "tint" the same way.
 func set_marks(layer: Layer, marks: Array[Array], color: Color,
-		widths: Array[Array] = [], cones: Array[Dictionary] = []) -> void:
+		widths: Array[Array] = [], cones: Array[Dictionary] = [], tints: Array[Color] = [],
+		starts: PackedFloat32Array = PackedFloat32Array()) -> void:
 	var spec: Dictionary = LAYERS[layer]
 	if spec["kind"] != Kind.LINE:
 		push_error("set_marks on a %s layer" % Kind.keys()[spec["kind"]])
@@ -709,11 +719,12 @@ func set_marks(layer: Layer, marks: Array[Array], color: Color,
 		var strip_count: int = strokes.size()
 		if not cone.is_empty() and strip_count > 1:
 			strip_count -= 1
-		var travelled := 0.0
+		var tint: Color = tints[m] if m < tints.size() else Color.WHITE
+		var travelled: float = starts[m] if m < starts.size() else 0.0
 		for s in strip_count:
 			var stroke: PackedVector3Array = strokes[s]
 			var scale: PackedFloat32Array = PackedFloat32Array() if s >= scales.size() else scales[s]
-			if add_beam_strip(mesh, stroke, Color.WHITE, travelled, scale):
+			if add_beam_strip(mesh, stroke, tint, travelled, scale):
 				drawn = true
 			travelled += _stroke_length(stroke)
 		if not cone.is_empty():
@@ -746,7 +757,7 @@ func _emit_cones(layer: Layer) -> void:
 	var drawn := false
 	for entry: Dictionary in batch:
 		if add_beam_cone(mesh, entry["base"], entry["tip"], float(entry["radius"]),
-				float(entry.get("dist", 0.0)), cone_shading, cone_facets):
+				float(entry.get("dist", 0.0)), cone_shading, cone_facets, entry.get("tint", Color.WHITE)):
 			drawn = true
 	node.visible = drawn
 	(node.material_override as ShaderMaterial).set_shader_parameter("beam_color",
@@ -764,8 +775,11 @@ func _emit_cones(layer: Layer) -> void:
 #
 # UV2.x carries the vertex's own distance ALONG THE AXIS from `dist_start`, so the shaft's bead runs
 # into the cone and up to the tip as one continuous sweep instead of restarting at the base.
+#
+# `tint` multiplies into that shade (#367), so one layer's cones can differ in colour and fade. White,
+# the default, leaves every vertex exactly the (shade, shade, shade, 1) it always was.
 static func add_beam_cone(mesh: ImmediateMesh, base: Vector3, tip: Vector3, radius: float,
-		dist_start := 0.0, shading := 0.45, facets := 12) -> bool:
+		dist_start := 0.0, shading := 0.45, facets := 12, tint := Color.WHITE) -> bool:
 	var axis := tip - base
 	var length := axis.length()
 	if length <= 0.0 or radius <= 0.0 or facets < 3:
@@ -784,21 +798,21 @@ static func add_beam_cone(mesh: ImmediateMesh, base: Vector3, tip: Vector3, radi
 	mesh.surface_begin(Mesh.PRIMITIVE_TRIANGLES)
 	for i in facets:
 		var j := (i + 1) % facets
-		_cone_face(mesh, tip, ring[i], ring[j], base, axis, light, dist_start, shading)
+		_cone_face(mesh, tip, ring[i], ring[j], base, axis, light, dist_start, shading, tint)
 		# The cap, wound the other way so its own face normal points back down the axis and it
 		# shades as the underside rather than as a copy of the side above it.
-		_cone_face(mesh, base, ring[j], ring[i], base, axis, light, dist_start, shading)
+		_cone_face(mesh, base, ring[j], ring[i], base, axis, light, dist_start, shading, tint)
 	mesh.surface_end()
 	return true
 
 
 static func _cone_face(mesh: ImmediateMesh, a: Vector3, b: Vector3, c: Vector3, base: Vector3,
-		axis: Vector3, light: Vector3, dist_start: float, shading: float) -> void:
+		axis: Vector3, light: Vector3, dist_start: float, shading: float, cone_tint: Color) -> void:
 	var normal := (b - a).cross(c - a)
 	if normal.length_squared() > 0.0:
 		normal = normal.normalized()
 	var lit: float = shading + (1.0 - shading) * maxf(normal.dot(light), 0.0)
-	var tint := Color(lit, lit, lit, 1.0)
+	var tint := Color(lit * cone_tint.r, lit * cone_tint.g, lit * cone_tint.b, cone_tint.a)
 	# EMITTED a, c, b: `normal` above is the OUTWARD one, and Godot's front face is (v0-v2)x(v0-v1),
 	# the opposite turn (measured, #876) -- so emitting a, b, c made the outside a BACK face. Harmless
 	# on the opaque cone, which culls nothing; the see-through one culls back faces and would have
