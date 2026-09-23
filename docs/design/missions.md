@@ -2,7 +2,7 @@
 
 **Status: ALL FOUR SLICES BUILT 2026-07-28 ([#96](https://github.com/Phaazoid/Godoiosis/issues/96)).** Filed 2026-07-27, when the project acquired a win condition for the first time. Before this, Iosis had ten interlocking systems and no way to finish a battle — which meant a design question could be answered *"is this coherent?"* but never *"does this improve play?"*
 
-**Canon checked through #1072 (2026-09-21).**
+**Canon checked through #1105 (2026-09-23).**
 
 ## What a mission is
 
@@ -365,6 +365,10 @@ Two authoring rules replaced the original one-zone-per-cell store: **zones overl
 **A leash is REVEALED ON DEMAND since [#710](https://github.com/Phaazoid/Godoiosis/issues/710) (dev, 2026-09-16).** A PATROL zone still draws only while the Tile Brush tab is up -- the layer itself stays authoring-only, for `Kind.DEPLOYMENT`'s reason below -- but a Sentry's own zone now lights on the picked-zone highlight layer while the player hovers one of its members, and every enemy sentry's does while the enemy RANGE view (V) is on, or that one sentry's does while it is Shift+click PINNED (slice 3 moved the reveal off T, which now cycles the INTENT tier instead). Never permanently: the board stays clean and the leash reads as *this squad's ground*. **What the leash does NOT bound is the red (slice 4):** a patrol will not OPEN outside its zone, but it ANSWERS a blow from anywhere it can stand, so the reach tone carries a counter rim one attack-range past the boundary. See visual-clarity.md -- before that, a patrol painted as almost pure blue, because its whole zone-clipped reach sat underneath its own standing room. That reverses the ruling this paragraph used to carry, which is kept for the case it still serves:
 
 **The overlap is how a leash becomes PERMANENTLY visible (The Causeway, 2026-09-11).** Before #710 a Sentry's boundary was invisible to the player outright. That is harmless on a map where the leash is incidental and load-bearing on one where it IS the design: a lure-proof zone the player cannot see is a rule they can only learn by being shot for crossing it. The fix needs no code and no second visibility input, because the motivating case above already allows it: **paint a CAPTURE zone over the same cells** -- and it is still the answer when the leash is the OBJECTIVE, since a reveal that lives on the pointer cannot say "this is the ground you must take". CAPTURE is drawn, so the glowing objective and the boundary become one mark, and "the ground you must take is the ground they hold" is a sentence the board says by itself. Worth reaching for whenever a Sentry's leash is something the player is meant to plan around rather than discover.
+
+### A zone says what it is when you click it ([#1105](https://github.com/Phaazoid/Godoiosis/issues/1105), 2026-09-23)
+
+The 2026-09-22 stream: a friend playing cold *"did not know how to capture the capture zone"* — the board tinted it and nothing named it (#955's diagnosis). Clicking a cell now opens the Inspect dock's **Zones** section: every zone on that cell **the board is drawing**, by name and kind, with the kind's Glossary text — which for a capture zone says HOW (*use Capture Point*, read off the verb's own entry so a rename follows). What is drawn is `MissionController.hidden_zone_names()` — the same list `redraw_zones` hides — plus `ZoneManager.AUTHORING_KINDS` (PATROL), so a claimed point, a deployment zone after turn 1 and a sentry's leash are never named. The four kinds' terms live on a **Missions** Glossary page; their text is a placeholder for the dev. #955 keeps the board marking (part 1) and the clickable mission rows (part 3).
 
 ### `Kind.DEPLOYMENT` — where the player's force starts (#736)
 
