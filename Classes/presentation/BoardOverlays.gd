@@ -295,7 +295,10 @@ enum SelectorDepth { LEVEL, HALF }
 # at exactly 0.0), 0.03 -> 0.04 at slice 4 (it landed at 0.002). The law demands a whole lift_step.
 @export var fill_lift := 0.04          # quad height above the top face — the z-fight gap
 @export var lift_step := 0.004         # per-sort spacing so stacked layers never coincide
-@export var billboard_lift := 0.85     # icon height above the cell's top face
+# The crown's clearance above its unit's HEAD -- the art's top, or the health readout's top while one is
+# up (#1070). It was a height above the CELL, which let a readout grow up through the crown; at 0.225
+# a crown over the standard sprite with no readout up sits exactly where the old 0.85 put it.
+@export var billboard_lift := 0.225
 @export var billboard_pixel_size := 1.0 / 32.0
 # What the hover bracket turns when the pointer is over something the 2D calls INVALID (#245).
 # A knob because there is nothing to mirror here: 2D says "invalid" with a negative-icon TEXTURE,
@@ -1219,13 +1222,19 @@ func marker_lift(layer: Layer) -> float:
 	return _lift_of(LAYERS[layer])
 
 
+# Where a billboard hung over `base` actually draws -- its centre. Public so the Squad Up count can sit
+# beside the crown without a second spelling of how high the crown hangs (#1070).
+func billboard_point(base: Vector3) -> Vector3:
+	return base + Vector3(0.0, billboard_lift, 0.0)
+
+
 func _apply_marker(spec: Dictionary, node: Node3D, marker: Dictionary) -> void:
 	var pos: Vector3 = marker["pos"]
 	var texture: Texture2D = marker["texture"]
 	var tint: Color = marker.get("modulate", Color.WHITE)
 	if spec["kind"] == Kind.BILLBOARD:
 		var sprite := node as Sprite3D
-		sprite.position = pos + Vector3(0.0, billboard_lift, 0.0)
+		sprite.position = billboard_point(pos)
 		sprite.texture = texture
 		sprite.modulate = tint
 		return

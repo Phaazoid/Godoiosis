@@ -127,6 +127,7 @@ func _process(_delta: float) -> void:
 	_markers(BoardOverlays.Layer.KNOCKBACK, kb_trails)
 
 	_icons(om)
+	_squad_count(om)
 	_guard_links(om)
 	_terrain(om)
 	_ghost_sync(om, kb_ghosts)
@@ -549,6 +550,7 @@ func _icons(om: OverlayManager) -> void:
 			var entry := _marker(_anchor(icon.current_cell()), icon.sprite.texture,
 					icon.sprite.modulate)
 			if type == OverlayIcon.IconType.CROWN:
+				entry["pos"] = _crown_base(icon.unit, icon.current_cell())
 				heads.append(entry)
 			elif type == OverlayIcon.IconType.GUARD_WARD:
 				# Its own layer, not because it is a different KIND of markup -- it is a ground decal
@@ -583,6 +585,36 @@ func _icons(om: OverlayManager) -> void:
 		if is_instance_valid(sprite) and sprite.texture != null:
 			watched.append(_marker(_anchor_px(sprite.global_position), sprite.texture, sprite.modulate))
 	_markers(BoardOverlays.Layer.WATCH_ICONS, watched)
+
+
+# Where a leader's crown STANDS (#1070): its cell's ground, as every marker here, lifted by the
+# unit's own head -- the art's top, or its health readout's top while one is up -- so the readout can
+# grow a row or a status and lift the crown instead of running through it. The billboard's clearance
+# goes on top of this, in BoardOverlays.billboard_point. The crown still does not follow a walk; only
+# its height moved off the tile.
+func _crown_base(unit: Unit, cell: Vector2i) -> Vector3:
+	var base: Vector3 = (_anchor(cell)["surface"] as Transform3D).origin
+	if unit_mirror == null:
+		return base
+	return base + Vector3.UP * unit_mirror.head_height(unit)
+
+
+# Squad Up's count (#1070), beside the crown -- at the crown's own point even before the first join,
+# when there is no crown yet, so the number never jumps as the crown arrives. OverlayManager says what
+# it reads and how faded it is; UnitMirror draws it in the HP digits' own style.
+func _squad_count(om: OverlayManager) -> void:
+	if unit_mirror == null:
+		return
+	var leader := om.squad_count_leader()
+	if leader == null or om.squad_count_alpha <= 0.0:
+		unit_mirror.clear_squad_count()
+		return
+	var crown: Texture2D = OverlayManager.ICON_TEXTURES[OverlayIcon.IconType.CROWN]
+	var cell := leader.get_projected_destination()
+	var centre := overlays.billboard_point(_crown_base(leader, cell))
+	var gap := OverlayManager.SQUAD_COUNT_GAP * BoardSpace.CELL_SIZE
+	var side := crown.get_width() * 0.5 * overlays.billboard_pixel_size + gap
+	unit_mirror.set_squad_count(centre, side, om.squad_count_text(), om.squad_count_alpha)
 
 
 # The armed-Guard links (#450): the blocker->ward arrows OverlayManager drew beside the ward

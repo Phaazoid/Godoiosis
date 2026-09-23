@@ -1273,6 +1273,100 @@ func test_with_rings_off_hovering_any_squadmate_crowns_the_leader_and_clears_on_
 			"the crown outlived the hover that raised it").is_equal(0)
 
 
+# --- The crown stands on the head, and the Squad Up count beside it (#1070) -------------
+
+# The crown's CENTRE as drawn, off the one head marker -- through billboard_point, because that is where
+# BoardOverlays hangs every billboard -- and how far below that centre its visible INK stops. The ink,
+# not the canvas: the art carries transparent rows under the crown, and those overlapping a readout is
+# nothing anybody can see. BoardMirror.opaque_bounds is the one answer to where art's ink is.
+func _crown() -> Dictionary:
+	var heads := _overlays.markers_of(BoardOverlays.Layer.ICONS)
+	assert_int(heads.size()).override_failure_message("no crown over the leader").is_equal(1)
+	var art: Texture2D = OverlayManager.ICON_TEXTURES[OverlayIcon.IconType.CROWN]
+	var image := art.get_image()
+	if image.is_compressed():
+		image.decompress()
+	var ink := BoardMirror.opaque_bounds(image, Rect2i(Vector2i.ZERO, image.get_size()))
+	var pixel := _overlays.billboard_pixel_size
+	return {"centre": _overlays.billboard_point(heads[0]["pos"]),
+			"ink_below_centre": (float(ink.end.y) - art.get_height() * 0.5) * pixel,
+			"half_width": art.get_width() * 0.5 * pixel}
+
+
+# A leader whose readout is TALL -- several rows of HP and a status row on top -- which is exactly what
+# ran up through the crown when it hung a fixed height off the tile (dev, 2026-09-23: "It sometimes
+# dips into it and intersects").
+func _tall_leader_pair() -> Array[Unit]:
+	var leader := _spawn(PLAYER, Vector2i(2, 2), {Stats.Stat.MHP: 35})
+	leader.add_element_state(Elemental.State.WET)
+	var member := _spawn(PLAYER, Vector2i(5, 2))
+	game.squad_manager.join_squad(member, leader.squad)
+	return [leader, member]
+
+
+func test_the_crown_stands_clear_of_its_leaders_readout() -> void:
+	var pair := _tall_leader_pair()
+	var leader: Unit = pair[0]
+	_point_at(leader.movement.cell)
+	await _settle()
+	var bar := _unit_mirror.bar_for(leader)
+	assert_bool(bar != null and bar.visible).override_failure_message(
+			"fixture: hovering the leader put no readout up").is_true()
+	var readout_top := bar.position.y + bar.top_extent()
+	var crown := _crown()
+	# Non-vacuity: with the readout down the crown rests just over the art, and this readout reaches
+	# past that -- so a crown that did not lift would be inside it.
+	var ground := BoardSpace.surface_point(leader.movement.cell, game.board_heights).y
+	var resting_bottom: float = ground + _unit_mirror.sprite_for(leader).art_top_height() \
+			+ _overlays.billboard_lift - crown["ink_below_centre"]
+	assert_float(readout_top).override_failure_message("fixture is vacuous: this readout does not reach "
+			+ "where the crown rests, so a crown that never lifted would pass").is_greater(resting_bottom)
+
+	assert_float((crown["centre"] as Vector3).y - crown["ink_below_centre"]).override_failure_message(
+			"the crown runs into the top of its leader's health readout").is_greater(readout_top)
+
+
+# The dev's ruling: the crown sits just over the head and LIFTS while a readout shows -- not parked
+# above the tallest readout the unit could ever wear.
+func test_the_crown_drops_back_over_the_head_when_the_readout_goes() -> void:
+	var pair := _tall_leader_pair()
+	_point_at(pair[0].movement.cell)   # the leader: its readout is up
+	await _settle()
+	var lifted: float = (_crown()["centre"] as Vector3).y
+	_point_at(pair[1].movement.cell)   # the member: the crown stays, the leader's readout goes
+	await _settle()
+	assert_bool(_unit_mirror.bar_for(pair[0]).visible).override_failure_message(
+			"fixture: the leader's readout is still up while hovering the member").is_false()
+	assert_float((_crown()["centre"] as Vector3).y).override_failure_message(
+			"the crown stayed up where the readout was").is_less(lifted)
+
+
+# Beside the crown, at the crown's own height, and in the view plane -- far enough out to clear it.
+func test_the_squad_up_count_sits_beside_the_crown() -> void:
+	var pair := _squad_pair()
+	_om().show_squad_count(pair[0])
+	_point_at(pair[1].movement.cell)   # a squadmate, so the crown is up to measure against
+	await _settle()
+	assert_bool(_unit_mirror.squad_count_shown()).override_failure_message(
+			"the count never reached the diorama").is_true()
+	assert_str(_unit_mirror.squad_count_text()).is_equal(_om().squad_count_text())
+	var crown := _crown()
+	var centre: Vector3 = crown["centre"]
+	assert_bool(_unit_mirror.squad_count_anchor().is_equal_approx(centre)).override_failure_message(
+			"the count is not anchored on the crown").is_true()
+	var placed := _unit_mirror.squad_count_position()
+	assert_float(placed.y).override_failure_message("the count is not level with the crown") \
+			.is_equal_approx(centre.y, 0.001)
+	var sideways := Vector2(placed.x - centre.x, placed.z - centre.z).length()
+	assert_float(sideways).override_failure_message("the count sits on top of the crown") \
+			.is_greater(crown["half_width"])
+
+	_om().clear_squad_count()
+	await _settle()
+	assert_bool(_unit_mirror.squad_count_shown()).override_failure_message(
+			"the count outlived its clear").is_false()
+
+
 # --- Guard ward marker (#414) -------------------------------------------------------
 
 # The channel wire: an armed Guard's ground mark has to REACH the 3D view, because that is what the

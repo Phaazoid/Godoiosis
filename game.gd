@@ -1062,6 +1062,8 @@ func exit_current_mode():
 	# every cell change, but leaving a mode is not a cell change -- a click commits at the cell the
 	# pointer is already on, so nothing would come along afterwards to take them down.
 	overlay_manager.clear_reach_lines()
+	# Squad Up's count (#1070). A count the closing join has already SETTLED is left to fade on its own.
+	overlay_manager.clear_squad_count()
 	last_clicked_cell = GridUtils.NO_CELL
 	selected_unit = null
 	leader_followable = {}
@@ -1405,15 +1407,20 @@ func _squad_all_committed(squad: Squad) -> bool:
 # "the callback chained another" and does not tear down.
 #
 # Drawn as the squad's own lines: its range, its members' tethers, and a GHOST tether from every unit
-# that could join, pointing at the leader like every tether does.
+# that could join, pointing at the leader like every tether does. The leader wears a COUNT beside the
+# crown (dev: "there's no real way to know how many we can pick"), and the join that closes the pick
+# settles it -- a brief last number, then a fade -- where a cancel just takes it away (exit_current_mode).
 func create_squad(unit: Unit):
 	var candidates := squad_up_candidates(unit)
 	var none: Array[Unit] = []
 	draw_squad_cohesion(unit.squad, unit.get_projected_destination(), {}, none, candidates)
+	overlay_manager.show_squad_count(unit)
 	enter_target_pick_mode(candidates, func(picked: Unit):
 		squad_manager.join_squad(picked, unit.squad)
 		if not squad_up_candidates(unit).is_empty():
-			create_squad(unit))
+			create_squad(unit)
+		else:
+			overlay_manager.settle_squad_count())
 
 
 func squad_up_candidates(unit: Unit) -> Array[Unit]:

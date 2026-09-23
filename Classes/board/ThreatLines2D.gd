@@ -57,8 +57,9 @@ static var MARK_HEIGHT := 0.625
 # on (0.45 world over a 3.58-cell chord).
 static var MARK_BOW_PER_CELL := 0.25
 # How far short of the victim the mark stops, in cells. A taste value -- NOT a clearance. #1042's
-# record claimed the inset had to clear the crown; the crown hangs at BoardOverlays.billboard_lift
-# 0.85 world, which is well ABOVE this mark, so nothing is being cleared.
+# record claimed the inset had to clear the crown; the crown stands over its leader's head (since #1070,
+# BoardOverlays.billboard_lift above the art or the health readout), well ABOVE this mark, so nothing
+# is being cleared.
 static var MARK_INSET := 0.25
 # The cone that replaces #1042's arrowhead (dev, 2026-09-20: the arrows "just don't look great in
 # practice... perhaps a narrow cone at the end instead?", then "about half of what it is, too. It

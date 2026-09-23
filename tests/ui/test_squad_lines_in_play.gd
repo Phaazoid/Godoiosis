@@ -392,3 +392,81 @@ func test_a_leader_squads_up_and_the_pick_stays_open_until_nobody_is_left() -> v
 	assert_bool(leader.squad.get_members().has(second)).is_true()
 	assert_int(game.game_state).override_failure_message(
 			"the pick stayed open with nobody left to recruit").is_not_equal(game.GameState.PICKING_TARGET)
+
+
+# --- The count beside the crown (#1070) ----------------------------------------------------------
+
+# The dev: "as we start picking, there's no real way to know how many we can pick... we should have a
+# 0/3 -> 1/3 etc over the squad leader's head, as we pick, only while picking like that." Recruits over
+# the room for them -- the leader is not counted -- and it moves one per pick.
+func test_squad_up_counts_its_recruits_against_the_room_for_them() -> void:
+	var board: Dictionary = await _squad(5, [])
+	var leader: Unit = board.leader
+	var first := _spawn(5, Vector2i(1, 0))
+	_spawn(5, Vector2i(0, 1))
+	await await_idle_frame()
+	var room: int = leader.squad.max_size() - 1
+	assert_int(room).override_failure_message("fixture: no room for both candidates and one more, so "
+			+ "the pick would close on the first join").is_greater(2)
+
+	game.create_squad(leader)
+	assert_object(_om().squad_count_leader()).override_failure_message(
+			"opening Squad Up put no count on the leader").is_same(leader)
+	assert_str(_om().squad_count_text()).is_equal("0/%d" % room)
+
+	game._click_picking_target(first.movement.cell)
+	assert_str(_om().squad_count_text()).override_failure_message(
+			"the count did not follow the pick").is_equal("1/%d" % room)
+	assert_float(_om().squad_count_alpha).is_equal(1.0)
+
+
+# A cancel changed nothing, so the count just goes -- no hold, no fade.
+func test_a_cancelled_squad_up_takes_its_count_away_at_once() -> void:
+	var board: Dictionary = await _squad(5, [])
+	var leader: Unit = board.leader
+	_spawn(5, Vector2i(1, 0))
+	await await_idle_frame()
+	game.create_squad(leader)
+	assert_object(_om().squad_count_leader()).is_same(leader)
+
+	var off := Vector2i(9, 9)
+	assert_bool(game.target_pick_cells.has(off)).override_failure_message(
+			"fixture: the 'off the set' cell is a candidate").is_false()
+	game._click_picking_target(off)
+	assert_int(game.game_state).override_failure_message(
+			"fixture: clicking off the set did not cancel the pick").is_not_equal(game.GameState.PICKING_TARGET)
+	assert_object(_om().squad_count_leader()).override_failure_message(
+			"a cancelled Squad Up left its count standing").is_null()
+
+
+# The dev: "It should hold a brief 3/3, then fade." The join that fills the squad closes the pick, and
+# leaving the mode must not take the last number with it.
+func test_the_join_that_fills_the_squad_holds_its_count_then_fades_it() -> void:
+	var board: Dictionary = await _squad(5, [])
+	var leader: Unit = board.leader
+	leader.unit_instance.stats[Stats.Stat.LDR] = 2 * Squad.MEMBER_LDR_COST   # room for exactly two
+	var first := _spawn(5, Vector2i(1, 0))
+	var second := _spawn(5, Vector2i(0, 1))
+	await await_idle_frame()
+	assert_int(leader.squad.max_size() - 1).override_failure_message(
+			"fixture: the squad is not sized for exactly two recruits").is_equal(2)
+	var hold := OverlayManager.SQUAD_COUNT_HOLD
+	var fade := OverlayManager.SQUAD_COUNT_FADE
+	OverlayManager.SQUAD_COUNT_HOLD = 0.05
+	OverlayManager.SQUAD_COUNT_FADE = 0.05
+
+	game.create_squad(leader)
+	game._click_picking_target(first.movement.cell)
+	game._click_picking_target(second.movement.cell)
+	assert_int(game.game_state).override_failure_message(
+			"fixture: the pick stayed open on a full squad").is_not_equal(game.GameState.PICKING_TARGET)
+	assert_object(_om().squad_count_leader()).override_failure_message(
+			"closing the pick took the full count with it").is_same(leader)
+	assert_str(_om().squad_count_text()).is_equal("2/2")
+	assert_float(_om().squad_count_alpha).is_equal(1.0)
+
+	await await_millis(400)
+	assert_object(_om().squad_count_leader()).override_failure_message(
+			"the full count never faded out").is_null()
+	OverlayManager.SQUAD_COUNT_HOLD = hold
+	OverlayManager.SQUAD_COUNT_FADE = fade

@@ -393,6 +393,21 @@ var squad_lines_version := 0
 # rather than a running animation, so both views read one clock and neither owns a tween.
 var tether_shake_msec := -1
 var _squad_lines_2d: SquadLines2D
+# The Squad Up count (#1070): "1/3" beside the leader's crown while Squad Up picks, so a player can
+# see how much room is left as they go. THE store -- this label draws it flat and OverlayMirror hands
+# it to UnitMirror -- and it keeps a leader's instance ID rather than the Unit, because a board
+# cleared mid-fade frees the leader under it (#149: a freed Unit in a typed slot dies on the read).
+# What it SAYS is never stored: squad_count_text asks the squad, which is the one answer.
+#
+# HOLD and FADE are read when a settle STARTS, so a slider moves the next one. GAP is in cells, and
+# the diorama reads it every frame; this flat label reads it when it is next drawn.
+static var SQUAD_COUNT_HOLD := 0.8
+static var SQUAD_COUNT_FADE := 0.5
+static var SQUAD_COUNT_GAP := 0.05
+var squad_count_alpha := 0.0
+var _squad_count_leader_id := 0
+var _squad_count_settle: Tween
+var _squad_count_label: Label
 var leash_revealed := false   # a play-time reveal is holding the highlight layer up (#710)
 # The two inputs to whether authoring zones draw -- see set_zone_visibility. The INTENT is what
 # a 3D mirror asks; `.visible` is the product and answers only "does the 2D draw this".
@@ -792,6 +807,105 @@ func has_strained_tether() -> bool:
 		if entry["state"] == SquadLines2D.Strain.STRAIN:
 			return true
 	return false
+
+
+# --- The Squad Up count (#1070) -------------------------------------------------------------------
+# Three verbs, and game.gd is the only caller: create_squad SHOWS it on every entry (it is re-entered
+# after each join, so the number follows the picks), the join that closes the pick SETTLES it, and
+# leaving the mode any other way CLEARS it. A settle is the dev's "a brief 3/3, then fade" -- and a
+# pick that ends early with room left settles the same way, since the last number is still news.
+# A cancel changed nothing, so it just goes.
+
+func squad_count_leader() -> Unit:
+	if _squad_count_leader_id == 0:
+		return null
+	return instance_from_id(_squad_count_leader_id) as Unit
+
+
+# Recruits over the room for them: the leader is not counted, so a fresh squad opens at 0.
+func squad_count_text() -> String:
+	var leader := squad_count_leader()
+	if leader == null or leader.squad == null:
+		return ""
+	return "%d/%d" % [leader.squad.get_members().size() - 1, leader.squad.max_size() - 1]
+
+
+func show_squad_count(leader: Unit) -> void:
+	_stop_squad_count_settle()
+	_squad_count_leader_id = leader.get_instance_id()
+	squad_count_alpha = 1.0
+	_draw_squad_count()
+
+
+func settle_squad_count() -> void:
+	if squad_count_leader() == null:
+		return
+	_stop_squad_count_settle()
+	squad_count_alpha = 1.0
+	_draw_squad_count()
+	_squad_count_settle = create_tween()
+	_squad_count_settle.tween_interval(maxf(SQUAD_COUNT_HOLD, 0.0))
+	_squad_count_settle.tween_method(_set_squad_count_alpha, 1.0, 0.0, maxf(SQUAD_COUNT_FADE, 0.001))
+	_squad_count_settle.tween_callback(_end_squad_count)
+
+
+# A settle outlives the mode that started it: the join that closes the pick settles the count and
+# then _click_picking_target leaves the mode, which lands here.
+func clear_squad_count() -> void:
+	if is_squad_count_settling():
+		return
+	_end_squad_count()
+
+
+func is_squad_count_settling() -> bool:
+	return _squad_count_settle != null and _squad_count_settle.is_valid()
+
+
+func _stop_squad_count_settle() -> void:
+	if is_squad_count_settling():
+		_squad_count_settle.kill()
+	_squad_count_settle = null
+
+
+func _set_squad_count_alpha(alpha: float) -> void:
+	squad_count_alpha = alpha
+	_draw_squad_count()
+
+
+func _end_squad_count() -> void:
+	_squad_count_settle = null
+	_squad_count_leader_id = 0
+	squad_count_alpha = 0.0
+	_draw_squad_count()
+
+
+# The flat view's number: just right of the crown, which sits on the cell centre with no offset.
+# Measured from the crown's CANVAS rather than its ink, which is what the diorama does too.
+func _draw_squad_count() -> void:
+	var leader := squad_count_leader()
+	if leader == null or squad_count_alpha <= 0.0:
+		if _squad_count_label != null:
+			_squad_count_label.visible = false
+		return
+	if _squad_count_label == null:
+		_squad_count_label = Label.new()
+		_squad_count_label.name = "SquadCount"
+		var style := LabelSettings.new()
+		style.font_size = 8
+		style.outline_size = 3
+		style.outline_color = Color.BLACK
+		_squad_count_label.label_settings = style
+		_squad_count_label.z_index = HEAD_ICON_Z_INDEX
+		_squad_count_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		icon_overlay.add_child(_squad_count_label)
+	_squad_count_label.text = squad_count_text()
+	_squad_count_label.size = _squad_count_label.get_minimum_size()
+	_squad_count_label.modulate.a = squad_count_alpha
+	var crown: Texture2D = ICON_TEXTURES[OverlayIcon.IconType.CROWN]
+	var centre: Vector2 = board_tilemap.map_to_local(leader.get_projected_destination())
+	var left: float = centre.x + crown.get_width() * 0.5 + SQUAD_COUNT_GAP * GridUtils.TILE_SIZE
+	_squad_count_label.position = Vector2(left, centre.y - _squad_count_label.size.y * 0.5)
+	_squad_count_label.visible = true
 
 # What color the reach layer should paint with for this attack -- red for damage, green for a
 # heal. A null attack (bare fists) reads as the default/damage color. A WATCH aim paints its own

@@ -3453,7 +3453,7 @@ A recompute skips any squad whose reach envelope holds no hostile unit -- exact,
 
 **The end form is GEOMETRY, and it is its own stroke.** `BoardOverlays.beam_tangents` averages the two directions at a joint, so any corner drawn inside one polyline twists the ribbon open at exactly the point the form exists for. (#1042 shipped an arrowhead here; [#1059](https://github.com/Phaazoid/Godoiosis/issues/1059) replaced it with a cone -- see below. The stroke-splitting rule is what survived, and the reason is unchanged.)
 
-> **CORRECTED by #1059, and the correction is the reusable part.** This paragraph used to justify the head's 0.4-cell inset as clearance: *"the mark hangs at `Reach.EYE_HEIGHT` (1.0) and the crown and guard ward hang at `billboard_lift` (0.85) just under it."* **Both halves are wrong.** `EYE_HEIGHT` is 1.0 **rule** units = 0.5 world, while `billboard_lift` is 0.85 **world** -- so the crown hangs a third of a cell ABOVE the mark, not under it; and the guard ward is a `Kind.SPRITE` layer, which lies on the ground and was never in that band at all. The mockup that produced the finding drew `EYE_HEIGHT` as a whole cell and the map sprites at half their real size, and both errors ran the same way. **The inset is a taste value with nothing to clear.** The lesson that travels: a comparison between two authored heights is only a comparison once both are in the same UNIT, and a mockup is a measuring instrument -- check its scale before reading a finding off it.
+> **CORRECTED by #1059, and the correction is the reusable part.** This paragraph used to justify the head's 0.4-cell inset as clearance: *"the mark hangs at `Reach.EYE_HEIGHT` (1.0) and the crown and guard ward hang at `billboard_lift` (0.85) just under it."* **Both halves are wrong.** `EYE_HEIGHT` is 1.0 **rule** units = 0.5 world, while `billboard_lift` is 0.85 **world** -- so the crown hangs a third of a cell ABOVE the mark, not under it; and the guard ward is a `Kind.SPRITE` layer, which lies on the ground and was never in that band at all. The mockup that produced the finding drew `EYE_HEIGHT` as a whole cell and the map sprites at half their real size, and both errors ran the same way. **The inset is a taste value with nothing to clear.** *(Since #1070's third play-check `billboard_lift` is the crown's clearance above its unit's head, not a height off the tile; the crown still hangs well above the mark.)* The lesson that travels: a comparison between two authored heights is only a comparison once both are in the same UNIT, and a mockup is a measuring instrument -- check its scale before reading a finding off it.
 
 **The bead measures in WORLD distance and chains across a mark's strokes.** `add_beam_strip` writes `UV2.x` as a running distance beside `UV.x`'s normalized one, and `set_marks` restarts it per mark: normalized, a two-cell mark and a nine-cell one would pulse at wildly different speeds off one number, and unchained, every stroke would run a little pulse of its own. Chained, the bead sweeps the mark and arrives through its end form. `set_lines` is now a thin wrapper over `set_marks` -- one mechanism, not two.
 
@@ -3752,6 +3752,25 @@ This repeals #1069's "the reach still moves onto a refused cell", above.
 - **The Squad Up marker has a black border.** It is the white corner-bracket tile (`OverlayManager.TARGET_ATLAS_COORDS`), which vanished on white stone. The border is a 1px ring baked into the art, so every unit pick carries it: Rescue, Intimidate, Join Squad and Squad Up. Both views read the one tile.
 - **The range's outline has its own width** (`BoardOverlays.cohesion_line_width`, *Range outline width (3D)*), starting at double the tethers'. It is its own beam set, `"cohesion"`, and `DASHED_BEAMS` keeps it on the tethers' one dash pattern. The flat view keeps its single stroke width.
 - **The grid's colour is the dev's.** He tuned the out-of-range grid to navy. "Grey" in this section names the role (MoveGrid's lattice switched off), not a hue.
+
+### The third play-check: a count beside the crown, and a crown that stands on the head (2026-09-23)
+
+> when we're picking squad members from the squad up button, as we start picking, there's no real way to know how many we can pick.
+
+- **Squad Up wears a count beside the leader's crown**, "0/3" going to "1/3" and so on. It counts recruits over the room for them; the leader is not counted.
+  - It sits at the crown's point even before the first join, when there is no crown yet, so the number never jumps as the crown arrives.
+  - `OverlayManager` is the one store and its three verbs are the lifecycle. `create_squad` SHOWS the count on every entry. The join that closes the pick SETTLES it: a brief last number, then a fade (`SQUAD_COUNT_HOLD` / `SQUAD_COUNT_FADE`). Leaving the pick any other way CLEARS it at once, since a cancel changed nothing.
+  - A pick that ends early with room left settles the same way (dev: *"we don't need to fill up the squad every time"*).
+  - The text is never stored. `squad_count_text` asks the squad.
+  - The number takes the HP digits' own size, outline and colour, which is #322's rule that no number on the board is smaller than those. It adds no style knob; only the gap to the crown is new.
+  - It is moved sideways in WORLD space along the view, never through `Label3D.offset`, which moves a label's glyphs and outline by different amounts (`UnitHealthBar.make_label`'s note).
+- **The crown stands on the head, not the tile.** It hung a fixed `billboard_lift` (0.85) off the CELL, while the health readout hangs off the art's top and grows upward: a row per 10 max HP, then a status row. A default 20-HP unit's readout already sat in the crown's band.
+  - `UnitMirror.head_height` is now the one answer: the art's top, or the readout's top while one is up (`UnitHealthBar.top_extent`, read off what is drawn).
+  - `billboard_lift` is now the crown's CLEARANCE above that. At 0.225, a crown over the standard sprite with no readout up sits where the old 0.85 put it.
+  - **The ruling:** the crown sits just over the head and LIFTS while a readout shows. It is not parked above the tallest readout the unit could wear.
+  - It lifts for any of the readout's four reasons, not only hover.
+  - Its ground and XZ are unchanged, so it still does not follow a walk.
+- **What only the dev can judge:** the crown's lift on hover, the hold and fade lengths, the gap, and whether the count reads beside the crown.
 
 ### Declared residuals
 
