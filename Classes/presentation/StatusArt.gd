@@ -33,7 +33,7 @@ class Map extends RefCounted:
 	var overhangs: Array[Vector2i] = []
 
 
-static var _cache: Dictionary[String, Map] = {}
+static var _maps_by_texture: Dictionary[String, Map] = {}
 
 
 # The map for whatever image this texture's UVs actually index. A Sprite3D draws an AtlasTexture
@@ -46,15 +46,15 @@ static func map_for(art: Texture2D) -> Map:
 	var key := sampled.resource_path
 	if key.is_empty():
 		key = str(sampled.get_instance_id())
-	if not _cache.has(key):
+	if not _maps_by_texture.has(key):
 		var image := sampled.get_image()
 		if image == null:
 			return null
 		if image.is_compressed():
 			image = image.duplicate()
 			image.decompress()
-		_cache[key] = build(image)
-	return _cache[key]
+		_maps_by_texture[key] = build(image)
+	return _maps_by_texture[key]
 
 
 static func sampled_texture(art: Texture2D) -> Texture2D:
