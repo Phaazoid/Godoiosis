@@ -364,6 +364,10 @@ func _arrows(om: OverlayManager) -> void:
 # consecutive cells' surfaces do not MEET, _append_drop folds the ribbon down the gap -- "in the
 # air until he would drop, then straight down to his destination" (dev).
 func _split_knockback(om: OverlayManager, trails: Array[Dictionary], ghosts: Array[Dictionary]) -> void:
+	# Which unit each landing ghost stands in for (#358) -- the 2D already keeps the pairing.
+	var owner_of := {}
+	for unit: Variant in om.knockback_ghost_by_unit.keys():
+		owner_of[om.knockback_ghost_by_unit[unit]] = unit
 	for node in om.knockback_preview_sprites:
 		if not is_instance_valid(node):
 			continue
@@ -385,7 +389,7 @@ func _split_knockback(om: OverlayManager, trails: Array[Dictionary], ghosts: Arr
 		if sprite.get_parent() == om.arrow_icon_overlay:
 			trails.append(entry)
 		elif sprite.get_parent() == om.projected_unit_overlay:
-			ghosts.append(entry)
+			ghosts.append(_stands_for(entry, owner_of.get(sprite)))
 
 
 # The drop pointer (#431, replacing the #259 rework's stamped landing). THE RULE: a trail cell
@@ -628,13 +632,15 @@ func _terrain(om: OverlayManager) -> void:
 # Move-projection ghosts + move-HOVER stand-ins + knockback landing ghosts -> UnitMirror's pool.
 func _ghost_sync(om: OverlayManager, kb_ghosts: Array[Dictionary]) -> void:
 	var entries: Array[Dictionary] = []
-	for sprite in om.projected_unit_sprites.values():
+	for subject: Variant in om.projected_unit_sprites.keys():
+		var sprite: Variant = om.projected_unit_sprites[subject]
 		if not is_instance_valid(sprite):
 			continue
 		var ghost := sprite as Sprite2D
 		if ghost == null or ghost.texture == null:
 			continue
-		entries.append(_marker(_anchor_px(ghost.global_position), ghost.texture, ghost.modulate))
+		entries.append(_stands_for(
+				_marker(_anchor_px(ghost.global_position), ghost.texture, ghost.modulate), subject))
 	# ...and the MOVE-HOVER stand-ins (#1069), which are their own store because they mean a move
 	# nobody has made. They have to be walked HERE or they are 2D-only -- this loop is the whole of
 	# how a ghost reaches the diorama, and the flat view is the dev-only one.
@@ -646,6 +652,16 @@ func _ghost_sync(om: OverlayManager, kb_ghosts: Array[Dictionary]) -> void:
 		return
 	_last_ghosts = entries
 	unit_mirror.set_ghosts(entries)
+
+
+# A ghost entry that STANDS FOR a unit carries its id (#358), so the pool can dress it in that unit's
+# element states. Inside the entry, so `_last_ghosts` sees a change of who a ghost is (#308). The
+# move-hover stand-ins never get one: they mean a move nobody has made.
+func _stands_for(entry: Dictionary, subject: Variant) -> Dictionary:
+	var unit: Unit = (subject as Unit) if is_instance_valid(subject) else null
+	if unit != null:
+		entry["unit_id"] = unit.get_instance_id()
+	return entry
 
 
 # --- Shared ------------------------------------------------------------------------

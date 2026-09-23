@@ -326,3 +326,79 @@ func test_the_fade_stands_still_while_time_is_stopped() -> void:
 	assert_float(_unit_mirror.status_level(unit).x).override_failure_message(
 			"the fade never moved once time ran again, so the hold above proved nothing").is_greater(later)
 
+
+# --- Ghosts ---------------------------------------------------------------------------------
+
+func _ghost_for(unit: Unit) -> UnitSprite3D:
+	for ghost in _unit_mirror.ghosts():
+		if ghost.visible and _unit_mirror.ghost_unit_id(ghost) == unit.get_instance_id():
+			return ghost
+	return null
+
+
+func test_a_queued_move_hands_the_status_to_the_ghost() -> void:
+	var unit := _spawn(PLAYER, Vector2i(2, 2))
+	await _settle()
+	StatusLook.status_fade_time = 0.0
+	unit.add_element_state(WET)
+	_unit_mirror.reconcile()
+	game.enter_move_mode(unit)
+	game.selected_unit = unit
+	game._on_left_click(Vector2i(3, 2))
+	await _settle()
+	assert_bool(_unit_mirror.sprite_for(unit).visible).override_failure_message(
+			"the real sprite is still up, so no ghost stands in and this case is vacuous").is_false()
+	var ghost := _ghost_for(unit)
+	assert_object(ghost).override_failure_message(
+			"no ghost is known to stand for the moving unit").is_not_null()
+	var material := ghost.status_material()
+	assert_object(material).override_failure_message(
+			"the ghost standing in for a Wet unit wears nothing").is_not_null()
+	assert_float(_param(material, "wet")).is_equal(1.0)
+	assert_object(material.shader).is_same(UnitSprite3D.STATUS_GHOST_SHADER)
+	assert_int(material.render_priority).override_failure_message(
+			"the ghost's material lost the priority the engine would have given it (#317)").is_equal(ghost.render_priority)
+
+
+func test_a_shoves_landing_ghost_wears_its_units_status() -> void:
+	var foe := _spawn(ENEMY, Vector2i(3, 2))
+	await _settle()
+	StatusLook.status_fade_time = 0.0
+	foe.add_element_state(CHILLED)
+	_unit_mirror.reconcile()
+	var path: Array[Vector2i] = [Vector2i(3, 2), Vector2i(4, 2), Vector2i(5, 2)]
+	var shoves: Array = [{"target": foe, "path": path, "to": Vector2i(5, 2)}]
+	game.overlay_manager.show_knockback_preview(shoves)
+	await _settle()
+	var ghost := _ghost_for(foe)
+	assert_object(ghost).override_failure_message(
+			"no landing ghost is known to stand for the shoved unit").is_not_null()
+	var material := ghost.status_material()
+	assert_object(material).is_not_null()
+	assert_float(_param(material, "chill")).is_equal(1.0)
+
+
+func test_the_move_hover_stand_in_stays_plain() -> void:
+	var unit := _spawn(PLAYER, Vector2i(2, 2))
+	await _settle()
+	StatusLook.status_fade_time = 0.0
+	unit.add_element_state(WET)
+	_unit_mirror.reconcile()
+	game.enter_move_mode(unit)
+	game.selected_unit = unit
+	game.hover_presenter.update_hover_visuals(Vector2i(4, 2))
+	await _settle()
+	var shown := 0
+	for ghost in _unit_mirror.ghosts():
+		if not ghost.visible:
+			continue
+		shown += 1
+		assert_int(_unit_mirror.ghost_unit_id(ghost)).override_failure_message(
+				"the move-hover stand-in claims to BE the unit").is_equal(0)
+		assert_object(ghost.material_override).override_failure_message(
+				"the move-hover stand-in wears the unit's state").is_null()
+	assert_int(shown).override_failure_message(
+			"no hover stand-in reached the diorama, so this case saw nothing").is_greater(0)
+	assert_object(_unit_mirror.sprite_for(unit).status_material()).override_failure_message(
+			"the real sprite, still on screen beside the stand-in, lost its state").is_not_null()
+	game.exit_current_mode()
