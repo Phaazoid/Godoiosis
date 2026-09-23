@@ -400,3 +400,141 @@ func test_the_boards_cull_sweep_reaches_every_emitter() -> void:
 		assert_bool(covered.is_equal_approx(expected)).override_failure_message(
 				"%s is culled to %s, not the board's %s" % [emitter.name, covered, expected]).is_true()
 	_board.scene.call("_cover_effects", _board.scene.call("_board_volume"))
+
+
+# --- The damp blot (a ground-only Decal) ----------------------------------------------------
+
+func test_a_blot_image_is_one_irregular_hard_edged_patch() -> void:
+	for variant in StatusWorld.BLOT_VARIANTS:
+		var image := StatusWorld.blot_image(variant)
+		assert_bool(image.get_data() == StatusWorld.blot_image(variant).get_data()).override_failure_message(
+				"variant %d came out differently twice" % variant).is_true()
+		var solid := 0
+		var clear := 0
+		for y in image.get_height():
+			for x in image.get_width():
+				var alpha := image.get_pixel(x, y).a
+				assert_bool(alpha == 0.0 or alpha == 1.0).override_failure_message(
+						"variant %d has a soft texel at %s" % [variant, Vector2i(x, y)]).is_true()
+				if alpha > 0.0:
+					solid += 1
+				else:
+					clear += 1
+		assert_int(solid).override_failure_message("variant %d is empty" % variant).is_greater(0)
+		assert_int(clear).override_failure_message("variant %d is a full square" % variant).is_greater(0)
+	assert_bool(StatusWorld.blot_image(0).get_data() == StatusWorld.blot_image(1).get_data()) \
+			.override_failure_message("two variants are the same patch").is_false()
+
+
+func test_a_wet_unit_leaves_a_ground_only_patch_at_its_feet() -> void:
+	var unit := _spawn(Vector2i(2, 2))
+	await _settle()
+	StatusLook.status_fade_time = 0.0
+	StatusLook.wet_blot_spread_time = 0.0
+	unit.add_element_state(WET)
+	_unit_mirror.reconcile(0.1)
+	var blot := _unit_mirror.status_world().blot_for(unit.get_instance_id())
+	assert_object(blot).override_failure_message("a Wet unit left no damp patch").is_not_null()
+	assert_int(blot.cull_mask).override_failure_message(
+			"the patch paints more than the ground, so it would muddy the squad ring and every prop") \
+			.is_equal(BoardOverlays.GROUND_RENDER_LAYER)
+	var sprite := _unit_mirror.sprite_for(unit)
+	assert_vector(blot.global_position).is_equal_approx(sprite.global_position - sprite.art_offset,
+			Vector3.ONE * 0.0001)
+	assert_float(blot.albedo_mix).is_greater(0.0)
+
+
+func test_a_dry_unit_leaves_no_patch() -> void:
+	var unit := _spawn(Vector2i(2, 2))
+	await _settle()
+	_unit_mirror.reconcile(1.0)
+	assert_object(_unit_mirror.status_world().blot_for(unit.get_instance_id())).is_null()
+
+
+# It spreads on its own time, and it DRIES on a longer one: the patch is still there after the drips
+# have faded, and gone once the ground has dried.
+func test_the_patch_spreads_then_outlives_the_drips_while_it_dries() -> void:
+	var unit := _spawn(Vector2i(2, 2))
+	await _settle()
+	StatusLook.status_fade_time = 0.5
+	StatusLook.wet_blot_spread_time = 2.0
+	StatusLook.wet_blot_dry_time = 4.0
+	var id := unit.get_instance_id()
+	unit.add_element_state(WET)
+	_unit_mirror.reconcile(1.0)
+	var half := _unit_mirror.status_level(unit).w
+	assert_bool(half > 0.0 and half < 1.0).override_failure_message(
+			"half a spread in, the patch reads %s -- it jumped rather than spread" % [half]).is_true()
+	var full_width := StatusLook.wet_blot_size * BoardSpace.CELL_SIZE
+	assert_float(_unit_mirror.status_world().blot_for(id).size.x).is_less(full_width)
+	_unit_mirror.reconcile(2.0)
+	unit.remove_element_state(WET)
+	_unit_mirror.reconcile(1.0)
+	var level := _unit_mirror.status_level(unit)
+	assert_float(level.x).override_failure_message("the drips have not faded, so this proves nothing") \
+			.is_equal(0.0)
+	assert_object(_unit_mirror.status_world().blot_for(id)).override_failure_message(
+			"the patch vanished with the drips instead of drying").is_not_null()
+	_unit_mirror.reconcile(4.0)
+	assert_object(_unit_mirror.status_world().blot_for(id)).override_failure_message(
+			"the patch never dried").is_null()
+
+
+# A Wet unit standing in water leaves no patch on it -- and the unit is still Wet, still dripping.
+func test_no_patch_is_left_on_water() -> void:
+	var tile := _a_wadeable_water_tile()
+	assert_bool(tile.is_empty()).override_failure_message(
+			"the tileset has no wadeable water tile, so this case cannot stand a unit in water").is_false()
+	var cell := Vector2i(2, 2)
+	game.grid.paint(cell, int(tile["source"]), tile["coords"])
+	await _settle()
+	var unit := _spawn(cell)
+	await _settle()
+	StatusLook.status_fade_time = 0.0
+	StatusLook.wet_blot_spread_time = 0.0
+	unit.add_element_state(WET)
+	_unit_mirror.reconcile(1.0)
+	var level := _unit_mirror.status_level(unit)
+	assert_float(level.x).override_failure_message("the unit is not wearing Wet, so this is vacuous") \
+			.is_equal(1.0)
+	assert_float(level.w).is_equal(0.0)
+	assert_object(_unit_mirror.status_world().blot_for(unit.get_instance_id())).is_null()
+
+
+func test_the_patch_follows_the_ghost_standing_in() -> void:
+	var unit := _spawn(Vector2i(2, 2))
+	await _settle()
+	StatusLook.status_fade_time = 0.0
+	StatusLook.wet_blot_spread_time = 0.0
+	unit.add_element_state(WET)
+	_unit_mirror.reconcile()
+	game.enter_move_mode(unit)
+	game.selected_unit = unit
+	game._on_left_click(Vector2i(3, 2))
+	await _settle()
+	var ghost: UnitSprite3D = null
+	for each in _unit_mirror.ghosts():
+		if each.visible and _unit_mirror.ghost_unit_id(each) == unit.get_instance_id():
+			ghost = each
+	assert_object(ghost).override_failure_message("no ghost stands in, so this case is vacuous").is_not_null()
+	_unit_mirror.reconcile(0.1)
+	var blot := _unit_mirror.status_world().blot_for(unit.get_instance_id())
+	assert_object(blot).is_not_null()
+	assert_vector(blot.global_position).is_equal_approx(ghost.global_position, Vector3.ONE * 0.0001)
+
+
+func _a_wadeable_water_tile() -> Dictionary:
+	var tiles: TileSet = game.grid.tile_set
+	for s in tiles.get_source_count():
+		var source_id := tiles.get_source_id(s)
+		var atlas := tiles.get_source(source_id) as TileSetAtlasSource
+		if atlas == null:
+			continue
+		for i in atlas.get_tiles_count():
+			var coords := atlas.get_tile_id(i)
+			if atlas.get_tile_size_in_atlas(coords) != Vector2i.ONE:
+				continue
+			var data := atlas.get_tile_data(coords, 0)
+			if GridUtils.terrain_kind_of(data) == Terrain.Kind.WATER and GridUtils.walkable_of(data):
+				return {"source": source_id, "coords": coords}
+	return {}
