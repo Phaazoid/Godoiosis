@@ -203,6 +203,9 @@ class Sweep extends RefCounted:
 	# changing it, and a single-target swing stops at its victim, so neither the widened footprint
 	# nor a fresh Reach of the whole shape is the right answer for the ground.
 	var struck: Array[Vector2i] = []
+	# WHEN the attack reaches each of `cells` (#1057 part 2): every step a cell is reached on, so a
+	# path's revisit carries two. What the aim's travel-order flash plays; nothing else reads it.
+	var steps: Dictionary[Vector2i, Array] = {}
 
 
 # THE ONE ANSWER to "what does this aim reach", asked by every site that has to agree about it: the
@@ -220,8 +223,14 @@ static func sweep(actor: Unit, origin_cell: Vector2i, target_cell: Vector2i, att
 	if attack != null and attack.is_single_target_swing():
 		return sweep_paths(actor, attack, Reach.get_paths_from(actor, origin_cell, target_cell, attack, board),
 				board, hypo, allies_only)
-	return _sweep_area(actor, attack, Reach.get_affected_cells_from(actor, origin_cell, target_cell, attack, board),
-			board, hypo, allies_only)
+	var footprint := Reach.get_affected_cells_from(actor, origin_cell, target_cell, attack, board)
+	var result := _sweep_area(actor, attack, footprint, board, hypo, allies_only)
+	var landed: Dictionary[Vector2i, Array] = {}
+	var steps := Reach.travel_steps(origin_cell, target_cell, attack, footprint)
+	for cell in steps:
+		_land(landed, cell, steps[cell])
+	_time(result, landed)
+	return result
 
 
 # A SINGLE-TARGET swing's sweep (#1057), and its order is the area sweep's INVERTED: victims first,
@@ -240,6 +249,7 @@ static func sweep_paths(actor: Unit, attack: AttackData, paths: Array[Array], bo
 	if board == null:
 		result.struck = _tiles_of(paths)
 		result.cells = result.struck.duplicate()
+		_time(result, _path_steps(paths))
 		return result
 	var occupancy: Callable = occupant_at if occupant_at.is_valid() else board.projected_unit_at_cell
 	var hits := RulesService.gather_path_victims(actor, paths, attack, occupancy, allies_only)
@@ -252,7 +262,39 @@ static func sweep_paths(actor: Unit, attack: AttackData, paths: Array[Array], bo
 	result.victims.append_array(caught(current.cells, board, hypo, result.victims))
 	result.cells = widened(result.struck, current.cells)
 	result.links = current.links
+	# Timed off the CUT paths: a tile past a victim was never reached, so it has no step.
+	_time(result, _path_steps(struck_paths))
 	return result
+
+
+# A path's step is its index along it, so a revisit lands a second step on the same tile.
+static func _path_steps(paths: Array[Array]) -> Dictionary[Vector2i, Array]:
+	var landed: Dictionary[Vector2i, Array] = {}
+	for path in paths:
+		for i in path.size():
+			_land(landed, path[i], i)
+	return landed
+
+
+static func _land(landed: Dictionary[Vector2i, Array], cell: Vector2i, step: int) -> void:
+	if not landed.has(cell):
+		landed[cell] = []
+	if not landed[cell].has(step):
+		landed[cell].append(step)
+
+
+# The whole wash's timing: the attack's own tiles as landed, then the current AFTER the blow, one
+# step per hop from where it struck (ruling 29) -- the order ArcLightning plays it in.
+static func _time(result: Sweep, landed: Dictionary[Vector2i, Array]) -> void:
+	var last := 0
+	for cell in landed:
+		for step: int in landed[cell]:
+			last = maxi(last, step)
+	var hops := steps_of(result.links)
+	for cell in result.cells:
+		if not landed.has(cell) and hops.has(cell):
+			landed[cell] = [last + hops[cell]]
+	result.steps = landed
 
 
 # The AREA sweep -- every other kind of attack: gather the whole footprint, then flood it.

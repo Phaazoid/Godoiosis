@@ -147,6 +147,41 @@ func test_set_cells_places_tinted_fills_at_the_cells() -> void:
 			assert_that((quad.material_override as StandardMaterial3D).albedo_color).is_equal(expected_color)
 
 
+# Per-CELL colours on a FILL layer (#1057 part 2, the aim's flash): a named cell wears its own
+# colour and follows its CELL when the pool is reused for a new set, a layer recolour does not stamp
+# over it, and an empty map puts every quad back on the layer's colour. Colours here are the test's
+# own inputs, not the aim's tuned ones.
+func test_per_cell_colours_follow_their_cells_and_survive_a_layer_recolour() -> void:
+	var overlays := _overlays()
+	var layer := BoardOverlays.Layer.AIM
+	var a := Vector3i(2, 0, 2)
+	var b := Vector3i(3, 0, 2)
+	var lit := Color(1, 1, 1, 0.8)
+	var base := Color(0.2, 0.4, 0.6, 0.9)
+	var both: Array[Vector3i] = [a, b]
+	overlays.set_cells(layer, both)
+	overlays.set_layer_modulate(layer, base)
+	var colors: Dictionary[Vector3i, Color] = {b: lit}
+	overlays.set_cell_colors(layer, colors)
+	assert_that(overlays.drawn_color(layer, a)).is_equal(base)
+	assert_that(overlays.drawn_color(layer, b)).is_equal(lit)
+
+	# The pool is reused in a new order: quad 0 now holds b, and must carry b's colour with it.
+	var swapped: Array[Vector3i] = [b, a]
+	overlays.set_cells(layer, swapped)
+	assert_that(overlays.drawn_color(layer, b)).is_equal(lit)
+	assert_that(overlays.drawn_color(layer, a)).is_equal(base)
+
+	var recoloured := Color(0.9, 0.1, 0.1, 0.9)
+	overlays.set_layer_modulate(layer, recoloured)
+	assert_that(overlays.drawn_color(layer, b)).is_equal(lit)
+	assert_that(overlays.drawn_color(layer, a)).is_equal(recoloured)
+
+	var none: Dictionary[Vector3i, Color] = {}
+	overlays.set_cell_colors(layer, none)
+	assert_that(overlays.drawn_color(layer, b)).is_equal(recoloured)
+
+
 func test_set_markers_replaces_wholesale_and_carries_the_variant() -> void:
 	var overlays := _overlays()
 	var arrow := GridUtils.ERROR_ICON

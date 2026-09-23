@@ -156,8 +156,10 @@ added a LEVEL for volume later, which does not touch this) and not one colour le
 **DEFAULT IS NOT A ROW IN `AIM_PALETTES`, and that is the load-bearing part.** It falls through to the
 authored statics — what the Game tab's knobs write and what Save-to-source authors. A copied row would
 be a second answer to *what colour is an attack reach* and would go stale the instant a knob moved, so
-the table holds the ALTERNATIVES entire. The fork lives inside the three accessors
-(`attack_reach_color` / `aim_fill_color` / `aim_pulse_color`) and nowhere else.
+the table holds the ALTERNATIVES entire. The fork lives inside the two accessors
+(`attack_reach_color` / `aim_fill_color`) and nowhere else. There were three until #1057 part 2 retired
+the footprint's breathing pulse and its derived low point, `aim_pulse_color`: the travel-order flash
+below only whitens the live fill, so it has no colour of its own to fork.
 
 **A colour knob therefore moves the DEFAULT palette alone** (dev, 2026-09-01: the alternatives are
 authored in source and nowhere else). With another palette live the three aim rows are inert — correct,
@@ -188,6 +190,35 @@ on it having never aimed at all, which is what makes both doors reachable rather
 
 **No test says what any colour is.** Every expectation derives from the accessors, so the dev may retune
 all four authored colours and the palettes themselves without reddening anything.
+
+### The aim FLASHES in the order the attack travels ([#1057](https://github.com/Phaazoid/Godoiosis/issues/1057) part 2, BUILT 2026-09-22)
+
+**Every aim footprint flashes, tile by tile, in the order the attack reaches it** (dev, #1054 ruling
+19: *"For true aoe, they all flash together. For swings, they flash in the order the attack
+travels"*). A true AoE flashes at once; a swing from the attacker row by row moving away; a swing
+placed at range ring by ring from the impact; a single-target swing along every path at once,
+stopping where it hits, a revisited tile flashing on each visit; and a shock's current after the blow,
+one hop per step (ruling 29). It replaced the whole-layer breathing pulse, which moved only when the
+attack hit the ground; the victims' own sprite pulse is unchanged.
+
+**The look is a WHITE flash over the steady fill** (ruling 27, chosen off a rendered mockup over
+"light up from dim" and "fill, hold, clear"): the footprint rests at its plain aim colour, so the
+covered tiles stay readable between flashes, and each tile goes white on its step and falls back.
+That it only ever ADDS white is what made the whole thing one channel per tile, and what lets it sit
+on any palette, heal or watch fill without a colour of its own.
+
+**Who owns what.** The ORDER is geometry and the cut: `Conduction.Sweep.steps` is filled beside
+`cells`, from `Reach.travel_steps` for the area kinds and from the gather's own cut for paths.
+`AimFlash2D` is the CLOCK and the 2D renderer; it lives under Game, so the modal freeze holds it still.
+`OverlayMirror` copies its per-tile levels into the AIM quads each frame through
+`BoardOverlays.set_cell_colors` and keeps no clock of its own, which is #176's authority rule and why
+the pause menu stills both views at once. Five `GameKnobs` rows under Aiming: time between steps,
+flash length, rest before the loop repeats, brightness, and the still's brightness.
+
+**Photosensitivity (#217) holds it still, GRADED IN WHITE** (ruling 28): the first step palest, each
+later one less, the last step plain, and a true AoE plain throughout, since it has no order to show.
+The mockup first drew the grade as dimming the later tiles; that needed a second per-tile channel in
+both views, and the dev took the one-channel version.
 
 ### The player SCALES what the dev authored ([#394](https://github.com/Phaazoid/Godoiosis/issues/394), BUILT 2026-09-01)
 
@@ -450,7 +481,7 @@ The HD-2D presentation (#176) is built as its own parallel stack. **The flat-2D 
 
 Stage 4b made the 3D view playable by keeping the whole 2D render as a corner picture-in-picture — a declared crutch. 4c retires it. **The hidden 2D game is now the UI surface**: its container covers the window at native scale over a transparent viewport with its board visuals hidden, so every Control draws over the 3D world and takes physical clicks natively (real tooltips, menus placed at the real cursor, the `ModalLock` click path untouched). Consequences worth knowing:
 
-- **Board markup mirrors, it is not reimplemented.** `OverlayMirror` polls `OverlayManager`'s retained state each frame and diffs it into `BoardOverlays`/`UnitMirror` — no trigger-site hooks, and the 2D stays the one authority for every cell set, texture, tint and animation (the aim pulse is its layer modulate, polled). The parallel-stacks doctrine holds: two representations, one declared authority.
+- **Board markup mirrors, it is not reimplemented.** `OverlayMirror` polls `OverlayManager`'s retained state each frame and diffs it into `BoardOverlays`/`UnitMirror` — no trigger-site hooks, and the 2D stays the one authority for every cell set, texture, tint and animation (the aim's travel-order flash is `OverlayManager.aim_flash_levels()`, polled). The parallel-stacks doctrine holds: two representations, one declared authority.
 - **A diff key must cover everything the render reads, and markup is drawn through TWO stores ([#308](https://github.com/Phaazoid/Godoiosis/issues/308), 2026-08-16).** The 2D is the authority for *which* cells are marked; `BoardHeights` decides how each one is *drawn* — the tilt a fill lies at (#281) and the surface a flame stands on. Neither is in a cell list, so a **rise painted onto a cell whose elevation does not change** left `_fill`'s `Array[Vector3i]` byte-identical and the quad kept its old tilt. The rule: a poll that draws through a second store **gates on that store having changed**, never on a copy of what it reads — a copied key is a second spelling that goes stale again the moment the render grows an input. `DirtyCells.version` is that gate, a monotonic count beside the cell list, non-consuming so it does not touch `battle3d`'s ONE-CONSUMER claim on the list itself. Coarse on purpose (any height edit re-pushes every fill layer) because height edits are authoring events, and the alternative pays per cell per layer per frame forever.
 - **Overlays render UNSHADED** (dev ruling): gameplay markup must never read as terrain, which is why fills are unshaded quads rather than Decals — a Decal's albedo modulates the lit surface by construction.
 - **Markup LIES ON the surface it marks; anything that STANDS on one stays upright ([#281](https://github.com/Phaazoid/Godoiosis/issues/281), 2026-08-15).** Dev: *"they should be flat against the ground, even on slopes."* `BoardSpace.surface_transform` is the one answer to how a flat thing lies on a cell — position *and* orientation, with `surface_point` as its origin so the two halves cannot drift. The tilt derives from `Terrain.gradient_of_corners`, the same call the ramp wedge's own yaw comes from, so ground and markup can never disagree about which way a slope climbs. **A CORNER CELL HAS NO SUCH TILT, and the fold moved to the MESH ([#427](https://github.com/Phaazoid/Godoiosis/issues/427) slice 4 follow-up, found in play).** Four non-coplanar surface points, and an affine transform maps a plane to a plane — so the best-fit plane crossed the ground by a quarter of the climb at every corner, six times `fill_lift`, which is what z-fighting on a corner tile's flat half and arrows cutting through it both were. `surface_transform` now returns an identity basis there rather than a tilt it cannot honour, and `BoardOverlays._surface_mesh` gives the marker four vertices at their true heights, split on the diagonal `Terrain.height_at_uv` splits on. Planar cells — flat ground and every cardinal ramp — keep the one shared `PlaneMesh`, so this costs a predicate and nothing else on the boards that exist. A SPRITE's shape travels in its marker entry **alongside** the basis, because the knockback drop pointer carries an orientation of its own and lies on nothing: an absent shape means airborne. Units, flames and props keep reading `surface_point`, and billboards and the hover bracket (a cell *volume*) are declared non-tilting. **The tilt carries a stretch**: a ramp face is 1.414 cells long, so markup that only rotated would leave it bare at both edges — stretching is also what makes an arrow foreshorten exactly as the ground under it does. Both values are derived geometry, not taste, so neither is a Look knob. **The tilt is the surface's; the LIFT is not ([#432](https://github.com/Phaazoid/Godoiosis/issues/432), 2026-08-21).** Every ground marker clears the ground it lies on by `fill_lift + sort * lift_step`, and that clearance goes **straight up**, never along the marker's own normal. What the lift buys is a shared *plane* — every marker on a layer the same distance off the ground, which is what lets one ribbon run through several of them — and since `BoardSpace.surface_height_at` already meets exactly at a shared edge, only a **constant** vertical offset leaves the markup meeting there too. Riding the normal instead decomposed on a slope into half up and half *downhill*, sliding every ramp marker `lift·sin(45°)` out of the cell it marks — a gap at the uphill join, an overlap tucked under the downhill one, and layers misregistered against each other in proportion to their own sort, which is the opposite of what #281 chose the normal for. It also made `lift_step`, whose documented job is vertical spacing, silently control horizontal placement on slopes. The price is that a 45° slope's *perpendicular* clearance is `cos(45°)` of the flat ground's — `fill_lift` is the knob if a ramp ever speckles, and the flat ground it was tuned on is unchanged.

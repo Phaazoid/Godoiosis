@@ -323,6 +323,36 @@ static func get_affected_cells_from(_unit: Unit, origin_cell: Vector2i, target_c
 	return _spread(placed, target_cell, attack, board)
 
 
+# THE ORDER an area footprint lands in (#1057 part 2, ruling 19): each cell and the step the attack
+# reaches it on, which the aim's travel-order flash plays. A true AoE lands all at once. A swing from
+# the attacker lands row by row moving away -- the facing distance _truncate's lanes advance by. A
+# placed swing lands ring by ring from the impact -- _spread's flood depth, because that flood only
+# ever steps outward by one. The nearest step is 0 whatever the stamp's centre offset.
+#
+# Paths are not answered here: where a path STOPS is the victim gather's call, so their steps come
+# off its cut (Conduction.sweep_paths).
+static func travel_steps(origin_cell: Vector2i, target_cell: Vector2i, attack: AttackData, cells: Array[Vector2i]) -> Dictionary[Vector2i, int]:
+	var steps: Dictionary[Vector2i, int] = {}
+	var swings := attack != null and attack.swing and attack.attack_shape != null
+	var dir := Vector2i.ZERO
+	if swings and attack.is_directional():
+		dir = GridUtils.cardinal_direction_i_between(origin_cell, target_cell)
+	var nearest := 0
+	for i in cells.size():
+		var cell := cells[i]
+		var step := 0
+		if swings and attack.is_directional():
+			var delta := cell - origin_cell
+			step = delta.x * dir.x + delta.y * dir.y
+		elif swings:
+			step = GridUtils.manhattan_distance(target_cell, cell)
+		steps[cell] = step
+		nearest = step if i == 0 else mini(nearest, step)
+	for cell: Vector2i in steps.keys():
+		steps[cell] -= nearest
+	return steps
+
+
 # THE PATHS A SINGLE-TARGET SWING WALKS (#1057), each placed and cut at the first tile the attack
 # cannot reach. Empty for any other attack, and for a facing with no cardinal.
 #

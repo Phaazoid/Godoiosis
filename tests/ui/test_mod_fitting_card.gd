@@ -419,9 +419,9 @@ func _attack(min_range: int, max_range: int) -> WeaponAttackData:
 func test_the_plate_grows_with_the_range_it_is_drawing() -> void:
 	var plate: ShapePlate = auto_free(ShapePlate.new())
 	plate.show_attack(_attack(1, 1))
-	var small := plate.get_child(0).get_child_count()
+	var small := plate.grid().get_child_count()
 	plate.show_attack(_attack(1, 3))
-	assert_int(plate.get_child(0).get_child_count()).is_greater(small)
+	assert_int(plate.grid().get_child_count()).is_greater(small)
 	assert_int(small).is_equal(3 * 3)
 
 
@@ -430,7 +430,7 @@ func test_the_plate_never_grows_past_its_own_box() -> void:
 	var plate: ShapePlate = auto_free(ShapePlate.new())
 	plate.show_attack(_attack(1, 40))
 	var span := ShapePlate.max_span()
-	assert_int(plate.get_child(0).get_child_count()).is_equal(span * span)
+	assert_int(plate.grid().get_child_count()).is_equal(span * span)
 
 
 # The aim the plate DRAWS is pulled in to the plate's edge when the range outruns it. Without this

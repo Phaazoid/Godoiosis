@@ -3,7 +3,7 @@ class_name OverlayManager
 
 # All 2D board visuals: the tile-layer fills (move/attack/hover/squad/zones), path
 # arrows, selection icons, projected-unit ghosts, knockback + terrain previews, and
-# the target-pulse channel. Every draw is RETAINED — the layers hold their cells and
+# the target-pulse channel, and the aim's travel-order flash (AimFlash2D). Every draw is RETAINED — the layers hold their cells and
 # the dicts below hold their sprites — which is what lets the 3D OverlayMirror poll
 # full parity off this manager with zero trigger hooks (#222).
 
@@ -73,7 +73,6 @@ const PROJECTED_HIGHLIGHT := Color(1.4, 1.4, 1.0, 1.0)      # brightened + opaqu
 # static var since #422, joining the reach pair below: the footprint is one of the three channels a
 # player's palette repaints, so its authored value has to be tunable like the two it sits with.
 static var HOVER_MODULATE := Color(1, 1, 0)             # the aim-footprint fill
-const HOVER_PULSE_MODULATE := Color(1, 1, 0, 0.3)       # its pulsed low point -- only its ALPHA is read
 
 # The reach layer's fill (#123 follow-up): red reads as hostile, so a healing pick paints green
 # instead. Decided from the attack's own `heals` flag -- the one question, one answer this already
@@ -394,12 +393,11 @@ var _pulsing_units: Array[Unit] = []
 # the aim's "about to be hit" channel on the unit SPRITE, this one is the ground ring saying "you
 # may click this". Different channel, different meaning, deliberately not merged.
 var _pulsing_rings: Array[Unit] = []
-var _tile_pulse: Tween = null
 var _pick_flash: Tween = null
 var _pick_flash_base: Color = ATTACK_MODULATE   # replaced by the live value when a flash starts
 # What the aim was last painted for, so refresh_aim_colors can re-derive it. `_aiming_watch` is THE
 # store for "is this aim a watch" on this side (#591) -- written only by set_aim_colors, read by both
-# layers' colour and by the tile pulse, so the three cannot disagree.
+# layers' colour, so the two cannot disagree.
 var _reach_attack: AttackData = null
 var _aiming_watch := false
 
@@ -410,6 +408,7 @@ var _aiming_watch := false
 var sight_trace: Reach.SightTrace = null
 var sight_trace_version := 0
 var _sight_trace_2d: SightTrace2D
+var _aim_flash: AimFlash2D
 var _threat_lines_2d: ThreatLines2D
 # The move tileset's generated art and the texel size it was cut at (#1074) -- see _install_move_grid.
 var _move_grid_texture: ImageTexture
@@ -491,6 +490,13 @@ func _ready() -> void:
 	_sight_trace_2d.name = "SightTrace2D"
 	_sight_trace_2d.z_index = TERRAIN_Z_INDEX
 	add_child(_sight_trace_2d)
+	# The aim's travel-order flash (#1057 part 2), over the footprint it whitens: the hover layer's own
+	# z, and later in tree order.
+	_aim_flash = AimFlash2D.new()
+	_aim_flash.name = "AimFlash2D"
+	if hover_overlay is CanvasItem:
+		_aim_flash.z_index = (hover_overlay as CanvasItem).z_index
+	add_child(_aim_flash)
 	# The two range fills under the move layer (#1066), each a duplicate of it, tinted, and placed
 	# UNDER it in tree order: your blue, then your red beneath it, then the enemy's purple beneath
 	# both. THREAT is inserted first and REACH second, because move_child(x, move_overlay.get_index())
@@ -562,6 +568,26 @@ func clear_sight_trace() -> void:
 	sight_trace_version += 1
 	_sight_trace_2d.trace = null
 	_sight_trace_2d.queue_redraw()
+
+
+# The hovered aim's timing (Conduction.Sweep.steps): the flash plays it. The SAME steps keep the
+# running loop, so a re-hover of one aim never restarts the travel.
+func set_aim_flash(steps: Dictionary[Vector2i, Array]) -> void:
+	_aim_flash.show_steps(steps)
+
+
+func clear_aim_flash() -> void:
+	_aim_flash.clear()
+
+
+# How white each footprint tile is this frame -- what OverlayMirror copies into the diorama.
+func aim_flash_levels() -> Dictionary[Vector2i, float]:
+	return _aim_flash.levels()
+
+
+# The footprint's timing as it was last handed in; empty when nothing is flashing.
+func aim_flash_steps() -> Dictionary[Vector2i, Array]:
+	return _aim_flash.steps
 
 
 # The verdict colours' re-apply (#506). Both views read them when the trace is DRAWN, and a trace
@@ -740,12 +766,6 @@ static func _palette_color(channel: AimChannel, authored: Color) -> Color:
 	var painted: Color = row[channel]
 	return painted
 
-# Its pulsed low point, DERIVED rather than authored: the same fill at the alpha the pulse has always
-# dropped to. One factor, never a third colour -- BLOCKED_REACH_DIM's precedent.
-static func aim_pulse_color(watch := false) -> Color:
-	var base := aim_fill_color(watch)
-	return Color(base.r, base.g, base.b, HOVER_PULSE_MODULATE.a)
-
 # Paint BOTH layers of an aim for this attack and this verb (#591). One door rather than two, since
 # the reach and the footprint are two halves of one picture and a caller that set only one would
 # leave the aim half-dressed.
@@ -755,16 +775,10 @@ func set_aim_colors(attack: AttackData, watch := false) -> void:
 	attack_overlay.modulate = attack_reach_color(attack, watch)
 	_apply_aim_fill()
 
-# The footprint layer's paint in whichever state it is in -- solid, or breathing between the fork's
-# two ends. A LIVE pulse holds the endpoints it started with, so a colour change has to re-arm it or
-# the tween paints the old aim back on its next swing (#308's copied-key shape, in a tween).
+# The footprint layer's paint. Steady since #1057 part 2 retired the breathing layer: the flash only
+# ever adds white over it, and reads this colour live rather than holding a copy.
 func _apply_aim_fill() -> void:
-	if _tile_pulse == null:
-		hover_overlay.modulate = aim_fill_color(_aiming_watch)
-		return
-	Pulse.stop(_tile_pulse, hover_overlay, &"modulate", aim_fill_color(_aiming_watch))
-	_tile_pulse = Pulse.start(self, hover_overlay, &"modulate",
-			aim_fill_color(_aiming_watch), aim_pulse_color(_aiming_watch))
+	hover_overlay.modulate = aim_fill_color(_aiming_watch)
 
 
 # Re-derive both fills from the aim they were last given. The Game tab calls this after tuning any of
@@ -865,11 +879,12 @@ func redraw_zones(zones: ZoneManager, hidden: Array[String] = []) -> void:
 			continue
 		draw_cells(layer, zones.cells_in(name), ATLAS_COORDS)
 
-# The aim's live feedback: what the CURRENT aim would affect pulses, while the red reach layer never
-# changes. WHICH channel pulses is the attack's own `targets` -- units, tiles or both -- so the kind
-# of attack being aimed reads at a glance. Diffed against the previous set, not restarted: this runs
-# on every hover change, and killing a tween per mouse-move strobes.
-func set_target_pulse(units: Array[Unit], pulse_tiles: bool) -> void:
+# The aim's live feedback on the UNITS it would hit: their sprites pulse, while the red reach layer
+# never changes. The tiles say it separately, by flashing in travel order (set_aim_flash) -- every
+# footprint since #1057 part 2, where only an attack that hit the ground used to pulse its tiles.
+# Diffed against the previous set, not restarted: this runs on every hover change, and killing a
+# tween per mouse-move strobes.
+func set_target_pulse(units: Array[Unit]) -> void:
 	for unit in _pulsing_units:
 		if is_instance_valid(unit) and not units.has(unit):
 			unit.visuals.stop_pulse()
@@ -877,15 +892,6 @@ func set_target_pulse(units: Array[Unit], pulse_tiles: bool) -> void:
 		if is_instance_valid(unit) and not _pulsing_units.has(unit):
 			unit.visuals.start_pulse()
 	_pulsing_units = units.duplicate()
-
-	# Both ends come off the live fork (#591), never the constants -- a watch aim that pulses its
-	# footprint would otherwise breathe back to the shot's yellow on every swing.
-	if pulse_tiles and _tile_pulse == null:
-		_tile_pulse = Pulse.start(self, hover_overlay, &"modulate",
-				aim_fill_color(_aiming_watch), aim_pulse_color(_aiming_watch))
-	elif not pulse_tiles and _tile_pulse != null:
-		Pulse.stop(_tile_pulse, hover_overlay, &"modulate", aim_fill_color(_aiming_watch))
-		_tile_pulse = null
 
 # Flash the cells a CELL pick is offering (#116). It pulses the pick layer's own modulate rather than
 # adding a channel of its own: the 3D mirror reads that modulate every frame, so one tween moves both
@@ -911,7 +917,7 @@ func set_pick_flash(on: bool) -> void:
 # RUNTIME, not parse time (CLAUDE.md "Sharp edges").
 func clear_target_pulse() -> void:
 	var none: Array[Unit] = []
-	set_target_pulse(none, false)
+	set_target_pulse(none)
 
 func show_hover_move_path(move: MoveAction):
 	clear_hover_move_path()

@@ -84,9 +84,6 @@ func _aim(unit: Unit, watch: bool) -> void:
 	game.hover_presenter._hover_attack_targeting(AIM_CELL)
 
 
-func _distance(a: Color, b: Color) -> float:
-	return absf(a.r - b.r) + absf(a.g - b.g) + absf(a.b - b.b) + absf(a.a - b.a)
-
 # ==============================================================================
 #  The fork itself
 # ==============================================================================
@@ -148,45 +145,38 @@ func test_the_watch_tint_beats_the_heal_fork() -> void:
 		).is_equal(OverlayManager.WATCH_REACH_MODULATE)
 
 # ==============================================================================
-#  The pulse, which is the trap
+#  The flash, where the trap used to be
 # ==============================================================================
-# A MAP-hitting attack pulses its footprint tiles, and Pulse holds the two endpoints it was STARTED
-# with. Read off the constants -- which is how this code looked before #591 -- a watch aim breathes
-# back to the shot's yellow twice a second, and the fix on the entry path alone would look right in
-# a screenshot and be wrong in motion.
+# Until #1057 part 2 a MAP-hitting attack BREATHED its footprint layer, and a running Pulse holds the
+# two endpoints it was started with -- so a watch aim read off the constants swung back to the shot's
+# yellow twice a second. The travel-order flash replaced that tween and never writes the layer's
+# colour at all: it only whitens on top of it. These pin that the watch's fill survives both the
+# flash running and the flash stopping, the two moments the old tween got wrong.
 
-func test_the_footprint_pulse_swings_toward_the_watchs_colour_and_not_the_shots() -> void:
+func test_the_footprint_keeps_the_watchs_colour_while_it_flashes() -> void:
 	var unit := _watcher(EquippableData.TargetMode.MAP)
 	_aim(unit, true)
+	assert_bool(_overlays().aim_flash_steps().is_empty()).override_failure_message(
+			"no flash is running -- the aim reached nothing"
+		).is_false()
 
-	var pulse: Tween = _overlays()._tile_pulse
-	assert_object(pulse).override_failure_message(
-			"no tile pulse is running -- the fixture's attack does not hit MAP"
-		).is_not_null()
-
-	# Deterministic rather than frame-timed: step the tween half a swing and see which end it is
-	# heading for. Both endpoints are derived, so tuning either colour moves the expectation too.
-	pulse.custom_step(Pulse.PERIOD * 0.5)
-	var landed: Color = _fill_layer().modulate
-
-	assert_bool(_distance(landed, OverlayManager.aim_pulse_color(true))
-			< _distance(landed, OverlayManager.aim_pulse_color(false))
-		).override_failure_message(
-			"the footprint pulse is swinging toward the SHOT's colour while a watch is being aimed"
-		).is_true()
-
-
-# The other end of the same trap: Pulse.stop RESTORES a value, and restoring the constant repaints
-# the watch aim yellow the moment the player hovers a cell the attack cannot reach.
-func test_the_pulse_stopping_restores_the_watchs_fill() -> void:
-	var unit := _watcher(EquippableData.TargetMode.MAP)
-	_aim(unit, true)
-	assert_object(_overlays()._tile_pulse).is_not_null()
-
-	_overlays().set_target_pulse([], false)
+	for i in 3:
+		await await_idle_frame()
 
 	assert_that(_fill_layer().modulate).override_failure_message(
-			"stopping the pulse put the SHOT's fill back under a watch aim"
+			"the flash repainted the footprint away from the WATCH's colour"
+		).is_equal(OverlayManager.aim_fill_color(true))
+
+
+# The other moment: the flash stops the instant the player hovers a cell the attack cannot reach.
+func test_the_flash_stopping_leaves_the_watchs_fill() -> void:
+	var unit := _watcher(EquippableData.TargetMode.MAP)
+	_aim(unit, true)
+
+	_overlays().clear_aim_flash()
+
+	assert_that(_fill_layer().modulate).override_failure_message(
+			"stopping the flash put the SHOT's fill back under a watch aim"
 		).is_equal(OverlayManager.aim_fill_color(true))
 
 # ==============================================================================

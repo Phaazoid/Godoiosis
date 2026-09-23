@@ -5,8 +5,8 @@ class_name OverlayMirror
 # and diffs it into BoardOverlays / UnitMirror — board markup parity with ZERO
 # trigger-site hooks (the alternative was ~40 sites across 9 files; UnitMirror's
 # poll-don't-wire precedent, applied to overlays). The 2D stays the ONE authority:
-# every cell set, texture, tint and animation arrives by copy — the aim pulse IS
-# hover_overlay.modulate, polled; arrow textures arrive pre-picked on the retained
+# every cell set, texture, tint and animation arrives by copy — the aim's travel-order
+# flash IS OverlayManager.aim_flash_levels(), polled; arrow textures arrive pre-picked on the retained
 # preview sprites; validity tints arrive pre-applied. Value-diff before every push
 # (fills compare SORTED — get_used_cells/Dictionary orderings aren't frame-stable),
 # so a static board costs comparisons, not writes.
@@ -109,9 +109,10 @@ func _process(_delta: float) -> void:
 	if om.threat_overlay != null:
 		overlays.set_layer_modulate(BoardOverlays.Layer.THREAT, om.threat_overlay.modulate)
 
-	# The aim footprint pulses by layer modulate in 2D — the animation rides the poll.
+	# The aim footprint: its cells and steady colour by copy, then its travel-order flash per cell.
 	_fill(BoardOverlays.Layer.AIM, om.hover_overlay.get_used_cells())
 	overlays.set_layer_modulate(BoardOverlays.Layer.AIM, om.hover_overlay.modulate)
+	_aim_flash(om)
 
 	_attack(om)
 	_sight_trace(om)
@@ -225,6 +226,19 @@ func _fill(layer: BoardOverlays.Layer, used: Array[Vector2i]) -> void:
 		return
 	_last_cells[layer] = cells
 	overlays.set_cells(layer, cells, _heights())
+
+
+# The aim's travel-order flash (#1057 part 2): each lit tile is the footprint's LIVE colour whitened
+# by the 2D's level for it, so a watch aim and every aim palette flash from their own colour. There
+# is no clock here -- the 2D holds it, under Game, so a modal freezes both views together.
+func _aim_flash(om: OverlayManager) -> void:
+	var colors: Dictionary[Vector3i, Color] = {}
+	var base: Color = om.hover_overlay.modulate
+	var levels := om.aim_flash_levels()
+	for cell: Vector2i in levels:
+		if levels[cell] > 0.0:
+			colors[BoardSpace.of_cell(cell, _row_of(cell))] = AimFlash2D.tint(base, levels[cell])
+	overlays.set_cell_colors(BoardOverlays.Layer.AIM, colors)
 
 
 # ATTACK is TRIPLE-use in 2D: reach fill at (0,0), target-pick markers at (1,0), and the

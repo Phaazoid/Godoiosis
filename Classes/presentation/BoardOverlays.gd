@@ -414,6 +414,8 @@ var _cones: Dictionary[Layer, MeshInstance3D] = {}
 var _cone_batches: Dictionary[Layer, Array] = {}
 var _cone_colors: Dictionary[Layer, Color] = {}
 var _layer_colors: Dictionary[Layer, Color] = {}  # runtime fill colors (set_layer_modulate)
+# Per-CELL colours on a FILL layer, over the layer's own (set_cell_colors) -- the aim's flash (#1057).
+var _cell_colors: Dictionary[Layer, Dictionary] = {}
 var _bracket_mesh: ArrayMesh
 var _quad_mesh: PlaneMesh
 # The folded quads corner-cell markup lies on (#427 slice 4 follow-up), keyed by the cell's SHAPE --
@@ -497,6 +499,9 @@ func set_cells(layer: Layer, cells: Array[Vector3i], heights: BoardHeights = nul
 				(marker as MeshInstance3D).mesh = _surface_mesh(_corners_under(cells[i], heights))
 		else:
 			marker.visible = false
+	# A reused quad keeps whatever colour its LAST cell wore, so per-cell colours follow the cells.
+	if not _cell_colors.get(layer, {}).is_empty():
+		_paint(layer)
 
 
 # Replaces a variant layer wholesale: one entry per marker, {"pos": Vector3 (the
@@ -537,9 +542,48 @@ func set_layer_modulate(layer: Layer, color: Color) -> void:
 	if _layer_colors.get(layer, spec["color"]) == color:
 		return
 	_layer_colors[layer] = color
-	for node: Node3D in _pool_for(layer):
-		var material := (node as MeshInstance3D).material_override as StandardMaterial3D
+	_paint(layer)
+
+
+# Per-CELL colours on a FILL layer (#1057 part 2): each named cell wears its own colour and every
+# other cell the layer's. The aim's travel-order flash is the one caller -- OverlayMirror hands in
+# the 2D's levels as colours every frame -- and an EMPTY map puts the whole layer back to its own
+# colour. Each fill quad already carries its own material, so this is paint, not geometry.
+func set_cell_colors(layer: Layer, colors: Dictionary[Vector3i, Color]) -> void:
+	if LAYERS[layer]["kind"] != Kind.FILL:
+		push_error("set_cell_colors is for FILL layers")
+		return
+	if _cell_colors.get(layer, {}) == colors:
+		return
+	_cell_colors[layer] = colors.duplicate()
+	_paint(layer)
+
+
+# The one place a FILL/BRACKET pool is coloured: a cell's own colour if it has one, else the layer's.
+# set_cells, set_layer_modulate and set_cell_colors all end here, so neither a reused quad nor a
+# layer recolour can strand a stale per-cell tint.
+func _paint(layer: Layer) -> void:
+	var base: Color = layer_modulate(layer)
+	var cells: Array = _cells.get(layer, [])
+	var own: Dictionary = _cell_colors.get(layer, {})
+	var pool := _pool_for(layer)
+	for i in pool.size():
+		var material := (pool[i] as MeshInstance3D).material_override as StandardMaterial3D
+		var color: Color = base
+		if i < cells.size() and own.has(cells[i]):
+			color = own[cells[i]]
 		material.albedo_color = color
+
+
+# The colour a FILL quad is actually drawn in at `cell`, read off its material -- what the player
+# sees, rather than what was asked for. Null-safe: a cell the layer does not hold answers clear.
+func drawn_color(layer: Layer, cell: Vector3i) -> Color:
+	var cells: Array = _cells.get(layer, [])
+	var i := cells.find(cell)
+	var pool := _pool_for(layer)
+	if i < 0 or i >= pool.size():
+		return Color(0, 0, 0, 0)
+	return ((pool[i] as MeshInstance3D).material_override as StandardMaterial3D).albedo_color
 
 
 # Replaces a LINE layer's polyline wholesale -- one pooled MeshInstance3D whose ImmediateMesh is
