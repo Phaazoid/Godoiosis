@@ -1096,9 +1096,12 @@ a step the decal splits onto both tops where a patch would hang as a sheet.
   shadow never moves, and the ring comes from the drips the player already sees landing.
 - **The ring is BAKED into the patch's own texture, never a second decal.** Godot orders
   overlapping decals by distance to the camera, so a ring decal would sit over the patch from one
-  side and under it from the other. Each patch has its own `ImageTexture`, painted by the pure
-  `StatusWorld.paint_blot` and re-uploaded only when a ring steps; the colour moved out of
-  `modulate` and into the texture to make that possible. `StatusWorld.patch_texel` puts a landing
+  side and under it from the other. Each patch is painted by the pure `StatusWorld.paint_blot`, only
+  when a ring steps; the colour moved out of `modulate` and into the texture to make that possible.
+  **Every paint hands the decal a NEW `ImageTexture`, never `update()`**: a decal draws from the
+  renderer's decal atlas, which copies a texture when it is assigned and never re-reads it. Measured
+  on 4.7.1 by the render probe -- the ring was in the texture and 0 pixels drew until the decal was
+  given a fresh one -- and pinned by the wire case asserting the texture object changes. `StatusWorld.patch_texel` puts a landing
   point into the patch's texels through the decal's own transform (texture u along +X, v along
   +Z), and the render probe measures that reading through a rotated patch.
 - **A fourth fade level, `w`.** It spreads on its own time and dries on a longer one, so the patch
