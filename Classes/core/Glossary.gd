@@ -5,7 +5,7 @@ class_name Glossary
 # is the one-line hover tooltip, `long_text` the glossary-page body. One entry carries both, so
 # the tooltips and the Glossary screen can never drift apart. Read by GlossaryScreen (the page),
 # MainActionMenu (menu-row hover text via ACTION_DATA "term" keys), info_panel (stat rows) and
-# StateIcons/HoverPresenter (state and tile hovers).
+# StateIcons (state hovers) and TileReadout (the tile hover card and the Inspect dock's tile mode).
 #
 # Two content rules, both Law #4:
 #   - Numbers are INTERPOLATED from the constants that rule them (DOWN_WILL_COST, COVER_DEF, ...),
@@ -41,9 +41,11 @@ enum Term {
 	TERRAIN_KINDS, WATER_TILE, SHALLOW_WATER, BURNING, SCORCHED, FROZEN, COVER,
 	# Will & lifecycle
 	DOWNED, CRISIS, MAIM, PROSTHETIC,
+	# Missions (one per player-facing ZoneManager.Kind, #1105)
+	CAPTURE_ZONE, EXTRACTION_ZONE, DEPLOYMENT_ZONE, DEFEND_ZONE,
 }
 
-enum Category { SQUADS, STATS, ACTIONS, ELEMENTAL, TERRAIN, LIFECYCLE }
+enum Category { SQUADS, STATS, ACTIONS, ELEMENTAL, TERRAIN, LIFECYCLE, MISSIONS }
 
 # Player-facing category names, in page order.
 const CATEGORY_NAMES: Dictionary[Category, String] = {
@@ -53,6 +55,7 @@ const CATEGORY_NAMES: Dictionary[Category, String] = {
 	Category.ELEMENTAL: "Elemental",
 	Category.TERRAIN: "Terrain",
 	Category.LIFECYCLE: "Will & Lifecycle",
+	Category.MISSIONS: "Missions",
 }
 
 # Built lazily rather than declared const so entry text can interpolate the constants that rule
@@ -106,6 +109,16 @@ static func term_for_tile_state(state: Terrain.TileState) -> Term:
 	# silent wrong word. Terrain.RETIRED_STATES are the ones it skips, and they never reach a
 	# reader -- TerrainStateManager.load_state_dict drops them at the door.
 	return MAP[state]
+
+# ZoneManager.AUTHORING_KINDS have no row, and test_glossary_coverage skips exactly those.
+static func term_for_zone_kind(kind: ZoneManager.Kind) -> Term:
+	const MAP: Dictionary[ZoneManager.Kind, Term] = {
+		ZoneManager.Kind.CAPTURE: Term.CAPTURE_ZONE,
+		ZoneManager.Kind.EXTRACTION: Term.EXTRACTION_ZONE,
+		ZoneManager.Kind.DEPLOYMENT: Term.DEPLOYMENT_ZONE,
+		ZoneManager.Kind.DEFEND: Term.DEFEND_ZONE,
+	}
+	return MAP[kind]
 
 static func term_for_element_state(state: Elemental.State) -> Term:
 	const MAP: Dictionary[Elemental.State, Term] = {
@@ -528,5 +541,25 @@ static func _build_entries() -> Dictionary:
 		"short": "A built replacement for a lost limb, with its own stat value.",
 		"long": "A crafted limb installed in place of a lost one, carrying its own stat value, "
 			+ "usually weaker than what it replaces, occasionally not."}
+
+	# Missions (#1105). PLACEHOLDER text, the dev's to rewrite. The capture line reads the verb's
+	# name off its own entry, built above, so renaming the action renames this.
+	e[Term.CAPTURE_ZONE] = {"category": Category.MISSIONS, "title": "Capture zone",
+		"short": "An objective. Move a unit inside and use %s to claim the whole zone."
+			% e[Term.CAPTURE]["title"],
+		"long": "Taking it is a main action. One unit standing anywhere inside claims the whole "
+			+ "zone for good, even with enemies nearby. The objective list counts how many you hold."}
+	e[Term.EXTRACTION_ZONE] = {"category": Category.MISSIONS, "title": "Extraction zone",
+		"short": "An objective. It is met once every unit of yours still alive stands inside.",
+		"long": "Every one of your surviving units has to be inside an extraction zone. A downed "
+			+ "unit inside counts. If the map has more than one, any of them will do."}
+	e[Term.DEPLOYMENT_ZONE] = {"category": Category.MISSIONS, "title": "Deployment zone",
+		"short": "Where you may place your units before the battle begins.",
+		"long": "Before the first turn your units can be placed and moved anywhere inside it. It "
+			+ "stops being shown once the battle starts."}
+	e[Term.DEFEND_ZONE] = {"category": Category.MISSIONS, "title": "Defended point",
+		"short": "If an enemy stands anywhere in here, the mission is lost.",
+		"long": "The mission fails when a hostile unit ends up on any tile of a defended point. "
+			+ "Keep them out."}
 
 	return e

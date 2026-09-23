@@ -472,21 +472,12 @@ func _show_hover_panel(hovered: Unit, cell: Vector2i) -> void:
 	#   - hovering the inspected unit adds nothing -> suppress the hover card (tile card too)
 	#   - anything else -> the card keeps its own top/bottom logic, shifted right of the column
 	# The card is a stack since #135, and the tile half shows for EVERY real tile (dev, round 2):
-	# icon + name header, then the tile's states, rules and possible interactions.
-	var board: BoardContext = game._board()
-	var kind: Terrain.Kind = board.terrain_kind_at(cell)
-	# The tile's OWN data names and pictures the card (2026-08-12): authored terrain_name first,
-	# kind name as the fallback, the tile's sprite as the picture -- the same policy the brush
-	# palette rows read (GridUtils.authored_tile_display_name / tile_sprite), so hover and palette
-	# cannot disagree. A bare unnamed NONE-kind tile stays headerless on purpose, and
-	# TERRAIN_ICONS stays the queue rows' pathing glyph, not a display read.
-	var data: TileData = game.grid.get_cell_tile_data(cell)
-	var authored: String = GridUtils.authored_tile_display_name(data)
-	var header: String = authored if authored != "" \
-		else (Terrain.kind_display_name(kind) if kind != Terrain.Kind.NONE else "")
-	var source: TileSetAtlasSource = game.grid.tile_set.get_source(game.grid.get_cell_source_id(cell)) as TileSetAtlasSource
-	var icon: Texture2D = GridUtils.tile_sprite(source, game.grid.get_cell_atlas_coords(cell))
-	var tile_lines: Array[String] = _tile_readout_lines(cell)
+	# icon + name header, then the tile's ground lines. Name, picture and lines all come off
+	# TileReadout, the one builder the Inspect dock's tile mode reads too (#1105), so the two cannot
+	# disagree. TERRAIN_ICONS stays the queue rows' pathing glyph, not a display read.
+	var header: String = TileReadout.title_of(game, cell)
+	var icon: Texture2D = TileReadout.icon_of(game, cell)
+	var tile_lines: Array[String] = TileReadout.ground_lines(game, cell)
 	var world_pos: Vector2 = hovered.global_position if hovered != null \
 		else GridUtils.cell_world(game.grid, cell)
 	if game.unit_info_panel.is_showing():
@@ -497,60 +488,3 @@ func _show_hover_panel(hovered: Unit, cell: Vector2i) -> void:
 			int(game.unit_info_panel.panel_width()) + 8)
 	else:
 		game.hover_info_panel.show_hover(hovered, icon, header, tile_lines, world_pos)
-
-# The tile card's body (#135): each dynamic state (with its live clock), the ground rules worth
-# knowing (water's traversal gate, a move cost above the norm), then which elements can touch
-# this tile — filtered through the SAME predicate the resolver's deposit filter runs
-# (TerrainReaction.applies_to_tile, via Glossary.terrain_reactions_for). Meanings come from
-# Glossary short texts, numbers from the reads the rules make — the card can't disagree with
-# either. The kind itself is the card's header, composed in _show_hover_panel.
-func _tile_readout_lines(cell: Vector2i) -> Array[String]:
-	var lines: Array[String] = []
-	var board: BoardContext = game._board()
-	var held: Array[Terrain.TileState] = []
-	if board.terrain_states != null:
-		held = board.terrain_states.states_at(cell)
-	for state: Terrain.TileState in held:
-		var line: String = "%s — %s" % [Terrain.tile_state_display_name(state),
-			Glossary.short(Glossary.term_for_tile_state(state))]
-		var turns: int = board.terrain_states.turns_remaining(cell, state)
-		if turns > 0:
-			line += " %d left." % turns
-		lines.append(line)
-	var kind: Terrain.Kind = board.terrain_kind_at(cell)
-	if kind == Terrain.Kind.WATER:
-		# One Kind, two tiles (#116) — so the card asks the same question the rules ask: water you
-		# cannot stand on is the DEEP kind. Reading walkability rather than a second enum member is
-		# what makes a FROZEN cell read as the shallow line for free, since is_walkable knows state.
-		lines.append(Glossary.short(Glossary.Term.WATER_TILE if not board.is_walkable(cell)
-			else Glossary.Term.SHALLOW_WATER))
-	var data: TileData = game.grid.get_cell_tile_data(cell)
-	if data != null and data.has_custom_data("move_cost"):
-		var cost: int = data.get_custom_data("move_cost")
-		if cost > 1:
-			lines.append("Slow going — costs %d movement to enter." % cost)
-	# Elevation (#257). Only spoken when it is non-default, so a flat board's card reads exactly as
-	# it did before verticality existed — the same rule the move_cost line above follows.
-	var elevation: int = board.elevation_at(cell)
-	var corners: Vector4i = board.corners_at(cell)
-	var rise: Terrain.RampRise = Terrain.rise_of_corners(corners)
-	var climb: int = Terrain.climb_of_corners(corners)
-	if rise != Terrain.RampRise.NONE:
-		# BOTH ends, because a ramp's steepness is authored since #427 slice 2 — "rises east from 4"
-		# no longer says where it arrives, and which heights it joins is the whole rule.
-		#
-		# The sideways clause went with #427 slice 3: a step is refused when the shared edge does not
-		# meet, which still refuses this ramp's sides but no longer refuses a slope continuing
-		# alongside it. Saying "only along that slope" would now be a card describing a rule the
-		# board does not follow.
-		lines.append("Ramp — rises %s from height %d to height %d."
-			% [Terrain.ramp_rise_display_name(rise).to_lower(), elevation, elevation + climb])
-	elif climb > 0:
-		# A corner form: RampRise cannot name it, so the card says what it IS rather than reaching
-		# for a direction that does not exist (#427 slice 3).
-		lines.append("Corner slope — height %d rising to %d across part of the cell."
-			% [elevation, elevation + climb])
-	elif elevation != 0:
-		lines.append("Height %d — reached only by a ramp that climbs to it." % elevation)
-	lines.append_array(Glossary.terrain_reactions_for(kind, held))
-	return lines
