@@ -437,7 +437,8 @@ visible*. Its strongest single item is that **BLAZE and BURNING are still visual
 (#174's one-texture ruling; #324 recorded not fixing it as deliberate), i.e. two mechanically
 different states the board refuses to distinguish. **Its sibling is
 [#358](https://github.com/Phaazoid/Godoiosis/issues/358), the UNIT channel** — built for Wet and
-Chilled in its slice 1 (see *A unit WEARS its element state*) — and the two are named together
+Chilled, on the sprite in its slice 1 and around it in slice 2 (see *A unit WEARS its element
+state*) — and the two are named together
 because they can disagree: a CHILLED unit wearing a frost sheen while standing on a FROZEN tile drawn
 as a flat blue quad is two answers to one idea. That is why #358's grill REFUSED a frost blot under
 a Chilled unit: it would have been a second answer beside FROZEN ground. What #358 settled for
@@ -711,7 +712,7 @@ Four rulings, and each is reusable past fire:
 | **cell** | the cell alone (`BoardMirror._cell_phase`) | a CONTINUOUS state effect — fire. One tile always burns the same way, so a reconcile that re-stands it does not visibly re-scatter. |
 | **occurrence** | the cell **and** `BoardSpace.staging_version` (`StagingDust.burst_key`) | an EVENT burst — the slam dust. Different every Execute, different per tile within one, and reproducible, so a replay matches and a case can assert it. |
 
-`staging_version` rather than a counter of the effect's own: it already bumps once per landing step and once per `begin_flight`, so it separates both axes and there is no second thing to keep in step or to reset. **Reach for a counter that already exists before minting one.** A third policy — free, never repeating — is what ambient motes and rain will plausibly want; it is not written down until something asks for it.
+`staging_version` rather than a counter of the effect's own: it already bumps once per landing step and once per `begin_flight`, so it separates both axes and there is no second thing to keep in step or to reset. **Reach for a counter that already exists before minting one.** A third policy — free, never repeating — is what ambient motes and rain will plausibly want; it is not written down until something asks for it. (A different third arrived with #358: **per unit**, a phase from the instance id, for a continuous effect worn by a unit rather than a cell.)
 
 **COPLANARITY IS PAID BY GEOMETRY, as everywhere else on this page.** A grain spawned exactly at `surface_point` is half inside the ground it was thrown off, so a burst lifts by half a grain — a clearance, not a proportion, the same distinction `flame_base_lift_for` draws. Dust draws `TRANSPARENCY_ALPHA` with no depth write, so unlike fire (#236) it never needs that lift *clamped*.
 
@@ -723,7 +724,7 @@ Four rulings, and each is reusable past fire:
 
 **Where a puff GOES is `BoardMirror.surface_point`, which already carries the staged offset**, so the effect is direction-blind and neither arm of the transition needs a rule of its own. **Measured and worth knowing before scoping the neighbours: the EXIT's landings are outside the frustum.** #602 round 7 holds the camera at the diorama through every exit landing (the tiles are watched *falling*, and the flash covers the drop home), so a puff forty units below the aim cannot be seen. #656 inherited *"tiles thud back into their sockets"* from #521, which predates that restaging — the ticket's stated target is a **stale premise**, and the ENTRY is where a slam reads. Left firing on both, because the alternative is a fork whose only content is a fact about today's camera.
 
-**Hitstop is not this effect's problem and IS the neighbours'.** `Pacing.hitstop` has one caller, `battle3d._on_impact` during the action pass; the tear-out is a different phase, so the two never overlap. [#188](https://github.com/Phaazoid/Godoiosis/issues/188) and [#523](https://github.com/Phaazoid/Godoiosis/issues/523) put particles *inside* the pass and owe the measurement — whether `GPUParticles3D` honours `Engine.time_scale`, with `speed_scale` as the wire if it does not.
+**Hitstop is not this effect's problem and IS the neighbours'.** `Pacing.hitstop` has one caller, `battle3d._on_impact` during the action pass; the tear-out is a different phase, so the two never overlap. [#188](https://github.com/Phaazoid/Godoiosis/issues/188) and [#523](https://github.com/Phaazoid/Godoiosis/issues/523) put particles *inside* the pass and owe the measurement — whether `GPUParticles3D` honours `Engine.time_scale`, with `speed_scale` as the wire if it does not. **Measured at #358 slice 2: it does.** The engine hands the renderer the scaled step, and `tools/status_world_probe/` saw 0 pixels move across ten frames at `time_scale = 0` (see *A unit WEARS its element state*), so a particle already in the air freezes with the world and no wire is needed.
 
 **Not gated by [#217](https://github.com/Phaazoid/Godoiosis/issues/217), deliberately.** That switch governs strobe and flicker; dust does neither, and the white-out beside it already reads the setting. Gating a non-flashing effect would be gating by category rather than by behaviour. If a puff ever gains a bright pop or a lit flash, it acquires the gate.
 
@@ -961,7 +962,7 @@ wielder's fitted mods on top. One answer, two readers, one fewer branch than bef
 its default, and no shipped attack's round trip emits it — checked with a throwaway tool SCENE, run
 and deleted, which is the dirty-tree rule's own instruction one ticket on.
 
-### A unit WEARS its element state ([#358](https://github.com/Phaazoid/Godoiosis/issues/358), slice 1 BUILT 2026-09-22)
+### A unit WEARS its element state ([#358](https://github.com/Phaazoid/Godoiosis/issues/358), slice 1 BUILT 2026-09-22; slice 2's particles 2026-09-23)
 
 With health bars off by default (#350), a unit's element state was invisible on the board unless
 hovered. The sprite itself now wears it. The look was grilled against rendered mockups on the real
@@ -1020,11 +1021,51 @@ DISABLED (#317) and never to an override.
   nothing. `test_unit_status.gd` checks every pushed name against the shader's own uniform list in
   both directions.
 
-**What slice 1 does not do.** Slice 2 is the world half: 3D drips landing on the real ground, the
-damp blot underfoot, cold mist and frost breath. Its one open mechanism fork is the blot, because a
-`Decal` would darken the squad ring and the move grid: they share `WORLD_RENDER_LAYER` with the
-ground. Chilled blocks Wet as a RULE in #1092, so this slice never draws both. Reaction beats (steam,
-shatter, freeze) are their own follow-up.
+**Slice 2 is the world half: what a worn state throws OFF the body** (its particles BUILT
+2026-09-23; the damp blot is its own PR, next). A Wet unit drips from its overhangs and each drip
+splashes where it lands. A Chilled unit sheds cold mist that sinks off its edges and pools at its
+feet, and breathes frost from one anchor every sprite shares, toward the way it faces.
+
+- **Four more emitters, on #656's rules unchanged.** `StatusParticles` is one class with a KIND
+  (drip, splash, mist, breath) and one resident emitter per kind: `emitting` false, `amount` sized
+  from the knobs for 24 wearers at once, swept into `battle3d._cover_effects`. They sit on
+  `WORLD_RENDER_LAYER`, so the blot's decal will never paint them, and they are unshaded -- the
+  grill's "the bright marks glow".
+- **A CONTINUOUS per-UNIT effect is scheduled on the CPU.** #656 answered continuous per-CELL
+  effects with a board mask; a per-unit effect is a handful of units, so `StatusWorld` (a child of
+  `UnitMirror`, fed by it once a frame) keeps an accumulator per wearer -- `owed += rate x level x
+  delta`, one emission per whole unit -- on the mirror's scaled delta. A fading state thins out
+  rather than cutting off, and a hitstop stops it with the world. Which overhang, which edge and
+  which jitter come off a hash of the unit and a counter, the per-unit seed policy above: the
+  scatter is derived, never rolled.
+- **Where on the art is StatusArt's answer plus one piece of engine arithmetic.** The scan gained
+  the body's EDGES (where mist leaves) and its per-row ink (where the breath is anchored).
+  `UnitSprite3D.texel_to_world` maps a sheet texel to the world with the engine's own sprite math
+  (`Sprite3D::_draw`), and a case pins it against `art_top_height`, the same rule read from the other
+  end. Drips fall from exactly the overhangs icicles hang from.
+- **A drip lands EXACTLY, with no collision node.** It falls at the constant speed that ends its
+  fixed lifetime on the surface under it (`BoardSpace.surface_height_at` plus the cell's staged
+  offset, so a tear-out is honoured), and its splash is queued for that instant at that point. The
+  trade, said out loud: a drip does not accelerate. At a third of a second it is hard to see, and it
+  buys a landing a headless case can state.
+- **The breath's ACROSS is measured along the mouth's own ROW**, not the ink box. A weapon held out
+  widens the box, and a share of it put the breath halfway down the Knight Templar's sword (the render
+  probe showed it). It is still one anchor for every unit, as the grill ruled.
+- **Effects follow the sprite that STANDS for the unit**: the real one, or the LAST ghost tagged
+  with it, since a shove's landing ghost follows its move ghost and is where the plan leaves the unit.
+- **Measured, closing #656's owed question: GPU particles FREEZE at `Engine.time_scale = 0`.** The
+  engine hands the renderer the scaled step (`main.cpp`), and `tools/status_world_probe/` confirms it
+  on 4.7.1: 0 pixels moved across ten frames with time stopped, 7556 once it ran. A particle already
+  in the air therefore holds through a hitstop with no `speed_scale` wire.
+- **Knobs:** twenty-four more `StatusLook` rows, under *Wet around a unit* and *Chilled around a
+  unit*, read every frame. The two an emitter must not rewrite casually (`amount` and `lifetime`, each
+  of which restarts the system) are written only when a knob has moved them.
+
+**Still to come in slice 2: the damp blot**, a `Decal` (dev ruling 2026-09-23, over a lit patch mesh,
+after the two were drawn side by side). A decal paints everything on its `cull_mask`, and a `GridMap`
+cannot be re-layered, so the ground takes layer 1 to itself and everything else the board draws moves
+to a new bit. Chilled blocks Wet as a RULE in #1092, so this slice never draws both. Reaction beats
+(steam, shatter, freeze) are their own follow-up.
 
 ### Conventions the art commission must carry (pending look-dev experiments)
 
