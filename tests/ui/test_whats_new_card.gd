@@ -198,6 +198,60 @@ func test_a_long_list_scrolls_rather_than_growing_past_the_cap() -> void:
 
 
 # ==============================================================================
+#  How it reads (#1102: "the items all kind of run together")
+# ==============================================================================
+
+const WRAPPING_LEDGER := """# Wrapping
+
+## v0.5.0
+
+- A line long enough that it cannot fit the card on one row, so it wraps onto a second and likely a third.
+- A second item.
+"""
+
+
+# Every item row, in draw order: the HBox holding a bullet and its line.
+func _item_rows(card: Node) -> Array[HBoxContainer]:
+	var out: Array[HBoxContainer] = []
+	for node: Node in _descendants(card):
+		if node is HBoxContainer and node.get_child_count() == 2 and node.get_child(0) is Label:
+			if (node.get_child(0) as Label).text == WhatsNewCard.BULLET:
+				out.append(node as HBoxContainer)
+	return out
+
+
+func _wrapped_card() -> Array[HBoxContainer]:
+	_arm(WRAPPING_LEDGER)
+	ReleaseNotes.mark_seen("0.4.0")
+	var card := WhatsNewCard._show_if_needed(_host(), "0.5.0")
+	await _frames(3)
+	var rows := _item_rows(card)
+	assert_int(rows.size()).is_equal(2)
+	# Without a wrap, a centred bullet and a top one are the same place, and both cases pass vacuously.
+	var line := rows[0].get_child(1) as Label
+	assert_int(line.get_line_count()) \
+		.override_failure_message("the first item never wrapped, so this case cannot tell top from centre") \
+		.is_greater(1)
+	return rows
+
+
+# The bullet marks where an item STARTS, so it sits beside the first line of a wrapped one.
+func test_a_bullet_sits_on_its_items_first_line() -> void:
+	var rows: Array[HBoxContainer] = await _wrapped_card()
+	var dot := rows[0].get_child(0) as Label
+	var line := rows[0].get_child(1) as Label
+	assert_float(dot.position.y).is_equal_approx(line.position.y, 0.5)
+
+
+# The report as a rule: the break between two items is wider than a line break inside one.
+func test_items_stand_further_apart_than_the_lines_inside_one() -> void:
+	var rows: Array[HBoxContainer] = await _wrapped_card()
+	var line := rows[0].get_child(1) as Label
+	var gap := rows[1].position.y - (rows[0].position.y + rows[0].size.y)
+	assert_float(gap).is_greater(float(line.get_theme_constant("line_spacing")))
+
+
+# ==============================================================================
 #  The wire -- booting the real scene
 # ==============================================================================
 

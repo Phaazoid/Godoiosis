@@ -32,6 +32,8 @@ const PAD_H := 16
 const PAD_V := 14
 const SEPARATION := 10
 const ENTRY_SEPARATION := 12
+# Between two items of one release. Must beat a Label's own line_spacing, or wrapped items run together.
+const ITEM_SEPARATION := 10
 const TITLE_SIZE := 18
 const VERSION_SIZE := 13
 const LINE_SIZE := 14
@@ -135,12 +137,17 @@ func _add_entry(entry: Dictionary) -> void:
 	version.add_theme_font_size_override("font_size", VERSION_SIZE)
 	version.add_theme_color_override("font_color", QueueStyle.ink(QueueStyle.Role.FRAME_TEXT))
 	block.add_child(version)
+	var items := VBoxContainer.new()
+	items.add_theme_constant_override("separation", ITEM_SEPARATION)
+	block.add_child(items)
 	var lines: Array = entry["lines"]
 	for text: String in lines:
 		var row := HBoxContainer.new()
-		block.add_child(row)
+		items.add_child(row)
 		var dot := Label.new()
 		dot.text = BULLET
+		# A Label shrinks to CENTRE by default, which puts the bullet beside a wrapped item's middle line.
+		dot.size_flags_vertical = Control.SIZE_SHRINK_BEGIN
 		dot.add_theme_font_size_override("font_size", LINE_SIZE)
 		dot.add_theme_color_override("font_color", QueueStyle.ink(QueueStyle.Role.FRAME_TEXT))
 		row.add_child(dot)
