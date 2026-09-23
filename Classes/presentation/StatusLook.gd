@@ -10,6 +10,7 @@ class_name StatusLook
 #
 # `push` is the one door from these values to a material. UnitMirror calls it every frame for every
 # sprite wearing a state, which is why no knob here needs a sweep: there is no stale copy to reach.
+# The world half's values (slice 2) are read the same way, by StatusWorld and StatusParticles.
 
 static var status_fade_time := 0.5        # seconds a state takes to fade in or out
 static var icicle_grow_time := 1.0        # seconds an icicle takes to grow to full length
@@ -28,6 +29,34 @@ static var chill_sheen_glow := 0.6
 static var chill_rime_glow := 0.5
 static var chill_glint_rate := 0.1        # the share of body texels that ever twinkle
 static var chill_glint_glow := 1.0
+
+# The world half (slice 2): what a worn state throws off the body. Read by StatusWorld and
+# StatusParticles every frame, so these need no sweep either.
+static var wet_drip_rate := 1.2           # drips a second from a fully Wet unit
+static var wet_drip_fall_time := 0.35     # seconds from the overhang to the ground
+static var wet_drip_length := 2.0         # texels
+static var wet_drip_alpha := 0.9
+static var wet_drip_whiten := 0.45        # how far a drip is lifted from the Water hue toward white
+static var wet_splash_count := 4
+static var wet_splash_speed := 0.5
+static var wet_splash_rise := 1.2         # how much of the splash's speed goes up rather than out
+static var wet_splash_gravity := 6.0
+static var wet_splash_time := 0.25
+
+static var chill_mist_rate := 4.0         # puffs a second from a fully Chilled unit
+static var chill_mist_life := 1.6         # seconds a puff takes to sink from the body to the ground
+static var chill_mist_drift := 0.18       # world units a puff wanders out from the body as it sinks
+static var chill_mist_size := 3.0         # texels
+static var chill_mist_alpha := 0.35
+static var chill_whiten := 0.6            # how far mist and breath are lifted from the Ice hue
+static var chill_breath_period := 2.6
+static var chill_breath_count := 4
+static var chill_breath_speed := 0.35
+static var chill_breath_life := 1.0
+static var chill_breath_size := 2.0       # texels
+static var chill_breath_alpha := 0.6
+static var chill_breath_x := 0.7          # the anchor, as a share of the ink box across the UNFLIPPED art
+static var chill_breath_y := 0.2          # ...and down from the top of the ink
 
 
 static func push(material: ShaderMaterial, wet: float, chill: float, icicles: float, clock: float,

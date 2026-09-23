@@ -13,7 +13,8 @@ class_name UnitSprite3D
 # ART_FACES_SCREEN_RIGHT is the one const to invert if the art reads the other way.
 #
 # Since #358 it also WEARS a unit's element states: show_status is the one door, and the material it
-# swaps in is StatusArt + unit_status.gdshaderinc, present only while a state shows.
+# swaps in is StatusArt + unit_status.gdshaderinc, present only while a state shows. texel_to_world
+# is where on the art the world half's effects leave the body from (StatusWorld).
 
 signal walk_finished
 
@@ -266,6 +267,24 @@ func show_status(wet: float, chill: float, icicles: float, clock: float, seed: f
 # The material a state is being drawn with, or null while this sprite wears none.
 func status_material() -> ShaderMaterial:
 	return material_override as ShaderMaterial
+
+
+# Where a point of this sprite's art is in the world (#358 slice 2): what a drip, a puff of mist
+# and a breath leave the body from. `texel` is in the SAMPLED sheet's pixels -- StatusArt's space,
+# y down, a texel's centre at +0.5 -- and `right` is the billboard's horizontal axis, which the
+# caller asks the camera for once a frame. The engine's own sprite math (Sprite3D::_draw,
+# SpriteBase3D::draw_texture_rect): the quad is centred on `offset` with y UP, and flip_h mirrors
+# the art inside the quad without moving it.
+func texel_to_world(texel: Vector2, right: Vector3) -> Vector3:
+	if texture == null:
+		return global_position
+	var frame := StatusArt.frame_of(texture)
+	var local := texel - frame.position
+	if flip_h:
+		local.x = frame.size.x - local.x
+	var across := (offset.x - frame.size.x * 0.5 + local.x) * pixel_size * scale.x
+	var up := (offset.y + frame.size.y * 0.5 - local.y) * pixel_size * scale.y
+	return global_position + right * across + Vector3.UP * up
 
 
 # --- frame animation (#629) --------------------------------------------------------------------

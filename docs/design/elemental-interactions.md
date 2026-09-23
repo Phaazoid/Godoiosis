@@ -110,7 +110,7 @@ Deterministic only. `S` setup · `P` payload/control · `i` instant · `e` EoT �
 | ★ OILED | S,e | FIRE → big bonus + BURNING; ⚗ knockback travels +1 |
 | ★ BURNING | P,e🔗 | loses fixed HP each activation; spreads to flammable; doused by WATER/ICE |
 | ★ CHILLED | P,i | **[BUILT 2026-08-12]** shipped as **−1 DEX for the victim's next activation** (a paired `StatEffect` is the clock; ice on a WET target doubles it — see the ICE table). The −move-and-2nd-cold-hit→FROZEN escalation stays on the bench: unit-side FROZEN isn't built |
-| ★ FROZEN | P,i | can't move **or counter** next activation; +EARTH/SOUND (shatter); FIRE → WET. *Gate behind CHILLED→FROZEN* |
+| ★ FROZEN | P,i | can't move **or counter** next activation; +EARTH/SOUND (shatter); FIRE → WET. *Gate behind CHILLED→FROZEN*. **Its look is pre-ruled (dev, 2026-09-23): a block of ice AROUND the unit** — Chilled already wears the frost sheen (#358), so encasement is what reads as the next step |
 | ★ SHOCKED | S/P,i | +next SHOCK; relays chains while adjacent |
 | ★ AIRBORNE | P,i | launched — can't counter, +EARTH (slam); AIR/EARTH **reposition** it. *Also from the kinetic mace (weapon-applied)* |
 | BRITTLE | P,i | +EARTH/SOUND/impact; can shatter (esp. vs FROZEN) |
