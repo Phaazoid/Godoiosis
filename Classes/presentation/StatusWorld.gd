@@ -203,7 +203,7 @@ func _breathe(id: int, wearer: Wearer, map: StatusArt.Map, frame: Rect2, clock: 
 	while wearer.next_breath <= clock:
 		wearer.next_breath += period
 	wearer.breaths += 1
-	var mouth := wearer.sprite.texel_to_world(breath_anchor(map.ink, frame), right) \
+	var mouth := wearer.sprite.texel_to_world(breath_anchor(map, frame), right) \
 			+ toward * wearer.sprite.pixel_size
 	var ahead := right * (1.0 if faces_right(wearer.sprite.flip_h) else -1.0)
 	var speed := StatusLook.chill_breath_speed
@@ -235,15 +235,22 @@ static func ground_under(cell: Vector2i, at: Vector3, heights: BoardHeights) -> 
 	return BoardSpace.surface_height_at(cell, at.x - lifted.x, at.z - lifted.z, heights) + lifted.y
 
 
-# The mouth: the one constant anchor every sprite shares for now (dev, #358 grill), as shares of the
-# ink box in the UNFLIPPED art. An atlas frame falls back to its own box, since the scan's ink is
-# the whole sheet's.
-static func breath_anchor(ink: Rect2i, frame: Rect2) -> Vector2:
-	var box := Rect2(ink)
-	if not frame.encloses(box):
-		box = frame
-	return box.position + Vector2(StatusLook.chill_breath_x * box.size.x,
-			StatusLook.chill_breath_y * box.size.y)
+# The mouth: the one constant anchor every sprite shares for now (dev, #358 grill), in the UNFLIPPED
+# art. Down is a share of the ink's height; ACROSS is a share of the ink in THAT ROW, not of the whole
+# box -- a sword held out widens the box, and a share of it put the breath halfway down the blade
+# (measured on the probe). An atlas frame falls back to its own box, since the scan is the whole
+# sheet's.
+static func breath_anchor(map: StatusArt.Map, frame: Rect2) -> Vector2:
+	var box := Rect2(map.ink)
+	var y := box.position.y + StatusLook.chill_breath_y * box.size.y
+	var row := floori(y) - map.ink.position.y
+	if not frame.encloses(box) or row < 0 or row >= map.rows.size() or map.rows[row].x > map.rows[row].y:
+		if not frame.encloses(box):
+			box = frame
+		return box.position + Vector2(StatusLook.chill_breath_x * box.size.x,
+				StatusLook.chill_breath_y * box.size.y)
+	var span := map.rows[row]
+	return Vector2(span.x + StatusLook.chill_breath_x * float(span.y + 1 - span.x), y)
 
 
 # Which way the unit faces on screen. flip_h mirrors the art, and the art's own way is a fact about

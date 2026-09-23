@@ -182,6 +182,9 @@ func test_the_edges_are_the_body_texels_with_open_air_beside_or_below() -> void:
 	assert_int(inside).override_failure_message(
 			"the figure has no inside texel, so the scan never had to leave one out").is_greater(0)
 	assert_that(map.ink).is_equal(BoardMirror.opaque_bounds(art, Rect2i(Vector2i.ZERO, art.get_size())))
+	assert_int(map.rows.size()).is_equal(map.ink.size.y)
+	assert_that(map.rows[0]).override_failure_message("the head's row").is_equal(Vector2i(4, 7))
+	assert_that(map.rows[2]).override_failure_message("the arm's row").is_equal(Vector2i(1, 8))
 
 
 # --- The rules the emitters are handed -----------------------------------------------------
@@ -202,13 +205,21 @@ func test_a_breath_leaves_toward_the_way_the_unit_faces() -> void:
 	assert_bool(StatusWorld.faces_right(true)).is_equal(not UnitSprite3D.ART_FACES_SCREEN_RIGHT)
 
 
-func test_the_breath_anchor_is_a_share_of_the_ink() -> void:
-	StatusLook.chill_breath_x = 0.75
-	StatusLook.chill_breath_y = 0.25
-	var ink := Rect2i(10, 20, 20, 40)
-	assert_that(StatusWorld.breath_anchor(ink, Rect2(0, 0, 64, 64))).is_equal(Vector2(25.0, 30.0))
+# Across is a share of the art IN THAT ROW, never of the whole box: the figure's arm held out widens
+# the box, and a share of the box would put the mouth out along the arm.
+func test_the_breath_anchor_is_a_share_of_its_own_row() -> void:
+	var map := StatusArt.build(_figure())
+	StatusLook.chill_breath_x = 0.5
+	StatusLook.chill_breath_y = 0.0
+	# The head's row: columns 4..7.
+	assert_that(StatusWorld.breath_anchor(map, Rect2(0, 0, 12, 12))).is_equal(Vector2(6.0, 1.0))
+	# The arm's row, two rows down: columns 1..8, so the same share lands elsewhere.
+	StatusLook.chill_breath_y = 2.5 / 11.0   # mid-row, clear of a float landing on its edge
+	var arm := StatusWorld.breath_anchor(map, Rect2(0, 0, 12, 12))
+	assert_float(arm.x).is_equal_approx(5.0, 0.0001)
 	# A frame showing only part of the sheet falls back to its own box.
-	assert_that(StatusWorld.breath_anchor(ink, Rect2(40, 0, 20, 20))).is_equal(Vector2(55.0, 5.0))
+	StatusLook.chill_breath_y = 0.25
+	assert_that(StatusWorld.breath_anchor(map, Rect2(4, 0, 8, 8))).is_equal(Vector2(8.0, 2.0))
 
 
 # --- The wire: a state on the model reaches the emitters ----------------------------------

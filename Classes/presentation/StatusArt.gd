@@ -13,8 +13,8 @@ class_name StatusArt
 # An OVERHANG is an opaque texel with transparency under it. The ones icicles hang from are also
 # where Wet's drips fall from (slice 2) -- `overhangs` is that one answer, so Chilled's icicles and
 # Wet's drops can never disagree about where the body drips. `edges` is where cold mist leaves the
-# body and `ink` where a frost breath is placed; every coordinate here is in the SAMPLED sheet's
-# pixels, and `frame_of` says which part of that sheet a texture shows.
+# body, and `ink` with its per-row `rows` is where a frost breath is placed; every coordinate here is
+# in the SAMPLED sheet's pixels, and `frame_of` says which part of that sheet a texture shows.
 #
 # Icicle LENGTH is deliberately not baked in: the map carries every free row under a chosen overhang
 # and the shader clips against the knobs, so no knob can leave a stale map in this cache.
@@ -37,6 +37,8 @@ class Map extends RefCounted:
 	var edges: Array[Vector2i] = []
 	# The opaque bounds of the whole sheet.
 	var ink := Rect2i()
+	# Per ink row from the top: the leftmost and rightmost opaque column in it.
+	var rows: Array[Vector2i] = []
 
 
 static var _maps_by_texture: Dictionary[String, Map] = {}
@@ -95,9 +97,11 @@ static func build(image: Image) -> Map:
 	var tall := float(maxi(1, bottom - top))
 	var wide := float(maxi(1, right - left))
 	for y in range(top, bottom + 1):
+		var span := Vector2i(right, left)
 		for x in range(left, right + 1):
 			if not _opaque(image, x, y):
 				continue
+			span = Vector2i(mini(span.x, x), maxi(span.y, x))
 			var down := float(y - top) / tall
 			var rime := 0.0
 			if not _opaque(image, x, y - 1):
@@ -107,6 +111,7 @@ static func build(image: Image) -> Map:
 			out.set_pixel(x, y, Color(rime, 0.0, down, float(x - left) / wide))
 			if not _opaque(image, x - 1, y) or not _opaque(image, x + 1, y) or not _opaque(image, x, y + 1):
 				map.edges.append(Vector2i(x, y))
+		map.rows.append(span)   # an empty row reads backwards (x past y), and says so
 	map.ink = ink
 	for hang: Vector2i in _icicle_overhangs(image, top, bottom, left, right):
 		map.overhangs.append(hang)

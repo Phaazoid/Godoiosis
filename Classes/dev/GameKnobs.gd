@@ -898,7 +898,7 @@ const CLASS_KNOBS: Array[Dictionary] = [
 		"tip": "How solid a breath puff is when it leaves the mouth."},
 	{"group": "Chilled around a unit", "label": "Mouth across", "static": "chill_breath_x", "script": STATUS_LOOK_SCRIPT,
 		"min": 0.0, "max": 1.0, "step": 0.01,
-		"tip": "Where the breath comes from, across the art's opaque box: 0 its left edge, 1 its right, measured on the art as drawn, before it is flipped to face. One place for every unit for now."},
+		"tip": "Where the breath comes from, across the art at the mouth's height: 0 the leftmost painted texel in that row, 1 the rightmost, on the art as drawn, before it is flipped to face. Measured along the row so a weapon held out does not drag the mouth down the blade. One place for every unit for now."},
 	{"group": "Chilled around a unit", "label": "Mouth down", "static": "chill_breath_y", "script": STATUS_LOOK_SCRIPT,
 		"min": 0.0, "max": 1.0, "step": 0.01,
 		"tip": "Where the breath comes from, down the art's opaque box: 0 the top of the head, 1 the feet."},
