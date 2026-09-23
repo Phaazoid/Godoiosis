@@ -67,7 +67,7 @@ func authored_elements() -> Array[Elemental.Element]:
 # be fired at all.
 static func property_sections() -> Array[Dictionary]:
 	var sections := AttackData.property_sections()
-	AttackData.in_section(sections, "Payload", PackedStringArray(["elemental_damage_type", "scaling_blend"]))
+	AttackData.in_section(sections, "On hit", PackedStringArray(["elemental_damage_type", "scaling_blend"]))
 	AttackData.in_section(sections, "How it is used",
 		PackedStringArray(["requires_readiness", "consumes_readiness", "builds_readiness", "empowered_form"]))
 	return sections

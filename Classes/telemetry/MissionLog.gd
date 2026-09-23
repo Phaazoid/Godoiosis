@@ -636,6 +636,11 @@ func _hit(kind: String, atk: AttackAction) -> Dictionary:
 		"attack": _attack_name(atk.fired_attack),
 		"secondary": atk.is_secondary_hit,
 	}
+	# A PAYLOAD hit says how many drops deep it is (#1058), and nothing else does: it shares its
+	# parent's actor and its parent's list, so without this a query could not tell it from the hit
+	# that dropped it. Absent means 0, which is every hit a unit fired.
+	if atk.payload_depth > 0:
+		row["payload_depth"] = atk.payload_depth
 	var r: ResolvedOutcome = atk.resolved
 	if r == null:
 		return row

@@ -173,13 +173,13 @@ func sigil_text() -> String:
 		parts.append("%s %d" % [Elemental.display_name(e), sigils.count(e)])
 	return ", ".join(parts)
 
-# The PAYLOAD half alone: what this carving does, with neither its recipe nor its wildcard count
+# The HIT half alone: what this carving does, with neither its recipe nor its wildcard count
 # (#1022). Split out because the rune card's rows draw both of those as MARKS -- the recipe as cost
 # bars, the wildcards as the row's own tint -- and printing them again underneath would be the same
 # fact twice on one row. Extracted rather than re-spelled, so "Damage 11, Blunt (unit)" exists once
 # and the hover readout below and the row cannot word it two ways.
 func effect_text(wielder: Unit) -> String:
-	return "%s %s" % [payload_text(base_damage(wielder), delivered_kind()), targets_text()]
+	return "%s %s" % [hit_text(base_damage(wielder), delivered_kind()), targets_text()]
 
 # What this carving DOES for this wielder, for the menu's hover readout (#166) — the carving's
 # answer to the role ArmorData.mechanical_text plays for a worn piece. Itemized per wielder because

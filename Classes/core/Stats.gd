@@ -73,7 +73,7 @@ const BLEND_TOTAL := 100
 const BLEND_STEP := 5
 
 # Human-readable scaling blend ("STR 60%, DEX 40%") for a weights dict (#485). Sibling of
-# modifier_text and separate for the same reason payload_text and targets_text are: a DELTA and a
+# modifier_text and separate for the same reason hit_text and targets_text are: a DELTA and a
 # SHARE are different questions, and only one of them wants a sign.
 #
 # NORMALISES, and that is the whole point rather than a nicety. The weights are read as a weighted

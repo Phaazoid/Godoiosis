@@ -287,11 +287,16 @@ static func get_all_attack_cells_from(unit: Unit, origin_cell: Vector2i, attack:
 # The board is REQUIRED, not optional -- the movement_cost precedent an optional board would break,
 # since a footprint answered without one is a different answer to the same question. A null board
 # reads flat, which is what leaves every heights-less fixture and the flat 2D view unchanged.
-static func get_affected_cells_from(_unit: Unit, origin_cell: Vector2i, target_cell: Vector2i, attack: AttackData, board: BoardContext) -> Array[Vector2i]:
+#
+# A PAYLOAD (#1058) is fired from the cell it dropped on with a FACING of its own, the way the attack
+# that dropped it was going, and `facing` carries it: non-zero, it turns the shape whichever anchor
+# it has, so a placed payload turns too (ruling 38). ZERO means no facing was given and keeps every
+# rule below exactly as it was -- placement_dir is the one place that tells the two apart.
+static func get_affected_cells_from(_unit: Unit, origin_cell: Vector2i, target_cell: Vector2i, attack: AttackData, board: BoardContext, facing := Vector2i.ZERO) -> Array[Vector2i]:
 	if attack == null:
 		return [target_cell]
 	if attack.is_directional():
-		var dir := GridUtils.cardinal_direction_i_between(origin_cell, target_cell)
+		var dir := placement_dir(attack, origin_cell, target_cell, facing)
 		if dir == Vector2i.ZERO:
 			return []
 		var swung := _place(attack, origin_cell, dir)
@@ -300,7 +305,7 @@ static func get_affected_cells_from(_unit: Unit, origin_cell: Vector2i, target_c
 		if not attack.swing:
 			return _height_only(swung, origin_cell, attack, board)
 		if attack.is_single_target_swing():
-			return _walked(swung, get_paths_from(_unit, origin_cell, target_cell, attack, board))
+			return _walked(swung, get_paths_from(_unit, origin_cell, target_cell, attack, board, facing))
 		return _truncate(swung, origin_cell, dir, attack, board)
 	# AN ANCHORED SHAPE NEVER TURNS (#818): it lands exactly as drawn, grid-up reading as board
 	# north whatever direction the aim came from. Turning it to the attacker-to-target cardinal
@@ -313,14 +318,59 @@ static func get_affected_cells_from(_unit: Unit, origin_cell: Vector2i, target_c
 	# The attacker's direction is not computed on this path AT ALL, and that is the point: since
 	# #805 the terrain narrows a placed footprint too, and a filter keyed off the attacker-to-target
 	# cardinal would put that same spin back into the blast after #818 took it out of the placement.
-	var placed := _place(attack, target_cell, AttackShape.FORWARD)
+	#
+	# The one exception is a PAYLOAD's given facing (#1058): that is the direction the attack that
+	# dropped it was going, not where anyone stands, so turning to it spins nothing with the cursor.
+	var placed := _place(attack, target_cell, placement_dir(attack, origin_cell, target_cell, facing))
 	if board == null:
 		return placed
 	if not attack.swing:
 		return _height_only(placed, target_cell, attack, board)
 	if attack.is_single_target_swing():
-		return _walked(placed, get_paths_from(_unit, origin_cell, target_cell, attack, board))
+		return _walked(placed, get_paths_from(_unit, origin_cell, target_cell, attack, board, facing))
 	return _spread(placed, target_cell, attack, board)
+
+
+# WHICH WAY THE SHAPE FACES for one aim -- the direction _place turns it to, and the one answer to
+# it. A self-anchored shape faces the aim's cardinal (ZERO for an aim at the attacker's own cell,
+# which covers nothing); a placed one lands as drawn (#818). A given `facing` beats both: that is a
+# payload fired with the direction of the attack that dropped it (#1058). ZERO is the sentinel for
+# "none given" and is BRANCHED ON here, never passed on -- AttackShape.place folds every offset onto
+# the anchor for a zero direction.
+static func placement_dir(attack: AttackData, origin_cell: Vector2i, target_cell: Vector2i, facing := Vector2i.ZERO) -> Vector2i:
+	if facing != Vector2i.ZERO:
+		return facing
+	if attack != null and attack.is_directional():
+		return GridUtils.cardinal_direction_i_between(origin_cell, target_cell)
+	return AttackShape.FORWARD
+
+
+# WHICH WAY THE ATTACK WAS GOING when it reached each of `cells` (#1058), travel_steps' sibling: what
+# a payload dropped there turns to (ruling 38). A self-anchored shape travels along its facing at
+# every cell. A placed shape, or a true AoE, travels OUTWARD from where it landed -- the cardinal from
+# the anchor to the cell, GridUtils' tie-break settling a diagonal. The anchor's own cell has no
+# outward, so it takes the direction the aim came from, and where even that is nothing (an aim at
+# the attacker's own cell) the way the shape itself faces.
+#
+# Paths are not answered here, for travel_steps' reason: a path's direction at a tile is its own
+# last step (Conduction.sweep_paths).
+static func travel_facings(origin_cell: Vector2i, target_cell: Vector2i, attack: AttackData, cells: Array[Vector2i], facing := Vector2i.ZERO) -> Dictionary[Vector2i, Vector2i]:
+	var facings: Dictionary[Vector2i, Vector2i] = {}
+	var turned := placement_dir(attack, origin_cell, target_cell, facing)
+	if turned == Vector2i.ZERO:
+		turned = AttackShape.FORWARD
+	var self_anchored := attack != null and attack.is_directional()
+	var aim := GridUtils.cardinal_direction_i_between(origin_cell, target_cell)
+	if aim == Vector2i.ZERO:
+		aim = turned
+	for cell in cells:
+		if self_anchored:
+			facings[cell] = turned
+		elif cell == target_cell:
+			facings[cell] = aim
+		else:
+			facings[cell] = GridUtils.cardinal_direction_i_between(target_cell, cell)
+	return facings
 
 
 # THE ORDER an area footprint lands in (#1057 part 2, ruling 19): each cell and the step the attack
@@ -331,12 +381,12 @@ static func get_affected_cells_from(_unit: Unit, origin_cell: Vector2i, target_c
 #
 # Paths are not answered here: where a path STOPS is the victim gather's call, so their steps come
 # off its cut (Conduction.sweep_paths).
-static func travel_steps(origin_cell: Vector2i, target_cell: Vector2i, attack: AttackData, cells: Array[Vector2i]) -> Dictionary[Vector2i, int]:
+static func travel_steps(origin_cell: Vector2i, target_cell: Vector2i, attack: AttackData, cells: Array[Vector2i], facing := Vector2i.ZERO) -> Dictionary[Vector2i, int]:
 	var steps: Dictionary[Vector2i, int] = {}
 	var swings := attack != null and attack.swing and attack.attack_shape != null
 	var dir := Vector2i.ZERO
 	if swings and attack.is_directional():
-		dir = GridUtils.cardinal_direction_i_between(origin_cell, target_cell)
+		dir = placement_dir(attack, origin_cell, target_cell, facing)
 	var nearest := 0
 	for i in cells.size():
 		var cell := cells[i]
@@ -365,15 +415,14 @@ static func travel_steps(origin_cell: Vector2i, target_cell: Vector2i, attack: A
 #
 # Unit-blind like everything here: who stands on a tile, and so where each path is TAKEN, is
 # RulesService.gather_path_victims' question. A null board walks every tile ungated.
-static func get_paths_from(_unit: Unit, origin_cell: Vector2i, target_cell: Vector2i, attack: AttackData, board: BoardContext) -> Array[Array]:
+static func get_paths_from(_unit: Unit, origin_cell: Vector2i, target_cell: Vector2i, attack: AttackData, board: BoardContext, facing := Vector2i.ZERO) -> Array[Array]:
 	var walked: Array[Array] = []
 	if attack == null or not attack.is_single_target_swing():
 		return walked
 	var anchor := target_cell
-	var dir := AttackShape.FORWARD
+	var dir := placement_dir(attack, origin_cell, target_cell, facing)
 	if attack.is_directional():
 		anchor = origin_cell
-		dir = GridUtils.cardinal_direction_i_between(origin_cell, target_cell)
 		if dir == Vector2i.ZERO:
 			return walked
 	for path in attack.attack_shape.place_paths(anchor, dir):

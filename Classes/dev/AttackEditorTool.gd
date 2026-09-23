@@ -64,6 +64,11 @@ const NO_SHAPE_KEY := "(none - the aimed cell alone)"
 const NEW_SHAPE_KEY := "(new shape)"
 const UNNAMED_SHAPE_KEY := "(unnamed - Save as... to name it)"
 const NO_EMPOWERED_KEY := "(none — fires the same however full the tank is)"
+const NO_PAYLOAD_KEY := "(none - drops nothing)"
+# The worst case a payload chain may fan out to before the readout warns (#1058, ruling 41: a warning,
+# never a refusal). A feel number, so a const rather than a rule anything else reads.
+const FANOUT_WARN := 16
+const FANOUT_WARN_COLOR := Color(1.0, 0.6, 0.3)
 
 # ...and the look picker's three, worded for what THEY explain (#900). Same order and same reason.
 const NO_LOOK_KEY := "(none - the Game tab's own values)"
@@ -84,6 +89,11 @@ var _items := {}
 # Which dropdown entry "current" was loaded from ("" = a New attack). Pool modes load a COPY with
 # no resource_path, so nothing else records this -- and Update's load-gate needs it (2026-08-11).
 var _loaded_name := ""
+# The Payload section's live readouts (#1058), refreshed off the attack's `changed` rather than by a
+# rebuild, so the plate and the sentences follow the tick, the targets and the shape as they move.
+var _payload_plate: ShapePlate = null
+var _payload_where: Label = null
+var _payload_fanout: Label = null
 
 func _ready():
 	_shape = LibraryField.new(self, status_label)
@@ -428,6 +438,9 @@ func _draw_field(field: String, rows: Dictionary) -> PackedStringArray:
 		"empowered_form":
 			_populate_empowered_form(current as WeaponAttackData, rows)
 			return PackedStringArray(["empowered_form"])
+		"payload":
+			_populate_payload()
+			return PackedStringArray(["payload"])
 		"sigils":
 			_populate_sigils(current as TransmutationData)
 			return PackedStringArray(["sigils"])
@@ -853,6 +866,111 @@ func _populate_empowered_form(attack: WeaponAttackData, rows: Dictionary) -> voi
 	)
 	rows["empowered_form"] = DevWidgets._added_since(editor_container, first)
 	DevWidgets._tip_rows_from(editor_container, first, DevWidgets.property_tip(attack, "empowered_form"))
+
+
+# THE PAYLOAD SECTION (#1058, layout B of the mockup rounds): a pick over the authored attacks, the
+# payload's own plate, where it goes off, and the worst case the chain fans out to. A PICKER, never a
+# nested editor, for empowered_form's reason: the payload is its own file and is edited where it
+# lives. A pick rebuilds the form, since the tick under it asks the payload's shape.
+#
+# The pick is not registered with the binder -- it is never hidden -- which also keeps the section's
+# heading standing when the tick below it hides.
+func _populate_payload() -> void:
+	var first := editor_container.get_child_count()
+	var choices := _payload_choices()
+	var held_key := NO_PAYLOAD_KEY
+	for k: String in choices:
+		if choices[k] == current.payload:
+			held_key = k
+	DevWidgets.add_option(editor_container, "Payload attack", choices.keys(), held_key,
+		func(s: String):
+			current.payload = choices[s]
+			populate()
+	)
+	DevWidgets._tip_rows_from(editor_container, first, DevWidgets.property_tip(current, "payload"))
+	if current.payload == null:
+		return
+	_payload_plate = ShapePlate.new()
+	editor_container.add_child(_payload_plate)
+	_payload_where = Label.new()
+	_payload_where.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	editor_container.add_child(_payload_where)
+	_payload_fanout = Label.new()
+	_payload_fanout.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	editor_container.add_child(_payload_fanout)
+	_refresh_payload_readouts()
+	if not current.changed.is_connected(_refresh_payload_readouts):
+		current.changed.connect(_refresh_payload_readouts)
+
+
+func _refresh_payload_readouts() -> void:
+	if current == null or current.payload == null:
+		return
+	if is_instance_valid(_payload_plate):
+		_payload_plate.show_payload(current.payload, current.attack_shape != null or current.payload_turns)
+	if is_instance_valid(_payload_where):
+		_payload_where.text = payload_where_text(current)
+	if is_instance_valid(_payload_fanout):
+		var levels := current.payload_fanout()
+		_payload_fanout.text = payload_fanout_text(levels)
+		var total := 0
+		for count in levels:
+			total += count
+		if total > FANOUT_WARN:
+			_payload_fanout.add_theme_color_override("font_color", FANOUT_WARN_COLOR)
+		else:
+			_payload_fanout.remove_theme_color_override("font_color")
+
+
+# Where this attack's payload goes off -- _drops_of's rule in words, read from `targets` (#1058).
+static func payload_where_text(attack: AttackData) -> String:
+	if attack.hits_map():
+		return "Goes off on every tile this attack strikes, whether or not anyone is on it."
+	return "Goes off on every unit this attack hits, on the tile the hit leaves them. A miss drops nothing."
+
+
+static func payload_fanout_text(levels: Array[int]) -> String:
+	var parts: Array[String] = []
+	var total := 0
+	for i in levels.size():
+		parts.append("%d at level %d" % [levels[i], i + 1])
+		total += levels[i]
+	return "Worst case: %s (%d in all)." % [", ".join(parts), total]
+
+
+# Every attack a payload may name (#1058): the weapon attacks the empowered form offers, then every
+# carving, one taking a " (carving)" suffix where a weapon attack already has its name so one name is
+# one entry. Watch-only attacks are left out -- they are never fired, so dropping one means nothing --
+# and so is anything that would make a loop (ruling 46), asked of the FILE this form edits: a pool
+# mode edits a copy, and no chain on disk can lead back to a copy. The payload already held stays
+# listed whatever it is, or the picker would claim a different one.
+func _payload_choices() -> Dictionary:
+	var choices := {NO_PAYLOAD_KEY: null}
+	var file := _loaded_file()
+	var weapon := _attack_choices(NO_PAYLOAD_KEY)
+	weapon.erase(NO_PAYLOAD_KEY)
+	for source: Dictionary in [weapon, TransmutationCatalog.get_all()]:
+		for k: String in source:
+			var candidate: AttackData = source[k]
+			if candidate == null or candidate.can_overwatch:
+				continue
+			if current.payload_would_loop(candidate) or (file != null and file.payload_would_loop(candidate)):
+				continue
+			var key := k if not choices.has(k) else "%s (carving)" % k
+			choices[key] = candidate
+	if current.payload != null and not choices.values().has(current.payload):
+		choices["%s (held)" % current.payload.display_name] = current.payload
+	return choices
+
+
+# The attack FILE this form is editing, or null for a New one. FAMILY edits the main live; the pool
+# modes edit a copy of the catalog entry they loaded.
+func _loaded_file() -> AttackData:
+	if _mode == Mode.FAMILY:
+		return current
+	if _loaded_name == "" or not _items.has(_loaded_name):
+		return null
+	return _items[_loaded_name] as AttackData
 
 
 # Every authored weapon attack, by display name -- ItemEditorTool._main_choices' shape, and a

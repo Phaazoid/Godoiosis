@@ -252,13 +252,16 @@ static func reconstruct_path(came_from: Dictionary, start: Vector2i, goal: Vecto
 	path.push_front(start)
 	return path
 
-static func gather_attack_victims(attacker: Unit, affected_cells: Array[Vector2i], board: BoardContext, attack: AttackData, allies_only := false) -> Array[Unit]:
+# `occupant_at` is gather_path_victims' parameter, for its reason: empty is the board's projected
+# answer, which every aim site wants, and a PAYLOAD (#1058) passes the resolver's threaded one,
+# since it goes off mid-pass where only the aims' shoves have been published.
+static func gather_attack_victims(attacker: Unit, affected_cells: Array[Vector2i], board: BoardContext, attack: AttackData, allies_only := false, occupant_at := Callable()) -> Array[Unit]:
 	var victims: Array[Unit] = []
 	for cell in affected_cells:
 		# One question, one lookup (#105): who ENDS UP here. The old dance (physical occupant ->
 		# discard if it's moving away -> else who's moving in) reconciled the forward and reverse
 		# answers by hand, and could not see a knocked-back unit at all.
-		var unit := board.projected_unit_at_cell(cell)
+		var unit: Unit = occupant_at.call(cell) if occupant_at.is_valid() else board.projected_unit_at_cell(cell)
 		if unit == null or victims.has(unit):
 			continue
 		if is_attack_victim(attacker, unit, attack, allies_only):

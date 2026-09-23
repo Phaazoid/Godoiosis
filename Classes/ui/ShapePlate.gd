@@ -94,13 +94,8 @@ func grid() -> GridContainer:
 
 
 func show_attack(attack: AttackData) -> void:
-	for child in _grid.get_children():
-		_grid.remove_child(child)
-		child.queue_free()
 	if attack == null:
-		_caption.text = "no attack"
-		var none: Array[Array] = []
-		_lines.show_paths(none, OverlayManager.aim_fill_color(), 0.0)
+		_clear("no attack")
 		return
 
 	var reach := drawn_reach(attack)
@@ -115,7 +110,42 @@ func show_attack(attack: AttackData) -> void:
 	if not directional:
 		ring = Reach.get_attack_cells_from(null, Vector2i.ZERO, Vector2i.ZERO, attack)
 	var hits := Reach.get_affected_cells_from(null, Vector2i.ZERO, aim, attack, null)
+	_paint(attack, ring, hits, Reach.get_paths_from(null, Vector2i.ZERO, aim, attack, null))
 
+	# The clip is DECLARED, never silent: a ring cut off at the plate's edge without a word would be a
+	# lie about where the attack stops.
+	var up: String = attack.grid_up_label("stamp")
+	_caption.text = up if reach >= attack.max_range else "%s · shown to %d" % [up, reach]
+
+
+# A PAYLOAD's plate (#1058): the footprint it covers once dropped, centred on the tile it goes off
+# from, with NO ring -- a payload is never aimed, so its own range means nothing (ruling 41). It is
+# fired facing up the plate, and what up MEANS is the carrier's answer, which arrives as `onward`:
+# the way the attack that dropped it was going, or board north.
+func show_payload(payload: AttackData, onward: bool) -> void:
+	if payload == null:
+		_clear("drops nothing")
+		return
+	var no_ring: Array[Vector2i] = []
+	var hits := Reach.get_affected_cells_from(null, Vector2i.ZERO, Vector2i.ZERO, payload, null, Vector2i.UP)
+	_paint(payload, no_ring, hits, Reach.get_paths_from(null, Vector2i.ZERO, Vector2i.ZERO, payload, null, Vector2i.UP))
+	_caption.text = "^ the way the attack was going" if onward else "^ board north"
+
+
+func _clear(caption: String) -> void:
+	for child in _grid.get_children():
+		_grid.remove_child(child)
+		child.queue_free()
+	_caption.text = caption
+	var none: Array[Array] = []
+	_lines.show_paths(none, OverlayManager.aim_fill_color(), 0.0)
+
+
+# The cells and the path lines for one picture: `ring` is where it may be aimed, `hits` what it covers.
+func _paint(attack: AttackData, ring: Array[Vector2i], hits: Array[Vector2i], paths: Array[Array]) -> void:
+	for child in _grid.get_children():
+		_grid.remove_child(child)
+		child.queue_free()
 	var drawn: Array[Vector2i] = []
 	drawn.append_array(ring)
 	drawn.append_array(hits)
@@ -128,13 +158,7 @@ func show_attack(attack: AttackData) -> void:
 			var at := Vector2i(x, y)
 			_grid.add_child(_cell(cell, at, ring.has(at), hits.has(at), attack))
 	# Empty unless the attack is a single-target swing, so every other plate hides its lines.
-	_lines.show_paths(Reach.get_paths_from(null, Vector2i.ZERO, aim, attack, null),
-			OverlayManager.aim_fill_color(), float(cell + SEP))
-
-	# The clip is DECLARED, never silent: a ring cut off at the plate's edge without a word would be a
-	# lie about where the attack stops.
-	var up: String = attack.grid_up_label("stamp")
-	_caption.text = up if reach >= attack.max_range else "%s · shown to %d" % [up, reach]
+	_lines.show_paths(paths, OverlayManager.aim_fill_color(), float(cell + SEP))
 
 
 # The smallest odd span that holds what was drawn, floored so there is always a ring of context and

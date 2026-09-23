@@ -66,6 +66,23 @@ var triggered_by: Unit = null
 var triggered_during: BaseAction = null
 var triggered_at_step := -1
 
+# THE PAYLOAD LINK (#1058): the hit that DROPPED this one, or null on every attack a unit fired. A
+# payload keeps its thrower as its actor, so this is the only thing that tells the two apart -- and
+# what it changes is what FIRING costs: no lunge, no readiness, no vial, no tank, and no liveness
+# check, since a payload is already in flight. Its own blow lands and publishes its impact as any
+# other does.
+var dropped_by: AttackAction = null
+# How many drops deep: 1 for a payload a fired attack dropped, 2 for that payload's own, and so on;
+# 0 on anything that is not a payload. The queue indents by it and telemetry records it.
+var payload_depth := 0
+# PER HIT, off the sweep that built this volley (stamp_sweep): whether the attack itself struck this
+# victim -- false for whoever only the current caught, who drops nothing (ruling 45) -- and which way
+# it was going when it did, which a payload dropped on them turns to.
+var direct := true
+var hit_facing := Vector2i.ZERO
+# ...and per TILE, the same direction at each of struck_cells, for a tile attack's payloads.
+var struck_facings: Dictionary[Vector2i, Vector2i] = {}
+
 var preview_sprites: Array[Node2D] = []
 
 # THE MOMENT THE BLOW LANDS (#887) -- the first per-attack event this game has ever published.
@@ -129,7 +146,9 @@ func execute():
 
 	var direction = GridUtils.cardinal_direction_between(actor.get_projected_destination(), target_cell)
 
-	if not is_secondary_hit:
+	# A payload's thrower does not lunge at it (#1058): the throw was the lunge of the hit that
+	# dropped it, and this one may be going off across the board.
+	if not is_secondary_hit and dropped_by == null:
 		await actor.visuals.play_attack_lunge(direction)
 
 	# The block moment (#414), slice one: the bodyguard lunges toward the unit it is covering, the
@@ -195,7 +214,10 @@ func execute():
 	# Carbine's magazine (#84) — pays for reactive fire, while Stab/Smash mains (consumes_readiness
 	# false) stay no-ops. The matching "can I even counter on empty" gate is on
 	# Unit.attack_source_can_counter().
-	if not is_secondary_hit and fired_attack is WeaponAttackData:
+	#
+	# NO PAYLOAD SPENDS ANYTHING (#1058) -- not readiness here, nor the vial or the tank below. It was
+	# never fired; the hit that dropped it was, and that hit already paid.
+	if not is_secondary_hit and dropped_by == null and fired_attack is WeaponAttackData:
 		var weapon := actor.get_equipped_weapon() as WeaponInstance
 		if weapon != null:
 			weapon.consume_readiness_for(fired_attack as WeaponAttackData)
@@ -207,13 +229,13 @@ func execute():
 	# EXECUTION IS THE ONLY PLACE ANYTHING IS SPENT, which is the whole of why cancelling costs
 	# nothing: re-aiming, displacing, undoing and clearing all leave the charge untouched, because
 	# the plan never had it. Readiness needed no reservation for exactly this reason.
-	if not is_secondary_hit and resolved != null and resolved.burned_vial != null:
+	if not is_secondary_hit and dropped_by == null and resolved != null and resolved.burned_vial != null:
 		actor.attunement = null
 
 	# Tank spend (#97), the same shape one economy over: the resolver already decided whether the
 	# empowered form is what fired, threading the count across the pass so a counter and a watch
 	# shot cannot both claim the last charge. Here there is only the spending.
-	if not is_secondary_hit and resolved != null and resolved.charge_spent:
+	if not is_secondary_hit and dropped_by == null and resolved != null and resolved.charge_spent:
 		var tank := actor.get_equipped_weapon() as WeaponInstance
 		if tank != null:
 			tank.spend_charge()
@@ -334,6 +356,21 @@ static func create_volley(attacker: Unit, origin: Vector2i, aim_cell: Vector2i, 
 		attack.volley = volley_actions
 
 	return volley_actions
+
+# What the sweep that built this volley answered about its tiles and its hits (#1058): the tiles the
+# attack struck and which way it was going at each, then per member whether the attack struck that
+# victim itself and from which side. Members line up with the sweep's victims one for one, since
+# create_volley and create_counter_volley make them from that list in order; a victimless cell
+# attack takes the tile half alone. Every site that builds a volley calls this, so a new site cannot
+# stamp the tiles and forget the hits.
+static func stamp_sweep(group: Array, reach: Conduction.Sweep) -> void:
+	for i in group.size():
+		var member: AttackAction = group[i]
+		member.struck_cells = reach.struck
+		member.struck_facings = reach.struck_facings
+		if member.target != null and i < reach.victims.size() and reach.victims[i] == member.target:
+			member.direct = reach.direct[i]
+			member.hit_facing = reach.hit_facings[i]
 
 func get_outcome_summary() -> String:
 	if resolved == null or target == null:   # cell attack (#47) — no unit outcome to summarize

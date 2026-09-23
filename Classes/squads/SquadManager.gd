@@ -879,37 +879,28 @@ func _resolve_actions(squad: Squad, actions: Array[BaseAction], board: BoardCont
 			group = AttackAction.create_volley(aim.actor, origin, aim.target_cell, victims, aim.fired_attack, affected, reach.links)
 
 		# Back-link every derived action to the order that produced it -- read by the whiff clause
-		# and the queue row's tint -- and stamp the tiles it struck, which is where its element lands
-		# (#1057). One place, so a new expansion branch can't forget either.
+		# and the queue row's tint -- and stamp what the sweep said about its tiles and hits: where
+		# its element lands (#1057) and where its payloads go off (#1058). One place, so a new
+		# expansion branch can't forget either.
+		AttackAction.stamp_sweep(group, reach)
 		for atk in group:
 			atk.source_aim = aim
-			atk.struck_cells = reach.struck
 		plan.attacks.append_array(group)
 
 		# Resolve THIS aim, then publish its shoves as projected positions — so the next aim's
 		# victim gather, the counter derivation below, and the board preview all read where the
 		# target LANDS (#84 approach B, extended to same-plan attacks by #105).
 		PlanResolver.resolve_attack_group(group, plan, hypo, reactions, board, terrain_reactions)
-		var shoved: Array[Unit] = []
-		for atk in group:
-			if atk.resolved != null and atk.resolved.knockback_applied and atk.target != null and is_instance_valid(atk.target):
-				shoved.append(atk.target)
-				# A REMOVED target (#259) publishes nothing: a doomed unit must not become
-				# pickable or aimable on the chasm cell -- its sprite never moves, the trail
-				# alone says where it goes, and the hypo's DEAD lifecycle covers the resolve.
-				if not atk.resolved.removed:
-					atk.target.set_projected_knockback(atk.resolved.knockback_to)
-		# A shove is an ENTRY (#413): mace them into your squadmate's watched line and it fires.
-		# The intended combo, and the reason arming happens at a queue slot — sequence the shove
-		# after the watch and it connects, before it and it does not.
-		#
-		# Its playback moment is AFTER this volley (#567), which is why the group's last member is
-		# the moment rather than a step of one: nothing is interrupted here, the blow has already
-		# landed and the shot answers it. Before #567 every triggered shot played in one batch ahead
-		# of the attacks, so this one fired before the blow that threw them into it.
-		if not shoved.is_empty():
-			PlanResolver.fire_watch_entries(shoved, plan, hypo, reactions, board, terrain_reactions,
-					group[-1], -1)
+		_settle_shoves(group, plan, hypo, reactions, board, terrain_reactions)
+
+		# ...then whatever it DROPS (#1058), after the watches its shoves set off, so a payload goes
+		# off where its victim finally came to rest. Straight after the aim in `attacks`, which makes
+		# a payload hit counter-bait like any hit (ruling 32) and plays it right behind its parent;
+		# its own shoves settle the same way the aim's did.
+		var dropped := PlanResolver.drop_payloads(group, plan, hypo, reactions, board, terrain_reactions)
+		if not dropped.is_empty():
+			plan.attacks.append_array(dropped)
+			_settle_shoves(dropped, plan, hypo, reactions, board, terrain_reactions)
 
 	# Reactions are derived as single-target "aims" (who reacts to whom, strike or heal). Expand
 	# each into its own volley from the reactor's projected cell — the same AoE + friendly-fire
@@ -931,9 +922,9 @@ func _resolve_actions(squad: Squad, actions: Array[BaseAction], board: BoardCont
 		var c_reach := Conduction.sweep(aim.actor, c_origin, c_aim_cell, c_attack, board, hypo, healing)
 		var c_affected := c_reach.cells
 		var c_victims := c_reach.victims
-		for ctr in CounterAttackAction.create_counter_volley(aim.actor, c_origin, c_victims, aim.source_attack, c_affected, c_reach.links):
-			ctr.struck_cells = c_reach.struck
-			plan.counters.append(ctr)
+		var c_volley := CounterAttackAction.create_counter_volley(aim.actor, c_origin, c_victims, aim.source_attack, c_affected, c_reach.links)
+		AttackAction.stamp_sweep(c_volley, c_reach)
+		plan.counters.append_array(c_volley)
 	# Phase 2: counters, now built from post-shove positions.
 	PlanResolver.resolve_counters(plan, hypo, reactions, board, terrain_reactions)
 
@@ -1040,6 +1031,35 @@ func _resolve_actions(squad: Squad, actions: Array[BaseAction], board: BoardCont
 	PlanResolver.resolve_tile_hits(plan, squad, actions, hypo, board)
 
 	return plan
+
+
+# What a resolved run of attack actions leaves for everything after it: each shove PUBLISHED as a
+# projected position -- the next aim's victim gather, the counter derivation and the board preview all
+# read where the target LANDS (#84 approach B, extended to same-plan attacks by #105) -- and each shove
+# offered to the standing watches as an ENTRY. Factored out of the aim walk when a payload became the
+# second thing it settles (#1058), so the two cannot publish differently.
+func _settle_shoves(group: Array[AttackAction], plan: ResolvedPlan, hypo: Dictionary,
+		reactions: Array[ElementalReaction], board: BoardContext, terrain_reactions: Array[TerrainReaction]) -> void:
+	var shoved: Array[Unit] = []
+	for atk in group:
+		if atk.resolved != null and atk.resolved.knockback_applied and atk.target != null and is_instance_valid(atk.target):
+			shoved.append(atk.target)
+			# A REMOVED target (#259) publishes nothing: a doomed unit must not become
+			# pickable or aimable on the chasm cell -- its sprite never moves, the trail
+			# alone says where it goes, and the hypo's DEAD lifecycle covers the resolve.
+			if not atk.resolved.removed:
+				atk.target.set_projected_knockback(atk.resolved.knockback_to)
+	# A shove is an ENTRY (#413): mace them into your squadmate's watched line and it fires.
+	# The intended combo, and the reason arming happens at a queue slot — sequence the shove
+	# after the watch and it connects, before it and it does not.
+	#
+	# Its playback moment is AFTER this run (#567), which is why the last member is the moment
+	# rather than a step of one: nothing is interrupted here, the blow has already landed and the
+	# shot answers it. Before #567 every triggered shot played in one batch ahead of the attacks,
+	# so this one fired before the blow that threw them into it.
+	if not shoved.is_empty():
+		PlanResolver.fire_watch_entries(shoved, plan, hypo, reactions, board, terrain_reactions,
+				group[-1], -1)
 
 # The most recent resolve for THIS squad, or null. The gate's rescue clause and the menu's
 # candidate list read it the way the whiff clause reads published knockback (#124): a candidate

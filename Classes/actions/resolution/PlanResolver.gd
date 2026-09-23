@@ -42,7 +42,10 @@ static func resolve_attack_group(group: Array[AttackAction], plan: ResolvedPlan,
 	# ABOVE _apply_guards, or a bodyguard spends its one ward absorbing a blow that never lands --
 	# and above the cell-effect append below, or a skipped fireball still sets the ground alight.
 	# One volley shares one actor, so this is asked once for the group.
-	if not group.is_empty() and not actor_is_live(group[0].actor, hypo):
+	#
+	# NOT ASKED OF A PAYLOAD (#1058): it is already in flight, so a thrower the same pass fells after
+	# the throw still has it go off -- scaled off them as they stood, like any hit already landing.
+	if not group.is_empty() and group[0].dropped_by == null and not actor_is_live(group[0].actor, hypo):
 		for atk in group:
 			var no_op := ResolvedOutcome.new()
 			no_op.skipped = true
@@ -56,27 +59,49 @@ static func resolve_attack_group(group: Array[AttackAction], plan: ResolvedPlan,
 				plan.cell_effects.append(cell_effect)
 
 # Phase 2: counters, threaded off the SAME hypo so a counter-er downed by an attack this pass can't counter (R7).
+#
+# Each counter volley's PAYLOADS (#1058) resolve right behind it and join this list right behind it:
+# here rather than in `attacks`, so a counter's payload draws no counter of its own (ruling 32's C4
+# ledger reads `attacks`), and in place, so playback and the queue follow with no list of their own.
+# The list is REBUILT from the derived counters alone, which keeps a second resolve of one plan from
+# dropping every payload twice.
 static func resolve_counters(plan: ResolvedPlan, hypo: Dictionary, reactions: Array[ElementalReaction], board: BoardContext, terrain_reactions: Array[TerrainReaction]) -> void:
+	var derived: Array[CounterAttackAction] = []
 	for ctr in plan.counters:
+		if ctr.dropped_by == null:
+			derived.append(ctr)
+	var ordered: Array[CounterAttackAction] = []
+	for i in derived.size():
+		var ctr := derived[i]
 		# A counter is an attack with a volley like any other, so it gets the same one-blast-one-
 		# moment read. plan.counters is FLAT (create_counter_volley's members are appended in
 		# order), so the volley's lead member is where its snapshot is taken.
 		if not ctr.is_secondary_hit:
-			var volley: Array[AttackAction] = []
-			if ctr.volley.is_empty():
-				volley.append(ctr)      # hand-built counter (test fixtures); a real one always has one
-			else:
-				volley.assign(ctr.volley)
-			_apply_guards(volley, plan, hypo)
+			_apply_guards(_volley_of(ctr), plan, hypo)
 		if not _counter_actor_live(ctr, hypo):
 			var no_op := ResolvedOutcome.new()
 			no_op.skipped = true
 			ctr.resolved = no_op                    # counter-er is down/dead this pass -> no counter
-			continue
-		_resolve_one(ctr, plan, reactions, hypo, board)
-		if board != null and not ctr.is_secondary_hit:
-			for cell_effect in _resolve_cell_effects(ctr, board, terrain_reactions):
-				plan.cell_effects.append(cell_effect)
+		else:
+			_resolve_one(ctr, plan, reactions, hypo, board)
+			if board != null and not ctr.is_secondary_hit:
+				for cell_effect in _resolve_cell_effects(ctr, board, terrain_reactions):
+					plan.cell_effects.append(cell_effect)
+		ordered.append(ctr)
+		if i == derived.size() - 1 or not is_same(derived[i + 1].volley, ctr.volley) or ctr.volley.is_empty():
+			for dropped in drop_payloads(_volley_of(ctr), plan, hypo, reactions, board, terrain_reactions):
+				ordered.append(dropped as CounterAttackAction)
+	plan.counters = ordered
+
+
+# The whole volley a member belongs to. A hand-built member (test fixtures) has none, and is its own.
+static func _volley_of(member: AttackAction) -> Array[AttackAction]:
+	var volley: Array[AttackAction] = []
+	if member.volley.is_empty():
+		volley.append(member)
+	else:
+		volley.assign(member.volley)
+	return volley
 
 # --- The END OF TURN forecast (#419) --------------------------------------------------------
 #
@@ -353,6 +378,10 @@ static func _fire_one_watch(watch: Watch, entrant: Unit, plan: ResolvedPlan, hyp
 		shot.triggered_at_step = at_step
 	plan.watch_shots.append_array(group)
 	resolve_attack_group(group, plan, hypo, reactions, board, terrain_reactions)
+	# ...and what the shot DROPS (#1058), right behind it in the same list and at the same moment --
+	# drop_payloads carries the moment over -- so it plays behind the shot and draws no counter. Before
+	# `moved` is read, so a payload's shove is an entry like the shot's own.
+	plan.watch_shots.append_array(drop_payloads(group, plan, hypo, reactions, board, terrain_reactions))
 	var moved: Array[Unit] = []
 	for unit: Unit in board.units:
 		if not is_instance_valid(unit):
@@ -422,8 +451,10 @@ static func _break_watch_on(target: Unit, plan: ResolvedPlan, outcome: ResolvedO
 # The sweep works on copies, so the armed watch is left alone -- re-arming it over the current would
 # let the arc grow the watched cells with every trigger.
 static func _derive_watch_shot(watch: Watch, entrant: Unit, board: BoardContext, hypo: Dictionary) -> Array[AttackAction]:
-	var reach := Conduction.sweep_paths(watch.watcher, watch.attack, watch.paths(), board, hypo, false,
-			PlanResolver._unit_threaded_at.bind(board, hypo))
+	var paths := watch.paths()
+	var arrival := Reach.travel_facings(watch.anchor_cell, watch.aim_cell, watch.attack, Conduction._tiles_of(paths))
+	var reach := Conduction.sweep_paths(watch.watcher, watch.attack, paths, board, hypo, false,
+			PlanResolver._unit_threaded_at.bind(board, hypo), arrival)
 	var group: Array[AttackAction] = []
 	if reach.victims.is_empty():
 		# #47's rule: a shot with nobody left in the footprint still resolves as a cell attack. Only
@@ -435,10 +466,10 @@ static func _derive_watch_shot(watch: Watch, entrant: Unit, board: BoardContext,
 		group.append(cell_shot)
 	else:
 		group = AttackAction.create_volley(watch.watcher, watch.anchor_cell, watch.aim_cell, reach.victims, watch.attack, reach.cells, reach.links)
+	AttackAction.stamp_sweep(group, reach)
 	for shot in group:
 		shot.is_watch_shot = true
 		shot.triggered_by = entrant
-		shot.struck_cells = reach.struck
 	return group
 
 
@@ -449,6 +480,118 @@ static func _unit_threaded_at(cell: Vector2i, board: BoardContext, hypo: Diction
 		if is_instance_valid(unit) and projected_position(unit, hypo) == cell:
 			return unit
 	return null
+
+
+# --- Payloads (#1058, docs/design/weapons.md -> Payloads) -----------------------------------------
+#
+# THE ONE DERIVATION of what a resolved volley DROPS: another authored attack, fired from where each
+# hit landed, resolved in full with the thrower still the actor. Called at the three sites that fire
+# an attack -- aims, counters, watch shots -- each of which puts the result in its parent's OWN list,
+# so which list a payload is in answers counter-bait, playback order and the queue with no new list.
+#
+# LEVEL BY LEVEL down the fired attack's payload_chain(), breadth-first: every level-1 payload the
+# volley dropped, in the order it struck them, then every level-2 payload those dropped, and so on.
+# Each one is resolved before the next is derived, since a payload goes off where its victim LANDED
+# and a payload is what might have thrown them there. Returns every dropped action, resolved, in
+# that order.
+static func drop_payloads(group: Array, plan: ResolvedPlan, hypo: Dictionary,
+		reactions: Array[ElementalReaction], board: BoardContext,
+		terrain_reactions: Array[TerrainReaction]) -> Array[AttackAction]:
+	var dropped: Array[AttackAction] = []
+	if group.is_empty():
+		return dropped
+	var root: AttackAction = group[0]
+	if root.fired_attack == null:
+		return dropped
+	var carriers: Array[Array] = [group]
+	for payload in root.fired_attack.payload_chain():
+		var next_level: Array[Array] = []
+		for carrier in carriers:
+			for drop in _drops_of(carrier, hypo):
+				var volley := _payload_volley(drop, payload, board, hypo)
+				resolve_attack_group(volley, plan, hypo, reactions, board, terrain_reactions)
+				dropped.append_array(volley)
+				next_level.append(volley)
+		carriers = next_level
+	return dropped
+
+
+# WHERE one resolved volley's payloads go off and which way each faces: {cell, facing, parent}.
+#
+# A TILE attack (hits_map, so unit/tile too) drops one per tile it STRUCK, anyone there or not, and a
+# victim's tile never gets a second (ruling 31). A UNIT attack drops one per unit it hit ITSELF -- a
+# miss drops nothing and the current's catch drops nothing (ruling 45) -- at the tile they LANDED on,
+# after this pass's shoves (ruling 43): the threaded position, read after the volley resolved. Two
+# paths reaching one unit are two hits and drop two (ruling 7).
+#
+# A volley that never happened (its thrower felled first, R7) drops nothing either.
+static func _drops_of(group: Array, hypo: Dictionary) -> Array[Dictionary]:
+	var drops: Array[Dictionary] = []
+	var lead: AttackAction = group[0]
+	if lead.resolved != null and lead.resolved.skipped:
+		return drops
+	var carrier := lead.fired_attack
+	if carrier.hits_map():
+		for cell in lead.struck_cells:
+			var onward: Vector2i = lead.struck_facings.get(cell, Vector2i.ZERO)
+			drops.append({"cell": cell, "facing": _drop_facing(carrier, onward), "parent": lead})
+		return drops
+	for member: AttackAction in group:
+		if member.target == null or not is_instance_valid(member.target) or not member.direct:
+			continue
+		if member.resolved != null and member.resolved.skipped:
+			continue
+		drops.append({"cell": projected_position(member.target, hypo),
+				"facing": _drop_facing(carrier, member.hit_facing), "parent": member})
+	return drops
+
+
+# Which way a payload faces (rulings 35-38): ONWARD, the way the attack that dropped it was going --
+# unless that attack has no shape of its own and is authored not to turn its payloads, when it lands
+# as drawn. A shaped carrier always turns them; payload_turns is not asked of it.
+static func _drop_facing(carrier: AttackData, onward: Vector2i) -> Vector2i:
+	if onward == Vector2i.ZERO:
+		onward = AttackShape.FORWARD
+	if carrier.attack_shape == null and not carrier.payload_turns:
+		return AttackShape.FORWARD
+	return onward
+
+
+# One drop's volley: `payload` fired by the parent's thrower from the drop cell, aimed at that cell.
+# Built by the factory its PARENT's list is built by -- a counter's payload is a CounterAttackAction,
+# so plan.counters keeps one type -- and #47's rule holds: with nobody in reach it still goes off, as
+# a cell attack, since its element still lands on the ground. It carries its parent's playback
+# moment, which is what keeps a watch shot's payload inside that shot's own partition.
+static func _payload_volley(drop: Dictionary, payload: AttackData, board: BoardContext,
+		hypo: Dictionary) -> Array[AttackAction]:
+	var parent: AttackAction = drop["parent"]
+	var cell: Vector2i = drop["cell"]
+	var facing: Vector2i = drop["facing"]
+	var thrower := parent.actor
+	var reach := Conduction.sweep_payload(thrower, cell, payload, board, hypo, facing)
+	var volley: Array[AttackAction] = []
+	if parent is CounterAttackAction:
+		var source := (parent as CounterAttackAction).source_attack
+		for member in CounterAttackAction.create_counter_volley(thrower, cell, reach.victims, source,
+				reach.cells, reach.links, payload):
+			volley.append(member)
+	elif reach.victims.is_empty():
+		var cell_attack := AttackAction.create(thrower, cell, null, cell)
+		cell_attack.fired_attack = payload
+		cell_attack.footprint = reach.cells
+		cell_attack.arc_links = reach.links
+		volley.append(cell_attack)
+	else:
+		volley = AttackAction.create_volley(thrower, cell, cell, reach.victims, payload, reach.cells, reach.links)
+	AttackAction.stamp_sweep(volley, reach)
+	for member in volley:
+		member.dropped_by = parent
+		member.payload_depth = parent.payload_depth + 1
+		member.source_aim = parent.source_aim
+		member.triggered_during = parent.triggered_during
+		member.triggered_at_step = parent.triggered_at_step
+		member.triggered_by = parent.triggered_by
+	return volley
 
 
 static func _positions_snapshot(board: BoardContext, hypo: Dictionary) -> Dictionary:
@@ -714,7 +857,9 @@ static func _source_base_damage(action: AttackAction, board: BoardContext = null
 		# knocked off the bank casts unempowered. The aim it declared is what stays frozen.
 		var terrain := Materia.empowered_at(projected_position(attacker, hypo), board)
 		var charge := attacker.attunement_elements()
-		if charge.is_empty():
+		# A PAYLOAD burns no vial (#1058): it was never fired, so it spends nothing. Terrain still
+		# empowers it, being where the thrower stands rather than something they would spend.
+		if charge.is_empty() or action.dropped_by != null:
 			return carving.base_damage(attacker, terrain)
 
 		# A burned vial (#697) is NOT positional, so it unions in HERE rather than inside Materia,
@@ -748,13 +893,19 @@ static func _source_base_damage(action: AttackAction, board: BoardContext = null
 			# once however many victims it reaches.
 			var base := weapon.base_main(attacker)
 			var charged: bool = base != null and base.empowered_form == action.fired_attack
-			if charged and not action.is_secondary_hit:
+			# ...and no payload spends a charge either (#1058).
+			if charged and not action.is_secondary_hit and action.dropped_by == null:
 				var hypo_state := _hypo_for(attacker, hypo)
 				if hypo_state.charges > 0:
 					hypo_state.charges -= 1
 					if outcome != null:
 						outcome.charge_spent = true
 			return weapon.base_damage(attacker, action.fired_attack as WeaponAttackData)
+		# A payload thrown with no weapon in hand is still a real hit, scaled as if they fired it
+		# (ruling 42). Only a payload: an ordinary order stamped with a weapon attack nobody holds keeps
+		# the bare-fists reading below.
+		if action.dropped_by != null:
+			return WeaponInstance.unwielded_damage(attacker, action.fired_attack as WeaponAttackData)
 	return attacker.get_effective_stat(Stats.Stat.STR)
 
 # The kind the hit DELIVERS (#424), _source_elements' shape: a carving answers its own authored field,
@@ -771,7 +922,7 @@ static func _source_kind(action: AttackAction) -> AttackData.Kind:
 	return AttackData.Kind.BLUNT
 
 static func _source_elements(action: AttackAction) -> Array[Elemental.Element]:
-	return elements_of(action.actor, action.fired_attack)
+	return elements_of(action.actor, action.fired_attack, action.dropped_by != null)
 
 # What elements would this (actor, attack) pair carry? PUBLIC because the conduction arc asks it at
 # sites holding no AttackAction -- a counter derives from (actor, counter_attack), the hover preview
@@ -783,7 +934,11 @@ static func _source_elements(action: AttackAction) -> Array[Elemental.Element]:
 # and what a WIELDER adds is the fitted mods on top. This function used to branch on the subclass
 # itself, i.e. a second answer to a question the resources are better placed to answer -- and the
 # editor would have had to write a third.
-static func elements_of(actor: Unit, attack: AttackData) -> Array[Elemental.Element]:
+#
+# `thrown` is a PAYLOAD (#1058), the one exception to the bare-fists reading: a payload is a real hit
+# with or without a weapon in hand (ruling 42), so with none it delivers its OWN authored element --
+# a fire payload thrown by a rune-wielder still sets the ground alight.
+static func elements_of(actor: Unit, attack: AttackData, thrown := false) -> Array[Elemental.Element]:
 	var none: Array[Elemental.Element] = []
 	if attack == null:
 		return none
@@ -792,9 +947,11 @@ static func elements_of(actor: Unit, attack: AttackData) -> Array[Elemental.Elem
 		# whatever fitted mods add. With no weapon in hand nothing is being delivered, which is the
 		# bare-fists reading this has always taken and is deliberately NOT the authored element.
 		if actor == null or not is_instance_valid(actor):
-			return none
+			return attack.authored_elements() if thrown else none
 		var weapon := actor.get_equipped_weapon() as WeaponInstance
-		return none if weapon == null else weapon.get_elements(actor, attack as WeaponAttackData)
+		if weapon == null:
+			return attack.authored_elements() if thrown else none
+		return weapon.get_elements(actor, attack as WeaponAttackData)
 	return attack.authored_elements()
 
 # hits_map() lives on the shared AttackData base, so both kinds answer it directly — and with the
