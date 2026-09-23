@@ -488,7 +488,7 @@ func attack_detail(wielder: Unit, attack: AttackData) -> String:
 	if weapon_attack == null:
 		return ""
 	var damage := base_damage(wielder, weapon_attack)
-	var headline := "%s %s" % [weapon_attack.payload_text(damage, effective_kind(wielder, weapon_attack)), weapon_attack.targets_text()]
+	var headline := "%s %s" % [weapon_attack.hit_text(damage, effective_kind(wielder, weapon_attack)), weapon_attack.targets_text()]
 	if weapon_attack.deals_no_damage:
 		return headline   # scaling is suppressed entirely (#126) -- printing a blend would be a lie
 	var mods := _mods_for(wielder, weapon_attack)
@@ -521,7 +521,7 @@ func get_effective_weight() -> int:
 # one that does not -- and a negative weight subtracts the wielder's stat from their own damage.
 # Clamped at 0 rather than propagated: the mod simply contributes nothing to a stat the attack
 # never used. #74's family gate is the real fix; this is the floor under it.
-func effective_blend(attack: WeaponAttackData, mods: Array[WeaponModData]) -> Dictionary:
+static func effective_blend(attack: WeaponAttackData, mods: Array[WeaponModData]) -> Dictionary:
 	var blend: Dictionary[Stats.Stat, int] = {}
 	if attack != null:
 		for stat: Stats.Stat in attack.scaling_blend:
@@ -531,7 +531,7 @@ func effective_blend(attack: WeaponAttackData, mods: Array[WeaponModData]) -> Di
 			blend[stat] = maxi(0, blend.get(stat, 0) + mod.scaling_change[stat])
 	return blend
 
-func scaling_contribution(wielder: Unit, attack: WeaponAttackData, mods: Array[WeaponModData]) -> int:
+static func scaling_contribution(wielder: Unit, attack: WeaponAttackData, mods: Array[WeaponModData]) -> int:
 	var blend := effective_blend(attack, mods)
 	var total_weight := 0
 	var weighted_sum := 0
@@ -557,6 +557,16 @@ func base_damage(wielder: Unit, attack: WeaponAttackData) -> int:
 	for mod in mods:
 		eff_power += mod.power_delta
 	return eff_power + scaling_contribution(wielder, attack, mods)
+
+# A weapon attack thrown as a PAYLOAD by a unit with no weapon in hand (#1058, ruling 42): it still
+# scales as if they had fired it -- its own power, its own blend over their stats -- with no mods,
+# since there is no weapon to have fitted any. base_damage's rule with the weapon taken out, and
+# static for that reason: effective_blend and scaling_contribution never read a weapon either.
+static func unwielded_damage(wielder: Unit, attack: WeaponAttackData) -> int:
+	if attack == null or attack.deals_no_damage:
+		return 0
+	var no_mods: Array[WeaponModData] = []
+	return attack.power + scaling_contribution(wielder, attack, no_mods)
 
 # No attack means bare fists: not even fitted mods contribute, because the weapon isn't what's
 # landing. (A stamped attack still collects mod-added elements on top of its own.)

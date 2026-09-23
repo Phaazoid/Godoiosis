@@ -90,9 +90,16 @@ static func _add_section(entries: Array[ActionQueueDisplayEntry], title: String,
 		entries.append(divider())
 	entries.append(header(title))
 	for action in batch:
-		entries.append(action_row(action, 0))
+		entries.append(action_row(action, _depth_of(action)))
 		for shot: AttackAction in _watch_shots_for(plan, action):
-			entries.append(action_row(shot, 1))
+			entries.append(action_row(shot, 1 + _depth_of(shot)))
+
+
+# How far in a row sits: a PAYLOAD (#1058) one step per drop under the hit that dropped it, which is
+# the row above it -- every list a payload lives in holds it right behind its parent.
+static func _depth_of(action: BaseAction) -> int:
+	var attack := action as AttackAction
+	return 0 if attack == null else attack.payload_depth
 
 
 # What an order SET OFF (#413), one row per hit, stacking when one route crosses several watches.

@@ -80,14 +80,17 @@ class Flood extends RefCounted:
 # One flood, so relaying is bounded and order-independent by construction -- a conductor is reached
 # or it is not, and no cell can be visited twice. That is also what makes the tree a TREE: a cell
 # reached twice would have two parents and the current would draw as a mesh rather than a spread.
+#
+# `thrown` marks a PAYLOAD (#1058), which carries its own element with or without a weapon in hand --
+# PlanResolver.elements_of says why, and this passes the flag on so the current and the hit agree.
 static func flood(actor: Unit, attack: AttackData, footprint: Array[Vector2i],
-		board: BoardContext, hypo: Dictionary = {}) -> Flood:
+		board: BoardContext, hypo: Dictionary = {}, thrown := false) -> Flood:
 	var found := Flood.new()
 	if board == null:
 		return found
 	if attack != null and attack.heals:
 		return found   # a heal carries no current, whatever element it is tagged with
-	if not PlanResolver.elements_of(actor, attack).has(Elemental.Element.SHOCK):
+	if not PlanResolver.elements_of(actor, attack, thrown).has(Elemental.Element.SHOCK):
 		return found
 	var wet := wet_cells(board, hypo)
 	var seen: Dictionary[Vector2i, bool] = {}
@@ -206,6 +209,15 @@ class Sweep extends RefCounted:
 	# WHEN the attack reaches each of `cells` (#1057 part 2): every step a cell is reached on, so a
 	# path's revisit carries two. What the aim's travel-order flash plays; nothing else reads it.
 	var steps: Dictionary[Vector2i, Array] = {}
+	# PER VICTIM, parallel to `victims` (#1058): whether the attack ITSELF struck them -- false for
+	# whoever only the current caught, who drops no payload (ruling 45) -- and which way it was going
+	# when it did, which a payload dropped on them turns to. Per HIT rather than per tile: two paths
+	# reaching one victim arrive from two sides and are two hits (ruling 7).
+	var direct: Array[bool] = []
+	var hit_facings: Array[Vector2i] = []
+	# The same direction for each of `struck`, from the first moment the attack reached that tile --
+	# what a tile attack's payloads turn to.
+	var struck_facings: Dictionary[Vector2i, Vector2i] = {}
 
 
 # THE ONE ANSWER to "what does this aim reach", asked by every site that has to agree about it: the
@@ -220,13 +232,32 @@ class Sweep extends RefCounted:
 # rather than an aim, calls sweep_paths.
 static func sweep(actor: Unit, origin_cell: Vector2i, target_cell: Vector2i, attack: AttackData,
 		board: BoardContext, hypo: Dictionary = {}, allies_only := false) -> Sweep:
+	return _sweep(actor, origin_cell, target_cell, attack, board, hypo, allies_only,
+			Vector2i.ZERO, Callable(), false)
+
+
+# A PAYLOAD's sweep (#1058): the same answer, asked of an attack fired from the cell it dropped on --
+# aimed at that cell, facing the way the attack that dropped it was going (Reach.placement_dir) --
+# and gathered against THIS PASS'S threaded positions. A payload goes off mid-pass, as a watch shot
+# does, and the board's published shoves are only the aims' (PlanResolver._unit_threaded_at).
+static func sweep_payload(actor: Unit, origin_cell: Vector2i, attack: AttackData, board: BoardContext,
+		hypo: Dictionary, facing: Vector2i) -> Sweep:
+	return _sweep(actor, origin_cell, origin_cell, attack, board, hypo, false, facing,
+			PlanResolver._unit_threaded_at.bind(board, hypo), true)
+
+
+static func _sweep(actor: Unit, origin_cell: Vector2i, target_cell: Vector2i, attack: AttackData,
+		board: BoardContext, hypo: Dictionary, allies_only: bool, facing: Vector2i,
+		occupant_at: Callable, thrown: bool) -> Sweep:
 	if attack != null and attack.is_single_target_swing():
-		return sweep_paths(actor, attack, Reach.get_paths_from(actor, origin_cell, target_cell, attack, board),
-				board, hypo, allies_only)
-	var footprint := Reach.get_affected_cells_from(actor, origin_cell, target_cell, attack, board)
-	var result := _sweep_area(actor, attack, footprint, board, hypo, allies_only)
+		var paths := Reach.get_paths_from(actor, origin_cell, target_cell, attack, board, facing)
+		return sweep_paths(actor, attack, paths, board, hypo, allies_only, occupant_at,
+				Reach.travel_facings(origin_cell, target_cell, attack, _tiles_of(paths), facing), thrown)
+	var footprint := Reach.get_affected_cells_from(actor, origin_cell, target_cell, attack, board, facing)
+	var facings := Reach.travel_facings(origin_cell, target_cell, attack, footprint, facing)
+	var result := _sweep_area(actor, attack, footprint, facings, board, hypo, allies_only, occupant_at, thrown)
 	var landed: Dictionary[Vector2i, Array] = {}
-	var steps := Reach.travel_steps(origin_cell, target_cell, attack, footprint)
+	var steps := Reach.travel_steps(origin_cell, target_cell, attack, footprint, facing)
 	for cell in steps:
 		_land(landed, cell, steps[cell])
 	_time(result, landed)
@@ -243,28 +274,76 @@ static func sweep(actor: Unit, origin_cell: Vector2i, target_cell: Vector2i, att
 #
 # `occupant_at` is who stands on a cell; empty means the board's projected answer, which is every
 # aim site's. The watch passes the resolver's threaded positions (PlanResolver._unit_threaded_at).
+#
+# `arrival` is the way each path's FIRST tile was reached (Reach.travel_facings over the paths'
+# tiles), for the one step a path cannot answer from its own tile before; after that, a path is
+# going the way its last step went (#1058). `thrown` is flood's.
 static func sweep_paths(actor: Unit, attack: AttackData, paths: Array[Array], board: BoardContext,
-		hypo: Dictionary = {}, allies_only := false, occupant_at := Callable()) -> Sweep:
+		hypo: Dictionary = {}, allies_only := false, occupant_at := Callable(),
+		arrival: Dictionary = {}, thrown := false) -> Sweep:
 	var result := Sweep.new()
 	if board == null:
 		result.struck = _tiles_of(paths)
 		result.cells = result.struck.duplicate()
+		result.struck_facings = _path_facings(paths, arrival)
 		_time(result, _path_steps(paths))
 		return result
 	var occupancy: Callable = occupant_at if occupant_at.is_valid() else board.projected_unit_at_cell
 	var hits := RulesService.gather_path_victims(actor, paths, attack, occupancy, allies_only)
-	result.victims = _step_major(hits)
+	for hit in _step_major(hits):
+		result.victims.append(hit.victim)
+		result.direct.append(true)
+		result.hit_facings.append(_arrival_of(hit.cells, hit.cells.size() - 1, arrival))
 	var struck_paths: Array[Array] = []
 	for hit in hits:
 		struck_paths.append(hit.cells)
 	result.struck = _tiles_of(struck_paths)
-	var current := flood(actor, attack, result.struck, board, hypo)
-	result.victims.append_array(caught(current.cells, board, hypo, result.victims))
+	result.struck_facings = _path_facings(struck_paths, arrival)
+	var current := flood(actor, attack, result.struck, board, hypo, thrown)
+	_add_caught(result, caught(current.cells, board, hypo, result.victims))
 	result.cells = widened(result.struck, current.cells)
 	result.links = current.links
 	# Timed off the CUT paths: a tile past a victim was never reached, so it has no step.
 	_time(result, _path_steps(struck_paths))
 	return result
+
+
+# Which way a path was going on reaching its tile `i`: its own step from the tile before, or, for its
+# first tile, the way the shape reached it from the anchor (`arrival`).
+static func _arrival_of(path: Array, i: int, arrival: Dictionary) -> Vector2i:
+	var cell: Vector2i = path[i]
+	if i > 0:
+		var before: Vector2i = path[i - 1]
+		var step := GridUtils.cardinal_direction_i_between(before, cell)
+		if step != Vector2i.ZERO:
+			return step
+	var first: Vector2i = arrival.get(cell, AttackShape.FORWARD)
+	return first
+
+
+# Each tile's direction from the FIRST moment any path reached it. Paths travel together, step 1 of
+# every path before step 2 (the step-major rule), so a tile two paths share takes the earlier arrival.
+static func _path_facings(paths: Array[Array], arrival: Dictionary) -> Dictionary[Vector2i, Vector2i]:
+	var facings: Dictionary[Vector2i, Vector2i] = {}
+	var longest := 0
+	for path in paths:
+		longest = maxi(longest, path.size())
+	for i in longest:
+		for path in paths:
+			if i >= path.size():
+				continue
+			var cell: Vector2i = path[i]
+			if not facings.has(cell):
+				facings[cell] = _arrival_of(path, i, arrival)
+	return facings
+
+
+# The current's catch joins the victims with no hit of its own: nothing to drop, nothing to face.
+static func _add_caught(result: Sweep, extra: Array[Unit]) -> void:
+	result.victims.append_array(extra)
+	for _unit in extra:
+		result.direct.append(false)
+		result.hit_facings.append(Vector2i.ZERO)
 
 
 # A path's step is its index along it, so a revisit lands a second step on the same tile.
@@ -301,19 +380,38 @@ static func _time(result: Sweep, landed: Dictionary[Vector2i, Array]) -> void:
 #
 # Non-mutating on purpose: `footprint` is Reach's fresh answer today, and appending to a caller's
 # array is how a stored footprint would grow with every sweep.
-static func _sweep_area(actor: Unit, attack: AttackData, footprint: Array[Vector2i], board: BoardContext,
-		hypo: Dictionary, allies_only: bool) -> Sweep:
+#
+# A victim's facing is the facing of the tile the gather FOUND them on -- the first footprint tile
+# whose occupant they are, which is the same walk the gather itself makes.
+static func _sweep_area(actor: Unit, attack: AttackData, footprint: Array[Vector2i],
+		facings: Dictionary[Vector2i, Vector2i], board: BoardContext, hypo: Dictionary, allies_only: bool,
+		occupant_at: Callable, thrown: bool) -> Sweep:
 	var result := Sweep.new()
 	result.cells = footprint.duplicate()
 	result.struck = footprint.duplicate()
+	result.struck_facings = facings
 	if board == null:
 		return result
-	result.victims = RulesService.gather_attack_victims(actor, footprint, board, attack, allies_only)
-	var current := flood(actor, attack, footprint, board, hypo)
-	result.victims.append_array(caught(current.cells, board, hypo, result.victims))
+	var occupancy: Callable = occupant_at if occupant_at.is_valid() else board.projected_unit_at_cell
+	result.victims = RulesService.gather_attack_victims(actor, footprint, board, attack, allies_only, occupancy)
+	for victim in result.victims:
+		result.direct.append(true)
+		result.hit_facings.append(_facing_of(victim, footprint, facings, occupancy))
+	var current := flood(actor, attack, footprint, board, hypo, thrown)
+	_add_caught(result, caught(current.cells, board, hypo, result.victims))
 	result.cells = widened(footprint, current.cells)
 	result.links = current.links
 	return result
+
+
+static func _facing_of(victim: Unit, footprint: Array[Vector2i], facings: Dictionary[Vector2i, Vector2i],
+		occupancy: Callable) -> Vector2i:
+	for cell in footprint:
+		var occupant: Unit = occupancy.call(cell)
+		if occupant == victim:
+			var facing: Vector2i = facings.get(cell, AttackShape.FORWARD)
+			return facing
+	return AttackShape.FORWARD
 
 
 # Every tile the paths cover, each once, in the order they are first reached.
@@ -326,7 +424,9 @@ static func _tiles_of(paths: Array[Array]) -> Array[Vector2i]:
 	return tiles
 
 
-static func _step_major(hits: Array[RulesService.PathHit]) -> Array[Unit]:
+# The hits that TOOK somebody, in victim order -- the hits rather than the victims since #1058, because
+# each one carries the path its payload faces along.
+static func _step_major(hits: Array[RulesService.PathHit]) -> Array[RulesService.PathHit]:
 	var taken: Array[int] = []
 	for i in hits.size():
 		if hits[i].victim != null:
@@ -335,7 +435,7 @@ static func _step_major(hits: Array[RulesService.PathHit]) -> Array[Unit]:
 		var step_a := hits[a].cells.size()
 		var step_b := hits[b].cells.size()
 		return step_a < step_b if step_a != step_b else a < b)
-	var victims: Array[Unit] = []
+	var sorted: Array[RulesService.PathHit] = []
 	for i in taken:
-		victims.append(hits[i].victim)
-	return victims
+		sorted.append(hits[i])
+	return sorted

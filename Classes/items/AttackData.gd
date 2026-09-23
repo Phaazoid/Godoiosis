@@ -141,6 +141,24 @@ enum Kind { BLUNT, SLASH, PIERCE, FIRE, SHOCK, COLD, CORROSION, NONE }
 # author is everything on the other side of that line.
 @export var effect_looks: Dictionary[Elemental.Element, EffectLook] = {}
 
+# THE PAYLOAD (#1058): another authored attack this one DROPS where it hits, resolved in full -- its
+# own damage, element, shove and victims, with the thrower still the actor and scaling as if they
+# had fired it. A PICK, never an attack built here (dev, #805's review): the payload is its own file,
+# so it authors its own reach from wherever it lands, which is what dissolved #805's burst field.
+#
+# A unit attack drops one per unit it hits itself; a tile or unit/tile attack one per tile it
+# strikes. PlanResolver.drop_payloads is the one derivation; this field only names the attack.
+#
+# NO LOOPS (ruling 46). A chain runs to any depth but always ends, because Godot cannot store a loop
+# as a reference: an attack naming itself saves as null, and two naming each other fail to load at
+# all. The editor's picker keeps one from being made (leads_back_to), and payload_chain stops at a
+# repeat as a backstop for an in-memory one.
+@export var payload: AttackData = null
+# Which way a payload's own shape faces, asked only of a carrier with NO shape of its own (a shaped
+# carrier always turns its payloads onward -- ruling 38). ON = onward, the way the attack was going;
+# OFF = board north, as a placed shape lands.
+@export var payload_turns := true
+
 # What this attack would deliver if it delivered `kind`: NONE for a heal or a pure-utility attack,
 # the kind itself otherwise. ONE home for that rule -- delivered_kind() reads it for the authored
 # field, WeaponInstance.effective_kind for the field with a mod's override composed on top.
@@ -193,20 +211,65 @@ func hits_map() -> bool:
 func hits_units() -> bool:
 	return targets == EquippableData.TargetMode.UNIT or targets == EquippableData.TargetMode.BOTH
 
-# How a readout PHRASES this attack's payload. The number stays per-kind (a carving scales off
-# aura, a weapon attack off its weapon — #72 keeps damage math off this base), but the three-state
-# question damages/heals/neither is answered HERE, so the two kinds can never word it differently.
-# Takes the DELIVERED kind rather than reading damage_kind (#424): a fitted mod may have replaced
-# it, and the caller holds the composed answer.
-func payload_text(amount: int, kind: Kind) -> String:
+# The attacks this one's chain fires, one per LEVEL below it -- its payload, that payload's payload,
+# and so on to the end. The resolver walks it level by level and the editor's fan-out readout reads
+# it, so the two cannot disagree about how deep a chain goes. Stops at the first attack it has
+# already met, this one included: a loop cannot exist on disk (ruling 46), so only an in-memory one
+# can reach here, and ending the chain is the honest answer to it.
+func payload_chain() -> Array[AttackData]:
+	var chain: Array[AttackData] = []
+	var seen: Array[AttackData] = [self]
+	var next := payload
+	while next != null and not seen.has(next):
+		chain.append(next)
+		seen.append(next)
+		next = next.payload
+	return chain
+
+# Would dropping `candidate` from this attack make a loop? True for this attack itself and for any
+# attack whose own chain leads back here. The payload picker's one exclusion (ruling 46).
+func payload_would_loop(candidate: AttackData) -> bool:
+	return candidate == self or candidate.payload_chain().has(self)
+
+# The most payloads ONE firing of this attack can drop -- PlanResolver._drops_of's rule counted rather
+# than walked: one per tile for a tile attack, one per path for a single-target swing (two paths
+# reaching one unit are two hits), one per tile otherwise (a tile holds one unit), and one for an
+# attack with no shape. An upper bound on what the board can offer, never a prediction of it.
+func drops_at_most() -> int:
+	if attack_shape == null:
+		return 1
+	if is_single_target_swing() and not hits_map():
+		return attack_shape.path_lengths.size()
+	return attack_shape.tiles().size()
+
+# The WORST CASE the chain fans out to, one count per level below this attack: level 1 is what this
+# attack can drop, level 2 what all of those can drop in turn, and so on. The editor warns on a big
+# one and never refuses it (ruling 41).
+func payload_fanout() -> Array[int]:
+	var levels: Array[int] = []
+	var count := 1
+	var carrier: AttackData = self
+	for payload in payload_chain():
+		count *= carrier.drops_at_most()
+		levels.append(count)
+		carrier = payload
+	return levels
+
+# How a readout PHRASES what this attack does on a HIT. The number stays per-kind (a carving scales
+# off aura, a weapon attack off its weapon — #72 keeps damage math off this base), but the
+# three-state question damages/heals/neither is answered HERE, so the two kinds can never word it
+# differently. Takes the DELIVERED kind rather than reading damage_kind (#424): a fitted mod may have
+# replaced it, and the caller holds the composed answer. Was payload_text until #1058 gave "payload"
+# its own meaning, the attack a hit drops.
+func hit_text(amount: int, kind: Kind) -> String:
 	if deals_no_damage:
 		return "No damage"
 	if heals:
 		return "Heals %d" % amount
 	return "Damage %d, %s" % [amount, kind_name(kind)]
 
-# The targeting channel's readout token (#135 round 2) — same one-spelling rule as payload_text,
-# deliberately its own function: payload and targeting are different questions. Concise parens by
+# The targeting channel's readout token (#135 round 2) — same one-spelling rule as hit_text,
+# deliberately its own function: what a hit does and what it may land on are different questions. Concise parens by
 # dev call ("(unit)" / "(tile)" / "(unit/tile)"); Glossary's ATTACK_TARGETING entry explains them.
 func targets_text() -> String:
 	if targets == EquippableData.TargetMode.BOTH:
@@ -265,7 +328,10 @@ static func property_sections() -> Array[Dictionary]:
 		{"title": "Range and shape", "fields": PackedStringArray(["max_range", "min_range", "max_and_a_half", "attack_shape", "swing"])},
 		{"title": "Who it can hit", "fields": PackedStringArray(["targets", "hits_allies", "hits_self", "pierces_guard"])},
 		{"title": "Height", "fields": PackedStringArray(["vertical_rule", "up_tolerance", "down_tolerance", "arc_clearance"])},
-		{"title": "Payload", "fields": PackedStringArray(["heals", "deals_no_damage", "power", "damage_kind", "knockback", "sound"])},
+		# "On hit" was "Payload" until #1058 gave that word to the attack a hit DROPS, which is the
+		# section right under it: what a hit does, then what it leaves behind.
+		{"title": "On hit", "fields": PackedStringArray(["heals", "deals_no_damage", "power", "damage_kind", "knockback", "sound"])},
+		{"title": "Payload", "fields": PackedStringArray(["payload", "payload_turns"])},
 		{"title": "How it is used", "fields": PackedStringArray(["can_counter", "can_overwatch"])},
 		# LAST because it is the biggest: one picker plus every look row the element has, which for
 		# SHOCK is thirty-five. Placed above "How it is used" it would push two checkboxes off the
@@ -310,6 +376,8 @@ static func in_section(sections: Array[Dictionary], title: String, fields: Packe
 #   delivered_kind()     -- the SAME rule the None caption reads, so the hidden picker and the
 #                           sentence standing in for it can never disagree about whether a kind is
 #                           delivered. deliver() is that rule's one home.
+#   payload_turns        -- read only when THIS attack has no shape (a shaped one always turns its
+#                           payloads onward) and the payload HAS one (a single cell has no facing).
 # `scaling_blend` is named from here though only WeaponAttackData has it: the RULE is this class's
 # (deals_no_damage suppresses scaling, per its own comment), and a name matching no row is ignored.
 #
@@ -327,6 +395,8 @@ func hidden_fields() -> PackedStringArray:
 		hidden.append_array(["power", "scaling_blend"])
 	if delivered_kind() == Kind.NONE:
 		hidden.append("damage_kind")
+	if attack_shape != null or payload == null or payload.attack_shape == null:
+		hidden.append("payload_turns")
 	# ...and the look section is absent unless this attack carries an element that HAS one (#900).
 	# Its heading goes with it: a section drawn as a bare title over nothing is worse than no
 	# section, and _draw_sections derives that rather than being told (see its own note).
@@ -369,5 +439,7 @@ static func property_tips() -> Dictionary:
 		"pierces_guard": "Ignores a Guard -- the hit lands on whoever it was aimed at, bodyguard or no.",
 		"damage_kind": "How the damage ARRIVES -- the thing armour can answer. Blunt is a plane (hammer, fist, thrown rock, a jet of water), slash a line (blade), pierce a point (spear, bullet, arrow, ice spear). Fire, shock, cold and corrosion are non-physical deliveries. SEPARATE from the element: a fireball is Fire kind AND applies the fire effect; an ice spear is Pierce AND applies the ice effect. Ignored on a heal or a no-damage attack, which read as None.",
 		"effect_looks": "A named LOOK for this attack's elemental effect, shared with every other attack that names it -- so a family of shock weapons can share one feel and one of them can differ.\nEach row inherits the Game tab's value until you untick it. Leave the look empty and nothing changes; pick (none) and the effect plays exactly as the Game tab has it tuned.\nThe RULE is never in here: how far a current arcs is a property of electricity, not of an attack.",
+		"payload": "Another attack this one DROPS where it hits, which then goes off as a whole attack of its own: its own damage, element, shove and shape, with the thrower still the attacker.\nA unit attack drops one per unit it hits (a miss drops nothing). A tile attack drops one per tile it strikes, whether anyone is there or not.\nOn a unit it goes off where they LAND, after this hit's shove. A payload may carry a payload of its own, to any depth, but never back round to an attack already in the chain.",
+		"payload_turns": "Which way the payload's shape faces. On, it faces the way this attack was going. Off, it lands as drawn, top of the grid to board north.\nOnly asked of an attack with no shape of its own: a shaped attack always turns its payloads the way it was travelling.",
 		"can_overwatch": "Makes this an OVERWATCH attack, and only that -- it is aimed as a standing watch and never fired directly, so it does not appear in the attack menu, the AI never picks it, and it cannot be a weapon's main. It fires on the first enemy who enters the aimed cells during someone else's turn, once, then it is spent.",
 	}

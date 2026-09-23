@@ -17,8 +17,11 @@ var source_attack: AttackAction
 const COUNTER_ATTACK_ICON := preload("res://Art/Icons/ActionIcons/CounterAttackIcon.png")
 
 
+# A null target is a CELL counter aimed at its own origin -- only ever a payload with nobody in reach
+# (#1058), which still goes off; a counter proper always has somebody to answer.
 func init_counter(counter_unit: Unit, target_unit: Unit, attack_origin: Vector2i, source: AttackAction):
-	init(counter_unit, attack_origin, target_unit, target_unit.get_projected_destination())
+	var aim := attack_origin if target_unit == null else target_unit.get_projected_destination()
+	init(counter_unit, attack_origin, target_unit, aim)
 
 	action_type = ActionType.COUNTER_ATTACK
 	source_attack = source
@@ -35,15 +38,22 @@ func get_action_icon() -> Texture2D:
 	var lethal := lethality_icon(resolved)
 	return lethal if lethal != null else COUNTER_ATTACK_ICON
 
-static func create_counter_volley(counter_unit: Unit, origin: Vector2i, victims: Array[Unit], source: AttackAction, footprint: Array[Vector2i], arc_links: Array[Conduction.Link] = []) -> Array[CounterAttackAction]:
+# `payload` is set when this volley is a counter's PAYLOAD rather than the counter itself (#1058,
+# PlanResolver.drop_payloads): it fires that attack instead, and with nobody in reach it is still one
+# cell attack, since a payload always goes off. Built here rather than by hand so the volley is
+# stamped by the one factory every counter volley comes out of.
+static func create_counter_volley(counter_unit: Unit, origin: Vector2i, victims: Array[Unit], source: AttackAction, footprint: Array[Vector2i], arc_links: Array[Conduction.Link] = [], payload: AttackData = null) -> Array[CounterAttackAction]:
 	var counters: Array[CounterAttackAction] = []
 	var volley: Array[AttackAction] = []
 	# The attack this unit fires reactively: a rune counters with whatever it would currently
 	# fire (unchanged #30 quirk); a weapon ALWAYS counters with its main attack (#72 ruling —
 	# overwatch-style alt-attack countering is out of scope, #73). Derived here, not stored, so
 	# the counter's damage/elements/pattern match what get_counter_attack() decided.
-	var chosen := counter_unit.get_counter_attack()
-	for victim in victims:
+	var chosen: AttackData = payload if payload != null else counter_unit.get_counter_attack()
+	var hit: Array[Unit] = victims.duplicate()
+	if hit.is_empty() and payload != null:
+		hit.append(null)
+	for victim in hit:
 		var counter := CounterAttackAction.new()
 		counter.init_counter(counter_unit, victim, origin, source)
 		counter.fired_attack = chosen

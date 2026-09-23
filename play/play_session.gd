@@ -664,7 +664,8 @@ func _apply_attack(atk: AttackAction, events: Array[String]) -> void:
 		target.remove_element_state(s)
 	for s in r.states_added:
 		target.add_element_state(s, r.state_turns.get(s, 0))
-	events.append("%s hits %s for %d%s" % [handle_for(actor), handle_for(target), r.damage, _lethality_tag(r.lethality)])
+	var dropped := " (payload)" if atk.dropped_by != null else ""
+	events.append("%s hits %s for %d%s%s" % [handle_for(actor), handle_for(target), r.damage, _lethality_tag(r.lethality), dropped])
 	# Knockback (#84): the headless stand-in for AttackAction.execute()'s shove — the resolver
 	# already picked the landing cell (stopped at any wall/unit/edge), so this just applies it.
 	if r.knockback_applied and is_instance_valid(target):
@@ -696,8 +697,11 @@ func _apply_attack(atk: AttackAction, events: Array[String]) -> void:
 # Every one of these is a SPEND the resolver already decided: it records a burn only when the
 # attunement changed the damage, and a charge only when the pass still had one to give. There is
 # nothing to judge here.
+#
+# A PAYLOAD spends nothing (#1058) -- MIRRORS AttackAction.execute: it was never fired, the hit that
+# dropped it was.
 func _spend_firing_costs(atk: AttackAction, actor: Unit) -> void:
-	if atk.is_secondary_hit:
+	if atk.is_secondary_hit or atk.dropped_by != null:
 		return
 	var r := atk.resolved
 	if atk.fired_attack is WeaponAttackData:

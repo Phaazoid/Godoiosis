@@ -220,17 +220,21 @@ func _start_section(title: String) -> VBoxContainer:
 func _is_attack_action(a: BaseAction) -> bool:
 	return a is AttackAction and not a is CounterAttackAction
 
-# A volley = the run of consecutive attack entries sharing one actor (members come out of
-# resolve_plan together). One actor per aim, so this also yields singletons for normal attacks.
+# A volley = the run of consecutive attack entries sharing one VOLLEY -- the array create_volley
+# links its members into. It was "sharing one actor" until #1058: a payload keeps its thrower as the
+# actor and sits right behind its parent, so an actor run swallowed the payload's hits into the
+# parent's header and counted them as the parent's. A lone attack's volley is its own.
 func _collect_volley_group(start: int) -> Array[BaseAction]:
-	var actor: Unit = _last_entries[start].action.actor
+	var first := _last_entries[start].action as AttackAction
 	var group: Array[BaseAction] = []
 	var j := start
 	while j < _last_entries.size():
 		var e: ActionQueueDisplayEntry = _last_entries[j]
 		if e == null or e.entry_type != ActionQueueDisplayEntry.EntryType.ACTION:
 			break
-		if not _is_attack_action(e.action) or e.action.actor != actor:
+		if not _is_attack_action(e.action):
+			break
+		if e.action != first and (first.volley.is_empty() or not is_same((e.action as AttackAction).volley, first.volley)):
 			break
 		group.append(e.action)
 		j += 1

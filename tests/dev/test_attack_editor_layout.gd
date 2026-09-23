@@ -369,3 +369,64 @@ func test_giving_an_attack_a_shape_brings_the_swing_box_back_live() -> void:
 
 	DevWidgets.write(attack, "attack_shape", null)
 	assert_bool(row.visible).override_failure_message("the row never went away again").is_false()
+
+
+# --- the Payload section (#1058) --------------------------------------------------------------
+
+func _plates() -> Array[Node]:
+	var plates: Array[Node] = []
+	for node in _all_of(_editor.editor_container, "VBoxContainer", []):
+		if node is ShapePlate:
+			plates.append(node)
+	return plates
+
+
+# Picking a payload REBUILDS the form (the tick under it asks the payload's shape), and the rebuilt
+# form carries the payload's plate. Driven through the real dropdown, not by setting the field.
+func test_picking_a_payload_draws_its_plate() -> void:
+	_open(WeaponAttackData.new())
+	assert_array(_plates()).override_failure_message("a plate drawn with no payload picked").is_empty()
+	var picker := _option("Payload attack")
+	assert_object(picker).override_failure_message("no Payload picker in the form").is_not_null()
+	assert_int(picker.item_count).override_failure_message(
+		"fixture: the picker offers nothing to pick").is_greater(1)
+	picker.item_selected.emit(1)
+	assert_object(_editor.current.payload).override_failure_message("the pick wrote nothing").is_not_null()
+	assert_int(_plates().size()).is_equal(1)
+
+
+# The picker is asked of the FILE the form edits: a pool mode edits a copy, and no chain on disk can
+# lead back to a copy, so asking the copy alone would offer an attack as its own payload.
+func test_the_picker_never_offers_the_loaded_attack_as_its_own_payload() -> void:
+	var library := WeaponAttackCatalog.get_library()
+	assert_bool(library.is_empty()).override_failure_message(
+		"fixture: the attack library is empty, so there is no file to load").is_false()
+	var loaded_name: String = library.keys()[0]
+	var file: WeaponAttackData = library[loaded_name]
+	_editor._mode = AttackEditorTool.Mode.WEAPON_ATTACK
+	_editor._items = library
+	_editor._loaded_name = loaded_name
+	_editor.current = file.duplicate(true)
+	assert_array(_editor._payload_choices().values()).not_contains([file])
+
+
+# The tick is asked only of a SHAPELESS carrier dropping a SHAPED payload (rulings 35-37).
+func test_the_turn_tick_shows_only_for_a_shapeless_carrier_dropping_a_shaped_payload() -> void:
+	var shaped := WeaponAttackData.new()
+	shaped.attack_shape = AttackShape.new()
+	var carrier := WeaponAttackData.new()
+	carrier.payload = shaped
+	_open(carrier)
+	var row := _row("Payload Turns")
+	assert_object(row).override_failure_message("no Payload Turns tick in the form at all").is_not_null()
+	assert_bool(row.visible).is_true()
+
+	DevWidgets.write(carrier, "attack_shape", AttackShape.new())
+	assert_bool(row.visible).override_failure_message(
+		"a shaped carrier offers the tick, but always turns its payloads onward").is_false()
+
+	DevWidgets.write(carrier, "attack_shape", null)
+	shaped.attack_shape = null
+	_editor.populate()
+	assert_bool(_row("Payload Turns").visible).override_failure_message(
+		"a single-cell payload has no facing, so the tick reaches nothing").is_false()
