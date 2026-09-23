@@ -133,8 +133,8 @@ func execute():
 		await actor.visuals.play_attack_lunge(direction)
 
 	# The block moment (#414), slice one: the bodyguard lunges toward the unit it is covering, the
-	# same lunge an attack plays. The loud jump-in-front the design wants waits on the battle-zoom /
-	# sprite-FX stack (#358) — no bespoke animation machinery ahead of it. Secondary volley members
+	# same lunge an attack plays. The loud jump-in-front the design wants is ANIMATION and waits on
+	# the battle zoom (#603, on #629's SpriteAnimator) -- no bespoke machinery ahead of it. Secondary volley members
 	# skip it for the reason they skip the attacker's lunge: one gesture per blast.
 	if blocked_for != null and not is_secondary_hit and is_instance_valid(blocked_for):
 		var block_dir = GridUtils.cardinal_direction_between(target.get_projected_destination(), blocked_for.get_projected_destination())

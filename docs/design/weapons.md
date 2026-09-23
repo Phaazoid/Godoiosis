@@ -119,7 +119,7 @@ Recurs across `Main info` + `Precombat Popup` + scratchpad: **adjacent units can
 - **The cell-anchored disarm became a unit-and-range PAIR** (range authored, default 1): separation beyond range drops it however it happens; displacement that keeps the pair in range keeps the ward.
 - **Access flipped from gear-gated toward BASIC** (a lean, playtest-subject): everyone may Guard; kit — weapon, job, armor, carving, source-agnostic — grants the brace bonus. The capture's ownership worry (a carving-granted Defend crossing the weapon/jobs split) dissolves with the verb leaving both sides.
 - The floated counterplays all survived as authored content: the Rev-precedent **pierce flag**, plus shove-the-blocker, shove-the-ward, and AoE-the-pair; the AI-untargets-the-ward idea filed to #117 as a preference-never-a-ban.
-- Both canon constraints it had to satisfy, it satisfies: standing-policy-never-prompt by construction; the cross-phase standing-effect questions are now #413/#414 build questions (see [resolution-pipeline.md](resolution-pipeline.md)'s amended note). Presentation landed in canon too: ground-channel ward link now, the loud battle-zoom block on #358's stack later.
+- Both canon constraints it had to satisfy, it satisfies: standing-policy-never-prompt by construction; the cross-phase standing-effect questions are now #413/#414 build questions (see [resolution-pipeline.md](resolution-pipeline.md)'s amended note). Presentation landed in canon too: ground-channel ward link now, the loud battle-zoom block later, as ANIMATION on #603's battle-zoom machinery (#358's grill, 2026-09-22, corrected the older pointer at #358's status stack).
 
 ## The seven weapon families (identities — [WORKSHOP])
 

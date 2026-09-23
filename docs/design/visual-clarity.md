@@ -985,8 +985,10 @@ their candidates marked *nowhere in either view* until #316, and Squad Up only l
 someone had patched that one screen. And **the freed channel's first occupant was filed in two
 halves (dev direction, 2026-08-18), of which the first is now BUILT:**
 [#357](https://github.com/Phaazoid/Godoiosis/issues/357) puts a `StateIcons` row just above each
-unit's health bar, and [#358](https://github.com/Phaazoid/Godoiosis/issues/358) — still open —
-makes the sprite itself wear its status (wet drip, frost sheen, Crisis), the channel that keeps
+unit's health bar, and [#358](https://github.com/Phaazoid/Godoiosis/issues/358) — slice 1 BUILT
+2026-09-22 for Wet and Chilled, Crisis split to [#1094](https://github.com/Phaazoid/Godoiosis/issues/1094)
+(see `presentation-effects.md` → *A unit WEARS its element state*) —
+makes the sprite itself wear its status, the channel that keeps
 states readable when [#350](https://github.com/Phaazoid/Godoiosis/issues/350)'s toggle hides the
 bars. Always-on state icons remain the trigger #229 named for the crowding question it deferred —
 two states cannot crowd, a longer vocabulary can.
@@ -1335,9 +1337,11 @@ every case something does. (*A third health-bar state: damaged only* was the six
 
 **Unit sprites should LOOK hurt.** Art reflecting health, so a nearly-dead unit reads as nearly dead
 without a bar at all. This is **the same thread as the Crisis-sprite item below** — sprite-as-status,
-art-gated, and the third consumer of [#358](https://github.com/Phaazoid/Godoiosis/issues/358)'s
-effect stack. Treat them as one design: whatever answers "how does a sprite show a state" answers
-both, and answering them separately is how two effect stacks get built. Two constraints already on
+art-gated, and a future tenant of [#358](https://github.com/Phaazoid/Godoiosis/issues/358)'s
+effect stack, which EXISTS since 2026-09-22 (`UnitSprite3D.show_status` and its material). Treat them
+as one design: whatever answers "how does a sprite show a state" answers both, and answering them
+separately is how two effect stacks get built. #358's grill kept this out on purpose (dev: *"just
+wet and chilled for now"*). Two constraints already on
 the books: the #346 channel rule says what a unit **is** belongs *on/above the unit* (this qualifies),
 and the restraint doctrine — *fancy effects in the correct places rather than everywhere* — bites
 hard here, since "every damaged unit" is close to "everywhere". Must reach both views or be declared
@@ -2720,7 +2724,10 @@ flash and pulse already reach a downed unit in the boot view).
 hover states-row is the only marker today, and a battle-long no-safety-net state deserves more —
 **the map sprite itself should reflect Crisis** (art-gated; needs a sprite/tint/overlay treatment
 per unit or a generic one). "It should be very obvious a unit is in crisis mode." Scoped as the
-third consumer of [#358](https://github.com/Phaazoid/Godoiosis/issues/358)'s effect stack.
+third consumer of [#358](https://github.com/Phaazoid/Godoiosis/issues/358)'s effect stack, then
+split out of that ticket at its grill (2026-09-22) as
+[#1094](https://github.com/Phaazoid/Godoiosis/issues/1094). The stack now exists; the one constraint
+already found is that Crisis cannot be a red TINT, since an enemy already wears one.
 
 *Authored by Claude (Opus 4.8) at @Phaazoid's direction, 2026-06-26.*
 

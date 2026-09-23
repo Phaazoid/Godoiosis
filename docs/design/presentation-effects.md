@@ -405,10 +405,12 @@ cannot arrange the values differently (see *An ATTACK may author what its elemen
 visible*. Its strongest single item is that **BLAZE and BURNING are still visually identical** (moot since #890 retired BLAZE: there is one fire, and how long it burns is the ground's)
 (#174's one-texture ruling; #324 recorded not fixing it as deliberate), i.e. two mechanically
 different states the board refuses to distinguish. **Its sibling is
-[#358](https://github.com/Phaazoid/Godoiosis/issues/358), the UNIT channel** — wet drip, frost
-sheen, Crisis — and the two are named together because they can disagree: a CHILLED unit wearing a
-frost sheen while standing on a FROZEN tile drawn as a flat blue quad is two answers to one idea.
-Whatever #358 settles for layering and intensity is the doctrine here too. Restraint governs both
+[#358](https://github.com/Phaazoid/Godoiosis/issues/358), the UNIT channel** — built for Wet and
+Chilled in its slice 1 (see *A unit WEARS its element state*) — and the two are named together
+because they can disagree: a CHILLED unit wearing a frost sheen while standing on a FROZEN tile drawn
+as a flat blue quad is two answers to one idea. That is why #358's grill REFUSED a frost blot under
+a Chilled unit: it would have been a second answer beside FROZEN ground. What #358 settled for
+intensity (a lit tint plus glowing marks) is the doctrine here too. Restraint governs both
 (dev, #346): *effects in the correct places rather than everywhere* — "the tab looks empty" is not a
 reason for a state to earn one.
 
@@ -775,8 +777,10 @@ two laws under it still speak of fire, fire being what a layer drawing over it w
 
 **Deliberately absent: the sprite blowout.** `UnitMirror` rewrites every unit sprite's `modulate`
 each frame from the 2D authority, so an effect writing the same property is stomped and is a second
-writer to a single-driver channel. An effect TINT channel on the mirror belongs to
-[#358](https://github.com/Phaazoid/Godoiosis/issues/358), which owns what a unit LOOKS like.
+writer to a single-driver channel. What a unit LOOKS like belongs to
+[#358](https://github.com/Phaazoid/Godoiosis/issues/358), and since its slice 1 there IS a channel for
+it that does not touch `modulate`: `UnitSprite3D.show_status` and its material. A blowout would be a
+new tenant of that material, not a second writer to `modulate`.
 
 **3D only** — the flat view keeps the aim wash it already has, on
 [#292](https://github.com/Phaazoid/Godoiosis/issues/292)'s ledger.
@@ -925,6 +929,72 @@ wielder's fitted mods on top. One answer, two readers, one fewer branch than bef
 **Measured rather than argued: the new field adds no save churn.** An empty dictionary is omitted at
 its default, and no shipped attack's round trip emits it — checked with a throwaway tool SCENE, run
 and deleted, which is the dirty-tree rule's own instruction one ticket on.
+
+### A unit WEARS its element state ([#358](https://github.com/Phaazoid/Godoiosis/issues/358), slice 1 BUILT 2026-09-22)
+
+With health bars off by default (#350), a unit's element state was invisible on the board unless
+hovered. The sprite itself now wears it. The look was grilled against rendered mockups on the real
+art before anything was planned (the rulings are on #358): **Wet** is a water tint with drip STREAKS
+running down the body; **Chilled** is an icy desaturated tint, a SHEEN band sliding down the body,
+RIME on the top edges, twinkling GLINTS and ICICLES hanging from overhangs on the sprite's own plane.
+Crisis was cut from this ticket (dev: *"just wet and chilled for now"*). **3D only**, on
+[#292](https://github.com/Phaazoid/Godoiosis/issues/292)'s ledger: the flat view is dev-only.
+
+**The mechanism is a HAND COPY of the engine's own sprite material, and that is a declared second
+representation.** Godot 4.7.1 exposes no way to read the shader a `BaseMaterial3D` generates, so
+`unit_status.gdshaderinc` reproduces it from the engine source (`get_material_for_2d` plus
+`SpriteBase3D`): per-pixel shading, `depth_prepass_alpha`, cull disabled, the FIXED_Y billboard keyed
+off `MAIN_CAM_INV_VIEW_MATRIX` (which is what keeps shadows consistent), and `modulate` arriving as
+the sRGB vertex colour. **Measured pixel-identical** (0 differing pixels) for a real sprite (prepass,
+cast shadow, flip, faction tint), a ghost and an atlas frame, by `tools/sprite_parity/`, which needs
+a window and so is a TOOL rather than a test. **The engine stays authoritative: re-run that probe
+after any engine upgrade.** Two things bound the risk. The override is carried ONLY while a unit
+wears a state, so every other sprite is the engine's own. And the ghost variant sets
+`render_priority` itself, because the engine applies it to its OWN material only when `alpha_cut` is
+DISABLED (#317) and never to an override.
+
+- **The ART rules are a pure scan, not shader logic.** `StatusArt` turns a sprite's image into an
+  effect map, the same size and read with the same UV: rime weight, icicle depth under an overhang,
+  and the ink-height fraction the sheen rides. It also returns the OVERHANG list, the one answer to
+  where the body drips; slice 2's drops fall from exactly where Chilled's icicles hang. An
+  `AtlasTexture` frame resolves to its parent sheet, because a Sprite3D's UVs index the parent.
+  Icicle LENGTH is clipped in the shader against knobs, so no knob can leave a stale map in the cache.
+- **Tint is lit; the marks GLOW.** The tint goes to `ALBEDO`, so a unit still belongs to its scene;
+  streaks, sheen, rime, glints and icicles go to `EMISSION`, so the state reads on a night board
+  (#229's reasoning for the health cubes). **The tints are mixed in DISPLAY space**, as the approved
+  mockup mixed them. Run on linear albedo, the same formulas turned the art's black outline mid-blue.
+- **Time is the effect's own clock.** `UnitMirror` advances one status clock and every fade by the
+  SCALED delta, so `Pacing.hitstop` freezes the lot (#887's law); the shader never reads `TIME`.
+  Measured: a new `Engine.time_scale` reaches `_process` one frame late, so a hitstop's first frame
+  still carries a real delta.
+- **The door is `UnitSprite3D.show_status`**, called every frame by the mirror. It READS `texture`
+  and never writes it, so `_apply_state_texture` stays the one writer (#629), and walk art, downed
+  art and an animation's borrow all rebind on the next push with nothing to announce them.
+- **Ghosts wear the unit they stand in for.** A queued move or a shove preview hides the real
+  sprite (#232), so the state rides the ghost, or it vanishes exactly while the player plans
+  around it. `OverlayMirror` tags planning and knockback ghost entries with their unit's id, inside
+  the entry so `_last_ghosts` sees who a ghost IS (#308), and the mirror dresses each ghost every
+  frame, outside that rebuild gate. The move-hover stand-in (#1069) stays plain: it is a move nobody
+  has made.
+- **A third seed policy, per UNIT**, beside #656's per-cell and per-occurrence: a phase from the
+  instance id, so two sprites of the same art do not twinkle in lockstep. Presentation only, and never
+  replayed.
+- **Knobs:** `StatusLook`, fifteen rows on the Game tab's Elemental page. No sweep is needed, because
+  `StatusLook.push` reads them every frame. The HUES are not knobs of their own:
+  `ElementPalette.color_for_state` (Water, Ice) is the answer, so tuning an element colour moves this
+  too. The ticket's "Look tab presets" line predated #373; nobody should disagree about a status read
+  between boards.
+- **A readback law, because a readback lies.** A `ShaderMaterial` stores a parameter it was handed
+  whether or not the shader declares it (measured), so a misspelled uniform reads back fine and draws
+  nothing. `test_unit_status.gd` checks every pushed name against the shader's own uniform list in
+  both directions.
+
+**What slice 1 does not do.** Slice 2 is the world half: 3D drips landing on the real ground, the
+damp blot underfoot, cold mist and frost breath. Its one open mechanism fork is the blot, because a
+`Decal` would darken the squad ring and the move grid: they share `WORLD_RENDER_LAYER` with the
+ground. Chilled blocks Wet as a RULE in #1092, so this slice never draws both. Reaction beats (steam,
+shatter, freeze) are their own follow-up.
+
 ### Conventions the art commission must carry (pending look-dev experiments)
 
 Two Tier-1/2 ideas below change *what art gets ordered*, so they are experiments to run in the look-dev scene **before** any commission, then locked into #176's conventions list:
