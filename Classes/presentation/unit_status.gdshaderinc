@@ -46,6 +46,17 @@ float status_hash(vec2 p) {
 	return fract(sin(dot(p, vec2(12.9898, 78.233))) * 43758.5453);
 }
 
+// The two TINTS are mixed in display space, as the approved mockup mixed them. The same formulas run
+// on linear albedo come out far stronger on dark texels -- measured, they turned the art's black
+// outline mid-blue -- and an outline is what makes the silhouette read.
+vec3 status_to_display(vec3 c) {
+	return pow(max(c, vec3(0.0)), vec3(1.0 / 2.2));
+}
+
+vec3 status_to_linear(vec3 c) {
+	return pow(max(c, vec3(0.0)), vec3(2.2));
+}
+
 void vertex() {
 	MODELVIEW_MATRIX = VIEW_MATRIX * mat4(
 			vec4(normalize(cross(vec3(0.0, 1.0, 0.0), MAIN_CAM_INV_VIEW_MATRIX[2].xyz)), 0.0),
@@ -74,7 +85,9 @@ void fragment() {
 	float column = status_hash(vec2(texel.x, status_seed));
 
 	if (body && wet > 0.0) {
-		rgb = mix(rgb, (rgb * 0.45 + wet_hue.rgb * 0.55) * 0.9, wet_tint * wet);
+		vec3 shown = status_to_display(rgb);
+		vec3 hue = status_to_display(wet_hue.rgb);
+		rgb = status_to_linear(mix(shown, (shown * 0.45 + hue * 0.55) * 0.9, wet_tint * wet));
 		if (column < wet_streak_density) {
 			float run = fract(texel.y / 8.0 - status_time * wet_streak_speed * (0.5 + 0.5 * column) + column * 7.0);
 			if (run < 0.2) {
@@ -85,8 +98,9 @@ void fragment() {
 
 	if (body && chill > 0.0) {
 		vec3 frost = mix(chill_hue.rgb, vec3(1.0), 0.75);
-		float lum = dot(rgb, vec3(0.3, 0.59, 0.11));
-		rgb = mix(rgb, lum * chill_hue.rgb * 1.3, chill_tint * chill);
+		vec3 shown = status_to_display(rgb);
+		float lum = dot(shown, vec3(0.3, 0.59, 0.11));
+		rgb = status_to_linear(mix(shown, lum * status_to_display(chill_hue.rgb) * 1.28, chill_tint * chill));
 		glow += frost * fx.r * chill_rime_glow * chill;
 		float band = fract(status_time / max(chill_sheen_period, 0.01) + status_seed) * 1.7 - 0.35;
 		if (abs(fx.b - band - fx.a * 0.3) < chill_sheen_width) {
