@@ -303,6 +303,10 @@ func _wire_signals() -> void:
 	# every edge the panel can be open on.
 	unit_info_panel.loadout_changed.connect(func() -> void:
 		refresh_action_queue(squad_manager.active_squad))
+	# The dock's tile body (#1105) reads the one tile-facts builder, handed over rather than looked
+	# up so the panel never learns what a game is.
+	unit_info_panel.tile_sections_source = func(cell: Vector2i) -> Array[TileReadout.Section]:
+		return TileReadout.compose(self, cell)
 
 	squad_action_queue_control.execute_requested.connect(_on_queue_execute_requested)
 	squad_action_queue_control.cancel_requested.connect(_on_queue_cancel_requested)
@@ -593,7 +597,8 @@ func _lone_queued_move(gesture: Array[BaseAction]) -> MoveAction:
 #
 # An empty DEPLOYMENT cell offers the units still in reserve, which is the dev's own description:
 # "click a blank spot and click add, and get a dropdown of all deployable units to bring one in."
-# A click anywhere else rests the board, so a mis-click closes whatever was open.
+# A click anywhere else rests the board, so a mis-click closes whatever was open, and inspects the
+# tile it landed on (#1105) -- the phase reads the board the way an idle board does.
 func _click_pre_mission(cell: Vector2i) -> void:
 	var target := unit_at_pointer(cell)
 	if target != null:
@@ -605,10 +610,20 @@ func _click_pre_mission(cell: Vector2i) -> void:
 		main_action_menu.show_deploy_menu(cell, get_viewport().get_mouse_position())
 		return
 	clear_selection()
+	inspect_tile(cell)
+
+# An empty tile opens its full readout in the Inspect dock (#1105, dev: "clicking an empty tile
+# opens its full info directly" -- no ring, since a tile has no verbs yet). The hover card names
+# what is here; this explains it. Off the map there is no tile, so nothing opens.
+func inspect_tile(cell: Vector2i) -> void:
+	if grid.get_cell_tile_data(cell) == null:
+		return
+	unit_info_panel.show_tile(cell, TileReadout.title_of(self, cell), TileReadout.icon_of(self, cell))
 
 func _click_idle(cell: Vector2i) -> void:
 	var target := unit_at_pointer(cell)
 	if target == null:
+		inspect_tile(cell)
 		return
 	select_unit(target, cell)
 	game_state = GameState.TILE_SELECTED

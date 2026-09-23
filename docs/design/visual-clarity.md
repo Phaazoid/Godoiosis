@@ -7,7 +7,7 @@ its child [#49 Action Queue UX](https://github.com/Phaazoid/Godoiosis/issues/49)
 This is a *guidelines* doc, not a spec — it captures the principles we're holding the work to,
 plus the running order of the queue-UX checklist. Update it as items land.
 
-**Canon checked through #1100 (2026-09-23).**
+**Canon checked through #1105 (2026-09-23).**
 
 ## Principles
 
@@ -56,6 +56,18 @@ plus the running order of the queue-UX checklist. Update it as items land.
    note `project.godot` cannot carry: dev, *"most people know what attack and move mean"* — the
    readouts stay, they just stop popping up mid-flow). Still open here: the rune "reacts-with"
    list — #167's inventory tooltip shows recipe/hit/strain, not reactions (the middle term was "payload" until #1058 gave that word to the attack a hit drops).
+
+   *A tile is INSPECTABLE since [#1105](https://github.com/Phaazoid/Godoiosis/issues/1105) slice 1
+   (2026-09-23), out of the 2026-09-22 stream playtest ("no way to inspect things on tiles like
+   overwatch paint, and zones").* Clicking an empty tile opens its full readout in the Inspect dock,
+   one boxed section per layer — **Overwatch** (who watches it: side, unit, attack), **Zones** (each
+   drawn zone and what its kind asks, including *how* to take a capture point), **Ground** (this
+   card's own lines). A unit's Inspect reaches its tile through a Unit/Tile switch. `TileReadout`
+   (`Classes/board/`) is the ONE builder both surfaces read; it took over `_tile_readout_lines`
+   unchanged. **The dev's ruling from the mockup round replaces this item's "every tile carries a
+   card of states, rules and interactions" in slice 2: the HOVER NAMES what is on a tile (one tag per
+   layer, wearing its board marking), the CLICK EXPLAINS it.** Until slice 2 ships the card is
+   unchanged, so no information is lost while slice 1 stands alone.
 
 ## #49 Action Queue UX — CLOSED, all items shipped
 
@@ -3336,6 +3348,8 @@ Two things about the SHAPE of that fix worth keeping. The old case pinned *the r
 **Fixed positions are what make a wheel learnable, so the ORDER is a rule with a reason.** `FIRE / AIR / WATER / AETHER / EARTH`, clockwise from twelve: Fire↔Water and Earth↔Air are the two elemental oppositions, five arcs put the furthest pair 144° apart, and this order puts *both* pairs there — Aether, the odd one, takes the arc left over. Because the positions never move, colour alone carries identity at card scale and no labels are needed; the tooltip names what the cursor is in.
 
 **A docked panel has a height budget and nothing says so out loud.** The inspect panel is 300 × **720** — the viewport's own height — and its body already wanted 648 of that before this ticket, so every future row competes for 72px. The first attempt put a 160px wheel in the body and overflowed by 92: the squad box and the states bar ran off the bottom of the screen, silently, because a `VBoxContainer` lays its children past its own rect without complaint. The ring moved onto the portrait (108px box, +12px of header) and the budget is now a law in `tests/ui/test_unit_info_panel_refresh.gd`, asked as a property against the panel's own height rather than as a pixel count — the lesson [#723](https://github.com/Phaazoid/Godoiosis/issues/723) learned on the title screen, arriving at a surface that is not a `ModalCard`. It reads the outermost CONTAINER, never the panel `Control`, because a plain Control aggregates nothing and answers `(0, 0)` however much is built underneath it.
+
+**The budget decided [#1105](https://github.com/Phaazoid/Godoiosis/issues/1105)'s layout before a line of it was written.** Re-measured on every authored unit: **660 of 700**, so a tile's sections could not simply go under a unit's. The dev picked a **Unit/Tile SWITCH** in the header's free space beside the portrait (it costs no height) over scrolling the unit panel or showing tags only. The tile body then met the same wall from the other side: an ordinary tile needs well under 600 but three watches, two zones and a fire on one cell need 766. It sits in its **own scroll area** below the header as a safety net (dev ruling: never the ordinary look), with the Spacer standing down in tile view so the scroll area gets the whole remaining height. Both halves are laws in `tests/ui/test_tile_inspect.gd` — the busy tile scrolls inside the dock, an ordinary one shows no bar.
 
 
 ## What the enemy COULD do ([#710](https://github.com/Phaazoid/Godoiosis/issues/710) slice 1, BUILT 2026-09-16; reshaped by slice 3 and corrected by slice 4, 2026-09-17)

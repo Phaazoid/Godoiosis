@@ -320,7 +320,11 @@ const HEAD_ICON_Z_INDEX := 8  # the legacy squares' z; code re-asserts it so the
 var overlay_map = {}
 var icons_by_unit := {} # { Unit : { IconType : OverlayIcon } }
 
-# The cells every live watch covers (#413) — THE store, written only by redraw_watch_marks. Both
+# Every watch the board marks (#413; the watches themselves since #1105) — THE store, written only by
+# redraw_watch_marks. A tile's Inspect names who is watching from here, so it can never name a
+# watch whose mark is gone.
+var watches: Array[Watch] = []
+# Its cells, once each — written in the same loop as `watches`, so neither can lag the other. Both
 # views read it: the 2D sprites beside it, and OverlayMirror's Layer.WATCH_ICONS markers. A cell
 # rather than a unit anchors this markup, which is why it is not an OverlayIcon: an OverlayIcon
 # FOLLOWS its unit, and a watch's footprint is frozen geometry that deliberately does not.
@@ -1573,11 +1577,12 @@ func restyle_guard_link() -> void:
 # yours to the enemy and theirs to you. Axiom 4's telegraph: a watch is never a surprise, and the
 # victim staying undirected is what keeps it a puzzle rather than a warning label.
 #
-# `watch_cells` is THE store and this is its only writer; the 2D sprites below and OverlayMirror's
-# 3D markers are two projections of it, never two derivations (the parallel-stacks rule). Called
-# from the same three moments the ward markers are: a pass settling, a faction's turn starting, and
-# a board load.
+# `watches` is THE store and this is its only writer; the 2D sprites below and OverlayMirror's
+# 3D markers are two projections of its cells, never two derivations (the parallel-stacks rule).
+# Called from the same three moments the ward markers are: a pass settling, a faction's turn
+# starting, and a board load.
 func redraw_watch_marks(units: Array[Unit], plan: ResolvedPlan = null) -> void:
+	watches = []
 	watch_cells = []
 	for unit in units:
 		if not is_instance_valid(unit) or unit.watch == null:
@@ -1596,10 +1601,19 @@ func redraw_watch_marks(units: Array[Unit], plan: ResolvedPlan = null) -> void:
 		# sources, exactly as GuardWard.in_range is asked by three callers.
 		if not unit.watch.is_anchored(unit.movement.cell):
 			continue
+		watches.append(unit.watch)
 		for cell in unit.watch.footprint:
 			if not watch_cells.has(cell):
 				watch_cells.append(cell)
 	_rebuild_watch_sprites()
+
+# The marked watches covering this cell, in board order — what a tile's Inspect names.
+func watches_covering(cell: Vector2i) -> Array[Watch]:
+	var out: Array[Watch] = []
+	for watch in watches:
+		if watch.covers(cell):
+			out.append(watch)
+	return out
 
 # Does this pass end that unit's watch? Reads the pass's own COPY, which is where the resolver
 # records it -- never a second derivation of the rule (Law #4). A watch the pass FIRED counts too:

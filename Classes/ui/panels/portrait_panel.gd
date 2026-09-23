@@ -24,6 +24,12 @@ const FALLBACK: Texture2D = preload("res://Art/Units/Portraits/faceless_one.png"
 var _aura_ring: AuraRing
 
 
+# A tile's picture in the corner (#1105): nobody is inspected, so no ring.
+func show_picture(texture: Texture2D) -> void:
+	set_unit(null)
+	portrait_texture.texture = texture
+
+
 func set_unit(unit: Unit):
 	if unit == null:
 		portrait_texture.texture = null
