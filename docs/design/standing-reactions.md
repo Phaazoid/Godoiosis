@@ -2,7 +2,7 @@
 
 **RATIFIED DIRECTION (grilled 2026-08-20, dev + Claude); numbers playtest-tunable. ALL THREE ARE BUILT: [#414](https://github.com/Phaazoid/Godoiosis/issues/414) Guard (2026-08-21), then [#412](https://github.com/Phaazoid/Godoiosis/issues/412) (queue order becomes real) + [#413](https://github.com/Phaazoid/Godoiosis/issues/413) (Overwatch) together on one branch (2026-08-26).** #412 and #413 landed together because #412's clock half has no consumer without Overwatch, and Overwatch is what defines the shape the walk has to answer — building it blind would have been a coin flip. All three sat on the **Demo** milestone.
 
-**Canon checked through #1006 (2026-09-17).**
+**Canon checked through #1100 (2026-09-23).**
 
 **Why these exist (the throughline, dev 2026-08-19):** push the player from *"does my queued plan work"* toward genuinely predicting what the ENEMY PHASE will do — more of the puzzle living in anticipating reactive/triggered events, not just resolving an already-known queue. A reactive defense (Guard) and a reactive attack (Overwatch) are the two halves of one idea, which is why they share a grammar and a doc. Secondary motives, both real: **Overwatch is Carbine identity** ("finally give Carbines a real feel"), and **Guard is heritage** — an adaptation of the guarding feature from the GameMaker-era demo (the pre-squad parallel battle system; most of that build died, guarding was always loved).
 
@@ -79,6 +79,8 @@ The rejected cuts, for the record: **(a)** spatial precedence ("nearest crosser 
 **The shot is a DERIVED `AttackAction` resolved through `resolve_attack_group`** — #414's lesson applied a second time. DEF mitigation, elemental immunity, Iron Will, the knockback direction and landing, the elevation stamp, the lethality rung, the readouts and execution's playback all inherit with no second copy of anything, and the magazine round it spends is `AttackAction.execute`'s existing readiness clause with nothing added.
 
 **Counter-immunity is STRUCTURAL, not a filter.** The shots live in `ResolvedPlan.watch_shots`, and `calculate_reactions_for_squad` reads `plan.attacks` — so "a derived attack is never counter-bait" is true because the list it would have to be in is a different list, rather than because somebody remembered to skip them.
+
+**A watch shot's PAYLOAD rides the same list ([#1058](https://github.com/Phaazoid/Godoiosis/issues/1058), 2026-09-23).** A watched attack that names a payload drops it where the shot landed, and `PlanResolver._fire_one_watch` appends it to `watch_shots` straight behind the shot, carrying the shot's `triggered_during` / `triggered_at_step` / `triggered_by`. So it plays in the shot's own moment, in whichever of the three partitions that is, and draws no counter for the same structural reason. Its shoves count as entries, since `moved` is read after it resolves, so a payload can throw somebody into a second watch. The payload rules themselves are [weapons.md → *Payloads*](weapons.md).
 
 **The footprint freezes at EXECUTE, not at declare.** `OverwatchAction` stamps the attack and the aim (the `fired_attack` pattern, Law #2 provenance) and derives its cells from the actor's *projected* cell every resolve, exactly as a stored attack aim re-targets — so re-planning the walk that precedes the declaration moves the preview honestly. The geometry becomes a fact on the `Watch` when the order executes.
 

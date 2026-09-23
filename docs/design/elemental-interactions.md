@@ -101,7 +101,7 @@ BLOOD (leech/frenzy) · PLANT (entangle/regrow) · SAND·DUST (abrade/blind/bog)
 
 ## Core states & what they do
 
-Deterministic only. `S` setup · `P` payload/control · `i` instant · `e` EoT 🔗.
+Deterministic only. `S` setup · `P` payoff/control · `i` instant · `e` EoT 🔗.
 
 | State | Role | Does (deterministic) |
 |---|---|---|
