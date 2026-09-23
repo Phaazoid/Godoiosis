@@ -9,20 +9,24 @@ extends Node3D
 #     the sprite's own tint off, so what differs is the world half alone);
 #   - that particles already in the air FREEZE while Engine.time_scale is 0, the way a hitstop sets it;
 #   - that the damp blot paints the ground and NOTHING ELSE: an unshaded quad on WORLD_RENDER_LAYER,
-#     standing in for the squad ring, keeps every pixel while the ground around it darkens.
+#     standing in for the squad ring, keeps every pixel while the ground around it darkens;
+#   - that a ripple lights the ground where its drip LANDED: StatusWorld.patch_texel's reading of which
+#     way a decal's texture runs, measured through a rotated patch on the real renderer.
 #
 #     godot --path . res://tools/status_world_probe/status_world_probe.tscn
 #
 # It needs a real window, prints one verdict line per check, and saves what a Wet and a Chilled unit
-# look like, on flat ground, on a ramp and across a step, to user://status_world/ for an eye check.
-# It writes nothing under res://.
+# look like, on flat ground, on a ramp and across a step, plus a ripple's four steps on pale stone and
+# on grass, to user://status_world/ for an eye check. It writes nothing under res://.
 
 const ART := preload("res://Art/Units/MapSprites/Knight Templar.png")
 const OUT_DIR := "user://status_world"
+const STONE := Color(0.898, 0.961, 0.969)   # the pale floor of the dev's "damp" reports
 
 var _camera: Camera3D
 var _world: StatusWorld
 var _sprite: UnitSprite3D
+var _ground: StandardMaterial3D
 var _clock := 0.0
 var _level := Vector4.ZERO
 var _floor_y := 0.0
@@ -37,6 +41,8 @@ func _ready() -> void:
 	failures += await _draws("chilled", Vector4(0.0, 1.0, 1.0, 0.0), control)
 	failures += await _freezes()
 	failures += await _ring_untouched()
+	failures += await _ripple_lands_where_it_fell()
+	await _ripple_looks()
 	await _blot_looks()
 	print("STATUS WORLD: %s" % ("OK" if failures == 0 else "%d CHECK(S) FAILED" % failures))
 	get_tree().quit(1 if failures > 0 else 0)
@@ -73,7 +79,8 @@ func _stage() -> void:
 	var ground := MeshInstance3D.new()
 	var plane := PlaneMesh.new()
 	plane.size = Vector2(6, 6)
-	plane.material = _grass()
+	_ground = _grass()
+	plane.material = _ground
 	ground.mesh = plane
 	ground.position = Vector3(0.5, _floor_y, 0.5)
 	add_child(ground)
@@ -180,6 +187,77 @@ func _ring_untouched() -> int:
 	ring.queue_free()
 	_sprite.visible = true
 	return 0 if on_ring == 0 and anywhere > 0 else 1
+
+
+# A ring started by hand at a known WORLD point beside the unit, through a patch rotated by the
+# unit's seed: the pixels it lightens must centre on where that point projects, and much nearer it
+# than the mirror point on the other side -- a wrong sign or a swapped axis in patch_texel would put
+# the ring somewhere else under the rotation. Pale stone, sprite hidden, no drips, a slow ring.
+func _ripple_lands_where_it_fell() -> int:
+	await _wait(StatusLook.chill_mist_life + 1.0)
+	_ground.albedo_color = STONE
+	_sprite.visible = false
+	var slow := StatusLook.wet_ripple_time
+	StatusLook.wet_ripple_time = 20.0
+	var board := _sprite.position
+	_level = Vector4(0.0, 0.0, 0.0, 1.0)
+	await _wait(0.3)
+	var before := await _grab()
+	var offset := Vector3(0.1, 0.0, 0.07)
+	_world.call("_ripple", 1, board + offset, _clock)
+	await _wait(0.2)
+	var after := await _grab()
+	var sum := Vector2.ZERO
+	var lit := 0
+	for y in before.get_height():
+		for x in before.get_width():
+			if after.get_pixel(x, y).get_luminance() > before.get_pixel(x, y).get_luminance() + 2.0 / 255.0:
+				sum += Vector2(x, y)
+				lit += 1
+	var aimed := _camera.unproject_position(board + offset)
+	var mirror := _camera.unproject_position(board - offset)
+	var landed := sum / float(maxi(lit, 1))
+	var miss := landed.distance_to(aimed)
+	print("  ripple: %d px lightened, centred %.1f px from where the drip landed (the mirror point is %.1f px away)"
+			% [lit, miss, aimed.distance_to(mirror)])
+	StatusLook.wet_ripple_time = slow
+	_level = Vector4.ZERO
+	await _wait(0.3)
+	_sprite.visible = true
+	_ground.albedo_color = _grass().albedo_color
+	return 0 if lit > 0 and miss < aimed.distance_to(mirror) * 0.2 else 1
+
+
+# A ring's four steps with the unit standing in its patch, on pale stone and on grass, for the eye;
+# then a live second of real drips landing and ringing on each.
+func _ripple_looks() -> void:
+	var slow := StatusLook.wet_ripple_time
+	StatusLook.wet_ripple_time = 4.0 * StatusWorld.RIPPLE_STEPS
+	var board := _sprite.position
+	var names: Array[String] = ["stone", "grass"]
+	var grounds: Array[Color] = [STONE, _grass().albedo_color]
+	for g in names.size():
+		_ground.albedo_color = grounds[g]
+		_level = Vector4(0.0, 0.0, 0.0, 1.0)
+		_sprite.show_status(1.0, 0.0, 0.0, _clock, 0.3)
+		await _wait(0.5)
+		_world.call("_ripple", 1, board + Vector3(0.06, 0.0, 0.1), _clock)
+		for step in StatusWorld.RIPPLE_STEPS:
+			await _wait(2.0)   # the middle of each four-second step
+			_save(await _grab(), "ripple_%s_%d" % [names[g], step])
+			await _wait(2.0)
+		StatusLook.wet_ripple_time = slow
+		_level = Vector4(1.0, 0.0, 0.0, 1.0)
+		await _wait(1.5)
+		for frame in 4:
+			await _wait(0.15)
+			_save(await _grab(), "ripple_%s_live_%d" % [names[g], frame])
+		StatusLook.wet_ripple_time = 4.0 * StatusWorld.RIPPLE_STEPS
+		_level = Vector4.ZERO
+		_sprite.show_status(0.0, 0.0, 0.0, _clock, 0.3)
+		await _wait(StatusLook.wet_blot_dry_time + 0.5)
+	StatusLook.wet_ripple_time = slow
+	_ground.albedo_color = _grass().albedo_color
 
 
 # The blot on a ramp and across a step, for the eye: a tilted plane, and two slabs a level apart

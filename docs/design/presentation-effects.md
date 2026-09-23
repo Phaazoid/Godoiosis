@@ -1078,17 +1078,36 @@ a step the decal splits onto both tops where a patch would hang as a sheet.
   lip on the ground bit, because a forgotten `layers =` means the blot quietly darkens that thing.
   The render probe measures the split on the real renderer: a quad on `WORLD` lost 0 of its 2308
   pixels while the ground around it darkened.
-- **Under the FEET, not the sprite's origin.** The pack draws characters off-centre to leave lunge
-  room, so a blot centred on the sheet lay under the Knight Templar's sword (the probe showed it).
-  `StatusWorld.feet_texel` is the middle of the art's lowest row of ink, placed through
-  `texel_to_world`, without the lunge.
+- **Where the unit STANDS, fixed to the floor** -- the board point (`global_position - art_offset`,
+  so a lunge does not drag it). It shipped first under where the art DRAWS the feet, and the dev's
+  playtest (2026-09-23, the "damp 1"/"damp 2" reports) found it sliding across the tiles as the
+  camera turned: a billboard faces the camera, so a point drawn off-centre circles the cell, and
+  jumps across it when the facing flips. The general rule: **anything that belongs to the ground
+  must never be placed through `texel_to_world`**, whose answer depends on the camera by design.
+  Measured over every map still, drawn feet sit 0-6 texels from the board point (a fifth of a
+  cell at most), well inside a patch 0.6 of a cell across. The "lowest row of ink" was also the
+  Swordsman's sword tip, so the feet anchor was wrong on its own terms too.
+- **It must not read as a SHADOW, and darkening alone does.** On the pale stone of those reports
+  the patch rendered `#C2D5D8`, the grout's own colour, beside sun shadows that are blue on that
+  map. Two changes, the dev's pick from a mockup of five: the tint leans to the Water hue
+  (`wet_blot_tint` 0.3 -> 0.9), and **a drip that lands in the patch RIPPLES it** -- a ring that
+  steps outward like a sprite animation (`RIPPLE_STEPS`, `wet_ripple_time`, `wet_ripple_reach`,
+  `wet_ripple_light`), clipped to the patch because past its edge there is no water to ripple. A
+  shadow never moves, and the ring comes from the drips the player already sees landing.
+- **The ring is BAKED into the patch's own texture, never a second decal.** Godot orders
+  overlapping decals by distance to the camera, so a ring decal would sit over the patch from one
+  side and under it from the other. Each patch has its own `ImageTexture`, painted by the pure
+  `StatusWorld.paint_blot` and re-uploaded only when a ring steps; the colour moved out of
+  `modulate` and into the texture to make that possible. `StatusWorld.patch_texel` puts a landing
+  point into the patch's texels through the decal's own transform (texture u along +X, v along
+  +Z), and the render probe measures that reading through a rotated patch.
 - **A fourth fade level, `w`.** It spreads on its own time and dries on a longer one, so the patch
   outlives the drips while the ground dries, and it is held at zero while the unit stands on WATER
   (`UnitMirror.water_at`, battle3d's Callable over the authored terrain kind). Three cells deep, so
   a one-level step darkens both tops, with `normal_fade` keeping it off the face between them.
-- **The texture is built, not drawn**: four irregular patches from hashed discs on the ground's own
-  texel grid, upscaled nearest so the decal's linear filter blurs a fraction of a texel, not a texel.
-  That keeps the pixel edge without a `project.godot` decal-filter setting.
+- **The shape is built, not drawn**: four irregular patches from hashed discs on the ground's own
+  texel grid, painted and upscaled nearest so the decal's linear filter blurs a fraction of a texel,
+  not a texel. That keeps the pixel edge without a `project.godot` decal-filter setting.
 
 Chilled blocks Wet as a RULE in #1092, so this slice never draws both. Reaction beats (steam,
 shatter, freeze) are their own follow-up.
