@@ -24,7 +24,8 @@ class_name BoardOverlays
 #
 # The mask contract: fill/sprite quads render on WORLD_RENDER_LAYER only, and
 # UnitSprite3D lives on UNIT_RENDER_LAYER. All three constants live HERE; a drift test
-# pins them disjoint. GROUND_RENDER_LAYER is the ground ALONE (#358's damp blot): a Decal
+# pins those two disjoint, and test_only_the_ground_takes_a_decal walks the live scene for
+# the third. GROUND_RENDER_LAYER is the ground ALONE (#358's damp blot): a Decal
 # paints whatever its cull_mask meets, and a GridMap cannot be re-layered, so the ground
 # keeps layer 1 and everything else the board draws is on WORLD -- or a ground decal
 # would muddy the squad ring, the move grid and every prop on the tile.
