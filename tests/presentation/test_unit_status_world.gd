@@ -1,0 +1,391 @@
+# What a worn element state throws into the WORLD around a unit (#358 slice 2): a Wet unit's drips
+# and their splashes, a Chilled unit's cold mist and frost breath. Two halves, split by what a
+# headless suite can see:
+#
+# - The RULES are pure and asserted on hand-drawn art and stated numbers: where a texel of the art is
+#   in the world, which texels are the body's edges, a drip that lands exactly as its life ends, a
+#   breath that leaves toward the way the unit faces.
+# - The WIRE runs through the real Battle3D scene: a state on the model reaches the emitters, from
+#   the sprite that stands for the unit, on the mirror's own clock, inside the board's cull box.
+#
+# A GPU particle is simulated on the card and never read back, so every wire case reads the
+# emitters' own CPU-side record (StatusParticles.emitted / last_position / last_velocity). What NO
+# case here can see is whether any of it LOOKS right -- that is the dev's to play.
+extends GdUnitTestSuite
+
+const SCENE_PATH := "res://Scenes/Battle3D/Battle3D.tscn"
+const H := preload("res://tests/support/squad_fixtures.gd")
+
+const PLAYER := Team.Faction.PLAYER
+const WET := Elemental.State.WET
+const CHILLED := Elemental.State.CHILLED
+const DRIP := StatusParticles.Kind.DRIP
+const SPLASH := StatusParticles.Kind.SPLASH
+const MIST := StatusParticles.Kind.MIST
+const BREATH := StatusParticles.Kind.BREATH
+
+var _board := SharedBoard.new(SCENE_PATH)
+var game: Node2D
+var _unit_mirror: UnitMirror
+
+
+func before() -> void:
+	await _board.open(self, _clear_the_board)
+
+
+func _clear_the_board() -> void:
+	_board.game.scenario_manager.clear_board()
+	_board.game.game_state = _board.game.GameState.IDLE
+
+
+func before_test() -> void:
+	await _board.reset(self)
+	game = _board.game
+	_unit_mirror = _board.scene.get_node("UnitMirror") as UnitMirror
+
+
+func after_test() -> void:
+	Engine.time_scale = 1.0
+	await _board.check(self)
+
+
+func after() -> void:
+	_board.close()
+
+
+func _settle() -> void:
+	await await_idle_frame()
+	await await_idle_frame()
+
+
+func _spawn(cell: Vector2i) -> Unit:
+	var unit: Unit = game.spawn_unit(H.make_unit_data({}, PLAYER), cell)
+	assert_object(unit).is_not_null()   # fixture setup, not the claim under test
+	return unit
+
+
+func _emitter(kind: StatusParticles.Kind) -> StatusParticles:
+	return _unit_mirror.status_world().emitter(kind)
+
+
+# The billboard's horizontal axis and the way toward the viewer, asked of the camera exactly as
+# StatusWorld asks it.
+func _right() -> Vector3:
+	return Vector3.UP.cross(_toward()).normalized()
+
+
+func _toward() -> Vector3:
+	return _unit_mirror.get_viewport().get_camera_3d().global_transform.basis.z
+
+
+# A figure drawn in '#' on '.': a head, a torso, an arm held out to the left, and two legs.
+func _figure() -> Image:
+	return _art([
+		"............",
+		"....####....",
+		"....####....",
+		".########...",
+		"....####....",
+		"....####....",
+		"....####....",
+		"....####....",
+		"....#..#....",
+		"....#..#....",
+		"....#..#....",
+		"....#..#....",
+	])
+
+
+func _art(rows: Array[String]) -> Image:
+	var image := Image.create(rows[0].length(), rows.size(), false, Image.FORMAT_RGBA8)
+	for y in rows.size():
+		for x in rows[y].length():
+			if rows[y][x] == "#":
+				image.set_pixel(x, y, Color(0.5, 0.4, 0.3, 1.0))
+	return image
+
+
+func _opaque(image: Image, x: int, y: int) -> bool:
+	return x >= 0 and y >= 0 and x < image.get_width() and y < image.get_height() \
+			and image.get_pixel(x, y).a >= StatusArt.OPAQUE
+
+
+# A sprite showing the figure, hung from its feet as a map still is, standing somewhere that is not
+# the origin so a missing global_position would show.
+func _figure_sprite(art: Texture2D, feet_row: float) -> UnitSprite3D:
+	var sprite := UnitSprite3D.new()
+	add_child(sprite)
+	sprite.texture = art
+	sprite.offset = Vector2(0.0, feet_row)
+	sprite.position = Vector3(1.0, 2.0, 3.0)
+	return sprite
+
+
+# --- Where a texel of the art is in the world -----------------------------------------------
+
+func test_the_feet_texel_is_where_the_sprite_stands() -> void:
+	var sprite := _figure_sprite(ImageTexture.create_from_image(_figure()), 6.0)
+	var feet := sprite.texel_to_world(Vector2(6.0, 12.0), Vector3.RIGHT)
+	assert_vector(feet).is_equal_approx(sprite.global_position, Vector3.ONE * 0.0001)
+	sprite.free()
+
+
+# The same rule art_top_height has always answered, read from the other end: the top of the ink.
+func test_the_top_of_the_ink_agrees_with_art_top_height() -> void:
+	var sprite := _figure_sprite(ImageTexture.create_from_image(_figure()), 6.0)
+	var top := sprite.texel_to_world(Vector2(6.0, 1.0), Vector3.RIGHT)
+	assert_float(top.y - sprite.global_position.y).is_equal_approx(sprite.art_top_height(), 0.0001)
+	sprite.free()
+
+
+func test_flipping_the_art_mirrors_a_texel_about_the_pivot() -> void:
+	var sprite := _figure_sprite(ImageTexture.create_from_image(_figure()), 6.0)
+	var arm := Vector2(1.5, 3.5)
+	var drawn := sprite.texel_to_world(arm, Vector3.RIGHT) - sprite.global_position
+	sprite.flip_h = true
+	var flipped := sprite.texel_to_world(arm, Vector3.RIGHT) - sprite.global_position
+	assert_float(drawn.x).override_failure_message(
+			"the arm held out to the left should sit left of the pivot").is_less(0.0)
+	assert_float(flipped.x).is_equal_approx(-drawn.x, 0.0001)
+	assert_float(flipped.y).is_equal_approx(drawn.y, 0.0001)
+	sprite.free()
+
+
+# StatusArt names texels in the SHEET's pixels, and an atlas frame shows only part of the sheet.
+func test_an_atlas_frame_maps_the_sheets_texels() -> void:
+	var frame := AtlasTexture.new()
+	frame.atlas = ImageTexture.create_from_image(_figure())
+	frame.region = Rect2(4, 6, 6, 6)
+	var sprite := _figure_sprite(frame, 3.0)
+	# The bottom-centre of the frame, named in the sheet's pixels.
+	var feet := sprite.texel_to_world(Vector2(7.0, 12.0), Vector3.RIGHT)
+	assert_vector(feet).is_equal_approx(sprite.global_position, Vector3.ONE * 0.0001)
+	assert_that(StatusArt.frame_of(frame)).is_equal(Rect2(4, 6, 6, 6))
+	sprite.free()
+
+
+# --- What the art scan names ------------------------------------------------------------------
+
+func test_the_edges_are_the_body_texels_with_open_air_beside_or_below() -> void:
+	var art := _figure()
+	var map := StatusArt.build(art)
+	var inside := 0
+	for y in art.get_height():
+		for x in art.get_width():
+			if not _opaque(art, x, y):
+				continue
+			var open := not _opaque(art, x - 1, y) or not _opaque(art, x + 1, y) or not _opaque(art, x, y + 1)
+			assert_bool(map.edges.has(Vector2i(x, y))).override_failure_message(
+					"%s is %s edge" % [Vector2i(x, y), "an" if open else "no"]).is_equal(open)
+			if not open:
+				inside += 1
+	assert_int(inside).override_failure_message(
+			"the figure has no inside texel, so the scan never had to leave one out").is_greater(0)
+	assert_that(map.ink).is_equal(BoardMirror.opaque_bounds(art, Rect2i(Vector2i.ZERO, art.get_size())))
+
+
+# --- The rules the emitters are handed -----------------------------------------------------
+
+func test_a_drip_lands_exactly_as_its_life_ends() -> void:
+	var start := Vector3(0.3, 2.0, -1.0)
+	var velocity := StatusWorld.drip_velocity(start, 0.5, 0.4)
+	var landed := start + velocity * 0.4
+	assert_float(landed.y).is_equal_approx(0.5, 0.0001)
+	assert_float(velocity.x).is_equal(0.0)
+	assert_float(velocity.z).is_equal(0.0)
+	assert_vector(StatusWorld.drip_velocity(start, 3.0, 0.4)).override_failure_message(
+			"a drip that starts below the ground climbed up to it").is_equal(Vector3.ZERO)
+
+
+func test_a_breath_leaves_toward_the_way_the_unit_faces() -> void:
+	assert_bool(StatusWorld.faces_right(false)).is_equal(UnitSprite3D.ART_FACES_SCREEN_RIGHT)
+	assert_bool(StatusWorld.faces_right(true)).is_equal(not UnitSprite3D.ART_FACES_SCREEN_RIGHT)
+
+
+func test_the_breath_anchor_is_a_share_of_the_ink() -> void:
+	StatusLook.chill_breath_x = 0.75
+	StatusLook.chill_breath_y = 0.25
+	var ink := Rect2i(10, 20, 20, 40)
+	assert_that(StatusWorld.breath_anchor(ink, Rect2(0, 0, 64, 64))).is_equal(Vector2(25.0, 30.0))
+	# A frame showing only part of the sheet falls back to its own box.
+	assert_that(StatusWorld.breath_anchor(ink, Rect2(40, 0, 20, 20))).is_equal(Vector2(55.0, 5.0))
+
+
+# --- The wire: a state on the model reaches the emitters ----------------------------------
+
+# Every drip falls from an overhang the art scan names, lands on the surface under it, and throws its
+# splash there -- AFTER its fall, never at the moment it leaves.
+func test_a_wet_unit_drips_and_each_drip_splashes_where_it_lands() -> void:
+	var unit := _spawn(Vector2i(2, 2))
+	await _settle()
+	var sprite := _unit_mirror.sprite_for(unit)
+	var hangs := StatusWorld.in_frame(StatusArt.map_for(sprite.texture).overhangs,
+			StatusArt.frame_of(sprite.texture))
+	assert_int(hangs.size()).override_failure_message(
+			"the fixture's art overhangs nowhere, so no drip can fall and this case sees nothing").is_greater(0)
+	StatusLook.status_fade_time = 0.0
+	StatusLook.wet_drip_rate = 10.0
+	StatusLook.wet_drip_fall_time = 0.2
+	StatusLook.wet_splash_count = 3
+	var drips := _emitter(DRIP)
+	var splashes := _emitter(SPLASH)
+	var world := _unit_mirror.status_world()
+	unit.add_element_state(WET)
+	var dripped := drips.emitted
+	var splashed := splashes.emitted
+	var owed := world.pending_splashes()
+	_unit_mirror.reconcile(1.0)
+	assert_int(drips.emitted - dripped).is_equal(10)
+	assert_int(splashes.emitted).override_failure_message(
+			"a splash landed while its drip was still falling").is_equal(splashed)
+	assert_int(world.pending_splashes() - owed).is_equal(10)
+
+	var starts: Array[Vector3] = []
+	for hang in hangs:
+		starts.append(sprite.texel_to_world(Vector2(hang.x + 0.5, hang.y + 1.0), _right())
+				+ _toward() * sprite.pixel_size)
+	var from_an_overhang := false
+	for start in starts:
+		from_an_overhang = from_an_overhang or start.is_equal_approx(drips.last_position)
+	assert_bool(from_an_overhang).override_failure_message(
+			"the last drip left from %s, which is under no overhang the scan names" % [drips.last_position]).is_true()
+	var landed := drips.last_position + drips.last_velocity * StatusLook.wet_drip_fall_time
+	var ground := StatusWorld.ground_under(UnitMirror.cell_under(unit), landed, game.board_heights)
+	assert_float(landed.y).is_equal_approx(ground, 0.0001)
+
+	StatusLook.wet_drip_rate = 0.0
+	_unit_mirror._process(0.3)
+	assert_int(splashes.emitted - splashed).is_equal(10 * 3)
+	assert_int(world.pending_splashes()).is_equal(owed)
+	# ParticleFan lifts a droplet half a texel off the plane it is born on.
+	assert_float(splashes.last_position.y).is_equal_approx(ground + sprite.pixel_size * 0.5, 0.0001)
+
+
+func test_a_chilled_unit_mists_and_breathes_and_never_drips() -> void:
+	var unit := _spawn(Vector2i(2, 2))
+	await _settle()
+	StatusLook.status_fade_time = 0.0
+	StatusLook.chill_mist_rate = 10.0
+	StatusLook.chill_mist_life = 1.0
+	StatusLook.chill_breath_period = 0.5
+	StatusLook.chill_breath_count = 3
+	var dripped := _emitter(DRIP).emitted
+	var misted := _emitter(MIST).emitted
+	var breathed := _emitter(BREATH).emitted
+	unit.add_element_state(CHILLED)
+	for i in 4:
+		_unit_mirror._process(0.25)
+	assert_int(_emitter(MIST).emitted).is_greater(misted)
+	assert_int(_emitter(BREATH).emitted).override_failure_message(
+			"a second of chill at a half-second period drew no breath").is_greater(breathed)
+	assert_int(_emitter(DRIP).emitted).override_failure_message("a Chilled unit dripped").is_equal(dripped)
+	# A puff sinks to the ground as it ends.
+	var mist := _emitter(MIST)
+	var ended := mist.last_position + mist.last_velocity * StatusLook.chill_mist_life
+	var ground := StatusWorld.ground_under(UnitMirror.cell_under(unit), ended, game.board_heights)
+	assert_float(ended.y).is_equal_approx(ground + _unit_mirror.sprite_for(unit).pixel_size * 0.5, 0.0001)
+
+
+func test_a_wet_unit_neither_mists_nor_breathes() -> void:
+	var unit := _spawn(Vector2i(2, 2))
+	await _settle()
+	StatusLook.status_fade_time = 0.0
+	StatusLook.chill_mist_rate = 10.0
+	StatusLook.chill_breath_period = 0.5
+	var misted := _emitter(MIST).emitted
+	var breathed := _emitter(BREATH).emitted
+	unit.add_element_state(WET)
+	for i in 4:
+		_unit_mirror._process(0.25)
+	assert_int(_emitter(MIST).emitted).is_equal(misted)
+	assert_int(_emitter(BREATH).emitted).is_equal(breathed)
+
+
+func test_a_dry_unit_throws_nothing() -> void:
+	var unit := _spawn(Vector2i(2, 2))
+	await _settle()
+	assert_bool(unit.element_states.is_empty()).override_failure_message(
+			"the fixture unit arrived wearing a state, so this case cannot see the dry path").is_true()
+	StatusLook.wet_drip_rate = 10.0
+	StatusLook.chill_mist_rate = 10.0
+	StatusLook.chill_breath_period = 0.5
+	# The three a unit throws itself; a splash is a drip's, and an earlier case's may still be due.
+	var sources: Array[StatusParticles.Kind] = [DRIP, MIST, BREATH]
+	var counts: Array[int] = []
+	for kind in sources:
+		counts.append(_emitter(kind).emitted)
+	for i in 4:
+		_unit_mirror._process(0.25)
+	var after: Array[int] = []
+	for kind in sources:
+		after.append(_emitter(kind).emitted)
+	assert_array(after).is_equal(counts)
+
+
+# The schedule runs on the mirror's SCALED clock, so a hitstop stops it with the world. A new
+# time_scale reaches _process one frame late (measured on 4.7.1, test_unit_status), so the count is
+# read after that frame and must then HOLD.
+func test_nothing_is_thrown_while_time_is_stopped() -> void:
+	var unit := _spawn(Vector2i(2, 2))
+	await _settle()
+	StatusLook.status_fade_time = 0.0
+	StatusLook.chill_mist_rate = 30.0
+	unit.add_element_state(CHILLED)
+	Engine.time_scale = 0.0
+	await await_idle_frame()
+	var held := _emitter(MIST).emitted
+	await _settle()
+	await _settle()
+	var later := _emitter(MIST).emitted
+	Engine.time_scale = 1.0
+	assert_int(later).override_failure_message("mist was thrown while time was stopped").is_equal(held)
+	# Frames, not seconds: a headless frame's delta is whatever the machine gives it.
+	for i in 240:
+		await await_idle_frame()
+		if _emitter(MIST).emitted > later:
+			break
+	assert_int(_emitter(MIST).emitted).override_failure_message(
+			"no mist once time ran again, so the hold above proved nothing").is_greater(later)
+
+
+# The ghost ruling: while a planning ghost stands in for the unit, the world half comes off the GHOST.
+func test_a_queued_move_hands_the_drips_to_the_ghost() -> void:
+	var unit := _spawn(Vector2i(2, 2))
+	await _settle()
+	StatusLook.status_fade_time = 0.0
+	StatusLook.wet_drip_rate = 10.0
+	unit.add_element_state(WET)
+	_unit_mirror.reconcile()
+	game.enter_move_mode(unit)
+	game.selected_unit = unit
+	game._on_left_click(Vector2i(3, 2))
+	await _settle()
+	var real := _unit_mirror.sprite_for(unit)
+	assert_bool(real.visible).override_failure_message(
+			"the real sprite is still up, so no ghost stands in and this case is vacuous").is_false()
+	var ghost: UnitSprite3D = null
+	for each in _unit_mirror.ghosts():
+		if each.visible and _unit_mirror.ghost_unit_id(each) == unit.get_instance_id():
+			ghost = each
+	assert_object(ghost).is_not_null()
+	var dripped := _emitter(DRIP).emitted
+	_unit_mirror.reconcile(1.0)
+	assert_int(_emitter(DRIP).emitted).is_greater(dripped)
+	var at := _emitter(DRIP).last_position
+	var to_ghost := Vector2(at.x - ghost.global_position.x, at.z - ghost.global_position.z).length()
+	var to_real := Vector2(at.x - real.global_position.x, at.z - real.global_position.z).length()
+	assert_float(to_ghost).override_failure_message(
+			"the drip fell %s from the ghost and %s from the hidden sprite" % [to_ghost, to_real]).is_less(to_real)
+
+
+# #656's shipped-invisible bug: an emitter the board's sweep does not reach draws NOTHING.
+func test_the_boards_cull_sweep_reaches_every_emitter() -> void:
+	var box := AABB(Vector3(-3.0, -2.0, -5.0), Vector3(40.0, 9.0, 31.0))
+	_board.scene.call("_cover_effects", box)
+	var expected := BoardSpace.effect_volume(box, StatusParticles.CULL_MARGIN)
+	for emitter in _unit_mirror.status_world().emitters():
+		var covered := AABB(emitter.visibility_aabb.position + emitter.global_position,
+				emitter.visibility_aabb.size)
+		assert_bool(covered.is_equal_approx(expected)).override_failure_message(
+				"%s is culled to %s, not the board's %s" % [emitter.name, covered, expected]).is_true()
+	_board.scene.call("_cover_effects", _board.scene.call("_board_volume"))
