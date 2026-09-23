@@ -74,11 +74,11 @@ const PIXELS_PER_CELL := float(GridUtils.TILE_SIZE)  # 16 — grid.map_to_local'
 # for two rounds and read as floating both times, because a map sprite's visible head is wherever
 # its transparent padding ends and no single number is right for every piece of art.
 #
-# The CROWN hangs at BoardOverlays.billboard_lift, measured from the CELL, and the dev's stacking is
-# it on top with the readout tucked under. Nothing enforces that: a test would be pinning one tuning
-# value against another, which the tuning razor forbids, so if the crown moves this moves by hand.
-# (It is the head channel's only tenant since #325's verdict -- TARGET went to the ground with #346,
-# squad membership followed it as a ring.)
+# The CROWN stands on top of the readout, and since #1070 that is ENFORCED rather than hand-kept: it
+# hung a fixed height off the CELL, so a second HP row or a status row ran the readout up through it.
+# It now stands on head_height below -- the art's top, or the readout's top while one is up -- so
+# this knob moves the readout and the crown follows. (The crown is the head channel's only tenant
+# since #325's verdict -- TARGET went to the ground with #346, squad membership followed it as a ring.)
 @export var hud_lift := 0.24
 # --- The health grid (#314) -------------------------------------------------------------
 # One cube per point of HP. A cube is this many texels INCLUDING its black cage, and cubes are
@@ -464,6 +464,93 @@ func sprite_for(unit: Unit) -> UnitSprite3D:
 
 func bar_for(unit: Unit) -> UnitHealthBar:
 	return _bars.get(unit.get_instance_id())
+
+
+# How high above the ground it stands on this unit's head reaches right now (#1070): the top of its
+# art, or the top of its health readout while one is up. The crown stands on this (OverlayMirror), so
+# a readout that wraps a row or grows a status row lifts the crown instead of running through it --
+# the dev's ruling was that the crown sits just over the head and LIFTS while a readout shows.
+#
+# Read off what this node drew THIS frame, which is only true because it runs before OverlayMirror
+# (Battle3D.tscn order). No sprite means nothing is drawn there, so nothing to clear.
+func head_height(unit: Unit) -> float:
+	var sprite := sprite_for(unit)
+	if sprite == null:
+		return 0.0
+	var top := sprite.art_top_height()
+	var bar := bar_for(unit)
+	if bar != null and bar.visible:
+		top += hud_lift + bar.top_extent()
+	return top
+
+
+# --- The Squad Up count (#1070) -------------------------------------------------------------------
+# "1/3" beside the leader's crown while Squad Up is picking. What it SAYS and when it fades are
+# OverlayManager's (both views read one store); where the crown is, OverlayMirror's. This node only
+# draws the number, in the HP digits' own size, outline and colour -- #322's rule that no number on
+# the board is smaller than those -- so it adds no knob of its own.
+#
+# Moved sideways in WORLD space along the view, never through Label3D.offset: offsetting a Label3D
+# moves its glyphs and its outline by different amounts (UnitHealthBar.make_label's note, 2026-08-15).
+var _squad_count: Label3D
+var _squad_count_anchor := Vector3.ZERO
+var _squad_count_side := 0.0
+
+
+# `anchor` is the crown's centre, `side` how far right of it the number's left edge starts.
+func set_squad_count(anchor: Vector3, side: float, text: String, alpha: float) -> void:
+	if _squad_count == null:
+		_squad_count = UnitHealthBar.make_label(BoardOverlays.UNIT_HUD_RENDER_PRIORITY + 6)
+		_squad_count.billboard = BaseMaterial3D.BILLBOARD_FIXED_Y   # the crown's own billboard
+		add_child(_squad_count)
+	_squad_count_anchor = anchor
+	_squad_count_side = side
+	_squad_count.text = text
+	_squad_count.pixel_size = maxf(number_height_cells, 0.001) / float(UnitHealthBar.FONT_RESOLUTION)
+	_squad_count.outline_size = roundi(number_outline_size)
+	_squad_count.modulate = Color(number_color, number_color.a * alpha)
+	_squad_count.outline_modulate = Color(UnitHealthBar.OUTLINE_COLOR, alpha)
+	var half_text: float = _squad_count.get_aabb().size.x * 0.5
+	_squad_count.position = anchor + _view_right() * (side + half_text)
+	_squad_count.visible = true
+
+
+func clear_squad_count() -> void:
+	if _squad_count != null:
+		_squad_count.visible = false
+
+
+# The view plane's horizontal axis, which is what BILLBOARD_FIXED_Y lines the crown up with.
+func _view_right() -> Vector3:
+	if is_inside_tree():
+		var camera := get_viewport().get_camera_3d()
+		if camera != null:
+			var right := camera.global_transform.basis.x
+			right.y = 0.0
+			if right.length_squared() > 0.000001:
+				return right.normalized()
+	return Vector3.RIGHT
+
+
+# The count's rendered facts, read off the label like UnitHealthBar's.
+func squad_count_shown() -> bool:
+	return _squad_count != null and _squad_count.visible
+
+
+func squad_count_text() -> String:
+	return _squad_count.text if _squad_count != null else ""
+
+
+func squad_count_anchor() -> Vector3:
+	return _squad_count_anchor
+
+
+func squad_count_side() -> float:
+	return _squad_count_side
+
+
+func squad_count_position() -> Vector3:
+	return _squad_count.position if _squad_count != null else Vector3.ZERO
 
 
 # The cubes currently in the air (#314). Board-wide rather than per unit, and deliberately so: a

@@ -10,11 +10,9 @@ class_name OverlayManager
 @onready var move_overlay = $MoveOverlay
 @onready var attack_overlay = $AttackOverlay
 @onready var hover_overlay = $HoverOverlay
-@onready var squad_overlay = $SquadOverlay
 @onready var icon_overlay = $IconOverlay
 @onready var arrow_icon_overlay: Node2D = $ArrowIconOverlay
 @onready var projected_unit_overlay: Node2D = $ProjectedUnitOverlay
-@onready var squadrange_overlay = $SquadRangeOverlay
 @onready var invalidmove_overlay = $InvalidMoveOverlay
 @onready var board_tilemap = $"../Grid"
 @onready var zone_overlay = $ZoneOverlay
@@ -180,10 +178,15 @@ static var FOCUS_OUTLINE_COLOR := Color(1, 1, 1, 0.85)
 # Which two CORNERS an outward-facing cell edge runs between, as offsets inside the cell. The corner
 # HEIGHTS come from Terrain.VERTEX_CORNERS read backwards (a vertex names the corner of the cell at
 # its own negated offset), so this table carries geometry and no second copy of that mapping.
+#
+# WOUND ONE WAY (#1070): every edge runs with its own cell on the RIGHT of travel (screen y down), so
+# an outline built from these goes round its region clockwise. A solid stroke never cared; the squad
+# range's MARCHING dashes do, since they move along each edge's own direction and would otherwise run
+# both ways at once. LEFT and DOWN were the two that ran backwards.
 const EDGE_CORNERS: Dictionary[Vector2i, Array] = {
 	Vector2i.RIGHT: [Vector2i(1, 0), Vector2i(1, 1)],
-	Vector2i.LEFT: [Vector2i(0, 0), Vector2i(0, 1)],
-	Vector2i.DOWN: [Vector2i(0, 1), Vector2i(1, 1)],
+	Vector2i.LEFT: [Vector2i(0, 1), Vector2i(0, 0)],
+	Vector2i.DOWN: [Vector2i(1, 1), Vector2i(0, 1)],
 	Vector2i.UP: [Vector2i(0, 0), Vector2i(1, 0)],
 }
 
@@ -192,9 +195,7 @@ enum OverlayType {
 	MOVE,
 	ATTACK,
 	HOVER,
-	SQUAD,
 	ARROW,
-	SQUADRANGE,
 	INVALIDMOVE
 }
 
@@ -378,6 +379,34 @@ var threat_overlay: TileMapLayer = null   # ...and the enemy's one undifferentia
 # on reach_line_version's shape, because OverlayMirror polls rather than listening.
 var focus_outline: Array[PackedVector3Array] = []
 var focus_outline_version := 0
+# A SQUAD's lines (#1070): the stroke round its cohesion range, and a tether from each member to its
+# leader -- see SquadLines2D. Data the way the reach lines are: SquadLines2D draws it flat,
+# OverlayMirror lifts it, and the version is the mirror's change signal (#308). The tether CHORDS are
+# the source and `squad_tethers` is derived from them, so a knob that reshapes a tether re-derives
+# without anyone holding a BoardContext across frames for a slider (ThreatLines2D.mark's reason).
+var squad_outline: Array[PackedVector3Array] = []
+var squad_tether_chords: Array[Dictionary] = []   # {"chord": PackedVector3Array, "state": SquadLines2D.Strain}
+var squad_tethers: Array[Dictionary] = []   # {"strokes": Array[PackedVector3Array], "state": ...}
+var squad_lines_version := 0
+# When the strained tethers were last plucked (#1070), in Time.get_ticks_msec; -1 is never. A stamp
+# rather than a running animation, so both views read one clock and neither owns a tween.
+var tether_shake_msec := -1
+var _squad_lines_2d: SquadLines2D
+# The Squad Up count (#1070): "1/3" beside the leader's crown while Squad Up picks, so a player can
+# see how much room is left as they go. THE store -- this label draws it flat and OverlayMirror hands
+# it to UnitMirror -- and it keeps a leader's instance ID rather than the Unit, because a board
+# cleared mid-fade frees the leader under it (#149: a freed Unit in a typed slot dies on the read).
+# What it SAYS is never stored: squad_count_text asks the squad, which is the one answer.
+#
+# HOLD and FADE are read when a settle STARTS, so a slider moves the next one. GAP is in cells, and
+# the diorama reads it every frame; this flat label reads it when it is next drawn.
+static var SQUAD_COUNT_HOLD := 0.8
+static var SQUAD_COUNT_FADE := 0.5
+static var SQUAD_COUNT_GAP := 0.05
+var squad_count_alpha := 0.0
+var _squad_count_leader_id := 0
+var _squad_count_settle: Tween
+var _squad_count_label: Label
 var leash_revealed := false   # a play-time reveal is holding the highlight layer up (#710)
 # The two inputs to whether authoring zones draw -- see set_zone_visibility. The INTENT is what
 # a 3D mirror asks; `.visible` is the product and answers only "does the 2D draw this".
@@ -433,9 +462,7 @@ func _ready() -> void:
 		OverlayType.MOVE: move_overlay,
 		OverlayType.ATTACK: attack_overlay,
 		OverlayType.HOVER: hover_overlay,
-		OverlayType.SQUAD: squad_overlay,
 		OverlayType.ARROW: arrow_icon_overlay,
-		OverlayType.SQUADRANGE: squadrange_overlay,
 		OverlayType.INVALIDMOVE: invalidmove_overlay
 	}
 	
@@ -447,9 +474,10 @@ func _ready() -> void:
 	# here would paint the authored colour once at setup and stay wrong until the next aim (#422).
 	attack_overlay.modulate = attack_reach_color(null)
 	hover_overlay.modulate = aim_fill_color()
-	squad_overlay.modulate = Color(1, 0.5, 0, 0.5)
-	squadrange_overlay.modulate = Color(1, 0.5, 0, 0.5)
-	invalidmove_overlay.modulate = Color(0.5, 0.36, 0.4, .5)
+	# GREY since #1070, where it was a mauve wash in the enemy purple's own family: tiles you could
+	# walk to but the SQUAD will not let you. It shares MOVE's tileset in Game.tscn, so it wears the
+	# same generated lattice -- the move range switched off, which is what "walkable, not now" is.
+	invalidmove_overlay.modulate = Color(0.78, 0.8, 0.84, 0.5)
 	zone_overlay.modulate = ZONE_PATROL_MODULATE
 	zone_overlay.visible = false   # authoring-only visual; DevOverlay shows it with the Tile Brush tab
 	capture_overlay.modulate = Color(0.3, 0.9, 1, 0.5)
@@ -507,17 +535,19 @@ func _ready() -> void:
 		# ...and each takes a plain FILL tileset back, because MOVE's own draws MoveGrid's lattice
 		# since #1069/#1074 and these two are washes (the dev's ruling: only the player's movement
 		# range loses its flood). They are duplicated off MOVE for the tree position and the cell
-		# metric, so the art has to be put back explicitly -- INVALIDMOVE's is the sheet MOVE's
-		# tileset still names in Game.tscn, as the placeholder _install_move_grid replaces.
+		# metric, so the art has to be put back explicitly. The ATTACK sheet's, whose (0,0) tile is
+		# the plain fill ATLAS_COORDS names -- INVALIDMOVE's was borrowed until #1070 gave that layer
+		# MOVE's lattice, which is a trap worth knowing about: borrow a tileset only from a layer
+		# whose art is a wash by definition.
 		threat_overlay = move_overlay.duplicate() as TileMapLayer
 		threat_overlay.name = "ThreatOverlay"
-		threat_overlay.tile_set = invalidmove_overlay.tile_set
+		threat_overlay.tile_set = attack_overlay.tile_set
 		threat_overlay.modulate = THREAT_MODULATE
 		add_child(threat_overlay)
 		move_child(threat_overlay, move_overlay.get_index())
 		reach_overlay = move_overlay.duplicate() as TileMapLayer
 		reach_overlay.name = "ReachOverlay"
-		reach_overlay.tile_set = invalidmove_overlay.tile_set
+		reach_overlay.tile_set = attack_overlay.tile_set
 		reach_overlay.modulate = REACH_MODULATE
 		add_child(reach_overlay)
 		move_child(reach_overlay, move_overlay.get_index())
@@ -525,6 +555,11 @@ func _ready() -> void:
 	_threat_lines_2d.name = "ThreatLines2D"
 	_threat_lines_2d.z_index = TERRAIN_Z_INDEX
 	add_child(_threat_lines_2d)
+	# The squad's tethers and range (#1070): the same band as the other board lines, under the units.
+	_squad_lines_2d = SquadLines2D.new()
+	_squad_lines_2d.name = "SquadLines2D"
+	_squad_lines_2d.z_index = TERRAIN_Z_INDEX
+	add_child(_squad_lines_2d)
 
 
 # The flat view's half of MoveGrid (#1074): the move tileset's one tile, drawn from the same rule the
@@ -645,8 +680,7 @@ func _rebuild_reach_line_marks() -> void:
 
 # YOUR unit's attack reach (#1066): every cell it could hit from anywhere in the move envelope the
 # blue layer is drawing. Its own door rather than a second argument to show_overlay, because it is
-# replaced wholesale on every hover change and MOVE is not (show_overlay erases squad tint as it
-# goes, which this layer has no business doing).
+# replaced wholesale on every hover change and MOVE is not.
 func show_reach(cells: Array[Vector2i]) -> void:
 	if reach_overlay == null:
 		return
@@ -693,6 +727,18 @@ func restyle_threat() -> void:
 # endpoint takes the INSIDE cell's own corner height and the stroke follows a ramp instead of
 # floating over it.
 func show_focus_outline(cells: Array[Vector2i], board: BoardContext) -> void:
+	var segments := outline_segments(cells, board)
+	focus_outline = segments
+	focus_outline_version += 1
+	if _threat_lines_2d != null:
+		_threat_lines_2d.outlines = segments
+		_threat_lines_2d.queue_redraw()
+
+
+# THE ONE outline builder (#1070 extracted it from show_focus_outline, when the squad range became its
+# second tenant): one segment per outward-facing edge of `cells`, in trace space, each wound with the
+# region on its right (see EDGE_CORNERS) so a dashed stroke marches round it one way.
+static func outline_segments(cells: Array[Vector2i], board: BoardContext) -> Array[PackedVector3Array]:
 	var inside := {}
 	for cell in cells:
 		inside[cell] = true
@@ -706,11 +752,7 @@ func show_focus_outline(cells: Array[Vector2i], board: BoardContext) -> void:
 				points.append(Vector3(float(cell.x + offset.x),
 						_corner_height(cell, offset, board), float(cell.y + offset.y)))
 			segments.append(points)
-	focus_outline = segments
-	focus_outline_version += 1
-	if _threat_lines_2d != null:
-		_threat_lines_2d.outlines = segments
-		_threat_lines_2d.queue_redraw()
+	return segments
 
 
 func clear_focus_outline() -> void:
@@ -725,11 +767,173 @@ func restyle_focus_outline() -> void:
 	_threat_lines_2d.queue_redraw()
 
 
-func _corner_height(cell: Vector2i, offset: Vector2i, board: BoardContext) -> float:
+static func _corner_height(cell: Vector2i, offset: Vector2i, board: BoardContext) -> float:
 	if board == null:
 		return 0.0
 	return float(Terrain.corner_height(board.corners_at(cell),
 			Terrain.VERTEX_CORNERS[-offset]))
+
+
+# A SQUAD's lines (#1070): the stroke round each `bubbles` entry (a cell set -- Join Squad shows
+# several squads' at once) and one tether per `links` entry, {"from": member cell, "to": leader cell,
+# "state": SquadLines2D.Strain}. The caller says WHERE each body is drawn, because only it knows which
+# of a unit's stand-ins is showing (its projected cell, a hover ghost, a formation ghost); this store
+# turns that into geometry, and nothing else does.
+func show_squad_lines(bubbles: Array, links: Array[Dictionary], board: BoardContext) -> void:
+	if bubbles.is_empty() and links.is_empty() and squad_outline.is_empty() \
+			and squad_tether_chords.is_empty():
+		return   # idempotent -- every exit path clears, and the version moves only on real change
+	var outline: Array[PackedVector3Array] = []
+	for bubble in bubbles:
+		var cells: Array[Vector2i] = []
+		cells.assign(bubble)
+		outline.append_array(outline_segments(cells, board))
+	var chords: Array[Dictionary] = []
+	for link: Dictionary in links:
+		chords.append({"chord": SquadLines2D.chord(link["from"], link["to"], board),
+				"state": link.get("state", SquadLines2D.Strain.SOLID)})
+	squad_outline = outline
+	squad_tether_chords = chords
+	_rebuild_squad_tethers()
+
+
+func clear_squad_lines() -> void:
+	var none: Array[Dictionary] = []
+	show_squad_lines([], none, null)
+
+
+# A tether knob moved: re-derive the strokes from the chords, and repaint both views.
+func restyle_squad_lines() -> void:
+	_rebuild_squad_tethers()
+
+
+# THE ONE derivation from chord to strokes, so the draw path and the knob path cannot disagree.
+func _rebuild_squad_tethers() -> void:
+	var built: Array[Dictionary] = []
+	for entry: Dictionary in squad_tether_chords:
+		built.append({"strokes": SquadLines2D.tether(entry["chord"]), "state": entry["state"]})
+	squad_tethers = built
+	squad_lines_version += 1
+	if _squad_lines_2d != null:
+		_squad_lines_2d.outline = squad_outline
+		_squad_lines_2d.tethers = squad_tethers
+		_squad_lines_2d.refresh()
+
+
+# The refused click (#1070): pluck every STRAINED tether. A stamp both views read against one clock.
+func shake_tethers() -> void:
+	tether_shake_msec = Time.get_ticks_msec()
+	if _squad_lines_2d != null:
+		_squad_lines_2d.shake_started_msec = tether_shake_msec
+		_squad_lines_2d.refresh()
+
+
+func has_strained_tether() -> bool:
+	for entry: Dictionary in squad_tether_chords:
+		if entry["state"] == SquadLines2D.Strain.STRAIN:
+			return true
+	return false
+
+
+# --- The Squad Up count (#1070) -------------------------------------------------------------------
+# Three verbs, and game.gd is the only caller: create_squad SHOWS it on every entry (it is re-entered
+# after each join, so the number follows the picks), the join that closes the pick SETTLES it, and
+# leaving the mode any other way CLEARS it. A settle is the dev's "a brief 3/3, then fade" -- and a
+# pick that ends early with room left settles the same way, since the last number is still news.
+# A cancel changed nothing, so it just goes.
+
+func squad_count_leader() -> Unit:
+	if _squad_count_leader_id == 0:
+		return null
+	return instance_from_id(_squad_count_leader_id) as Unit
+
+
+# The squad's size over its capacity, LEADER INCLUDED (dev, 2026-09-23: "how many people can be in the
+# squad, total. So we'd always start with a 1/X, because of the leader"). The same two numbers the
+# capacity rule itself compares -- members.size() against max_size().
+func squad_count_text() -> String:
+	var leader := squad_count_leader()
+	if leader == null or leader.squad == null:
+		return ""
+	return "%d/%d" % [leader.squad.get_members().size(), leader.squad.max_size()]
+
+
+func show_squad_count(leader: Unit) -> void:
+	_stop_squad_count_settle()
+	_squad_count_leader_id = leader.get_instance_id()
+	squad_count_alpha = 1.0
+	_draw_squad_count()
+
+
+func settle_squad_count() -> void:
+	if squad_count_leader() == null:
+		return
+	_stop_squad_count_settle()
+	squad_count_alpha = 1.0
+	_draw_squad_count()
+	_squad_count_settle = create_tween()
+	_squad_count_settle.tween_interval(maxf(SQUAD_COUNT_HOLD, 0.0))
+	_squad_count_settle.tween_method(_set_squad_count_alpha, 1.0, 0.0, maxf(SQUAD_COUNT_FADE, 0.001))
+	_squad_count_settle.tween_callback(_end_squad_count)
+
+
+# A settle outlives the mode that started it: the join that closes the pick settles the count and
+# then _click_picking_target leaves the mode, which lands here.
+func clear_squad_count() -> void:
+	if is_squad_count_settling():
+		return
+	_end_squad_count()
+
+
+func is_squad_count_settling() -> bool:
+	return _squad_count_settle != null and _squad_count_settle.is_valid()
+
+
+func _stop_squad_count_settle() -> void:
+	if is_squad_count_settling():
+		_squad_count_settle.kill()
+	_squad_count_settle = null
+
+
+func _set_squad_count_alpha(alpha: float) -> void:
+	squad_count_alpha = alpha
+	_draw_squad_count()
+
+
+func _end_squad_count() -> void:
+	_squad_count_settle = null
+	_squad_count_leader_id = 0
+	squad_count_alpha = 0.0
+	_draw_squad_count()
+
+
+# The flat view's number: just right of the crown, which sits on the cell centre with no offset.
+# Measured from the crown's CANVAS rather than its ink, which is what the diorama does too.
+func _draw_squad_count() -> void:
+	var leader := squad_count_leader()
+	if leader == null or squad_count_alpha <= 0.0:
+		if _squad_count_label != null:
+			_squad_count_label.visible = false
+		return
+	if _squad_count_label == null:
+		_squad_count_label = Label.new()
+		_squad_count_label.name = "SquadCount"
+		var style := LabelSettings.new()
+		style.font_size = 8
+		style.outline_size = 3
+		style.outline_color = Color.BLACK
+		_squad_count_label.label_settings = style
+		_squad_count_label.z_index = HEAD_ICON_Z_INDEX
+		_squad_count_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		icon_overlay.add_child(_squad_count_label)
+	_squad_count_label.text = squad_count_text()
+	_squad_count_label.size = _squad_count_label.get_minimum_size()
+	_squad_count_label.modulate.a = squad_count_alpha
+	var crown: Texture2D = ICON_TEXTURES[OverlayIcon.IconType.CROWN]
+	var centre: Vector2 = board_tilemap.map_to_local(leader.get_projected_destination())
+	var left: float = centre.x + crown.get_width() * 0.5 + SQUAD_COUNT_GAP * GridUtils.TILE_SIZE
+	_squad_count_label.position = Vector2(left, centre.y - _squad_count_label.size.y * 0.5)
+	_squad_count_label.visible = true
 
 # What color the reach layer should paint with for this attack -- red for damage, green for a
 # heal. A null attack (bare fists) reads as the default/damage color. A WATCH aim paints its own
@@ -798,13 +1002,6 @@ func show_overlay(type: int, cells: Array, atlas_coord: Vector2i):
 	var layer = overlay_map[type]
 	layer.clear()
 	draw_cells(layer, cells, atlas_coord)
-
-	# Move overlay always wins tiles it shares with squad tint (avoids alpha-stacked orange+yellow
-	# bleed where a unit's move range overlaps its squad's leader range).
-	if type == OverlayType.MOVE:
-		for cell in cells:
-			squad_overlay.erase_cell(cell)
-			squadrange_overlay.erase_cell(cell)
 
 # PATROL only -- capture zones are objective info, not an authoring overlay. The picked-zone
 # highlight is authoring scaffolding too, so it follows the same switch.
@@ -1520,9 +1717,9 @@ func clear_selection_overlays():
 	move_overlay.clear()
 	attack_overlay.clear()
 	hover_overlay.clear()
-	squad_overlay.clear()
 	invalidmove_overlay.clear()
-	squadrange_overlay.clear()
+	# The squad's lines are selection markup like the fills they replaced (#1070).
+	clear_squad_lines()
 	# The player's reach goes with the move layer it belongs to (#1066) -- they are two halves of
 	# one answer about one unit, and a red halo outliving its blue names nobody. The THREAT layer
 	# is deliberately NOT here: an enemy field is up because of a key or a pin, not a selection.
@@ -1550,9 +1747,6 @@ func _clear_terrain_live() -> void:
 			sprite.queue_free()
 	terrain_live_sprites.clear()
 
-func clear_squad_range():
-	squadrange_overlay.clear()
-	
 func draw_cells(layer: TileMapLayer, cells: Array, atlas_coord: Vector2i):
 	for cell in cells:
 		#if is_valid_cell(cell):

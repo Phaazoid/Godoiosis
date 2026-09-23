@@ -56,6 +56,8 @@ var _staging_moved := false
 var _last_trace_version := -1   # OverlayManager.sight_trace_version -- the store's own signal (#308)
 var _last_reach_line_version := -1   # ...and the reach lines, #710 slice 1 by way of #1069
 var _last_outline_version := -1  # ...and the focus stroke's (slice 4)
+var _last_squad_lines_version := -1   # ...and the squad's range and tethers (#1070)
+var _shake_pushed := 0.0   # the last pluck pushed, so a still tether costs no per-frame write
 
 # How far the drop pointer stands off the cliff face it hangs on (#431), in cells. A depth-buffer
 # epsilon, not a feel value: big enough that a coplanar wall cannot stipple through it, small
@@ -81,8 +83,6 @@ func _process(_delta: float) -> void:
 
 	_fill(BoardOverlays.Layer.MOVE, om.move_overlay.get_used_cells())
 	_fill(BoardOverlays.Layer.INVALID_MOVE, om.invalidmove_overlay.get_used_cells())
-	_fill(BoardOverlays.Layer.SQUAD, om.squad_overlay.get_used_cells())
-	_fill(BoardOverlays.Layer.SQUAD_RANGE, om.squadrange_overlay.get_used_cells())
 	_fill(BoardOverlays.Layer.ZONE_CAPTURE, om.capture_overlay.get_used_cells())
 	_fill(BoardOverlays.Layer.ZONE_EXTRACTION, om.extraction_overlay.get_used_cells())
 	# Ungated like the two above, not gated like PATROL below (#736): the gate exists to keep AI
@@ -119,6 +119,7 @@ func _process(_delta: float) -> void:
 	overlays.poll_beam_motion()   # #217 has no changed signal; this is the one composed read (#1042)
 	_reach_lines(om)
 	_focus_outline(om)
+	_squad_lines(om)
 	_arrows(om)
 
 	var kb_trails: Array[Dictionary] = []
@@ -127,6 +128,7 @@ func _process(_delta: float) -> void:
 	_markers(BoardOverlays.Layer.KNOCKBACK, kb_trails)
 
 	_icons(om)
+	_squad_count(om)
 	_guard_links(om)
 	_terrain(om)
 	_ghost_sync(om, kb_ghosts)
@@ -323,8 +325,8 @@ func _reach_lines(om: OverlayManager) -> void:
 				points.append(BoardSpace.trace_point(p))
 			strokes.append(points)
 		marks.append(strokes)
-		widths.append(ThreatLines2D.mark_widths(flat))
-		var cone := ThreatLines2D.cone_of(flat)
+		widths.append(ThreatLines2D.mark_widths(flat, ThreatLines2D.CONE_WIDTH_SCALE))
+		var cone := ThreatLines2D.cone_of(flat, ThreatLines2D.CONE_WIDTH_SCALE)
 		if cone.is_empty():
 			cones.append({})
 		else:
@@ -566,6 +568,7 @@ func _icons(om: OverlayManager) -> void:
 			var entry := _marker(_anchor(icon.current_cell()), icon.sprite.texture,
 					icon.sprite.modulate)
 			if type == OverlayIcon.IconType.CROWN:
+				entry["pos"] = _crown_base(icon.unit, icon.current_cell())
 				heads.append(entry)
 			elif type == OverlayIcon.IconType.GUARD_WARD:
 				# Its own layer, not because it is a different KIND of markup -- it is a ground decal
@@ -600,6 +603,36 @@ func _icons(om: OverlayManager) -> void:
 		if is_instance_valid(sprite) and sprite.texture != null:
 			watched.append(_marker(_anchor_px(sprite.global_position), sprite.texture, sprite.modulate))
 	_markers(BoardOverlays.Layer.WATCH_ICONS, watched)
+
+
+# Where a leader's crown STANDS (#1070): its cell's ground, as every marker here, lifted by the
+# unit's own head -- the art's top, or its health readout's top while one is up -- so the readout can
+# grow a row or a status and lift the crown instead of running through it. The billboard's clearance
+# goes on top of this, in BoardOverlays.billboard_point. The crown still does not follow a walk; only
+# its height moved off the tile.
+func _crown_base(unit: Unit, cell: Vector2i) -> Vector3:
+	var base: Vector3 = (_anchor(cell)["surface"] as Transform3D).origin
+	if unit_mirror == null:
+		return base
+	return base + Vector3.UP * unit_mirror.head_height(unit)
+
+
+# Squad Up's count (#1070), beside the crown -- at the crown's own point even before the first join,
+# when there is no crown yet, so the number never jumps as the crown arrives. OverlayManager says what
+# it reads and how faded it is; UnitMirror draws it in the HP digits' own style.
+func _squad_count(om: OverlayManager) -> void:
+	if unit_mirror == null:
+		return
+	var leader := om.squad_count_leader()
+	if leader == null or om.squad_count_alpha <= 0.0:
+		unit_mirror.clear_squad_count()
+		return
+	var crown: Texture2D = OverlayManager.ICON_TEXTURES[OverlayIcon.IconType.CROWN]
+	var cell := leader.get_projected_destination()
+	var centre := overlays.billboard_point(_crown_base(leader, cell))
+	var gap := OverlayManager.SQUAD_COUNT_GAP * BoardSpace.CELL_SIZE
+	var side := crown.get_width() * 0.5 * overlays.billboard_pixel_size + gap
+	unit_mirror.set_squad_count(centre, side, om.squad_count_text(), om.squad_count_alpha)
 
 
 # The armed-Guard links (#450): the blocker->ward arrows OverlayManager drew beside the ward
@@ -751,3 +784,68 @@ func _focus_outline(om: OverlayManager) -> void:
 			points.append(BoardSpace.trace_point(p) + lift)
 		segments.append(points)
 	overlays.set_lines(BoardOverlays.Layer.ENEMY_FOCUS_EDGE, segments, OverlayManager.FOCUS_OUTLINE_COLOR)
+
+
+# The squad's lines (#1070): the range's stroke lies on the ground as the focus edge does, and each
+# tether hangs where its chord put it -- the middles of the two bodies -- with the cone at the
+# leader's end built exactly as a reach mark's is. The three tether STATES go to three layers,
+# because the pluck is a material uniform and only a strained tether may shake.
+#
+# The pluck is pushed every frame it rings and never otherwise: the store holds a start stamp, and
+# the envelope is SquadLines2D's, so the flat line and the ribbon swing as one.
+func _squad_lines(om: OverlayManager) -> void:
+	_push_tether_shake(om)
+	if om.squad_lines_version == _last_squad_lines_version:
+		return
+	_last_squad_lines_version = om.squad_lines_version
+	var lift := Vector3.UP * overlays.marker_lift(BoardOverlays.Layer.COHESION_EDGE)
+	var segments: Array[PackedVector3Array] = []
+	for segment in om.squad_outline:
+		var points := PackedVector3Array()
+		for p: Vector3 in segment:
+			points.append(BoardSpace.trace_point(p) + lift)
+		segments.append(points)
+	overlays.set_lines(BoardOverlays.Layer.COHESION_EDGE, segments, SquadLines2D.TETHER_COLOR)
+	for state: int in SquadLines2D.Strain.values():
+		var marks: Array[Array] = []
+		var widths: Array[Array] = []
+		var cones: Array[Dictionary] = []
+		for entry: Dictionary in om.squad_tethers:
+			if entry["state"] != state:
+				continue
+			var flat: Array[PackedVector3Array] = []
+			flat.assign(entry["strokes"])
+			var strokes: Array[PackedVector3Array] = []
+			for stroke: PackedVector3Array in flat:
+				var points := PackedVector3Array()
+				for p: Vector3 in stroke:
+					points.append(BoardSpace.trace_point(p))
+				strokes.append(points)
+			marks.append(strokes)
+			widths.append(ThreatLines2D.mark_widths(flat, SquadLines2D.ARROW_WIDTH_SCALE))
+			var cone := ThreatLines2D.cone_of(flat, SquadLines2D.ARROW_WIDTH_SCALE)
+			if cone.is_empty():
+				cones.append({})
+			else:
+				cones.append({
+					"base": BoardSpace.trace_point(cone["base"]),
+					"tip": BoardSpace.trace_point(cone["tip"]),
+					"radius": overlays.squad_line_width * float(cone["scale"]) * 0.5,
+				})
+		overlays.set_marks(TETHER_LAYERS[state], marks, SquadLines2D.color_of(state), widths, cones)
+
+
+# Which diorama layer draws each tether state.
+const TETHER_LAYERS := {
+	SquadLines2D.Strain.SOLID: BoardOverlays.Layer.TETHERS,
+	SquadLines2D.Strain.GHOST: BoardOverlays.Layer.TETHER_GHOST,
+	SquadLines2D.Strain.STRAIN: BoardOverlays.Layer.TETHER_STRAIN,
+}
+
+
+func _push_tether_shake(om: OverlayManager) -> void:
+	var amount := SquadLines2D.shake_now(om.tether_shake_msec) * BoardSpace.CELL_SIZE
+	if is_equal_approx(amount, _shake_pushed):
+		return
+	_shake_pushed = amount
+	overlays.set_tether_shake(amount)

@@ -62,8 +62,8 @@ const KNOBS: Array[Dictionary] = [
 	SELECTOR_DEPTH,
 	{"group": "Lift, brackets & icons", "node": "BoardOverlays", "prop": "invalid_bracket_color", "label": "Invalid bracket tint",
 		"tip": "What the hover bracket turns over a cell the 2D game calls invalid -- unwalkable, occupied, or a paint the tile brush would refuse. It mirrors the 2D cursor's own verdict rather than deciding for itself."},
-	{"group": "Lift, brackets & icons", "node": "BoardOverlays", "prop": "billboard_lift", "label": "Icon height", "min": 0.0, "max": 3.0, "step": 0.01,
-		"tip": "How high a selection icon floats above the cell it marks. High enough to clear the unit standing there, low enough not to read as belonging to the cell behind."},
+	{"group": "Lift, brackets & icons", "node": "BoardOverlays", "prop": "billboard_lift", "label": "Crown clearance", "min": 0.0, "max": 1.5, "step": 0.005,
+		"tip": "How far above its leader's head the crown sits, in cells -- above the top of the art, or above the health readout while one is showing, so a readout that grows a row or a status lifts the crown instead of running through it (#1070). The Squad Up count sits beside the crown at the same height."},
 	{"group": "Lift, brackets & icons", "node": "BoardOverlays", "prop": "billboard_pixel_size", "label": "Icon pixel size", "min": 0.004, "max": 0.1, "step": 0.001,
 		"tip": "World size of ONE pixel of a billboard icon. 1/32 matches the tile art's density; mixing densities is the loudest amateur tell in HD-2D, so change this only with the art in view."},
 
@@ -104,6 +104,15 @@ const KNOBS: Array[Dictionary] = [
 		"tip": "How dark a face pointing away from the light goes. 1.0 is flat -- a silhouette, which is what a cone looks like with no shading at all -- and 0 is hard black on the far side. This is the whole of what makes the head read as a 3D shape rather than a triangle, since board markup is never lit by the scene."},
 	{"group": "Reach lines: the cone", "node": "BoardOverlays", "prop": "cone_facets", "label": "Reach cone facets", "min": 3, "max": 32, "step": 1,
 		"tip": "How many flat faces the cone is built from. Low reads as a cut gem with obvious edges, high as a smooth round cone. At the size this draws on screen, somewhere in the low teens is usually all that survives the pixels."},
+	# The squad's lines (#1070): one width and one glow for the range's stroke AND the tethers, which is
+	# what makes them read as one system. The dashes and colours are class values in CLASS_KNOBS,
+	# because the flat view draws them too; these two have no flat-view twin.
+	{"group": "Squad lines", "node": "BoardOverlays", "prop": "squad_line_width", "label": "Squad line width (3D)", "min": 0.01, "max": 0.2, "step": 0.005,
+		"tip": "How thick a tether is, in cells. Its arrowhead is a multiple of this (Tether arrow width), so widening the line widens its head too. The range's outline has its own width below."},
+	{"group": "Squad lines", "node": "BoardOverlays", "prop": "cohesion_line_width", "label": "Range outline width (3D)", "min": 0.01, "max": 0.3, "step": 0.005,
+		"tip": "How thick the dashed stroke round the squad's range is, in cells. It lies on the ground, where it has more to compete with than a tether in the air does."},
+	{"group": "Squad lines", "node": "BoardOverlays", "prop": "squad_line_intensity", "label": "Squad line glow (3D)", "min": 0.2, "max": 4.0, "step": 0.05,
+		"tip": "Brightness multiplier on the squad's lines. Around 1 draws them flat, which is what markup wants; past the scene's glow threshold (1.2) they bloom and start reading as an effect."},
 
 	# --- Dev chrome ---
 	# Filed truthfully rather than folded into the markup above it: these are the only rows on this
@@ -119,13 +128,13 @@ const KNOBS: Array[Dictionary] = [
 
 	# --- Unit HUD (#229) ---
 	{"group": "HP cubes", "node": "UnitMirror", "prop": "hud_lift", "label": "Readout clearance", "min": 0.0, "max": 1.5, "step": 0.01,
-		"tip": "Gap between the top of the unit's visible ART and the bottom of the readout, in cells. Measured from the sprite's topmost opaque pixel rather than from its feet, so units drawn with different amounts of empty space above their heads all wear it at the same apparent height. The selection icons sit higher still; keep this well under their lift or the readout climbs past them."},
+		"tip": "Gap between the top of the unit's visible ART and the bottom of the readout, in cells. Measured from the sprite's topmost opaque pixel rather than from its feet, so units drawn with different amounts of empty space above their heads all wear it at the same apparent height. A leader's crown stands on top of the readout whatever this is, so raising it lifts the crown too."},
 	{"group": "HP cubes", "node": "UnitMirror", "prop": "hp_block_texels", "label": "HP cube size", "min": 2.0, "max": 16.0, "step": 1.0,
 		"tip": "Edge of one HP cube in texels, at the same pixel density as every sprite -- 32 is one cell. This INCLUDES the black cage, so the coloured core is this minus twice the cage: at 5 with a 1-texel cage the core is 3 texels, which is about the floor for still reading as a bordered square rather than a dark speck."},
 	{"group": "HP cubes", "node": "UnitMirror", "prop": "hp_block_border_texels", "label": "HP cube cage", "min": 0.0, "max": 4.0, "step": 1.0,
 		"tip": "Thickness of the black frame around every face of a cube, in texels. It is what makes a cube read as a cube with no lighting on it, and neighbouring cubes SHARE it -- so this also closes the gap between them. Zero removes it and the grid becomes a row of flat squares; push it past a third of the cube size and there is no colour left to read."},
 	{"group": "HP cubes", "node": "UnitMirror", "prop": "hp_blocks_per_row", "label": "HP cubes per row", "min": 1.0, "max": 30.0, "step": 1.0,
-		"tip": "How many cubes before the grid wraps to another row. Ten is what makes the readout countable at a glance -- one full row plus four reads as 14 without counting. Fewer per row trades width for height, and height is the contested axis: the state icons and the crown are stacked above."},
+		"tip": "How many cubes before the grid wraps to another row. Ten is what makes the readout countable at a glance -- one full row plus four reads as 14 without counting. Fewer per row trades width for height, and height is the contested axis: the state icons stack above the grid, and a leader's crown is lifted clear of both."},
 	{"group": "HP cubes", "node": "UnitMirror", "prop": "hp_block_recess_texels", "label": "Lost cube depth", "min": 0.0, "max": 8.0, "step": 1.0,
 		"tip": "How far back a LOST cube sits, in texels. The dent is a second cue beside the colour, so the readout still reads at distance and for anyone who finds green-against-red hard. Zero makes every cube flush and hands the dent to the shrink below -- which is where it sits by default, because depth and holding the grid still are incompatible: pushed back cubes stop reading as sunk the moment you orbit behind them."},
 	{"group": "HP cubes", "node": "UnitMirror", "prop": "hp_block_recess_shrink", "label": "Lost cube shrink", "min": 0.1, "max": 1.0, "step": 0.05,
@@ -420,6 +429,7 @@ const SIGHT_TRACE_SCRIPT := "res://Classes/board/SightTrace2D.gd"
 const THREAT_LINES_SCRIPT := "res://Classes/board/ThreatLines2D.gd"
 const AIM_FLASH_SCRIPT := "res://Classes/board/AimFlash2D.gd"
 const MOVE_GRID_SCRIPT := "res://Classes/board/MoveGrid.gd"
+const SQUAD_LINES_SCRIPT := "res://Classes/board/SquadLines2D.gd"
 const UNIT_VISUALS_SCRIPT := "res://Classes/units/UnitVisuals.gd"
 const MUSIC_DIRECTOR_SCRIPT := "res://Classes/audio/MusicDirector.gd"
 const STAGING_DUST_SCRIPT := "res://Classes/presentation/StagingDust.gd"
@@ -441,12 +451,8 @@ const CLASS_KNOBS: Array[Dictionary] = [
 
 	{"group": "Range readout", "label": "Move fill", "layer": BoardOverlays.Layer.MOVE,
 		"tip": "The tiles one of YOUR units can reach, while you hover it or order a move. Blue since #1066, and it sorts above every other range tone, so the intersect with an enemy field reads as tinted blue rather than as purple. Alpha is the dial that matters most -- markup has to read as gameplay information without burying the terrain under it."},
-	{"group": "Range readout", "label": "Invalid-move fill", "layer": BoardOverlays.Layer.INVALID_MOVE,
-		"tip": "Tiles inside a unit's movement range that it still may not stop on -- out of its leader's cohesion range, or already occupied. Clicking one does nothing, so this colour is the only warning."},
-	{"group": "Squads & zones", "label": "Squad fill", "layer": BoardOverlays.Layer.SQUAD,
-		"tip": "The candidate bubble while FORMING a squad (Squad Up / Join Squad) -- the cells a recruit may be picked from. Membership itself is the ring/square markers, not this fill."},
-	{"group": "Squads & zones", "label": "Squad-range fill", "layer": BoardOverlays.Layer.SQUAD_RANGE,
-		"tip": "The leader's cohesion range -- how far squadmates may stray before the plan is refused. Shares its colour with Squad fill by default, since they are two halves of the same idea."},
+	{"group": "Range readout", "label": "Out-of-range grid", "layer": BoardOverlays.Layer.INVALID_MOVE,
+		"tip": "Tiles a unit could walk to that its SQUAD will not let it take -- a member's past its leader's cohesion range, or a leader's that would strand somebody. The move grid in grey (#1070): same lattice, switched off. Hovering one turns the tether it would break red, and clicking it shakes that tether."},
 	{"group": "Squads & zones", "label": "Capture zone", "layer": BoardOverlays.Layer.ZONE_CAPTURE,
 		"tip": "A painted objective zone that can be captured. Stays visible for the whole battle -- this is live objective information, not authoring scaffolding."},
 	{"group": "Squads & zones", "label": "Extraction zone", "layer": BoardOverlays.Layer.ZONE_EXTRACTION,
@@ -491,7 +497,7 @@ const CLASS_KNOBS: Array[Dictionary] = [
 	{"group": "Range readout", "label": "Your attack reach (2D+3D)", "static": "REACH_MODULATE",
 		"tip": "Every cell your hovered or selected unit could hit from anywhere in its blue move range. Drawn UNDER the blue, so what shows is the halo past where you may stand -- an alpha set too low leaves the halo invisible against an enemy field."},
 	{"group": "Range readout", "label": "Enemy threat field (2D+3D)", "static": "THREAT_MODULATE",
-		"tip": "Where an enemy could go AND what it could hit, as one unbroken field. Under both of your tones, so where it crosses your blue the composite IS the intersect colour -- tune it there as well as over bare ground. Its risky neighbours are the violet deployment zone and the mauve invalid-move fill."},
+		"tip": "Where an enemy could go AND what it could hit, as one unbroken field. Under both of your tones, so where it crosses your blue the composite IS the intersect colour -- tune it there as well as over bare ground. Its risky neighbour is the violet deployment zone."},
 
 	# THE GRID YOUR MOVEMENT RANGE IS DRAWN WITH (#1074). Four placement values in pixels of the
 	# 32-pixel tile, generated into one texture both views draw -- no colour here, because the line and
@@ -540,6 +546,54 @@ const CLASS_KNOBS: Array[Dictionary] = [
 		"tip": "How wide the cone's base is as a MULTIPLE of the mark's own width, so widening the mark widens its cone with it. It wants to be subtle -- barely more than the shaft, converging to nothing at the victim."},
 	{"group": "Squads & zones", "label": "Leash reveal (2D+3D)", "static": "ZONE_HIGHLIGHT_MODULATE",
 		"tip": "A sentry's patrol zone while you hover it or hold the threat view -- and the Tile Brush's picked zone, which is the same layer and the same colour."},
+
+	# THE SQUAD'S LINES (#1070): a tether from each member to its leader, and the dashed stroke round
+	# where the squad may stand -- one system, so one colour and one dash for both. Class values on
+	# SquadLines2D because both views draw them.
+	{"group": "Squad lines", "label": "Tether and range (2D+3D)", "static": "TETHER_COLOR", "script": SQUAD_LINES_SCRIPT,
+		"tip": "The tether from each member to its leader AND the dashed stroke round the squad's range -- one colour, because they are one system. Orange, the hue the cohesion fill always wore."},
+	{"group": "Squad lines", "label": "Ghost tether (2D+3D)", "static": "TETHER_GHOST_COLOR", "script": SQUAD_LINES_SCRIPT,
+		"tip": "A tether that MIGHT be: every unit Squad Up could recruit, or every squad Join Squad could join. Dim the colour itself, not only its alpha -- the 3D arrowhead is solid and ignores alpha, so a ghost there reads as darker rather than see-through."},
+	{"group": "Squad lines", "label": "Strained tether (2D+3D)", "static": "TETHER_STRAIN_COLOR", "script": SQUAD_LINES_SCRIPT,
+		"tip": "The tether a hovered move would break -- a member past its leader's range, or a member the leader would strand. It is also the one that shakes when you click that tile anyway."},
+	{"group": "Squad lines", "label": "Dashes per tile", "static": "DASHES_PER_TILE", "script": SQUAD_LINES_SCRIPT,
+		"min": 1, "max": 8, "step": 1,
+		"tip": "How many dashes fit one tile's length. A count rather than a length so the range's stroke, which is one piece per tile edge, meets itself in step at every corner."},
+	{"group": "Squad lines", "label": "Dash fill", "static": "DASH_FILL", "script": SQUAD_LINES_SCRIPT,
+		"min": 0.05, "max": 1.0, "step": 0.05,
+		"tip": "How much of each dash period is ink. 1.0 is a solid line."},
+	{"group": "Squad lines", "label": "Dash speed", "static": "DASH_SPEED", "script": SQUAD_LINES_SCRIPT,
+		"min": 0.0, "max": 3.0, "step": 0.05,
+		"tip": "How fast the dashes march, in tiles per second -- toward the leader along a tether, clockwise round the range. Slow is the brief. The photosensitivity setting stops them."},
+	{"group": "Squad lines", "label": "Tether inset", "static": "TETHER_INSET", "script": SQUAD_LINES_SCRIPT,
+		"min": 0.0, "max": 0.6, "step": 0.05,
+		"tip": "How far short of the leader's centre the arrowhead's tip stops, in tiles, so it meets the leader's body rather than disappearing behind it."},
+	{"group": "Squad lines", "label": "Tether arrow length", "static": "ARROW_LENGTH", "script": SQUAD_LINES_SCRIPT,
+		"min": 0.0, "max": 1.5, "step": 0.05,
+		"tip": "How long the arrowhead at the leader's end of a tether is, in tiles. Zero leaves a bare line. The tethers' own -- the enemy reach marks' cone has its own pair."},
+	{"group": "Squad lines", "label": "Tether arrow width", "static": "ARROW_WIDTH_SCALE", "script": SQUAD_LINES_SCRIPT,
+		"min": 1.0, "max": 6.0, "step": 0.1,
+		"tip": "How wide the arrowhead's base is, as a MULTIPLE of the tether's own width, so widening the tether widens its arrow with it."},
+	{"group": "Squad lines", "label": "Shake size", "static": "SHAKE_AMPLITUDE", "script": SQUAD_LINES_SCRIPT,
+		"min": 0.0, "max": 0.5, "step": 0.01,
+		"tip": "How far the middle of a strained tether swings when you click a tile the squad will not let you take, in tiles. Both ends stay pinned, like a plucked string."},
+	{"group": "Squad lines", "label": "Shake length", "static": "SHAKE_SECONDS", "script": SQUAD_LINES_SCRIPT,
+		"min": 0.05, "max": 2.0, "step": 0.05,
+		"tip": "How long the pluck rings before it settles, in seconds."},
+	{"group": "Squad lines", "label": "Shake swings", "static": "SHAKE_SWINGS", "script": SQUAD_LINES_SCRIPT,
+		"min": 0.5, "max": 8.0, "step": 0.5,
+		"tip": "How many times it swings back and forth in that time."},
+	# The Squad Up count beside the leader's crown (#1070). On OverlayManager, the store both views
+	# read; its size, outline and colour are the HP digits' own rows, so it has none here.
+	{"group": "Squad lines", "label": "Squad Up count hold (2D+3D)", "static": "SQUAD_COUNT_HOLD",
+		"min": 0.0, "max": 3.0, "step": 0.05,
+		"tip": "How long the last number -- 3/3 on a squad you just filled -- stays up after the pick closes, in seconds, before it starts to fade. Takes effect on the next Squad Up."},
+	{"group": "Squad lines", "label": "Squad Up count fade (2D+3D)", "static": "SQUAD_COUNT_FADE",
+		"min": 0.05, "max": 3.0, "step": 0.05,
+		"tip": "How long that last number takes to fade out, in seconds. A cancelled Squad Up does not fade -- the count just goes, since nothing changed. Takes effect on the next Squad Up."},
+	{"group": "Squad lines", "label": "Squad Up count gap (2D+3D)", "static": "SQUAD_COUNT_GAP",
+		"min": 0.0, "max": 0.5, "step": 0.01,
+		"tip": "Space between the crown and the count beside it, in cells. Live in 3D; the flat view picks it up on the next number."},
 
 	# The watched footprint (#413). It has to read as a THREAT while every range overlay is off, and
 	# it is on screen for both sides at once, so its loudness is the one dial that decides whether
@@ -1356,6 +1410,7 @@ const GROUP_TABS: Dictionary[String, String] = {
 	"Arrows & trails": "Markers",
 	"Guard": "Markers",
 	"Squads & zones": "Markers",
+	"Squad lines": "Markers",
 	"Tile pick": "Markers",
 	"Lift, brackets & icons": "Markers",
 	"Dev chrome": "Markers",
@@ -1550,6 +1605,21 @@ static func read_static(name: String) -> Variant:
 		"GRID_LINE_WIDTH": return MoveGrid.GRID_LINE_WIDTH
 		"GRID_FILL_GAP": return MoveGrid.GRID_FILL_GAP
 		"GRID_FILL_ALPHA": return MoveGrid.GRID_FILL_ALPHA
+		"TETHER_COLOR": return SquadLines2D.TETHER_COLOR
+		"TETHER_GHOST_COLOR": return SquadLines2D.TETHER_GHOST_COLOR
+		"TETHER_STRAIN_COLOR": return SquadLines2D.TETHER_STRAIN_COLOR
+		"DASHES_PER_TILE": return SquadLines2D.DASHES_PER_TILE
+		"DASH_FILL": return SquadLines2D.DASH_FILL
+		"DASH_SPEED": return SquadLines2D.DASH_SPEED
+		"TETHER_INSET": return SquadLines2D.TETHER_INSET
+		"ARROW_LENGTH": return SquadLines2D.ARROW_LENGTH
+		"ARROW_WIDTH_SCALE": return SquadLines2D.ARROW_WIDTH_SCALE
+		"SHAKE_AMPLITUDE": return SquadLines2D.SHAKE_AMPLITUDE
+		"SHAKE_SECONDS": return SquadLines2D.SHAKE_SECONDS
+		"SHAKE_SWINGS": return SquadLines2D.SHAKE_SWINGS
+		"SQUAD_COUNT_HOLD": return OverlayManager.SQUAD_COUNT_HOLD
+		"SQUAD_COUNT_FADE": return OverlayManager.SQUAD_COUNT_FADE
+		"SQUAD_COUNT_GAP": return OverlayManager.SQUAD_COUNT_GAP
 		"PIN_PULSE_MODULATE": return UnitVisuals.PIN_PULSE_MODULATE
 		"PIN_PULSE_HOLD": return UnitVisuals.PIN_PULSE_HOLD
 		"SQUAD_RING_ALPHA": return OverlayManager.SQUAD_RING_ALPHA
@@ -1817,6 +1887,14 @@ static func write_static(host: Node3D, name: String, value: Variant) -> void:
 			MoveGrid.GRID_FILL_ALPHA = value
 			_restyle_move_grid(host)
 			return
+		# The squad's lines (#1070). Every one re-applies to BOTH views through one door: the 3D beam
+		# params (the dashes are shader uniforms) and the store, which re-derives the tethers -- the
+		# inset is geometry -- and repaints the flat line.
+		"TETHER_COLOR", "TETHER_GHOST_COLOR", "TETHER_STRAIN_COLOR", "DASHES_PER_TILE", "DASH_FILL", \
+				"DASH_SPEED", "TETHER_INSET", "ARROW_LENGTH", "ARROW_WIDTH_SCALE", "SHAKE_AMPLITUDE", 				"SHAKE_SECONDS", "SHAKE_SWINGS":
+			_write_squad_line(name, value)
+			_restyle_squad_lines(host)
+			return
 		"SQUAD_RING_ALPHA": OverlayManager.SQUAD_RING_ALPHA = value
 		"SQUAD_RING_PULSE_GAIN": OverlayManager.SQUAD_RING_PULSE_GAIN = value
 		"KNOCKBACK_MODULATE": OverlayManager.KNOCKBACK_MODULATE = value
@@ -1839,6 +1917,11 @@ static func write_static(host: Node3D, name: String, value: Variant) -> void:
 		# SHOVE_SLIDE_SPEED's early-return reasoning, and why neither needs a sweep.
 		"PICK_FLASH_ALPHA": OverlayManager.PICK_FLASH_ALPHA = value
 		"PICK_FLASH_PERIOD": OverlayManager.PICK_FLASH_PERIOD = value
+		# The Squad Up count (#1070). HOLD and FADE are read when a settle starts and GAP every frame
+		# the diorama draws it, so none of them has a standing thing to sweep.
+		"SQUAD_COUNT_HOLD": OverlayManager.SQUAD_COUNT_HOLD = value
+		"SQUAD_COUNT_FADE": OverlayManager.SQUAD_COUNT_FADE = value
+		"SQUAD_COUNT_GAP": OverlayManager.SQUAD_COUNT_GAP = value
 		# The beat table (#519). Every one of these is read at the START of a pass, so there is never
 		# a standing pause to re-apply one to -- SHOVE_SLIDE_SPEED's early return, same reason.
 		# The slam dust (#656). Every arm re-applies, because two of these nine (lifetime, and the
@@ -2433,6 +2516,36 @@ static func write_static(host: Node3D, name: String, value: Variant) -> void:
 		"MOVE_ARROW_MODULATE", "INVALID_ARROW_MODULATE", "TRAILING_ARROW_MODULATE":
 			manager.redraw_planned_paths()
 		_: manager.refresh_aim_colors()
+
+
+# Split out of write_static's match so the squad-line arm can list its names once. DASHES_PER_TILE is
+# a COUNT and the slider hands over a float; the cast is what keeps the static an int, and so what
+# Save writes back as one. ROUNDED, not truncated: a stepped slider's 3.0 may arrive as 2.9999.
+static func _write_squad_line(name: String, value: Variant) -> void:
+	match name:
+		"TETHER_COLOR": SquadLines2D.TETHER_COLOR = value
+		"TETHER_GHOST_COLOR": SquadLines2D.TETHER_GHOST_COLOR = value
+		"TETHER_STRAIN_COLOR": SquadLines2D.TETHER_STRAIN_COLOR = value
+		"DASHES_PER_TILE": SquadLines2D.DASHES_PER_TILE = roundi(value)
+		"DASH_FILL": SquadLines2D.DASH_FILL = value
+		"DASH_SPEED": SquadLines2D.DASH_SPEED = value
+		"TETHER_INSET": SquadLines2D.TETHER_INSET = value
+		"ARROW_LENGTH": SquadLines2D.ARROW_LENGTH = value
+		"ARROW_WIDTH_SCALE": SquadLines2D.ARROW_WIDTH_SCALE = value
+		"SHAKE_AMPLITUDE": SquadLines2D.SHAKE_AMPLITUDE = value
+		"SHAKE_SECONDS": SquadLines2D.SHAKE_SECONDS = value
+		"SHAKE_SWINGS": SquadLines2D.SHAKE_SWINGS = value
+
+
+# The squad lines' re-apply (#1070): the diorama's beam params and the store's derived tethers, the
+# two halves #1074's grid taught -- missing either is a slider that moves one view only.
+static func _restyle_squad_lines(host: Node3D) -> void:
+	var overlays := overlays_of(host)
+	if overlays != null:
+		overlays.restyle_squad_lines()
+	var manager := overlay_manager_of(host)
+	if manager != null:
+		manager.restyle_squad_lines()
 
 
 # The movement grid's re-apply (#1074): BOTH views, because MoveGrid is one rule each of them

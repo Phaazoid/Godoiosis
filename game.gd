@@ -111,6 +111,10 @@ var selected_unit: Unit = null
 # recompute-if-empty fallback -- and the two modes ask the same question for the same reason, which
 # is why this is not named after group move any more (#1069).
 var leader_followable: Dictionary = {}
+# ...and, for every destination the leader could WALK to, which members it would strand there (#1070):
+# empty for a followable cell. Built by the same sweep as leader_followable and cleared beside it --
+# what turns a refused tile's tethers red, and what tells a click on one to shake rather than leave.
+var leader_stranding: Dictionary = {}
 var target_pick_cells: Array[Vector2i] = []   # candidates while PICKING_TARGET; read by HoverPresenter
 var _target_pick_callback: Callable           # func(cell: Vector2i) -> void
 # Bumped by every enter_cell_pick_mode. _click_picking_target snapshots it around the callback so a
@@ -648,10 +652,20 @@ func _click_choosing_move(cell: Vector2i) -> void:
 	var moverange := compute_move_range(unit)
 	# ...and a LEADER may not take a destination its squad cannot follow to (#1069). Read off the
 	# cache enter_move_mode built, exactly as _click_choosing_group_move reads it, so the refusal
-	# and the red tile can never disagree about which cells they mean. Silently, like every other
-	# refusal on this board.
+	# and the grey tile can never disagree about which cells they mean.
+	#
+	# A tile the unit could WALK to but the squad refuses ANSWERS BACK since #1070 (dev: "if they try
+	# clicking, the tether gives a shake"): the tethers the move would break shake, and the pick stays
+	# open so the player can choose again. The board's one refusal that does -- every other one here
+	# is still silent, and a click outside the whole range still leaves the mode.
 	if unit.is_leader() and unit.has_squad() and not leader_followable.has(cell):
+		if leader_stranding.has(cell):
+			overlay_manager.shake_tethers()
+			return
 		exit_current_mode()
+		return
+	if not unit.is_leader() and moverange.squad_unreachable.has(cell):
+		overlay_manager.shake_tethers()
 		return
 	# Physical reach is the click's business; whether the SQUAD permits landing there is queue_action's.
 	if moverange.reachable.keys().has(cell) or moverange.squad_unreachable.keys().has(cell):
@@ -666,9 +680,13 @@ func _click_choosing_move(cell: Vector2i) -> void:
 func _click_choosing_group_move(cell: Vector2i) -> void:
 	var leader := selected_unit
 	# The two questions the overlay painted, in the same order: can the leader get there, and can the
-	# squad follow. A red tile is clickable and does nothing, exactly like a squadmate's own.
+	# squad follow. A grey tile shakes the tethers it would break and keeps the pick open, exactly like
+	# a single move's (#1070).
 	if compute_move_range(leader).reachable.keys().has(cell) and leader_followable.has(cell):
 		squad_manager.queue_group_move(leader.squad, cell, _board())
+	elif leader_stranding.has(cell):
+		overlay_manager.shake_tethers()
+		return
 	exit_current_mode()
 
 func _click_dev_mode(cell: Vector2i) -> void:
@@ -914,7 +932,7 @@ func enter_move_mode(unit: Unit):
 	var moverange := compute_move_range(unit)
 	game_state = GameState.CHOOSING_MOVE
 	if unit.has_squad():
-		draw_squad_leader_range(unit.squad, unit.squad.leader.get_projected_destination())
+		draw_squad_cohesion(unit.squad, unit.squad.leader.get_projected_destination())
 	var standable := get_move_range(moverange, unit)
 	# A LEADER MAY NOT STRAND A SQUADMATE (#1069, dev: "we need to block the user from even being
 	# able to make moves with a squad leader that leaves a member of their squad without any legal
@@ -929,15 +947,10 @@ func enter_move_mode(unit: Unit):
 	# individual move needs. So this is the same sweep at the same moment, and the cache is shared.
 	var green := standable
 	if unit.is_leader() and unit.has_squad():
-		leader_followable = GroupMoveSolver.followable_destinations(unit.squad, _board(), standable)
-		green = []
-		var stranding: Array[Vector2i] = []
-		for cell: Vector2i in standable:
-			if leader_followable.has(cell):
-				green.append(cell)
-			else:
-				stranding.append(cell)
-		overlay_manager.show_overlay(OverlayManager.OverlayType.INVALIDMOVE, stranding,
+		var split := leader_range_split(unit, standable)
+		_cache_leader_split(split)
+		green = split["green"]
+		overlay_manager.show_overlay(OverlayManager.OverlayType.INVALIDMOVE, split["blocked"],
 				OverlayManager.ATLAS_COORDS)
 	overlay_manager.show_overlay(OverlayManager.OverlayType.MOVE, green, OverlayManager.ATLAS_COORDS)
 	# From where the body IS, until the pointer names a candidate -- HoverPresenter moves it to each
@@ -951,22 +964,16 @@ func enter_move_mode(unit: Unit):
 func enter_group_move_mode(unit: Unit):
 	game_state = GameState.CHOOSING_GROUP_MOVE
 	if unit.has_squad():
-		draw_squad_leader_range(unit.squad, unit.squad.leader.get_projected_destination())
+		draw_squad_cohesion(unit.squad, unit.squad.leader.get_projected_destination())
 	# The SQUAD's range, not the leader's: what the slowest member cannot follow into cohesion gets
-	# the same red as a squadmate's own out-of-range tiles. Swept once here — per-SQUAD work, the
+	# the same grey as a squadmate's own out-of-range tiles. Swept once here — per-SQUAD work, the
 	# same cost for one destination as for forty — and the hover and click read the result.
-	var destinations := get_move_range(compute_move_range(unit), unit)
-	leader_followable = GroupMoveSolver.followable_destinations(unit.squad, _board(), destinations)
-	var green: Array[Vector2i] = []
-	var red: Array[Vector2i] = []
-	for cell in destinations:
-		if leader_followable.has(cell):
-			green.append(cell)
-		else:
-			red.append(cell)
-	overlay_manager.show_overlay(OverlayManager.OverlayType.MOVE, green, OverlayManager.ATLAS_COORDS)
+	var split := leader_range_split(unit, get_move_range(compute_move_range(unit), unit))
+	_cache_leader_split(split)
+	overlay_manager.show_overlay(OverlayManager.OverlayType.MOVE, split["green"], OverlayManager.ATLAS_COORDS)
 	show_player_reach(unit, unit.movement.cell)   # the leader's own cell; the pointer moves it
-	overlay_manager.show_overlay(OverlayManager.OverlayType.INVALIDMOVE, red, OverlayManager.ATLAS_COORDS)
+	overlay_manager.show_overlay(OverlayManager.OverlayType.INVALIDMOVE, split["blocked"],
+			OverlayManager.ATLAS_COORDS)
 
 # What the aim being taken will PRODUCE (#413). Overwatch is declared through the normal targeting
 # flow — same reach, same facing, same overlay, same legality — and diverges at exactly one line:
@@ -1056,9 +1063,12 @@ func exit_current_mode():
 	# every cell change, but leaving a mode is not a cell change -- a click commits at the cell the
 	# pointer is already on, so nothing would come along afterwards to take them down.
 	overlay_manager.clear_reach_lines()
+	# Squad Up's count (#1070). A count the closing join has already SETTLED is left to fade on its own.
+	overlay_manager.clear_squad_count()
 	last_clicked_cell = GridUtils.NO_CELL
 	selected_unit = null
 	leader_followable = {}
+	leader_stranding = {}
 	clear_selection()
 	if squad_manager.active_squad != null:
 		squad_manager.validate_squad_plan(squad_manager.active_squad)
@@ -1093,9 +1103,7 @@ func clear_selection():
 	target_pick_cells = []
 	_target_pick_callback = Callable()   # drop captured refs
 
-	overlay_manager.clear_selection_overlays()
-	if squad_manager.active_squad == null:
-		overlay_manager.clear_squad_range()
+	overlay_manager.clear_selection_overlays()   # the squad's lines too (#1070)
 	if squad_manager.active_squad == null:
 		clear_selection_icons()
 
@@ -1392,13 +1400,36 @@ func _squad_all_committed(squad: Squad) -> bool:
 #  Squads
 # ==============================================================================
 
+# Squad Up: from a solo unit it FORMS a squad, and since #1043 from a leader it GROWS one -- the same
+# act, because can_squad_up never asked whether the squad being joined was solo. The PICK STAYS OPEN
+# while anybody is left who could join (#1070, dev), so a four-unit squad is one gesture; it re-asks
+# after every join, since a join spends capacity. Re-entering here from inside the pick's own callback
+# is what keeps it open: a fresh pick bumps _pick_generation, which _click_picking_target reads as
+# "the callback chained another" and does not tear down.
+#
+# Drawn as the squad's own lines: its range, its members' tethers, and a GHOST tether from every unit
+# that could join, pointing at the leader like every tether does. The leader wears a COUNT beside the
+# crown (dev: "there's no real way to know how many we can pick"), and the join that closes the pick
+# settles it -- a brief last number, then a fade -- where a cancel just takes it away (exit_current_mode).
 func create_squad(unit: Unit):
-	draw_create_squad(unit)
+	var candidates := squad_up_candidates(unit)
+	var none: Array[Unit] = []
+	draw_squad_cohesion(unit.squad, unit.get_projected_destination(), {}, none, candidates)
+	overlay_manager.show_squad_count(unit)
+	enter_target_pick_mode(candidates, func(picked: Unit):
+		squad_manager.join_squad(picked, unit.squad)
+		if not squad_up_candidates(unit).is_empty():
+			create_squad(unit)
+		else:
+			overlay_manager.settle_squad_count())
+
+
+func squad_up_candidates(unit: Unit) -> Array[Unit]:
 	var candidates: Array[Unit] = []
 	for other in _all_units():
 		if squad_manager.can_squad_up(other, unit.squad):
 			candidates.append(other)
-	enter_target_pick_mode(candidates, func(picked: Unit): squad_manager.join_squad(picked, unit.squad))
+	return candidates
 
 func join_squad_mode(unit: Unit):
 	var joinable := joinable_squads(unit)
@@ -1427,7 +1458,7 @@ func _on_squad_became_active(squad: Squad, action: BaseAction):
 		return
 	if squad.leader.has_squad():
 		var icons_to_draw = {}
-		draw_squad_leader_range(squad, squad.leader.get_projected_destination())
+		draw_squad_cohesion(squad, squad.leader.get_projected_destination())
 		icons_to_draw = get_squad_icons(squad)
 		for unit in icons_to_draw.keys():
 			for icontype in icons_to_draw[unit]:
@@ -1438,7 +1469,7 @@ func _on_squad_became_active(squad: Squad, action: BaseAction):
 func _on_squad_has_no_actions(squad: Squad):
 	if squad_manager.previewing:
 		return
-	overlay_manager.clear_squad_range()
+	overlay_manager.clear_squad_lines()
 	refresh_action_queue(squad)
 	overlay_manager.redraw_squad_unit_icons(squad)
 
@@ -1463,7 +1494,7 @@ func _repaint_squad_plan(squad: Squad) -> void:
 	# Squad-wide, so equivalent to the old per-actor unit.has_squad().
 	var has_squadmates: bool = squad.has_squadmates()
 	if squad_manager.active_squad == squad and has_squadmates:
-		draw_squad_leader_range(squad, squad.leader.get_projected_destination())
+		draw_squad_cohesion(squad, squad.leader.get_projected_destination())
 	squad_manager.validate_squad_plan(squad)
 	refresh_action_queue(squad)
 
@@ -1485,8 +1516,10 @@ func _on_unit_action_cancelled(squad: Squad, unit: Unit, actiontype: BaseAction.
 		if unit.is_leader():
 			overlay_manager.create_unit_icon(unit, OverlayIcon.IconType.CROWN)
 
-	if unit.is_leader():
-		draw_squad_leader_range(squad, squad.leader.get_projected_destination())
+	# has_squadmates too (#1070): every solo unit is its own leader, so this used to draw a cohesion
+	# range round a lone unit whenever it cancelled an order.
+	if unit.is_leader() and squad.has_squadmates():
+		draw_squad_cohesion(squad, squad.leader.get_projected_destination())
 
 	squad_manager.validate_squad_plan(squad)
 	overlay_manager.redraw_planned_paths()
@@ -1639,48 +1672,86 @@ func _on_unit_died(unit: Unit):
 #  Board visuals
 # ==============================================================================
 
-# The UNION of the members' path-bubbles (#151): cohesion is per-member (a Waterwalker's crosses
-# water), and the overlay must show every cell SOME member may hold or it lies about the rule. For
-# a uniform squad the union collapses to one field, drawn the same way move range is.
-func draw_squad_leader_range(squad: Squad, cell: Vector2i):
+# WHERE A SQUAD MAY STAND round its leader: the UNION of the members' path-bubbles (#151), because
+# cohesion is per-member (a Waterwalker's crosses water) and a drawing of one member's would lie about
+# another's. For a uniform squad the union collapses to one field.
+func cohesion_bubble(squad: Squad, leader_cell: Vector2i) -> Array[Vector2i]:
 	var board := _board()
 	var union := {}
 	for member in squad.get_members():
-		for c in SquadCohesion.field(squad, cell, member, board):
+		for c in SquadCohesion.field(squad, leader_cell, member, board):
 			union[c] = true
 	var cells: Array[Vector2i] = []
-	for c in union:
-		cells.append(c)
-	overlay_manager.show_overlay(OverlayManager.OverlayType.SQUADRANGE, cells, OverlayManager.ATLAS_COORDS)
+	cells.assign(union.keys())
+	return cells
 
-func draw_create_squad(unit: Unit):
-	var cells: Array[Vector2i] = []
-	# Subject = the forming leader; the per-RECRUIT gate is can_squad_up, asked by the
-	# enter_target_pick_mode candidate query below. The bubble is where a squad could stand;
-	# WHO may join is marked on the ground by that mode (#346 -- this loop used to hang a
-	# TARGET icon over each recruit as well, two markings of one fact).
-	for cell in SquadCohesion.cells(unit.squad, unit.get_projected_destination(), unit, _board()):
-		if cell != unit.movement.cell:
-			cells.append(cell)
-	overlay_manager.show_overlay(OverlayManager.OverlayType.SQUAD, cells, OverlayManager.ATLAS_COORDS)
+# A SQUAD'S LINES (#1070, which retired the orange range fill -- the move layer ERASED it wherever the
+# two met, so the range only ever showed where you could not walk): the dashed stroke round where the
+# squad may stand, and a tether from every member to its leader, strung between the bodies AS THE
+# BOARD IS SHOWING THEM.
+#
+# `leader_cell` is where the leader's body is drawn -- its projected cell, or its ghost on the
+# destination being hovered -- and the range centres there. `placed` moves any MEMBER onto a stand-in
+# (a hover ghost, a formation ghost); everybody else stands on get_projected_destination(), which is
+# the anchor OverlayIcon's ring rides. `strained` names the members whose tether the hovered move would
+# break; `candidates` adds a GHOST tether from each unit that could join.
+#
+# Solo squads are the CALLERS' question: Squad Up draws round a lone unit on purpose.
+func draw_squad_cohesion(squad: Squad, leader_cell: Vector2i, placed: Dictionary = {},
+		strained: Array[Unit] = [], candidates: Array[Unit] = []) -> void:
+	var links: Array[Dictionary] = []
+	for member in squad.get_members():
+		if member == squad.leader:
+			continue
+		var state := SquadLines2D.Strain.STRAIN if strained.has(member) else SquadLines2D.Strain.SOLID
+		links.append({"from": placed.get(member, member.get_projected_destination()),
+				"to": leader_cell, "state": state})
+	for candidate in candidates:
+		links.append({"from": candidate.get_projected_destination(), "to": leader_cell,
+				"state": SquadLines2D.Strain.GHOST})
+	overlay_manager.show_squad_lines([cohesion_bubble(squad, leader_cell)], links, _board())
 
 # The joinable squads' own rings ARE the marking (#442) -- drawn through draw_squad_unit_icons, so
 # with ALWAYS_SHOW_SQUAD_RINGS on this is idempotent over the standing set and only the PULSE
 # changes, while with it off this is what puts them on screen. One path, both of the dev's cases.
 #
-# The cohesion bubble stays: WHERE THE JOINER WOULD STAND is a different fact from WHOSE SQUAD THIS
-# IS, so it is not the duplication this ticket removed.
+# The cohesion range stays: WHERE THE JOINER WOULD STAND is a different fact from WHOSE SQUAD THIS
+# IS. Since #1070 it is the squad lines' dashed stroke rather than an orange fill, and the joiner
+# gets a GHOST tether to each leader it could join -- Squad Up's treatment from the other side.
 func draw_joinable_squads(joining_unit: Unit, joinable: Array[Squad]):
 	overlay_manager.clear_selection_overlays()
-	var cells: Array[Vector2i] = []
+	var bubbles: Array = []
+	var links: Array[Dictionary] = []
 	for squad: Squad in joinable:
 		var leader: Unit = squad.get_leader()
 		# Subject = the JOINER: these are cells it would stand on, so its own traversal decides.
-		for cell in SquadCohesion.cells(squad, leader.get_projected_destination(), joining_unit, _board()):
-			if get_unit_at_cell(cell) == null:
-				cells.append(cell)
+		bubbles.append(SquadCohesion.cells(squad, leader.get_projected_destination(), joining_unit, _board()))
+		links.append({"from": joining_unit.get_projected_destination(),
+				"to": leader.get_projected_destination(), "state": SquadLines2D.Strain.GHOST})
 		overlay_manager.draw_squad_unit_icons(squad)
-	overlay_manager.show_overlay(OverlayManager.OverlayType.SQUAD, cells, OverlayManager.ATLAS_COORDS)
+	overlay_manager.show_squad_lines(bubbles, links, _board())
+
+# A leader's move range split by whether the SQUAD can follow there (#1069's rule; one helper since
+# #1070 made hover its third caller, beside both move modes): {"green": the followable destinations,
+# "blocked": the ones it could walk to and would strand somebody at, "stranding": destination -> the
+# members who could not follow}. Pure -- the modes cache it through _cache_leader_split, and hover,
+# which has no mode to cache for, only draws it.
+func leader_range_split(unit: Unit, standable: Array[Vector2i]) -> Dictionary:
+	var stranding := GroupMoveSolver.stranding(unit.squad, _board(), standable)
+	var green: Array[Vector2i] = []
+	var blocked: Array[Vector2i] = []
+	for cell: Vector2i in standable:
+		if (stranding.get(cell, []) as Array).is_empty():
+			green.append(cell)
+		else:
+			blocked.append(cell)
+	return {"green": green, "blocked": blocked, "stranding": stranding}
+
+func _cache_leader_split(split: Dictionary) -> void:
+	leader_stranding = split["stranding"]
+	leader_followable = {}
+	for cell: Vector2i in split["green"]:
+		leader_followable[cell] = true
 
 func get_squad_icons(squad: Squad) -> Dictionary: #Includes hovered unit
 	var icons = {} # { Unit : Icon }

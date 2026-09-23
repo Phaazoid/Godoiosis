@@ -1243,7 +1243,7 @@ The tier nobody else can copy, because it renders systems Iosis alone has.
   #259 shape — a built number owed a presentation — with one question attached, since a ring under
   the body would put *what this unit IS* in the channel #346 gave to *what this INTERACTION is
   about*.
-- **Squad cohesion** drawn as a soft light tether/field (the `SquadCohesion.field` is already computed; render it instead of tile fills).
+- ~~**Squad cohesion** drawn as a soft light tether/field (the `SquadCohesion.field` is already computed; render it instead of tile fills).~~ **BUILT as LINES by [#1070](https://github.com/Phaazoid/Godoiosis/issues/1070)** -- a marching dashed stroke round the range and a tether from each member to its leader; see `visual-clarity.md` -> *The squad's LINES*.
 - **Zones**: capture/extraction as diegetic alchemical light columns, intensity tracking progress.
 - **Turn count drives the sun** — dawn on turn 1, dusk by turn 12; time pressure made visible. (Pure presentation; the rules never read the clock.)
 - **The shove-off-cliff kill is REAL as of #259 (2026-08-20)** — it still owes this earned presentation: a slow focus-racked camera tilt, the tilt-shift rig doing dramatic work.

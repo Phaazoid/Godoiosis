@@ -15,9 +15,9 @@ class_name UnitHealthBar
 # A cube is `_block` texels including a black frame `_border` texels thick, and cubes are pitched
 # `_block - _border` apart so neighbours SHARE that frame. At the shipped 5/1 that is a 3-texel
 # coloured core in a 1-texel black cage, and a 20 HP unit's grid is 41 x 9 texels -- barely wider
-# than the 26 x 5 bar it replaces. Width is the axis to spend: the crown hangs above at
-# BoardOverlays.billboard_lift and the state row stacks above the grid, so vertical growth is the
-# only growth that collides with anything.
+# than the 26 x 5 bar it replaces. Width is the axis to spend: the state row stacks above the grid
+# and a leader's crown stands on top of both (top_extent, #1070), so vertical growth is the only
+# growth that pushes anything -- it no longer collides, it lifts the crown.
 #
 # THE BLACK CAGE IS WHY A CUBE READS AS A CUBE (dev, 2026-08-21: "each edge of the cube should be
 # black, corner to corner. I'm thinking little green squares, with black outlines"). It is a
@@ -207,8 +207,8 @@ func _init() -> void:
 	_mat_heal = _make_block_material()
 	# Text draws in FRONT of the cubes, so its priority sits above the whole grid and _text_z pushes
 	# it clear in Z as well.
-	_label = _make_label(BoardOverlays.UNIT_HUD_RENDER_PRIORITY + 6)
-	_count = _make_label(BoardOverlays.UNIT_HUD_RENDER_PRIORITY + 6)
+	_label = make_label(BoardOverlays.UNIT_HUD_RENDER_PRIORITY + 6)
+	_count = make_label(BoardOverlays.UNIT_HUD_RENDER_PRIORITY + 6)
 	add_child(_label)
 	add_child(_count)
 	visible = false
@@ -557,6 +557,23 @@ func downed_count_glyph_height() -> float:
 
 func track_texels() -> float:
 	return stack_size_texels().x
+
+
+# How far above its own anchor the readout DRAWS, in world units: the grid's top half, plus the
+# state row while one is up (#1070). The crown stands on this, and it is read off what is drawn so a
+# row that wraps or a status that arrives lifts the crown in the same frame rather than through it.
+# The rescue clock rides that row too, and its glyphs can stand taller than the icons.
+func top_extent() -> float:
+	var texel := _texel()
+	var top: float = stack_size_texels().y * 0.5 * texel
+	if state_icon_count() == 0 and not _count.visible:
+		return top
+	var icon: float = maxf(roundf(_state_icon_texels), 1.0) * texel
+	var row_y: float = top + maxf(roundf(_state_gap_texels), 0.0) * texel + icon * 0.5
+	var tallest: float = icon
+	if _count.visible:
+		tallest = maxf(tallest, downed_count_glyph_height())
+	return row_y + tallest * 0.5
 
 
 func number_text() -> String:
@@ -972,7 +989,9 @@ func _size_quad(quad: MeshInstance3D, width: float, height: float, offset_x: flo
 # displacing it with Label3D.offset (the only in-plane displacement a per-object billboard permits)
 # moved them by different amounts, which is what the dev saw as the number "appearing double and
 # overlapping" (2026-08-15). The OUTLINE draws one priority below the glyphs it backs.
-func _make_label(priority: int) -> Label3D:
+# Public and static since #1070: the Squad Up count beside the crown is a number on the same board,
+# and two builders would be two places for the look of a number to drift.
+static func make_label(priority: int) -> Label3D:
 	var label := Label3D.new()
 	label.billboard = BaseMaterial3D.BILLBOARD_DISABLED
 	label.shaded = false

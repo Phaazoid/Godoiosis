@@ -26,8 +26,8 @@ const UNIT_SCENE := preload("res://Scenes/Unit.tscn")
 # OverlayManager's @onready child overlays. Supplied as bare Node2Ds so its
 # _ready (which only sets each one's modulate/visibility) runs without error.
 const OVERLAY_CHILD_NAMES := [
-	"MoveOverlay", "AttackOverlay", "HoverOverlay", "SquadOverlay", "IconOverlay",
-	"ArrowIconOverlay", "ProjectedUnitOverlay", "SquadRangeOverlay", "InvalidMoveOverlay",
+	"MoveOverlay", "AttackOverlay", "HoverOverlay", "IconOverlay",
+	"ArrowIconOverlay", "ProjectedUnitOverlay", "InvalidMoveOverlay",
 	"ZoneOverlay", "CaptureOverlay", "ExtractionOverlay", "DeploymentOverlay", "DefendOverlay",
 ]
 

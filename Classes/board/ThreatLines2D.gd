@@ -57,8 +57,9 @@ static var MARK_HEIGHT := 0.625
 # on (0.45 world over a 3.58-cell chord).
 static var MARK_BOW_PER_CELL := 0.25
 # How far short of the victim the mark stops, in cells. A taste value -- NOT a clearance. #1042's
-# record claimed the inset had to clear the crown; the crown hangs at BoardOverlays.billboard_lift
-# 0.85 world, which is well ABOVE this mark, so nothing is being cleared.
+# record claimed the inset had to clear the crown; the crown stands over its leader's head (since #1070,
+# BoardOverlays.billboard_lift above the art or the health readout), well ABOVE this mark, so nothing
+# is being cleared.
 static var MARK_INSET := 0.25
 # The cone that replaces #1042's arrowhead (dev, 2026-09-20: the arrows "just don't look great in
 # practice... perhaps a narrow cone at the end instead?", then "about half of what it is, too. It
@@ -163,16 +164,19 @@ static func mark(chord: PackedVector3Array) -> Array[PackedVector3Array]:
 # THE SCALE, NOT A RADIUS, for CONE_WIDTH_SCALE's own reason: the shaft's width is a BoardOverlays
 # export this 2D class cannot see. Whoever draws the solid multiplies it by the width it is drawing
 # the shaft at, which is the same composition the ribbon does through UV2.y.
-static func cone_of(strokes: Array[PackedVector3Array]) -> Dictionary:
+#
+# The scale is PASSED since a squad tether's arrow (#1070) took its own knob: a reach mark hands in
+# CONE_WIDTH_SCALE, a tether SquadLines2D.ARROW_WIDTH_SCALE, and neither reaches the other's.
+static func cone_of(strokes: Array[PackedVector3Array], scale: float) -> Dictionary:
 	if strokes.size() < 2:
 		return {}
 	var tail := strokes[strokes.size() - 1]
 	if tail.size() < 2:
 		return {}
-	return {"base": tail[0], "tip": tail[tail.size() - 1], "scale": CONE_WIDTH_SCALE}
+	return {"base": tail[0], "tip": tail[tail.size() - 1], "scale": scale}
 
 
-static func mark_widths(strokes: Array[PackedVector3Array]) -> Array[PackedFloat32Array]:
+static func mark_widths(strokes: Array[PackedVector3Array], scale: float) -> Array[PackedFloat32Array]:
 	var out: Array[PackedFloat32Array] = []
 	for i in strokes.size():
 		var scales := PackedFloat32Array()
@@ -185,7 +189,7 @@ static func mark_widths(strokes: Array[PackedVector3Array]) -> Array[PackedFloat
 				if j > 0:
 					walked += points[j].distance_to(points[j - 1])
 				var t := 0.0 if total <= 0.0 else walked / total
-				scales.append(lerpf(CONE_WIDTH_SCALE, 0.0, t))
+				scales.append(lerpf(scale, 0.0, t))
 		else:
 			for _j in points.size():
 				scales.append(1.0)
@@ -245,7 +249,7 @@ func _draw() -> void:
 	for segment in outlines:
 		_polyline(segment, OverlayManager.FOCUS_OUTLINE_COLOR)
 	for strokes: Array[PackedVector3Array] in marks:
-		var widths := mark_widths(strokes)
+		var widths := mark_widths(strokes, CONE_WIDTH_SCALE)
 		for i in strokes.size():
 			# A constant-width stroke is a polyline; a tapering one has to be a polygon, because
 			# draw_polyline carries ONE width for the whole line.

@@ -1083,8 +1083,12 @@ func _remove_from_squad_and_revalidate(unit: Unit, keep_on_board: bool) -> void:
 
 # --- squad-formation eligibility (migrated from game.gd, #22) ---
 
+# A LEADER may Squad Up too (#1043, dev: "Squad up doesn't have to disappear if a unit is already in
+# a squad"): for a solo unit the verb forms a squad, for a leader it grows its own. What still refuses
+# is a unit in SOMEBODY ELSE's squad -- it would be forming a second squad out of the middle of one.
+# can_squad_up needed no change; it never asked whether the squad being joined was solo.
 func can_create_any_squad(creating_unit: Unit) -> bool:
-	if creating_unit.has_squad() or creating_unit.squad.has_acted:
+	if (creating_unit.has_squad() and not creating_unit.is_leader()) or creating_unit.squad.has_acted:
 		return false
 	for unit in _all_units():
 		if can_squad_up(unit, creating_unit.squad):

@@ -105,6 +105,21 @@ func test_loner_cannot_form_a_squad() -> void:
 	assert_bool(_sm.can_squad_up(buddy, loner.squad)).is_false()
 	assert_bool(_sm.can_create_any_squad(loner)).is_false()
 
+# #1043: Squad Up is a LEADER's verb too -- forming a squad and growing your own are one act. What it
+# still refuses is a unit in somebody else's squad, which would be forming a second squad out of the
+# middle of one.
+func test_a_leader_may_squad_up_and_a_member_may_not() -> void:
+	var leader := _leader_with_ldr(4 * Squad.MEMBER_LDR_COST, Vector2i(0, 0))
+	var member := H.spawn_solo(self, _sm, ENEMY, Vector2i(1, 0))
+	var recruit := H.spawn_solo(self, _sm, ENEMY, Vector2i(0, 1))
+	_sm.join_squad(member, leader.squad)
+	assert_bool(_sm.can_squad_up(recruit, leader.squad)).override_failure_message(
+			"fixture: the recruit is not a legal candidate, so the verb has nothing to offer").is_true()
+	assert_bool(_sm.can_create_any_squad(leader)).override_failure_message(
+			"Squad Up disappeared from a leader once its squad existed").is_true()
+	assert_bool(_sm.can_create_any_squad(member)).override_failure_message(
+			"a unit in somebody else's squad was offered Squad Up").is_false()
+
 func test_direct_join_grandfathers_over_capacity() -> void:
 	# Scenario loads call join_squad directly — it must admit over cap (warn, never eject).
 	var leader := _leader_with_ldr(1, Vector2i(0, 0))   # cap: loner

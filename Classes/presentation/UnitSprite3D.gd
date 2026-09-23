@@ -73,6 +73,16 @@ var art_offset := Vector3.ZERO
 # one, which nothing reads (art_top_height measures opaque rows).
 static var texels_per_unit := 32.0
 
+
+# How far above its feet the MIDDLE of a body stands, in world units (#1070): half the ink every map
+# sprite shares (MapSpriteInk.INK_RECT, the median across the cast) at the one density above. It is
+# what a squad tether hangs at (dev: "connect the middle of the sprites"), derived rather than tuned
+# so it follows texels_per_unit if that dial ever moves. ThreatLines2D.MARK_HEIGHT was measured to
+# the same number and stays a knob of its own: a reach mark may hang elsewhere for a look, and a line
+# that joins two bodies may not.
+static func body_middle() -> float:
+	return float(MapSpriteInk.INK_RECT.size.y) * 0.5 / texels_per_unit
+
 var _map_texture: Texture2D
 var _move_texture: Texture2D
 var _downed_texture: Texture2D
