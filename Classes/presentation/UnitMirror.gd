@@ -216,6 +216,10 @@ var plan_source: Callable
 # one. Unset reads as "no pass running", the same graceful absence plan_source has.
 var effect_subjects_source: Callable
 
+# Whether a board cell's ground is WATER, injected by battle3d beside the sources above (#358's damp
+# blot: a Wet unit standing in water leaves no patch on it). Unset reads as dry ground everywhere.
+var water_at: Callable
+
 # THE ENEMY-INTENT SPAN THAT LIVED HERE IS GONE (#1069). #710 slice 3 drew a second predicted span
 # on a victim's bar for what the enemy was about to do, composed with the player's own plan; the
 # readout it belonged to retired when the lines stopped answering about intent, so the channel went
@@ -278,9 +282,10 @@ var _camera_right := Vector3.ZERO   # last camera basis facing was judged agains
 # taken this frame and bursts.
 var _last_hp: Dictionary[int, int] = {}
 var _debris: HealthBlockDebris
-# Element-state fade levels per unit (#358), keyed like _mirrored: x = wet, y = chill, z = icicles.
-# A unit wearing nothing has no entry, and an entry leaves with its unit.
-var _status: Dictionary[int, Vector3] = {}
+# Element-state fade levels per unit (#358), keyed like _mirrored: x = wet, y = chill, z = icicles,
+# w = the damp blot underfoot, which dries on its own clock and so outlives the rest. A unit wearing
+# nothing has no entry, and an entry leaves with its unit.
+var _status: Dictionary[int, Vector4] = {}
 # The one clock every status mark runs on. Advanced by the SCALED delta, so a hitstop freezes it.
 var _status_clock := 0.0
 # Which unit each pooled ghost stands in for, by slot; 0 = none (a move-hover stand-in, or a spare).
@@ -413,21 +418,31 @@ func reconcile(delta := 0.0) -> void:
 # Every live unit, every frame, before any visibility question: a level that only moved while its
 # sprite was up would pop to full the moment a ghost stood in for it.
 func _sync_status(unit: Unit, id: int, sprite: UnitSprite3D, delta: float) -> void:
-	var level: Vector3 = _status.get(id, Vector3.ZERO)
+	var level: Vector4 = _status.get(id, Vector4.ZERO)
 	var wet := 1.0 if unit.element_states.has(Elemental.State.WET) else 0.0
 	var chill := 1.0 if unit.element_states.has(Elemental.State.CHILLED) else 0.0
 	level.x = move_toward(level.x, wet, _fade_step(StatusLook.status_fade_time, delta))
 	level.y = move_toward(level.y, chill, _fade_step(StatusLook.status_fade_time, delta))
 	level.z = move_toward(level.z, chill, _fade_step(StatusLook.icicle_grow_time, delta))
-	if level == Vector3.ZERO:
+	# The cell under whichever sprite stands for the unit -- the ghost's while one stands in.
+	var cell: Vector2i = unit.get_projected_destination() if unit.visuals.projected else cell_under(unit)
+	if wet > 0.0 or level.w > 0.0:
+		var damp: float = wet if not _is_water(cell) else 0.0
+		var spreads := damp > level.w
+		level.w = move_toward(level.w, damp, _fade_step(
+				StatusLook.wet_blot_spread_time if spreads else StatusLook.wet_blot_dry_time, delta))
+	if level == Vector4.ZERO:
 		_status.erase(id)
 	else:
 		_status[id] = level
 		var standing := _standing_sprite(unit, id, sprite)
 		if standing != null:
-			var cell: Vector2i = unit.get_projected_destination() if unit.visuals.projected else cell_under(unit)
 			_status_world.wear(id, standing, cell, level, status_seed(id))
 	sprite.show_status(level.x, level.y, level.z, _status_clock, status_seed(id))
+
+
+func _is_water(cell: Vector2i) -> bool:
+	return water_at.is_valid() and bool(water_at.call(cell))
 
 
 # The sprite that STANDS for a unit (#358's ghost ruling, the fork _bar_anchor makes): the real one,
@@ -449,7 +464,7 @@ func _sync_ghost_status() -> void:
 	for i in _ghosts.size():
 		var ghost: UnitSprite3D = _ghosts[i]
 		var id: int = _ghost_units[i] if i < _ghost_units.size() else 0
-		var level: Vector3 = _status.get(id, Vector3.ZERO) if ghost.visible else Vector3.ZERO
+		var level: Vector4 = _status.get(id, Vector4.ZERO) if ghost.visible else Vector4.ZERO
 		ghost.show_status(level.x, level.y, level.z, _status_clock, status_seed(id))
 
 
@@ -464,9 +479,10 @@ static func status_seed(id: int) -> float:
 	return float(hash(id) % 997) / 997.0
 
 
-# How much of each state a unit is wearing right now (#358): x = wet, y = chill, z = icicles.
-func status_level(unit: Unit) -> Vector3:
-	return _status.get(unit.get_instance_id(), Vector3.ZERO)
+# How much of each state a unit is wearing right now (#358): x = wet, y = chill, z = icicles, w = the
+# damp blot.
+func status_level(unit: Unit) -> Vector4:
+	return _status.get(unit.get_instance_id(), Vector4.ZERO)
 
 
 # Which unit a pooled ghost stands in for (#358), or 0 for none.

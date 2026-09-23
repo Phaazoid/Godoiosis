@@ -196,6 +196,9 @@ func _ready() -> void:
 	_unit_mirror.hovered_unit_source = _hovered_unit
 	_unit_mirror.plan_source = _previewed_plan
 	_unit_mirror.effect_subjects_source = _effect_pass_subjects
+	# Whether a cell's ground is water, for the damp blot (#358): the AUTHORED kind, frozen or not.
+	_unit_mirror.water_at = func(cell: Vector2i) -> bool:
+		return GridUtils.get_terrain_kind_at_cell(game.grid, cell) == Terrain.Kind.WATER
 	# The impact wire (#520 diff 2b): the mirror sees the blow land, and this decides what it is
 	# worth. It bound straight to _rig.shake until 2c gave a killing blow a second consequence --
 	# the freeze -- which is not the rig's to do, so the decision moved here where both are reachable.

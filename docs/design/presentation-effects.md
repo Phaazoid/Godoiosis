@@ -962,7 +962,7 @@ wielder's fitted mods on top. One answer, two readers, one fewer branch than bef
 its default, and no shipped attack's round trip emits it — checked with a throwaway tool SCENE, run
 and deleted, which is the dirty-tree rule's own instruction one ticket on.
 
-### A unit WEARS its element state ([#358](https://github.com/Phaazoid/Godoiosis/issues/358), slice 1 BUILT 2026-09-22; slice 2's particles 2026-09-23)
+### A unit WEARS its element state ([#358](https://github.com/Phaazoid/Godoiosis/issues/358), slice 1 BUILT 2026-09-22; slice 2 2026-09-23)
 
 With health bars off by default (#350), a unit's element state was invisible on the board unless
 hovered. The sprite itself now wears it. The look was grilled against rendered mockups on the real
@@ -1021,8 +1021,8 @@ DISABLED (#317) and never to an override.
   nothing. `test_unit_status.gd` checks every pushed name against the shader's own uniform list in
   both directions.
 
-**Slice 2 is the world half: what a worn state throws OFF the body** (its particles BUILT
-2026-09-23; the damp blot is its own PR, next). A Wet unit drips from its overhangs and each drip
+**Slice 2 is the world half: what a worn state throws OFF the body** (BUILT 2026-09-23, in two
+PRs: the particles, then the damp blot). A Wet unit drips from its overhangs and each drip
 splashes where it lands. A Chilled unit sheds cold mist that sinks off its edges and pools at its
 feet, and breathes frost from one anchor every sprite shares, toward the way it faces.
 
@@ -1061,11 +1061,59 @@ feet, and breathes frost from one anchor every sprite shares, toward the way it 
   unit*, read every frame. The two an emitter must not rewrite casually (`amount` and `lifetime`, each
   of which restarts the system) are written only when a knob has moved them.
 
-**Still to come in slice 2: the damp blot**, a `Decal` (dev ruling 2026-09-23, over a lit patch mesh,
-after the two were drawn side by side). A decal paints everything on its `cull_mask`, and a `GridMap`
-cannot be re-layered, so the ground takes layer 1 to itself and everything else the board draws moves
-to a new bit. Chilled blocks Wet as a RULE in #1092, so this slice never draws both. Reaction beats
-(steam, shatter, freeze) are their own follow-up.
+**The damp blot** closes slice 2 (BUILT 2026-09-23): a `Decal` under every Wet unit, chosen over a
+lit patch mesh after the two were drawn side by side (dev). At rest they look the same; mid-walk over
+a step the decal splits onto both tops where a patch would hang as a sheet.
+
+- **It is GROUND, so it is lit and paints the ground's own material** -- the one piece of the world
+  half that does not glow. Which is also why a decal is right here and wrong for markup (the
+  UNSHADED-overlays ruling above): markup must never read as terrain, and this is meant to.
+- **The ground owns render layer 1, and that is the whole cost of the choice.** A decal paints every
+  instance its `cull_mask` meets, and a `GridMap` cannot be re-layered (it is not a
+  `VisualInstance3D`), so `BoardOverlays.GROUND_RENDER_LAYER` is 1 and `WORLD_RENDER_LAYER` moved to
+  its own bit. Everything the board draws that is not ground sits there: every overlay, props,
+  flames, bolts, the brush ghost and all four particle kinds. The hole lips ARE ground and stay on
+  1. Nothing read layers as a mask before this, so the move is invisible to all but the decal.
+  `tests/law/test_only_the_ground_takes_a_decal.gd` walks the live scene and refuses anything but a
+  lip on the ground bit, because a forgotten `layers =` means the blot quietly darkens that thing.
+  The render probe measures the split on the real renderer: a quad on `WORLD` lost 0 of its 2308
+  pixels while the ground around it darkened.
+- **Where the unit STANDS, fixed to the floor** -- the board point (`global_position - art_offset`,
+  so a lunge does not drag it). It shipped first under where the art DRAWS the feet, and the dev's
+  playtest (2026-09-23, the "damp 1"/"damp 2" reports) found it sliding across the tiles as the
+  camera turned: a billboard faces the camera, so a point drawn off-centre circles the cell, and
+  jumps across it when the facing flips. The general rule: **anything that belongs to the ground
+  must never be placed through `texel_to_world`**, whose answer depends on the camera by design.
+  Measured over every map still, drawn feet sit 0-6 texels from the board point (a fifth of a
+  cell at most), well inside a patch 0.6 of a cell across. The "lowest row of ink" was also the
+  Swordsman's sword tip, so the feet anchor was wrong on its own terms too.
+- **It must not read as a SHADOW, and darkening alone does.** On the pale stone of those reports
+  the patch rendered `#C2D5D8`, the grout's own colour, beside sun shadows that are blue on that
+  map. Two changes, the dev's pick from a mockup of five: the tint leans to the Water hue
+  (`wet_blot_tint` 0.3 -> 0.9), and **a drip that lands in the patch RIPPLES it** -- a ring that
+  steps outward like a sprite animation (`RIPPLE_STEPS`, `wet_ripple_time`, `wet_ripple_reach`,
+  `wet_ripple_light`), clipped to the patch because past its edge there is no water to ripple. A
+  shadow never moves, and the ring comes from the drips the player already sees landing.
+- **The ring is BAKED into the patch's own texture, never a second decal.** Godot orders
+  overlapping decals by distance to the camera, so a ring decal would sit over the patch from one
+  side and under it from the other. Each patch is painted by the pure `StatusWorld.paint_blot`, only
+  when a ring steps; the colour moved out of `modulate` and into the texture to make that possible.
+  **Every paint hands the decal a NEW `ImageTexture`, never `update()`**: a decal draws from the
+  renderer's decal atlas, which copies a texture when it is assigned and never re-reads it. Measured
+  on 4.7.1 by the render probe -- the ring was in the texture and 0 pixels drew until the decal was
+  given a fresh one -- and pinned by the wire case asserting the texture object changes. `StatusWorld.patch_texel` puts a landing
+  point into the patch's texels through the decal's own transform (texture u along +X, v along
+  +Z), and the render probe measures that reading through a rotated patch.
+- **A fourth fade level, `w`.** It spreads on its own time and dries on a longer one, so the patch
+  outlives the drips while the ground dries, and it is held at zero while the unit stands on WATER
+  (`UnitMirror.water_at`, battle3d's Callable over the authored terrain kind). Three cells deep, so
+  a one-level step darkens both tops, with `normal_fade` keeping it off the face between them.
+- **The shape is built, not drawn**: four irregular patches from hashed discs on the ground's own
+  texel grid, painted and upscaled nearest so the decal's linear filter blurs a fraction of a texel,
+  not a texel. That keeps the pixel edge without a `project.godot` decal-filter setting.
+
+Chilled blocks Wet as a RULE in #1092, so this slice never draws both. Reaction beats (steam,
+shatter, freeze) are their own follow-up.
 
 ### Conventions the art commission must carry (pending look-dev experiments)
 
@@ -1261,7 +1309,7 @@ Proven Squeenix-style ingredients Stage 0 didn't include. All stage-5 material.
 
 ## Tier 2 — modern-3D tricks on a pixel diorama
 
-- **Decals as persistent battle scars**: scorch after a fire, frost creep for CHILLED, footprints in mud/snow lasting the mission. Cheap, stateful storytelling.
+- **Decals as persistent battle scars**: scorch after a fire, frost creep for CHILLED, footprints in mud/snow lasting the mission. Cheap, stateful storytelling. **The first Decal shipped as #358's damp blot**, and any other takes its ground-only cull mask (`BoardOverlays.GROUND_RENDER_LAYER`) for the same reason -- see *A unit WEARS its element state*.
 - **SSR so FROZEN water is literally a mirror** — beauty that *communicates the state*.
 - Heat-haze distortion above fire and torches (screen-texture displacement).
 - Wind sway on foliage sprites — gusts synced to the *Gust* carving.

@@ -986,7 +986,7 @@ someone had patched that one screen. And **the freed channel's first occupant wa
 halves (dev direction, 2026-08-18), of which the first is now BUILT:**
 [#357](https://github.com/Phaazoid/Godoiosis/issues/357) puts a `StateIcons` row just above each
 unit's health bar, and [#358](https://github.com/Phaazoid/Godoiosis/issues/358) — slice 1 BUILT
-2026-09-22 for Wet and Chilled and slice 2's particles 2026-09-23, Crisis split to [#1094](https://github.com/Phaazoid/Godoiosis/issues/1094)
+2026-09-22 for Wet and Chilled and slice 2 (the world half) 2026-09-23, Crisis split to [#1094](https://github.com/Phaazoid/Godoiosis/issues/1094)
 (see `presentation-effects.md` → *A unit WEARS its element state*) —
 makes the sprite itself wear its status, the channel that keeps
 states readable when [#350](https://github.com/Phaazoid/Godoiosis/issues/350)'s toggle hides the
