@@ -51,7 +51,9 @@ class_name UnitMirror
 # Since #358 it also decides how much of a unit's element states each sprite WEARS: a fade level per
 # state, advanced here by the scaled delta toward what `element_states` holds, and pushed to
 # UnitSprite3D.show_status every frame -- to the ghost instead of the hidden sprite whenever one
-# stands in, which is _bar_anchor's own fork. It computes no rule: the states are the model's.
+# stands in, which is _bar_anchor's own fork. It computes no rule: the states are the model's. The
+# same levels feed StatusWorld (slice 2), whatever the state throws into the world around the sprite
+# that stands for the unit.
 
 const PIXELS_PER_CELL := float(GridUtils.TILE_SIZE)  # 16 — grid.map_to_local's metric
 
@@ -283,6 +285,9 @@ var _status: Dictionary[int, Vector3] = {}
 var _status_clock := 0.0
 # Which unit each pooled ghost stands in for, by slot; 0 = none (a move-hover stand-in, or a spare).
 var _ghost_units: Array[int] = []
+# What a worn state throws into the world around the unit (#358 slice 2). A child for the debris'
+# reason: it is board-wide, and it is fed from this node's own per-frame pass.
+var _status_world: StatusWorld
 
 
 func _ready() -> void:
@@ -291,6 +296,8 @@ func _ready() -> void:
 	# they fell off: a readout hides the instant the pointer moves or the plan settles.
 	_debris = HealthBlockDebris.new()
 	add_child(_debris)
+	_status_world = StatusWorld.new()
+	add_child(_status_world)
 
 
 func _process(delta: float) -> void:
@@ -398,6 +405,7 @@ func reconcile(delta := 0.0) -> void:
 				_bars[id].queue_free()
 				_bars.erase(id)
 	_sync_ghost_status()
+	_status_world.advance(delta, _status_clock, heights)
 
 
 # --- Element states (#358) ------------------------------------------------------------
@@ -415,7 +423,24 @@ func _sync_status(unit: Unit, id: int, sprite: UnitSprite3D, delta: float) -> vo
 		_status.erase(id)
 	else:
 		_status[id] = level
+		var standing := _standing_sprite(unit, id, sprite)
+		if standing != null:
+			var cell: Vector2i = unit.get_projected_destination() if unit.visuals.projected else cell_under(unit)
+			_status_world.wear(id, standing, cell, level, status_seed(id))
 	sprite.show_status(level.x, level.y, level.z, _status_clock, status_seed(id))
+
+
+# The sprite that STANDS for a unit (#358's ghost ruling, the fork _bar_anchor makes): the real one,
+# or the ghost that replaced it -- the LAST one tagged with the unit, since a shove's landing ghost
+# follows its move ghost and is where the plan leaves it. Null while neither is up.
+func _standing_sprite(unit: Unit, id: int, sprite: UnitSprite3D) -> UnitSprite3D:
+	if not unit.visuals.projected:
+		return sprite
+	var standing: UnitSprite3D = null
+	for i in mini(_ghosts.size(), _ghost_units.size()):
+		if _ghost_units[i] == id and _ghosts[i].visible:
+			standing = _ghosts[i]
+	return standing
 
 
 # Each ghost wears its unit's levels. Outside OverlayMirror's `_last_ghosts` gate on purpose: that
@@ -452,6 +477,15 @@ func ghost_unit_id(ghost: UnitSprite3D) -> int:
 
 func ghosts() -> Array[UnitSprite3D]:
 	return _ghosts
+
+
+func status_world() -> StatusWorld:
+	return _status_world
+
+
+# The world half's emitters follow the board like every other effect's (battle3d._cover_effects).
+func cover_status(board: AABB) -> void:
+	_status_world.cover(board)
 
 
 func mirrored_count() -> int:

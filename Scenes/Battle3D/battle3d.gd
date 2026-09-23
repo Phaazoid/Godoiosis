@@ -728,7 +728,7 @@ func _board_extent_changed() -> void:
 	_cover_effects(board)
 
 
-# Every particle effect's cull box follows the board (#656 round 2; a second tenant at #887). Not
+# Every particle effect's cull box follows the board (#656 round 2; tenants since at #887 and #358). Not
 # folded into _board_volume(), which is a QUERY -- three callers read it and only two of them mean
 # "the extent just moved". One sweep rather than one call per effect, because the question they are
 # all being asked is the same one and a new emitter that forgets to subscribe draws NOTHING, which
@@ -738,6 +738,7 @@ func _cover_effects(board: AABB) -> void:
 		_staging_dust.cover(board)
 	if _arc != null:
 		_arc.cover(board)
+	_unit_mirror.cover_status(board)
 
 
 # The volume the camera must see, derived from the picker's column tops rather than the

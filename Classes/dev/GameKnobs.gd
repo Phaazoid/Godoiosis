@@ -827,6 +827,81 @@ const CLASS_KNOBS: Array[Dictionary] = [
 	{"group": "Chilled on a unit", "label": "Icicle max length", "static": "icicle_max_texels", "script": STATUS_LOOK_SCRIPT,
 		"min": 0.0, "max": 6.0, "step": 1.0,
 		"tip": "The longest an icicle grows, in texels. 6 is the most the art scan leaves room for."},
+	# What a worn state throws into the WORLD around the unit (#358 slice 2). Read every frame by
+	# StatusWorld and its emitters, so no arm sweeps; the two that size an emitter's buffer are
+	# written on change by the emitter itself.
+	{"group": "Wet around a unit", "label": "Drip rate", "static": "wet_drip_rate", "script": STATUS_LOOK_SCRIPT,
+		"min": 0.0, "max": 8.0, "step": 0.1,
+		"tip": "Drips a second off a fully Wet unit. They fall from the same overhangs icicles hang from, so art with nothing overhanging drips only in its streaks."},
+	{"group": "Wet around a unit", "label": "Drip fall time", "static": "wet_drip_fall_time", "script": STATUS_LOOK_SCRIPT,
+		"min": 0.05, "max": 2.0, "step": 0.01,
+		"tip": "Seconds a drip takes from the overhang to the ground. It falls at a steady speed so it lands exactly as it ends, which is when its splash plays."},
+	{"group": "Wet around a unit", "label": "Drip length", "static": "wet_drip_length", "script": STATUS_LOOK_SCRIPT,
+		"min": 1.0, "max": 6.0, "step": 1.0,
+		"tip": "How tall a drip is, in texels. One texel wide either way."},
+	{"group": "Wet around a unit", "label": "Drip opacity", "static": "wet_drip_alpha", "script": STATUS_LOOK_SCRIPT,
+		"min": 0.0, "max": 1.0, "step": 0.01,
+		"tip": "How solid a drip and its splash are. They glow rather than being lit, so they read on a night board."},
+	{"group": "Wet around a unit", "label": "Drip whiten", "static": "wet_drip_whiten", "script": STATUS_LOOK_SCRIPT,
+		"min": 0.0, "max": 1.0, "step": 0.01,
+		"tip": "How far a drip is lifted from the Water hue toward white. 0 is the hue itself, which reads as paint; 1 is white, which reads as light."},
+	{"group": "Wet around a unit", "label": "Splash droplets", "static": "wet_splash_count", "script": STATUS_LOOK_SCRIPT,
+		"min": 0.0, "max": 12.0, "step": 1.0,
+		"tip": "How many one-texel droplets a drip throws up where it lands. 0 turns the splash off."},
+	{"group": "Wet around a unit", "label": "Splash speed", "static": "wet_splash_speed", "script": STATUS_LOOK_SCRIPT,
+		"min": 0.0, "max": 3.0, "step": 0.05,
+		"tip": "How fast the droplets leave the landing point."},
+	{"group": "Wet around a unit", "label": "Splash rise", "static": "wet_splash_rise", "script": STATUS_LOOK_SCRIPT,
+		"min": 0.0, "max": 4.0, "step": 0.05,
+		"tip": "How much of the droplets' speed goes up rather than out. Low reads as a ring, high as a fountain."},
+	{"group": "Wet around a unit", "label": "Splash gravity", "static": "wet_splash_gravity", "script": STATUS_LOOK_SCRIPT,
+		"min": 0.0, "max": 20.0, "step": 0.1,
+		"tip": "How hard the droplets are pulled back down."},
+	{"group": "Wet around a unit", "label": "Splash time", "static": "wet_splash_time", "script": STATUS_LOOK_SCRIPT,
+		"min": 0.05, "max": 1.5, "step": 0.01,
+		"tip": "Seconds a splash droplet lasts, fading as it goes."},
+	{"group": "Chilled around a unit", "label": "Mist rate", "static": "chill_mist_rate", "script": STATUS_LOOK_SCRIPT,
+		"min": 0.0, "max": 20.0, "step": 0.1,
+		"tip": "Puffs of cold mist a second off a fully Chilled unit. Each leaves an edge of the body and sinks to the ground at its feet."},
+	{"group": "Chilled around a unit", "label": "Mist life", "static": "chill_mist_life", "script": STATUS_LOOK_SCRIPT,
+		"min": 0.1, "max": 5.0, "step": 0.05,
+		"tip": "Seconds a puff takes to sink from the body to the ground. It swells and fades on the way, which is what makes the mist pool."},
+	{"group": "Chilled around a unit", "label": "Mist drift", "static": "chill_mist_drift", "script": STATUS_LOOK_SCRIPT,
+		"min": 0.0, "max": 1.0, "step": 0.01,
+		"tip": "How far a puff wanders out from the body as it sinks, in world units. A cell is 1."},
+	{"group": "Chilled around a unit", "label": "Mist size", "static": "chill_mist_size", "script": STATUS_LOOK_SCRIPT,
+		"min": 1.0, "max": 12.0, "step": 0.5,
+		"tip": "How big a puff is at its fullest, in texels. It is born at under half of this."},
+	{"group": "Chilled around a unit", "label": "Mist opacity", "static": "chill_mist_alpha", "script": STATUS_LOOK_SCRIPT,
+		"min": 0.0, "max": 1.0, "step": 0.01,
+		"tip": "How solid a puff is at its densest. Several Chilled units stack this, so it is the first dial to lower if a frozen squad reads as fog."},
+	{"group": "Chilled around a unit", "label": "Whiten", "static": "chill_whiten", "script": STATUS_LOOK_SCRIPT,
+		"min": 0.0, "max": 1.0, "step": 0.01,
+		"tip": "How far the mist and the breath are lifted from the Ice hue toward white."},
+	{"group": "Chilled around a unit", "label": "Breath period", "static": "chill_breath_period", "script": STATUS_LOOK_SCRIPT,
+		"min": 0.3, "max": 10.0, "step": 0.1,
+		"tip": "Seconds between one frost breath and the next. Each unit keeps its own phase, so a squad does not breathe in unison."},
+	{"group": "Chilled around a unit", "label": "Breath puffs", "static": "chill_breath_count", "script": STATUS_LOOK_SCRIPT,
+		"min": 0.0, "max": 12.0, "step": 1.0,
+		"tip": "How many puffs one breath is made of. 0 turns the breath off."},
+	{"group": "Chilled around a unit", "label": "Breath speed", "static": "chill_breath_speed", "script": STATUS_LOOK_SCRIPT,
+		"min": 0.0, "max": 2.0, "step": 0.01,
+		"tip": "How fast a breath leaves the mouth, toward the way the unit faces."},
+	{"group": "Chilled around a unit", "label": "Breath life", "static": "chill_breath_life", "script": STATUS_LOOK_SCRIPT,
+		"min": 0.1, "max": 4.0, "step": 0.05,
+		"tip": "Seconds a breath puff lasts, swelling and fading."},
+	{"group": "Chilled around a unit", "label": "Breath size", "static": "chill_breath_size", "script": STATUS_LOOK_SCRIPT,
+		"min": 1.0, "max": 8.0, "step": 0.5,
+		"tip": "How big a breath puff is at its fullest, in texels."},
+	{"group": "Chilled around a unit", "label": "Breath opacity", "static": "chill_breath_alpha", "script": STATUS_LOOK_SCRIPT,
+		"min": 0.0, "max": 1.0, "step": 0.01,
+		"tip": "How solid a breath puff is when it leaves the mouth."},
+	{"group": "Chilled around a unit", "label": "Mouth across", "static": "chill_breath_x", "script": STATUS_LOOK_SCRIPT,
+		"min": 0.0, "max": 1.0, "step": 0.01,
+		"tip": "Where the breath comes from, across the art's opaque box: 0 its left edge, 1 its right, measured on the art as drawn, before it is flipped to face. One place for every unit for now."},
+	{"group": "Chilled around a unit", "label": "Mouth down", "static": "chill_breath_y", "script": STATUS_LOOK_SCRIPT,
+		"min": 0.0, "max": 1.0, "step": 0.01,
+		"tip": "Where the breath comes from, down the art's opaque box: 0 the top of the head, 1 the feet."},
 
 	# --- THE ACTION QUEUE.S OWN COLOURS (#685 round 4) -----------------------------------------
 	#
@@ -1404,6 +1479,8 @@ const GROUP_TABS: Dictionary[String, String] = {
 	"States on a unit": "Elemental",
 	"Wet on a unit": "Elemental",
 	"Chilled on a unit": "Elemental",
+	"Wet around a unit": "Elemental",
+	"Chilled around a unit": "Elemental",
 	# The queue.s own invented colour, beside the element chips it has to read against (#685).
 	"Action queue": "Elemental",
 	# Playback is SIX groups on one tab (dev, 2026-08-27) -- thirty flat rows was unreadable, and a
@@ -1626,6 +1703,30 @@ static func read_static(name: String) -> Variant:
 		"chill_rime_glow": return StatusLook.chill_rime_glow
 		"chill_glint_rate": return StatusLook.chill_glint_rate
 		"chill_glint_glow": return StatusLook.chill_glint_glow
+		"wet_drip_rate": return StatusLook.wet_drip_rate
+		"wet_drip_fall_time": return StatusLook.wet_drip_fall_time
+		"wet_drip_length": return StatusLook.wet_drip_length
+		"wet_drip_alpha": return StatusLook.wet_drip_alpha
+		"wet_drip_whiten": return StatusLook.wet_drip_whiten
+		"wet_splash_count": return StatusLook.wet_splash_count
+		"wet_splash_speed": return StatusLook.wet_splash_speed
+		"wet_splash_rise": return StatusLook.wet_splash_rise
+		"wet_splash_gravity": return StatusLook.wet_splash_gravity
+		"wet_splash_time": return StatusLook.wet_splash_time
+		"chill_mist_rate": return StatusLook.chill_mist_rate
+		"chill_mist_life": return StatusLook.chill_mist_life
+		"chill_mist_drift": return StatusLook.chill_mist_drift
+		"chill_mist_size": return StatusLook.chill_mist_size
+		"chill_mist_alpha": return StatusLook.chill_mist_alpha
+		"chill_whiten": return StatusLook.chill_whiten
+		"chill_breath_period": return StatusLook.chill_breath_period
+		"chill_breath_count": return StatusLook.chill_breath_count
+		"chill_breath_speed": return StatusLook.chill_breath_speed
+		"chill_breath_life": return StatusLook.chill_breath_life
+		"chill_breath_size": return StatusLook.chill_breath_size
+		"chill_breath_alpha": return StatusLook.chill_breath_alpha
+		"chill_breath_x": return StatusLook.chill_breath_x
+		"chill_breath_y": return StatusLook.chill_breath_y
 		# ...and the sparks, whose own node holds them (#887 slice 2). A GPU particle's state cannot
 		# be read back, so each of these names the CPU-side value a burst is built from.
 		"sparks": return ShockSparks.sparks
@@ -2006,6 +2107,80 @@ static func write_static(host: Node3D, name: String, value: Variant) -> void:
 			return
 		"chill_glint_glow":
 			StatusLook.chill_glint_glow = value
+			return
+		# The world half (slice 2): plain writes too. StatusWorld reads these every frame, and the
+		# emitters rewrite the two that restart a particle system only when one has moved.
+		"wet_drip_rate":
+			StatusLook.wet_drip_rate = value
+			return
+		"wet_drip_fall_time":
+			StatusLook.wet_drip_fall_time = value
+			return
+		"wet_drip_length":
+			StatusLook.wet_drip_length = value
+			return
+		"wet_drip_alpha":
+			StatusLook.wet_drip_alpha = value
+			return
+		"wet_drip_whiten":
+			StatusLook.wet_drip_whiten = value
+			return
+		"wet_splash_count":
+			StatusLook.wet_splash_count = int(value)
+			return
+		"wet_splash_speed":
+			StatusLook.wet_splash_speed = value
+			return
+		"wet_splash_rise":
+			StatusLook.wet_splash_rise = value
+			return
+		"wet_splash_gravity":
+			StatusLook.wet_splash_gravity = value
+			return
+		"wet_splash_time":
+			StatusLook.wet_splash_time = value
+			return
+		"chill_mist_rate":
+			StatusLook.chill_mist_rate = value
+			return
+		"chill_mist_life":
+			StatusLook.chill_mist_life = value
+			return
+		"chill_mist_drift":
+			StatusLook.chill_mist_drift = value
+			return
+		"chill_mist_size":
+			StatusLook.chill_mist_size = value
+			return
+		"chill_mist_alpha":
+			StatusLook.chill_mist_alpha = value
+			return
+		"chill_whiten":
+			StatusLook.chill_whiten = value
+			return
+		"chill_breath_period":
+			StatusLook.chill_breath_period = value
+			return
+		"chill_breath_count":
+			StatusLook.chill_breath_count = int(value)
+			return
+		"chill_breath_speed":
+			StatusLook.chill_breath_speed = value
+			return
+		"chill_breath_life":
+			StatusLook.chill_breath_life = value
+			return
+		"chill_breath_size":
+			StatusLook.chill_breath_size = value
+			return
+		"chill_breath_alpha":
+			StatusLook.chill_breath_alpha = value
+			return
+		"chill_breath_x":
+			StatusLook.chill_breath_x = value
+			return
+		"chill_breath_y":
+			StatusLook.chill_breath_y = value
 			return
 		# The sparks. Every arm RE-APPLIES, because the emission buffer `sparks_per_victim` sizes
 		# and the material's own fields are node state rather than values a burst reads as it goes
