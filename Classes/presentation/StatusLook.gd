@@ -33,21 +33,21 @@ static var chill_glint_glow := 1.0
 # The world half (slice 2): what a worn state throws off the body, and the damp patch a Wet unit
 # leaves under it (a ground-only Decal; UnitMirror spreads and dries it). Read by StatusWorld and
 # StatusParticles every frame, so these need no sweep either.
-static var wet_drip_rate := 1.2           # drips a second from a fully Wet unit
-static var wet_drip_fall_time := 0.35     # seconds from the overhang to the ground
-static var wet_drip_length := 2.0         # texels
-static var wet_drip_alpha := 0.9
-static var wet_drip_whiten := 0.45        # how far a drip is lifted from the Water hue toward white
-static var wet_splash_count := 4
-static var wet_splash_speed := 0.5
-static var wet_splash_rise := 1.2         # how much of the splash's speed goes up rather than out
-static var wet_splash_gravity := 6.0
+static var wet_drip_rate := 2.4           # drips a second from a fully Wet unit
+static var wet_drip_fall_time := 0.36     # seconds from the overhang to the ground
+static var wet_drip_length := 3.0         # texels
+static var wet_drip_alpha := 0.81
+static var wet_drip_whiten := 0.0        # how far a drip is lifted from the Water hue toward white
+static var wet_splash_count := 11
+static var wet_splash_speed := 1.25
+static var wet_splash_rise := 0.45         # how much of the splash's speed goes up rather than out
+static var wet_splash_gravity := 6.5
 static var wet_splash_time := 0.25
-static var wet_blot_size := 0.6           # the damp patch across, as a share of a cell, fully spread
-static var wet_blot_darkness := 0.45      # how much of the ground's own colour the patch replaces
-static var wet_blot_tint := 0.9           # how far the patch leans from black to the Water hue
-static var wet_blot_spread_time := 0.8    # seconds to spread once the unit is wet
-static var wet_blot_dry_time := 4.0       # seconds to dry once it is not
+static var wet_blot_size := 0.95           # the damp patch across, as a share of a cell, fully spread
+static var wet_blot_darkness := 0.93      # how much of the ground's own colour the patch replaces
+static var wet_blot_tint := 0.97           # how far the patch leans from black to the Water hue
+static var wet_blot_spread_time := 1.8    # seconds to spread once the unit is wet
+static var wet_blot_dry_time := 7.1       # seconds to dry once it is not
 static var wet_ripple_time := 0.6         # seconds a ring takes to spread through the patch from a landed drip
 static var wet_ripple_reach := 3.0        # the ring's widest radius, in the patch's own texels
 static var wet_ripple_light := 0.8        # how far a new ring is lifted from the patch's colour toward white
