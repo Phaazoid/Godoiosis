@@ -1116,6 +1116,23 @@ func test_only_the_squad_lines_are_dashed() -> void:
 		.override_failure_message("the reach mark's cone lost its bead").is_greater(0.0)
 
 
+# The range's outline takes its OWN width (dev, 2026-09-22: its dashes read too faint on the ground)
+# and the tethers keep theirs. Set apart, so a layer still reading the other's knob draws the wrong one.
+func test_the_range_outline_and_the_tethers_each_take_their_own_width() -> void:
+	var overlays := _bare_overlays()
+	overlays.squad_line_width = 0.03
+	overlays.cohesion_line_width = 0.11
+	var segments: Array[PackedVector3Array] = [PackedVector3Array([Vector3(0, 1, 0), Vector3(1, 1, 0)])]
+	overlays.set_lines(BoardOverlays.Layer.COHESION_EDGE, segments, Color.WHITE)
+	var marks: Array[Array] = [[PackedVector3Array([Vector3(0, 1, 0), Vector3(3, 1, 0)])]]
+	overlays.set_marks(BoardOverlays.Layer.TETHERS, marks, Color.WHITE)
+
+	assert_float(overlays.beam_parameter(BoardOverlays.Layer.COHESION_EDGE, &"beam_width")) \
+		.override_failure_message("the range's outline is not on its own width").is_equal_approx(0.11, 0.0001)
+	assert_float(overlays.beam_parameter(BoardOverlays.Layer.TETHERS, &"beam_width")) \
+		.override_failure_message("the tethers moved off their own width").is_equal_approx(0.03, 0.0001)
+
+
 # The PLUCK reaches the strained tethers and no other line (#1070): a refused click shakes the tether
 # it would break, and the solid tethers beside it hold still. That is the whole reason STRAIN is a
 # layer of its own -- a layer is one material, and the shake is a uniform.

@@ -234,8 +234,12 @@ func _hover_choosing_group_move(cell: Vector2i) -> void:
 		game.draw_squad_cohesion(leader.squad, cell, placed)
 	elif game.leader_stranding.has(cell):
 		_draw_stranding(leader, cell, moverange)
-	elif leader.has_squad():
-		game.draw_squad_cohesion(leader.squad, leader.get_projected_destination())
+	else:
+		# Outside the range: the red goes back to the leader's own tile, what enter_group_move_mode
+		# painted, rather than standing where the last legal tile left it.
+		game.show_player_reach(leader, leader.movement.cell)
+		if leader.has_squad():
+			game.draw_squad_cohesion(leader.squad, leader.get_projected_destination())
 	_set_cursor_for_preview(cell, followable)
 
 
@@ -243,7 +247,10 @@ func _hover_choosing_group_move(cell: Vector2i) -> void:
 # ghost standing there, and the squad's lines drawn as though he had gone, with the tethers of whoever
 # would be stranded in red -- which is the reason the tile is grey, said where the player is looking.
 # A ghost authors nothing; the path preview and the plan re-validation stay withheld, as they were.
+# And NOTHING ELSE (dev, 2026-09-22): no red reach and no reach lines, because a tile wearing "what you
+# would threaten here" reads as one you may take. The red the last legal tile drew is cleared.
 func _draw_stranding(leader: Unit, cell: Vector2i, moverange: Dictionary) -> void:
+	game.overlay_manager.clear_reach()
 	_show_stand_in(leader, cell, moverange)
 	var strained: Array[Unit] = []
 	strained.assign(game.leader_stranding.get(cell, []))
@@ -336,22 +343,22 @@ func _hover_choosing_move(cell: Vector2i) -> void:
 			game.overlay_manager.redraw_projected_units()
 
 	if not moverange.reachable.keys().has(cell) and not moverange.squad_unreachable.keys().has(cell):
+		# Outside the range: the red goes back to the unit's own tile, what enter_move_mode painted,
+		# rather than standing where the last legal tile left it.
+		game.show_player_reach(unit, unit.movement.cell)
 		_set_cursor_for_preview(cell, false)
 		return
 
-	# ...and a LEADER's destination its squad cannot follow to is refused the same way (#1069).
-	# Asked HERE as well as at the click, and off the same cache, because the cursor and the click
-	# disagreeing about which cells are legal is the shape _hover_choosing_group_move already
-	# avoids -- it asks the identical two questions in the identical order.
+	# A tile this unit could WALK to and may not TAKE (#1070): a member past its leader's range, or
+	# a leader's destination the squad cannot follow to (#1069 -- asked here as well as at the click,
+	# off the same cache, so the cursor and the click cannot disagree). It draws the unit's ghost and
+	# the red tether _draw_move_lines just drew, and nothing else (dev, 2026-09-22): no red reach, no
+	# reach lines, no path arrow, no re-validation. A tile wearing "what you would threaten here"
+	# reads as one you may take, which is the thing this tile is saying you may not.
 	var strands: bool = unit.is_leader() and unit.has_squad() and not game.leader_followable.has(cell)
-	if strands:
-		# The reach still moves: what a tile would cost you is worth knowing about one you are being
-		# stopped from taking. What does NOT happen is the path preview and the plan re-validation,
-		# which would describe an order this click cannot author. His GHOST does stand there (#1070),
-		# because the red tethers _draw_move_lines just drew need a body to run to.
-		game.show_player_reach(unit, cell)
-		game.show_reach_lines_at(cell)
-		if game.leader_stranding.has(cell):
+	if strands or moverange.squad_unreachable.keys().has(cell):
+		game.overlay_manager.clear_reach()
+		if not strands or game.leader_stranding.has(cell):
 			_show_stand_in(unit, cell, moverange)
 		_set_cursor_for_preview(cell, false)
 		return
@@ -360,10 +367,6 @@ func _hover_choosing_move(cell: Vector2i) -> void:
 	# "what happens if I stop here", both re-aimed at the cell under the pointer rather than at the
 	# body. The red is the same layer enter_move_mode painted from the unit's own cell; it simply
 	# follows the candidate now.
-	#
-	# Drawn for any cell inside the move footprint, refused ones included (see the leader clause
-	# above): what a tile costs you is worth knowing about one you are being stopped from taking,
-	# and it is the same sentence either way.
 	game.show_player_reach(unit, cell)
 	game.show_reach_lines_at(cell)
 

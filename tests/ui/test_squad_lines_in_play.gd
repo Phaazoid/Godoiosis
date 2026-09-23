@@ -215,6 +215,153 @@ func test_a_leaders_stranding_tile_strains_exactly_the_members_it_strands() -> v
 			"a member who could follow him there went red too").is_equal(SquadLines2D.Strain.SOLID)
 
 
+# --- A grey tile says only why it is grey --------------------------------------------------------
+
+# An enemy placed so its field covers tiles a squad's move can reach, and blocks none of them: the
+# reach LINES are drawn only where an enemy's field covers the hovered tile, so without one the
+# "no reach lines" half of the cases below could not fail.
+func _enemy_at(cell: Vector2i) -> Unit:
+	var enemy: Unit = game.spawn_unit(H.make_unit_data({}, Team.Faction.ENEMY), cell)
+	assert_object(enemy).is_not_null()
+	game.drop_threat_field()
+	return enemy
+
+
+func _red() -> Array:
+	return _sorted(_om().reach_overlay.get_used_cells())
+
+
+# The dev (2026-09-22): hovering a tile the unit could walk to but the squad forbids "should not get
+# most readouts... Having those appear sort of read the movement as valid, while it isn't." What stays
+# is the ghost and the red tether -- the reason. The red reach, the enemies' reach lines and the path
+# arrow all go, including the red the previous LEGAL tile drew, which is why the case hovers one first.
+func test_a_tile_past_the_leaders_range_draws_the_ghost_and_the_tether_and_nothing_else() -> void:
+	var board: Dictionary = await _squad(5, [{"dex": DEX_FAST, "cell": Vector2i(-1, 0)}])
+	var member: Unit = board.members[0]
+	_enemy_at(Vector2i(-9, 0))
+	await await_idle_frame()
+	var reach: Dictionary = game.compute_move_range(member)
+	var past := GridUtils.NO_CELL
+	for cell: Vector2i in reach.squad_unreachable.keys():
+		if not game.threat_field().attackers_of(cell).is_empty():
+			past = cell
+			break
+	assert_that(past).override_failure_message("fixture is vacuous: no enemy reaches a tile past "
+			+ "the leader's range, so missing reach lines could not be seen").is_not_equal(GridUtils.NO_CELL)
+	var inside := GridUtils.NO_CELL
+	for cell: Vector2i in reach.reachable.keys():
+		if cell != member.movement.cell:
+			inside = cell
+			break
+
+	game.selected_unit = member
+	game.enter_move_mode(member)
+	game.hover_presenter.update_hover_visuals(inside)
+	assert_bool(_red().is_empty()).override_failure_message(
+			"fixture: a legal tile drew no red, so its clearing could not be seen").is_false()
+
+	game.hover_presenter.update_hover_visuals(past)
+	assert_array(_red()).override_failure_message(
+			"a grey tile still shows the unit's attack range").is_empty()
+	assert_int(_om().reach_line_marks.size()).override_failure_message(
+			"a grey tile still shows who could hit you there").is_equal(0)
+	assert_object(_om().hover_move_preview).override_failure_message(
+			"a grey tile still draws a path arrow").is_null()
+	assert_int(_om().hover_ghost_sprites.size()).override_failure_message(
+			"the ghost the red tether runs to is missing").is_equal(1)
+	assert_array(_states()).override_failure_message(
+			"the tether saying WHY the tile is grey is not red").contains_exactly([SquadLines2D.Strain.STRAIN])
+
+
+# ...and the same for a LEADER on a tile that would strand somebody, which drew its reach on purpose
+# until the dev's ruling reversed it.
+func test_a_leaders_stranding_tile_draws_no_reach_and_no_reach_lines() -> void:
+	var board: Dictionary = await _squad(DEX_FAST, [{"dex": DEX_SLOW, "cell": Vector2i(-3, 0)}])
+	var leader: Unit = board.leader
+	_enemy_at(Vector2i(10, 0))
+	await await_idle_frame()
+	game.selected_unit = leader
+	game.enter_move_mode(leader)
+	var target := GridUtils.NO_CELL
+	for cell: Vector2i in game.leader_stranding:
+		# The cache names EVERY destination, a followable one with nobody stranded.
+		if not (game.leader_stranding[cell] as Array).is_empty() 				and not game.threat_field().attackers_of(cell).is_empty():
+			target = cell
+			break
+	assert_that(target).override_failure_message("fixture is vacuous: no enemy reaches a tile "
+			+ "that strands somebody").is_not_equal(GridUtils.NO_CELL)
+	var followable := GridUtils.NO_CELL
+	for cell: Vector2i in game.leader_followable:
+		if cell != leader.movement.cell:
+			followable = cell
+			break
+	game.hover_presenter.update_hover_visuals(followable)
+	assert_bool(_red().is_empty()).override_failure_message(
+			"fixture: a legal tile drew no red, so its clearing could not be seen").is_false()
+
+	game.hover_presenter.update_hover_visuals(target)
+	assert_array(_red()).override_failure_message(
+			"a stranding tile still shows the leader's attack range").is_empty()
+	assert_int(_om().reach_line_marks.size()).override_failure_message(
+			"a stranding tile still shows who could hit him there").is_equal(0)
+
+
+# Group Move's stranding tile never drew a reach of its own -- but it left the one the last legal tile
+# drew standing, which reads the same.
+func test_a_group_moves_stranding_tile_clears_the_red_the_last_tile_drew() -> void:
+	var board: Dictionary = await _squad(DEX_FAST, [{"dex": DEX_SLOW, "cell": Vector2i(-3, 0)}])
+	var leader: Unit = board.leader
+	game.selected_unit = leader
+	game.enter_group_move_mode(leader)
+	var followable := GridUtils.NO_CELL
+	for cell: Vector2i in game.leader_followable:
+		if cell != leader.movement.cell:
+			followable = cell
+			break
+	game.hover_presenter.update_hover_visuals(followable)
+	assert_bool(_red().is_empty()).override_failure_message(
+			"fixture: a followable tile drew no red, so its clearing could not be seen").is_false()
+
+	var stranding := GridUtils.NO_CELL
+	for cell: Vector2i in game.leader_stranding:
+		# The cache names EVERY destination, a followable one with nobody stranded.
+		if not (game.leader_stranding[cell] as Array).is_empty():
+			stranding = cell
+			break
+	assert_that(stranding).override_failure_message(
+			"fixture is vacuous: no tile strands anybody").is_not_equal(GridUtils.NO_CELL)
+	game.hover_presenter.update_hover_visuals(stranding)
+	assert_array(_red()).override_failure_message(
+			"a stranding tile left the last tile's attack range standing").is_empty()
+
+
+# Off the whole range the red goes back to the unit's own tile -- what Move painted when it opened --
+# where it used to stay wherever the last legal tile had put it.
+func test_hovering_off_the_range_puts_the_red_back_where_move_opened_it() -> void:
+	var board: Dictionary = await _squad(5, [{"dex": 5, "cell": Vector2i(-1, 0)}])
+	var member: Unit = board.members[0]
+	game.selected_unit = member
+	game.enter_move_mode(member)
+	var opened := _red()
+	var reach: Dictionary = game.compute_move_range(member)
+	var inside := GridUtils.NO_CELL
+	for cell: Vector2i in reach.reachable.keys():
+		if cell != member.movement.cell:
+			game.hover_presenter.update_hover_visuals(cell)
+			if _red() != opened:
+				inside = cell
+				break
+	assert_that(inside).override_failure_message("fixture is vacuous: every legal tile draws the "
+			+ "red Move opened with, so a stale one could not be told apart").is_not_equal(GridUtils.NO_CELL)
+	var outside := Vector2i(12, 12)
+	assert_bool(reach.reachable.has(outside) or reach.squad_unreachable.has(outside)) \
+		.override_failure_message("fixture: the 'outside' tile is inside the range").is_false()
+
+	game.hover_presenter.update_hover_visuals(outside)
+	assert_array(_red()).override_failure_message(
+			"off the range, the red still stands where the last legal tile put it").is_equal(opened)
+
+
 # --- Squad Up from the leader, and a pick that stays open ---------------------------------------
 
 # #1043: a friend tried to grow his squad from the leader and could not -- the verb vanished the moment

@@ -174,16 +174,17 @@ const LAYERS: Dictionary[Layer, Dictionary] = {
 	# a leader's that would strand somebody. GREY GRIDLINES since #1070, where they were a mauve wash in
 	# the enemy purple's own family: MOVE's lattice switched off, which is what "walkable, not now" is.
 	# Its cells never meet MOVE's (one tile is one or the other), so sharing sort 0 cannot fight.
-	Layer.INVALID_MOVE: {"color": Color(0.8, 0.82, 0.86, 0.75), "sort": 0, "kind": Kind.FILL,
+	Layer.INVALID_MOVE: {"color": Color(0.0, 0.1725, 0.2863, 0.851), "sort": 0, "kind": Kind.FILL,
 		"grid": true},
 	# THE SQUAD'S LINES (#1070), which replaced the orange SQUAD / SQUAD_RANGE fills -- see
 	# SquadLines2D. The range's stroke LIES ON THE GROUND the way the enemy focus edge does, so it names
 	# a lift_sort above every FILL; its sort is render priority only, and sits under the tethers because
 	# a line in the air should read over one on the floor. Colours arrive per draw from SquadLines2D's
-	# statics, so these entries are fallbacks; all four share the "squad" beam set, which is what makes
-	# the range and the tethers read as one system.
+	# statics, so these entries are fallbacks. The range is the "cohesion" set and the tethers the
+	# "squad" one -- two widths, one glow and one dash pattern (DASHED_BEAMS), which is what makes them
+	# read as one system.
 	Layer.COHESION_EDGE: {"color": Color(1.0, 0.55, 0.12, 0.95), "sort": 12, "lift_sort": 6,
-		"beam": "squad", "kind": Kind.LINE},
+		"beam": "cohesion", "kind": Kind.LINE},
 	# ...and the tethers, one layer per STATE because a layer is one material: the pluck is a uniform,
 	# and only the strained tethers may shake. They hang at the body's middle and a ribbon writes no
 	# depth, so the three share 14, the last free sort under ICONS. `cone_alpha` puts their arrowhead on
@@ -354,15 +355,23 @@ enum SelectorDepth { LEVEL, HALF }
 # Radial segments round the cone. Low reads as a cut gem, high as smooth; the base cap uses the
 # same count, so this is the whole shape's resolution.
 @export var cone_facets := 12: set = _set_cone_facets
-# The squad lines' own pair (#1070), shared by the range's stroke and the three tether layers so the
-# two read as one system. Thin and near the bloom threshold, like the outline -- these are markup. The
-# DASHES are not here: they are SquadLines2D statics, because the flat view draws them too.
+# The squad lines' own pair (#1070). The glow is shared by the range's stroke and the three tether
+# layers so the two read as one system; the WIDTH is the tethers' alone since the dev found the
+# range's dashes too faint on the ground (2026-09-22), which cohesion_line_width answers. Near the
+# bloom threshold, like the outline -- these are markup. The DASHES are not here: they are
+# SquadLines2D statics, because the flat view draws them too.
 @export var squad_line_width := 0.045: set = _set_squad_line_width
 @export var squad_line_intensity := 1.2: set = _set_squad_line_intensity
+@export var cohesion_line_width := 0.09: set = _set_cohesion_line_width
 
 
 func _set_squad_line_width(value: float) -> void:
 	squad_line_width = value
+	_apply_beam_params()
+
+
+func _set_cohesion_line_width(value: float) -> void:
+	cohesion_line_width = value
 	_apply_beam_params()
 
 
@@ -871,6 +880,11 @@ func set_tether_shake(amount: float) -> void:
 		((node as MeshInstance3D).material_override as ShaderMaterial).set_shader_parameter("shake", amount)
 
 
+# The beam sets that march dashes (#1070): the tethers and the range's stroke, which have their own
+# widths and one pattern -- the pattern is what makes them one system.
+const DASHED_BEAMS: Array[String] = ["squad", "cohesion"]
+
+
 # A LINE layer may name its own set (slice 4). The shared trio is tuned for a LASER -- the sight
 # bead's width and an intensity whose own comment reads ">1.2 blooms" -- and the focus outline is
 # markup, so inheriting them made it a glowing rope around forty cells. Softness stays shared: the
@@ -893,6 +907,9 @@ func _style_beam(material: ShaderMaterial, spec: Dictionary = {}) -> void:
 		"squad":
 			width = squad_line_width
 			intensity = squad_line_intensity
+		"cohesion":
+			width = cohesion_line_width
+			intensity = squad_line_intensity
 	material.set_shader_parameter("beam_width", width)
 	material.set_shader_parameter("beam_softness", beam_softness)
 	material.set_shader_parameter("beam_intensity", intensity)
@@ -904,7 +921,7 @@ func _style_beam(material: ShaderMaterial, spec: Dictionary = {}) -> void:
 	material.set_shader_parameter("bead_gap", maxf(bead_gap, 0.001))
 	# ...and the marching DASHES ride only the squad's lines (#1070), off the same statics the flat
 	# view cuts its dashes from. A zero period is a solid stroke, which is every other layer.
-	var dashed: bool = spec.get("beam", "") == "squad"
+	var dashed: bool = DASHED_BEAMS.has(spec.get("beam", ""))
 	material.set_shader_parameter("dash_period",
 			SquadLines2D.dash_period() * BoardSpace.CELL_SIZE if dashed else 0.0)
 	material.set_shader_parameter("dash_fill", clampf(SquadLines2D.DASH_FILL, 0.0, 1.0))

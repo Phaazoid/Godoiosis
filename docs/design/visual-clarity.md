@@ -7,7 +7,7 @@ its child [#49 Action Queue UX](https://github.com/Phaazoid/Godoiosis/issues/49)
 This is a *guidelines* doc, not a spec — it captures the principles we're holding the work to,
 plus the running order of the queue-UX checklist. Update it as items land.
 
-**Canon checked through #1093 (2026-09-22).**
+**Canon checked through #1093 (2026-09-23).**
 
 ## Principles
 
@@ -3581,7 +3581,7 @@ The [#1061](https://github.com/Phaazoid/Godoiosis/issues/1061) residual, folded 
 
 **It could, and the hole was structural at three layers at once.** `RulesService.compute_move_range` builds a cohesion field only `if not unit.is_leader()`, so a leader's `squad_unreachable` is empty BY CONSTRUCTION; `enter_move_mode` painted `INVALID_MOVE` only for non-leaders; and `SquadPlanValidator._check_leader_range` iterates the plan's **move actions** and skips the leader by name, so a member who queues nothing is invisible to it. The leader walked to the edge of its MOV, every member stayed, the plan validated clean, Execute ran, and `enforce_contact` ejected them afterwards. **`SquadManager`'s own header claimed movement could no longer author a split "because the validator refuses it", and that sentence was false for this path for as long as it was written** -- it now says so.
 
-`GroupMoveSolver.followable_destinations` already answered exactly this, including *"stay put counts as a placement"*, and group move already ran that sweep at its own mode entry. So it is the same sweep at the same moment on the same cache -- renamed `group_move_followable` to `leader_followable`, because a store named for group move that the individual move reads is the kind of name that misleads the next reader. The hover refuses it too, off the same cache and in the same order `_hover_choosing_group_move` uses; the reach and the reach lines still move onto a refused cell, since what a tile would cost you is worth knowing about one you are being stopped from taking.
+`GroupMoveSolver.followable_destinations` already answered exactly this, including *"stay put counts as a placement"*, and group move already ran that sweep at its own mode entry. So it is the same sweep at the same moment on the same cache -- renamed `group_move_followable` to `leader_followable`, because a store named for group move that the individual move reads is the kind of name that misleads the next reader. The hover refuses it too, off the same cache and in the same order `_hover_choosing_group_move` uses; the reach and the reach lines still move onto a refused cell, since what a tile would cost you is worth knowing about one you are being stopped from taking. **Repealed at #1070's second play-check (2026-09-22):** a refused tile now draws only the ghost and the red tether, because a tile wearing its reach reads as one you may take. See *A grey tile says only why it is grey* below.
 
 **`MainActionMenu._can_move` is deliberately untouched** -- its own header says Move must stay a per-unit question and never read squadmates. This is scope at the DESTINATION, which is [#461](https://github.com/Phaazoid/Godoiosis/issues/461)'s ruling from the other side.
 
@@ -3740,6 +3740,18 @@ A friend of the dev's formed a squad and then tried to grow it from the leader; 
 | The out-of-range tiles | A grey grid |
 | Squad Up's pick | Stays open |
 | A refused click | Stays in Move and shakes |
+
+### The second play-check: a grey tile says only why it is grey (2026-09-22)
+
+> hovering a normally valid but currently invalid move tile because of squad zone... we should not get most readouts. The enemy threat lines and the unit's attack range should not appear while hovering those tiles. Having those appear sort of read the movement as valid, while it isn't.
+
+This repeals #1069's "the reach still moves onto a refused cell", above.
+
+- **A grey tile** draws the unit's ghost and the red tether, and nothing else. That covers a member past its leader's range, a leader's stranding tile, and Group Move's stranding tile. The red reach, the reach lines, the path arrow and the plan re-validation are withheld. The red the last legal tile drew is cleared, not left standing.
+- **Outside the whole range**, the red goes back to the unit's own tile, which is what Move paints when it opens. Before this it stood wherever the last legal tile had left it.
+- **The Squad Up marker has a black border.** It is the white corner-bracket tile (`OverlayManager.TARGET_ATLAS_COORDS`), which vanished on white stone. The border is a 1px ring baked into the art, so every unit pick carries it: Rescue, Intimidate, Join Squad and Squad Up. Both views read the one tile.
+- **The range's outline has its own width** (`BoardOverlays.cohesion_line_width`, *Range outline width (3D)*), starting at double the tethers'. It is its own beam set, `"cohesion"`, and `DASHED_BEAMS` keeps it on the tethers' one dash pattern. The flat view keeps its single stroke width.
+- **The grid's colour is the dev's.** He tuned the out-of-range grid to navy. "Grey" in this section names the role (MoveGrid's lattice switched off), not a hue.
 
 ### Declared residuals
 

@@ -108,7 +108,9 @@ const KNOBS: Array[Dictionary] = [
 	# what makes them read as one system. The dashes and colours are class values in CLASS_KNOBS,
 	# because the flat view draws them too; these two have no flat-view twin.
 	{"group": "Squad lines", "node": "BoardOverlays", "prop": "squad_line_width", "label": "Squad line width (3D)", "min": 0.01, "max": 0.2, "step": 0.005,
-		"tip": "How thick a tether and the dashed stroke round the squad's range are, in cells. The tether's arrowhead is a multiple of this (Reach cone width), so widening the line widens its head too."},
+		"tip": "How thick a tether is, in cells. Its arrowhead is a multiple of this (Tether arrow width), so widening the line widens its head too. The range's outline has its own width below."},
+	{"group": "Squad lines", "node": "BoardOverlays", "prop": "cohesion_line_width", "label": "Range outline width (3D)", "min": 0.01, "max": 0.3, "step": 0.005,
+		"tip": "How thick the dashed stroke round the squad's range is, in cells. It lies on the ground, where it has more to compete with than a tether in the air does."},
 	{"group": "Squad lines", "node": "BoardOverlays", "prop": "squad_line_intensity", "label": "Squad line glow (3D)", "min": 0.2, "max": 4.0, "step": 0.05,
 		"tip": "Brightness multiplier on the squad's lines. Around 1 draws them flat, which is what markup wants; past the scene's glow threshold (1.2) they bloom and start reading as an effect."},
 
