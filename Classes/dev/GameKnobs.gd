@@ -418,6 +418,7 @@ const QUEUE_STYLE_SCRIPT := "res://Classes/ui/queue/QueueStyle.gd"
 const BOARD_SPACE_SCRIPT := "res://Classes/presentation/BoardSpace.gd"
 const SIGHT_TRACE_SCRIPT := "res://Classes/board/SightTrace2D.gd"
 const THREAT_LINES_SCRIPT := "res://Classes/board/ThreatLines2D.gd"
+const AIM_FLASH_SCRIPT := "res://Classes/board/AimFlash2D.gd"
 const MOVE_GRID_SCRIPT := "res://Classes/board/MoveGrid.gd"
 const UNIT_VISUALS_SCRIPT := "res://Classes/units/UnitVisuals.gd"
 const MUSIC_DIRECTOR_SCRIPT := "res://Classes/audio/MusicDirector.gd"
@@ -457,13 +458,30 @@ const CLASS_KNOBS: Array[Dictionary] = [
 		"tip": "The same reach fill when the pick HEALS. Forked off the attack's own heals flag, so an attack cannot paint the wrong colour for what it does."},
 	# The footprint the reach pair above is aimed THROUGH -- the cells the current pick would actually
 	# hit. A const with no row until #422 made it a static var: it is the third channel a player's aim
-	# palette repaints, and a value a palette can move has to be one the dev can author. Its pulsed low
-	# point follows it (aim_pulse_color borrows the fill's RGB), so there is no second colour to chase.
+	# palette repaints, and a value a palette can move has to be one the dev can author. The travel
+	# flash only whitens it (AimFlash2D.tint), so there is no second colour to chase.
 	{"group": "Aiming", "label": "Aim footprint (2D+3D)", "static": "HOVER_MODULATE",
 		"tip": "The cells your current pick would actually hit, drawn on top of the reach fill. Yellow-on-red out of the box, which is the contrast that makes an aim readable -- tune it against whichever reach colour it sits over, not on its own."},
 	{"group": "Aiming", "label": "Blocked-reach dim (3D)", "static": "BLOCKED_REACH_DIM",
 		"min": 0.1, "max": 1.0, "step": 0.01,
 		"tip": "How much darker a reach cell past the attack's vertical tolerance draws in 3D, relative to the live reach colour. The 2D says the same thing with a hatched tile instead."},
+	# The aim's travel-order flash (#1057 part 2): every footprint tile flashes white on the step the
+	# attack reaches it. One loop is the travel, plus one flash, plus the rest.
+	{"group": "Aiming", "label": "Flash: time between steps", "static": "STEP_SECONDS", "script": AIM_FLASH_SCRIPT,
+		"min": 0.02, "max": 0.6, "step": 0.01,
+		"tip": "Seconds from one step of the attack's travel to the next -- a swing's next row, a blast's next ring, a path's next tile. Smaller reads as a faster swing. A true AoE has one step, so this does not touch it."},
+	{"group": "Aiming", "label": "Flash: length", "static": "FLASH_SECONDS", "script": AIM_FLASH_SCRIPT,
+		"min": 0.05, "max": 1.5, "step": 0.01,
+		"tip": "Seconds one tile's white flash lasts: a quick rise, a hold at the peak, a longer fall. Longer than the step time means neighbouring steps overlap into a trail."},
+	{"group": "Aiming", "label": "Flash: rest before repeat", "static": "REST_SECONDS", "script": AIM_FLASH_SCRIPT,
+		"min": 0.0, "max": 3.0, "step": 0.05,
+		"tip": "Quiet time after the last tile's flash before the travel plays again from the top. The footprint rests at its plain colour."},
+	{"group": "Aiming", "label": "Flash: brightness", "static": "FLASH_PEAK", "script": AIM_FLASH_SCRIPT,
+		"min": 0.0, "max": 1.0, "step": 0.01,
+		"tip": "How white a tile gets at the top of its flash. 1 is pure white; 0 turns the flash off."},
+	{"group": "Aiming", "label": "Flash: still brightness", "static": "STILL_PEAK", "script": AIM_FLASH_SCRIPT,
+		"min": 0.0, "max": 1.0, "step": 0.01,
+		"tip": "With the photosensitivity setting on nothing moves: the first step holds this white and each later step less, down to plain on the last. This is the first step's."},
 
 	# The three tones of the range readout (#1066): your blue above (Move fill), your red, and the
 	# enemy's one field under both. Tune them as a STACK, never one at a time -- what the player
@@ -1457,6 +1475,11 @@ static func read_static(name: String) -> Variant:
 		"HEAL_ATTACK_MODULATE": return OverlayManager.HEAL_ATTACK_MODULATE
 		"HOVER_MODULATE": return OverlayManager.HOVER_MODULATE
 		"BLOCKED_REACH_DIM": return OverlayManager.BLOCKED_REACH_DIM
+		"STEP_SECONDS": return AimFlash2D.STEP_SECONDS
+		"FLASH_SECONDS": return AimFlash2D.FLASH_SECONDS
+		"REST_SECONDS": return AimFlash2D.REST_SECONDS
+		"FLASH_PEAK": return AimFlash2D.FLASH_PEAK
+		"STILL_PEAK": return AimFlash2D.STILL_PEAK
 		"REACH_MODULATE": return OverlayManager.REACH_MODULATE
 		"THREAT_MODULATE": return OverlayManager.THREAT_MODULATE
 		"FOCUS_OUTLINE_COLOR": return OverlayManager.FOCUS_OUTLINE_COLOR
@@ -1666,6 +1689,23 @@ static func write_static(host: Node3D, name: String, value: Variant) -> void:
 		"HEAL_ATTACK_MODULATE": OverlayManager.HEAL_ATTACK_MODULATE = value
 		"HOVER_MODULATE": OverlayManager.HOVER_MODULATE = value
 		"BLOCKED_REACH_DIM": OverlayManager.BLOCKED_REACH_DIM = value   # mirror reads it per frame; the refresh below is harmless
+		# The travel flash reads all five every frame, so a standing flash takes a turned value at once
+		# and there is nothing to re-apply -- SHOVE_SLIDE_SPEED's early return.
+		"STEP_SECONDS":
+			AimFlash2D.STEP_SECONDS = value
+			return
+		"FLASH_SECONDS":
+			AimFlash2D.FLASH_SECONDS = value
+			return
+		"REST_SECONDS":
+			AimFlash2D.REST_SECONDS = value
+			return
+		"FLASH_PEAK":
+			AimFlash2D.FLASH_PEAK = value
+			return
+		"STILL_PEAK":
+			AimFlash2D.STILL_PEAK = value
+			return
 		"REACH_MODULATE": OverlayManager.REACH_MODULATE = value
 		"THREAT_MODULATE": OverlayManager.THREAT_MODULATE = value
 		"FOCUS_OUTLINE_COLOR": OverlayManager.FOCUS_OUTLINE_COLOR = value

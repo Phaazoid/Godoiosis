@@ -221,8 +221,8 @@ func _hover_attack_targeting(cell: Vector2i) -> void:
 	var attacker: Unit = game.selected_unit
 
 	var preview_cells: Array[Vector2i] = []
+	var travel: Dictionary[Vector2i, Array] = {}
 	var victims: Array[Unit] = []
-	var pulse_tiles := false
 	var trace_shown := false
 	if attacker != null:
 		var board: BoardContext = game._board()
@@ -245,16 +245,19 @@ func _hover_attack_targeting(cell: Vector2i) -> void:
 			# pass instead, and the queue row it produces is where that reading is honest.
 			var reach := Conduction.sweep(attacker, origin, cell, aiming, board)
 			preview_cells = reach.cells
-			# A null pick is bare fists -- unit-only by definition, so it has no hits_map/hits_units
-			# to ask and answers as UNIT.
-			pulse_tiles = aiming != null and aiming.hits_map()
+			# Every footprint flashes in the order the attack travels (#1057 part 2), whatever it
+			# targets -- the tiles say HOW it lands, the victims' own pulse says WHO.
+			travel = reach.steps
+			# A null pick is bare fists -- unit-only by definition, so it has no hits_units to ask and
+			# answers as UNIT.
 			if aiming == null or aiming.hits_units():
 				victims = reach.victims
 
 	if not trace_shown:
 		game.overlay_manager.clear_sight_trace()
 	game.overlay_manager.show_overlay(OverlayManager.OverlayType.HOVER, preview_cells, OverlayManager.ATLAS_COORDS)
-	game.overlay_manager.set_target_pulse(victims, pulse_tiles)
+	game.overlay_manager.set_aim_flash(travel)
+	game.overlay_manager.set_target_pulse(victims)
 	_set_cursor_for_preview(cell, not preview_cells.is_empty())
 
 func _hover_choosing_move(cell: Vector2i) -> void:

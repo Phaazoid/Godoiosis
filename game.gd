@@ -1047,6 +1047,7 @@ func exit_current_mode():
 		# aim left standing here would tint the next rescue's tile pick in the watch's colours.
 		overlay_manager.set_aim_colors(null, false)
 	overlay_manager.clear_target_pulse()
+	overlay_manager.clear_aim_flash()
 	overlay_manager.clear_ring_pulse()
 	overlay_manager.set_pick_flash(false)   # #116's tile-pick flash; idempotent when none is running
 	overlay_manager.clear_sight_trace()

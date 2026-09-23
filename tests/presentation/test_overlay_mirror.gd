@@ -387,7 +387,11 @@ func test_target_pick_markers_split_from_the_reach_fill() -> void:
 	assert_int(_overlays.cells_of(BoardOverlays.Layer.ATTACK).size()).is_equal(0)
 
 
-func test_aim_footprint_and_tile_pulse_ride_the_poll() -> void:
+# The footprint's cells and steady colour ride the poll, and so does its travel-order flash (#1057
+# part 2): each lit quad is the LIVE colour whitened by the 2D's level for that cell -- the diorama has
+# no clock of its own. The 2D clock is set rather than waited for, since a frame count cannot land on
+# a flash's peak; each poll is driven synchronously so the copy and the read see the same instant.
+func test_aim_footprint_and_its_flash_ride_the_poll() -> void:
 	var attacker := _spawn(PLAYER, Vector2i(2, 2))
 	var foe := _spawn(ENEMY, Vector2i(3, 2))
 	attacker.equipped_weapon = H.make_weapon(3)
@@ -398,12 +402,30 @@ func test_aim_footprint_and_tile_pulse_ride_the_poll() -> void:
 	await _settle()
 	assert_bool(_om().hover_overlay.get_used_cells().size() > 0).is_true()
 	assert_that(_sorted_3d(BoardOverlays.Layer.AIM)).is_equal(_lifted(_om().hover_overlay))
-	# The pulse is the 2D layer's live modulate, polled — no 3D tween. Drive one poll
-	# synchronously so the copy and the read see the same tween frame.
-	assert_object(_om()._tile_pulse).is_not_null()
 	var live: Color = _om().hover_overlay.modulate
+	var quad: Vector3i = _lifted(_om().hover_overlay)[0]
+
+	# The top of the first flash.
+	_om()._aim_flash.clock = AimFlash2D.FLASH_SECONDS * AimFlash2D.RISE_SHARE
 	_mirror._process(0.0)
+	var level: float = _om().aim_flash_levels()[foe.movement.cell]
+	assert_float(level).is_greater(0.0)   # non-vacuity: the tile really is lit
 	assert_that(_overlays.layer_modulate(BoardOverlays.Layer.AIM)).is_equal(live)
+	assert_that(_overlays.drawn_color(BoardOverlays.Layer.AIM, quad)).is_equal(AimFlash2D.tint(live, level))
+
+	# The rest before the loop repeats: nothing lit, so the quad is back to the steady colour.
+	_om()._aim_flash.clock = AimFlash2D.loop_seconds(0) - 0.01
+	_mirror._process(0.0)
+	assert_that(_overlays.drawn_color(BoardOverlays.Layer.AIM, quad)).is_equal(live)
+
+	# A WATCH aim flashes from the watch's colour (#591), because the whitening starts from the live
+	# fill rather than from the shot's constant.
+	_om().set_aim_colors(attacker.get_equipped_weapon().template.main_attack, true)
+	var watch: Color = _om().hover_overlay.modulate
+	assert_that(watch).is_not_equal(live)
+	_om()._aim_flash.clock = AimFlash2D.FLASH_SECONDS * AimFlash2D.RISE_SHARE
+	_mirror._process(0.0)
+	assert_that(_overlays.drawn_color(BoardOverlays.Layer.AIM, quad)).is_equal(AimFlash2D.tint(watch, level))
 
 
 # --- Units -------------------------------------------------------------------------

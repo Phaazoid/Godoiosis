@@ -112,16 +112,3 @@ func test_a_watch_aim_is_untouched_by_the_palette() -> void:
 		assert_that(OverlayManager.aim_fill_color(true)).override_failure_message(
 				"the %s palette repainted a WATCH footprint, which is outside #422's scope" % palette_name
 				).is_equal(OverlayManager.WATCH_HOVER_MODULATE)
-
-func test_the_pulse_follows_the_palettes_footprint() -> void:
-	# DERIVED, not authored: the pulse is the fill at the low alpha. A palette that moved the fill and
-	# left the pulse on the old hue would breathe between two different colours.
-	PlayerSettings.set_choice(PALETTE, PlayerSettings.AimPalette.HIGH_CONTRAST)
-	var fill := OverlayManager.aim_fill_color()
-	var pulse := OverlayManager.aim_pulse_color()
-	assert_float(pulse.r).is_equal_approx(fill.r, 0.001)
-	assert_float(pulse.g).is_equal_approx(fill.g, 0.001)
-	assert_float(pulse.b).is_equal_approx(fill.b, 0.001)
-	assert_float(pulse.a).override_failure_message(
-			"the pulse stopped using the authored low alpha").is_equal_approx(
-			OverlayManager.HOVER_PULSE_MODULATE.a, 0.001)
