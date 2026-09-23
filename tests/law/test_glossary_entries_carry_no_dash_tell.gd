@@ -13,7 +13,8 @@
 # so this file's own comments carry em dashes on purpose and Glossary.gd's nine still do.
 #
 # WHY IT STOPS AT THE GLOSSARY rather than sweeping every player-facing string: the wider net's first
-# catch would be HoverPresenter._tile_readout_lines, which composes "%s — %s" as a LABEL SEPARATOR
+# catch would be TileReadout.ground_lines (the tile hover card and the Inspect dock, since #1105),
+# which composes "%s — %s" as a LABEL SEPARATOR
 # between a state's name and its meaning. That is ordinary typography rather than a tell, and it is
 # the dev's call to make, not this law's. Flagged to him rather than silently widened.
 #
