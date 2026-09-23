@@ -914,6 +914,21 @@ const CLASS_KNOBS: Array[Dictionary] = [
 	{"group": "Wet around a unit", "label": "Splash time", "static": "wet_splash_time", "script": STATUS_LOOK_SCRIPT,
 		"min": 0.05, "max": 1.5, "step": 0.01,
 		"tip": "Seconds a splash droplet lasts, fading as it goes."},
+	{"group": "Wet around a unit", "label": "Damp patch size", "static": "wet_blot_size", "script": STATUS_LOOK_SCRIPT,
+		"min": 0.1, "max": 1.0, "step": 0.01,
+		"tip": "How far across the damp patch under a Wet unit reaches once fully spread, as a share of a cell. It is born at half this and grows as it spreads."},
+	{"group": "Wet around a unit", "label": "Damp patch darkness", "static": "wet_blot_darkness", "script": STATUS_LOOK_SCRIPT,
+		"min": 0.0, "max": 1.0, "step": 0.01,
+		"tip": "How much of the ground's own colour the patch replaces. It is lit like the ground, so it darkens with the board at night rather than glowing."},
+	{"group": "Wet around a unit", "label": "Damp patch tint", "static": "wet_blot_tint", "script": STATUS_LOOK_SCRIPT,
+		"min": 0.0, "max": 1.0, "step": 0.01,
+		"tip": "How blue the patch is rather than simply dark. The blue is the Water hue under Element colours."},
+	{"group": "Wet around a unit", "label": "Damp patch spread", "static": "wet_blot_spread_time", "script": STATUS_LOOK_SCRIPT,
+		"min": 0.0, "max": 5.0, "step": 0.05,
+		"tip": "Seconds the patch takes to spread once a unit gets wet. 0 is instant."},
+	{"group": "Wet around a unit", "label": "Damp patch dry", "static": "wet_blot_dry_time", "script": STATUS_LOOK_SCRIPT,
+		"min": 0.0, "max": 20.0, "step": 0.1,
+		"tip": "Seconds the patch takes to dry once the unit is no longer wet, or once it steps into water. Longer than the drips' fade, so the ground stays damp a while after the unit stops dripping."},
 	{"group": "Chilled around a unit", "label": "Mist rate", "static": "chill_mist_rate", "script": STATUS_LOOK_SCRIPT,
 		"min": 0.0, "max": 20.0, "step": 0.1,
 		"tip": "Puffs of cold mist a second off a fully Chilled unit. Each leaves an edge of the body and sinks to the ground at its feet."},
@@ -1783,6 +1798,11 @@ static func read_static(name: String) -> Variant:
 		"wet_splash_rise": return StatusLook.wet_splash_rise
 		"wet_splash_gravity": return StatusLook.wet_splash_gravity
 		"wet_splash_time": return StatusLook.wet_splash_time
+		"wet_blot_size": return StatusLook.wet_blot_size
+		"wet_blot_darkness": return StatusLook.wet_blot_darkness
+		"wet_blot_tint": return StatusLook.wet_blot_tint
+		"wet_blot_spread_time": return StatusLook.wet_blot_spread_time
+		"wet_blot_dry_time": return StatusLook.wet_blot_dry_time
 		"chill_mist_rate": return StatusLook.chill_mist_rate
 		"chill_mist_life": return StatusLook.chill_mist_life
 		"chill_mist_drift": return StatusLook.chill_mist_drift
@@ -2222,6 +2242,21 @@ static func write_static(host: Node3D, name: String, value: Variant) -> void:
 			return
 		"wet_splash_time":
 			StatusLook.wet_splash_time = value
+			return
+		"wet_blot_size":
+			StatusLook.wet_blot_size = value
+			return
+		"wet_blot_darkness":
+			StatusLook.wet_blot_darkness = value
+			return
+		"wet_blot_tint":
+			StatusLook.wet_blot_tint = value
+			return
+		"wet_blot_spread_time":
+			StatusLook.wet_blot_spread_time = value
+			return
+		"wet_blot_dry_time":
+			StatusLook.wet_blot_dry_time = value
 			return
 		"chill_mist_rate":
 			StatusLook.chill_mist_rate = value

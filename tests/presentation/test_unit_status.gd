@@ -287,7 +287,9 @@ func test_a_state_that_ends_fades_out_and_hands_the_sprite_back() -> void:
 	_unit_mirror.reconcile(1.0)
 	assert_object(sprite.material_override).override_failure_message(
 			"a unit wearing nothing still carries the status material").is_null()
-	assert_that(_unit_mirror.status_level(unit)).is_equal(Vector3.ZERO)
+	# What the SPRITE wears; the damp blot (w) dries on its own, longer clock.
+	var level := _unit_mirror.status_level(unit)
+	assert_that(Vector3(level.x, level.y, level.z)).is_equal(Vector3.ZERO)
 
 
 func test_icicles_grow_on_their_own_clock() -> void:

@@ -1121,6 +1121,7 @@ func _ensure_brush_ghost() -> void:
 	mat.albedo_color = Color(1.0, 1.0, 1.0, brush_ghost_alpha)
 	_brush_ghost.material_override = mat
 	_brush_ghost.visible = false
+	_brush_ghost.layers = BoardOverlays.WORLD_RENDER_LAYER
 	board.add_child(_brush_ghost)
 
 
@@ -1231,6 +1232,7 @@ func _make_flame(cell: Vector2i, index: int) -> MeshInstance3D:
 	quad.material = material
 	flame.mesh = quad
 	flame.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	flame.layers = BoardOverlays.WORLD_RENDER_LAYER   # never painted by a ground decal (#358)
 	# Where this flame stands when nothing is pushing it. Kept as meta rather than read back off
 	# the node, because _animate_flames OVERWRITES position every frame with the camera push —
 	# a resting place derived from the pushed one would walk away from the cell.
@@ -1934,7 +1936,7 @@ func _fill_lip(root: Node3D, cell: Vector2i, key: Array) -> void:
 	for piece in pieces:
 		if piece == null:
 			continue
-		piece.layers = BoardOverlays.WORLD_RENDER_LAYER
+		piece.layers = BoardOverlays.GROUND_RENDER_LAYER   # a lip IS ground: a decal may paint a rim
 		piece.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 		root.add_child(piece)
 

@@ -56,6 +56,7 @@ func _ready() -> void:
 	emitting = false
 	local_coords = false
 	cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	layers = BoardOverlays.WORLD_RENDER_LAYER   # never painted by a ground decal (#358)
 	process_material = _process_material()
 	draw_pass_1 = _spark_mesh()
 	apply(EffectLook.new())

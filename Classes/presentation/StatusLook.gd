@@ -30,7 +30,8 @@ static var chill_rime_glow := 0.5
 static var chill_glint_rate := 0.1        # the share of body texels that ever twinkle
 static var chill_glint_glow := 1.0
 
-# The world half (slice 2): what a worn state throws off the body. Read by StatusWorld and
+# The world half (slice 2): what a worn state throws off the body, and the damp patch a Wet unit
+# leaves under it (a ground-only Decal; UnitMirror spreads and dries it). Read by StatusWorld and
 # StatusParticles every frame, so these need no sweep either.
 static var wet_drip_rate := 1.2           # drips a second from a fully Wet unit
 static var wet_drip_fall_time := 0.35     # seconds from the overhang to the ground
@@ -42,6 +43,11 @@ static var wet_splash_speed := 0.5
 static var wet_splash_rise := 1.2         # how much of the splash's speed goes up rather than out
 static var wet_splash_gravity := 6.0
 static var wet_splash_time := 0.25
+static var wet_blot_size := 0.6           # the damp patch across, as a share of a cell, fully spread
+static var wet_blot_darkness := 0.45      # how much of the ground's own colour the patch replaces
+static var wet_blot_tint := 0.3           # how blue the patch is rather than simply dark
+static var wet_blot_spread_time := 0.8    # seconds to spread once the unit is wet
+static var wet_blot_dry_time := 4.0       # seconds to dry once it is not
 
 static var chill_mist_rate := 4.0         # puffs a second from a fully Chilled unit
 static var chill_mist_life := 1.6         # seconds a puff takes to sink from the body to the ground

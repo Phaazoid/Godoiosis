@@ -23,8 +23,11 @@ class_name BoardOverlays
 # did exactly that on every board load (#318). Clear the layers you own.
 #
 # The mask contract: fill/sprite quads render on WORLD_RENDER_LAYER only, and
-# UnitSprite3D lives on UNIT_RENDER_LAYER. Both constants live HERE; a drift test
-# pins them disjoint.
+# UnitSprite3D lives on UNIT_RENDER_LAYER. All three constants live HERE; a drift test
+# pins them disjoint. GROUND_RENDER_LAYER is the ground ALONE (#358's damp blot): a Decal
+# paints whatever its cull_mask meets, and a GridMap cannot be re-layered, so the ground
+# keeps layer 1 and everything else the board draws is on WORLD -- or a ground decal
+# would muddy the squad ring, the move grid and every prop on the tile.
 
 enum Layer {
 	MOVE, ATTACK, ZONE_CAPTURE, ZONE_EXTRACTION, HOVER,
@@ -38,8 +41,9 @@ enum Layer {
 }
 enum Kind { FILL, BRACKET, SPRITE, BILLBOARD, LINE }
 
-const WORLD_RENDER_LAYER := 1  # bit for layer index 0 — the board and props
-const UNIT_RENDER_LAYER := 2   # bit for layer index 1 — UnitSprite3D sets this
+const GROUND_RENDER_LAYER := 1  # bit for layer index 0 — the GridMaps (fixed there) and the hole lips
+const UNIT_RENDER_LAYER := 2    # bit for layer index 1 — UnitSprite3D sets this
+const WORLD_RENDER_LAYER := 4   # bit for layer index 2 — everything else the board draws
 # Every unit sprite (real or planning ghost) sorts ABOVE every overlay layer, structurally
 # rather than by numeric luck — the 3D twin of the 2D's "tile overlays sit below
 # Unit.BASE_SPRITE_INDEX". Must stay greater than any LAYERS "sort"; pinned by a test.
@@ -1457,6 +1461,7 @@ func _make_bracket(color: Color) -> MeshInstance3D:
 	material.albedo_color = color
 	instance.material_override = material
 	instance.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	instance.layers = WORLD_RENDER_LAYER
 	add_child(instance)
 	return instance
 
