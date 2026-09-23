@@ -1125,6 +1125,7 @@ func cone_vertices_of(layer: Layer) -> Array[Dictionary]:
 			out.append({
 				"point": points[i],
 				"shade": 1.0 if i >= colors.size() else colors[i].r,
+				"color": Color.WHITE if i >= colors.size() else colors[i],
 				"dist": 0.0 if i >= uv2.size() else uv2[i].x,
 			})
 	return out

@@ -1120,7 +1120,8 @@ func test_only_the_reach_lines_carry_a_bead() -> void:
 # --- The squad's lines (#1070) --------------------------------------------------------------------
 
 const SQUAD_LINE_LAYERS: Array[BoardOverlays.Layer] = [BoardOverlays.Layer.COHESION_EDGE,
-	BoardOverlays.Layer.TETHERS, BoardOverlays.Layer.TETHER_GHOST, BoardOverlays.Layer.TETHER_STRAIN]
+	BoardOverlays.Layer.TETHERS, BoardOverlays.Layer.TETHER_GHOST, BoardOverlays.Layer.TETHER_STRAIN,
+	BoardOverlays.Layer.TETHER_MOMENT]
 
 
 # The marching DASHES are the squad's lines' and nobody else's: the range's stroke and the three
@@ -1184,6 +1185,109 @@ func test_the_pluck_reaches_only_the_strained_tethers() -> void:
 	var still: Variant = overlays.beam_parameter(BoardOverlays.Layer.TETHERS, &"shake")
 	assert_float(0.0 if still == null else float(still)).override_failure_message(
 			"a tether the move does not break shook too").is_equal_approx(0.0, 0.0001)
+
+
+# --- Membership moments (#367) --------------------------------------------------------------------
+
+# Every strip vertex of one mark, off the layer's one pooled mesh: its colour and its dash measure.
+func _strip_vertices(overlays: BoardOverlays, layer: BoardOverlays.Layer, surface: int) -> Dictionary:
+	var arrays := (_one_marker(overlays, layer).mesh as ImmediateMesh).surface_get_arrays(surface)
+	return {"colors": arrays[Mesh.ARRAY_COLOR], "uv2": arrays[Mesh.ARRAY_TEX_UV2]}
+
+
+# Several moments play at once, at different colours and ages, on ONE material -- so a mark's tint rides
+# its own vertices and reaches no other mark's.
+func test_a_marks_tint_reaches_its_own_vertices_and_no_other_marks() -> void:
+	var overlays := _bare_overlays()
+	var marks: Array[Array] = [
+		[PackedVector3Array([Vector3(0, 1, 0), Vector3(2, 1, 0)])],
+		[PackedVector3Array([Vector3(0, 1, 1), Vector3(2, 1, 1)])],
+	]
+	var tints: Array[Color] = [Color(1, 0.5, 0, 0.9), Color(0.2, 0.4, 1, 0.3)]
+	overlays.set_marks(BoardOverlays.Layer.TETHER_MOMENT, marks, Color.WHITE, [], [], tints)
+	for m in 2:
+		var colors: PackedColorArray = _strip_vertices(overlays, BoardOverlays.Layer.TETHER_MOMENT, m)["colors"]
+		assert_int(colors.size()).override_failure_message("mark %d drew no vertices" % m).is_greater(0)
+		for color in colors:
+			assert_bool(_same_colour(color, tints[m])).override_failure_message(
+					"mark %d wore %s, not its own tint %s" % [m, color, tints[m]]).is_true()
+
+
+# A vertex colour is stored at EIGHT BITS a channel (measured: 0.5 reads back 0.498), so two colours
+# are the same one when every channel agrees to within a step.
+func _same_colour(a: Color, b: Color) -> bool:
+	return absf(a.r - b.r) <= 1.5 / 255.0 and absf(a.g - b.g) <= 1.5 / 255.0 \
+			and absf(a.b - b.b) <= 1.5 / 255.0 and absf(a.a - b.a) <= 1.5 / 255.0
+
+
+# A part-drawn tether keeps its dashes where the whole one's would be: `starts` is where along its line
+# a mark BEGINS, and the dash measure counts on from there rather than from zero.
+func test_a_marks_start_offsets_its_dash_measure() -> void:
+	var overlays := _bare_overlays()
+	var marks: Array[Array] = [[PackedVector3Array([Vector3(1.5, 1, 0), Vector3(3, 1, 0)])]]
+	overlays.set_marks(BoardOverlays.Layer.TETHER_MOMENT, marks, Color.WHITE, [], [], [],
+			PackedFloat32Array([1.5]))
+	var uv2: PackedVector2Array = _strip_vertices(overlays, BoardOverlays.Layer.TETHER_MOMENT, 0)["uv2"]
+	assert_float(uv2[0].x).override_failure_message("the mark's measure restarted at zero") \
+		.is_equal_approx(1.5, 0.0001)
+	assert_float(uv2[uv2.size() - 1].x).is_equal_approx(3.0, 0.0001)
+
+
+# A cone's tint multiplies INTO its baked facet shade, so a moment's arrowhead fades and colours with
+# its shaft while its facets still read as a volume.
+func test_a_cone_tint_multiplies_into_the_facet_shade() -> void:
+	var overlays := _bare_overlays()
+	var marks: Array[Array] = [[
+		PackedVector3Array([Vector3(0, 1, 0), Vector3(3, 1, 0)]),
+		PackedVector3Array([Vector3(3, 1, 0), Vector3(3.5, 1, 0)]),
+	]]
+	var tint := Color(1.0, 0.5, 0.25, 0.4)
+	var cones: Array[Dictionary] = [{"base": Vector3(3, 1, 0), "tip": Vector3(3.5, 1, 0), "radius": 0.1}]
+	overlays.set_marks(BoardOverlays.Layer.TETHER_MOMENT, marks, Color.WHITE, [], cones)
+	var plain := overlays.cone_vertices_of(BoardOverlays.Layer.TETHER_MOMENT)
+	cones[0]["tint"] = tint
+	overlays.set_marks(BoardOverlays.Layer.TETHER_MOMENT, marks, Color.WHITE, [], cones)
+	var tinted := overlays.cone_vertices_of(BoardOverlays.Layer.TETHER_MOMENT)
+	assert_int(tinted.size()).is_equal(plain.size())
+	assert_int(plain.size()).override_failure_message("no cone was emitted").is_greater(0)
+	for i in plain.size():
+		var shade: float = plain[i]["shade"]
+		var want := Color(shade * tint.r, shade * tint.g, shade * tint.b, tint.a)
+		assert_bool(_same_colour(tinted[i]["color"], want)).override_failure_message(
+				"vertex %d is %s, not its shade %.3f times the tint" % [i, tinted[i]["color"], shade]).is_true()
+
+
+# WHITE CHANGES NOTHING, and that is what keeps every standing tether, reach mark and sight bead
+# exactly as it was: none of them passes a tint, and the defaults must be the untinted build.
+func test_a_white_tint_and_no_tint_build_the_same_mesh() -> void:
+	var overlays := _bare_overlays()
+	var marks: Array[Array] = [[
+		PackedVector3Array([Vector3(0, 1, 0), Vector3(3, 1, 0)]),
+		PackedVector3Array([Vector3(3, 1, 0), Vector3(3.5, 1, 0)]),
+	]]
+	var cones: Array[Dictionary] = [{"base": Vector3(3, 1, 0), "tip": Vector3(3.5, 1, 0), "radius": 0.1}]
+	overlays.set_marks(BoardOverlays.Layer.TETHERS, marks, Color.WHITE, [], cones)
+	var bare_strip := _strip_vertices(overlays, BoardOverlays.Layer.TETHERS, 0)
+	var bare_cone := overlays.cone_vertices_of(BoardOverlays.Layer.TETHERS)
+	var white: Array[Color] = [Color.WHITE]
+	cones[0]["tint"] = Color.WHITE
+	overlays.set_marks(BoardOverlays.Layer.TETHERS, marks, Color.WHITE, [], cones, white,
+			PackedFloat32Array([0.0]))
+	assert_that(_strip_vertices(overlays, BoardOverlays.Layer.TETHERS, 0)).is_equal(bare_strip)
+	assert_that(overlays.cone_vertices_of(BoardOverlays.Layer.TETHERS)).is_equal(bare_cone)
+
+
+func test_the_moment_layer_draws_the_see_through_cone() -> void:
+	var overlays := _bare_overlays()
+	var marks: Array[Array] = [[
+		PackedVector3Array([Vector3(0, 1, 0), Vector3(3, 1, 0)]),
+		PackedVector3Array([Vector3(3, 1, 0), Vector3(3.5, 1, 0)]),
+	]]
+	var cones: Array[Dictionary] = [{"base": Vector3(3, 1, 0), "tip": Vector3(3.5, 1, 0), "radius": 0.1}]
+	overlays.set_marks(BoardOverlays.Layer.TETHER_MOMENT, marks, Color.WHITE, [], cones)
+	assert_str(overlays.cone_material_of(BoardOverlays.Layer.TETHER_MOMENT).shader.resource_path) \
+		.override_failure_message("a moment's arrowhead is on the solid cone, so it cannot fade") \
+		.is_equal(BoardOverlays.REACH_CONE_ALPHA_SHADER_PATH)
 
 
 # --- The SOLID cone (#1069) ---------------------------------------------------------------------
