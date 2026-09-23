@@ -45,9 +45,12 @@ static var wet_splash_gravity := 6.0
 static var wet_splash_time := 0.25
 static var wet_blot_size := 0.6           # the damp patch across, as a share of a cell, fully spread
 static var wet_blot_darkness := 0.45      # how much of the ground's own colour the patch replaces
-static var wet_blot_tint := 0.3           # how blue the patch is rather than simply dark
+static var wet_blot_tint := 0.9           # how far the patch leans from black to the Water hue
 static var wet_blot_spread_time := 0.8    # seconds to spread once the unit is wet
 static var wet_blot_dry_time := 4.0       # seconds to dry once it is not
+static var wet_ripple_time := 0.6         # seconds a ring takes to spread through the patch from a landed drip
+static var wet_ripple_reach := 3.0        # the ring's widest radius, in the patch's own texels
+static var wet_ripple_light := 0.8        # how far a new ring is lifted from the patch's colour toward white
 
 static var chill_mist_rate := 4.0         # puffs a second from a fully Chilled unit
 static var chill_mist_life := 1.6         # seconds a puff takes to sink from the body to the ground

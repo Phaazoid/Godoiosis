@@ -922,13 +922,22 @@ const CLASS_KNOBS: Array[Dictionary] = [
 		"tip": "How much of the ground's own colour the patch replaces. It is lit like the ground, so it darkens with the board at night rather than glowing."},
 	{"group": "Wet around a unit", "label": "Damp patch tint", "static": "wet_blot_tint", "script": STATUS_LOOK_SCRIPT,
 		"min": 0.0, "max": 1.0, "step": 0.01,
-		"tip": "How blue the patch is rather than simply dark. The blue is the Water hue under Element colours."},
+		"tip": "How far the patch leans from black toward the Water hue under Element colours. Low reads as plain darker ground, which on pale stone looks like a shadow."},
 	{"group": "Wet around a unit", "label": "Damp patch spread", "static": "wet_blot_spread_time", "script": STATUS_LOOK_SCRIPT,
 		"min": 0.0, "max": 5.0, "step": 0.05,
 		"tip": "Seconds the patch takes to spread once a unit gets wet. 0 is instant."},
 	{"group": "Wet around a unit", "label": "Damp patch dry", "static": "wet_blot_dry_time", "script": STATUS_LOOK_SCRIPT,
 		"min": 0.0, "max": 20.0, "step": 0.1,
 		"tip": "Seconds the patch takes to dry once the unit is no longer wet, or once it steps into water. Longer than the drips' fade, so the ground stays damp a while after the unit stops dripping."},
+	{"group": "Wet around a unit", "label": "Ripple time", "static": "wet_ripple_time", "script": STATUS_LOOK_SCRIPT,
+		"min": 0.1, "max": 3.0, "step": 0.05,
+		"tip": "Seconds a ring takes to spread through the damp patch from where a drip landed in it. It steps outward in four frames, like a sprite animation."},
+	{"group": "Wet around a unit", "label": "Ripple reach", "static": "wet_ripple_reach", "script": STATUS_LOOK_SCRIPT,
+		"min": 1.0, "max": 6.0, "step": 0.1,
+		"tip": "How wide a ring gets, in the patch's own pixels. The ring never leaves the patch: past its edge there is no water to ripple."},
+	{"group": "Wet around a unit", "label": "Ripple light", "static": "wet_ripple_light", "script": STATUS_LOOK_SCRIPT,
+		"min": 0.0, "max": 1.0, "step": 0.01,
+		"tip": "How pale a new ring is, as a share of the way from the patch's colour to white. It fades back to the patch's colour as it spreads."},
 	{"group": "Chilled around a unit", "label": "Mist rate", "static": "chill_mist_rate", "script": STATUS_LOOK_SCRIPT,
 		"min": 0.0, "max": 20.0, "step": 0.1,
 		"tip": "Puffs of cold mist a second off a fully Chilled unit. Each leaves an edge of the body and sinks to the ground at its feet."},
@@ -1803,6 +1812,9 @@ static func read_static(name: String) -> Variant:
 		"wet_blot_tint": return StatusLook.wet_blot_tint
 		"wet_blot_spread_time": return StatusLook.wet_blot_spread_time
 		"wet_blot_dry_time": return StatusLook.wet_blot_dry_time
+		"wet_ripple_time": return StatusLook.wet_ripple_time
+		"wet_ripple_reach": return StatusLook.wet_ripple_reach
+		"wet_ripple_light": return StatusLook.wet_ripple_light
 		"chill_mist_rate": return StatusLook.chill_mist_rate
 		"chill_mist_life": return StatusLook.chill_mist_life
 		"chill_mist_drift": return StatusLook.chill_mist_drift
@@ -2257,6 +2269,15 @@ static func write_static(host: Node3D, name: String, value: Variant) -> void:
 			return
 		"wet_blot_dry_time":
 			StatusLook.wet_blot_dry_time = value
+			return
+		"wet_ripple_time":
+			StatusLook.wet_ripple_time = value
+			return
+		"wet_ripple_reach":
+			StatusLook.wet_ripple_reach = value
+			return
+		"wet_ripple_light":
+			StatusLook.wet_ripple_light = value
 			return
 		"chill_mist_rate":
 			StatusLook.chill_mist_rate = value

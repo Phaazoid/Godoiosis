@@ -25,7 +25,12 @@ extends Node3D
 # ground getting darker, so it paints the ground's own material. Its cull mask is the ground ALONE
 # (BoardOverlays.GROUND_RENDER_LAYER), which is what keeps it off the squad ring, the move grid and
 # every prop on the tile. It spreads and dries on its own clock (UnitMirror's w level), so it
-# outlives the drips while the ground dries.
+# outlives the drips while the ground dries. It lies where the unit STANDS, fixed to the floor --
+# never where the billboard draws its feet, which circle the cell as the camera turns.
+#
+# A DRIP THAT LANDS IN THE PATCH RIPPLES IT, and the ring is baked into the patch's own texture,
+# stepped like a sprite animation: one decal draws both, so no question of which of two overlapping
+# decals draws on top ever arises. The texture is re-painted only when a ring steps.
 #
 # Per-unit state is RETIRED when a unit stops being reported, so it needs no hook in the mirror's
 # removal loop. A splash already queued still lands after its unit has gone -- the drip is in the air.
@@ -34,6 +39,8 @@ const BLOT_VARIANTS := 4
 const BLOT_TEXELS := 10    # across, at the ground's own 16 texels a cell, for the default size
 const BLOT_UPSCALE := 8    # nearest, so the decal's filter blurs a fraction of a texel, not a texel
 const BLOT_DEPTH_CELLS := 3.0
+const RIPPLE_STEPS := 4
+const RIPPLE_MAX := 2      # rings going at once in one patch; a drip landing past that rings nothing
 
 var _drip: StatusParticles
 var _splash: StatusParticles
@@ -41,10 +48,11 @@ var _mist: StatusParticles
 var _breath: StatusParticles
 
 var _wearers: Dictionary[int, Wearer] = {}
-# Splashes owed by drips still falling: {"due": clock time, "at": landing point, "key": seed}.
+# Splashes owed by drips still falling: {"due": clock time, "at": landing point, "key": seed,
+# "id": the unit it fell from}.
 var _splashes: Array[Dictionary] = []
 var _blots: Dictionary[int, Decal] = {}
-var _blot_textures: Array[ImageTexture] = []
+var _blot_shapes: Array[Image] = []
 
 
 class Wearer extends RefCounted:
@@ -59,6 +67,8 @@ class Wearer extends RefCounted:
 	var mists := 0
 	var next_breath := -1.0   # the status clock's time of the next puff; -1 until one is scheduled
 	var breaths := 0
+	var ripples: Array[Vector3] = []   # a ring's centre in the patch's texels (x, y), and when it began (z)
+	var painted := ""                  # what the patch's texture last showed; a re-paint only on change
 
 
 func _ready() -> void:
@@ -67,7 +77,7 @@ func _ready() -> void:
 	_mist = _emitter(StatusParticles.Kind.MIST)
 	_breath = _emitter(StatusParticles.Kind.BREATH)
 	for variant in BLOT_VARIANTS:
-		_blot_textures.append(ImageTexture.create_from_image(blot_image(variant)))
+		_blot_shapes.append(blot_image(variant))
 
 
 func _emitter(of: StatusParticles.Kind) -> StatusParticles:
@@ -126,10 +136,10 @@ func advance(delta: float, clock: float, heights: BoardHeights) -> void:
 		var wearer: Wearer = _wearers[id]
 		if not wearer.reported or not is_instance_valid(wearer.sprite):
 			_wearers.erase(id)
-			_dress_blot(id, null, right)
+			_dress_blot(id, null, clock)
 			continue
 		wearer.reported = false
-		_dress_blot(id, wearer, right)
+		_dress_blot(id, wearer, clock)
 		if wearer.sprite.texture == null:
 			continue
 		var map := StatusArt.map_for(wearer.sprite.texture)
@@ -163,7 +173,7 @@ func _drip_from(id: int, wearer: Wearer, map: StatusArt.Map, frame: Rect2, delta
 		var ground := ground_under(wearer.cell, start, heights)
 		_drip.throw(start, drip_velocity(start, ground, fall))
 		_splashes.append({"due": clock + fall, "at": Vector3(start.x, ground, start.z),
-				"key": hash([id, wearer.drips, 1])})
+				"key": hash([id, wearer.drips, 1]), "id": id})
 
 
 func _land_splashes(clock: float) -> void:
@@ -173,6 +183,7 @@ func _land_splashes(clock: float) -> void:
 		if clock < float(splash["due"]):
 			still.append(splash)
 			continue
+		_ripple(int(splash["id"]), splash["at"], float(splash["due"]))
 		if StatusLook.wet_splash_count <= 0:
 			continue   # ParticleFan throws at least one; zero here means no splash at all
 		# Half a texel of lift, so a droplet born ON the ground does not share its plane (#656).
@@ -184,42 +195,89 @@ func _land_splashes(clock: float) -> void:
 
 # The damp blot under one unit, or none: built the frame its blot level leaves 0, dressed every
 # frame after, and freed when it has dried or the unit has gone (`wearer` null).
-func _dress_blot(id: int, wearer: Wearer, right: Vector3) -> void:
+func _dress_blot(id: int, wearer: Wearer, clock: float) -> void:
 	var decal: Decal = _blots.get(id)
 	var level: float = wearer.level.w if wearer != null else 0.0
 	if level <= 0.0:
 		if decal != null:
 			decal.queue_free()
 			_blots.erase(id)
+		if wearer != null:
+			wearer.ripples.clear()
+			wearer.painted = ""
 		return
 	if decal == null:
 		decal = Decal.new()
 		decal.cull_mask = BoardOverlays.GROUND_RENDER_LAYER
-		decal.texture_albedo = _blot_textures[int(wearer.seed * 997.0) % BLOT_VARIANTS]
 		decal.normal_fade = 0.5    # off a vertical face, so a step splits it onto both tops
 		decal.upper_fade = 0.3
 		decal.lower_fade = 0.3
 		add_child(decal)
 		_blots[id] = decal
+		wearer.painted = ""
 	var across := StatusLook.wet_blot_size * BoardSpace.CELL_SIZE * (0.5 + 0.5 * level)
 	# Three cells deep: a unit mid-step over a one-level drop darkens both tops, and the fades take
 	# anything further off. Only the unit's own footprint is ever under it.
 	decal.size = Vector3(across, BoardSpace.CELL_SIZE * BLOT_DEPTH_CELLS, across)
-	# Under the FEET, and without the lunge: a lunge moves the art, not the ground it drips on.
-	var feet := wearer.sprite.global_position
-	var art := wearer.sprite.texture
-	var map: StatusArt.Map = StatusArt.map_for(art) if art != null else null
-	if map != null:
-		feet = wearer.sprite.texel_to_world(feet_texel(map, StatusArt.frame_of(art)), right)
-	decal.global_position = feet - wearer.sprite.art_offset
+	# The board point: where the unit stands, and without the lunge.
+	decal.global_position = wearer.sprite.global_position - wearer.sprite.art_offset
 	decal.rotation = Vector3(0.0, wearer.seed * TAU, 0.0)
-	decal.modulate = Color.BLACK.lerp(ElementPalette.color_for_state(Elemental.State.WET),
-			StatusLook.wet_blot_tint)
 	decal.albedo_mix = StatusLook.wet_blot_darkness * level
+	_paint_blot(decal, wearer, clock)
+
+
+# The patch's texture this frame: its colour, and every ring at the step it has reached. Rings that
+# have run their course are dropped here.
+func _paint_blot(decal: Decal, wearer: Wearer, clock: float) -> void:
+	var life := maxf(StatusLook.wet_ripple_time, 0.05)
+	var reach := maxf(StatusLook.wet_ripple_reach, 1.0)
+	var going: Array[Vector3] = []
+	var rings: Array[Vector4] = []
+	for ripple in wearer.ripples:
+		var step := floori((clock - ripple.z) / life * RIPPLE_STEPS)
+		if step >= RIPPLE_STEPS:
+			continue
+		going.append(ripple)
+		var out := float(maxi(step, 0)) / float(RIPPLE_STEPS - 1)
+		var fade := 1.0 - float(maxi(step, 0)) / float(RIPPLE_STEPS)
+		rings.append(Vector4(ripple.x, ripple.y, lerpf(1.0, reach, out), StatusLook.wet_ripple_light * fade))
+	wearer.ripples = going
+	var body := Color.BLACK.lerp(ElementPalette.color_for_state(Elemental.State.WET), StatusLook.wet_blot_tint)
+	var variant := int(wearer.seed * 997.0) % BLOT_VARIANTS
+	var key := str([variant, body, rings])
+	if key == wearer.painted and decal.texture_albedo != null:
+		return
+	wearer.painted = key
+	var image := paint_blot(_blot_shapes[variant], body, rings)
+	var texture := decal.texture_albedo as ImageTexture
+	if texture == null:
+		decal.texture_albedo = ImageTexture.create_from_image(image)
+	else:
+		texture.update(image)
+
+
+# A drip landed at `at`. If it fell inside this unit's patch, a ring starts there.
+func _ripple(id: int, at: Vector3, began: float) -> void:
+	var decal: Decal = _blots.get(id)
+	var wearer: Wearer = _wearers.get(id)
+	if decal == null or wearer == null or wearer.ripples.size() >= RIPPLE_MAX:
+		return
+	var texel := patch_texel(decal.global_transform, decal.size, at)
+	if not Rect2(0.0, 0.0, BLOT_TEXELS, BLOT_TEXELS).has_point(texel):
+		return
+	wearer.ripples.append(Vector3(texel.x, texel.y, began))
 
 
 func blot_for(id: int) -> Decal:
 	return _blots.get(id)
+
+
+func ripples_for(id: int) -> Array[Vector3]:
+	var going: Array[Vector3] = []
+	var wearer: Wearer = _wearers.get(id)
+	if wearer != null:
+		going.assign(wearer.ripples)
+	return going
 
 
 func _mist_from(id: int, wearer: Wearer, map: StatusArt.Map, frame: Rect2, delta: float,
@@ -316,9 +374,8 @@ static func faces_right(flip_h: bool) -> bool:
 	return flip_h != UnitSprite3D.ART_FACES_SCREEN_RIGHT
 
 
-# One damp patch, as an image: a core disc and a few lobes at hashed angles, on the ground's own
-# texel grid and upscaled nearest. Irregular, always one connected patch, and the same for a variant
-# every time.
+# One damp patch's SHAPE, on the ground's own texel grid: a core disc and a few lobes at hashed
+# angles. Irregular, always one connected patch, and the same for a variant every time.
 static func blot_image(variant: int) -> Image:
 	var grid := Image.create(BLOT_TEXELS, BLOT_TEXELS, false, Image.FORMAT_RGBA8)
 	grid.fill(Color(1.0, 1.0, 1.0, 0.0))
@@ -336,19 +393,35 @@ static func blot_image(variant: int) -> Image:
 				if at.distance_to(Vector2(disc.x, disc.y)) <= disc.z:
 					grid.set_pixel(x, y, Color.WHITE)
 					break
-	grid.resize(BLOT_TEXELS * BLOT_UPSCALE, BLOT_TEXELS * BLOT_UPSCALE, Image.INTERPOLATE_NEAREST)
 	return grid
 
 
-# Where the art's feet are: the middle of its lowest row of ink, on that row's bottom edge. Not the
-# sheet's centre -- a pack draws its characters off-centre to leave lunge room, and a blot centred on
-# the sheet lay under the Knight Templar's sword (the render probe showed it). An atlas frame falls
-# back to its own bottom centre, since the scan is the whole sheet's.
-static func feet_texel(map: StatusArt.Map, frame: Rect2) -> Vector2:
-	if not frame.encloses(Rect2(map.ink)) or map.rows.is_empty():
-		return Vector2(frame.position.x + frame.size.x * 0.5, frame.end.y)
-	var span := map.rows[map.rows.size() - 1]
-	return Vector2(float(span.x + span.y + 1) * 0.5, float(map.ink.end.y))
+# The patch as the decal shows it: `body` on every texel of `shape`, and each ring (x, y centre in
+# texels, z radius, w how far toward white) drawn only where the patch is -- past its edge there is
+# no water to ripple. Upscaled nearest, so the decal's filter blurs a fraction of a texel, not a
+# texel. A clear texel keeps the body's colour so filtering does not pull a dark fringe in.
+static func paint_blot(shape: Image, body: Color, rings: Array[Vector4]) -> Image:
+	var painted := Image.create(shape.get_width(), shape.get_height(), false, Image.FORMAT_RGBA8)
+	painted.fill(Color(body, 0.0))
+	for y in shape.get_height():
+		for x in shape.get_width():
+			if shape.get_pixel(x, y).a <= 0.0:
+				continue
+			var at := Vector2(x + 0.5, y + 0.5)
+			var light := 0.0
+			for ring in rings:
+				if absf(at.distance_to(Vector2(ring.x, ring.y)) - ring.z) < 0.5:
+					light = maxf(light, ring.w)
+			painted.set_pixel(x, y, Color(body.lerp(Color.WHITE, light), 1.0))
+	painted.resize(shape.get_width() * BLOT_UPSCALE, shape.get_height() * BLOT_UPSCALE,
+			Image.INTERPOLATE_NEAREST)
+	return painted
+
+
+# A world point in a patch's texels: the decal's texture runs along its own +X and +Z.
+static func patch_texel(xform: Transform3D, size: Vector3, at: Vector3) -> Vector2:
+	var local := xform.affine_inverse() * at
+	return Vector2(local.x / size.x + 0.5, local.z / size.z + 0.5) * float(BLOT_TEXELS)
 
 
 static func in_frame(texels: Array[Vector2i], frame: Rect2) -> Array[Vector2i]:
