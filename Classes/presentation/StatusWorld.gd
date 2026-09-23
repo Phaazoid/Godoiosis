@@ -33,6 +33,7 @@ extends Node3D
 const BLOT_VARIANTS := 4
 const BLOT_TEXELS := 10    # across, at the ground's own 16 texels a cell, for the default size
 const BLOT_UPSCALE := 8    # nearest, so the decal's filter blurs a fraction of a texel, not a texel
+const BLOT_DEPTH_CELLS := 3.0
 
 var _drip: StatusParticles
 var _splash: StatusParticles
@@ -125,10 +126,10 @@ func advance(delta: float, clock: float, heights: BoardHeights) -> void:
 		var wearer: Wearer = _wearers[id]
 		if not wearer.reported or not is_instance_valid(wearer.sprite):
 			_wearers.erase(id)
-			_dress_blot(id, null)
+			_dress_blot(id, null, right)
 			continue
 		wearer.reported = false
-		_dress_blot(id, wearer)
+		_dress_blot(id, wearer, right)
 		if wearer.sprite.texture == null:
 			continue
 		var map := StatusArt.map_for(wearer.sprite.texture)
@@ -183,7 +184,7 @@ func _land_splashes(clock: float) -> void:
 
 # The damp blot under one unit, or none: built the frame its blot level leaves 0, dressed every
 # frame after, and freed when it has dried or the unit has gone (`wearer` null).
-func _dress_blot(id: int, wearer: Wearer) -> void:
+func _dress_blot(id: int, wearer: Wearer, right: Vector3) -> void:
 	var decal: Decal = _blots.get(id)
 	var level: float = wearer.level.w if wearer != null else 0.0
 	if level <= 0.0:
@@ -201,9 +202,16 @@ func _dress_blot(id: int, wearer: Wearer) -> void:
 		add_child(decal)
 		_blots[id] = decal
 	var across := StatusLook.wet_blot_size * BoardSpace.CELL_SIZE * (0.5 + 0.5 * level)
-	decal.size = Vector3(across, BoardSpace.CELL_SIZE, across)
-	# The board point, not the drawn one: a lunge moves the art, not the ground it drips on.
-	decal.global_position = wearer.sprite.global_position - wearer.sprite.art_offset
+	# Three cells deep: a unit mid-step over a one-level drop darkens both tops, and the fades take
+	# anything further off. Only the unit's own footprint is ever under it.
+	decal.size = Vector3(across, BoardSpace.CELL_SIZE * BLOT_DEPTH_CELLS, across)
+	# Under the FEET, and without the lunge: a lunge moves the art, not the ground it drips on.
+	var feet := wearer.sprite.global_position
+	var art := wearer.sprite.texture
+	var map: StatusArt.Map = StatusArt.map_for(art) if art != null else null
+	if map != null:
+		feet = wearer.sprite.texel_to_world(feet_texel(map, StatusArt.frame_of(art)), right)
+	decal.global_position = feet - wearer.sprite.art_offset
 	decal.rotation = Vector3(0.0, wearer.seed * TAU, 0.0)
 	decal.modulate = Color.BLACK.lerp(ElementPalette.color_for_state(Elemental.State.WET),
 			StatusLook.wet_blot_tint)
@@ -330,6 +338,17 @@ static func blot_image(variant: int) -> Image:
 					break
 	grid.resize(BLOT_TEXELS * BLOT_UPSCALE, BLOT_TEXELS * BLOT_UPSCALE, Image.INTERPOLATE_NEAREST)
 	return grid
+
+
+# Where the art's feet are: the middle of its lowest row of ink, on that row's bottom edge. Not the
+# sheet's centre -- a pack draws its characters off-centre to leave lunge room, and a blot centred on
+# the sheet lay under the Knight Templar's sword (the render probe showed it). An atlas frame falls
+# back to its own bottom centre, since the scan is the whole sheet's.
+static func feet_texel(map: StatusArt.Map, frame: Rect2) -> Vector2:
+	if not frame.encloses(Rect2(map.ink)) or map.rows.is_empty():
+		return Vector2(frame.position.x + frame.size.x * 0.5, frame.end.y)
+	var span := map.rows[map.rows.size() - 1]
+	return Vector2(float(span.x + span.y + 1) * 0.5, float(map.ink.end.y))
 
 
 static func in_frame(texels: Array[Vector2i], frame: Rect2) -> Array[Vector2i]:

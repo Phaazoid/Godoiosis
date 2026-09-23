@@ -439,9 +439,29 @@ func test_a_wet_unit_leaves_a_ground_only_patch_at_its_feet() -> void:
 			"the patch paints more than the ground, so it would muddy the squad ring and every prop") \
 			.is_equal(BoardOverlays.GROUND_RENDER_LAYER)
 	var sprite := _unit_mirror.sprite_for(unit)
-	assert_vector(blot.global_position).is_equal_approx(sprite.global_position - sprite.art_offset,
-			Vector3.ONE * 0.0001)
+	assert_vector(blot.global_position).is_equal_approx(_feet_of(sprite), Vector3.ONE * 0.0001)
 	assert_float(blot.albedo_mix).is_greater(0.0)
+
+
+# Where a sprite's feet are drawn, without the lunge: the blot's anchor, asked the way StatusWorld asks.
+func _feet_of(sprite: UnitSprite3D) -> Vector3:
+	var texel := StatusWorld.feet_texel(StatusArt.map_for(sprite.texture), StatusArt.frame_of(sprite.texture))
+	return sprite.texel_to_world(texel, _right()) - sprite.art_offset
+
+
+# The middle of the lowest row of ink, not the middle of the sheet: art drawn off-centre stands where
+# it is drawn.
+func test_the_feet_are_the_middle_of_the_lowest_row_of_ink() -> void:
+	var off_centre := _art([
+		"............",
+		".####.......",
+		".####.......",
+		".#..#.......",
+	])
+	var map := StatusArt.build(off_centre)
+	assert_that(StatusWorld.feet_texel(map, Rect2(0, 0, 12, 4))).is_equal(Vector2(3.0, 4.0))
+	# A frame showing only part of the sheet falls back to its own bottom centre.
+	assert_that(StatusWorld.feet_texel(map, Rect2(6, 0, 6, 4))).is_equal(Vector2(9.0, 4.0))
 
 
 func test_a_dry_unit_leaves_no_patch() -> void:
@@ -520,7 +540,10 @@ func test_the_patch_follows_the_ghost_standing_in() -> void:
 	_unit_mirror.reconcile(0.1)
 	var blot := _unit_mirror.status_world().blot_for(unit.get_instance_id())
 	assert_object(blot).is_not_null()
-	assert_vector(blot.global_position).is_equal_approx(ghost.global_position, Vector3.ONE * 0.0001)
+	assert_vector(blot.global_position).is_equal_approx(_feet_of(ghost), Vector3.ONE * 0.0001)
+	var real := _unit_mirror.sprite_for(unit)
+	assert_float(blot.global_position.distance_to(_feet_of(ghost))) \
+			.is_less(blot.global_position.distance_to(_feet_of(real)))
 
 
 func _a_wadeable_water_tile() -> Dictionary:
