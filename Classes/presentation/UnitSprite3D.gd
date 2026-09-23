@@ -11,6 +11,9 @@ class_name UnitSprite3D
 # camera's right vector and mirrors the sprite when travelling screen-left. When
 # multi-facing art exists this function becomes frame_for(unit_facing, camera_yaw);
 # ART_FACES_SCREEN_RIGHT is the one const to invert if the art reads the other way.
+#
+# Since #358 it also WEARS a unit's element states: show_status is the one door, and the material it
+# swaps in is StatusArt + unit_status.gdshaderinc, present only while a state shows.
 
 signal walk_finished
 
@@ -87,6 +90,14 @@ var _animator := SpriteAnimator.new()
 # Where the playing set says its character stands inside a card, in card-local texels (#634).
 # Vector2(-1, -1) = the set does not say, and the still pivot is used unchanged.
 var _animation_ground := Vector2(-1, -1)
+# The element-state material (#358), built the first time this sprite wears a state and kept for
+# the next. Carried as material_override ONLY while a state shows, so every other frame is the
+# engine's own sprite material, untouched.
+var _status_material: ShaderMaterial
+var _status_bound: Texture2D   # which texture the material's two samplers were last bound to
+
+const STATUS_SHADER := preload("res://Classes/presentation/unit_status.gdshader")
+const STATUS_GHOST_SHADER := preload("res://Classes/presentation/unit_status_ghost.gdshader")
 
 
 func _init() -> void:
@@ -207,6 +218,44 @@ func set_walking_visual(walking: bool) -> void:
 		return
 	_walk_art = walking
 	_apply_state_texture()
+
+
+# --- element states (#358) ---------------------------------------------------------------------
+
+
+# THE one door to what this sprite shows of a unit's element states: fade levels 0..1 and the
+# status clock, pushed every frame by UnitMirror. It READS `texture` and never writes it, so
+# _apply_state_texture stays the one writer, and a texture swap (walk art, downed art, a frame
+# animation's borrow) is rebound on the next push with nothing to announce it.
+func show_status(wet: float, chill: float, icicles: float, clock: float, seed: float) -> void:
+	if (wet <= 0.0 and chill <= 0.0 and icicles <= 0.0) or texture == null:
+		if material_override != null:
+			material_override = null
+		return
+	if _status_material == null:
+		_status_material = ShaderMaterial.new()
+		# A ghost runs ALPHA_CUT_DISABLED, the one mode the engine applies render_priority in, and
+		# only to its OWN material -- so an override has to carry it itself (#317).
+		if alpha_cut == SpriteBase3D.ALPHA_CUT_DISABLED:
+			_status_material.shader = STATUS_GHOST_SHADER
+			_status_material.render_priority = render_priority
+		else:
+			_status_material.shader = STATUS_SHADER
+	if texture != _status_bound:
+		var map := StatusArt.map_for(texture)
+		if map == null:
+			return
+		_status_bound = texture
+		_status_material.set_shader_parameter("texture_albedo", texture)
+		_status_material.set_shader_parameter("status_map", map.texture)
+	if material_override != _status_material:
+		material_override = _status_material
+	StatusLook.push(_status_material, wet, chill, icicles, clock, seed)
+
+
+# The material a state is being drawn with, or null while this sprite wears none.
+func status_material() -> ShaderMaterial:
+	return material_override as ShaderMaterial
 
 
 # --- frame animation (#629) --------------------------------------------------------------------

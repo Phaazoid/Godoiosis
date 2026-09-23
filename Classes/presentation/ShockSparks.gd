@@ -10,7 +10,7 @@ extends GPUParticles3D
 # caught*, and the two together are the whole readout. It stands in for the sprite blowout the plan
 # opened with: `UnitMirror` rewrites every unit sprite's modulate each frame from the 2D authority,
 # so tinting a body would be a second writer on a single-driver channel -- an effect tint channel on
-# the mirror belongs to #358.
+# the mirror is #358's status material (UnitSprite3D.show_status), never modulate.
 #
 # The three rules it inherits from #656, each measured there rather than assumed here: ONE emitter
 # rather than one per cell (restart() on a shared emitter kills the burst already in the air, while
