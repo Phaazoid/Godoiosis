@@ -424,6 +424,7 @@ const MUSIC_DIRECTOR_SCRIPT := "res://Classes/audio/MusicDirector.gd"
 const STAGING_DUST_SCRIPT := "res://Classes/presentation/StagingDust.gd"
 const ARC_LIGHTNING_SCRIPT := "res://Classes/presentation/ArcLightning.gd"
 const SHOCK_SPARKS_SCRIPT := "res://Classes/presentation/ShockSparks.gd"
+const STATUS_LOOK_SCRIPT := "res://Classes/presentation/StatusLook.gd"
 
 const CLASS_KNOBS: Array[Dictionary] = [
 	# --- Player settings the dev authors the DEFAULT for (#394) ---
@@ -757,6 +758,57 @@ const CLASS_KNOBS: Array[Dictionary] = [
 	{"group": "Shock: the crawl", "label": "Crawl strength", "static": "crawl_strength", "script": ARC_LIGHTNING_SCRIPT,
 		"min": 0.0, "max": 1.0, "step": 0.05,
 		"tip": "How much of the water.s own colour the filaments replace at their brightest. Its HUE is not here -- it is Shock.s row under Element colours, because what colour electricity is should be one decision and not two."},
+
+	# --- AN ELEMENT STATE WORN ON A UNIT'S SPRITE (#358) ---------------------------------------
+	#
+	# Every value the status shader is told, read by StatusLook.push once per frame per sprite
+	# wearing a state -- which is why none of these rows needs a sweep. The HUES are not here:
+	# Water and Ice under Element colours are what a Wet and a Chilled unit wear.
+	{"group": "States on a unit", "label": "Fade time", "static": "status_fade_time", "script": STATUS_LOOK_SCRIPT,
+		"min": 0.0, "max": 3.0, "step": 0.05,
+		"tip": "Seconds a state takes to fade in when it lands and out when it ends. 0 is instant."},
+	{"group": "States on a unit", "label": "Icicle grow time", "static": "icicle_grow_time", "script": STATUS_LOOK_SCRIPT,
+		"min": 0.0, "max": 4.0, "step": 0.05,
+		"tip": "Seconds a Chilled unit's icicles take to grow to full length, and to melt back when the chill ends. 0 is instant."},
+	{"group": "Wet on a unit", "label": "Tint", "static": "wet_tint", "script": STATUS_LOOK_SCRIPT,
+		"min": 0.0, "max": 1.0, "step": 0.01,
+		"tip": "How far the body takes the Water hue. Lit with the sprite, so it darkens with the board like the art does."},
+	{"group": "Wet on a unit", "label": "Streak speed", "static": "wet_streak_speed", "script": STATUS_LOOK_SCRIPT,
+		"min": 0.0, "max": 4.0, "step": 0.05,
+		"tip": "How fast the drip streaks run down the body, in 8-texel runs per second. Each column runs at its own share of this so no two drip in step."},
+	{"group": "Wet on a unit", "label": "Streak density", "static": "wet_streak_density", "script": STATUS_LOOK_SCRIPT,
+		"min": 0.0, "max": 1.0, "step": 0.05,
+		"tip": "The share of the art's columns that carry a streak. 1 streaks every column, which reads as a sheet rather than drips."},
+	{"group": "Wet on a unit", "label": "Streak glow", "static": "wet_streak_glow", "script": STATUS_LOOK_SCRIPT,
+		"min": 0.0, "max": 3.0, "step": 0.05,
+		"tip": "How bright a streak is. It GLOWS rather than being lit, so it reads on a night board -- which is also why too much of it looks like magic rather than water."},
+	{"group": "Chilled on a unit", "label": "Tint", "static": "chill_tint", "script": STATUS_LOOK_SCRIPT,
+		"min": 0.0, "max": 1.0, "step": 0.01,
+		"tip": "How far the body is desaturated toward the Ice hue. Lit with the sprite."},
+	{"group": "Chilled on a unit", "label": "Sheen period", "static": "chill_sheen_period", "script": STATUS_LOOK_SCRIPT,
+		"min": 0.5, "max": 10.0, "step": 0.1,
+		"tip": "Seconds between one pass of the frozen sheen down the body and the next."},
+	{"group": "Chilled on a unit", "label": "Sheen width", "static": "chill_sheen_width", "script": STATUS_LOOK_SCRIPT,
+		"min": 0.0, "max": 0.3, "step": 0.005,
+		"tip": "How thick the sheen band is, as a share of the body's height. On a 20-texel body 0.05 is one texel."},
+	{"group": "Chilled on a unit", "label": "Sheen glow", "static": "chill_sheen_glow", "script": STATUS_LOOK_SCRIPT,
+		"min": 0.0, "max": 3.0, "step": 0.05,
+		"tip": "How bright the sheen band is as it passes."},
+	{"group": "Chilled on a unit", "label": "Rime glow", "static": "chill_rime_glow", "script": STATUS_LOOK_SCRIPT,
+		"min": 0.0, "max": 3.0, "step": 0.05,
+		"tip": "How bright the frost settled on the body's top edges is. It is what still says Chilled between sheen passes, so it is the one to keep above zero."},
+	{"group": "Chilled on a unit", "label": "Glint rate", "static": "chill_glint_rate", "script": STATUS_LOOK_SCRIPT,
+		"min": 0.0, "max": 0.5, "step": 0.01,
+		"tip": "The share of the body's texels that ever twinkle. Several Chilled units on one board multiply this, so it is the first dial to lower if a frozen squad reads as noise."},
+	{"group": "Chilled on a unit", "label": "Glint glow", "static": "chill_glint_glow", "script": STATUS_LOOK_SCRIPT,
+		"min": 0.0, "max": 4.0, "step": 0.05,
+		"tip": "How bright a glint is at its peak."},
+	{"group": "Chilled on a unit", "label": "Icicle min length", "static": "icicle_min_texels", "script": STATUS_LOOK_SCRIPT,
+		"min": 0.0, "max": 6.0, "step": 1.0,
+		"tip": "The shortest an icicle grows, in texels. Each icicle picks its own length between this and the max, and never grows past the room under its overhang."},
+	{"group": "Chilled on a unit", "label": "Icicle max length", "static": "icicle_max_texels", "script": STATUS_LOOK_SCRIPT,
+		"min": 0.0, "max": 6.0, "step": 1.0,
+		"tip": "The longest an icicle grows, in texels. 6 is the most the art scan leaves room for."},
 
 	# --- THE ACTION QUEUE.S OWN COLOURS (#685 round 4) -----------------------------------------
 	#
@@ -1330,6 +1382,10 @@ const GROUP_TABS: Dictionary[String, String] = {
 	"Shock: the screen flash": "Elemental",
 	"Shock: sparks": "Elemental",
 	"Shock: the crawl": "Elemental",
+	# An element state worn on a unit's sprite (#358), beside the colours those states borrow.
+	"States on a unit": "Elemental",
+	"Wet on a unit": "Elemental",
+	"Chilled on a unit": "Elemental",
 	# The queue.s own invented colour, beside the element chips it has to read against (#685).
 	"Action queue": "Elemental",
 	# Playback is SIX groups on one tab (dev, 2026-08-27) -- thirty flat rows was unreadable, and a
@@ -1531,6 +1587,22 @@ static func read_static(name: String) -> Variant:
 		"crawl": return ArcLightning.crawl
 		"crawl_life": return ArcLightning.crawl_life
 		"crawl_strength": return ArcLightning.crawl_strength
+		# An element state worn on a unit (#358). Read per frame by StatusLook.push, so no arm sweeps.
+		"status_fade_time": return StatusLook.status_fade_time
+		"icicle_grow_time": return StatusLook.icicle_grow_time
+		"icicle_min_texels": return StatusLook.icicle_min_texels
+		"icicle_max_texels": return StatusLook.icicle_max_texels
+		"wet_tint": return StatusLook.wet_tint
+		"wet_streak_speed": return StatusLook.wet_streak_speed
+		"wet_streak_density": return StatusLook.wet_streak_density
+		"wet_streak_glow": return StatusLook.wet_streak_glow
+		"chill_tint": return StatusLook.chill_tint
+		"chill_sheen_period": return StatusLook.chill_sheen_period
+		"chill_sheen_width": return StatusLook.chill_sheen_width
+		"chill_sheen_glow": return StatusLook.chill_sheen_glow
+		"chill_rime_glow": return StatusLook.chill_rime_glow
+		"chill_glint_rate": return StatusLook.chill_glint_rate
+		"chill_glint_glow": return StatusLook.chill_glint_glow
 		# ...and the sparks, whose own node holds them (#887 slice 2). A GPU particle's state cannot
 		# be read back, so each of these names the CPU-side value a burst is built from.
 		"sparks": return ShockSparks.sparks
@@ -1847,6 +1919,53 @@ static func write_static(host: Node3D, name: String, value: Variant) -> void:
 			return
 		"crawl_strength":
 			ArcLightning.crawl_strength = value
+			return
+		# An element state worn on a unit (#358): plain writes, because StatusLook.push reads every
+		# one of these each frame and there is no built node holding a copy.
+		"status_fade_time":
+			StatusLook.status_fade_time = value
+			return
+		"icicle_grow_time":
+			StatusLook.icicle_grow_time = value
+			return
+		"icicle_min_texels":
+			StatusLook.icicle_min_texels = value
+			return
+		"icicle_max_texels":
+			StatusLook.icicle_max_texels = value
+			return
+		"wet_tint":
+			StatusLook.wet_tint = value
+			return
+		"wet_streak_speed":
+			StatusLook.wet_streak_speed = value
+			return
+		"wet_streak_density":
+			StatusLook.wet_streak_density = value
+			return
+		"wet_streak_glow":
+			StatusLook.wet_streak_glow = value
+			return
+		"chill_tint":
+			StatusLook.chill_tint = value
+			return
+		"chill_sheen_period":
+			StatusLook.chill_sheen_period = value
+			return
+		"chill_sheen_width":
+			StatusLook.chill_sheen_width = value
+			return
+		"chill_sheen_glow":
+			StatusLook.chill_sheen_glow = value
+			return
+		"chill_rime_glow":
+			StatusLook.chill_rime_glow = value
+			return
+		"chill_glint_rate":
+			StatusLook.chill_glint_rate = value
+			return
+		"chill_glint_glow":
+			StatusLook.chill_glint_glow = value
 			return
 		# The sparks. Every arm RE-APPLIES, because the emission buffer `sparks_per_victim` sizes
 		# and the material's own fields are node state rather than values a burst reads as it goes

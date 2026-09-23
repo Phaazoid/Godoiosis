@@ -47,6 +47,11 @@ class_name UnitMirror
 # which is expressed on the Unit's child sprite rather than on the Unit — the one fact of that class
 # the position read above cannot see. The rule the ticket settled: anything a 2D effect writes on the
 # Unit node mirrors for free, anything it writes as a child offset arrives through animation_offset().
+#
+# Since #358 it also decides how much of a unit's element states each sprite WEARS: a fade level per
+# state, advanced here by the scaled delta toward what `element_states` holds, and pushed to
+# UnitSprite3D.show_status every frame -- to the ghost instead of the hidden sprite whenever one
+# stands in, which is _bar_anchor's own fork. It computes no rule: the states are the model's.
 
 const PIXELS_PER_CELL := float(GridUtils.TILE_SIZE)  # 16 — grid.map_to_local's metric
 
@@ -271,6 +276,13 @@ var _camera_right := Vector3.ZERO   # last camera basis facing was judged agains
 # taken this frame and bursts.
 var _last_hp: Dictionary[int, int] = {}
 var _debris: HealthBlockDebris
+# Element-state fade levels per unit (#358), keyed like _mirrored: x = wet, y = chill, z = icicles.
+# A unit wearing nothing has no entry, and an entry leaves with its unit.
+var _status: Dictionary[int, Vector3] = {}
+# The one clock every status mark runs on. Advanced by the SCALED delta, so a hitstop freezes it.
+var _status_clock := 0.0
+# Which unit each pooled ghost stands in for, by slot; 0 = none (a move-hover stand-in, or a spare).
+var _ghost_units: Array[int] = []
 
 
 func _ready() -> void:
@@ -281,9 +293,10 @@ func _ready() -> void:
 	add_child(_debris)
 
 
-func _process(_delta: float) -> void:
+func _process(delta: float) -> void:
+	_status_clock += delta
 	if units_root != null:
-		reconcile()
+		reconcile(delta)
 	_refresh_facing_on_camera_turn()
 	# The show ends when the last cube lands. Cleared here rather than inside death_show_live so a
 	# read is a read -- and BEFORE any later burst could re-arm it, an ordinary hit's cubes cannot
@@ -317,7 +330,8 @@ func _refresh_facing_on_camera_turn() -> void:
 			sprite.flip_h = sprite.facing_flip_for(sprite.last_step)
 
 
-func reconcile() -> void:
+# `delta` is the status fade step (#358); a bare call advances no fade and only re-pushes what is held.
+func reconcile(delta := 0.0) -> void:
 	# Asked ONCE per frame, not once per unit: it is a board-wide question, and calling it per unit
 	# would re-derive every other unit's projected cell for each unit on the board.
 	var hovered := _hovered_unit()
@@ -373,14 +387,71 @@ func reconcile() -> void:
 		_sync_bar(unit, _mirrored[id], _bars[id], unit == hovered, plan, marked.has(id), bars,
 				unhovered_numbers)
 		_settle_health_change(unit, id, _bars[id])
+		_sync_status(unit, id, _mirrored[id], delta)
 	for id: int in _mirrored.keys():
 		if not live.has(id):
 			_mirrored[id].queue_free()
 			_mirrored.erase(id)
 			_last_hp.erase(id)
+			_status.erase(id)
 			if _bars.has(id):
 				_bars[id].queue_free()
 				_bars.erase(id)
+	_sync_ghost_status()
+
+
+# --- Element states (#358) ------------------------------------------------------------
+
+# Every live unit, every frame, before any visibility question: a level that only moved while its
+# sprite was up would pop to full the moment a ghost stood in for it.
+func _sync_status(unit: Unit, id: int, sprite: UnitSprite3D, delta: float) -> void:
+	var level: Vector3 = _status.get(id, Vector3.ZERO)
+	var wet := 1.0 if unit.element_states.has(Elemental.State.WET) else 0.0
+	var chill := 1.0 if unit.element_states.has(Elemental.State.CHILLED) else 0.0
+	level.x = move_toward(level.x, wet, _fade_step(StatusLook.status_fade_time, delta))
+	level.y = move_toward(level.y, chill, _fade_step(StatusLook.status_fade_time, delta))
+	level.z = move_toward(level.z, chill, _fade_step(StatusLook.icicle_grow_time, delta))
+	if level == Vector3.ZERO:
+		_status.erase(id)
+	else:
+		_status[id] = level
+	sprite.show_status(level.x, level.y, level.z, _status_clock, status_seed(id))
+
+
+# Each ghost wears its unit's levels. Outside OverlayMirror's `_last_ghosts` gate on purpose: that
+# gate stops a REBUILD, and the levels move every frame of a fade whether or not the ghosts do.
+func _sync_ghost_status() -> void:
+	for i in _ghosts.size():
+		var ghost: UnitSprite3D = _ghosts[i]
+		var id: int = _ghost_units[i] if i < _ghost_units.size() else 0
+		var level: Vector3 = _status.get(id, Vector3.ZERO) if ghost.visible else Vector3.ZERO
+		ghost.show_status(level.x, level.y, level.z, _status_clock, status_seed(id))
+
+
+# Zero means INSTANT, never a division.
+static func _fade_step(seconds: float, delta: float) -> float:
+	return INF if seconds <= 0.0 else delta / seconds
+
+
+# A per-unit phase, so two sprites of the same art do not twinkle in lockstep. Presentation only and
+# never replayed: a third seed policy beside #656's per-cell and per-occurrence ones.
+static func status_seed(id: int) -> float:
+	return float(hash(id) % 997) / 997.0
+
+
+# How much of each state a unit is wearing right now (#358): x = wet, y = chill, z = icicles.
+func status_level(unit: Unit) -> Vector3:
+	return _status.get(unit.get_instance_id(), Vector3.ZERO)
+
+
+# Which unit a pooled ghost stands in for (#358), or 0 for none.
+func ghost_unit_id(ghost: UnitSprite3D) -> int:
+	var slot := _ghosts.find(ghost)
+	return _ghost_units[slot] if slot >= 0 and slot < _ghost_units.size() else 0
+
+
+func ghosts() -> Array[UnitSprite3D]:
+	return _ghosts
 
 
 func mirrored_count() -> int:
@@ -415,8 +486,13 @@ func set_ghosts(ghosts: Array[Dictionary]) -> void:
 		ghost.alpha_cut = SpriteBase3D.ALPHA_CUT_DISABLED
 		add_child(ghost)
 		_ghosts.append(ghost)
+	# Which unit each slot stands in for (#358), rebuilt wholesale with the pool so a hidden spare
+	# can never keep a stale one.
+	_ghost_units.resize(_ghosts.size())
 	for i in _ghosts.size():
 		var ghost: UnitSprite3D = _ghosts[i]
+		var stands_for: int = ghosts[i].get("unit_id", 0) if i < ghosts.size() else 0
+		_ghost_units[i] = stands_for
 		if i < ghosts.size():
 			ghost.visible = true
 			ghost.position = ghosts[i]["pos"]
