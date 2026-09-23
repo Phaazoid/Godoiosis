@@ -12,7 +12,9 @@ class_name UnitInfoPanelControl
 # for the tile that unit stands on. A switch rather than a section underneath because the unit body
 # already fills the dock (660 of 700px on every authored unit, measured). Either way the tile body
 # is re-read every frame it shows and rebuilt only when what it says changed, so a watch firing or
-# a fire spreading cannot leave it stale.
+# a fire spreading cannot leave it stale. It sits in its own scroll area as a safety net (dev,
+# 2026-09-23): an ordinary tile fits with room to spare, and only a stack of watches and zones on
+# one cell ever shows a bar.
 
 enum View { UNIT, TILE }
 
@@ -51,6 +53,8 @@ var _tile_only := false                 # an empty tile is open rather than a un
 var _tile_cell := GridUtils.NO_CELL
 var _drawn := ""                        # TileReadout.signature of what the tile body shows now
 var _tile_sections: TileInfoSections
+var _tile_scroll: ScrollContainer
+var _spacer: Control
 var _switch: HBoxContainer
 var _switch_buttons: Dictionary[View, Button] = {}
 var _unit_body: Array[Control] = []
@@ -63,10 +67,18 @@ func _ready() -> void:
 	var body: VBoxContainer = $UnitInfoPanel/Margin/VBox
 	_unit_body.assign([stats_section, $UnitInfoPanel/Margin/VBox/HSep3, inventory_panel, squad_panel,
 		states_bar])
+	_spacer = $UnitInfoPanel/Margin/VBox/Spacer
+	# The tile body takes the height the header leaves, and scrolls only past it. The Spacer stands
+	# down in tile view, or the two expanding children would split that height between them.
+	_tile_scroll = ScrollContainer.new()
+	_tile_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	_tile_scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	_tile_scroll.visible = false
 	_tile_sections = TileInfoSections.new(inventory_panel.get_theme_stylebox("panel"))
-	_tile_sections.visible = false
-	body.add_child(_tile_sections)
-	body.move_child(_tile_sections, squad_panel.get_index() + 1)
+	_tile_sections.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_tile_scroll.add_child(_tile_sections)
+	body.add_child(_tile_scroll)
+	body.move_child(_tile_scroll, squad_panel.get_index() + 1)
 	_build_switch()
 
 # Two toggles in one group, in the header's free space beside the portrait, so it costs no height.
@@ -133,7 +145,8 @@ func _set_view(view: View) -> void:
 	_switch_buttons[view].set_pressed_no_signal(true)
 	for node in _unit_body:
 		node.visible = view == View.UNIT
-	_tile_sections.visible = view == View.TILE
+	_spacer.visible = view == View.UNIT
+	_tile_scroll.visible = view == View.TILE
 	_drawn = ""
 	_refresh_tile()
 

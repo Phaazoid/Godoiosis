@@ -245,6 +245,54 @@ func test_the_open_tile_follows_the_board() -> void:
 			"the dock kept showing the tile as it was when clicked").contains(burning)
 
 
+# The dock is as tall as the screen, so a tile stacked past it must SCROLL rather than run off the
+# bottom -- test_unit_info_panel_refresh's height law, asked of the tile body. Three watches, two
+# zones and a fire on one cell is busier than any authored board makes a single tile (measured: 766
+# of the 720 the dock has, where an ordinary tile needs well under 600).
+func test_a_busy_tile_scrolls_inside_the_dock() -> void:
+	var cell := Vector2i(4, 2)
+	_set_burning(cell)
+	for i in range(3):
+		var watcher := _spawn(ENEMY if i != 1 else PLAYER, Vector2i(i, 0), "Watcher Number %d" % i)
+		_arm(watcher, cell, "A Long Attack Name %d" % i)
+	game.refresh_watch_markers()
+	game.zone_manager.paint_cell("The Far Ground", ZoneManager.Kind.CAPTURE, cell)
+	game.zone_manager.paint_cell("The Landing Field", ZoneManager.Kind.DEPLOYMENT, cell)
+
+	await _click(cell)
+	await await_idle_frame()
+
+	assert_int(_panel().tile_texts().size()).override_failure_message(
+			"precondition: the tile body drew nothing, so this measures nothing").is_greater(8)
+	var body: Control = _panel().get_node("UnitInfoPanel/Margin/VBox")
+	assert_float(body.get_combined_minimum_size().y).override_failure_message(
+			"a busy tile wants %d of the %d the dock has -- its bottom rows are off screen"
+				% [body.get_combined_minimum_size().y, _panel().size.y]).is_less_equal(_panel().size.y)
+	var scroll: ScrollContainer = _panel()._tile_scroll
+	var dock: Rect2 = (_panel().get_node("UnitInfoPanel") as Control).get_global_rect()
+	assert_float(scroll.get_global_rect().end.y).override_failure_message(
+			"the tile's scroll area itself runs off the dock").is_less_equal(dock.end.y)
+	assert_bool(scroll.get_v_scroll_bar().visible).override_failure_message(
+			"the overflow has no scrollbar, so its last rows cannot be reached").is_true()
+
+
+# ...and the scroll is a safety net, never the ordinary look (dev, 2026-09-23): a watch, a zone and a
+# fire together still fit without a bar.
+func test_an_ordinary_tile_shows_no_scrollbar() -> void:
+	var cell := Vector2i(4, 2)
+	_set_burning(cell)
+	_arm(_spawn(ENEMY, Vector2i(0, 0), "Brigand Archer"), cell, "Longbow")
+	game.refresh_watch_markers()
+	game.zone_manager.paint_cell("The Far Ground", ZoneManager.Kind.CAPTURE, cell)
+
+	await _click(cell)
+	await await_idle_frame()
+
+	assert_str(_texts()).contains("The Far Ground")
+	assert_bool(_panel()._tile_scroll.get_v_scroll_bar().visible).override_failure_message(
+			"an ordinary tile needed a scrollbar -- the tile body is not getting the dock's height").is_false()
+
+
 func test_clicking_off_the_map_opens_nothing() -> void:
 	await _click(Vector2i(50, 50))
 
