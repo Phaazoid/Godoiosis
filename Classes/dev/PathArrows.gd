@@ -15,12 +15,6 @@ class_name PathArrows
 
 enum Kind { START, STEP }
 
-# Cycled by path index. The first three are the mockup's.
-const PATH_HUES: Array[Color] = [
-	Color("ffb45e"), Color("4fd8c8"), Color("c39bff"),
-	Color("ff7a9a"), Color("9be06a"), Color("6aaeff"),
-]
-
 const LANE := 3.0          # sideways shift right of travel, so an out-and-back reads as two arrows
 const TRIM_START := 7.0
 const TRIM_END := 5.0
@@ -55,16 +49,18 @@ func show_paths(paths: Array[Array], selected: int, shown: bool) -> void:
 	queue_redraw()
 
 
+# A path's colour, cycled by index. The hues live on PathPalette since #1057 part 2, beside the shape
+# plate that draws them too.
 static func hue(index: int) -> Color:
-	return PATH_HUES[index % PATH_HUES.size()]
+	return PathPalette.hue(index)
 
 
 # The picker's mark for a path: a square of its hue.
 static func swatch(index: int) -> Texture2D:
-	var key := index % PATH_HUES.size()
+	var key := index % PathPalette.HUES.size()
 	if not _swatches.has(key):
 		var image := Image.create(SWATCH_PX, SWATCH_PX, false, Image.FORMAT_RGBA8)
-		image.fill(PATH_HUES[key])
+		image.fill(PathPalette.hue(key))
 		_swatches[key] = ImageTexture.create_from_image(image)
 	return _swatches[key]
 

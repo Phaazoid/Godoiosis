@@ -11,9 +11,14 @@ extends VBoxContainer
 # labels and one of them goes stale.
 #
 # IT DERIVES NOTHING. Since #808 an attack's geometry is two fields -- the RANGE trio on AttackData
-# and a shared AttackShape -- and Reach is the one place that answers using both. Both queries here
-# are board-blind by Reach's own contract: get_attack_cells_from's anchored branch never touches the
-# board, and get_affected_cells_from returns the untruncated placement when handed a null one.
+# and a shared AttackShape -- and Reach is the one place that answers using both. Every query here is
+# board-blind by Reach's own contract: get_attack_cells_from's anchored branch never touches the
+# board, get_affected_cells_from returns the untruncated placement when handed a null one, and
+# get_paths_from walks every path tile unjudged.
+#
+# A SINGLE-TARGET SWING'S PATHS are drawn over its tiles (#1057 part 2, #1054 ruling 30): PathLines, one
+# dark line per path with a bead on every tile it stops on, sharing the grid's rect. A painted shape,
+# and a path shape fired with Swing off (which lands all at once), draw none.
 #
 # THAT NULL IS LOAD-BEARING SINCE #805, where it used to be merely true: a placed footprint is now
 # narrowed by the terrain it lands on, so handing this a real board would draw the player whichever
@@ -38,16 +43,24 @@ const MIN_SPAN := 3
 const SEP := 2
 
 var _grid: GridContainer
+var _lines: PathLines
 var _caption: Label
 
 
 func _init() -> void:
 	add_theme_constant_override("separation", 3)
+	# The grid and the path lines share one rect: a MarginContainer lays every child over the same area.
+	var frame := MarginContainer.new()
+	frame.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	add_child(frame)
 	_grid = GridContainer.new()
 	_grid.add_theme_constant_override("h_separation", SEP)
 	_grid.add_theme_constant_override("v_separation", SEP)
 	_grid.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
-	add_child(_grid)
+	frame.add_child(_grid)
+	_lines = PathLines.new()
+	_lines.grid = _grid
+	frame.add_child(_lines)
 
 	_caption = Label.new()
 	_caption.add_theme_font_size_override("font_size", 9)
@@ -75,12 +88,19 @@ static func drawn_reach(attack: AttackData) -> int:
 	return mini(attack.max_range, (max_span() - 1) / 2)
 
 
+# The cells, one per square, row by row from the top-left.
+func grid() -> GridContainer:
+	return _grid
+
+
 func show_attack(attack: AttackData) -> void:
 	for child in _grid.get_children():
 		_grid.remove_child(child)
 		child.queue_free()
 	if attack == null:
 		_caption.text = "no attack"
+		var none: Array[Array] = []
+		_lines.show_paths(none, OverlayManager.aim_fill_color(), 0.0)
 		return
 
 	var reach := drawn_reach(attack)
@@ -106,7 +126,10 @@ func show_attack(attack: AttackData) -> void:
 	for y in range(-half, half + 1):
 		for x in range(-half, half + 1):
 			var at := Vector2i(x, y)
-			_grid.add_child(_cell(cell, ring.has(at), hits.has(at), at == Vector2i.ZERO, attack))
+			_grid.add_child(_cell(cell, at, ring.has(at), hits.has(at), attack))
+	# Empty unless the attack is a single-target swing, so every other plate hides its lines.
+	_lines.show_paths(Reach.get_paths_from(null, Vector2i.ZERO, aim, attack, null),
+			OverlayManager.aim_fill_color(), float(cell + SEP))
 
 	# The clip is DECLARED, never silent: a ring cut off at the plate's edge without a word would be a
 	# lie about where the attack stops.
@@ -125,7 +148,8 @@ static func _span_for(cells: Array[Vector2i]) -> int:
 
 # COVERED beats AIMABLE where they overlap: the more specific fact about a cell is what the attack
 # does to it, not that you could point at it.
-static func _cell(px: int, aimable: bool, hit: bool, centre: bool, attack: AttackData) -> Panel:
+static func _cell(px: int, at: Vector2i, aimable: bool, hit: bool, attack: AttackData) -> Panel:
+	var centre := at == Vector2i.ZERO
 	var box := StyleBoxFlat.new()
 	box.bg_color = QueueStyle.ink(QueueStyle.Role.SECTION_BG)
 	box.border_color = QueueStyle.ink(QueueStyle.Role.SECTION_BORDER)
@@ -140,4 +164,5 @@ static func _cell(px: int, aimable: bool, hit: bool, centre: bool, attack: Attac
 	var pane := Panel.new()
 	pane.custom_minimum_size = Vector2(px, px)
 	pane.add_theme_stylebox_override("panel", box)
+	pane.set_meta(PathLines.CELL_META, at)   # where PathLines finds this cell's centre
 	return pane
