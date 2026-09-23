@@ -401,6 +401,45 @@ func test_a_counters_payload_sits_right_behind_it_among_the_counters() -> void:
 	assert_object(plan.counters[1].dropped_by).is_same(plan.counters[0])
 
 
+# A counter's shove is never PUBLISHED, so a counter's payload finds its victim only because a
+# payload gathers against the pass's threaded positions -- the sticky bomb, one list over.
+func test_a_counters_payload_sticks_to_the_unit_its_counter_shoved() -> void:
+	var tap := _attack("Tap")
+	var thrower := _thrower(tap)
+	var foe := _foe(Vector2i(0, -1))
+	var counter := _attack("Riposte")
+	counter.knockback = 2
+	counter.payload = _attack("Bomb", MAP)
+	(foe.get_equipped_weapon() as WeaponInstance).template.main_attack = counter
+	var plan := _resolve(thrower, Vector2i(0, -1))
+	assert_int(plan.counters.size()).is_equal(2)
+	var bomb := plan.counters[1]
+	assert_that(bomb.origin_cell).override_failure_message(
+			"fixture: the riposte did not throw the thrower to (0, 2)").is_equal(Vector2i(0, 2))
+	assert_object(bomb.target).override_failure_message(
+			"the payload went off where the thrower landed and found nobody there").is_same(thrower)
+
+
+# A payload plays right behind the hit that dropped it, and the list IS the playback order: a
+# payload appended after every aim would resolve in one place and play in another (Law #2).
+func test_a_payload_sits_in_the_attack_list_right_behind_its_parent() -> void:
+	var carrier := _attack("Lob", MAP)
+	carrier.payload = _attack("Bomb", MAP)
+	var first := _thrower(carrier)
+	var second := H.spawn_unit(self, PLAYER, Vector2i(2, 0), TOUGH)
+	_sm.join_squad(second, first.squad)
+	(second.get_equipped_weapon() as WeaponInstance).template.main_attack = _attack("Tap")
+	_foe(Vector2i(2, -1))
+	first.squad._queue_action(AttackAction.declare(first, ORIGIN, Vector2i(0, -1)))
+	second.squad._queue_action(AttackAction.declare(second, Vector2i(2, 0), Vector2i(2, -1)))
+	var plan := _sm.resolve_plan(first.squad, _board(), [] as Array[ElementalReaction], [] as Array[TerrainReaction])
+	_plans.append(plan)
+	var order: Array[String] = []
+	for atk in plan.attacks:
+		order.append(atk.fired_attack.display_name)
+	assert_array(order).is_equal(["Lob", "Bomb", "Tap"])
+
+
 # ==============================================================================
 #  A watch shot's payload
 # ==============================================================================
@@ -622,7 +661,10 @@ func test_a_weapon_payload_thrown_with_no_weapon_keeps_its_blend_and_its_element
 	fire.elemental_damage_type = Elemental.Element.FIRE
 	var carrier := _attack("Tap")
 	carrier.payload = fire
-	var thrower := H.spawn_solo(self, _sm, PLAYER, ORIGIN, TOUGH, false)
+	var thrower := H.spawn_solo(self, _sm, PLAYER, ORIGIN, {Stats.Stat.MHP: 60, Stats.Stat.DEX: 11}, false)
+	assert_int(4 + thrower.get_effective_stat(Stats.Stat.DEX)).override_failure_message(
+			"fixture: the blend and the bare-STR fallback would give the same number") \
+		.is_not_equal(thrower.get_effective_stat(Stats.Stat.STR))
 	var foe := _foe(Vector2i(0, -1))
 	var aim := AttackAction.create(thrower, ORIGIN, null, Vector2i(0, -1))
 	aim.fired_attack = carrier
