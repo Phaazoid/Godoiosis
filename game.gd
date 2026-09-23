@@ -133,6 +133,7 @@ var height_debug_overlay: HeightDebugOverlay   # F5 readout, dev builds only; de
 var zone_manager: ZoneManager
 var main_action_menu: MainActionMenu
 var hover_presenter: HoverPresenter
+var squad_tether_presenter: SquadTetherPresenter   # membership changes -> tether moments (#367)
 # THE T KEY AND ITS WHOLE CYCLE ARE GONE (#1069). #710 slice 3 gave the intent readout a
 # {NONE, INTENTS, EVERYTHING} cycle so a player could turn it off; #1069 retired the readout itself,
 # on the dev's ruling that the lines should answer who can REACH a cell rather than who intends
@@ -251,6 +252,10 @@ func _build_collaborators() -> void:
 	hover_presenter = HoverPresenter.new()
 	hover_presenter.game = self
 	add_child(hover_presenter)
+
+	squad_tether_presenter = SquadTetherPresenter.new()
+	squad_tether_presenter.game = self
+	add_child(squad_tether_presenter)   # after @onready: _ready here connects squad_manager
 
 	bug_reporter = BugReporter.new()
 	bug_reporter.game = self

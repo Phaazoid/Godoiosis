@@ -409,6 +409,7 @@ func clear_board():
 	# re-renders stale on the dying board (#182).
 	game.scenario_director.reset()
 	game.mission_controller.reset()   # mission START resets battle-scoped state (#96/#87 seam)
+	game.squad_tether_presenter.reset()   # no tether moment outlives its board (#367)
 	# A cleared board has NO loaded scenario. Update's load-gate reads this; a stale path would let
 	# a sandbox board overwrite the last-loaded mission (the Prolog accident, 2026-08-11). Safe for
 	# load paths: load_scenario re-sets it AFTER apply_scenario's internal clear_board.

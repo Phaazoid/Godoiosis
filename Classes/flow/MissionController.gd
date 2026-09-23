@@ -347,6 +347,7 @@ func begin_mission(path: String, armed := true) -> void:
 # start_faction_turn on the other branch, so the phase and a turn come to rest the same way.
 func _open_deployment() -> void:
 	_deploying = true
+	game.squad_tether_presenter.arm()   # #367: the placement ring's Squad Up plays; the draw did not
 	game.clear_selection()   # -> _base_state(), which now answers PRE_MISSION
 	_premission_screen = PreMissionScreen.open(game, self)
 	_premission_bar = PreMissionBar.open(game, self)
@@ -815,6 +816,9 @@ func _begin_turn(record_to_disk := true) -> void:
 	# Defaulted, so all five arrival doors are unchanged. The replay driver is the one caller that
 	# passes false: it takes this same door so the board is armed identically, and records in memory.
 	game.mission_log.begin(record_to_disk)   # the run starts here, whichever door brought us (#53)
+	# Membership changes play from here on (#367). This and _open_deployment are where every load
+	# lands, so the load's own joins are the baseline rather than a moment.
+	game.squad_tether_presenter.arm()
 	game.overlay_manager.redraw_zones(game.zone_manager, hidden_zone_names())
 	var faction: Team.Faction = game.turn_manager.active_faction()
 	game.turn_banner.show_label("%s Turn" % Team.faction_name(faction))
