@@ -527,7 +527,7 @@ filters live in `Reach`, which already owned the sight trace.
 > there for later."*
 
 The resolver stamps `elevation_delta` (target height − attacker height) onto each `ResolvedOutcome`.
-No behaviour in v1; a future height-damage rule reads it, and the hover card can say "uphill"
+No behaviour in v1; a future height-damage rule reads it, and the tile card can say "uphill"
 immediately.
 
 **It must be FROZEN, not re-derived** — the same reason `fired_attack` is stamped at declare time.
@@ -956,7 +956,7 @@ word.
 > `movement_cost` and `compute_move_range` mean by *on the map* — **erasing a rim cell shrinks the
 > board, erasing an interior one digs a hole** — and `"offmap"` now means only *past that rect*.
 > `terrain_kind_at` is deliberately NOT widened: its other readers (`Materia.sources_at`,
-> `_resolve_cell_effect_at`, the hover card) ask what the AUTHOR wrote, and a derived VOID would leak
+> `_resolve_cell_effect_at`, the tile card) ask what the AUTHOR wrote, and a derived VOID would leak
 > into terrain reactions and alchemy sources. Same split as `GridUtils.walkable_of` against
 > `is_walkable` — two questions, not two answers to one.
 >

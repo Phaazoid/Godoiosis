@@ -516,9 +516,8 @@ The mirror above answers *the AI is acting somewhere else*. #467's ring raised t
 does **not** lock the board, so the player can pan the diorama anywhere while choosing — and then
 commit an order that plays out around a unit no longer on screen. **A terminal pick brings the view
 back to the acting unit; backing out with no order leaves it exactly where the player put it.** The
-dev's line drawn once: *action versus no action*, not board-verbs versus UI-verbs. Wait yanks the
-camera too, and that is a knob to turn in play rather than a rule to guess at. (Inspect did until
-[#1105](https://github.com/Phaazoid/Godoiosis/issues/1105) moved it off the ring to the Z key.)
+dev's line drawn once: *action versus no action*, not board-verbs versus UI-verbs. Inspect and Wait
+yank the camera too, and that is a knob to turn in play rather than a rule to guess at.
 
 - **The gate above is untouched, and reaching for it would have been the wrong fix.** `pan_to` moves
   the hidden 2D camera, which under `HD_2D` nobody is looking at, so widening `ai_locked` was the
@@ -539,7 +538,7 @@ camera too, and that is a knob to turn in play rather than a rule to guess at. (
   so a queued move is followed rather than second-guessed. The 2D camera is written there and the 3D
   rig on the signal — one question, two cameras, no second answer about which cell.
 - **The 2D write stands down under a 3D host, and that is load-bearing.** `battle3d._update_pointer`
-  snaps that hidden camera on every motion purely to park the hover card, so writing it from here
+  snaps that hidden camera on every motion purely to park the info card, so writing it from here
   would mis-anchor the card and change nothing else. Same flag, same reason, as the WASD poll's.
 - **2D/3D** ([#292](https://github.com/Phaazoid/Godoiosis/issues/292)): both views answer it. `CORNER` deliberately does not — it is a debug PiP whose
   2D camera is already being dragged by the pointer.
