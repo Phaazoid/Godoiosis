@@ -308,10 +308,14 @@ func _wire_signals() -> void:
 	# every edge the panel can be open on.
 	unit_info_panel.loadout_changed.connect(func() -> void:
 		refresh_action_queue(squad_manager.active_squad))
-	# The dock's tile body (#1105) reads the one tile-facts builder, handed over rather than looked
-	# up so the panel never learns what a game is.
-	unit_info_panel.tile_sections_source = func(cell: Vector2i) -> Array[TileReadout.Section]:
+	# A tile's full readout (#1105) reads the one tile-facts builder, handed over rather than looked
+	# up so neither panel learns what a game is. Two hosts: the dock's Tile view and the grown hover
+	# card, which draws its sections in the dock's boxes.
+	var tile_sections := func(cell: Vector2i) -> Array[TileReadout.Section]:
 		return TileReadout.compose(self, cell)
+	unit_info_panel.tile_sections_source = tile_sections
+	hover_info_panel.tile_sections_source = tile_sections
+	hover_info_panel.set_section_box(unit_info_panel.section_box())
 
 	squad_action_queue_control.execute_requested.connect(_on_queue_execute_requested)
 	squad_action_queue_control.cancel_requested.connect(_on_queue_cancel_requested)
@@ -367,6 +371,12 @@ func _input(event: InputEvent) -> void:
 	if event.is_action_pressed("toggle_enemy_ranges") and not ModalLock.any_open(get_tree()) \
 			and not _board_locked_for_player():
 		toggle_enemy_ranges()
+	# The Inspect key (#1105). Here for the same both-views reason, and only on a resting board --
+	# idle or deploying -- which is also what keeps it clear of the Tile Brush's Z in DEV_MODE.
+	if event.is_action_pressed("inspect") and not ModalLock.any_open(get_tree()) \
+			and not _board_locked_for_player() \
+			and (game_state == GameState.IDLE or game_state == GameState.PRE_MISSION):
+		inspect_at_pointer()
 
 	# THE PLAYER'S REPORT KEY (#1050). Here rather than in _unhandled_input for the reason Esc and
 	# the two above are: a 3D host sets board_input_delegated and _unhandled_input returns on it
@@ -596,44 +606,51 @@ func _lone_queued_move(gesture: Array[BaseAction]) -> MoveAction:
 # still allowed here for hotseat/testing; the AI_TURN lock above is what stops it in play.
 # The phase's own click (#739), and the reason "a click on a deployed unit must not open the action
 # ring" needs no gate anywhere: _click_idle is the only arm that opens the battle ring, and this
-# state never reaches it. What a unit gets instead is the PHASE ring -- squad verbs, Undeploy,
-# Inspect -- built by the same MainActionMenu.build_tree, so the squad flow is the one that already
-# exists rather than a second one authored for a screen.
+# state never reaches it. What a unit gets instead is the PHASE ring -- squad verbs and Undeploy --
+# built by the same MainActionMenu.build_tree, so the squad flow is the one that already exists
+# rather than a second one authored for a screen.
 #
 # An empty DEPLOYMENT cell offers the units still in reserve, which is the dev's own description:
 # "click a blank spot and click add, and get a dropdown of all deployable units to bring one in."
-# A click anywhere else rests the board, so a mis-click closes whatever was open, and inspects the
-# tile it landed on (#1105) -- the phase reads the board the way an idle board does.
+# A click anywhere else rests the board, so a mis-click closes whatever was open. A unit with
+# nothing to offer rests it too: its ring would open empty (#1105 took Inspect out of it).
 func _click_pre_mission(cell: Vector2i) -> void:
 	var target := unit_at_pointer(cell)
-	if target != null:
+	if target != null and main_action_menu.has_verbs(target):
 		select_unit(target, cell)
 		show_selected_reach(target)
 		main_action_menu.show_main_menu(target, get_viewport().get_mouse_position())
 		return
-	if mission_controller.can_deploy_another() and mission_controller.open_deployment_cells().has(cell):
+	if target == null and mission_controller.can_deploy_another() \
+			and mission_controller.open_deployment_cells().has(cell):
 		main_action_menu.show_deploy_menu(cell, get_viewport().get_mouse_position())
 		return
 	clear_selection()
-	inspect_tile(cell)
-
-# An empty tile opens its full readout in the Inspect dock (#1105, dev: "clicking an empty tile
-# opens its full info directly" -- no ring, since a tile has no verbs yet). The hover card names
-# what is here; this explains it. Off the map there is no tile, so nothing opens.
-func inspect_tile(cell: Vector2i) -> void:
-	if grid.get_cell_tile_data(cell) == null:
-		return
-	unit_info_panel.show_tile(cell, TileReadout.title_of(self, cell), TileReadout.icon_of(self, cell))
 
 func _click_idle(cell: Vector2i) -> void:
 	var target := unit_at_pointer(cell)
-	if target == null:
-		inspect_tile(cell)
+	# An enemy on your turn has no verbs since Inspect left the ring (#1105), so its click does what
+	# an empty tile's does: nothing. Z is how you read it.
+	if target == null or not main_action_menu.has_verbs(target):
 		return
 	select_unit(target, cell)
 	game_state = GameState.TILE_SELECTED
 	show_selected_reach(target)
 	main_action_menu.show_main_menu(target, get_viewport().get_mouse_position())
+
+# THE INSPECT KEY (#1105, dev: "having them pop up from a left click is too intrusive. We should
+# designate an inspect button"). It reads what is under the pointer: a unit steps the dock through
+# unit -> its tile -> closed, and an empty tile grows the hover card in place.
+func inspect_at_pointer() -> void:
+	var cell: Vector2i = hover_presenter.last_hovered_cell
+	if grid.get_cell_tile_data(cell) == null:
+		return
+	var unit := unit_at_pointer(cell)
+	if unit == null:
+		hover_presenter.toggle_grown(cell)
+		return
+	unit_info_panel.inspect_step(unit, can_control(unit), _board())
+	hover_presenter.refresh()   # the card steps aside for the unit the dock now shows
 
 # WHAT A SELECTED UNIT THREATENS FROM WHERE IT STANDS (#1069, dev: "Selecting a unit, though (for
 # us, bringing up the radial menu, and also choosing a move, etc), brings up the unit's attack
@@ -651,10 +668,11 @@ func _click_idle(cell: Vector2i) -> void:
 func show_selected_reach(unit: Unit) -> void:
 	if unit == null or not is_instance_valid(unit):
 		return
-	# NOT FOR AN ENEMY, which a plain click also selects -- the hotseat allowance means the ring
-	# opens on anybody. #710 slice 3's ruling holds here exactly as it does on hover: an enemy is
-	# read in the ENEMY's own vocabulary, which is the one unbroken purple field, and painting your
-	# red over one would be a second picture of the same fact in the colour that means "yours".
+	# NOT FOR AN ENEMY, which a plain click still selects on its own turn -- the hotseat allowance
+	# (one you cannot command has no ring since #1105). #710 slice 3's ruling holds here exactly as it
+	# does on hover: an enemy is read in the ENEMY's own vocabulary, which is the one unbroken purple
+	# field, and painting your red over one would be a second picture of the same fact in the colour
+	# that means "yours".
 	if Team.is_enemy(Team.Faction.PLAYER, unit.get_faction()):
 		return
 	show_player_reach(unit, unit.get_projected_destination())

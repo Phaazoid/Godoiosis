@@ -30,6 +30,11 @@ var pointer_source: Callable
 
 var last_hovered_cell: Vector2i = GridUtils.NO_CELL
 
+# The tile the hover card is GROWN for (#1105) -- the Inspect key's work on an empty tile. Reset on
+# every cell change in _process, which is the "point at another tile and it shrinks" ruling living
+# where the cell change is detected.
+var grown_cell: Vector2i = GridUtils.NO_CELL
+
 var _highlighted_queue_units: Array[Unit] = []
 
 func _ready() -> void:
@@ -48,6 +53,7 @@ func _process(_delta: float) -> void:
 	if hovered_cell == last_hovered_cell:   # everything below only runs on a CELL change
 		return
 
+	grown_cell = GridUtils.NO_CELL
 	var previous: Unit = game.unit_at_pointer(last_hovered_cell)
 	var current: Unit = game.unit_at_pointer(hovered_cell)
 	hovered_unit_changed.emit(previous, current)
@@ -62,6 +68,12 @@ func _process(_delta: float) -> void:
 # MODE changed under a stationary mouse (a menu closing, for one).
 func refresh() -> void:
 	update_hover_visuals(last_hovered_cell)
+
+
+# The Inspect key over an empty tile: grow the card for it, or shrink it back if it already is.
+func toggle_grown(cell: Vector2i) -> void:
+	grown_cell = GridUtils.NO_CELL if grown_cell == cell else cell
+	refresh()
 
 
 # The enemy under the pointer, or null -- the TRANSIENT half of what the range view draws (#710
@@ -473,18 +485,20 @@ func _show_hover_panel(hovered: Unit, cell: Vector2i) -> void:
 	#   - anything else -> the card keeps its own top/bottom logic, shifted right of the column
 	# The card is a stack since #135, and the tile half shows for EVERY real tile (dev, round 2):
 	# icon + name header, then the tile's ground lines. Name, picture and lines all come off
-	# TileReadout, the one builder the Inspect dock's tile mode reads too (#1105), so the two cannot
+	# TileReadout, the one builder the Inspect dock's Tile view reads too (#1105), so the two cannot
 	# disagree. TERRAIN_ICONS stays the queue rows' pathing glyph, not a display read.
+	# A GROWN card (the Inspect key on an empty tile, #1105) is still this one card, so a tile is
+	# never shown twice: the grown readout replaces the lines rather than opening a second surface.
 	var header: String = TileReadout.title_of(game, cell)
 	var icon: Texture2D = TileReadout.icon_of(game, cell)
 	var tile_lines: Array[String] = TileReadout.ground_lines(game, cell)
 	var world_pos: Vector2 = hovered.global_position if hovered != null \
 		else GridUtils.cell_world(game.grid, cell)
+	var grown := cell if cell == grown_cell else GridUtils.NO_CELL
+	var left_x := HoverInfoPanelControl.MARGIN
 	if game.unit_info_panel.is_showing():
 		if hovered != null and game.unit_info_panel.is_showing_unit(hovered):
 			game.hover_info_panel.clear()
 			return
-		game.hover_info_panel.show_hover(hovered, icon, header, tile_lines, world_pos,
-			int(game.unit_info_panel.panel_width()) + 8)
-	else:
-		game.hover_info_panel.show_hover(hovered, icon, header, tile_lines, world_pos)
+		left_x = int(game.unit_info_panel.panel_width()) + 8
+	game.hover_info_panel.show_hover(hovered, icon, header, tile_lines, world_pos, left_x, grown)

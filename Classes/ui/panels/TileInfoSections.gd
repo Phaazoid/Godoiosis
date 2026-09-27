@@ -1,12 +1,13 @@
 extends VBoxContainer
 class_name TileInfoSections
 
-# The Inspect dock's tile half (#1105): draws TileReadout's sections, one boxed section per layer --
-# a heading (wearing the layer's board mark when it has one) over its rows, an explanation drawn
-# quieter than a fact. Code-built (data-shaped UI) and handed the dock's own section stylebox, so it
-# matches the inventory box beside it by construction rather than by copied values.
+# A tile's full readout (#1105): draws TileReadout's sections, one boxed section per layer -- a
+# heading (wearing the layer's board mark when it has one) over its rows, an explanation drawn
+# quieter than a fact. Code-built (data-shaped UI) and handed the dock's own section stylebox, so
+# both hosts -- the Inspect dock's Tile view and the grown hover card -- draw the same boxes.
 #
-# It only renders what it is handed; which cell, and when to re-read it, is UnitInfoPanelControl's.
+# Which cell, and when to re-read it, is the host's; whether the re-read changed anything is this
+# file's (show_if_changed), so the two hosts share one diff.
 
 const HEADING_SIZE := 12
 const NOTE_SIZE := 14
@@ -16,10 +17,28 @@ const MARK_SIZE := Vector2i(16, 16)
 
 var section_box: StyleBox
 
+var _drawn := ""          # TileReadout.signature of what is drawn now
+var _has_drawn := false   # a flag, not a "" sentinel: an empty readout signs as "" too (the rock bug)
+
 
 func _init(box: StyleBox = null) -> void:
 	section_box = box
 	add_theme_constant_override("separation", 8)
+
+
+# Redraw only when the sections say something other than what is already drawn.
+func show_if_changed(sections: Array[TileReadout.Section]) -> void:
+	var said := TileReadout.signature(sections)
+	if _has_drawn and said == _drawn:
+		return
+	_has_drawn = true
+	_drawn = said
+	show_sections(sections)
+
+
+# The next show_if_changed draws whatever it is handed, the empty readout included.
+func forget() -> void:
+	_has_drawn = false
 
 
 func show_sections(sections: Array[TileReadout.Section]) -> void:

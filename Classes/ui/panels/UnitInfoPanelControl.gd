@@ -6,15 +6,16 @@ class_name UnitInfoPanelControl
 # unit is open, sets the header (name/jobs), and fans set_unit/clear out to the child
 # sections so their signal hookups tear down together.
 #
-# IT INSPECTS TILES TOO since #1105, and stays the ONE dock, so HoverPresenter's is_showing /
-# panel_width checks need no second answer. Two ways in: show_tile (an empty tile was clicked; the
-# header becomes the tile's) and the Unit/Tile switch beside a unit's portrait, which swaps the body
-# for the tile that unit stands on. A switch rather than a section underneath because the unit body
-# already fills the dock (660 of 700px on every authored unit, measured). Either way the tile body
-# is re-read every frame it shows and rebuilt only when what it says changed, so a watch firing or
-# a fire spreading cannot leave it stale. It sits in its own scroll area as a safety net (dev,
-# 2026-09-23): an ordinary tile fits with room to spare, and only a stack of watches and zones on
-# one cell ever shows a bar.
+# Opened by the Inspect key (#1105): Z over a unit opens it here, Z again swaps the body for the tile
+# that unit stands on, and a third Z closes it (inspect_step). The Unit/Tile buttons beside the
+# portrait do the same swap by mouse. A swap rather than a section underneath because the unit body
+# already fills the dock (660 of 700px on every authored unit, measured). An EMPTY tile is not
+# inspected here -- it grows the hover card instead -- so the dock only ever holds a unit.
+#
+# The tile body is re-read every frame it shows and rebuilt only when what it says changed, so a
+# watch firing or a fire spreading cannot leave it stale. It sits in its own scroll area as a safety
+# net (dev, 2026-09-23): an ordinary tile fits with room to spare, and only a stack of watches and
+# zones on one cell ever shows a bar.
 
 enum View { UNIT, TILE }
 
@@ -49,9 +50,6 @@ var _hidden_for_playback := false
 var _content_shown := false
 
 var _view := View.UNIT
-var _tile_only := false                 # an empty tile is open rather than a unit
-var _tile_cell := GridUtils.NO_CELL
-var _drawn := ""                        # TileReadout.signature of what the tile body shows now
 var _tile_sections: TileInfoSections
 var _tile_scroll: ScrollContainer
 var _spacer: Control
@@ -74,7 +72,7 @@ func _ready() -> void:
 	_tile_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
 	_tile_scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	_tile_scroll.visible = false
-	_tile_sections = TileInfoSections.new(inventory_panel.get_theme_stylebox("panel"))
+	_tile_sections = TileInfoSections.new(section_box())
 	_tile_sections.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_tile_scroll.add_child(_tile_sections)
 	body.add_child(_tile_scroll)
@@ -109,7 +107,6 @@ func set_unit(unit: Unit, can_act := false, board: BoardContext = null):
 	_release_current_unit()
 	current_unit = unit
 	current_board = board
-	_tile_only = false
 	_content_shown = true
 	_apply_visibility()
 	name_label.text = unit.get_unit_name()
@@ -120,25 +117,17 @@ func set_unit(unit: Unit, can_act := false, board: BoardContext = null):
 	squad_panel.set_unit(unit)
 	states_bar.set_unit(unit)
 	unit.movement.movement_finished.connect(_refresh_derived_rows)
-	_switch.visible = true
 	_set_view(View.UNIT)   # Inspect means the unit; its tile is one press away
 
-# An empty tile was clicked (#1105). The caller names and pictures it (TileReadout.title_of /
-# icon_of), the same pair the hover card wears.
-func show_tile(cell: Vector2i, title: String, icon: Texture2D) -> void:
-	_release_current_unit()
-	current_unit = null
-	current_board = null
-	_tear_down_unit_sections()
-	_tile_only = true
-	_tile_cell = cell
-	_content_shown = true
-	_apply_visibility()
-	name_label.text = title
-	jobs_label.text = ""
-	portrait_panel.show_picture(icon)
-	_switch.visible = false
-	_set_view(View.TILE)
+# The Inspect key's cycle over one unit (#1105, dev: "Z on a unit could inspect the unit, tapping Z
+# again to swap to the tile the unit is on"): opens it on Unit, then its tile, then closes.
+func inspect_step(unit: Unit, can_act := false, board: BoardContext = null) -> void:
+	if not is_showing_unit(unit):
+		set_unit(unit, can_act, board)
+	elif _view == View.UNIT:
+		_set_view(View.TILE)
+	else:
+		clear()
 
 func _set_view(view: View) -> void:
 	_view = view
@@ -147,29 +136,16 @@ func _set_view(view: View) -> void:
 		node.visible = view == View.UNIT
 	_spacer.visible = view == View.UNIT
 	_tile_scroll.visible = view == View.TILE
-	_drawn = ""
+	_tile_sections.forget()
 	_refresh_tile()
 
 func _refresh_tile() -> void:
 	if _view != View.TILE or not tile_sections_source.is_valid():
 		return
-	var cell := _inspected_cell()
-	if cell == GridUtils.NO_CELL:
+	if current_unit == null or not is_instance_valid(current_unit):
 		return
-	var sections: Array[TileReadout.Section] = tile_sections_source.call(cell)
-	var said := TileReadout.signature(sections)
-	if said == _drawn:
-		return
-	_drawn = said
-	_tile_sections.show_sections(sections)
-
-# The clicked tile, or the one the open unit stands on now.
-func _inspected_cell() -> Vector2i:
-	if _tile_only:
-		return _tile_cell
-	if current_unit != null and is_instance_valid(current_unit):
-		return current_unit.movement.cell
-	return GridUtils.NO_CELL
+	var sections: Array[TileReadout.Section] = tile_sections_source.call(current_unit.movement.cell)
+	_tile_sections.show_if_changed(sections)
 
 # Re-read only the derived numbers. set_unit early-returns on the same unit (it's called on every
 # inspect), so a change made while the panel is OPEN would otherwise leave DEF and MOV showing
@@ -190,8 +166,6 @@ func _release_current_unit() -> void:
 func clear():
 	_release_current_unit()
 	current_unit = null
-	_tile_only = false
-	_tile_cell = GridUtils.NO_CELL
 	_content_shown = false
 	_apply_visibility()
 	_tear_down_unit_sections()
@@ -212,13 +186,17 @@ func _apply_visibility() -> void:
 	visible = _content_shown and not _hidden_for_playback
 
 func is_showing() -> bool:
-	return _content_shown and (current_unit != null or _tile_only)
+	return _content_shown and current_unit != null
 
 func is_showing_unit(unit: Unit) -> bool:
 	return _content_shown and current_unit == unit
 
 func panel_width() -> float:
 	return $UnitInfoPanel.size.x
+
+# The box a tile section is drawn in -- the inventory's own, so the grown hover card matches the dock.
+func section_box() -> StyleBox:
+	return inventory_panel.get_theme_stylebox("panel")
 
 # What the tile body says, headings included -- empty unless it is up.
 func tile_texts() -> Array[String]:
