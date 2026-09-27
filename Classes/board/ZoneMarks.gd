@@ -59,9 +59,9 @@ static var ZONE_WALL_ALPHA := 0.8
 static var ZONE_SHIMMER_SPEED := 0.45
 
 # Moved by restyle(), so a reader holding generated art knows to ask again.
-static var version := 0
+static var art_version := 0
 
-static var _cache: Dictionary = {}
+static var _art_cache: Dictionary = {}
 
 
 # THE one read of the experiment.
@@ -87,8 +87,8 @@ static func emblem_of(kind: ZoneManager.Kind) -> Texture2D:
 
 # A knob moved: every generated texture is stale.
 static func restyle() -> void:
-	_cache.clear()
-	version += 1
+	_art_cache.clear()
+	art_version += 1
 
 
 # Each cell of a zone -> the Side bits it needs. Membership is THIS zone's, so two zones of one kind
@@ -137,9 +137,9 @@ static func emblem_cell(cells: Array[Vector2i]) -> Vector2i:
 # One cell of a look's art for a cell wearing `mask`, cached.
 static func texture(which: Look, mask: int) -> Texture2D:
 	var key := Vector2i(which, mask)
-	if not _cache.has(key):
-		_cache[key] = ImageTexture.create_from_image(image(which, mask))
-	return _cache[key] as Texture2D
+	if not _art_cache.has(key):
+		_art_cache[key] = ImageTexture.create_from_image(image(which, mask))
+	return _art_cache[key] as Texture2D
 
 
 # A texel's distance in from the nearest thing the zone ends at -- an outward side, or the corner of

@@ -650,7 +650,7 @@ func _zone_wall_sync(om: OverlayManager, look: ZoneMarks.Look) -> void:
 	_zone_walls.visible = wanted and not BoardSpace.staging_active()
 	if not wanted:
 		return
-	var key: Array = [om.drawn_zones_version, ZoneMarks.version]
+	var key: Array = [om.drawn_zones_version, ZoneMarks.art_version]
 	for layer: BoardOverlays.Layer in ZoneMarks.LAYER_OF_KIND.values():
 		key.append(overlays.layer_modulate(layer))   # a zone colour dragged on the Game tab
 	if key == _last_wall_key and not _heights_moved:

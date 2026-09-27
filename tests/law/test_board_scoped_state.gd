@@ -60,6 +60,7 @@ const PROCESS_SCOPED := [
 	"_art_top_cache",                             # UnitSprite3D: per-texture art top, keyed by path
 	"_warned_sets",                               # UnitSprite3D: which sets have already warned, keyed by path
 	"_maps_by_texture",                           # StatusArt: per-texture effect map, keyed by the sampled texture's path
+	"_art_cache", "art_version",                 # ZoneMarks (#955): generated cell art keyed by (look, mask), and the count restyle() moves
 	"GUARD_RING_SCALE",                           # tuning, no knob
 	"texels_per_unit",                            # tuning, no knob
 ]
