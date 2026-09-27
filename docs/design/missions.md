@@ -2,7 +2,7 @@
 
 **Status: ALL FOUR SLICES BUILT 2026-07-28 ([#96](https://github.com/Phaazoid/Godoiosis/issues/96)).** Filed 2026-07-27, when the project acquired a win condition for the first time. Before this, Iosis had ten interlocking systems and no way to finish a battle — which meant a design question could be answered *"is this coherent?"* but never *"does this improve play?"*
 
-**Canon checked through #1105 (2026-09-27).**
+**Canon checked through #1115 (2026-09-27).**
 
 ## What a mission is
 
@@ -372,7 +372,7 @@ The 2026-09-22 stream: a friend playing cold *"did not know how to capture the c
 
 ### A zone is MARKED on the board, and how is an experiment ([#955](https://github.com/Phaazoid/Godoiosis/issues/955) part 1, 2026-09-27)
 
-A zone used to be a half-strength tint of its kind's colour under every other layer, and on grass it barely read (measured off the dev's screenshot: grass rgb(59, 225, 168), a capture tile rgb(87, 232, 213); green extraction on green grass is nearly nothing). He liked what #1070 did with the cohesion range -- a line round a region instead of a wash -- and asked for that with the zones' own identity. So an edge says WHERE a zone is and an **emblem** says WHAT it is, and which edge is still his call: shown a mockup, he asked to judge in the game, so the looks ship behind `Experiments.Flag.ZONE_LOOK` (Session > Experiments > Zone look): **Tint** (today, the default, so a player build is unchanged), **A** a painted edge, **B** a soft rim, **C** a light wall. The identity rule the three share: the COH line is thin, dashed, orange, moving and there only while you choose a move; a zone edge is still, in its kind's colour and always there. Mechanics and knobs: `visual-clarity.md`.
+A zone used to be a half-strength tint of its kind's colour under every other layer, and on grass it barely read (measured off the dev's screenshot: grass rgb(59, 225, 168), a capture tile rgb(87, 232, 213); green extraction on green grass is nearly nothing). He liked what #1070 did with the cohesion range -- a line round a region instead of a wash -- and asked for that with the zones' own identity. So an edge says WHERE a zone is and an **emblem** says WHAT it is, and which edge is still his call: shown a mockup, he asked to judge in the game, so the looks ship behind `Experiments.Flag.ZONE_LOOK` (Session > Experiments > Zone look): **Tint** (today, the default, so a player build is unchanged), **A** a painted edge, **B** a soft rim, **C** B's rim with a light wall standing just inside it (his ruling after the first play, 2026-09-27: *"combine B and C"*, with every edge kept inside the zone's own tiles). The identity rule the three share: the COH line is thin, dashed, orange, moving and there only while you choose a move; a zone edge is still, in its kind's colour and always there. Mechanics and knobs: `visual-clarity.md`.
 
 **The emblem is not the experiment** (dev: "yes, both places"): one mark per zone on the board, on the zone cell nearest its middle, and the same mark heading that kind's section on the tile card -- the watch reticle's one-texture, one-colour shape. The four placeholder emblems (`Art/Icons/BoardIcons/Zone*Icon.png`, a flag, a door with an arrow out, an arrow down onto a line, a crate) are the dev's to redraw. **What the marks read is what the tint reads**: `OverlayManager.drawn_zones`, filled by `redraw_zones` after its hidden list and minus `AUTHORING_KINDS`, so a claimed point or a deployment zone after turn 1 loses its edge and its emblem exactly when it would have lost its tint.
 
