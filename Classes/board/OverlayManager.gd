@@ -398,9 +398,12 @@ var squad_tethers: Array[Dictionary] = []   # {"strokes": Array[PackedVector3Arr
 # ...the ones the views DRAW (#367): the same, minus any tether a draw-in moment is standing in for,
 # since a draw-in over an already-whole tether is invisible. squad_tethers stays the truth.
 var drawn_squad_tethers: Array[Dictionary] = []
+# Whose squad the standing lines are (#1109) -- true for an enemy's, which wear the enemy colour.
+var squad_lines_hostile := false
 # The membership MOMENTS in the air (#367): {"from", "to", "chord", "moment": SquadLines2D.Moment,
-# "start_msec", "standing"}. `standing` is whether a standing tether exists for the same pair, which
-# is what lets a draw-in hand over to it rather than fade. Played on one clock, pruned by _process.
+# "start_msec", "standing", "hostile"}. `standing` is whether a standing tether exists for the same
+# pair, which is what lets a draw-in hand over to it rather than fade; `hostile` is whose squad it
+# was (#1109). Played on one clock, pruned by _process.
 var squad_tether_moments: Array[Dictionary] = []
 var squad_lines_version := 0
 # When the strained tethers were last plucked (#1070), in Time.get_ticks_msec; -1 is never. A stamp
@@ -829,7 +832,12 @@ static func _corner_height(cell: Vector2i, offset: Vector2i, board: BoardContext
 # "state": SquadLines2D.Strain}. The caller says WHERE each body is drawn, because only it knows which
 # of a unit's stand-ins is showing (its projected cell, a hover ghost, a formation ghost); this store
 # turns that into geometry, and nothing else does.
-func show_squad_lines(bubbles: Array, links: Array[Dictionary], board: BoardContext) -> void:
+#
+# `hostile` is the SIDE of the whole draw (#1109): an enemy squad's lines wear the enemy colour. ONE
+# side per draw, which holds because no caller shows two sides' squads at once -- a caller that ever
+# must would need the flag per link and per bubble instead.
+func show_squad_lines(bubbles: Array, links: Array[Dictionary], board: BoardContext,
+		hostile := false) -> void:
 	if bubbles.is_empty() and links.is_empty() and squad_outline.is_empty() \
 			and squad_tether_chords.is_empty():
 		return   # idempotent -- every exit path clears, and the version moves only on real change
@@ -845,6 +853,7 @@ func show_squad_lines(bubbles: Array, links: Array[Dictionary], board: BoardCont
 				"from": link["from"], "to": link["to"]})
 	squad_outline = outline
 	squad_tether_chords = chords
+	squad_lines_hostile = hostile
 	_rebuild_squad_tethers()
 
 
@@ -877,6 +886,7 @@ func _rebuild_squad_tethers() -> void:
 	if _squad_lines_2d != null:
 		_squad_lines_2d.outline = squad_outline
 		_squad_lines_2d.tethers = drawn_squad_tethers
+		_squad_lines_2d.hostile = squad_lines_hostile
 		_squad_lines_2d.moments = squad_tether_moments
 		_squad_lines_2d.refresh()
 
@@ -884,7 +894,7 @@ func _rebuild_squad_tethers() -> void:
 # --- Membership moments (#367) ------------------------------------------------------------------
 # SquadTetherPresenter decides WHICH moments play; this is where they live while they do, the same
 # store/two-views shape as the tethers. Each link is {"from": member cell, "to": leader cell,
-# "moment": SquadLines2D.Moment, "delay": seconds before it starts}.
+# "moment": SquadLines2D.Moment, "delay": seconds before it starts, "hostile": whose squad (#1109)}.
 
 func play_tether_moments(links: Array[Dictionary], board: BoardContext) -> void:
 	if links.is_empty():
@@ -894,7 +904,7 @@ func play_tether_moments(links: Array[Dictionary], board: BoardContext) -> void:
 		squad_tether_moments.append({"from": link["from"], "to": link["to"],
 				"chord": SquadLines2D.chord(link["from"], link["to"], board),
 				"moment": link["moment"], "start_msec": now + int(float(link.get("delay", 0.0)) * 1000.0),
-				"standing": false})
+				"standing": false, "hostile": bool(link.get("hostile", false))})
 	_rebuild_squad_tethers()
 	set_process(true)
 

@@ -522,3 +522,44 @@ func _snap_time() -> float:
 		if not (_break(t)["pieces"] as Array).is_empty():
 			return t
 	return -1.0
+
+
+# --- An enemy squad's colour (#1109) --------------------------------------------------------------
+
+# An enemy's moment wears the enemy colour: a draw-in starts in it, a break starts in it and still
+# strains toward the ONE strain red, and its sparks fly in it. Its standing tether is the same colour,
+# and the ghost and strain states do not change with the side. Compared to the statics, never values.
+func test_an_enemy_squads_lines_and_moments_wear_the_enemy_colour() -> void:
+	_break_times(0.4, 0.6, 4, 0.3)
+	var enemy := SquadLines2D.ENEMY_TETHER_COLOR
+	var red := SquadLines2D.TETHER_STRAIN_COLOR
+	assert_bool(enemy.is_equal_approx(SquadLines2D.TETHER_COLOR) or enemy.is_equal_approx(red)) \
+			.override_failure_message("fixture: the enemy colour matches a colour it is told apart from") \
+			.is_false()
+
+	var draw_in := SquadLines2D.moment_at(SquadLines2D.Moment.DRAW_IN, _chord(), 0.1, false, false, true)
+	assert_bool((draw_in["tint"] as Color).is_equal_approx(enemy)).override_failure_message(
+			"an enemy's draw-in did not wear the enemy colour").is_true()
+
+	var entry := {"chord": _chord(), "moment": SquadLines2D.Moment.BREAK, "start_msec": 0,
+			"standing": false, "hostile": true}
+	var opening: Color = SquadLines2D.moment_drawing(entry, 0, false)["tint"]
+	assert_bool(opening.is_equal_approx(enemy)).override_failure_message(
+			"an enemy's break did not start in the enemy colour -- moment_drawing lost its side").is_true()
+	var late: Color = SquadLines2D.moment_drawing(entry, 390, false)["tint"]
+	var to_red := Vector4(late.r - red.r, late.g - red.g, late.b - red.b, late.a - red.a).length()
+	var to_enemy := Vector4(late.r - enemy.r, late.g - enemy.g, late.b - enemy.b, late.a - enemy.a).length()
+	assert_bool(to_red < to_enemy).override_failure_message(
+			"an enemy's break did not strain toward the shared strain red").is_true()
+	var spark_in_enemy := false
+	for piece: Dictionary in SquadLines2D.moment_drawing(entry, 450, false)["pieces"]:
+		var tint: Color = piece["tint"]
+		spark_in_enemy = spark_in_enemy or Color(tint, 1.0).is_equal_approx(Color(enemy, 1.0))
+	assert_bool(spark_in_enemy).override_failure_message(
+			"an enemy's break threw no spark in the enemy colour").is_true()
+
+	assert_bool(SquadLines2D.color_of(SquadLines2D.Strain.SOLID, true).is_equal_approx(enemy)) \
+			.override_failure_message("an enemy's standing tether is not the enemy colour").is_true()
+	assert_bool(SquadLines2D.color_of(SquadLines2D.Strain.GHOST, true)
+			.is_equal_approx(SquadLines2D.TETHER_GHOST_COLOR)).is_true()
+	assert_bool(SquadLines2D.color_of(SquadLines2D.Strain.STRAIN, true).is_equal_approx(red)).is_true()

@@ -147,8 +147,16 @@ func _hover_idle(cell: Vector2i) -> Dictionary:
 	# cohesion bubble is a third picture of enemy movement that ThreatField deliberately ignores.
 	# The fork is the whole branch rather than one call, because every one of those three is the
 	# wrong question to ask about somebody you do not command.
+	#
+	# ITS SQUAD'S LINES CAME BACK (#1109, dev: "there's no good way to see the enemy's COH range at
+	# all") -- the range stroke and the tethers, in the ENEMY's colour. That is a readout of who is in
+	# the squad and how far its leash reaches, not a picture of where it will move, so the bubble's
+	# objection above does not reach it. Drawn while your own squad is mid-plan too, which is when a
+	# shove to split them gets planned; only the rings keep the gate below.
 	if Team.is_enemy(Team.Faction.PLAYER, hovered.get_faction()):
 		game._redraw_enemy_ranges(hovered)
+		if hovered.has_squad():
+			game.draw_squad_cohesion(hovered.squad, hovered.squad.leader.get_projected_destination())
 		if hovered.has_squad() and game.squad_manager.active_squad == null:
 			return game.get_squad_icons(hovered.squad)
 		return {}

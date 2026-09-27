@@ -35,6 +35,9 @@ const LINE_WIDTH := 2.0
 # One ORANGE for the tether and the range, which is what makes them read as one system. The cohesion
 # fill wore Color(1, 0.5, 0) for the project's whole life, so the hue is not new -- only its form is.
 static var TETHER_COLOR := Color(1.0, 0.55, 0.12, 0.95)
+# ...and an ENEMY squad's range and tethers (#1109): the threat field's purple, lightened so it reads
+# over that field and over bare ground alike. Standing lines and moments both; is_hostile picks the side.
+static var ENEMY_TETHER_COLOR := Color(1.0, 0.43, 0.59, 0.95)
 # A tether that MIGHT be: dimmer and see-through, arrowhead included.
 static var TETHER_GHOST_COLOR := Color(0.72, 0.42, 0.16, 0.5)
 static var TETHER_STRAIN_COLOR := Color(1.0, 0.18, 0.14, 0.95)
@@ -104,6 +107,8 @@ var outline: Array[PackedVector3Array] = []
 var tethers: Array[Dictionary] = []   # {"strokes": Array[PackedVector3Array], "state": Strain}
 var moments: Array[Dictionary] = []   # OverlayManager.squad_tether_moments
 var shake_started_msec := -1
+# Whose squad the standing lines belong to (#1109) -- one side per draw, OverlayManager.squad_lines_hostile.
+var hostile := false
 
 
 # The body's middle, in the RULE height units trace space carries (UnitSprite3D.body_middle is world).
@@ -233,12 +238,15 @@ static func shake_now(started_msec: int) -> float:
 # `standing` says a standing tether exists for the same pair (a draw-in hands over to it rather than
 # fading); `flash` is #217's composed read. Returns the shaft as a range along the chord, [u0, u1],
 # measured from the member end (empty when u1 <= u0), its tint, the cone -- how far it has grown out
-# of the shaft, its scale about its own tip, its tint -- and whether the moment is over.
+# of the shaft, its scale about its own tip, its tint -- and whether the moment is over. `hostile_side`
+# is whose squad it is (#1109): an enemy's moment wears the enemy colour, and a break still strains to
+# the one strain red, which means "breaking" for either side.
 static func moment_at(moment: int, tether_chord: PackedVector3Array, elapsed: float, standing: bool,
-		flash := true) -> Dictionary:
+		flash := true, hostile_side := false) -> Dictionary:
 	var m := measure(tether_chord)
-	var drawn := {"u0": 0.0, "u1": 0.0, "tint": TETHER_COLOR, "cone_grow": 0.0, "cone_scale": 1.0,
-			"cone_tint": TETHER_COLOR, "done": false}
+	var base := tether_color(hostile_side)
+	var drawn := {"u0": 0.0, "u1": 0.0, "tint": base, "cone_grow": 0.0, "cone_scale": 1.0,
+			"cone_tint": base, "done": false}
 	if m.is_empty():
 		drawn["done"] = true
 		return drawn
@@ -258,7 +266,7 @@ static func moment_at(moment: int, tether_chord: PackedVector3Array, elapsed: fl
 				var settle := 1.0 - _phase(after, POP_SECONDS)
 				drawn["cone_scale"] = 1.0 + (maxf(POP_SCALE, 1.0) - 1.0) * settle
 				if flash:
-					drawn["cone_tint"] = _brighten(TETHER_COLOR, POP_BRIGHTEN * settle)
+					drawn["cone_tint"] = _brighten(base, POP_BRIGHTEN * settle)
 				after -= maxf(POP_SECONDS, 0.0)
 				if after >= 0.0:
 					if standing:
@@ -266,7 +274,7 @@ static func moment_at(moment: int, tether_chord: PackedVector3Array, elapsed: fl
 					else:
 						after -= maxf(DRAWN_HOLD_SECONDS, 0.0)
 						var fade := _phase(after, DRAWN_FADE_SECONDS) if after >= 0.0 else 0.0
-						drawn["tint"] = _faded(TETHER_COLOR, 1.0 - fade)
+						drawn["tint"] = _faded(base, 1.0 - fade)
 						drawn["cone_tint"] = _faded(drawn["cone_tint"], 1.0 - fade)
 						drawn["done"] = after >= 0.0 and fade >= 1.0
 		Moment.REEL_IN:
@@ -281,7 +289,7 @@ static func moment_at(moment: int, tether_chord: PackedVector3Array, elapsed: fl
 			# Whole until it snaps, reddening; after the snap the tether is its pieces (moment_drawing).
 			var strain := maxf(BREAK_STRAIN_SECONDS, 0.0)
 			if elapsed < strain:
-				var tint := TETHER_COLOR.lerp(TETHER_STRAIN_COLOR, _phase(maxf(elapsed, 0.0), strain))
+				var tint := base.lerp(TETHER_STRAIN_COLOR, _phase(maxf(elapsed, 0.0), strain))
 				drawn["u1"] = shaft_end
 				drawn["cone_grow"] = 1.0 if has_cone else 0.0
 				drawn["tint"] = tint
@@ -342,11 +350,13 @@ static func _faded(color: Color, alpha: float) -> Color:
 # the dashes stay where the standing tether's would be), its tint, and the cone -- base, tip, width
 # scale, tint -- or {} while there is none; plus a break's `bend` (the shiver, in cells) and its
 # `pieces` (solid two-point strokes, each with its own tint). The one conversion both views read.
+# The entry's `hostile` (#1109) says whose squad the link was, which picks the colour.
 static func moment_drawing(entry: Dictionary, now_msec: int, flash: bool) -> Dictionary:
 	var tether_chord: PackedVector3Array = entry["chord"]
 	var elapsed := float(now_msec - int(entry["start_msec"])) / 1000.0
+	var hostile_side := bool(entry.get("hostile", false))
 	var drawn := moment_at(int(entry["moment"]), tether_chord, elapsed, bool(entry.get("standing", false)),
-			flash)
+			flash, hostile_side)
 	var no_pieces: Array[Dictionary] = []
 	var out := {"origin": tether_chord[0], "shaft": PackedVector3Array(), "tint": drawn["tint"],
 			"cone": {}, "done": drawn["done"], "bend": 0.0, "pieces": no_pieces}
@@ -368,7 +378,7 @@ static func moment_drawing(entry: Dictionary, now_msec: int, flash: bool) -> Dic
 		var snap_shift := 0.0
 		if flash:
 			snap_shift = DASH_SPEED * (float(int(entry["start_msec"])) / 1000.0 + maxf(BREAK_STRAIN_SECONDS, 0.0))
-		_break_drawing(out, tether_chord, elapsed, snap_shift, flash)
+		_break_drawing(out, tether_chord, elapsed, snap_shift, flash, hostile_side)
 	return out
 
 
@@ -379,7 +389,7 @@ static func moment_drawing(entry: Dictionary, now_msec: int, flash: bool) -> Dic
 # sideways, tumbled about the chord's side axis, and lands on the ground under the chord (its body-
 # middle height taken back off) exactly as its time runs out, eased in like a fall.
 static func _break_drawing(out: Dictionary, tether_chord: PackedVector3Array, elapsed: float,
-		snap_shift: float, flash: bool) -> void:
+		snap_shift: float, flash: bool, hostile_side := false) -> void:
 	var m := measure(tether_chord)
 	if m.is_empty():
 		return
@@ -411,7 +421,8 @@ static func _break_drawing(out: Dictionary, tether_chord: PackedVector3Array, el
 	var spark_life := maxf(BREAK_SPARK_SECONDS, 0.0)
 	if after < spark_life:
 		var age := _phase(after, spark_life)
-		var spark_tint := _faded(_brighten(TETHER_COLOR, 1.0 - age) if flash else TETHER_COLOR, 1.0 - age)
+		var base := tether_color(hostile_side)
+		var spark_tint := _faded(_brighten(base, 1.0 - age) if flash else base, 1.0 - age)
 		var snap := point_along(tether_chord, snap_u)
 		for i in maxi(BREAK_SPARKS, 0):
 			var turn := float(i) * GOLDEN_ANGLE
@@ -444,13 +455,26 @@ static func _falling(tether_chord: PackedVector3Array, u0: float, u1: float, sna
 	return PackedVector3Array([landed - turned, landed + turned])
 
 
-static func color_of(state: int) -> Color:
+# Whose side a squad's lines are drawn for (#1109): hostile to the player or not. WHOSE SIDE, never who
+# is in control -- a hotseat enemy squad still wears the enemy colour (MusicDirector's ruling).
+static func is_hostile(faction: Team.Faction) -> bool:
+	return Team.is_enemy(Team.Faction.PLAYER, faction)
+
+
+# The colour a side's tethers and range wear -- the range, a SOLID tether and every moment.
+static func tether_color(hostile_side: bool) -> Color:
+	return ENEMY_TETHER_COLOR if hostile_side else TETHER_COLOR
+
+
+# A tether state's colour. GHOST and STRAIN ignore the side: an enemy never draws either, and the
+# strain red means "breaking" whoever's tether it is.
+static func color_of(state: int, hostile_side := false) -> Color:
 	match state:
 		Strain.GHOST:
 			return TETHER_GHOST_COLOR
 		Strain.STRAIN:
 			return TETHER_STRAIN_COLOR
-	return TETHER_COLOR
+	return tether_color(hostile_side)
 
 
 # The store has changed: redraw now, and keep redrawing while there is anything to march.
@@ -476,7 +500,7 @@ func _draw() -> void:
 		shift = DASH_SPEED * float(Time.get_ticks_msec()) / 1000.0
 	for segment in outline:
 		if segment.size() >= 2:
-			_dashed(_flat(segment[0]), _flat(segment[segment.size() - 1]), TETHER_COLOR, shift, 0.0)
+			_dashed(_flat(segment[0]), _flat(segment[segment.size() - 1]), tether_color(hostile), shift, 0.0)
 	var shake := shake_now(shake_started_msec)
 	for entry in tethers:
 		var strokes: Array[PackedVector3Array] = []
@@ -484,7 +508,7 @@ func _draw() -> void:
 		if strokes.is_empty():
 			continue
 		var state: int = entry["state"]
-		var color := color_of(state)
+		var color := color_of(state, hostile)
 		var shaft := strokes[0]
 		var bend := shake if state == Strain.STRAIN else 0.0
 		_dashed(_flat(shaft[0]), _flat(shaft[shaft.size() - 1]), color, shift, bend)

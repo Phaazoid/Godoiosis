@@ -1753,6 +1753,9 @@ func cohesion_bubble(squad: Squad, leader_cell: Vector2i) -> Array[Vector2i]:
 # the anchor OverlayIcon's ring rides. `strained` names the members whose tether the hovered move would
 # break; `candidates` adds a GHOST tether from each unit that could join.
 #
+# An ENEMY squad's lines wear the enemy colour (#1109) -- whose side, read off its leader here, so
+# no caller has to say.
+#
 # Solo squads are the CALLERS' question: Squad Up draws round a lone unit on purpose.
 func draw_squad_cohesion(squad: Squad, leader_cell: Vector2i, placed: Dictionary = {},
 		strained: Array[Unit] = [], candidates: Array[Unit] = []) -> void:
@@ -1766,7 +1769,8 @@ func draw_squad_cohesion(squad: Squad, leader_cell: Vector2i, placed: Dictionary
 	for candidate in candidates:
 		links.append({"from": candidate.get_projected_destination(), "to": leader_cell,
 				"state": SquadLines2D.Strain.GHOST})
-	overlay_manager.show_squad_lines([cohesion_bubble(squad, leader_cell)], links, _board())
+	overlay_manager.show_squad_lines([cohesion_bubble(squad, leader_cell)], links, _board(),
+			SquadLines2D.is_hostile(squad.get_leader().get_faction()))
 
 # The joinable squads' own rings ARE the marking (#442) -- drawn through draw_squad_unit_icons, so
 # with ALWAYS_SHOW_SQUAD_RINGS on this is idempotent over the standing set and only the PULSE
@@ -1774,7 +1778,9 @@ func draw_squad_cohesion(squad: Squad, leader_cell: Vector2i, placed: Dictionary
 #
 # The cohesion range stays: WHERE THE JOINER WOULD STAND is a different fact from WHOSE SQUAD THIS
 # IS. Since #1070 it is the squad lines' dashed stroke rather than an orange fill, and the joiner
-# gets a GHOST tether to each leader it could join -- Squad Up's treatment from the other side.
+# gets a GHOST tether to each leader it could join -- Squad Up's treatment from the other side. A
+# joiner is only offered its own side's squads, so the joiner's side is theirs (#1109) -- an enemy in
+# hotseat sees enemy squads, in the enemy colour.
 func draw_joinable_squads(joining_unit: Unit, joinable: Array[Squad]):
 	overlay_manager.clear_selection_overlays()
 	var bubbles: Array = []
@@ -1786,7 +1792,8 @@ func draw_joinable_squads(joining_unit: Unit, joinable: Array[Squad]):
 		links.append({"from": joining_unit.get_projected_destination(),
 				"to": leader.get_projected_destination(), "state": SquadLines2D.Strain.GHOST})
 		overlay_manager.draw_squad_unit_icons(squad)
-	overlay_manager.show_squad_lines(bubbles, links, _board())
+	overlay_manager.show_squad_lines(bubbles, links, _board(),
+			SquadLines2D.is_hostile(joining_unit.get_faction()))
 
 # A leader's move range split by whether the SQUAD can follow there (#1069's rule; one helper since
 # #1070 made hover its third caller, beside both move modes): {"green": the followable destinations,
