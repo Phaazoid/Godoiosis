@@ -657,13 +657,20 @@ func test_hovering_a_lone_enemy_draws_no_squad_lines() -> void:
 # A pass takes the hover's lines down before it plays: the pointer stops polling once the board locks,
 # so a tether left up would stand intact beside its own break at the blow. Read AT the blow, through
 # the pass's own mid-pass signal -- after the pass, other doors clear the lines anyway.
+#
+# The pointer is the 3D picker's shape, a SOURCE that holds its cell: battle3d stops picking while the
+# board is locked. Hovering through the flat scene's own mouse instead is blind to the fault -- the
+# pass pans the camera, the mouse lands on another cell, and the hover's own repaint clears the lines
+# by accident (measured: the mutant without the clear passed that way).
 func test_a_pass_takes_the_hover_lines_down_before_its_first_blow() -> void:
 	var mine: Dictionary = await _squad(5, [{"dex": 5, "cell": Vector2i(-1, 0)}])
 	var theirs: Dictionary = await _enemy_squad(Vector2i(1, 0))
 	var hero: Unit = mine.leader
 	var target: Unit = theirs.members[0]
 	_queue_swing(hero, target)
-	game.hover_presenter.update_hover_visuals(target.movement.cell)
+	var pointed := target.movement.cell
+	game.hover_presenter.pointer_source = func() -> Vector2i: return pointed
+	await await_idle_frame()   # the real poll lands the hover
 	assert_bool(_om().squad_tether_chords.is_empty()).override_failure_message(
 			"fixture: the enemy's lines were not up when the pass began").is_false()
 
