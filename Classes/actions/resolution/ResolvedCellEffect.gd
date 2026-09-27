@@ -10,3 +10,7 @@ var states_added: Array[Terrain.TileState] = []
 var states_removed: Array[Terrain.TileState] = []
 var popups: Array[String] = []
 var icons: Array[Texture2D] = []
+# The blow that deposited it, or null for an order's own deposit (Burrow's COVER). Live applies a
+# pass's deposits in one batch, so nothing in playback reads this; the Split forecast does (#367),
+# to hand a break over ice this pass melts to the fire that melted it.
+var cause: AttackAction = null

@@ -669,6 +669,23 @@ func test_the_picked_zone_highlight_sorts_above_the_zones_it_highlights() -> voi
 		.is_equal(BoardOverlays.LAYERS[BoardOverlays.Layer.ZONE_CAPTURE]["sort"])
 
 
+func test_the_zone_marks_sit_over_the_zone_band_and_under_every_range_tone() -> void:
+	# #955, a RELATIONSHIP: a zone's edge replaces its kind's wash and its emblem stands on the edge,
+	# so both sort above the zone band and the picked-zone highlight -- and under every range tone,
+	# because a zone is ground and the interaction reads over it (#346).
+	var marks: int = BoardOverlays.LAYERS[BoardOverlays.Layer.ZONE_MARKS]["sort"]
+	var emblems: int = BoardOverlays.LAYERS[BoardOverlays.Layer.ZONE_EMBLEMS]["sort"]
+	for below: BoardOverlays.Layer in [BoardOverlays.Layer.ZONE_PATROL, BoardOverlays.Layer.ZONE_CAPTURE,
+			BoardOverlays.Layer.ZONE_EXTRACTION, BoardOverlays.Layer.ZONE_DEPLOYMENT,
+			BoardOverlays.Layer.ZONE_DEFEND, BoardOverlays.Layer.ZONE_HIGHLIGHT]:
+		assert_int(marks).is_greater(BoardOverlays.LAYERS[below]["sort"])
+	assert_int(emblems).override_failure_message(
+			"the emblem shares or sits under the edge it stands on -- a z-fight").is_greater(marks)
+	for above: BoardOverlays.Layer in [BoardOverlays.Layer.THREAT, BoardOverlays.Layer.REACH,
+			BoardOverlays.Layer.MOVE]:
+		assert_int(emblems).is_less(BoardOverlays.LAYERS[above]["sort"])
+
+
 func test_no_overlay_layer_can_sort_over_a_unit() -> void:
 	# The structural half, and the one that covers planning ghosts: a ghost is a UnitSprite3D,
 	# so board markup must sit below UNIT_RENDER_PRIORITY by construction — not because the

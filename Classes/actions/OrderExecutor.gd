@@ -367,6 +367,11 @@ func _execute_move_phase(actions: Array, plan: ResolvedPlan, sheet: BeatSheet,
 	for action in actions:
 		action.begin_execution()
 
+	# Every walk starts together and a watch shot plays while the others keep walking, so a leader it
+	# kills hands over mid-stride: its successor's reach waits for the walk's end (#367), where the
+	# Split forecast and the Play API already judge it.
+	var squads: SquadManager = game.squad_manager
+	squads.hold_handovers()
 	for action in actions:
 		action.execute()
 
@@ -423,6 +428,7 @@ func _execute_move_phase(actions: Array, plan: ResolvedPlan, sheet: BeatSheet,
 			# takes one to clear the stage.
 			var cam: CameraController = game.camera_controller
 			cam.framed_span = []
+			squads.release_handovers()
 			return
 
 		await get_tree().process_frame
@@ -499,8 +505,12 @@ func _walk_interrupts(plan: ResolvedPlan, actions: Array) -> Array[Dictionary]:
 # 2026-08-26: "the AI ghost unit stays around for a bit after the unit already reaches its move
 # destination"). Until this, nothing pulled a ghost until _end_squad_turn -- so a unit spent the rest
 # of the pass standing underneath a translucent copy of itself.
+#
+# A walker a watch shot KILLED is already freed by the time its walk completes; its markup went with
+# it (OverlayManager.handle_unit_death), and a freed unit cannot pass the typed parameter.
 func _retire_move_markup(action: BaseAction) -> void:
-	game.overlay_manager.clear_move_markup(action.actor)
+	if is_instance_valid(action.actor):
+		game.overlay_manager.clear_move_markup(action.actor)
 
 # The HOLD lands before each action and the LINGER after it -- two schedules, two moments, and they
 # are different questions: a hold is anticipation and scales with the drama profile, a linger is

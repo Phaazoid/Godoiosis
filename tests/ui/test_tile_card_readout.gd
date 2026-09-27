@@ -200,6 +200,50 @@ func test_the_card_icon_is_the_tiles_own_sprite() -> void:
 	assert_that(icon.region).is_equal(Rect2(source.get_tile_texture_region(GRASS_ATLAS)))
 
 
+# The picture is the board's own tile sprite, so bare on the card it read as a hole through to the
+# board (#955): it sits in a frame. Asked as an OVERRIDE, because get_theme_stylebox answers for a
+# control that brings nothing of its own.
+func test_the_card_picture_sits_in_a_frame() -> void:
+	await _click(Vector2i(2, 0))
+
+	var well: PanelContainer = game.hover_info_panel._tile_well
+	assert_bool(well.is_ancestor_of(game.hover_info_panel._tile_icon)).is_true()
+	assert_bool(well.visible).is_true()
+	assert_bool(well.has_theme_stylebox_override("panel")).is_true()
+	assert_object(well.get_theme_stylebox("panel")).is_same(QueueStyle.section_box())
+
+
+# Each zone KIND on a tile heads its own section with the emblem the board wears for it, in the
+# kind's colour (#955) -- the watch section's mechanism, one texture and one colour for both surfaces.
+func test_each_zone_kind_heads_its_own_section_with_its_emblem() -> void:
+	var cell := Vector2i(4, 0)
+	game.zone_manager.paint_cell("North Point", ZoneManager.Kind.CAPTURE, cell)
+	game.zone_manager.paint_cell("The Landing", ZoneManager.Kind.DEPLOYMENT, cell)
+
+	var zones: Array[TileReadout.Section] = []
+	for section in TileReadout.compose(game, cell):
+		if section.layer == TileReadout.Layer.ZONE:
+			zones.append(section)
+	assert_int(zones.size()).override_failure_message("two kinds on one tile, one section each").is_equal(2)
+	var capture := zones[0]
+	assert_str(capture.heading).is_equal(Glossary.title(Glossary.Term.CAPTURE_ZONE))
+	assert_object(capture.marking).is_same(ZoneMarks.emblem_of(ZoneManager.Kind.CAPTURE))
+	assert_that(capture.marking_color).is_equal(ZoneMarks.colour_of(ZoneManager.Kind.CAPTURE))
+	assert_str(capture.rows[0].text).is_equal("North Point")
+	assert_bool(capture.rows[-1].note).is_true()
+	assert_object(zones[1].marking).is_same(ZoneMarks.emblem_of(ZoneManager.Kind.DEPLOYMENT))
+
+	# ...and the card DRAWS it: the mark heads the section in the kind's colour.
+	await _click(cell)
+	var drawn := false
+	for rect in game.hover_info_panel._tile_panel.find_children("*", "TextureRect", true, false):
+		var mark := rect as TextureRect
+		if mark.texture == ZoneMarks.emblem_of(ZoneManager.Kind.CAPTURE) \
+				and mark.modulate == ZoneMarks.colour_of(ZoneManager.Kind.CAPTURE):
+			drawn = true
+	assert_bool(drawn).override_failure_message("the card drew no capture emblem").is_true()
+
+
 func test_a_burning_tile_works_the_state_into_the_card() -> void:
 	var cell := Vector2i(3, 0)
 	_set_tile_state(cell, Terrain.TileState.BURNING)

@@ -27,6 +27,7 @@ var tile_sections_source: Callable   # (cell) -> Array[TileReadout.Section]
 
 var current_unit: Unit
 var _tile_panel: PanelContainer
+var _tile_well: PanelContainer   # the frame the tile picture sits in, so it cannot read as a hole in the card
 var _tile_icon: TextureRect
 var _tile_header: Label
 var _sections: TileInfoSections
@@ -62,7 +63,15 @@ func _ready() -> void:
 	_tile_icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 	_tile_icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 	_tile_icon.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
-	header_row.add_child(_tile_icon)
+	# The picture is the board's own tile sprite, so bare on the card it read as a window through to
+	# the board (dev, #955). It sits in the paper section box, a pixel clear of its border.
+	_tile_well = PanelContainer.new()
+	var well_margin := MarginContainer.new()
+	for side: String in ["left", "right", "top", "bottom"]:
+		well_margin.add_theme_constant_override("margin_" + side, 1)
+	well_margin.add_child(_tile_icon)
+	_tile_well.add_child(well_margin)
+	header_row.add_child(_tile_well)
 	_tile_header = Label.new()
 	header_row.add_child(_tile_header)
 	_sections = TileInfoSections.new()
@@ -83,6 +92,7 @@ func restyle() -> void:
 	var frame: StyleBox = QueueStyle.panel_box()
 	hover_panel.add_theme_stylebox_override("panel", frame)
 	_tile_panel.add_theme_stylebox_override("panel", frame)
+	_tile_well.add_theme_stylebox_override("panel", QueueStyle.section_box())
 	_tile_header.add_theme_color_override("font_color", QueueStyle.ink(QueueStyle.Role.TITLE_TEXT))
 	hover_gridcontainer.restyle()
 	if is_showing_tile():
@@ -174,7 +184,7 @@ func _draw_tile(cell: Vector2i) -> void:
 	var readout: TileReadout.Readout = tile_source.call(cell) if tile_source.is_valid() \
 		else TileReadout.Readout.new()
 	_tile_icon.texture = readout.icon
-	_tile_icon.visible = readout.icon != null
+	_tile_well.visible = readout.icon != null
 	_tile_header.text = readout.title
 	_tile_header.visible = readout.title != ""
 	_sections.forget()

@@ -377,6 +377,12 @@ var knockback_ghost_by_unit := {} # { Unit : Sprite2D }
 # own layer. Adding a kind is one line here.
 var zone_layer_map := {}
 var zone_highlight_overlay: TileMapLayer = null   # the Tile Brush's picked zone; built in _ready
+# The zones redraw_zones last drew for a player (#955): {"name", "kind", "cells"} each, the hidden
+# list applied and the authoring kinds left out -- the one answer the zone marks, the emblems and the
+# walls all read. The version is the mirror's change signal (#308).
+var drawn_zones: Array[Dictionary] = []
+var drawn_zones_version := 0
+var _zone_emblem_sprites: Array[Sprite2D] = []
 var reach_overlay: TileMapLayer = null   # YOUR unit's attack reach (#1066); built in _ready
 var threat_overlay: TileMapLayer = null   # ...and the enemy's one undifferentiated field, under it
 var payload_overlay: TileMapLayer = null   # the aim's PAYLOAD tiles, inset (#1058 D2b); built in _ready
@@ -1198,13 +1204,43 @@ func restyle_leash() -> void:
 func redraw_zones(zones: ZoneManager, hidden: Array[String] = []) -> void:
 	for layer in zone_layer_map.values():
 		layer.clear()
+	var drawn: Array[Dictionary] = []
 	for name in zones.zone_names():
 		if hidden.has(name):
 			continue
-		var layer = zone_layer_map.get(zones.kind_of(name))
+		var kind: ZoneManager.Kind = zones.kind_of(name)
+		if not ZoneManager.AUTHORING_KINDS.has(kind):
+			drawn.append({"name": name, "kind": kind, "cells": zones.cells_in(name)})
+		var layer = zone_layer_map.get(kind)
 		if layer == null:
 			continue
 		draw_cells(layer, zones.cells_in(name), ATLAS_COORDS)
+	if drawn != drawn_zones:
+		drawn_zones = drawn
+		drawn_zones_version += 1
+	_rebuild_zone_emblems()
+
+
+# The flat view's emblems -- one per drawn zone, on the cell ZoneMarks picks, in its kind's colour.
+# Sprites for the watch marks' reason: a tile layer holds one tile per cell and would evict the wash.
+func _rebuild_zone_emblems() -> void:
+	for sprite in _zone_emblem_sprites:
+		if is_instance_valid(sprite):
+			sprite.queue_free()
+	_zone_emblem_sprites.clear()
+	if board_tilemap == null or icon_overlay == null:
+		return
+	for zone in drawn_zones:
+		var kind: ZoneManager.Kind = zone["kind"]
+		var cells: Array[Vector2i] = []
+		cells.assign(zone["cells"])
+		var sprite := Sprite2D.new()
+		sprite.texture = ZoneMarks.emblem_of(kind)
+		sprite.modulate = ZoneMarks.colour_of(kind)
+		sprite.z_index = RING_Z_INDEX
+		sprite.position = board_tilemap.map_to_local(ZoneMarks.emblem_cell(cells))
+		icon_overlay.add_child(sprite)
+		_zone_emblem_sprites.append(sprite)
 
 # The aim's live feedback on the UNITS it would hit: their sprites pulse, while the red reach layer
 # never changes. The tiles say it separately, by flashing in travel order (set_aim_flash) -- every
