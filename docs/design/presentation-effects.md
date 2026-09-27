@@ -791,7 +791,10 @@ settles that the next ribbon effect inherits:
 - **The per-bolt AGE rides in the VERTEX COLOUR**, which is the only channel that varies inside one
   draw. `sight_beam.gdshader` multiplies by it and a mesh with no colour array reads white, so the
   aim's own sight beam is untouched — the shader has two tenants now and the file name is the
-  first one's.
+  first one's. *(It has since taken the reach marks, the focus edge and the squad's lines, and
+  [#1109](https://github.com/Phaazoid/Godoiosis/issues/1109) round 2 gave the squad's lines a dark
+  CASING through two uniforms that are inert at zero width on every other tenant — see
+  visual-clarity.md → *Round 2: the casing*.)*
 - **`BoardOverlays.add_beam_strip` is the one spelling of the ribbon recipe**, static and appending,
   with `beam_tangents` beside it. The overlay's `set_line` is one caller of it.
 - **The STRIKE is the attack's own trajectory.** `Reach.sight_trace` already computes what the aim

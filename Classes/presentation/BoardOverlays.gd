@@ -192,27 +192,30 @@ const LAYERS: Dictionary[Layer, Dictionary] = {
 	# a line in the air should read over one on the floor. Colours arrive per draw from SquadLines2D's
 	# statics, so these entries are fallbacks. The range is the "cohesion" set and the tethers the
 	# "squad" one -- two widths, one glow and one dash pattern (DASHED_BEAMS), which is what makes them
-	# read as one system.
+	# read as one system. All six wear a dark CASING (#1109 round 2), declared per entry by `"casing"`,
+	# which goes LAST because KnobSource's colour rewriter reads `"color"` first.
 	Layer.COHESION_EDGE: {"color": Color(1.0, 0.55, 0.12, 0.95), "sort": 12, "lift_sort": 6,
-		"beam": "cohesion", "kind": Kind.LINE},
+		"beam": "cohesion", "kind": Kind.LINE, "casing": true},
 	# ...and the tethers, one layer per STATE because a layer is one material: the pluck is a uniform,
 	# and only the strained tethers may shake. They hang at the body's middle and a ribbon writes no
 	# depth, so the three share 14, the last free sort under ICONS. `cone_alpha` puts their arrowhead on
 	# the SEE-THROUGH cone, so a tether colour's alpha fades the arrow with the shaft (dev, 2026-09-22);
 	# the reach mark's stays solid, which was #1069's ruling for an intent.
 	Layer.TETHERS: {"color": Color(1.0, 0.55, 0.12, 0.95), "sort": 14, "beam": "squad",
-		"kind": Kind.LINE, "cone_alpha": true},
+		"kind": Kind.LINE, "cone_alpha": true, "casing": true},
 	Layer.TETHER_GHOST: {"color": Color(0.72, 0.42, 0.16, 0.5), "sort": 14, "beam": "squad",
-		"kind": Kind.LINE, "cone_alpha": true},
+		"kind": Kind.LINE, "cone_alpha": true, "casing": true},
 	Layer.TETHER_STRAIN: {"color": Color(1.0, 0.18, 0.14, 0.95), "sort": 14, "beam": "squad",
-		"kind": Kind.LINE, "cone_alpha": true},
+		"kind": Kind.LINE, "cone_alpha": true, "casing": true},
 	# ...and a membership MOMENT (#367): a tether drawing in on a join, reeling in on a leave. WHITE,
 	# because each moment's own colour and fade ride its vertex colour -- several play at once, at
 	# different ages, on one material. Rebuilt per frame while one is in the air (ArcLightning's shape).
-	Layer.TETHER_MOMENT: {"color": Color(1, 1, 1, 1), "sort": 14, "beam": "squad", "kind": Kind.LINE, "cone_alpha": true},
+	Layer.TETHER_MOMENT: {"color": Color(1, 1, 1, 1), "sort": 14, "beam": "squad", "kind": Kind.LINE, "cone_alpha": true,
+		"casing": true},
 	# ...and a BREAK's pieces and sparks (#367 part 2B), which are SOLID: each piece is one dash already,
 	# and the squad beam marches its dashes along a stroke, which would cut a falling piece up as it fell.
-	Layer.TETHER_SHARDS: {"color": Color(1, 1, 1, 1), "sort": 14, "beam": "shard", "kind": Kind.LINE},
+	Layer.TETHER_SHARDS: {"color": Color(1, 1, 1, 1), "sort": 14, "beam": "shard", "kind": Kind.LINE,
+		"casing": true},
 	Layer.AIM: {"color": Color(1, 1, 0, 1), "sort": 4, "kind": Kind.FILL},
 	# The aim's PAYLOAD tiles (#1058 D2b): the footprint's twin, inset a size smaller (InsetSquare), for the
 	# tiles only what the attack DROPS reaches. It SHARES AIM's sort, and may: its cells are the payloads'
@@ -294,6 +297,9 @@ const REACH_CONE_SHADER_PATH := "res://Classes/presentation/reach_cone.gdshader"
 # ...and its SEE-THROUGH twin (#1070 follow-up), for a layer whose spec carries `cone_alpha`: a third
 # file for the same reason, since blending and back-face culling are render_mode too.
 const REACH_CONE_ALPHA_SHADER_PATH := "res://Classes/presentation/reach_cone_alpha.gdshader"
+# ...and the CASING round a cased layer's cone (#1109 round 2): an inverted hull, which needs its FRONT
+# faces culled -- a fourth file, for the same reason.
+const REACH_CONE_CASING_SHADER_PATH := "res://Classes/presentation/reach_cone_casing.gdshader"
 # The fixed world direction the cone's facets are shaded against. NOT the camera and NOT a knob:
 # the shade is baked into vertex colour when a mark is rebuilt (on a hover change), so a
 # camera-relative bake is stale the instant the rig orbits, and a direction is three sliders nobody
@@ -393,14 +399,24 @@ enum SelectorDepth { LEVEL, HALF }
 # range's dashes too faint on the ground (2026-09-22), which cohesion_line_width answers. Near the
 # bloom threshold, like the outline -- these are markup. The DASHES are not here: they are
 # SquadLines2D statics, because the flat view draws them too.
-@export var squad_line_width := 0.045: set = _set_squad_line_width
-@export var squad_line_intensity := 1.2: set = _set_squad_line_intensity
-@export var cohesion_line_width := 0.09: set = _set_cohesion_line_width
+@export var squad_line_width := 0.035: set = _set_squad_line_width
+@export var squad_line_intensity := 0.95: set = _set_squad_line_intensity
+@export var cohesion_line_width := 0.035: set = _set_cohesion_line_width
+# The dark CASING's width, world units EACH side (#1109 round 2), on every layer declaring `"casing"`.
+# Its colour is SquadLines2D.CASING_COLOR, since the flat view draws the casing too.
+@export var squad_casing_width := 0.015: set = _set_squad_casing_width
 
 
 func _set_squad_line_width(value: float) -> void:
 	squad_line_width = value
 	_apply_beam_params()
+
+
+# A material uniform on the ribbons AND geometry on the arrowheads' hulls, so it has to do both.
+func _set_squad_casing_width(value: float) -> void:
+	squad_casing_width = value
+	_apply_beam_params()
+	_rebuild_cones()
 
 
 func _set_cohesion_line_width(value: float) -> void:
@@ -497,6 +513,9 @@ var _lines: Dictionary[Layer, Array] = {}   # LINE layers: the current segments 
 # kinds of node in it; `_cone_batches` is what a knob change re-emits from, the way `intent_shafts`
 # is what a mark knob re-derives from one layer up.
 var _cones: Dictionary[Layer, MeshInstance3D] = {}
+# ...and a CASED layer's outline round those cones (#1109 round 2): a third node, on a third shader,
+# for the reason the cone has a second.
+var _cone_hulls: Dictionary[Layer, MeshInstance3D] = {}
 var _cone_batches: Dictionary[Layer, Array] = {}
 var _cone_colors: Dictionary[Layer, Color] = {}
 var _layer_colors: Dictionary[Layer, Color] = {}  # runtime fill colors (set_layer_modulate)
@@ -805,8 +824,46 @@ func _emit_cones(layer: Layer) -> void:
 				float(entry.get("dist", 0.0)), cone_shading, cone_facets, entry.get("tint", Color.WHITE)):
 			drawn = true
 	node.visible = drawn
-	(node.material_override as ShaderMaterial).set_shader_parameter("beam_color",
-			_cone_colors.get(layer, Color.WHITE))
+	var color: Color = _cone_colors.get(layer, Color.WHITE)
+	(node.material_override as ShaderMaterial).set_shader_parameter("beam_color", color)
+	if LAYERS[layer].get("casing", false):
+		_emit_hulls(layer, batch, color)
+
+
+# The CASING round each of a cased layer's cones (#1109 round 2): one larger cone per arrowhead, the same
+# shape grown by the casing width, drawn inside-out behind it. Unshaded and flat -- a shade of 1.0 bakes
+# white -- carrying only each cone's own tint ALPHA, so a fading moment fades its outline.
+func _emit_hulls(layer: Layer, batch: Array, color: Color) -> void:
+	var node := _hull_for(layer)
+	var mesh := node.mesh as ImmediateMesh
+	mesh.clear_surfaces()
+	var drawn := false
+	if squad_casing_width > 0.0:
+		for entry: Dictionary in batch:
+			var hull := casing_cone(entry["base"], entry["tip"], float(entry["radius"]), squad_casing_width)
+			var tint: Color = entry.get("tint", Color.WHITE)
+			if add_beam_cone(mesh, hull["base"], hull["tip"], float(hull["radius"]), 0.0, 1.0, cone_facets,
+					Color(1.0, 1.0, 1.0, tint.a)):
+				drawn = true
+	node.visible = drawn
+	(node.material_override as ShaderMaterial).set_shader_parameter("beam_color", color)
+
+
+# The cone that wraps another by `width` all round: the SAME apex angle, its base pushed back by
+# `width` and its tip out by `width / sin(half_angle)`, which is exactly what puts every point of the
+# slanted face `width` outside the original's. Static and pure, so a case can state a cone and check
+# the wrap; zero width is the cone it was given.
+static func casing_cone(base: Vector3, tip: Vector3, radius: float, width: float) -> Dictionary:
+	var axis := tip - base
+	var length := axis.length()
+	if length <= 0.0 or radius <= 0.0 or width <= 0.0:
+		return {"base": base, "tip": tip, "radius": radius}
+	axis /= length
+	var half_angle := atan2(radius, length)
+	var grown_base := base - axis * width
+	var grown_tip := tip + axis * (width / sin(half_angle))
+	return {"base": grown_base, "tip": grown_tip,
+		"radius": grown_base.distance_to(grown_tip) * tan(half_angle)}
 
 
 # One SOLID cone: a radial fan from `base` to `tip` plus the base cap, emitted as triangles onto a
@@ -975,6 +1032,10 @@ func _apply_beam_params() -> void:
 	# ...and the cones beside them, which carry the bead's own three so the pulse stays one sweep.
 	for layer: Layer in _cones:
 		_style_cone((_cones[layer] as MeshInstance3D).material_override as ShaderMaterial, LAYERS[layer])
+	# ...and the casing round them, whose colour is a SquadLines2D static a knob can move.
+	for layer: Layer in _cone_hulls:
+		((_cone_hulls[layer] as MeshInstance3D).material_override as ShaderMaterial) \
+			.set_shader_parameter("casing_color", SquadLines2D.CASING_COLOR)
 
 
 # A squad-line knob moved (#1070) -- the dashes live on SquadLines2D, so nothing here would otherwise
@@ -1038,6 +1099,11 @@ func _style_beam(material: ShaderMaterial, spec: Dictionary = {}) -> void:
 	material.set_shader_parameter("dash_fill", clampf(SquadLines2D.DASH_FILL, 0.0, 1.0))
 	material.set_shader_parameter("dash_speed", SquadLines2D.DASH_SPEED * BoardSpace.CELL_SIZE)
 	material.set_shader_parameter("motion", 1.0 if beams_animating() else 0.0)
+	# ...and the dark CASING (#1109 round 2), only on a layer that DECLARES one. Every other beam reads a
+	# zero width, which is the shader's original path untouched.
+	var cased: bool = spec.get("casing", false)
+	material.set_shader_parameter("casing_width", squad_casing_width if cased else 0.0)
+	material.set_shader_parameter("casing_color", SquadLines2D.CASING_COLOR)
 
 
 # The CONE's material (#1069), which is a different shader from the shaft's and therefore a
@@ -1173,6 +1239,31 @@ func cone_vertices_of(layer: Layer) -> Array[Dictionary]:
 				"color": Color.WHITE if i >= colors.size() else colors[i],
 				"dist": 0.0 if i >= uv2.size() else uv2[i].x,
 			})
+	return out
+
+
+# ...and a cased layer's arrowhead CASING (#1109 round 2): its material, and its geometry in the
+# cone_vertices_of shape. Null and empty on a layer that has never built one.
+func hull_material_of(layer: Layer) -> ShaderMaterial:
+	if not _cone_hulls.has(layer) or not is_instance_valid(_cone_hulls[layer]):
+		return null
+	return (_cone_hulls[layer] as MeshInstance3D).material_override as ShaderMaterial
+
+
+func hull_vertices_of(layer: Layer) -> Array[Dictionary]:
+	var out: Array[Dictionary] = []
+	if not _cone_hulls.has(layer) or not is_instance_valid(_cone_hulls[layer]):
+		return out
+	var mesh := (_cone_hulls[layer] as MeshInstance3D).mesh as ImmediateMesh
+	if mesh == null:
+		return out
+	for s in mesh.get_surface_count():
+		var arrays := mesh.surface_get_arrays(s)
+		var points: PackedVector3Array = arrays[Mesh.ARRAY_VERTEX]
+		var colors: PackedColorArray = arrays[Mesh.ARRAY_COLOR]
+		for i in points.size():
+			out.append({"point": points[i],
+				"color": Color.WHITE if i >= colors.size() else colors[i]})
 	return out
 
 
@@ -1494,6 +1585,26 @@ func _cone_for(layer: Layer) -> MeshInstance3D:
 	add_child(instance)
 	_style_cone(material, LAYERS[layer])
 	_cones[layer] = instance
+	return instance
+
+
+# The cone's CASING node (#1109 round 2), built lazily beside it on a cased layer. One render priority
+# UNDER its layer: it writes no depth, so at the cone's own priority the two would sort by distance and
+# the hull's far side could draw over the arrowhead it outlines.
+func _hull_for(layer: Layer) -> MeshInstance3D:
+	if _cone_hulls.has(layer) and is_instance_valid(_cone_hulls[layer]):
+		return _cone_hulls[layer]
+	var instance := MeshInstance3D.new()
+	instance.mesh = ImmediateMesh.new()
+	var material := ShaderMaterial.new()
+	material.shader = load(REACH_CONE_CASING_SHADER_PATH) as Shader
+	material.render_priority = int(LAYERS[layer]["sort"]) - 1
+	material.set_shader_parameter("casing_color", SquadLines2D.CASING_COLOR)
+	instance.material_override = material
+	instance.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	instance.layers = WORLD_RENDER_LAYER
+	add_child(instance)
+	_cone_hulls[layer] = instance
 	return instance
 
 

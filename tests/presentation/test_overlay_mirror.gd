@@ -1036,6 +1036,30 @@ func test_an_enemy_squads_lines_reach_the_diorama_in_the_enemy_colour() -> void:
 			.is_equal(SquadLines2D.TETHER_COLOR)
 
 
+# The dark CASING (#1109 round 2) reaches a REAL squad's lines through the real draw, both sides' -- the
+# dev's "both sides" ruling. Compared to the knob, never to a number.
+func test_a_squads_lines_reach_the_diorama_cased_on_both_sides() -> void:
+	var enemy_leader := _spawn(ENEMY, Vector2i(2, 2))
+	var enemy_member := _spawn(ENEMY, Vector2i(4, 3))
+	game.squad_manager.join_squad(enemy_member, enemy_leader.squad)
+	var leader := _spawn(PLAYER, Vector2i(3, 2))
+	var member := _spawn(PLAYER, Vector2i(5, 2))
+	game.squad_manager.join_squad(member, leader.squad)
+	assert_float(_overlays.squad_casing_width).override_failure_message(
+			"fixture: the casing is tuned to nothing, so this case cannot see it").is_greater(0.0)
+
+	for squad_leader: Unit in [enemy_leader, leader]:
+		game.draw_squad_cohesion(squad_leader.squad, squad_leader.movement.cell)
+		await _settle()
+		assert_bool(_overlays.lines_of(BoardOverlays.Layer.TETHERS).size() > 0).override_failure_message(
+				"fixture: the tether never reached the diorama").is_true()
+		for layer: BoardOverlays.Layer in [BoardOverlays.Layer.COHESION_EDGE, BoardOverlays.Layer.TETHERS]:
+			assert_float(float(_overlays.beam_parameter(layer, &"casing_width"))).override_failure_message(
+					"%s drew the %s squad's lines with no casing" % [BoardOverlays.Layer.keys()[layer],
+						"enemy" if squad_leader == enemy_leader else "player's"]) \
+				.is_equal_approx(_overlays.squad_casing_width, 0.0001)
+
+
 # --- Membership moments (#367) ---------------------------------------------------------------------
 
 # A moment reaches the diorama off the same store the flat view draws, hanging at its chord like the

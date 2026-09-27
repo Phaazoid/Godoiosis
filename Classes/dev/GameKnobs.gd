@@ -111,6 +111,8 @@ const KNOBS: Array[Dictionary] = [
 		"tip": "How thick a tether is, in cells. Its arrowhead is a multiple of this (Tether arrow width), so widening the line widens its head too. The range's outline has its own width below."},
 	{"group": "Squad lines", "node": "BoardOverlays", "prop": "cohesion_line_width", "label": "Range outline width (3D)", "min": 0.01, "max": 0.3, "step": 0.005,
 		"tip": "How thick the dashed stroke round the squad's range is, in cells. It lies on the ground, where it has more to compete with than a tether in the air does."},
+	{"group": "Squad lines", "node": "BoardOverlays", "prop": "squad_casing_width", "label": "Casing width (3D)", "min": 0.0, "max": 0.08, "step": 0.005,
+		"tip": "How far the dark outline round every squad line reaches past the line, on each side, in cells -- dashes, arrowheads and a break's pieces alike. Zero takes the outline off. Its colour is Squad line casing below."},
 	{"group": "Squad lines", "node": "BoardOverlays", "prop": "squad_line_intensity", "label": "Squad line glow (3D)", "min": 0.2, "max": 4.0, "step": 0.05,
 		"tip": "Brightness multiplier on the squad's lines. Around 1 draws them flat, which is what markup wants; past the scene's glow threshold (1.2) they bloom and start reading as an effect."},
 
@@ -581,6 +583,8 @@ const CLASS_KNOBS: Array[Dictionary] = [
 		"tip": "The tether from each member to its leader AND the dashed stroke round the squad's range -- one colour, because they are one system. Orange, the hue the cohesion fill always wore."},
 	{"group": "Squad lines", "label": "Enemy tether and range (2D+3D)", "static": "ENEMY_TETHER_COLOR", "script": SQUAD_LINES_SCRIPT,
 		"tip": "The same lines for an ENEMY squad, shown on enemy hover, and its breaks and draw-ins. Lightened from the enemy field's purple so it reads over that field and over bare ground alike; the strain red a break turns to is shared with yours."},
+	{"group": "Squad lines", "label": "Squad line casing (2D+3D)", "static": "CASING_COLOR", "script": SQUAD_LINES_SCRIPT,
+		"tip": "The dark outline round every squad line, yours and the enemy's: what keeps a line readable on a floor near its own colour. Its alpha is multiplied by the line's, so a ghost tether's outline is as see-through as the ghost. The 3D width is Casing width; the flat view's is one pixel."},
 	{"group": "Squad lines", "label": "Ghost tether (2D+3D)", "static": "TETHER_GHOST_COLOR", "script": SQUAD_LINES_SCRIPT,
 		"tip": "A tether that MIGHT be: every unit Squad Up could recruit, or every squad Join Squad could join. Dim the colour itself, not only its alpha -- the 3D arrowhead is solid and ignores alpha, so a ghost there reads as darker rather than see-through."},
 	{"group": "Squad lines", "label": "Strained tether (2D+3D)", "static": "TETHER_STRAIN_COLOR", "script": SQUAD_LINES_SCRIPT,
@@ -1791,6 +1795,7 @@ static func read_static(name: String) -> Variant:
 		"ZONE_SHIMMER_SPEED": return ZoneMarks.ZONE_SHIMMER_SPEED
 		"TETHER_COLOR": return SquadLines2D.TETHER_COLOR
 		"ENEMY_TETHER_COLOR": return SquadLines2D.ENEMY_TETHER_COLOR
+		"CASING_COLOR": return SquadLines2D.CASING_COLOR
 		"TETHER_GHOST_COLOR": return SquadLines2D.TETHER_GHOST_COLOR
 		"TETHER_STRAIN_COLOR": return SquadLines2D.TETHER_STRAIN_COLOR
 		"DASHES_PER_TILE": return SquadLines2D.DASHES_PER_TILE
@@ -2134,7 +2139,7 @@ static func write_static(host: Node3D, name: String, value: Variant) -> void:
 		# The squad's lines (#1070). Every one re-applies to BOTH views through one door: the 3D beam
 		# params (the dashes are shader uniforms) and the store, which re-derives the tethers -- the
 		# inset is geometry -- and repaints the flat line.
-		"TETHER_COLOR", "ENEMY_TETHER_COLOR", "TETHER_GHOST_COLOR", "TETHER_STRAIN_COLOR", \
+		"TETHER_COLOR", "ENEMY_TETHER_COLOR", "CASING_COLOR", "TETHER_GHOST_COLOR", "TETHER_STRAIN_COLOR", \
 				"DASHES_PER_TILE", "DASH_FILL", \
 				"DASH_SPEED", "TETHER_INSET", "ARROW_LENGTH", "ARROW_WIDTH_SCALE", "SHAKE_AMPLITUDE", 				"SHAKE_SECONDS", "SHAKE_SWINGS":
 			_write_squad_line(name, value)
@@ -2874,6 +2879,7 @@ static func _write_squad_line(name: String, value: Variant) -> void:
 	match name:
 		"TETHER_COLOR": SquadLines2D.TETHER_COLOR = value
 		"ENEMY_TETHER_COLOR": SquadLines2D.ENEMY_TETHER_COLOR = value
+		"CASING_COLOR": SquadLines2D.CASING_COLOR = value
 		"TETHER_GHOST_COLOR": SquadLines2D.TETHER_GHOST_COLOR = value
 		"TETHER_STRAIN_COLOR": SquadLines2D.TETHER_STRAIN_COLOR = value
 		"DASHES_PER_TILE": SquadLines2D.DASHES_PER_TILE = roundi(value)
