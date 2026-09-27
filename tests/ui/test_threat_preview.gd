@@ -432,6 +432,42 @@ func test_a_queued_order_drops_the_cached_field() -> void:
 	assert_object(game.threat_field()).is_not_same(before)
 
 
+# A LIFECYCLE CHANGE MOVES THE FIELD TOO, and no plan edit or pass end announces one that lands
+# outside a pass -- a dev button, a turn-start tick. The cache went on naming a downed body as an
+# attacker (reach lines from a downed Skirmisher, reported 2026-09-23). force_down fires the same
+# went_downed every down fires, so this pins the wire rather than the button.
+func test_a_unit_going_down_drops_the_cached_field() -> void:
+	_spawn(PLAYER, Vector2i(1, 1))
+	var enemy := _spawn(ENEMY, Vector2i(3, 2))
+	var cell := Vector2i(2, 2)
+	game.toggle_enemy_ranges()
+	assert_bool(game.threat_field().attackers_of(cell).has(enemy)).override_failure_message(
+			"fixture is vacuous: the standing enemy never reached the cell beside it").is_true()
+	assert_int(_om().threat_overlay.get_used_cells().size()).override_failure_message(
+			"the ranges key lit nothing, so the repaint below proves nothing").is_greater(0)
+
+	enemy.force_down()
+
+	assert_bool(game.threat_field().attackers_of(cell).has(enemy)).override_failure_message(
+			"the downed enemy is still in the cached threat field").is_false()
+	assert_array(_om().threat_overlay.get_used_cells()).override_failure_message(
+			"the V tones still show the downed enemy's field").is_empty()
+
+
+func test_a_unit_dying_drops_the_cached_field() -> void:
+	_spawn(PLAYER, Vector2i(1, 1))
+	var enemy := _spawn(ENEMY, Vector2i(3, 2))
+	var cell := Vector2i(2, 2)
+	assert_bool(game.threat_field().attackers_of(cell).has(enemy)).override_failure_message(
+			"fixture is vacuous: the standing enemy never reached the cell beside it").is_true()
+
+	enemy.die()
+
+	# Counted rather than asked by reference: the body is queue_freed.
+	assert_int(game.threat_field().attackers_of(cell).size()).override_failure_message(
+			"the dead enemy is still in the cached threat field").is_equal(0)
+
+
 # A shove is what makes the PROJECTION observable, and a player's own move is not: a move reaches
 # this field only through occupancy, which a board can render invisible, so the mutant that skips
 # the snapshot would pass. A queued knockback moves the ENEMY, which moves its origins -- and a HOLD

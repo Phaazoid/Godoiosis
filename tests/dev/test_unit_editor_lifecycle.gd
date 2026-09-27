@@ -193,3 +193,49 @@ func test_down_ejects_the_body_into_a_solo_squad() -> void:
 		.override_failure_message("_downed_pending did not drain").is_equal(0)
 	assert_bool(member.is_downed()).is_true()          # ejected, not removed from the board
 	assert_that(member.movement.cell).is_equal(Vector2i(2, 0))
+
+
+# ==============================================================================
+#  The enemy field -- the other thing a press outside any pass has to settle
+# ==============================================================================
+
+# game.threat_field() is a cache, and only a plan edit or a pass end used to drop it -- so an enemy
+# downed here kept drawing reach lines (the 2026-09-23 report), and one revived here drew none.
+func _spawn_enemy(cell: Vector2i) -> Unit:
+	var enemy: Unit = game.spawn_unit(H.make_unit_data({}, Team.Faction.ENEMY), cell)
+	assert_object(enemy).is_not_null()
+	enemy.equipped_weapon = H.make_weapon()
+	enemy.squad.archetype = AIArchetype.Type.HOLD
+	return enemy
+
+
+func _reaches(enemy: Unit, cell: Vector2i) -> bool:
+	return game.threat_field().attackers_of(cell).has(enemy)
+
+
+func test_down_takes_the_unit_out_of_the_enemy_field() -> void:
+	var enemy := _spawn_enemy(Vector2i(4, 0))
+	var cell := Vector2i(3, 0)
+	assert_bool(_reaches(enemy, cell)).override_failure_message(
+			"fixture is vacuous: the standing enemy never reached the cell beside it").is_true()
+	_editor.edit_unit(enemy)
+
+	_press("Down Unit")
+
+	assert_bool(_reaches(enemy, cell)).override_failure_message(
+			"the downed enemy is still in the cached threat field").is_false()
+
+
+func test_revive_puts_the_unit_back_into_the_enemy_field() -> void:
+	var enemy := _spawn_enemy(Vector2i(4, 0))
+	var cell := Vector2i(3, 0)
+	_editor.edit_unit(enemy)
+	_press("Down Unit")
+	assert_bool(_reaches(enemy, cell)).override_failure_message(
+			"fixture is vacuous: the downed enemy still reaches the cell, so a revive proves nothing") \
+		.is_false()
+
+	_press("Revive Unit")
+
+	assert_bool(_reaches(enemy, cell)).override_failure_message(
+			"the revived enemy is missing from the cached threat field").is_true()

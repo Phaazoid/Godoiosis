@@ -146,7 +146,7 @@ var ranges_shown := false     # the V toggle (slice 3): every enemy's move + rea
 # Which enemies stay drawn once the pointer leaves them, by instance id -- see toggle_enemy_pin.
 # They outlive the pointer and a queued order, but NOT the V key going off (2026-09-18).
 var pinned_enemies: Dictionary[int, bool] = {}
-var _threat_field: ThreatField = null   # built lazily by threat_field(); dropped when the plan moves
+var _threat_field: ThreatField = null   # built lazily by threat_field(); dropped when the plan moves, or a unit goes down, dies or is revived
 var mission_controller: MissionController
 var order_executor: OrderExecutor
 var bug_reporter: BugReporter
@@ -1591,6 +1591,9 @@ func _build_unit(data: UnitData, grid_layer: TileMapLayer, cell: Vector2i) -> Un
 	# the since-deleted Crisis offer poll, #158) unreachable: downed units were never ejected, so
 	# their tiles stayed walkable to squadmates and a downed leader kept the squad.
 	unit.went_downed.connect(order_executor.on_unit_downed)
+	# A down is a lifecycle change no plan edit announces: the dev Down button and a turn-start tick
+	# land outside any pass, so without this the cached field keeps the body as an attacker.
+	unit.went_downed.connect(drop_threat_field.unbind(1))
 	return unit
 
 func spawn_unit(data: UnitData, pos: Vector2i, is_body := false) -> Unit:
@@ -1668,6 +1671,7 @@ func _on_unit_died(unit: Unit):
 	# The selection is stored (#107) and die() frees the node -- release it or every reader dangles.
 	if unit == selected_unit:
 		selected_unit = null
+	drop_threat_field()   # ahead of the pin release, so its repaint reads a field without the corpse
 	drop_enemy_pin(unit)   # a pin outlives the pointer, so it has to be released here (#710)
 	overlay_manager.handle_unit_death(unit)
 	squad_manager.handle_unit_death(unit)
