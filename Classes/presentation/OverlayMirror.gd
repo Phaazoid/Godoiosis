@@ -59,6 +59,10 @@ var _last_outline_version := -1  # ...and the focus stroke's (slice 4)
 var _last_squad_lines_version := -1   # ...and the squad's range and tethers (#1070)
 var _shake_pushed := 0.0   # the last pluck pushed, so a still tether costs no per-frame write
 var _moments_drawn := false   # whether the moment layers hold anything, so an idle board costs nothing (#367)
+# The zone-look experiment (#955): the light wall (look C), built on first need, and what it was last
+# built from -- the zones, the knobs and the look -- so a still board rebuilds nothing.
+var _zone_walls: ZoneWalls
+var _last_wall_key: Array = []
 
 # How far the drop pointer stands off the cliff face it hangs on (#431), in cells. A depth-buffer
 # epsilon, not a feel value: big enough that a coplanar wall cannot stipple through it, small
@@ -84,13 +88,15 @@ func _process(_delta: float) -> void:
 
 	_fill(BoardOverlays.Layer.MOVE, om.move_overlay.get_used_cells())
 	_fill(BoardOverlays.Layer.INVALID_MOVE, om.invalidmove_overlay.get_used_cells())
-	_fill(BoardOverlays.Layer.ZONE_CAPTURE, om.capture_overlay.get_used_cells())
-	_fill(BoardOverlays.Layer.ZONE_EXTRACTION, om.extraction_overlay.get_used_cells())
-	# Ungated like the two above, not gated like PATROL below (#736): the gate exists to keep AI
+	# The four play kinds wash under TINT only: under an edge look (#955) ZONE_MARKS draws them instead.
+	var tint := ZoneMarks.draws_tint()
+	_fill_gated(BoardOverlays.Layer.ZONE_CAPTURE, om.capture_overlay, tint)
+	_fill_gated(BoardOverlays.Layer.ZONE_EXTRACTION, om.extraction_overlay, tint)
+	# Look-gated like the two above, never authoring-gated like PATROL below (#736): that gate keeps AI
 	# internals out of play, and where the player may stand is the opposite of a secret. What ends
 	# it is redraw_zones' `hidden` list once turn 1 begins, so the cells simply stop being there.
-	_fill(BoardOverlays.Layer.ZONE_DEPLOYMENT, om.deployment_overlay.get_used_cells())
-	_fill(BoardOverlays.Layer.ZONE_DEFEND, om.defend_overlay.get_used_cells())
+	_fill_gated(BoardOverlays.Layer.ZONE_DEPLOYMENT, om.deployment_overlay, tint)
+	_fill_gated(BoardOverlays.Layer.ZONE_DEFEND, om.defend_overlay, tint)
 	# Authoring scaffolding: cells AND the authoring INTENT, or patrol zones leak into play. The
 	# highlight is ALSO the play-time leash reveal (#710), so its gate is either intent, and its
 	# tint is copied from the 2D like AIM's since the colour became a knob.
@@ -130,6 +136,7 @@ func _process(_delta: float) -> void:
 	_markers(BoardOverlays.Layer.KNOCKBACK, kb_trails)
 
 	_icons(om)
+	_zones(om)
 	_squad_count(om)
 	_guard_links(om)
 	_terrain(om)
@@ -605,6 +612,67 @@ func _icons(om: OverlayManager) -> void:
 		if is_instance_valid(sprite) and sprite.texture != null:
 			watched.append(_marker(_anchor_px(sprite.global_position), sprite.texture, sprite.modulate))
 	_markers(BoardOverlays.Layer.WATCH_ICONS, watched)
+
+
+# The drawn zones (#955), off OverlayManager.drawn_zones -- the one answer to what a player may see,
+# the hidden list already applied. An emblem per zone under every look, and under an edge look each
+# cell's art for the sides it faces out of. The tint is the kind's LIVE layer colour, so dragging a
+# zone colour on the Game tab moves the marks with the wash.
+func _zones(om: OverlayManager) -> void:
+	var look := ZoneMarks.look()
+	var marks: Array[Dictionary] = []
+	var emblems: Array[Dictionary] = []
+	for zone in om.drawn_zones:
+		var kind: ZoneManager.Kind = zone["kind"]
+		var cells: Array[Vector2i] = []
+		cells.assign(zone["cells"])
+		var tint := overlays.layer_modulate(ZoneMarks.LAYER_OF_KIND[kind])
+		tint.a = 1.0
+		emblems.append(_marker(_anchor(ZoneMarks.emblem_cell(cells)), ZoneMarks.emblem_of(kind), tint))
+		if look == ZoneMarks.Look.TINT:
+			continue
+		var masks := ZoneMarks.cell_masks(cells)
+		for cell: Vector2i in masks:
+			marks.append(_marker(_anchor(cell), ZoneMarks.texture(look, masks[cell]), tint))
+	_markers(BoardOverlays.Layer.ZONE_MARKS, marks)
+	_markers(BoardOverlays.Layer.ZONE_EMBLEMS, emblems)
+	_zone_wall_sync(om, look)
+
+
+# Look C's wall, standing just inside each zone (ZoneMarks.wall_outline). Hidden while a tear-out is
+# up, since its strips stand where the ground rests.
+func _zone_wall_sync(om: OverlayManager, look: ZoneMarks.Look) -> void:
+	var wanted := look == ZoneMarks.Look.LIGHT_WALL and not om.drawn_zones.is_empty()
+	if _zone_walls == null:
+		if not wanted:
+			return
+		_zone_walls = ZoneWalls.new()
+		add_child(_zone_walls)
+	_zone_walls.visible = wanted and not BoardSpace.staging_active()
+	if not wanted:
+		return
+	var key: Array = [om.drawn_zones_version, ZoneMarks.art_version]
+	for layer: BoardOverlays.Layer in ZoneMarks.LAYER_OF_KIND.values():
+		key.append(overlays.layer_modulate(layer))   # a zone colour dragged on the Game tab
+	if key == _last_wall_key and not _heights_moved:
+		return
+	_last_wall_key = key
+	var board: BoardContext = null
+	if game != null and game.squad_manager.board_source.is_valid():
+		board = game.squad_manager.board_source.call()
+	var lift := Vector3.UP * overlays.marker_lift(BoardOverlays.Layer.ZONE_MARKS)
+	var strips: Array[Dictionary] = []
+	for zone in om.drawn_zones:
+		var kind: ZoneManager.Kind = zone["kind"]
+		var cells: Array[Vector2i] = []
+		cells.assign(zone["cells"])
+		var colour := overlays.layer_modulate(ZoneMarks.LAYER_OF_KIND[kind])
+		colour.a = 1.0
+		for segment in ZoneMarks.wall_outline(cells, board):
+			strips.append({"from": BoardSpace.trace_point(segment[0]) + lift,
+					"to": BoardSpace.trace_point(segment[1]) + lift, "colour": colour})
+	_zone_walls.build(strips, ZoneMarks.ZONE_WALL_HEIGHT * BoardSpace.CELL_SIZE,
+			ZoneMarks.ZONE_WALL_ALPHA, ZoneMarks.ZONE_SHIMMER_SPEED)
 
 
 # Where a leader's crown STANDS (#1070): its cell's ground, as every marker here, lifted by the

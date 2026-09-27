@@ -13,8 +13,10 @@ class_name ZoneManager
 # were always going to expand. What a new kind costs, measured on #736 rather than estimated: one
 # enum member, whatever rule consumes it, and -- if it draws -- a layer in BOTH stacks (a .tscn
 # node, an @onready, a modulate, a zone_layer_map row, a BoardOverlays.Layer + LAYERS row, an
-# OverlayMirror fill, and a string in each of the two headless overlay-child lists). Save/load,
-# authoring and persistence genuinely need no edit at all, which is the part that matters.
+# OverlayMirror fill, and a string in each of the two headless overlay-child lists) -- plus, if a
+# player sees it, a ZoneMarks colour row and emblem (#955; test_zone_marks refuses a kind without
+# them). Save/load, authoring and persistence genuinely need no edit at all, which is the part that
+# matters.
 #
 # PERSISTED, so the enum is APPEND-ONLY (enums serialize as plain ints).
 
