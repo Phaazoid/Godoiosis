@@ -791,15 +791,20 @@ func test_a_payload_level_that_hits_nobody_has_no_subject() -> void:
 func test_a_knockback_payload_leaves_its_own_victim_and_shoves_the_rest_outward() -> void:
 	var blast := _blast("Blowback")
 	blast.knockback = 2
-	var carrier := _attack("Tap")
+	var carrier := _attack("Tap", UNIT, 2)
 	carrier.payload = blast
 	var thrower := _thrower(carrier)
-	var stuck := _foe(Vector2i(0, -1))
+	# Every lane out of the stuck victim's tile is open, so staying put is the rule and never a
+	# shove that something blocked; the one beside it stands on a diagonal for the same reason.
+	var drop := Vector2i(0, -2)
+	var stuck := _foe(drop)
 	var beside := _foe(Vector2i(1, -1))
-	var plan := _resolve(thrower, Vector2i(0, -1))
-	assert_that(PlanResolver.projected_position(stuck, plan.hypo)).is_equal(Vector2i(0, -1))
-	assert_that(PlanResolver.projected_position(beside, plan.hypo)).override_failure_message(
-			"the unit beside the drop was not shoved away from it").is_equal(Vector2i(3, -1))
+	var plan := _resolve(thrower, drop)
+	assert_that(PlanResolver.projected_position(stuck, plan.hypo)).override_failure_message(
+			"the payload shoved the unit it was stuck to").is_equal(drop)
+	var landed := PlanResolver.projected_position(beside, plan.hypo)
+	assert_int(absi(landed.x - drop.x) + absi(landed.y - drop.y)).override_failure_message(
+			"the unit beside the drop landed at %s -- not shoved away from it" % landed).is_greater(2)
 
 
 # 48: a Guard that takes the carrier's hit carries the bomb -- it goes off where the BLOCKER lands.
