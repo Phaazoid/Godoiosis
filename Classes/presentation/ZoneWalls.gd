@@ -1,15 +1,15 @@
 extends MeshInstance3D
 class_name ZoneWalls
 
-# Look C of the zone experiment (#955): a low wall of light on every drawn zone's perimeter. ONE mesh
+# A zone's WALL (#955): a low wall of light just inside every drawn zone's perimeter. ONE mesh
 # for the whole board -- a vertical strip per outward cell edge, its kind's colour in the vertices --
 # built by OverlayMirror from ZoneMarks.wall_outline, which steps the tracer the COH line and the
 # enemy focus edge share just inside the zone, off the plane a border block's face stands in. Rebuilt
 # only when the zones, the heights or a knob move; the shimmer is the shader's own clock.
 #
 # On the WORLD render layer alone, or the damp blot would darken it (the decal law). It HIDES while a
-# tear-out has cells up: its strips stand where the ground rests and cannot follow a flight (declared,
-# experiment scope).
+# tear-out has cells up: its strips stand where the ground rests and cannot follow a flight
+# (declared; the rim marks do follow it). The flat view has no wall.
 
 const SHADER := preload("res://Classes/presentation/zone_wall.gdshader")
 

@@ -10,13 +10,13 @@ class_name ZoneManager
 #
 # The kind is what makes this ONE mechanism instead of a parallel Array[Vector2i] on ScenarioData
 # per objective type (dev call 2026-07-28): a capture point is a zone of size one, and zone kinds
-# were always going to expand. What a new kind costs, measured on #736 rather than estimated: one
-# enum member, whatever rule consumes it, and -- if it draws -- a layer in BOTH stacks (a .tscn
-# node, an @onready, a modulate, a zone_layer_map row, a BoardOverlays.Layer + LAYERS row, an
-# OverlayMirror fill, and a string in each of the two headless overlay-child lists) -- plus, if a
-# player sees it, a ZoneMarks colour row and emblem (#955; test_zone_marks refuses a kind without
-# them). Save/load, authoring and persistence genuinely need no edit at all, which is the part that
-# matters.
+# were always going to expand. What a new kind costs: one enum member, whatever rule consumes it,
+# and -- if a player sees it -- a BoardOverlays.Layer + LAYERS row for its colour and a ZoneMarks
+# LAYER_OF_KIND row and emblem (test_zone_marks refuses a kind without them). Both views then draw it
+# as rim marks off OverlayManager.drawn_zones with no further edit (#955 retired the per-kind wash
+# layers #736 measured at ~10 places). An AUTHORING kind is still a wash: a .tscn TileMapLayer, an
+# @onready, a zone_layer_map row and an OverlayMirror fill, as PATROL has. Save/load, authoring and
+# persistence genuinely need no edit at all, which is the part that matters.
 #
 # PERSISTED, so the enum is APPEND-ONLY (enums serialize as plain ints).
 

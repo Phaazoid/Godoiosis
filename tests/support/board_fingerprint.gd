@@ -92,7 +92,7 @@ static func _settings_state() -> Dictionary:
 static func _experiments_state() -> Dictionary:
 	var out := {}
 	for flag: Experiments.Flag in Experiments.DEFS:
-		out[Experiments.Flag.keys()[flag]] = Experiments.value_of(flag)
+		out[Experiments.Flag.keys()[flag]] = Experiments.is_on(flag)
 	return out
 
 

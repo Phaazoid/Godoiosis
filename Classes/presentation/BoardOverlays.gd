@@ -106,6 +106,8 @@ const LAYERS: Dictionary[Layer, Dictionary] = {
 	# sort * lift_step, so the lowest sort must still clear the tile's own OPAQUE top face -- a real
 	# z-fight, unlike the transparent-vs-transparent case below. At slice 3 that meant 0.02 -> 0.03;
 	# at slice 4, -7 would have landed at 0.002 and fill_lift went to 0.04. The floor is a law.
+	# The four PLAY kinds' rows (capture, extraction, deployment, defend) are each kind's COLOUR since
+	# #955, read by ZoneMarks and tuned on the Game tab; nothing fills them, a zone draws as ZONE_MARKS.
 	Layer.ZONE_CAPTURE: {"color": Color(0.3, 0.9, 1, 0.5), "sort": -7, "kind": Kind.FILL},
 	Layer.ZONE_EXTRACTION: {"color": Color(0.4, 1, 0.5, 0.5), "sort": -7, "kind": Kind.FILL},
 	Layer.ZONE_PATROL: {"color": OverlayManager.ZONE_PATROL_MODULATE, "sort": -7, "kind": Kind.FILL},
@@ -266,8 +268,8 @@ const LAYERS: Dictionary[Layer, Dictionary] = {
 	# the lawful band -- a law pins every layer under EFFECT_RENDER_PRIORITY. A BILLBOARD
 	# ignores _lift_of and rides billboard_lift, so this moves PRIORITY only, not geometry.
 	Layer.ICONS: {"color": Color.WHITE, "sort": 15, "kind": Kind.BILLBOARD},
-	# A zone's EDGE (#955), per cell, drawn as the experiment ZoneMarks.look() picks -- in place of the
-	# kind's wash above, not over it. -5 is a vacated slot in the zone band's neighbourhood: above the
+	# A zone's RIM (#955), per cell -- which is how a zone draws; the kind's FILL row above is only its
+	# colour now, and nothing fills it. -5 is a vacated slot in the zone band's neighbourhood: above the
 	# wash and the picked-zone highlight, UNDER every range tone, because a zone is ground and the
 	# interaction reads over it (#346). Tint arrives per marker, so the colour here is WHITE.
 	Layer.ZONE_MARKS: {"color": Color.WHITE, "sort": -5, "kind": Kind.SPRITE},

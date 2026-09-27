@@ -1167,7 +1167,9 @@ func test_a_ring_on_a_corner_cell_carries_the_shape_it_lies_on() -> void:
 			+ "marker on a corner cell draws flat and cuts through the ground").is_greater(0)
 
 
-func test_zone_fills_mirror_and_captured_zones_drop() -> void:
+# Since #955 a zone draws as rim marks, not a wash: every cell of a drawn zone wears one, tinted by its
+# kind, and a captured zone drops out with its marks.
+func test_zone_marks_mirror_and_captured_zones_drop() -> void:
 	var zones := {
 		"cap": {"kind": ZoneManager.Kind.CAPTURE, "cells": [Vector2i(1, 1), Vector2i(2, 1)]},
 		"ext": {"kind": ZoneManager.Kind.EXTRACTION, "cells": [Vector2i(6, 6)]},
@@ -1175,15 +1177,29 @@ func test_zone_fills_mirror_and_captured_zones_drop() -> void:
 	game.zone_manager.load_dict(zones)
 	_om().redraw_zones(game.zone_manager)
 	await _settle()
-	assert_that(_sorted_3d(BoardOverlays.Layer.ZONE_CAPTURE)) \
-		.is_equal([BoardSpace.of_cell(Vector2i(1, 1), BoardSpace.top_row_of(0)), BoardSpace.of_cell(Vector2i(2, 1), BoardSpace.top_row_of(0))] as Array[Vector3i])
-	assert_that(_sorted_3d(BoardOverlays.Layer.ZONE_EXTRACTION)) \
-		.is_equal([BoardSpace.of_cell(Vector2i(6, 6), BoardSpace.top_row_of(0))] as Array[Vector3i])
-	# A captured zone stops glowing in 2D (redraw_zones' hidden list) — and therefore in 3D.
+	assert_that(_marked_cells(BoardOverlays.Layer.ZONE_CAPTURE)) \
+		.is_equal([Vector2i(1, 1), Vector2i(2, 1)] as Array[Vector2i])
+	assert_that(_marked_cells(BoardOverlays.Layer.ZONE_EXTRACTION)) \
+		.is_equal([Vector2i(6, 6)] as Array[Vector2i])
+	# A captured zone stops being drawn (redraw_zones' hidden list), in both views.
 	_om().redraw_zones(game.zone_manager, ["cap"])
 	await _settle()
-	assert_int(_overlays.cells_of(BoardOverlays.Layer.ZONE_CAPTURE).size()).is_equal(0)
-	assert_int(_overlays.cells_of(BoardOverlays.Layer.ZONE_EXTRACTION).size()).is_equal(1)
+	assert_int(_marked_cells(BoardOverlays.Layer.ZONE_CAPTURE).size()).is_equal(0)
+	assert_int(_marked_cells(BoardOverlays.Layer.ZONE_EXTRACTION).size()).is_equal(1)
+
+
+# The cells a kind's rim marks stand on (#955), read off the ZONE_MARKS entries its colour tints.
+func _marked_cells(kind_layer: BoardOverlays.Layer) -> Array[Vector2i]:
+	var tint := _overlays.layer_modulate(kind_layer)
+	tint.a = 1.0
+	var cells: Array[Vector2i] = []
+	for mark in _overlays.markers_of(BoardOverlays.Layer.ZONE_MARKS):
+		if mark["modulate"] == tint:
+			var pos: Vector3 = mark["pos"]
+			cells.append(Vector2i(floori(pos.x / BoardSpace.CELL_SIZE), floori(pos.z / BoardSpace.CELL_SIZE)))
+	cells.sort()
+	return cells
+
 
 
 # #736. UNGATED, deliberately — the opposite of the patrol case directly below, and the two exist
@@ -1199,15 +1215,15 @@ func test_a_deployment_zone_mirrors_without_the_authoring_gate() -> void:
 
 	_om().set_zone_visibility(false)   # the play view: patrol scaffolding is DOWN here
 	await _settle()
-	assert_that(_sorted_3d(BoardOverlays.Layer.ZONE_DEPLOYMENT)).override_failure_message(
+	assert_that(_marked_cells(BoardOverlays.Layer.ZONE_DEPLOYMENT)).override_failure_message(
 			"a painted deployment zone is invisible in 3D").is_equal(
-		[BoardSpace.of_cell(Vector2i(4, 2), BoardSpace.top_row_of(0)),
-			BoardSpace.of_cell(Vector2i(5, 2), BoardSpace.top_row_of(0))] as Array[Vector3i])
+		[Vector2i(4, 2), Vector2i(5, 2)] as Array[Vector2i])
 
 	# ...and the hidden list is what takes it away, not a visibility flag.
 	_om().redraw_zones(game.zone_manager, ["landing"])
 	await _settle()
-	assert_int(_overlays.cells_of(BoardOverlays.Layer.ZONE_DEPLOYMENT).size()).is_equal(0)
+	assert_int(_marked_cells(BoardOverlays.Layer.ZONE_DEPLOYMENT).size()).is_equal(0)
+
 
 
 func test_the_patrol_zone_and_picked_highlight_mirror_only_while_visible() -> void:
@@ -1320,31 +1336,43 @@ func test_exit_current_mode_clears_the_mirrored_layers() -> void:
 # battle3d._on_board_loaded used to empty EVERY 3D layer while the mirror's push cache went on
 # saying it had already drawn them. apply_scenario is synchronous end to end, so the mirror never
 # observes the intermediate empty — it sees the same cells before and after, diffs equal, and the
-# wiped layer stays wiped for the life of the board. Zones are the visible casualty for being the
-# only markup static across a whole board; a gameplay layer self-heals within a click or two.
+# wiped layer stays wiped for the life of the board. Zones (their rim marks since #955) are the
+# visible casualty for being the only markup static across a whole board; a gameplay layer
+# self-heals within a click or two.
 #
 # Asserting the settled end state of a FIRST load passes against that bug (the cache starts empty),
 # so this reloads an UNCHANGED board through the real funnel: capture_scenario -> apply_scenario ->
 # board_loaded -> battle3d. The zones are hand-built rather than read off a mission, so nothing here
 # pins authored content — they round-trip through ScenarioData.zones like any other board content.
-func test_a_reload_of_an_unchanged_board_leaves_the_zone_fills_drawn() -> void:
+func test_a_reload_of_an_unchanged_board_leaves_the_zone_marks_drawn() -> void:
 	game.zone_manager.load_dict({
 		"cap": {"kind": ZoneManager.Kind.CAPTURE, "cells": [Vector2i(1, 1), Vector2i(2, 1)]},
 	})
 	_om().redraw_zones(game.zone_manager)
 	await _settle()
-	var drawn := _sorted_3d(BoardOverlays.Layer.ZONE_CAPTURE)
+	var drawn := _mark_positions(BoardOverlays.Layer.ZONE_MARKS)
 	assert_array(drawn).override_failure_message(
 			"nothing was drawn before the reload, so the reload could not lose it").is_not_empty()
 
 	var manager: ScenarioManager = game.scenario_manager
 	manager.apply_scenario(manager.capture_scenario("reload-test"))
 	await _settle()
-	# The 2D kept them, or the 3D would be right to be empty — assert the authority first.
-	assert_that(_lifted(_om().capture_overlay)).override_failure_message(
-			"the 2D lost the zones on reload, which is a different bug").is_equal(drawn)
-	assert_that(_sorted_3d(BoardOverlays.Layer.ZONE_CAPTURE)).override_failure_message(
+	# The store kept them, or the 3D would be right to be empty -- assert the authority first.
+	var kept: Array = _om().drawn_zones.map(func(zone: Dictionary) -> String: return zone["name"])
+	assert_array(kept).override_failure_message(
+			"the zone store lost the zones on reload, which is a different bug").contains(["cap"])
+	assert_that(_mark_positions(BoardOverlays.Layer.ZONE_MARKS)).override_failure_message(
 			"the board reloaded and its zones never came back in 3D").is_equal(drawn)
+
+
+# Where a marker layer's entries stand, sorted, so two draws of the same marks compare equal.
+func _mark_positions(layer: BoardOverlays.Layer) -> Array[Vector3]:
+	var at: Array[Vector3] = []
+	for mark in _overlays.markers_of(layer):
+		at.append(mark["pos"])
+	at.sort()
+	return at
+
 
 
 # Move the pointer the way the picker does, so everything past this line is the real hover wire:

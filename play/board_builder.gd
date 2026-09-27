@@ -16,7 +16,7 @@ const WATER_ATLAS := Vector2i(5, 6)   # walkable=false (Waterwalk-only), move_co
 const OVERLAY_CHILD_NAMES := [
 	"MoveOverlay", "AttackOverlay", "HoverOverlay", "IconOverlay",
 	"ArrowIconOverlay", "ProjectedUnitOverlay", "InvalidMoveOverlay",
-	"ZoneOverlay", "CaptureOverlay", "ExtractionOverlay", "DeploymentOverlay", "DefendOverlay",
+	"ZoneOverlay",
 ]
 
 # Build the node graph under `parent` (a node already in the SceneTree). Returns refs by name.

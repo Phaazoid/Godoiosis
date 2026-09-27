@@ -1,6 +1,6 @@
-# ZoneMarks (#955 part 1), pure: which sides of a zone's cells face out, where its emblem goes, and
-# what each look's generated art does at an edge. Relationships only -- a knob moves every number
-# here, so no value is pinned (#8's tuning razor).
+# ZoneMarks (#955 part 1), pure: which sides of a zone's cells face out, where its emblem goes, what
+# the generated rim does at an edge, and where the wall stands. Relationships only -- a knob moves
+# every number here, so no value is pinned (#8's tuning razor).
 extends GdUnitTestSuite
 
 const N := ZoneMarks.Side.N
@@ -10,7 +10,6 @@ const W := ZoneMarks.Side.W
 
 
 func before_test() -> void:
-	Experiments.reset_for_test()
 	ZoneMarks.restyle()
 
 
@@ -59,39 +58,20 @@ func test_every_kind_a_player_sees_has_an_emblem_and_a_colour() -> void:
 		assert_float(ZoneMarks.colour_of(kind).a).is_equal(1.0)
 
 
-# Texel row 0 is the NORTH edge. The painted edge is solid white against a north edge (past its
-# outline) and the plain fill in the middle of the cell.
-func test_the_painted_edge_is_solid_at_the_edge_and_the_fill_inside() -> void:
-	var img := ZoneMarks.image(ZoneMarks.Look.PAINTED_EDGE, N)
-	var size := img.get_height()
-	var middle := img.get_pixel(size / 2, size / 2)
-	var band_row := int(ceil(ZoneMarks.ZONE_EDGE_OUTLINE)) + 1
-	var band := img.get_pixel(size / 2, band_row)
-	assert_float(band.a).is_greater(middle.a)
-	assert_that(band).override_failure_message("the band is not white -- it could not take a tint").is_equal(
-			Color(1, 1, 1, band.a))
-	assert_float(middle.a).is_equal_approx(ZoneMarks.ZONE_FILL_ALPHA, 0.01)
-	# The south side faces nowhere, so it carries no band.
-	assert_float(img.get_pixel(size / 2, size - 1 - band_row).a).is_equal_approx(ZoneMarks.ZONE_FILL_ALPHA, 0.01)
-
-
-func test_the_soft_rim_fades_inward() -> void:
-	var img := ZoneMarks.image(ZoneMarks.Look.SOFT_RIM, W)
+# Texel column 0 is the WEST edge. The rim is white past its outline (so it takes a tint), fades inward,
+# and leaves the plain fill in the middle of the cell; the east side faces nowhere and carries no rim.
+func test_the_rim_fades_inward_to_the_fill() -> void:
+	var img := ZoneMarks.image(W)
 	var size := img.get_width()
-	var near := img.get_pixel(int(ceil(ZoneMarks.ZONE_EDGE_OUTLINE)) + 3, size / 2).a
+	var near_colour := img.get_pixel(int(ceil(ZoneMarks.ZONE_EDGE_OUTLINE)) + 3, size / 2)
 	var further := img.get_pixel(size / 3, size / 2).a
 	var middle := img.get_pixel(size - 2, size / 2).a
-	assert_float(near).is_greater(further)
+	assert_float(near_colour.a).is_greater(further)
 	assert_float(further).is_greater_equal(middle)
+	assert_that(near_colour).override_failure_message("the rim is not white -- it could not take a tint") \
+			.is_equal(Color(1, 1, 1, near_colour.a))
+	assert_float(middle).is_equal_approx(ZoneMarks.ZONE_FILL_ALPHA, 0.01)
 
-
-# Look C wears B's rim under its wall (dev, 2026-09-27), held as the two looks' art agreeing.
-func test_the_light_wall_stands_on_the_soft_rim() -> void:
-	for mask: int in [N, N | E, N | E | S | W, ZoneMarks.Side.NE]:
-		var wall := ZoneMarks.image(ZoneMarks.Look.LIGHT_WALL, mask).get_data()
-		var rim := ZoneMarks.image(ZoneMarks.Look.SOFT_RIM, mask).get_data()
-		assert_bool(wall == rim).override_failure_message(
-				"look C's ground art for mask %d is not B's rim" % mask).is_true()
 
 
 # A hair off the point in every direction is still one of the zone's cells: inside, and off the border.
@@ -125,17 +105,12 @@ func test_the_wall_outline_stands_inside_its_zone_and_closes_round_the_notch() -
 
 
 func test_a_knob_regenerates_the_art() -> void:
-	var before := ZoneMarks.texture(ZoneMarks.Look.PAINTED_EDGE, N)
-	var old := ZoneMarks.ZONE_BAND_WIDTH
-	ZoneMarks.ZONE_BAND_WIDTH = old + 0.1
+	var before := ZoneMarks.texture(N)
+	var old := ZoneMarks.ZONE_RIM_WIDTH
+	ZoneMarks.ZONE_RIM_WIDTH = old + 0.1
 	ZoneMarks.restyle()
-	var after := ZoneMarks.texture(ZoneMarks.Look.PAINTED_EDGE, N)
-	ZoneMarks.ZONE_BAND_WIDTH = old
+	var after := ZoneMarks.texture(N)
+	ZoneMarks.ZONE_RIM_WIDTH = old
 	ZoneMarks.restyle()
 	assert_object(after).is_not_same(before)
 
-
-func test_the_experiment_is_a_choice_the_look_reads() -> void:
-	Experiments.set_choice(Experiments.Flag.ZONE_LOOK, ZoneMarks.Look.LIGHT_WALL)
-	assert_int(ZoneMarks.look()).is_equal(ZoneMarks.Look.LIGHT_WALL)
-	assert_int(Experiments.options_of(Experiments.Flag.ZONE_LOOK).size()).is_equal(ZoneMarks.Look.size())
