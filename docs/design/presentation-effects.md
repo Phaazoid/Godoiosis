@@ -538,7 +538,7 @@ yank the camera too, and that is a knob to turn in play rather than a rule to gu
   so a queued move is followed rather than second-guessed. The 2D camera is written there and the 3D
   rig on the signal — one question, two cameras, no second answer about which cell.
 - **The 2D write stands down under a 3D host, and that is load-bearing.** `battle3d._update_pointer`
-  snaps that hidden camera on every motion purely to park the hover card, so writing it from here
+  snaps that hidden camera on every motion purely to park the info card, so writing it from here
   would mis-anchor the card and change nothing else. Same flag, same reason, as the WASD poll's.
 - **2D/3D** ([#292](https://github.com/Phaazoid/Godoiosis/issues/292)): both views answer it. `CORNER` deliberately does not — it is a debug PiP whose
   2D camera is already being dragged by the pointer.

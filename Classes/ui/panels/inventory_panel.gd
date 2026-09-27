@@ -2,7 +2,8 @@ extends PanelContainer
 
 # Inventory section of the inspect panel (UnitInfoPanel.tscn): the fixed grid of item slots
 # (code-generated), with an equip/unequip/toss action popup when the inspected unit is
-# controllable (can_act). Slot rows show the computed weapon view (elements incl. mods).
+# controllable (can_act). Slot rows show the computed weapon view (elements incl. mods). The slots
+# are the action queue's rows, in the player's palette (#1105).
 
 @onready var slots_container = $MarginContainer/InventorySlots
 signal loadout_changed
@@ -17,13 +18,18 @@ var can_act := false
 var selected_index := -1
 var action_popup: Control = null
 
-const COLOR_BORDER_DEFAULT := Color(0.3, 0.3, 0.3, 1)
-const COLOR_BORDER_SELECTED := Color(0.9, 0.78, 0.32, 1)
-const COLOR_EQUIPPED := Color(1, 0.85, 0.3, 1)
-const COLOR_EMPTY := Color(0.6, 0.616, 0.6, 1.0)
-
 func _ready() -> void:
 	_create_slots()
+
+# The player's palette (#1105): the slots are the action queue's rows on paper, re-inked on every
+# refresh, so a palette switch needs only a refresh.
+func restyle() -> void:
+	_refresh()
+
+# A slot NAME is text on paper, so it takes a font colour; `modulate` multiplies the theme's white
+# and cannot darken it for parchment.
+static func _ink_name(label: Label, role: QueueStyle.Role) -> void:
+	label.add_theme_color_override("font_color", QueueStyle.ink(role))
 
 func _create_slots():
 	for i in range(Unit.MAX_INVENTORY_SIZE):
@@ -31,18 +37,7 @@ func _create_slots():
 		slot_panel.custom_minimum_size = Vector2i(130, 40)
 		slot_panel.mouse_filter = Control.MOUSE_FILTER_STOP
 
-		var style := StyleBoxFlat.new()
-		style.bg_color = Color(0.15, 0.15, 0.15, 1)
-		style.border_width_left = 1
-		style.border_width_right = 1
-		style.border_width_top = 1
-		style.border_width_bottom = 1
-		style.corner_radius_top_left = 4
-		style.corner_radius_top_right = 4
-		style.corner_radius_bottom_left = 4
-		style.corner_radius_bottom_right = 4
-		style.border_color = COLOR_BORDER_DEFAULT
-		slot_panel.add_theme_stylebox_override("panel", style)
+		slot_panel.add_theme_stylebox_override("panel", QueueStyle.row_box(false, false))
 
 		var hbox := HBoxContainer.new()
 		hbox.name = "SlotHBox"
@@ -110,6 +105,7 @@ func _show_action_popup(index: int):
 		
 
 	var popup := PanelContainer.new()
+	popup.add_theme_stylebox_override("panel", QueueStyle.panel_box())
 	popup.z_index = UiLayers.INVENTORY_POPUP
 	var vbox := VBoxContainer.new()
 	popup.add_child(vbox)
@@ -250,9 +246,9 @@ func _refresh():
 		var slot = slots_container.get_child(i)
 		var icon = slot.get_node("SlotHBox/Icon")
 		var name_label = slot.get_node("SlotHBox/ItemName")
-		var style: StyleBoxFlat = slot.get_theme_stylebox("panel")
-
-		style.border_color = COLOR_BORDER_SELECTED if i == selected_index else COLOR_BORDER_DEFAULT
+		# The selected slot wears the row's hover look. Swapped, never edited: QueueStyle's boxes are
+		# shared, so writing a border into one would recolour every row in the game.
+		slot.add_theme_stylebox_override("panel", QueueStyle.row_box(false, i == selected_index))
 
 		if unit and i < unit.inventory.size() and unit.inventory[i] != null:
 			var item = unit.inventory[i]
@@ -265,12 +261,12 @@ func _refresh():
 
 			if item == unit.get_equipped_weapon():
 				display_name += "  (E)"
-				name_label.modulate = COLOR_EQUIPPED
+				_ink_name(name_label, QueueStyle.Role.EMPHASIS_TEXT)
 			elif item == unit.worn_armor:
 				display_name += "  (W)"
-				name_label.modulate = COLOR_EQUIPPED
+				_ink_name(name_label, QueueStyle.Role.EMPHASIS_TEXT)
 			else:
-				name_label.modulate = Color(1, 1, 1, 1)
+				_ink_name(name_label, QueueStyle.Role.BODY_TEXT)
 			if item is ArmorData and item.modifier_text() != "":
 				display_name += "  [%s]" % item.modifier_text()
 
@@ -286,5 +282,5 @@ func _refresh():
 		else:
 			icon.texture = null
 			name_label.text = "Empty"
-			name_label.modulate = COLOR_EMPTY
+			_ink_name(name_label, QueueStyle.Role.HEADER_TEXT)
 			slot.tooltip_text = ""

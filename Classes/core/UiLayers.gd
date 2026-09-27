@@ -15,7 +15,7 @@ class_name UiLayers
 # be Law #4 run in reverse -- one answer covering two genuinely different questions.
 
 const MISSION_STATUS := 1     # the always-on objectives/version corner (Scenes/MissionStatusPanel.tscn)
-const HOVER_PANEL := 2        # the compact hover card (Scenes/HoverInfoPanelControl.tscn)
+const HOVER_PANEL := 2        # the info card (Scenes/HoverInfoPanelControl.tscn), opened by a click since #1105
 const INVENTORY_POPUP := 10   # the in-panel item action popup (inventory_panel.gd)
 const ACTION_MENU := 20       # the unit's radial action menu -- over the HUD, under any takeover
 const MENU_SCREEN := 100      # a full-screen takeover -- MissionSelectScreen

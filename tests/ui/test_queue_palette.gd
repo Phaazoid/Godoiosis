@@ -227,7 +227,7 @@ func test_the_paper_roles_read_on_paper_in_both_palettes() -> void:
 	for palette: int in [PlayerSettings.QueuePalette.DEFAULT, PlayerSettings.QueuePalette.PARCHMENT]:
 		_pick(palette)
 		for ink_role: QueueStyle.Role in [QueueStyle.Role.BODY_TEXT, QueueStyle.Role.NAME_TEXT,
-				QueueStyle.Role.HEADER_TEXT]:
+				QueueStyle.Role.HEADER_TEXT, QueueStyle.Role.EMPHASIS_TEXT]:
 			var ink := QueueStyle.ink(ink_role)
 			for ground_role: QueueStyle.Role in [QueueStyle.Role.SECTION_BG, QueueStyle.Role.ROW_BG,
 					QueueStyle.Role.ROW_HOVER_BG]:
