@@ -7,7 +7,7 @@ its child [#49 Action Queue UX](https://github.com/Phaazoid/Godoiosis/issues/49)
 This is a *guidelines* doc, not a spec — it captures the principles we're holding the work to,
 plus the running order of the queue-UX checklist. Update it as items land.
 
-**Canon checked through #1119 (2026-09-27).**
+**Canon checked through #1124 (2026-09-27).**
 
 ## Principles
 
@@ -3708,6 +3708,8 @@ Asked and answered: **regroup by subject**. Markup is now the readout, in this o
 
 This is the orange cohesion bubble and the mauve `INVALID_MOVE`, deferred through #1066 and #1069 until the dev had played the new board. He had, and brought four asks and a fifth from a friend's playtest. There were four rulings from the questions (below), and one follow-up went to [#423](https://github.com/Phaazoid/Godoiosis/issues/423).
 
+**Every squad line wears a dark CASING since [#1109](https://github.com/Phaazoid/Godoiosis/issues/1109) round 2**, both sides': see *An enemy squad's LINES* → *Round 2: the casing*.
+
 ### Hover and Move now answer the same question about a leader
 
 > a squad leader, when hovered, shows his full move range. When move is selected, that move range is cut if squad mates can't follow. These two floodfills disagreeing is problematic.
@@ -3874,7 +3876,41 @@ The dev, after playing #367 part 1: *"there's no good way to see the enemy's COH
 
 - **Pins draw no lines.** V and Shift+click stay field-only; this is hover alone, as the issue scoped it.
 - **The Split chip stays tether orange**, even on a row whose blow splits an enemy squad (2A's ruling, not revisited here).
-- **How the rose reads in the lit diorama** over the real threat fill is the dev's to judge. The mockup's field was a flat blend with no lighting.
+- ~~**How the rose reads in the lit diorama** over the real threat fill is the dev's to judge. The mockup's field was a flat blend with no lighting.~~ **It read badly, and Round 2 below answers it.**
+
+### Round 2: the casing (2026-09-27)
+
+The dev, after playing it: *"it is too hard to see this rose color inside the enemy threat field color."* He sent a Shift+F3 report, and its frame said why.
+
+**What the frame measured.**
+- Over pale stone the enemy field renders LIGHT PINK, about (215,163,174), and its brick pattern spans (208,96,128) to (216,200,208).
+- The enemy line pixels sat at about (250,145,185), inside the field's own range, so the lines vanished on colour.
+- The range stroke runs along cell edges, which is exactly where the grout lines are, so it vanished on pattern as well.
+
+**Why the first mockup lied.** It blended the threat purple over the floor flat and unlit, which made the field BROWN. The rose looked fine against brown. **Build a look mockup from a REAL FRAME, never a hand-composited floor:** the round-2 mockup took his own screenshot and repainted only the lines' own pixels.
+
+| Fork | Ruling |
+|---|---|
+| Treatment | **Keep the rose, add a dark CASING**: an outline round each dash, tether and arrowhead. It reads on any floor, the casing on light ground and the rose on dark. Not taken: dark plum ink (fails on dark ground), and a near-white core with a rose edge (reads as the white focus outline). |
+| Scope | **Both sides.** Your own orange lines wear the casing too, so it is one look for the whole system. |
+
+**How it is built.**
+- **The ribbon.** `sight_beam.gdshader` gained `casing_width` and `casing_color`, INERT at zero width: the fragment then takes its original path untouched, so the sight bead, the reach marks, the focus edge and the arc's bolts are unchanged by construction. The cased path draws a crisp core inside a dark band, and cuts the band with the dash window dilated by the casing's width, so every dash is outlined at its ends as well as its sides. The casing's alpha follows the line's, so a ghost's casing is as see-through as the ghost.
+- **Which lines.** `"casing": true` goes last on the six squad-line entries of `BoardOverlays.LAYERS`, and `_style_beam` pushes a width only where it is declared. A law case in `test_board_overlays` holds every other LINE layer at zero.
+- **The arrowhead.** An INVERTED HULL: a second, larger cone per arrowhead, drawn front-faces-culled on `reach_cone_casing.gdshader`, one render priority under its layer. `BoardOverlays.casing_cone` keeps the apex angle, pushes the base back by the width and the tip out by `width / sin(half_angle)`, which puts the whole cone exactly the width inside it.
+- **The flat view.** `SquadLines2D` draws a wider polyline under each dash, extended at both ends (`CASING_PX`, one pixel), a triangle grown about its incentre under each arrowhead, and the same under a break's pieces.
+- **Knobs.** Game tab → Squad lines → *Squad line casing (2D+3D)* (the colour, `SquadLines2D.CASING_COLOR`) and *Casing width (3D)* (`BoardOverlays.squad_casing_width`; zero takes the casing off).
+- **Checked by eye before building on it.** A headless suite cannot see a shader's pixels, so a scratch windowed render of a cased and an uncased ribbon over the measured pink came first. The uncased rose on a grout line all but vanished, as reported; the cased one did not.
+
+**The line's core is CRISP now**, where it had a soft falloff to its rim, so every squad line is a little harder-edged than it was.
+
+**Declared residuals.**
+- **Sparks are cased too.** They share `TETHER_SHARDS` with a break's falling pieces, and a material has one casing. Splitting them onto a layer of their own is the fix, if the outlined sparks look wrong.
+- **A ghost's arrowhead reads a little darker**, because its outline shows through the see-through cone.
+- **The arrowhead's outline runs to a longer point than the mockup's.** A constant-width outline round a sharp cone meets in a miter, `width / sin(half_angle)` past the tip, where the mockup's pixel dilation rounded it. The tip stops short of the leader (`TETHER_INSET`), so most of that point sits behind the leader's sprite. If it reads as a needle, capping the apex push is the fix.
+- **A stroke's free start can show a sliver of casing with no ink** for a moment, as a dash marches off it. A tether's start sits under its member's sprite.
+- **The Split chip is still orange** on a row whose blow splits an enemy squad.
+- **What only the dev can judge:** the casing's width and darkness in play, the harder edge, and outlined sparks.
 
 ## Membership MOMENTS: a join draws the tether in, a leave reels it in, a forced exit breaks it ([#367](https://github.com/Phaazoid/Godoiosis/issues/367), part 1 BUILT 2026-09-23, part 2 BUILT 2026-09-27)
 
