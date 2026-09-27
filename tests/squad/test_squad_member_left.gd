@@ -115,3 +115,57 @@ func test_an_undeploy_is_a_release() -> void:
 	var units := _squad(1)
 	_sm.release(units[1])
 	assert_array(_causes_of(units[1])).contains_exactly([Cause.RELEASE])
+
+
+# A leader who dies DURING A WALK hands over at once but the reach check waits for the walk to end
+# (#367): the walkers are mid-stride at the frame of the death, and animation must not decide who
+# stays. OrderExecutor holds across the move phase; here the hold is driven directly.
+func _held_handover_squad(members: Array[Vector2i], heir_cell: Vector2i) -> Array[Unit]:
+	var leader: Unit = H.spawn_solo(self, _sm, ENEMY, Vector2i(0, 0), {Stats.Stat.LDR: 10})
+	var heir: Unit = H.spawn_solo(self, _sm, ENEMY, heir_cell, {Stats.Stat.LDR: 4})
+	_sm.join_squad(heir, leader.squad)
+	var units: Array[Unit] = [leader, heir]
+	for cell in members:
+		var member: Unit = H.spawn_solo(self, _sm, ENEMY, cell, {Stats.Stat.LDR: 1})
+		_sm.join_squad(member, leader.squad)
+		units.append(member)
+	_heard = []
+	return units
+
+
+func test_a_handover_held_through_a_walk_judges_reach_where_the_walkers_end() -> void:
+	var units := _held_handover_squad([Vector2i(0, 3), Vector2i(0, 4)], Vector2i(5, 0))
+	var heir := units[1]
+	var walker := units[2]
+	var stays_out := units[3]
+
+	_sm.hold_handovers()
+	_sm.handle_unit_death(units[0])
+	assert_object(heir.squad.leader).override_failure_message(
+			"a held handover did not name its successor at once").is_same(heir)
+	assert_array(_causes_of(walker) + _causes_of(stays_out)).override_failure_message(
+			"a held handover judged reach mid-walk").is_empty()
+
+	walker.movement.set_cell(Vector2i(4, 0))
+	_sm.release_handovers()
+	assert_array(_causes_of(walker)).override_failure_message(
+			"the walker was judged where it stood at the death, not where its walk ended").is_empty()
+	assert_array(_causes_of(stays_out)).contains_exactly([Cause.FORCED])
+
+
+# Range, THEN capacity -- the order check_reassign_leader has always used. The heir holds three; the
+# stranded member's leaving is what makes room for the newest, so a capacity check that ran at the
+# death instead of the walk's end drops a member who should have stayed.
+func test_a_held_handover_still_ejects_by_range_before_capacity() -> void:
+	var units := _held_handover_squad([Vector2i(0, 6), Vector2i(4, 0), Vector2i(5, 1)], Vector2i(5, 0))
+	assert_int(Squad.capacity_of(units[1])).override_failure_message(
+			"fixture: the heir must hold exactly the three left once the stranded member goes").is_equal(3)
+	var stranded := units[2]
+	var newest := units[4]
+
+	_sm.hold_handovers()
+	_sm.handle_unit_death(units[0])
+	_sm.release_handovers()
+	assert_array(_causes_of(stranded)).contains_exactly([Cause.FORCED])
+	assert_array(_causes_of(newest)).override_failure_message(
+			"capacity was judged before range, and dropped the newest member").is_empty()

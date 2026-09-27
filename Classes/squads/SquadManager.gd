@@ -46,6 +46,13 @@ var board_source: Callable
 var _last_resolved_plan: ResolvedPlan = null
 var _last_resolved_squad: Squad = null
 
+# A handover during a WALK waits for the walk to end before judging reach (#367, dev 2026-09-27).
+# The walkers are mid-stride when a watch shot kills a leader, and where each stands at that frame is
+# an animation fact -- the pan and the shot's length decided who was stranded. Held by
+# OrderExecutor._execute_move_phase; the successor is still named at once (it reads LDR, not cells).
+var _handovers_held := false
+var _held_handovers: Array[Squad] = []
+
 @onready var overlay_manager: OverlayManager = $"../OverlayManager"
 @onready var grid: TileMapLayer = $"../Grid"
 
@@ -245,7 +252,15 @@ func check_reassign_leader(squad: Squad, unit: Unit):
 		return
 	
 	squad.leader = successor_among(squad.members)
+	if _handovers_held:
+		if not _held_handovers.has(squad):
+			_held_handovers.append(squad)
+		return
+	_check_new_leaders_reach(squad)
 
+# What a new leader can hold: range first, then capacity drops the newest -- in that order, so a
+# held handover waits for BOTH, or a released one could drop a different member.
+func _check_new_leaders_reach(squad: Squad) -> void:
 	var board: BoardContext = board_source.call()
 	for member in squad.members.duplicate():
 		if not SquadCohesion.in_range(squad, squad.leader.movement.cell, member, member.movement.cell, board):
@@ -253,6 +268,18 @@ func check_reassign_leader(squad: Squad, unit: Unit):
 
 	for member in capacity_overflow(squad.members, squad.leader):
 		eject(member, LeaveCause.FORCED)
+
+func hold_handovers() -> void:
+	_handovers_held = true
+
+# The walk is over: every handover it held judges reach where the walkers now stand.
+func release_handovers() -> void:
+	_handovers_held = false
+	var held := _held_handovers
+	_held_handovers = []
+	for squad in held:
+		if is_instance_valid(squad) and not squad.members.is_empty():
+			_check_new_leaders_reach(squad)
 
 # Who takes over a squad whose leader left: the highest effective LDR, the first in member order on a
 # tie. Static so SplitForecast asks the same question of a squad it is only predicting (#367).

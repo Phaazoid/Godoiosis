@@ -94,10 +94,19 @@ func _plan(squad: Squad) -> ResolvedPlan:
 	return game.squad_manager.resolve_plan(squad, game._board())
 
 
-# unit id -> the blow the forecast says knocks it out.
+# Every row that can own a split: the pass's blows, then its END OF TURN burns.
+func _rows(squad: Squad) -> Array[BaseAction]:
+	var plan := _plan(squad)
+	var rows: Array[BaseAction] = []
+	rows.append_array(SplitForecast.playback(plan))
+	rows.append_array(plan.tile_hits)
+	return rows
+
+
+# unit id -> the row the forecast says knocks it out.
 func _forecast(squad: Squad) -> Dictionary:
 	var owners: Dictionary = {}
-	for blow in SplitForecast.playback(_plan(squad)):
+	for blow in _rows(squad):
 		var outcome := blow.resolved_outcome()
 		if outcome == null:
 			continue
@@ -130,11 +139,13 @@ func _assert_lifecycle(squad: Squad, victim: Unit, actor: Unit, expected: Unit.L
 			"fixture: the blow does not land the rung this case is about").is_equal(expected)
 
 
-func _execute(actor: Unit) -> void:
+# The pass, and with `then_burn` the END OF TURN burn after it (game.end_turn's own first step).
+func _execute(actor: Unit, then_burn := false) -> void:
 	_left.clear()
 	_links_before = _links()
 	_foretold = []
-	for blow in SplitForecast.playback(_plan(actor.squad)):
+	var faction := actor.get_faction()
+	for blow in _rows(actor.squad):
 		var outcome := blow.resolved_outcome()
 		if outcome == null:
 			continue
@@ -142,6 +153,8 @@ func _execute(actor: Unit) -> void:
 			_foretold.append({"member": link.member.get_instance_id(),
 					"leader": link.leader.get_instance_id(), "ends": link.ends})
 	await game.order_executor.execute_orders(actor)
+	if then_burn:
+		await game.order_executor.apply_burning_tile_damage(faction)
 
 
 # Every member -> leader link on the board, by instance id.
@@ -403,3 +416,267 @@ func test_a_counter_that_shoves_your_member_out_is_a_split_on_the_counter() -> v
 	assert_object(owners[member.get_instance_id()]).is_instanceof(CounterAttackAction)
 	await _execute(member)
 	_assert_agrees(owners)
+
+
+# --- walks and watches (2A's leftovers) ----------------------------------------------------------
+
+# A watch over `cells`, anchored where the watcher stands -- test_overwatch_trigger's fixture.
+func _watch(watcher: Unit, cells: Array[Vector2i]) -> void:
+	var attack: WeaponAttackData = (watcher.get_equipped_weapon() as WeaponInstance).template.main_attack
+	watcher.arm_watch(watcher.movement.cell, cells[0], cells, attack)
+
+
+func _walk(unit: Unit, to: Vector2i) -> void:
+	var path: Array[Vector2i] = []
+	var at := unit.movement.cell
+	path.append(at)
+	while at != to:
+		at += Vector2i(signi(to.x - at.x), 0) if at.x != to.x else Vector2i(0, signi(to.y - at.y))
+		path.append(at)
+	var move := MoveAction.new()
+	move.init(unit, path, null)
+	game.squad_manager.active_squad = unit.squad
+	assert_bool(game.squad_manager.queue_action(unit.squad, move)).override_failure_message(
+			"fixture: the walk to %s never queued (%s)" % [to, ", ".join(move.validation_errors)]).is_true()
+	game.refresh_action_queue(unit.squad)
+
+
+# A watch shot kills the leader at its first step while a member is still walking in. Live, the
+# successor's reach waits for the walk to end -- where the forecast judges it -- so the member stays;
+# judged at the frame of the kill, it would be stranded mid-stride.
+func test_a_leader_killed_mid_walk_judges_reach_where_the_walks_end() -> void:
+	var lead := _spawn(PLAYER, Vector2i(7, 0), {Stats.Stat.LDR: 10, Stats.Stat.MHP: 10})
+	var heir := _spawn(PLAYER, Vector2i(6, 2), {Stats.Stat.LDR: 4, Stats.Stat.COH: 1})
+	var walker := _spawn(PLAYER, Vector2i(1, 2))
+	_squad(lead, [heir, walker])
+	var watcher := _spawn(ENEMY, Vector2i(9, 4), {}, 200)
+	_watch(watcher, [Vector2i(6, 0)])
+	_walk(walker, Vector2i(5, 2))
+	_walk(lead, Vector2i(5, 0))
+
+	var shots := _plan(lead.squad).mid_walk_shots()
+	assert_int(shots.size()).override_failure_message("fixture: the watch never fired").is_equal(1)
+	assert_object(shots[0].target).is_same(lead)
+	assert_int(LethalityRules.lifecycle_for(shots[0].resolved_outcome().lethality)).override_failure_message(
+			"fixture: the watch shot does not kill the leader").is_equal(Unit.LifecycleState.DEAD)
+
+	var owners := _forecast(lead.squad)
+	assert_bool(owners.is_empty()).override_failure_message(
+			"the walker ends beside the successor, yet the forecast strands it").is_true()
+	await _execute(lead)
+	_assert_ran(walker, Vector2i(5, 2))
+	_assert_agrees(owners)
+	assert_object(walker.squad).override_failure_message(
+			"the walker was judged mid-stride and left the squad").is_same(heir.squad)
+
+
+# 2A declared "a watch shot that halts a walk short strands a member with no blow to own it". That
+# pass cannot run: the validator judges a halted walk where the shot CATCHES it, so a catch out of
+# range reds the walk and the plan is refused. A catch in range makes the shove an ordinary break
+# the forecast already owns (test_a_shove_out_of_range_is_a_split_on_the_shove's shape).
+func test_a_walk_a_watch_would_halt_out_of_range_is_refused_rather_than_stranded() -> void:
+	var lead := _spawn(PLAYER, Vector2i(6, 2), {Stats.Stat.LDR: 10})
+	var walker := _spawn(PLAYER, Vector2i(0, 2), {Stats.Stat.MHP: 30})
+	_squad(lead, [walker])
+	var watcher := _spawn(ENEMY, Vector2i(1, 4), {}, 1, 1)
+	_watch(watcher, [Vector2i(1, 2)])
+	_walk(walker, Vector2i(3, 2))
+
+	var shots := _plan(lead.squad).mid_walk_shots()
+	assert_int(shots.size()).override_failure_message("fixture: the watch never fired").is_equal(1)
+	var shot := shots[0].resolved_outcome()
+	assert_bool(shot.knockback_applied and LethalityRules.lifecycle_for(shot.lethality) \
+			== Unit.LifecycleState.ACTIVE).override_failure_message(
+			"fixture: the watch shot must shove the walker and leave it standing").is_true()
+	var board: BoardContext = game._board()
+	assert_bool(SquadCohesion.in_range_of(lead, lead.movement.cell, walker, shot.knockback_from, board)) \
+		.override_failure_message("fixture: the shot must catch the walker out of range").is_false()
+
+	game.refresh_action_queue(lead.squad)
+	assert_bool(walker.get_move_action().is_valid).override_failure_message(
+			"a walk the watch halts out of range is legal, so the pass could strand the walker").is_false()
+	await _execute(lead)
+	assert_object(walker.squad).is_same(lead.squad)
+	assert_array(_left).is_empty()
+
+
+# --- the END OF TURN burn ------------------------------------------------------------------------
+
+func _ignite(cell: Vector2i) -> void:
+	var effect := ResolvedCellEffect.new()
+	effect.cell = cell
+	effect.states_added.assign([Terrain.TileState.BURNING])
+	game.terrain_states.apply(effect)
+
+
+func _burn_on(squad: Squad, victim: Unit) -> TileHitAction:
+	for burn in _plan(squad).tile_hits:
+		if burn.actor == victim:
+			return burn
+	return null
+
+
+# Exactly what the burn deals, so the ladder lands on a down -- _make_it_a_down's reason.
+func _burn_down(squad: Squad, victim: Unit) -> void:
+	var burn := _burn_on(squad, victim)
+	assert_object(burn).override_failure_message("fixture: the fire forecasts no burn").is_not_null()
+	victim.set_current_hp(burn.resolved_outcome().damage)
+	game.refresh_action_queue(squad)
+	assert_int(LethalityRules.lifecycle_for(_burn_on(squad, victim).resolved_outcome().lethality)) \
+		.override_failure_message("fixture: the burn does not down the victim").is_equal(
+			Unit.LifecycleState.DOWNED)
+
+
+func test_a_member_the_burn_downs_splits_on_its_end_of_turn_row() -> void:
+	var lead := _spawn(PLAYER, Vector2i(1, 2), {Stats.Stat.LDR: 10})
+	var member := _spawn(PLAYER, Vector2i(3, 2))
+	_squad(lead, [member])
+	_ignite(member.movement.cell)
+	_burn_down(lead.squad, member)
+
+	var owners := _forecast(lead.squad)
+	assert_bool(owners.has(member.get_instance_id())).override_failure_message(
+			"a member the burn downs has no Split").is_true()
+	assert_object(owners[member.get_instance_id()]).override_failure_message(
+			"the burn's Split is not on the END OF TURN row").is_instanceof(TileHitAction)
+	await _execute(lead, true)
+	_assert_agrees(owners)
+
+
+# The burned-down leader hands over at end of turn, and the member its successor cannot reach leaves
+# on the same END OF TURN row.
+func test_a_leader_the_burn_downs_hands_over_on_its_end_of_turn_row() -> void:
+	var lead := _spawn(PLAYER, Vector2i(4, 2), {Stats.Stat.LDR: 10})
+	var heir := _spawn(PLAYER, Vector2i(6, 2), {Stats.Stat.LDR: 4})
+	var far := _spawn(PLAYER, Vector2i(1, 2))
+	_squad(lead, [heir, far])
+	_ignite(lead.movement.cell)
+	_burn_down(lead.squad, lead)
+
+	var owners := _forecast(lead.squad)
+	assert_array(_ids(owners)).override_failure_message(
+			"the burned leader and the member its successor cannot reach are one row's Split") \
+		.is_equal(_sorted([lead.get_instance_id(), far.get_instance_id()]))
+	assert_object((owners[far.get_instance_id()] as TileHitAction).actor).is_same(lead)
+	await _execute(lead, true)
+	_assert_agrees(owners)
+
+
+# --- the ground this pass changes ----------------------------------------------------------------
+
+const WATER_ATLAS := Vector2i(5, 6)   # play/board_builder.gd's: deep water, walkable only frozen
+
+
+# A river along `row` that nobody crosses except on `frozen`.
+func _river(row: int, frozen: Array[Vector2i]) -> void:
+	var grid: BoardGrid = game.grid
+	for x in range(10):
+		grid.paint(Vector2i(x, row), GRASS_SOURCE, WATER_ATLAS)
+	for cell in frozen:
+		var ice := ResolvedCellEffect.new()
+		ice.cell = cell
+		ice.states_added.assign([Terrain.TileState.FROZEN])
+		game.terrain_states.apply(ice)
+
+
+# The unit's main attack carries `element` and lands on the ground as well as on units.
+func _imbue(unit: Unit, element: Elemental.Element) -> void:
+	var attack: WeaponAttackData = (unit.get_equipped_weapon() as WeaponInstance).template.main_attack
+	attack.elemental_damage_type = element
+	attack.targets = EquippableData.TargetMode.BOTH
+
+
+func _deposits_at(squad: Squad, cell: Vector2i) -> Array[ResolvedCellEffect]:
+	var found: Array[ResolvedCellEffect] = []
+	for effect in _plan(squad).cell_effects:
+		if effect.cell == cell:
+			found.append(effect)
+	return found
+
+
+# The fire melts the one crossing between leader and member. Nobody is hit, and the member is out of
+# range once the pass's ground lands -- on the fire's own row.
+func test_a_fire_that_melts_the_ice_between_them_splits_on_the_fire() -> void:
+	_river(2, [Vector2i(1, 2)])
+	var lead := _spawn(ENEMY, Vector2i(2, 1), {Stats.Stat.LDR: 10, Stats.Stat.COH: 3})
+	var member := _spawn(ENEMY, Vector2i(1, 3))
+	_squad(lead, [member])
+	var hero := _spawn(PLAYER, Vector2i(1, 1))
+	_imbue(hero, Elemental.Element.FIRE)
+	_queue(hero, Vector2i(1, 2))
+	var melt := _deposits_at(hero.squad, Vector2i(1, 2))
+	assert_bool(melt.size() == 1 and melt[0].states_removed.has(Terrain.TileState.FROZEN)) \
+		.override_failure_message("fixture: the fire does not melt the crossing").is_true()
+
+	var owners := _forecast(hero.squad)
+	assert_bool(owners.has(member.get_instance_id())).override_failure_message(
+			"a member stranded by melting ice has no Split").is_true()
+	assert_object((owners[member.get_instance_id()] as AttackAction).actor).override_failure_message(
+			"the Split is not on the fire that melted the crossing").is_same(hero)
+	await _execute(hero)
+	_assert_agrees(owners)
+
+
+# A shove sends a member the long way round the river, out of range -- and the same pass freezes a
+# crossing right beside it. The pass keeps the member, so no Split (and no break played for it).
+func test_an_ice_that_freezes_a_way_back_keeps_the_member_the_shove_would_have_lost() -> void:
+	_river(2, [Vector2i(1, 2)])
+	var lead := _spawn(ENEMY, Vector2i(2, 1), {Stats.Stat.LDR: 10, Stats.Stat.COH: 3})
+	var member := _spawn(ENEMY, Vector2i(1, 3), {Stats.Stat.MHP: 30})
+	_squad(lead, [member])
+	var shover := _spawn(PLAYER, Vector2i(0, 3), {}, 1, 1)
+	var froster := _spawn(PLAYER, Vector2i(1, 2))
+	_squad(shover, [froster])
+	_imbue(froster, Elemental.Element.ICE)
+	_queue(shover, member.movement.cell)
+	_queue(froster, Vector2i(2, 2))
+	var ice := _deposits_at(shover.squad, Vector2i(2, 2))
+	assert_bool(ice.size() == 1 and ice[0].states_added.has(Terrain.TileState.FROZEN)) \
+		.override_failure_message("fixture: the ice does not freeze the new crossing").is_true()
+	var board: BoardContext = game._board()
+	assert_bool(SquadCohesion.in_range_of(lead, lead.movement.cell, member, Vector2i(2, 3), board)) \
+		.override_failure_message("fixture: without the ice, the shove must strand the member").is_false()
+
+	var owners := _forecast(shover.squad)
+	assert_bool(owners.is_empty()).override_failure_message(
+			"a member the pass's own ice keeps in range forecasts a Split").is_true()
+	await _execute(shover)
+	_assert_ran(member, Vector2i(2, 3))
+	_assert_agrees(owners)
+
+
+# A leader killed by one mid-walk shot, then a member thrown INTO the successor's reach by a later
+# one: the handover is judged where the walk ends, after the throw, so the member stays.
+func test_a_mid_walk_handover_is_judged_after_a_later_mid_walk_shove() -> void:
+	var lead := _spawn(PLAYER, Vector2i(7, 0), {Stats.Stat.LDR: 10, Stats.Stat.MHP: 10})
+	var heir := _spawn(PLAYER, Vector2i(6, 1), {Stats.Stat.LDR: 4, Stats.Stat.COH: 1})
+	var walker := _spawn(PLAYER, Vector2i(2, 1), {Stats.Stat.MHP: 30})
+	_squad(lead, [heir, walker])
+	var killer := _spawn(ENEMY, Vector2i(9, 4), {}, 200)
+	_watch(killer, [Vector2i(6, 0)])
+	var thrower := _spawn(ENEMY, Vector2i(0, 1), {}, 1, 2)
+	_watch(thrower, [Vector2i(3, 1)])
+	_walk(lead, Vector2i(5, 0))
+	_walk(walker, Vector2i(4, 1))
+
+	var shots := _plan(lead.squad).mid_walk_shots()
+	assert_int(shots.size()).override_failure_message("fixture: both watches must fire").is_equal(2)
+	assert_bool(shots[0].target == lead and LethalityRules.lifecycle_for(
+			shots[0].resolved_outcome().lethality) == Unit.LifecycleState.DEAD).override_failure_message(
+			"fixture: the first shot must kill the leader").is_true()
+	assert_bool(shots[1].target == walker and shots[1].resolved_outcome().knockback_to == Vector2i(5, 1)) \
+		.override_failure_message("fixture: the second shot must throw the walker beside the heir").is_true()
+
+	var owners := _forecast(lead.squad)
+	assert_bool(owners.is_empty()).override_failure_message(
+			"the handover was judged before the throw that brings the walker into reach").is_true()
+	await _execute(lead)
+	_assert_ran(walker, Vector2i(5, 1))
+	_assert_agrees(owners)
+	assert_object(walker.squad).is_same(heir.squad)
+
+
+# A case whose point is that the pass KEEPS someone passes vacuously on a plan that never ran.
+func _assert_ran(unit: Unit, cell: Vector2i) -> void:
+	assert_that(unit.movement.cell).override_failure_message(
+			"fixture: the pass never ran (%s is not at %s)" % [unit.get_unit_name(), cell]).is_equal(cell)
