@@ -49,7 +49,8 @@ func _spawn(faction: Team.Faction, cell: Vector2i) -> Unit:
 
 
 # Put all four surfaces up, so no assertion below can pass vacuously. Three of the four have a
-# CONTENT gate that has to be satisfied first; End Turn is up on its own.
+# CONTENT gate that has to be satisfied first; End Turn is up on its own, since the raw queue door
+# activates no squad (#541 hides it while one is active).
 func _raise_the_hud(unit: Unit) -> void:
 	game.refresh_action_queue(unit.squad)
 	game.unit_info_panel.set_unit(unit, false, game._board())
@@ -198,9 +199,10 @@ func test_a_hidden_inspect_panel_still_says_which_unit_it_holds() -> void:
 #
 # So RECORD the edges instead of racing them. `visibility_changed` fires on each real change (Godot
 # early-outs on an unchanged `visible`), which makes the transitions readable afterwards and does
-# not care whether the pass spanned a frame. End Turn is the surface watched because it has no
-# content rule of its own -- it is up unless a cinematic put it down, so a recording can never fill
-# up with someone else's writes.
+# not care whether the pass spanned a frame. End Turn is the surface watched because its content
+# rule (#541: the AI's turn, a squad mid-queue) cannot move here -- the player's faction is active
+# and these fixtures queue through the raw `_queue_action`, which never activates a squad -- so a
+# recording can never fill up with someone else's writes.
 func test_a_real_cinematic_pass_takes_the_hud_down_and_puts_it_back() -> void:
 	PlayerSettings.set_choice(PlayerSettings.Setting.BATTLE_ZOOM_MODE, PlayerSettings.BattleZoom.ALWAYS)
 	var attacker := _attacker_with_a_real_target()
