@@ -355,6 +355,25 @@ func test_z_again_shows_its_tile() -> void:
 			"the unit body is still drawn under the tile").is_false()
 
 
+# The Unit/Tile buttons beside the portrait do the same swap by mouse.
+func test_the_dock_buttons_swap_too() -> void:
+	var cell := Vector2i(3, 2)
+	_set_burning(cell)
+	var unit := _spawn(PLAYER, cell, "Aldin")
+	await _point(cell)
+	await _press_z()
+
+	_panel().switch_button(UnitInfoPanelControl.View.TILE).pressed.emit()
+	await await_idle_frame()
+	assert_str(_dock_texts()).contains(Glossary.short(Glossary.Term.BURNING))
+
+	_panel().switch_button(UnitInfoPanelControl.View.UNIT).pressed.emit()
+	await await_idle_frame()
+	assert_bool(_panel().is_showing_unit(unit)).is_true()
+	assert_bool(_panel().stats_section.visible).is_true()
+	assert_array(_panel().tile_texts()).is_empty()
+
+
 func test_a_third_z_closes_the_dock() -> void:
 	var unit := _spawn(PLAYER, Vector2i(3, 2), "Aldin")
 	await _point(unit.movement.cell)
