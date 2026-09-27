@@ -5,7 +5,8 @@
 # are shared code; the ORDER is the one thing it spells itself -- so every case here runs the REAL
 # pass through OrderExecutor.execute_orders and requires the forecast to name exactly the units that
 # squad_member_left then reports as FORCED or DOWNED out of a squad of two or more. Where a case is
-# about WHICH blow owns a split, it says so as well.
+# about WHICH blow owns a split, it says so as well. Every case also checks the forecast's LINKS
+# (#367 part 2B): applied blow by blow to the board before the pass, they must give the board after.
 #
 # No case pins a tuned number. A down is made by setting the victim's HP to exactly what the queued
 # blow deals (test_downed_ejection's reason), a kill by a blow far past the overkill ceiling, and
@@ -24,6 +25,8 @@ const ENEMY := Team.Faction.ENEMY
 var _main: Node
 var game: Node2D
 var _left: Array[int] = []
+var _links_before: Dictionary = {}
+var _foretold: Array[Dictionary] = []
 
 
 func before_test() -> void:
@@ -129,7 +132,29 @@ func _assert_lifecycle(squad: Squad, victim: Unit, actor: Unit, expected: Unit.L
 
 func _execute(actor: Unit) -> void:
 	_left.clear()
+	_links_before = _links()
+	_foretold = []
+	for blow in SplitForecast.playback(_plan(actor.squad)):
+		var outcome := blow.resolved_outcome()
+		if outcome == null:
+			continue
+		for link in outcome.relinks:
+			_foretold.append({"member": link.member.get_instance_id(),
+					"leader": link.leader.get_instance_id(), "ends": link.ends})
 	await game.order_executor.execute_orders(actor)
+
+
+# Every member -> leader link on the board, by instance id.
+func _links() -> Dictionary:
+	var links: Dictionary = {}
+	for squad: Squad in game.squad_manager.squads:
+		if not is_instance_valid(squad) or not squad.has_squadmates():
+			continue
+		var leader := squad.get_leader()
+		for member: Unit in squad.get_members():
+			if member != leader:
+				links[member.get_instance_id()] = leader.get_instance_id()
+	return links
 
 
 func _ids(owners: Dictionary) -> Array[int]:
@@ -150,6 +175,23 @@ func _assert_agrees(owners: Dictionary) -> void:
 	assert_array(_ids(owners)).override_failure_message(
 			"the queue forecast %s but the pass knocked out %s" % [_ids(owners), _sorted(_left)]) \
 		.is_equal(_sorted(_left))
+	_assert_links_foretold()
+
+
+# The links the forecast says end and begin, applied blow by blow to the board before the pass, are
+# the board's links after it -- what the tether break plays at the blow is what the settle leaves.
+func _assert_links_foretold() -> void:
+	var links := _links_before.duplicate()
+	for change: Dictionary in _foretold:
+		var member: int = change["member"]
+		if change["ends"]:
+			if links.get(member, 0) == change["leader"]:
+				links.erase(member)
+		else:
+			links[member] = change["leader"]
+	assert_dict(links).override_failure_message(
+			"the forecast's links come to %s but the pass left %s" % [links, _links()]) \
+		.is_equal(_links())
 
 
 # --- cases ---------------------------------------------------------------------------------------
@@ -234,6 +276,36 @@ func test_a_downed_leader_whose_successor_has_less_capacity_drops_the_newest() -
 			"the newest member the successor cannot command forecasts no Split").is_true()
 	await _execute(hero)
 	_assert_agrees(owners)
+
+
+# A downed leader's links all end on the downing blow, and the member its successor can hold draws
+# in to the successor on that SAME blow -- the handover the tether plays at the blow (#367 part 2B).
+func test_a_downed_leaders_handover_relinks_on_the_downing_blow() -> void:
+	var lead := _spawn(ENEMY, Vector2i(4, 2), {Stats.Stat.LDR: 10})
+	var heir := _spawn(ENEMY, Vector2i(5, 2), {Stats.Stat.LDR: 4})
+	var other := _spawn(ENEMY, Vector2i(6, 2))
+	_squad(lead, [heir, other])
+	assert_int(Squad.capacity_of(heir)).override_failure_message(
+			"fixture: the successor must be able to hold the one left behind").is_greater_equal(2)
+	var hero := _spawn(PLAYER, Vector2i(4, 3))
+	_queue(hero, lead.movement.cell)
+	_make_it_a_down(hero.squad, lead)
+
+	var said: Array[String] = []
+	for link in _blow_on(hero.squad, lead).resolved_outcome().relinks:
+		said.append(_spell(link))
+	assert_array(said).contains_exactly_in_any_order([
+			"%s>%s ends" % [heir.get_instance_id(), lead.get_instance_id()],
+			"%s>%s ends" % [other.get_instance_id(), lead.get_instance_id()],
+			"%s>%s begins" % [other.get_instance_id(), heir.get_instance_id()]])
+	var owners := _forecast(hero.squad)
+	await _execute(hero)
+	_assert_agrees(owners)
+
+
+func _spell(link: ResolvedOutcome.Relink) -> String:
+	return "%s>%s %s" % [link.member.get_instance_id(), link.leader.get_instance_id(),
+			"ends" if link.ends else "begins"]
 
 
 # A death settles AT ONCE, mid-pass: the successor is judged there, the dead leader is not counted.

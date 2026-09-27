@@ -3,8 +3,9 @@ class_name SplitForecast
 
 # WHO A PASS WILL KNOCK OUT OF A SQUAD, AND WHICH BLOW DOES IT (#367). The plan-time mirror of the
 # settle that runs after a pass, so the queue can say "Split" on the row that causes one (Law #2)
-# and PR B's break can play at the same blow. Stamped once per resolve, by SquadManager.resolve_plan,
-# into ResolvedOutcome.splits.
+# and the tether break can play at that same blow. Stamped once per resolve, by
+# SquadManager.resolve_plan, into ResolvedOutcome.splits (who leaves) and .relinks (which links end
+# and begin -- a handover names its successor once, here, for the presenter and the stage to read).
 #
 # THE ORDER IT REPLAYS is the live one, and it is the only thing here that is not shared code:
 #   - a DEATH settles at once, mid-pass (game._on_unit_died -> handle_unit_death), so a killed
@@ -32,6 +33,7 @@ static func stamp(plan: ResolvedPlan, board: BoardContext) -> void:
 		var outcome := blow.resolved_outcome()
 		if outcome != null:
 			outcome.splits.clear()
+			outcome.relinks.clear()
 
 	var bands: Dictionary[Unit, _Band] = {}
 	var all_bands: Array[_Band] = []
@@ -55,7 +57,7 @@ static func stamp(plan: ResolvedPlan, board: BoardContext) -> void:
 			Unit.LifecycleState.DEAD:
 				if not dead.has(victim):
 					dead[victim] = true
-					_leave(victim, outcome, bands, pos, board, false)
+					_leave(victim, outcome, bands, pos, board, SquadManager.LeaveCause.DEATH)
 			Unit.LifecycleState.DOWNED:
 				if not downed.has(victim):
 					downed[victim] = true
@@ -64,7 +66,7 @@ static func stamp(plan: ResolvedPlan, board: BoardContext) -> void:
 	# A body finished off later in the pass is never ejected -- and needs no check here: its death
 	# already took it out of its copied squad, so _leave finds nothing to do.
 	for blow in downs:
-		_leave(blow.target, blow.resolved_outcome(), bands, pos, board, true)
+		_leave(blow.target, blow.resolved_outcome(), bands, pos, board, SquadManager.LeaveCause.DOWNED)
 
 	_sweep_contact(blows, all_bands, start, pos, board)
 
@@ -124,24 +126,38 @@ static func _start_positions(blows: Array[AttackAction], bands: Dictionary[Unit,
 
 
 # A unit leaves its copied squad, and a leader's leaving hands over -- the successor's range and
-# capacity ejections are stamped on the SAME blow. `counted` is false for a death.
+# capacity ejections are stamped on the SAME blow. A death is never counted as a split.
+#
+# The LINKS it records are the ones the tether presenter would diff after the same settle: every link
+# to a leaving leader ends, a member ejected by the handover ending on its OWN cause (FORCED) and the
+# rest on the leader's, and the survivors' links to the successor begin.
 static func _leave(unit: Unit, outcome: ResolvedOutcome, bands: Dictionary[Unit, _Band],
-		pos: Dictionary[Unit, Vector2i], board: BoardContext, counted: bool) -> void:
+		pos: Dictionary[Unit, Vector2i], board: BoardContext, cause: SquadManager.LeaveCause) -> void:
 	var band: _Band = bands.get(unit)
 	if band == null:
 		return
 	band.members.erase(unit)
 	bands.erase(unit)
-	if counted and not band.members.is_empty():
+	if cause != SquadManager.LeaveCause.DEATH and not band.members.is_empty():
 		outcome.splits.append(unit)
-	if band.leader != unit or band.members.is_empty():
+	if band.members.is_empty():
 		return
+	if band.leader != unit:
+		_relink(outcome, unit, band.leader, true, cause, pos)
+		return
+	var stayed: Array[Unit] = band.members.duplicate()
 	band.leader = SquadManager.successor_among(band.members)
 	for member in band.members.duplicate():
 		if not SquadCohesion.in_range_of(band.leader, pos[band.leader], member, pos[member], board):
 			_eject(member, band, bands, outcome)
 	for member in SquadManager.capacity_overflow(band.members, band.leader):
 		_eject(member, band, bands, outcome)
+	for member in stayed:
+		var ejected := not band.members.has(member)
+		_relink(outcome, member, unit, true, SquadManager.LeaveCause.FORCED if ejected else cause, pos)
+	for member in band.members:
+		if member != band.leader:
+			_relink(outcome, member, band.leader, false, -1, pos)
 
 
 static func _eject(member: Unit, band: _Band, bands: Dictionary[Unit, _Band],
@@ -149,6 +165,18 @@ static func _eject(member: Unit, band: _Band, bands: Dictionary[Unit, _Band],
 	band.members.erase(member)
 	bands.erase(member)
 	outcome.splits.append(member)
+
+
+static func _relink(outcome: ResolvedOutcome, member: Unit, leader: Unit, ends: bool, cause: int,
+		pos: Dictionary[Unit, Vector2i]) -> void:
+	var link := ResolvedOutcome.Relink.new()
+	link.member = member
+	link.leader = leader
+	link.ends = ends
+	link.cause = cause
+	link.member_cell = pos[member]
+	link.leader_cell = pos[leader]
+	outcome.relinks.append(link)
 
 
 # The pass-end contact sweep. A break is owned by the blow after which the pair STAYED out of range:
@@ -165,6 +193,8 @@ static func _sweep_contact(blows: Array[AttackAction], all_bands: Array[_Band],
 			var culprit := _breaking_blow(blows, band.leader, member, start, board)
 			if culprit != null:
 				culprit.resolved_outcome().splits.append(member)
+				_relink(culprit.resolved_outcome(), member, band.leader, true,
+						SquadManager.LeaveCause.FORCED, pos)
 
 
 static func _breaking_blow(blows: Array[AttackAction], leader: Unit, member: Unit,
