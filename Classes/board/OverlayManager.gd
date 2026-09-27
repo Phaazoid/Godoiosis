@@ -16,10 +16,6 @@ class_name OverlayManager
 @onready var invalidmove_overlay = $InvalidMoveOverlay
 @onready var board_tilemap = $"../Grid"
 @onready var zone_overlay = $ZoneOverlay
-@onready var capture_overlay = $CaptureOverlay
-@onready var extraction_overlay = $ExtractionOverlay
-@onready var deployment_overlay = $DeploymentOverlay
-@onready var defend_overlay = $DefendOverlay
 
 const PATH_ERROR := preload("res://Art/Icons/ArrowIcons/ERROR.png")
 const PATH_HORIZONTAL := preload("res://Art/Icons/ArrowIcons/horizontal.png")
@@ -315,6 +311,7 @@ const SQUAD_HUES_ENEMY: Array[Color] = [
 	Color(1.0, 0.95, 0.5),   # yellow
 ]
 const RING_Z_INDEX := 2       # underfoot: above terrain state (1), below arrows (3) and units (4)
+const ZONE_MARK_Z_INDEX := 1  # a zone's rim, where its wash lay: under the move grid (2) and the emblem
 const HEAD_ICON_Z_INDEX := 8  # the legacy squares' z; code re-asserts it so the toggle round-trips
 
 var overlay_map = {}
@@ -372,9 +369,8 @@ var knockback_preview_sprites: Array[Node2D] = []
 # lifetimes (a move ghost dies with clear_projected_unit, a shove's with clear_knockback_preview),
 # so they stay apart and _ghost_for is the one place that answers across both.
 var knockback_ghost_by_unit := {} # { Unit : Sprite2D }
-# ZoneManager.Kind -> the TileMapLayer that draws it. A layer per kind rather than a method per
-# kind: colour is `modulate`, which is per-LAYER, so a kind that needs its own colour needs its
-# own layer. Adding a kind is one line here.
+# ZoneManager.Kind -> the TileMapLayer that washes it: the AUTHORING kinds only (PATROL). A kind a
+# player sees draws as ZoneMarks sprites instead (#955), so it needs no layer here.
 var zone_layer_map := {}
 var zone_highlight_overlay: TileMapLayer = null   # the Tile Brush's picked zone; built in _ready
 # The zones redraw_zones last drew for a player (#955): {"name", "kind", "cells"} each, the hidden
@@ -382,7 +378,7 @@ var zone_highlight_overlay: TileMapLayer = null   # the Tile Brush's picked zone
 # walls all read. The version is the mirror's change signal (#308).
 var drawn_zones: Array[Dictionary] = []
 var drawn_zones_version := 0
-var _zone_emblem_sprites: Array[Sprite2D] = []
+var _zone_sprites: Array[Sprite2D] = []   # the flat view's rims and emblems, rebuilt with the zones
 var reach_overlay: TileMapLayer = null   # YOUR unit's attack reach (#1066); built in _ready
 var threat_overlay: TileMapLayer = null   # ...and the enemy's one undifferentiated field, under it
 var payload_overlay: TileMapLayer = null   # the aim's PAYLOAD tiles, inset (#1058 D2b); built in _ready
@@ -502,25 +498,11 @@ func _ready() -> void:
 	invalidmove_overlay.modulate = Color(0.78, 0.8, 0.84, 0.5)
 	zone_overlay.modulate = ZONE_PATROL_MODULATE
 	zone_overlay.visible = false   # authoring-only visual; DevOverlay shows it with the Tile Brush tab
-	capture_overlay.modulate = Color(0.3, 0.9, 1, 0.5)
-	extraction_overlay.modulate = Color(0.4, 1, 0.5, 0.5)
-	deployment_overlay.modulate = Color(0.65, 0.5, 1, 0.45)
-	defend_overlay.modulate = ZONE_DEFEND_MODULATE
-	# These three restate BoardOverlays.LAYERS' literal rather than sharing a const the way PATROL
-	# does, and that fork is deliberate: the Game tab's markup-colour knob rewrites the LAYERS
-	# entry, so a shared const would be replaced by a literal on the first Save. PATROL is excluded
-	# from that table precisely because it shares one (GameKnobs.CLASS_KNOBS says so).
-	#
-	# PATROL is an authoring aid (DevOverlay shows it with the Tile Brush tab); CAPTURE and
-	# EXTRACTION are live objective information and stay visible for the whole battle. DEPLOYMENT
-	# (#736) is a third thing again -- it is real information the player acts on, but only until
-	# turn 1 begins, after which MissionController.hidden_zone_names() stops it being drawn.
+	# PATROL is an authoring aid (DevOverlay shows it with the Tile Brush tab), so it is still a wash.
+	# The kinds a player sees are not washed at all since #955: _rebuild_zone_marks draws their rim and
+	# emblem, in the colour BoardOverlays.LAYERS authors, and hidden_zone_names() says which are drawn.
 	zone_layer_map = {
 		ZoneManager.Kind.PATROL: zone_overlay,
-		ZoneManager.Kind.CAPTURE: capture_overlay,
-		ZoneManager.Kind.EXTRACTION: extraction_overlay,
-		ZoneManager.Kind.DEPLOYMENT: deployment_overlay,
-		ZoneManager.Kind.DEFEND: defend_overlay,
 	}
 	# The Tile Brush's picked-zone highlight: a white lift drawn over the kind layers so the picked
 	# zone reads against its neighbours. Code-built as a duplicate of zone_overlay (same tileset and
@@ -1198,9 +1180,9 @@ func restyle_leash() -> void:
 	if zone_highlight_overlay != null:
 		zone_highlight_overlay.modulate = ZONE_HIGHLIGHT_MODULATE
 
-# One method for every zone kind: each zone draws into the layer registered for its kind, and a
-# kind with no layer simply isn't drawn. `hidden` drops zones that are done with (a captured
-# point stops glowing) without needing a second redraw entry point.
+# One method for every zone kind. A kind a player sees goes into drawn_zones, the store both views
+# draw marks from; an authoring kind is washed on its registered layer. `hidden` drops zones that are
+# done with (a captured point stops glowing) without needing a second redraw entry point.
 func redraw_zones(zones: ZoneManager, hidden: Array[String] = []) -> void:
 	for layer in zone_layer_map.values():
 		layer.clear()
@@ -1218,29 +1200,53 @@ func redraw_zones(zones: ZoneManager, hidden: Array[String] = []) -> void:
 	if drawn != drawn_zones:
 		drawn_zones = drawn
 		drawn_zones_version += 1
-	_rebuild_zone_emblems()
+	_rebuild_zone_marks()
 
 
-# The flat view's emblems -- one per drawn zone, on the cell ZoneMarks picks, in its kind's colour.
-# Sprites for the watch marks' reason: a tile layer holds one tile per cell and would evict the wash.
-func _rebuild_zone_emblems() -> void:
-	for sprite in _zone_emblem_sprites:
+# A zone-mark knob moved (#955): the sprites hold the art they were built with, so build them again.
+func restyle_zone_marks() -> void:
+	_rebuild_zone_marks()
+
+
+# The flat view's zone marks (#955): per drawn zone cell, the SAME rim texture the diorama draws,
+# sized to this tileset's own tile, plus one emblem per zone on the cell ZoneMarks picks, all in the
+# kind's colour. Sprites for the watch marks' reason: a tile layer holds one tile per cell, and the rim
+# differs from cell to cell. The wall is the diorama's alone.
+func _rebuild_zone_marks() -> void:
+	for sprite in _zone_sprites:
 		if is_instance_valid(sprite):
 			sprite.queue_free()
-	_zone_emblem_sprites.clear()
+	_zone_sprites.clear()
 	if board_tilemap == null or icon_overlay == null:
 		return
+	var tile := Vector2.ONE * ZoneMarks.TEXELS
+	var grid := board_tilemap as TileMapLayer
+	if grid != null and grid.tile_set != null:
+		tile = Vector2(grid.tile_set.tile_size)
+	var art_scale := tile / float(ZoneMarks.TEXELS)
 	for zone in drawn_zones:
 		var kind: ZoneManager.Kind = zone["kind"]
 		var cells: Array[Vector2i] = []
 		cells.assign(zone["cells"])
-		var sprite := Sprite2D.new()
-		sprite.texture = ZoneMarks.emblem_of(kind)
-		sprite.modulate = ZoneMarks.colour_of(kind)
-		sprite.z_index = RING_Z_INDEX
-		sprite.position = board_tilemap.map_to_local(ZoneMarks.emblem_cell(cells))
-		icon_overlay.add_child(sprite)
-		_zone_emblem_sprites.append(sprite)
+		var colour := ZoneMarks.colour_of(kind)
+		var masks := ZoneMarks.cell_masks(cells)
+		for cell: Vector2i in masks:
+			var rim := Sprite2D.new()
+			rim.texture = ZoneMarks.texture(masks[cell])
+			rim.modulate = colour
+			rim.scale = art_scale
+			rim.z_index = ZONE_MARK_Z_INDEX
+			rim.position = board_tilemap.map_to_local(cell)
+			icon_overlay.add_child(rim)
+			_zone_sprites.append(rim)
+		var emblem := Sprite2D.new()
+		emblem.texture = ZoneMarks.emblem_of(kind)
+		emblem.modulate = colour
+		emblem.z_index = RING_Z_INDEX
+		emblem.position = board_tilemap.map_to_local(ZoneMarks.emblem_cell(cells))
+		icon_overlay.add_child(emblem)
+		_zone_sprites.append(emblem)
+
 
 # The aim's live feedback on the UNITS it would hit: their sprites pulse, while the red reach layer
 # never changes. The tiles say it separately, by flashing in travel order (set_aim_flash) -- every

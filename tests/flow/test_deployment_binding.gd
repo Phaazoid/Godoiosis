@@ -113,6 +113,16 @@ func test_a_deployment_zone_survives_capture_and_apply() -> void:
 		[Vector2i(2, 2), Vector2i(3, 2)])
 
 
+# The deployment cells the board draws (#955: a zone draws as marks off OverlayManager.drawn_zones, the
+# one store both views read, since the flat wash layers were retired).
+func _drawn_deployment_cells() -> Array[Vector2i]:
+	var cells: Array[Vector2i] = []
+	for zone: Dictionary in game.overlay_manager.drawn_zones:
+		if zone["kind"] == DEPLOYMENT:
+			cells.append_array(zone["cells"])
+	return cells
+
+
 # --- Visible while authoring, gone once the battle starts (dev, 2026-09-04) ---
 
 func test_a_deployment_zone_is_drawn_while_no_turn_has_begun() -> void:
@@ -121,7 +131,7 @@ func test_a_deployment_zone_is_drawn_while_no_turn_has_begun() -> void:
 
 	assert_array(mc.hidden_zone_names()).is_empty()
 	# The visible consequence, not just the list: this is the authoring session the dev paints in.
-	assert_array(game.overlay_manager.deployment_overlay.get_used_cells()).contains_exactly_in_any_order(
+	assert_array(_drawn_deployment_cells()).contains_exactly_in_any_order(
 		[Vector2i(2, 2), Vector2i(3, 2)])
 
 
@@ -131,13 +141,13 @@ func test_a_deployment_zone_is_drawn_while_no_turn_has_begun() -> void:
 func test_beginning_a_turn_stops_the_deployment_zone_being_drawn() -> void:
 	_paint("landing", [Vector2i(2, 2), Vector2i(3, 2)])
 	game.overlay_manager.redraw_zones(game.zone_manager, mc.hidden_zone_names())
-	assert_array(game.overlay_manager.deployment_overlay.get_used_cells()).is_not_empty()
+	assert_array(_drawn_deployment_cells()).is_not_empty()
 
 	mc._begin_turn()
 	await await_idle_frame()
 
 	assert_array(mc.hidden_zone_names()).contains("landing")
-	assert_array(game.overlay_manager.deployment_overlay.get_used_cells()).is_empty()
+	assert_array(_drawn_deployment_cells()).is_empty()
 
 
 # The store the deployment zones JOIN, rather than replace. Before #736 this list was answered

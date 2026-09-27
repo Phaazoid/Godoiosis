@@ -2,9 +2,8 @@ extends VBoxContainer
 class_name ExperimentsTool
 
 # The Experiments page (#382) -- the surface Experiments.gd was built expecting (its own docstring
-# says "toggle it from the Experiments dev tab") and never got. One checkbox per flag (a dropdown for
-# a CHOICE flag, #955), off the registry's own introspection, plus Reset all. Session scope: these are
-# dev toggles persisted to
+# says "toggle it from the Experiments dev tab") and never got. One checkbox per flag, off the
+# registry's own introspection, plus Reset all. Session scope: these are dev toggles persisted to
 # user://experiments.cfg, not settings a player keeps and not values a mission carries.
 #
 # No confirm dialog on purpose: a flag flip is a session toggle, not a file overwrite -- the #380
@@ -22,17 +21,9 @@ func _ready() -> void:
 
 func _build_rows() -> void:
 	for flag: Experiments.Flag in Experiments.all_flags():
-		var tip := DevWidgets.wrap_tooltip(Experiments.desc_of(flag))
-		if Experiments.is_choice(flag):
-			# A dropdown is safe here: this page is its own OS window, outside GameView.
-			var options := Experiments.options_of(flag)
-			var row := DevWidgets.add_option(self, Experiments.title_of(flag), options,
-				str(options[Experiments.choice_of(flag)]),
-				func(picked: String) -> void: Experiments.set_choice(flag, options.find(picked)))
-			DevWidgets.apply_tooltip(row, tip)
-		else:
-			DevWidgets.add_checkbox(self, Experiments.title_of(flag), Experiments.is_on(flag),
-				func(on: bool) -> void: Experiments.set_on(flag, on), tip)
+		DevWidgets.add_checkbox(self, Experiments.title_of(flag), Experiments.is_on(flag),
+			func(on: bool) -> void: Experiments.set_on(flag, on),
+			DevWidgets.wrap_tooltip(Experiments.desc_of(flag)))
 
 
 func _on_reset_pressed() -> void:
