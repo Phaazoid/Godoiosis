@@ -428,6 +428,48 @@ func test_aim_footprint_and_its_flash_ride_the_poll() -> void:
 	assert_that(_overlays.drawn_color(BoardOverlays.Layer.AIM, quad)).is_equal(AimFlash2D.tint(watch, level))
 
 
+# The aim's PAYLOAD tiles (#1058 D2b) ride the same poll onto their own layer: the 2D's inset cells,
+# in the footprint's live colour, lit by the same clock one step after the aim (ruling 52).
+func test_payload_insets_and_their_flash_ride_the_poll() -> void:
+	var attacker := _spawn(PLAYER, Vector2i(2, 2))
+	var foe := _spawn(ENEMY, Vector2i(3, 2))
+	attacker.equipped_weapon = H.make_weapon(3)
+	var main: WeaponAttackData = attacker.get_equipped_weapon().template.main_attack
+	main.targets = EquippableData.TargetMode.MAP
+	var blast := WeaponAttackData.new()
+	blast.power = 1
+	blast.targets = EquippableData.TargetMode.MAP
+	blast.max_range = 3
+	var square: Array[Vector2i] = [Vector2i(-1, 0), Vector2i(1, 0), Vector2i(0, -1), Vector2i(0, 1)]
+	blast.attack_shape = AttackShape.new()
+	blast.attack_shape.stamp = square
+	main.payload = blast
+	game.enter_attack_mode(attacker)
+	game.selected_unit = attacker
+	game.hover_presenter._hover_attack_targeting(foe.movement.cell)
+	await _settle()
+	var payload_2d: TileMapLayer = _om().payload_overlay
+	assert_bool(payload_2d.get_used_cells().is_empty()).override_failure_message(
+			"the aim drew no payload tiles, so this case proves nothing").is_false()
+	assert_that(_sorted_3d(BoardOverlays.Layer.PAYLOAD)).is_equal(_lifted(payload_2d))
+	var live: Color = _om().hover_overlay.modulate
+	assert_that(_overlays.layer_modulate(BoardOverlays.Layer.PAYLOAD)).is_equal(live)
+
+	var cell: Vector2i = payload_2d.get_used_cells()[0]
+	var quad := BoardSpace.of_cell(cell, BoardSpace.top_row_of(game.board_heights.elevation_at(cell)))
+	_om()._aim_flash.clock = AimFlash2D.STEP_SECONDS + AimFlash2D.FLASH_SECONDS * AimFlash2D.RISE_SHARE
+	_mirror._process(0.0)
+	var level: float = _om().aim_flash_levels()[cell]
+	assert_float(level).is_greater(0.0)   # non-vacuity: the payload tile really is lit
+	assert_that(_overlays.drawn_color(BoardOverlays.Layer.PAYLOAD, quad)).override_failure_message(
+			"the diorama's payload tile is not lit with the 2D's flash").is_equal(AimFlash2D.tint(live, level))
+
+	game.exit_current_mode()
+	await _settle()
+	assert_int(_overlays.cells_of(BoardOverlays.Layer.PAYLOAD).size()).override_failure_message(
+			"the payload tiles outlived the aim in the diorama").is_equal(0)
+
+
 # --- Units -------------------------------------------------------------------------
 
 func test_unit_pulse_reaches_the_mirrored_sprite() -> void:

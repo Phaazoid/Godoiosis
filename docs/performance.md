@@ -505,3 +505,24 @@ added to coalesce a group move's per-member drops, which is real — five member
 five times — but it broke the hover seam (see visual-clarity.md) and the staleness it was also
 credited with fixing does not exist. If that rebuild count ever matters, the fix belongs at
 `_on_unit_action_queued`'s batching early-out, which the drop currently sits above.
+
+## 2026-09-27 — the payload aim preview (#1058 D2b)
+
+Hovering an attack that carries a payload runs `SquadManager.preview_payloads` on every cell the
+pointer crosses: a hypothetical resolve with the candidate, then the restoring `resolve_plan`. Only a
+payload attack pays it; every other aim is untouched. Measured with a throwaway gdUnit probe (never
+committed): a placed 3×3 tile blast whose payload is the same blast, on a 33×33 board, the thrower's
+queue empty, five reps each, the median shown.
+
+| Payload volleys | Empty ground | 16 foes round the aim |
+|---|---|---|
+| 9 (depth 1) | 28 ms | 36 ms |
+| 81 (depth 2) | 42 ms | 100 ms |
+| 729 (depth 3) | 158 ms | not run |
+
+**Every row is over one 60 fps frame (16.7 ms)**, so a payload hover drops a frame per cell change —
+per cell, not per frame, since the hover only repaints when the hovered cell moves. It grows with the
+foes a chain reaches much faster than with its size on empty ground, because each hit is a resolve.
+The Attack Editor already warns past a fan-out of 16. If a payload hover ever feels sticky, the first
+things to measure are the restore resolve (it re-resolves the whole real queue, which is empty here
+and will not be in play) and the per-call `ReactionCatalog.get_all()` default arguments.

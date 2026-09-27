@@ -111,6 +111,10 @@ func _process(_delta: float) -> void:
 	# The aim footprint: its cells and steady colour by copy, then its travel-order flash per cell.
 	_fill(BoardOverlays.Layer.AIM, om.hover_overlay.get_used_cells())
 	overlays.set_layer_modulate(BoardOverlays.Layer.AIM, om.hover_overlay.modulate)
+	# ...and its PAYLOAD tiles (#1058 D2b), in the footprint's colour: the 2D inset layer is the footprint's
+	# child, so that modulate is the one it is drawn in there too.
+	_fill_gated(BoardOverlays.Layer.PAYLOAD, om.payload_overlay, true)
+	overlays.set_layer_modulate(BoardOverlays.Layer.PAYLOAD, om.hover_overlay.modulate)
 	_aim_flash(om)
 
 	_attack(om)
@@ -234,6 +238,8 @@ func _fill(layer: BoardOverlays.Layer, used: Array[Vector2i]) -> void:
 # The aim's travel-order flash (#1057 part 2): each lit tile is the footprint's LIVE colour whitened
 # by the 2D's level for it, so a watch aim and every aim palette flash from their own colour. There
 # is no clock here -- the 2D holds it, under Game, so a modal freezes both views together.
+# The PAYLOAD layer takes the same map: its cells and AIM's never meet, and a layer ignores a cell it
+# does not hold, so one set of levels lights each tile on whichever layer drew it.
 func _aim_flash(om: OverlayManager) -> void:
 	var colors: Dictionary[Vector3i, Color] = {}
 	var base: Color = om.hover_overlay.modulate
@@ -242,6 +248,7 @@ func _aim_flash(om: OverlayManager) -> void:
 		if levels[cell] > 0.0:
 			colors[BoardSpace.of_cell(cell, _row_of(cell))] = AimFlash2D.tint(base, levels[cell])
 	overlays.set_cell_colors(BoardOverlays.Layer.AIM, colors)
+	overlays.set_cell_colors(BoardOverlays.Layer.PAYLOAD, colors)
 
 
 # ATTACK is TRIPLE-use in 2D: reach fill at (0,0), target-pick markers at (1,0), and the

@@ -381,6 +381,7 @@ var drawn_zones_version := 0
 var _zone_sprites: Array[Sprite2D] = []   # the flat view's rims and emblems, rebuilt with the zones
 var reach_overlay: TileMapLayer = null   # YOUR unit's attack reach (#1066); built in _ready
 var threat_overlay: TileMapLayer = null   # ...and the enemy's one undifferentiated field, under it
+var payload_overlay: TileMapLayer = null   # the aim's PAYLOAD tiles, inset (#1058 D2b); built in _ready
 # The stroke round that one enemy's footprint (slice 4), in ThreatLines2D's trace space. Versioned
 # on reach_line_version's shape, because OverlayMirror polls rather than listening.
 var focus_outline: Array[PackedVector3Array] = []
@@ -453,6 +454,9 @@ var sight_trace_version := 0
 var _sight_trace_2d: SightTrace2D
 var _aim_flash: AimFlash2D
 var _threat_lines_2d: ThreatLines2D
+# The payload layer's generated inset square and the texel size it was cut at (#1058 D2b).
+var _payload_source: TileSetAtlasSource
+var _payload_size := 16
 # The move tileset's generated art and the texel size it was cut at (#1074) -- see _install_move_grid.
 var _move_grid_texture: ImageTexture
 var _move_grid_size := 16
@@ -525,6 +529,12 @@ func _ready() -> void:
 	if hover_overlay is CanvasItem:
 		_aim_flash.z_index = (hover_overlay as CanvasItem).z_index
 	add_child(_aim_flash)
+	# The aim's PAYLOAD tiles (#1058 D2b), inset a size smaller. A CHILD of the footprint layer, so it wears
+	# the footprint's modulate and z by construction: a watch aim or a player's palette reaches the insets
+	# with no second write to forget. Its own tileset, built here rather than copied, because its one tile
+	# is generated art. None on a headless Play board, whose overlays are bare Node2Ds.
+	if hover_overlay is TileMapLayer:
+		_install_payload_overlay()
 	# The two range fills under the move layer (#1066), each a duplicate of it, tinted, and placed
 	# UNDER it in tree order: your blue, then your red beneath it, then the enemy's purple beneath
 	# both. THREAT is inserted first and REACH second, because move_child(x, move_overlay.get_index())
@@ -591,6 +601,35 @@ func move_grid_texture() -> Texture2D:
 	return _move_grid_texture
 
 
+# The flat view's half of InsetSquare (#1058 D2b): one atlas tile, cut at the footprint's own tile
+# size so an inset can never come out a different size from the cell it sits in.
+func _install_payload_overlay() -> void:
+	var tile_set := TileSet.new()
+	tile_set.tile_size = (hover_overlay as TileMapLayer).tile_set.tile_size
+	_payload_size = tile_set.tile_size.x
+	_payload_source = TileSetAtlasSource.new()
+	_payload_source.texture = ImageTexture.create_from_image(InsetSquare.image(_payload_size))
+	_payload_source.texture_region_size = tile_set.tile_size
+	_payload_source.create_tile(ATLAS_COORDS)
+	tile_set.add_source(_payload_source, SOURCE_ID)
+	payload_overlay = TileMapLayer.new()
+	payload_overlay.name = "PayloadOverlay"
+	payload_overlay.tile_set = tile_set
+	hover_overlay.add_child(payload_overlay)
+
+
+# A turned inset knob, flat-view half: a fresh texture, which every painted cell reads.
+# BoardOverlays.restyle_inset is the diorama's twin.
+func restyle_payload_inset() -> void:
+	if _payload_source == null:
+		return
+	_payload_source.texture = ImageTexture.create_from_image(InsetSquare.image(_payload_size))
+
+
+func payload_inset_texture() -> Texture2D:
+	return _payload_source.texture if _payload_source != null else null
+
+
 func show_sight_trace(trace: Reach.SightTrace) -> void:
 	sight_trace = trace
 	sight_trace_version += 1
@@ -609,12 +648,21 @@ func clear_sight_trace() -> void:
 
 # The hovered aim's timing (Conduction.Sweep.steps): the flash plays it. The SAME steps keep the
 # running loop, so a re-hover of one aim never restarts the travel.
-func set_aim_flash(steps: Dictionary[Vector2i, Array]) -> void:
-	_aim_flash.show_steps(steps)
+#
+# `insets` are the aim's PAYLOAD tiles (#1058 D2b) -- the ones only what it drops reaches. They are
+# painted here rather than through show_overlay because they live and die with the flash: every door
+# that takes the flash down takes them with it.
+func set_aim_flash(steps: Dictionary[Vector2i, Array], insets: Array[Vector2i] = []) -> void:
+	_aim_flash.show_steps(steps, insets)
+	if payload_overlay != null:
+		payload_overlay.clear()
+		draw_cells(payload_overlay, insets, ATLAS_COORDS)
 
 
 func clear_aim_flash() -> void:
 	_aim_flash.clear()
+	if payload_overlay != null:
+		payload_overlay.clear()
 
 
 # How white each footprint tile is this frame -- what OverlayMirror copies into the diorama.

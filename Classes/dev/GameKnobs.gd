@@ -429,6 +429,7 @@ const SIGHT_TRACE_SCRIPT := "res://Classes/board/SightTrace2D.gd"
 const THREAT_LINES_SCRIPT := "res://Classes/board/ThreatLines2D.gd"
 const AIM_FLASH_SCRIPT := "res://Classes/board/AimFlash2D.gd"
 const MOVE_GRID_SCRIPT := "res://Classes/board/MoveGrid.gd"
+const INSET_SQUARE_SCRIPT := "res://Classes/board/InsetSquare.gd"
 const ZONE_MARKS_SCRIPT := "res://Classes/board/ZoneMarks.gd"
 const SQUAD_LINES_SCRIPT := "res://Classes/board/SquadLines2D.gd"
 const UNIT_VISUALS_SCRIPT := "res://Classes/units/UnitVisuals.gd"
@@ -510,6 +511,11 @@ const CLASS_KNOBS: Array[Dictionary] = [
 	{"group": "Aiming", "label": "Flash: still brightness", "static": "STILL_PEAK", "script": AIM_FLASH_SCRIPT,
 		"min": 0.0, "max": 1.0, "step": 0.01,
 		"tip": "With the photosensitivity setting on nothing moves: the first step holds this white and each later step less, down to plain on the last. This is the first step's."},
+	# The aim's PAYLOAD tiles (#1058 D2b): the footprint's yellow, a size smaller. Generated into one texture
+	# both views draw, so this is the only dial -- the colour is the footprint's own.
+	{"group": "Aiming", "label": "Payload inset (2D+3D)", "static": "PAYLOAD_INSET", "script": INSET_SQUARE_SCRIPT,
+		"min": 0.0, "max": 0.45, "step": 0.01,
+		"tip": "How far in from each edge a payload's tile is drawn, as a share of the tile -- the tiles an attack reaches only through what it DROPS. 0 is a full tile, which reads exactly like the aim's own footprint; larger leaves a smaller square with more ground showing round it."},
 
 	# The three tones of the range readout (#1066): your blue above (Move fill), your red, and the
 	# enemy's one field under both. Tune them as a STACK, never one at a time -- what the player
@@ -1770,6 +1776,7 @@ static func read_static(name: String) -> Variant:
 		"MARK_INSET": return ThreatLines2D.MARK_INSET
 		"CONE_LENGTH": return ThreatLines2D.CONE_LENGTH
 		"CONE_WIDTH_SCALE": return ThreatLines2D.CONE_WIDTH_SCALE
+		"PAYLOAD_INSET": return InsetSquare.PAYLOAD_INSET
 		"GRID_LINE_INSET": return MoveGrid.GRID_LINE_INSET
 		"GRID_LINE_WIDTH": return MoveGrid.GRID_LINE_WIDTH
 		"GRID_FILL_GAP": return MoveGrid.GRID_FILL_GAP
@@ -2090,6 +2097,11 @@ static func write_static(host: Node3D, name: String, value: Variant) -> void:
 		"PIN_PULSE_HOLD":
 			UnitVisuals.PIN_PULSE_HOLD = value
 			_restyle_pin_flashes(host)
+			return
+		# The payload inset (#1058 D2b): regenerates the one texture each view holds, like the grid below.
+		"PAYLOAD_INSET":
+			InsetSquare.PAYLOAD_INSET = value
+			_restyle_payload_inset(host)
 			return
 		# The movement grid (#1074). All four regenerate the one texture each view already holds.
 		"GRID_LINE_INSET":
@@ -2922,6 +2934,16 @@ static func _restyle_zone_marks(host: Node3D) -> void:
 	var manager := overlay_manager_of(host)
 	if manager != null:
 		manager.restyle_zone_marks()
+
+
+# The payload inset's re-apply (#1058 D2b): both views, for _restyle_move_grid's reason.
+static func _restyle_payload_inset(host: Node3D) -> void:
+	var overlays := overlays_of(host)
+	if overlays != null:
+		overlays.restyle_inset()
+	var manager := overlay_manager_of(host)
+	if manager != null:
+		manager.restyle_payload_inset()
 
 
 # The mission-status HUD's re-apply. Its one door is game.refresh_mission_status (#134), which is
