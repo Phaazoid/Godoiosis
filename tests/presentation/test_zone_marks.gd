@@ -85,6 +85,45 @@ func test_the_soft_rim_fades_inward() -> void:
 	assert_float(further).is_greater_equal(middle)
 
 
+# Look C wears B's rim under its wall (dev, 2026-09-27), held as the two looks' art agreeing.
+func test_the_light_wall_stands_on_the_soft_rim() -> void:
+	for mask: int in [N, N | E, N | E | S | W, ZoneMarks.Side.NE]:
+		var wall := ZoneMarks.image(ZoneMarks.Look.LIGHT_WALL, mask).get_data()
+		var rim := ZoneMarks.image(ZoneMarks.Look.SOFT_RIM, mask).get_data()
+		assert_bool(wall == rim).override_failure_message(
+				"look C's ground art for mask %d is not B's rim" % mask).is_true()
+
+
+# A hair off the point in every direction is still one of the zone's cells: inside, and off the border.
+func _strictly_inside(point: Vector3, cells: Array[Vector2i]) -> bool:
+	for dx: float in [-0.001, 0.001]:
+		for dz: float in [-0.001, 0.001]:
+			if not cells.has(Vector2i(floori(point.x + dx), floori(point.z + dz))):
+				return false
+	return true
+
+
+# The wall stands just inside the zone, so it never shares a plane with a block face on the border (the
+# z-fight #955's play found), and its ends meet at an outer corner, a straight run and an L's notch.
+func test_the_wall_outline_stands_inside_its_zone_and_closes_round_the_notch() -> void:
+	var shapes: Array = [_cells([Vector2i(0, 0)]), _cells([Vector2i(0, 0), Vector2i(0, 1), Vector2i(1, 1)])]
+	for listed: Array in shapes:
+		var shape := _cells(listed)
+		var strips := ZoneMarks.wall_outline(shape, null)
+		assert_int(strips.size()).is_equal(OverlayManager.outline_segments(shape, null).size())
+		var starts: Array[Vector3] = []
+		for strip in strips:
+			starts.append(strip[0])
+		for strip in strips:
+			for point in strip:
+				assert_bool(_strictly_inside(point, shape)).override_failure_message(
+						"a wall end at %s stands on or outside the zone %s" % [point, shape]).is_true()
+			var end := strip[1]
+			assert_bool(starts.any(func(start: Vector3) -> bool: return start.is_equal_approx(end))) \
+					.override_failure_message("a strip ends at %s and none starts there: the ring is open" % end) \
+					.is_true()
+
+
 func test_a_knob_regenerates_the_art() -> void:
 	var before := ZoneMarks.texture(ZoneMarks.Look.PAINTED_EDGE, N)
 	var old := ZoneMarks.ZONE_BAND_WIDTH

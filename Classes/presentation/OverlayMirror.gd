@@ -639,7 +639,8 @@ func _zones(om: OverlayManager) -> void:
 	_zone_wall_sync(om, look)
 
 
-# Look C's wall. Hidden while a tear-out is up, since its strips stand where the ground rests.
+# Look C's wall, standing just inside each zone (ZoneMarks.wall_outline). Hidden while a tear-out is
+# up, since its strips stand where the ground rests.
 func _zone_wall_sync(om: OverlayManager, look: ZoneMarks.Look) -> void:
 	var wanted := look == ZoneMarks.Look.LIGHT_WALL and not om.drawn_zones.is_empty()
 	if _zone_walls == null:
@@ -667,7 +668,7 @@ func _zone_wall_sync(om: OverlayManager, look: ZoneMarks.Look) -> void:
 		cells.assign(zone["cells"])
 		var colour := overlays.layer_modulate(ZoneMarks.LAYER_OF_KIND[kind])
 		colour.a = 1.0
-		for segment in OverlayManager.outline_segments(cells, board):
+		for segment in ZoneMarks.wall_outline(cells, board):
 			strips.append({"from": BoardSpace.trace_point(segment[0]) + lift,
 					"to": BoardSpace.trace_point(segment[1]) + lift, "colour": colour})
 	_zone_walls.build(strips, ZoneMarks.ZONE_WALL_HEIGHT * BoardSpace.CELL_SIZE,

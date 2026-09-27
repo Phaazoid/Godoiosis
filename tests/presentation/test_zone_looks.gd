@@ -134,6 +134,51 @@ func test_the_light_wall_stands_one_strip_per_outward_edge() -> void:
 	assert_bool(walls.visible).is_false()
 
 
+# A ground mark's quad is sized by its art's pixels, so art at the wrong resolution spills past its cell
+# (#955's first play: every edge half a cell outside the zone). Asked of the drawn quads themselves.
+func test_every_zone_mark_covers_exactly_its_own_cell() -> void:
+	_look(ZoneMarks.Look.SOFT_RIM)
+	await _settle()
+	var zone_cells: Array[Vector2i] = [Vector2i(1, 1), Vector2i(2, 1), Vector2i(6, 6)]
+	var drawn: Array[Vector2i] = []
+	for node: Variant in _overlays._pool_for(BoardOverlays.Layer.ZONE_MARKS):
+		var quad := node as MeshInstance3D
+		if not quad.visible:
+			continue
+		var box: AABB = quad.transform * quad.mesh.get_aabb()
+		var middle := box.get_center() / BoardSpace.CELL_SIZE
+		var cell := Vector2i(floori(middle.x), floori(middle.z))
+		assert_bool(zone_cells.has(cell)).override_failure_message(
+				"a zone mark is centred on %s, outside the zone" % cell).is_true()
+		assert_vector(Vector2(box.size.x, box.size.z)).override_failure_message(
+				"the mark on %s is %s across, not one cell" % [cell, box.size]).is_equal_approx(
+				Vector2.ONE * BoardSpace.CELL_SIZE, Vector2.ONE * 0.001)
+		assert_vector(Vector2(box.position.x, box.position.z)).is_equal_approx(
+				Vector2(cell) * BoardSpace.CELL_SIZE, Vector2.ONE * 0.001)
+		drawn.append(cell)
+	assert_int(drawn.size()).is_equal(3)
+
+
+# The wall stands just INSIDE its zone: on the border it shares a plane with the face of any block there
+# (#955's second report, a crate flickering through it). Every vertex, a hair off in each direction.
+func test_the_light_wall_stands_inside_its_zone_never_on_its_border() -> void:
+	_look(ZoneMarks.Look.LIGHT_WALL)
+	await _settle()
+	var walls := _mirror.get_node_or_null("ZoneWalls") as ZoneWalls
+	assert_object(walls).is_not_null()
+	var zone_cells: Array[Vector2i] = [Vector2i(1, 1), Vector2i(2, 1), Vector2i(6, 6)]
+	var vertices: PackedVector3Array = walls.mesh.surface_get_arrays(0)[Mesh.ARRAY_VERTEX]
+	assert_int(vertices.size()).is_greater(0)
+	for vertex in vertices:
+		var at := vertex / BoardSpace.CELL_SIZE
+		var inside := true
+		for dx: float in [-0.001, 0.001]:
+			for dz: float in [-0.001, 0.001]:
+				inside = inside and zone_cells.has(Vector2i(floori(at.x + dx), floori(at.z + dz)))
+		assert_bool(inside).override_failure_message(
+				"a wall vertex at (%.3f, %.3f) stands on or outside its zone's border" % [at.x, at.z]).is_true()
+
+
 func test_every_zone_wears_one_emblem_inside_it_and_a_claimed_one_wears_nothing() -> void:
 	_look(ZoneMarks.Look.PAINTED_EDGE)
 	await _settle()

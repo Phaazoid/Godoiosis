@@ -45,9 +45,9 @@ const DEFS := {
 	},
 	Flag.ZONE_LOOK: {
 		"title": "Zone look",
-		"desc": "How an objective zone is drawn on the board (#955). Tint: today's flat wash. A: a solid, dark-outlined band on the zone's inside edge. B: a glow fading inward from the edge. C: a low wall of light standing on the edge. The emblems draw under every look. Pick one and the rest get deleted.",
+		"desc": "How an objective zone is drawn on the board (#955). Tint: today's flat wash. A: a solid, dark-outlined band on the zone's inside edge. B: a glow fading inward from the edge. C: B's glow with a low wall of light standing just inside the edge. The emblems draw under every look. Pick one and the rest get deleted.",
 		"default": 0,
-		"options": ["Tint (today)", "A: painted edge", "B: soft rim", "C: light wall"],
+		"options": ["Tint (today)", "A: painted edge", "B: soft rim", "C: soft rim + light wall"],
 	},
 }
 

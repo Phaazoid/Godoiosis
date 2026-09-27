@@ -9,8 +9,9 @@ class_name ZoneMarks
 # real game before choosing. look() is the one read of that flag, so promoting a winner is one
 # function and a flag deletion. TINT is today's flat wash, drawn by the zone FILL layers as ever; the
 # three edges replace that wash in the diorama with per-cell art on BoardOverlays.Layer.ZONE_MARKS,
-# and LIGHT_WALL adds ZoneWalls standing on the perimeter. The flat 2D view keeps the wash under
-# every look while this is an experiment -- a declared #292 asymmetry, owed to the winner.
+# and LIGHT_WALL wears SOFT_RIM's art with ZoneWalls standing just inside the perimeter. The flat
+# 2D view keeps the wash under every look while this is an experiment -- a declared #292 asymmetry,
+# owed to the winner.
 #
 # The EMBLEM is not an experiment: one mark per zone, on the board and heading the card's section
 # for its kind (the watch reticle's one-texture, one-colour shape).
@@ -24,8 +25,11 @@ enum Look { TINT, PAINTED_EDGE, SOFT_RIM, LIGHT_WALL }
 # neighbours on a corner are in the zone while the diagonal between them is not).
 enum Side { N = 1, E = 2, S = 4, W = 8, NE = 16, SE = 32, SW = 64, NW = 128 }
 
-# The resolution the art is authored at and generated in: the diorama's tile.
-const TEXELS := 32
+# The art's texels across a cell: the 3D view sizes a ground mark by its pixels, so it is that metric.
+const TEXELS := int(BoardOverlays.ART_PIXELS_PER_CELL)
+# How far look C's wall stands inside the zone, in cells: half a texel, onto the rim's outline. A
+# separation, not a look -- it keeps the wall out of the plane a border block's face stands in.
+const WALL_INSET := 0.5 / TEXELS
 
 # Which layer's colour a kind wears -- the colour the tint, the knob and the card all read.
 const LAYER_OF_KIND: Dictionary[ZoneManager.Kind, BoardOverlays.Layer] = {
@@ -45,9 +49,9 @@ const EMBLEMS: Dictionary[ZoneManager.Kind, Texture2D] = {
 
 # A: the band's width, as a fraction of a cell.
 static var ZONE_BAND_WIDTH := 0.13
-# A/B/C: the dark outline on each side of an edge, in texels of the 32-texel tile. 0 is none.
+# A/B/C: the dark outline on each side of an edge, in art texels. 0 is none.
 static var ZONE_EDGE_OUTLINE := 1.0
-# B: how far in the glow reaches, as a fraction of a cell.
+# B/C: how far in the glow reaches, as a fraction of a cell.
 static var ZONE_RIM_WIDTH := 0.45
 # A/B/C: the faint wash left inside the zone, as an alpha. 0 is an edge alone.
 static var ZONE_FILL_ALPHA := 0.16
@@ -186,7 +190,7 @@ static func _texel(which: Look, d: float, outline: float, size: float) -> Color:
 				return Color(1, 1, 1, 1)
 			if past < band + outline:
 				return Color(0, 0, 0, 0.8)
-		Look.SOFT_RIM:
+		Look.SOFT_RIM, Look.LIGHT_WALL:   # the wall stands on the rim (dev, 2026-09-27)
 			var line := size / float(TEXELS) * 1.5
 			if past < line:
 				return Color(1, 1, 1, 0.95)
@@ -194,7 +198,34 @@ static func _texel(which: Look, d: float, outline: float, size: float) -> Color:
 			if past < line + reach:
 				var t := 1.0 - (past - line) / reach
 				return Color(1, 1, 1, lerpf(ZONE_FILL_ALPHA, 0.75, t * t))
-		Look.LIGHT_WALL:
-			if past < size / float(TEXELS) * 1.5:
-				return Color(1, 1, 1, 0.95)
 	return fill
+
+
+# The perimeter look C's wall stands on: OverlayManager's outline, in its trace space, each strip moved
+# WALL_INSET into the zone. Its ends are trimmed at an outer corner and run on at an inner one, judged
+# from the zone's own cells, so the ring stays closed.
+static func wall_outline(cells: Array[Vector2i], board: BoardContext) -> Array[PackedVector3Array]:
+	var inside := {}
+	for cell in cells:
+		inside[cell] = true
+	var strips: Array[PackedVector3Array] = []
+	for segment in OverlayManager.outline_segments(cells, board):
+		var from := segment[0]
+		var to := segment[1]
+		var along := Vector3(to.x - from.x, 0.0, to.z - from.z)   # one cell, x east, z south
+		var inward := Vector3(-along.z, 0.0, along.x)             # the zone is on the stroke's right
+		var step := Vector2i(roundi(along.x), roundi(along.z))
+		var out := Vector2i(-roundi(inward.x), -roundi(inward.z))
+		var cell := Vector2i(floori((from.x + to.x + inward.x) * 0.5), floori((from.z + to.z + inward.z) * 0.5))
+		strips.append(PackedVector3Array([
+			from + (inward - along * _corner_turn(inside, cell - step, out)) * WALL_INSET,
+			to + (inward + along * _corner_turn(inside, cell + step, out)) * WALL_INSET]))
+	return strips
+
+
+# Which way a strip's end moves along it where the outline turns: -1 back at an outer corner (the
+# next cell along is outside), +1 on at an inner one (it and the cell beyond it are both inside).
+static func _corner_turn(inside: Dictionary, next: Vector2i, out: Vector2i) -> float:
+	if not inside.has(next):
+		return -1.0
+	return 1.0 if inside.has(next + out) else 0.0
