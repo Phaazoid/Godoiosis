@@ -166,6 +166,128 @@ func test_a_forced_exit_does_not_reel_in() -> void:
 			"a unit thrown out of range reeled in like a voluntary leave").is_equal(0)
 
 
+# #367 part 2B: a forced exit BREAKS the tether, and so does a downing (the dev: "breaks, like a
+# shove").
+func test_a_forced_or_downed_exit_breaks_the_tether() -> void:
+	var leader := _solo(Vector2i(0, 0), 5)
+	var thrown := _solo(Vector2i(1, 0))
+	var downed := _solo(Vector2i(0, 1))
+	_sm.join_squad(thrown, leader.squad)
+	_sm.join_squad(downed, leader.squad)
+	_presenter.arm()
+	thrown.movement.cell = Vector2i(12, 0)
+	_sm.enforce_contact()
+	_sm.handle_unit_downed(downed)
+	_presenter.flush()
+	assert_int(_moments(Moment.BREAK, thrown, leader).size()).override_failure_message(
+			"a unit thrown out of range did not break its tether").is_equal(1)
+	assert_int(_moments(Moment.BREAK, downed, leader).size()).override_failure_message(
+			"a downed unit did not break its tether").is_equal(1)
+
+
+# A downed LEADER's links all break, THEN the new leader's draw in -- the "then" now waits for a break.
+func test_a_downed_leaders_links_break_then_the_new_leaders_draw_in() -> void:
+	var leader := _solo(Vector2i(0, 0), 5)
+	var heir := _solo(Vector2i(1, 0), 4)
+	var other := _solo(Vector2i(0, 1), 2)
+	_sm.join_squad(heir, leader.squad)
+	_sm.join_squad(other, leader.squad)
+	_presenter.arm()
+	_sm.handle_unit_downed(leader)
+	_presenter.flush()
+	assert_object(other.squad.leader).override_failure_message(
+			"fixture: leadership did not pass to the heir").is_same(heir)
+	var breaks := _moments(Moment.BREAK)
+	assert_int(breaks.size()).override_failure_message("the downed leader's links did not all break") \
+			.is_equal(2)
+	var draws := _moments(Moment.DRAW_IN, other, heir)
+	assert_int(draws.size()).is_equal(1)
+	var waited := int(draws[0]["start_msec"]) - int(breaks[0]["start_msec"])
+	assert_int(waited).override_failure_message(
+			"the new leader's tether did not wait for the break (waited %d ms)" % waited) \
+			.is_equal(int(SquadLines2D.moment_seconds(Moment.BREAK) * 1000.0))
+
+
+# The blow's link changes, spelled as the forecast stamps them.
+func _outcome(changes: Array) -> ResolvedOutcome:
+	var outcome := ResolvedOutcome.new()
+	for change: Dictionary in changes:
+		var link := ResolvedOutcome.Relink.new()
+		link.member = change["member"]
+		link.leader = change["leader"]
+		link.ends = change["ends"]
+		link.cause = change.get("cause", -1)
+		link.member_cell = link.member.movement.cell
+		link.leader_cell = link.leader.movement.cell
+		outcome.relinks.append(link)
+	return outcome
+
+
+# At the blow: the forecast's break plays NOW, and says how long it needs; when the pass settles and
+# the ejection really happens, the flush finds it in the ledger and plays it no second time.
+func test_a_foretold_break_plays_at_the_blow_and_not_again_at_the_settle() -> void:
+	var leader := _solo(Vector2i(0, 0))
+	var member := _solo(Vector2i(1, 0))
+	_sm.join_squad(member, leader.squad)
+	_presenter.arm()
+	var shown := _presenter.foretell(_outcome([{"member": member, "leader": leader, "ends": true,
+			"cause": SquadManager.LeaveCause.FORCED}]))
+	assert_int(_moments(Moment.BREAK, member, leader).size()).override_failure_message(
+			"the foretold break did not play at the blow").is_equal(1)
+	assert_float(shown).override_failure_message("the blow was not told how long its break needs") \
+			.is_greater_equal(SquadLines2D.moment_seconds(Moment.BREAK))
+
+	_om.clear_tether_moments()
+	member.movement.cell = Vector2i(12, 0)
+	_sm.enforce_contact()
+	_presenter.flush()
+	_presenter.end_pass()
+	assert_bool(member.squad == leader.squad).override_failure_message(
+			"fixture: the settle did not eject the member").is_false()
+	assert_int(_om.squad_tether_moments.size()).override_failure_message(
+			"the settle played the break a second time").is_equal(0)
+
+
+# A KILL settles mid-blow (handle_unit_death), so by the time its blow is foretold the ordinary flush
+# owns it: foretell plays none of it, and the flush plays each link once.
+func test_foretell_leaves_a_kills_handover_to_the_flush() -> void:
+	var leader := _solo(Vector2i(0, 0), 5)
+	var heir := _solo(Vector2i(1, 0), 4)
+	var other := _solo(Vector2i(0, 1), 2)
+	_sm.join_squad(heir, leader.squad)
+	_sm.join_squad(other, leader.squad)
+	_presenter.arm()
+	_sm.handle_unit_death(leader)
+	var shown := _presenter.foretell(_outcome([
+			{"member": heir, "leader": leader, "ends": true, "cause": SquadManager.LeaveCause.DEATH},
+			{"member": other, "leader": leader, "ends": true, "cause": SquadManager.LeaveCause.DEATH},
+			{"member": other, "leader": heir, "ends": false}]))
+	assert_float(shown).override_failure_message("foretell played a kill that had already settled") \
+			.is_equal_approx(0.0, 0.0001)
+	assert_int(_om.squad_tether_moments.size()).is_equal(0)
+	_presenter.flush()
+	assert_int(_moments(Moment.DRAW_IN, other, heir).size()).override_failure_message(
+			"the kill's handover did not draw in exactly once").is_equal(1)
+
+
+# A break the forecast foretold but the pass never delivered must not swallow a later, real leave of
+# that link: end_pass forgets it.
+func test_a_foretold_link_the_pass_never_changed_does_not_swallow_a_later_leave() -> void:
+	var leader := _solo(Vector2i(0, 0))
+	var member := _solo(Vector2i(1, 0))
+	_sm.join_squad(member, leader.squad)
+	_presenter.arm()
+	_presenter.foretell(_outcome([{"member": member, "leader": leader, "ends": true,
+			"cause": SquadManager.LeaveCause.FORCED}]))
+	_presenter.flush()
+	_presenter.end_pass()
+	_om.clear_tether_moments()
+	_sm.leave_squad(member)
+	_presenter.flush()
+	assert_int(_moments(Moment.REEL_IN, member, leader).size()).override_failure_message(
+			"a later Leave Squad was swallowed by a break the pass never delivered").is_equal(1)
+
+
 func test_a_death_and_an_undeploy_play_nothing() -> void:
 	var leader := _solo(Vector2i(0, 0))
 	var dies := _solo(Vector2i(1, 0))
