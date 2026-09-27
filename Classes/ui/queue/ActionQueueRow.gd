@@ -60,10 +60,10 @@ signal drag_requested(row: ActionQueueRow)
 func setup(action_ref: BaseAction):
 	action = action_ref
 
-	actor_texture.texture = action.get_actor_texture()
+	_show_in(actor_texture, action.get_actor_texture())
 	actor_texture.modulate = action.get_actor_modulate()
 	action_icon.texture = action.get_action_icon()
-	target_texture.texture = action.get_target_texture()
+	_show_in(target_texture, action.get_target_texture())
 	description_label.text = action.get_description()
 
 	var outcome := action.resolved_outcome()
@@ -293,11 +293,16 @@ func _gui_input(event: InputEvent) -> void:
 		drag_requested.emit(self)
 		accept_event()
 
+# A unit's sheet is 64px holding a ~23x20 character, so fitting the whole CELL into a 32px slot drew
+# everyone at a third of the slot (#1082, the #937 law). The slot's own size is the window.
+func _show_in(slot: TextureRect, texture: Texture2D) -> void:
+	slot.texture = MapSpriteInk.portrait(texture, int(slot.custom_minimum_size.x))
+
 func setup_volley_summary(lead: AttackAction, count: int, expanded: bool) -> void:
 	action = lead
 	is_volley_header = true
 
-	actor_texture.texture = lead.get_actor_texture()
+	_show_in(actor_texture, lead.get_actor_texture())
 	actor_texture.modulate = lead.get_actor_modulate()
 
 	# Plain attack icon (not the lead's lethality icon — the group has many outcomes).
