@@ -61,9 +61,10 @@ static func stamp(plan: ResolvedPlan, board: BoardContext) -> void:
 					downed[victim] = true
 					downs.append(blow)
 
+	# A body finished off later in the pass is never ejected -- and needs no check here: its death
+	# already took it out of its copied squad, so _leave finds nothing to do.
 	for blow in downs:
-		if not dead.has(blow.target):
-			_leave(blow.target, blow.resolved_outcome(), bands, pos, board, true)
+		_leave(blow.target, blow.resolved_outcome(), bands, pos, board, true)
 
 	_sweep_contact(blows, all_bands, start, pos, board)
 
