@@ -3910,13 +3910,7 @@ The RULES inside each step are shared, never copied: `SquadManager.successor_amo
 
 `tests/squad/test_split_forecast.gd` is the Law #2 harness: every case runs the REAL pass and requires the forecast to name exactly the units `squad_member_left` then reports as FORCED or DOWNED out of a squad with members left.
 
-**Declared residuals:**
-- **Same-pass terrain.** Cohesion reads live terrain, so ice this pass melts is not forecast.
-- **The end-of-turn burn.** A burn that downs a squadded unit gets no Split chip on its END OF TURN row.
-- **A watch shot that halts a walk short**, stranding a member without shoving anyone, has no blow to own it. Relatedly, a leader KILLED by a watch shot mid-walk is judged at the members' post-walk cells, where the live handover reads them mid-walk.
-- **A collapsed volley** shows no chips on its summary row (the same as every other consequence); expanding it shows the Split on the victim's row.
-
-These five come **after part 2B**, by the dev's ruling (2026-09-27): not in it.
+**Its five declared residuals were built after part 2B** (dev's ruling, 2026-09-27): see *Part 2A's leftovers* below.
 
 ### Part 2B: the break, at the blow, in the zoom (BUILT 2026-09-27)
 
@@ -3952,7 +3946,7 @@ These five come **after part 2B**, by the dev's ruling (2026-09-27): not in it.
   - It lingers `max(linger, shown)`. `shown` is the break's own length, plus a handover's draw-in up to its pop (`SquadLines2D.shown_seconds`), so tuning a break can never outrun the camera.
 - **A kill already settled live.** `handle_unit_death` runs mid-blow, and the presenter's ordinary deferred flush plays it at that blow. So `foretell` skips any link `_current_links()` has already changed, and nothing plays twice whichever of the two gets there first.
 - **The settle reads a ledger.** Everything foretold goes into `_foretold_ends` / `_foretold_begins`. After `enforce_contact`, the executor calls `flush()` SYNCHRONOUSLY, and the diff consumes the ledger instead of playing those links again. Then `end_pass()` clears whatever is left, so a link the forecast named but the pass never changed cannot swallow a later, real leave.
-- **An exit no forecast saw breaks at the settle, on the board**, through the ordinary diff: same-pass ice melt, and turn start's ice at the next turn.
+- **An exit no forecast saw breaks at the settle, on the board**, through the ordinary diff. Since *Part 2A's leftovers* the pass's own ice is forecast; what still arrives this way is a burn's break, at the end-of-turn settle, and the contact backstops outside a pass (turn start, a pre-mission reposition).
 
 **Z2 is two edits.**
 - **The stage.** `BeatSheet._gather_cells` marks both cells of every relink on the outcomes it already stages. Mid-walk shots stay off it, as their footprints do.
@@ -3968,3 +3962,20 @@ With zooms off nothing stages: the break plays on the board, at the blow, with t
 - **A break the forecast predicted but the pass did not deliver has already played**, and nothing redraws the tether until it is next shown. The link check makes this a bug to fix rather than a mode.
 - **A down's handover is judged at end-of-pass positions** (the settle's own order), so a member shoved out of the successor's reach before the down breaks at the down's blow, as its chip says.
 - **The dashes' march is frozen at the snap from the flat view's clock.** The diorama's shader marches on its own `TIME`, so its last dash positions and the pieces can differ by a fraction of a dash.
+
+### Part 2A's leftovers (BUILT 2026-09-27)
+
+2A declared five things its forecast got wrong or could not show, and the dev ruled they come after 2B. Each was re-derived from the code before building; two were not what 2A said.
+
+| Leftover | What the code did | What changed |
+|---|---|---|
+| **The end-of-turn burn** | `stamp` never read `plan.tile_hits`, so a burn that downed a squadded unit wore no Split. | The burn settles after the contact sweep, in the live order: a death hands over at once, and the downed leave once every burn has landed (`apply_burning_tile_damage`). It settles on the ground the pass leaves, and its Split rides the END OF TURN row. |
+| **This pass's ice** | A pass's deposits land in ONE batch after the attack volley (`OrderExecutor._apply_cell_effects`), while the forecast read only the pre-pass board. A melt that stranded a member was missed; a freeze that restored a path gave a false Split, whose break 2B then played for a link the pass kept. | `BoardContext.with_deposits` folds deposits over the live store through the existing `TerrainStateManager.projected_states_at`. The walk and the volley settle on the board as it was, the counters onward on the landed one. A pass that deposits anything copies every squad with members, since a melt splits one no blow touched. Ownership counts each blow's OWN deposits (`ResolvedCellEffect.cause`), so the melt's Split is on the fire. |
+| **A watch shot halting a walk** | Unreachable, measured. The validator judges a halted walk where the shot catches it (`MoveAction.get_destination`), so a catch out of range reds the walk and the plan is refused. A catch in range makes the shove an ordinary in-range to out-of-range change the forecast already owned. | Nothing in the forecast. `test_split_forecast` pins the refusal, since the forecast now leans on it. |
+| **A leader killed mid-walk** | Every walk starts together and a watch shot plays while the others keep walking, so the successor's reach was read at the frame of the kill. The pan, the shot's length and the battle-zoom setting decided who stayed; the Play API, which finishes every walk before any shot, already disagreed with the game. | **A live rule change (dev, 2026-09-27).** The successor is still named at once (it reads LDR, not cells), but its reach, range then capacity, waits for the walk to end: `SquadManager.hold_handovers`, held across `OrderExecutor._execute_move_phase`. The forecast defers the same check past the last mid-walk shot and keeps the chip on the killing blow. On screen, the new leader's tethers draw in at the kill, and anyone still out of its reach breaks off when the walk ends. |
+| **The collapsed volley row** | A collapsed volley shows no chips; expanding it shows the Split. | **Ruled as-is (dev, 2026-09-27)**, the same as every other consequence. |
+
+**Declared residuals:**
+- **A burn's break plays as the burn phase settles, on the board**, not at each burn: the live burn list is rebuilt at end of turn (`_tile_hits_for`), so there is no forecast outcome at a burn to play it from.
+- **A burn is forecast against this squad's pass.** Another squad's pass later in the turn can change it, as with any forecast.
+- **A mid-walk kill and a later mid-walk shove that both matter**: the kill's row wears the chip.
