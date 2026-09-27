@@ -9,7 +9,7 @@ class_name ZoneWalls
 #
 # On the WORLD render layer alone, or the damp blot would darken it (the decal law). It HIDES while a
 # tear-out has cells up: its strips stand where the ground rests and cannot follow a flight
-# (declared; the rim marks do follow it). The flat view has no wall.
+# (declared, #1118; the rim marks do follow it). The flat view has no wall.
 
 const SHADER := preload("res://Classes/presentation/zone_wall.gdshader")
 
