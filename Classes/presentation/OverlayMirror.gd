@@ -866,7 +866,8 @@ func _focus_outline(om: OverlayManager) -> void:
 # The squad's lines (#1070): the range's stroke lies on the ground as the focus edge does, and each
 # tether hangs where its chord put it -- the middles of the two bodies -- with the cone at the
 # leader's end built exactly as a reach mark's is. The three tether STATES go to three layers,
-# because the pluck is a material uniform and only a strained tether may shake.
+# because the pluck is a material uniform and only a strained tether may shake. An enemy squad's draw
+# wears the enemy colour on the same layers (#1109): the colour already arrives per draw.
 #
 # The pluck is pushed every frame it rings and never otherwise: the store holds a start stamp, and
 # the envelope is SquadLines2D's, so the flat line and the ribbon swing as one.
@@ -882,7 +883,8 @@ func _squad_lines(om: OverlayManager) -> void:
 		for p: Vector3 in segment:
 			points.append(BoardSpace.trace_point(p) + lift)
 		segments.append(points)
-	overlays.set_lines(BoardOverlays.Layer.COHESION_EDGE, segments, SquadLines2D.TETHER_COLOR)
+	overlays.set_lines(BoardOverlays.Layer.COHESION_EDGE, segments,
+			SquadLines2D.tether_color(om.squad_lines_hostile))
 	for state: int in SquadLines2D.Strain.values():
 		var marks: Array[Array] = []
 		var widths: Array[Array] = []
@@ -910,7 +912,8 @@ func _squad_lines(om: OverlayManager) -> void:
 					"tip": BoardSpace.trace_point(cone["tip"]),
 					"radius": overlays.squad_line_width * float(cone["scale"]) * 0.5,
 				})
-		overlays.set_marks(TETHER_LAYERS[state], marks, SquadLines2D.color_of(state), widths, cones)
+		overlays.set_marks(TETHER_LAYERS[state], marks, SquadLines2D.color_of(state, om.squad_lines_hostile),
+				widths, cones)
 
 
 # The membership moments (#367), rebuilt EVERY frame one is in the air -- the growth, the pop and the

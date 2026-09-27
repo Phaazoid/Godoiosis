@@ -79,6 +79,10 @@ func execute_orders(unit):
 		return
 
 	game.clear_selection_icons()
+	# ...and the squad lines a hover left up (#1109). The pointer stops polling while the pass plays, so
+	# they would otherwise stand at cells the pass is about to empty -- an intact tether beside its own
+	# break at the blow. The next hover redraws them.
+	game.overlay_manager.clear_squad_lines()
 
 	# Explicit types throughout: `game` is untyped (game.gd has no class_name), so every
 	# game.* call reads as Variant and `:=` cannot infer from it.

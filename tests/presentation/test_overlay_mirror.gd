@@ -1005,6 +1005,37 @@ func test_squad_lines_and_icons_mirror() -> void:
 	assert_int(_overlays.markers_of(BoardOverlays.Layer.ICONS).size()).is_equal(1)
 
 
+# An ENEMY squad's lines reach the diorama in the enemy colour (#1109), and a player's draw after it
+# is back in the player's -- read off the beam MATERIAL, which is what the wire has to reach. The
+# colours are compared to the statics, never to a value.
+func test_an_enemy_squads_lines_reach_the_diorama_in_the_enemy_colour() -> void:
+	assert_bool(SquadLines2D.ENEMY_TETHER_COLOR.is_equal_approx(SquadLines2D.TETHER_COLOR)) \
+		.override_failure_message("the two sides are tuned to one colour -- this case cannot tell them apart") \
+		.is_false()
+	var enemy_leader := _spawn(ENEMY, Vector2i(2, 2))
+	var enemy_member := _spawn(ENEMY, Vector2i(4, 3))
+	game.squad_manager.join_squad(enemy_member, enemy_leader.squad)
+	var leader := _spawn(PLAYER, Vector2i(3, 2))
+	var member := _spawn(PLAYER, Vector2i(5, 2))
+	game.squad_manager.join_squad(member, leader.squad)
+
+	game.draw_squad_cohesion(enemy_leader.squad, enemy_leader.movement.cell)
+	await _settle()
+	assert_bool(_overlays.lines_of(BoardOverlays.Layer.TETHERS).size() > 0).override_failure_message(
+			"fixture: the enemy's tether never reached the diorama").is_true()
+	for layer: BoardOverlays.Layer in [BoardOverlays.Layer.COHESION_EDGE, BoardOverlays.Layer.TETHERS]:
+		assert_that(_overlays.beam_parameter(layer, &"beam_color")).override_failure_message(
+				"%s drew an enemy squad in the player's colour" % BoardOverlays.Layer.keys()[layer]) \
+			.is_equal(SquadLines2D.ENEMY_TETHER_COLOR)
+
+	game.draw_squad_cohesion(leader.squad, leader.movement.cell)
+	await _settle()
+	for layer: BoardOverlays.Layer in [BoardOverlays.Layer.COHESION_EDGE, BoardOverlays.Layer.TETHERS]:
+		assert_that(_overlays.beam_parameter(layer, &"beam_color")).override_failure_message(
+				"%s kept the enemy colour for the player's own squad" % BoardOverlays.Layer.keys()[layer]) \
+			.is_equal(SquadLines2D.TETHER_COLOR)
+
+
 # --- Membership moments (#367) ---------------------------------------------------------------------
 
 # A moment reaches the diorama off the same store the flat view draws, hanging at its chord like the

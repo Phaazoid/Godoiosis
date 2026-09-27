@@ -582,6 +582,8 @@ const CLASS_KNOBS: Array[Dictionary] = [
 	# SquadLines2D because both views draw them.
 	{"group": "Squad lines", "label": "Tether and range (2D+3D)", "static": "TETHER_COLOR", "script": SQUAD_LINES_SCRIPT,
 		"tip": "The tether from each member to its leader AND the dashed stroke round the squad's range -- one colour, because they are one system. Orange, the hue the cohesion fill always wore."},
+	{"group": "Squad lines", "label": "Enemy tether and range (2D+3D)", "static": "ENEMY_TETHER_COLOR", "script": SQUAD_LINES_SCRIPT,
+		"tip": "The same lines for an ENEMY squad, shown on enemy hover, and its breaks and draw-ins. Lightened from the enemy field's purple so it reads over that field and over bare ground alike; the strain red a break turns to is shared with yours."},
 	{"group": "Squad lines", "label": "Ghost tether (2D+3D)", "static": "TETHER_GHOST_COLOR", "script": SQUAD_LINES_SCRIPT,
 		"tip": "A tether that MIGHT be: every unit Squad Up could recruit, or every squad Join Squad could join. Dim the colour itself, not only its alpha -- the 3D arrowhead is solid and ignores alpha, so a ghost there reads as darker rather than see-through."},
 	{"group": "Squad lines", "label": "Strained tether (2D+3D)", "static": "TETHER_STRAIN_COLOR", "script": SQUAD_LINES_SCRIPT,
@@ -1792,6 +1794,7 @@ static func read_static(name: String) -> Variant:
 		"ZONE_WALL_ALPHA": return ZoneMarks.ZONE_WALL_ALPHA
 		"ZONE_SHIMMER_SPEED": return ZoneMarks.ZONE_SHIMMER_SPEED
 		"TETHER_COLOR": return SquadLines2D.TETHER_COLOR
+		"ENEMY_TETHER_COLOR": return SquadLines2D.ENEMY_TETHER_COLOR
 		"TETHER_GHOST_COLOR": return SquadLines2D.TETHER_GHOST_COLOR
 		"TETHER_STRAIN_COLOR": return SquadLines2D.TETHER_STRAIN_COLOR
 		"DASHES_PER_TILE": return SquadLines2D.DASHES_PER_TILE
@@ -2134,7 +2137,8 @@ static func write_static(host: Node3D, name: String, value: Variant) -> void:
 		# The squad's lines (#1070). Every one re-applies to BOTH views through one door: the 3D beam
 		# params (the dashes are shader uniforms) and the store, which re-derives the tethers -- the
 		# inset is geometry -- and repaints the flat line.
-		"TETHER_COLOR", "TETHER_GHOST_COLOR", "TETHER_STRAIN_COLOR", "DASHES_PER_TILE", "DASH_FILL", \
+		"TETHER_COLOR", "ENEMY_TETHER_COLOR", "TETHER_GHOST_COLOR", "TETHER_STRAIN_COLOR", \
+				"DASHES_PER_TILE", "DASH_FILL", \
 				"DASH_SPEED", "TETHER_INSET", "ARROW_LENGTH", "ARROW_WIDTH_SCALE", "SHAKE_AMPLITUDE", 				"SHAKE_SECONDS", "SHAKE_SWINGS":
 			_write_squad_line(name, value)
 			_restyle_squad_lines(host)
@@ -2872,6 +2876,7 @@ static func write_static(host: Node3D, name: String, value: Variant) -> void:
 static func _write_squad_line(name: String, value: Variant) -> void:
 	match name:
 		"TETHER_COLOR": SquadLines2D.TETHER_COLOR = value
+		"ENEMY_TETHER_COLOR": SquadLines2D.ENEMY_TETHER_COLOR = value
 		"TETHER_GHOST_COLOR": SquadLines2D.TETHER_GHOST_COLOR = value
 		"TETHER_STRAIN_COLOR": SquadLines2D.TETHER_STRAIN_COLOR = value
 		"DASHES_PER_TILE": SquadLines2D.DASHES_PER_TILE = roundi(value)

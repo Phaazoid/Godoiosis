@@ -185,6 +185,30 @@ func test_a_forced_or_downed_exit_breaks_the_tether() -> void:
 			"a downed unit did not break its tether").is_equal(1)
 
 
+# An ENEMY squad's break carries its side into the store, so it plays in the enemy colour (#1109); a
+# player's beside it does not. Two squads thrown apart in one operation, one of each side.
+func test_a_moment_knows_whose_squad_it_was() -> void:
+	var leader := _solo(Vector2i(0, 0), 5)
+	var thrown := _solo(Vector2i(1, 0))
+	_sm.join_squad(thrown, leader.squad)
+	var their_leader: Unit = H.spawn_solo(self, _sm, Team.Faction.ENEMY, Vector2i(0, 4), {Stats.Stat.LDR: 5})
+	var their_thrown: Unit = H.spawn_solo(self, _sm, Team.Faction.ENEMY, Vector2i(1, 4), {Stats.Stat.LDR: 3})
+	_sm.join_squad(their_thrown, their_leader.squad)
+	_presenter.arm()
+	thrown.movement.cell = Vector2i(12, 0)
+	their_thrown.movement.cell = Vector2i(12, 4)
+	_sm.enforce_contact()
+	_presenter.flush()
+	var ours := _moments(Moment.BREAK, thrown, leader)
+	var theirs := _moments(Moment.BREAK, their_thrown, their_leader)
+	assert_int(ours.size() + theirs.size()).override_failure_message(
+			"fixture: the two squads did not both break").is_equal(2)
+	assert_bool(bool(theirs[0].get("hostile", false))).override_failure_message(
+			"an enemy squad's break was stored as the player's").is_true()
+	assert_bool(bool(ours[0].get("hostile", false))).override_failure_message(
+			"the player's own break was stored as an enemy's").is_false()
+
+
 # A downed LEADER's links all break, THEN the new leader's draw in -- the "then" now waits for a break.
 func test_a_downed_leaders_links_break_then_the_new_leaders_draw_in() -> void:
 	var leader := _solo(Vector2i(0, 0), 5)

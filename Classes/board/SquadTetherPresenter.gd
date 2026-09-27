@@ -198,7 +198,8 @@ static func _consume(ledger: Dictionary[int, int], member_id: int, leader_id: in
 
 
 # One moment's link, strung between where the board draws the two bodies -- the anchor the standing
-# tethers use. Empty when either body is gone.
+# tethers use -- and whose squad it was, so an enemy's moment wears the enemy colour (#1109). Empty
+# when either body is gone.
 func _link(member_id: int, leader_id: int, moment: int, delay: float) -> Dictionary:
 	var member := instance_from_id(member_id) as Unit
 	var leader := instance_from_id(leader_id) as Unit
@@ -206,7 +207,7 @@ func _link(member_id: int, leader_id: int, moment: int, delay: float) -> Diction
 			or leader.is_queued_for_deletion():
 		return {}
 	return {"from": member.get_projected_destination(), "to": leader.get_projected_destination(),
-			"moment": moment, "delay": delay}
+			"moment": moment, "delay": delay, "hostile": SquadLines2D.is_hostile(leader.get_faction())}
 
 
 # Every member -> leader link on the board: a squad with squadmates, each member but its leader.
