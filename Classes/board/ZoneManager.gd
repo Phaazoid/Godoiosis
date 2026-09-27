@@ -30,6 +30,10 @@ enum Kind {
 	DEFEND,       # the cargo: a hostile standing anywhere inside loses the mission (#571)
 }
 
+# Kinds no player surface names: PATROL is the AI's leash, drawn only while authoring (#736). Read
+# by the tile Inspect and the glossary coverage law, Terrain.RETIRED_STATES' shape.
+const AUTHORING_KINDS: Array[Kind] = [Kind.PATROL]
+
 # "DEPLOYMENT" -> "Deployment", derived rather than a parallel label array (Terrain.gd's shape).
 # The array this replaced was indexed RAW by the Tile Brush, so a kind added without a label was
 # an out-of-bounds crash in the zone dropdown rather than a missing string.

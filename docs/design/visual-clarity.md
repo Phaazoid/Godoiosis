@@ -7,7 +7,7 @@ its child [#49 Action Queue UX](https://github.com/Phaazoid/Godoiosis/issues/49)
 This is a *guidelines* doc, not a spec — it captures the principles we're holding the work to,
 plus the running order of the queue-UX checklist. Update it as items land.
 
-**Canon checked through #1100 (2026-09-23).**
+**Canon checked through #1105 (2026-09-27).**
 
 ## Principles
 
@@ -56,6 +56,30 @@ plus the running order of the queue-UX checklist. Update it as items land.
    note `project.godot` cannot carry: dev, *"most people know what attack and move mean"* — the
    readouts stay, they just stop popping up mid-flow). Still open here: the rune "reacts-with"
    list — #167's inventory tooltip shows recipe/hit/strain, not reactions (the middle term was "payload" until #1058 gave that word to the attack a hit drops).
+
+   *A tile is READ ON A CLICK since [#1105](https://github.com/Phaazoid/Godoiosis/issues/1105)
+   (2026-09-23, reshaped by two play reviews), out of the 2026-09-22 stream playtest ("no way to
+   inspect things on tiles like overwatch paint, and zones").* **Nothing shows on hover any more —
+   this reverses round 2's "every real tile carries a hover card".** The dev's 2026-09-27 ruling,
+   after a unit card and a full tile card were drawn together: *"This is just too much on the
+   screen at once... Nothing on hover, at all. While the radial menu is up for a unit, we get that
+   unit's card up. Inspect from the menu brings up the full one. For tiles, nothing on hover.
+   Clicking a tile brings up the full tile for it."* So the one info card has two faces: a unit's
+   card for exactly as long as its ring is up, and the **tile card** — one boxed section per layer,
+   **Overwatch** (who watches it: side, unit, attack), **Zones** (each drawn zone and what its kind
+   asks, including *how* to take a capture point) and **Ground** (states with live clocks, rules,
+   which elements can touch it) — for a clicked empty tile, or beside the dock for the tile an
+   inspected unit stands on, following that unit as it walks. **A tile is never read inside the
+   dock** (*"much better than including the new info in the unit overlay"*). Two earlier shapes were
+   built and thrown out, and why is worth keeping: a click opening the tile in the full-height dock
+   (*"far too much"*, and it stood beside the hover card for the same tile), then the Z key growing
+   the hover card in place (*"the Z button just isn't doing it for me"* — it all has to be reachable
+   by mouse). Right-click closes a card before it undoes an order, since a card now comes up on every
+   empty-tile click. `TileReadout` (`Classes/board/`) is the ONE builder and `TileInfoSections` the
+   one renderer and the one redraw diff — whose old `""` sentinel, doubling as an empty readout's
+   signature, is what showed a rock the grass tile's fire (dev report, 2026-09-26). A hover setting
+   (Verbose / Minimal / Off) is slice 2's, default Off.
+
 
 ## #49 Action Queue UX — CLOSED, all items shipped
 
@@ -2864,10 +2888,10 @@ about.
 
 Each surface conjoins the flag into **its own** gate rather than being written from outside — *one gate,
 no second visibility expression*, the rule stated three times above. That is load-bearing, not tidy:
-`HoverPresenter` re-drives the hover card on every cursor-CELL change and a player's own Execute never
-leaves `game_state` at IDLE, so a one-shot write at the claim edge is undone by the first mouse move.
+every show re-runs the info card's gate (and since #1105 a tile card redraws itself as its unit walks) while a
+player's own Execute never leaves `game_state` at IDLE, so a one-shot write at the claim edge is undone by the next show.
 `UnitInfoPanelControl.is_showing()`/`is_showing_unit()` therefore read the CONTENT half — a panel hidden
-for a cinematic has not let go of its unit, and `HoverPresenter` asks those two where to park the card.
+for a cinematic has not let go of its unit, and game asks those two where to park the card.
 `#541` closed into this: one predicate writes the End Turn button's `visible`, and a plain enemy turn
 leaves it up.
 
@@ -3321,6 +3345,17 @@ One consequence outside the roles: `PlayerSettings`' own description still said 
 *"the order panel on the right"*, which stopped being true when the pre-mission surfaces adopted the
 palette. Ruled a whole-UI skin (dev, 2026-09-07), so the setting is now **Menu colours**.
 
+### The Inspect dock and the info card join the palette ([#1105](https://github.com/Phaazoid/Godoiosis/issues/1105), 2026-09-27)
+
+The palette was ruled a whole-UI skin above, and the two panels it had never reached were the ones slate was copied FROM: the Inspect dock's scene boxes were `PANEL_BG`/`SECTION_BG`'s source, so under parchment it stayed dark beside a parchment screen, and the info card was a salmon box of its own. Both now ask `QueueStyle`, and their scenes carry no box of their own (the queue scene's precedent):
+
+- **The dock:** the frame is `panel_box()` (dark in both palettes, so the stats on it keep their colours and only the muted tags take `FRAME_TEXT`), the inventory and squad boxes are `section_box()` paper, and the slots are the queue's `row_box` with the **selected** slot in the row's hover look. The slot names moved from `modulate` to a font colour, because `modulate` multiplies the theme's white and cannot darken it for paper; `modulate` is also invisible to the contrast walker.
+- **The info card:** both faces wear `panel_box()`; a tile card's sections are `section_box()` under a `header_box()` strip, rows in `BODY_TEXT`, explanations in `HEADER_TEXT` (drawn and approved as a mockup).
+- **`EMPHASIS_TEXT` is a role of its own, crimson in BOTH palettes** -- an equipped or worn item, a squad's count and leader. The dock's gold adapted to parchment as a dark mustard; drawn on paper it read badly, and of the candidates the dev ruled for a TEXT colour over a border or fill, because *"we don't want to communicate things differently in the slate than in the parchment."* It equals `READOUT_ENEMY` today and is kept separate on purpose: what marks your gear and what marks an enemy are two questions.
+- **Both restyle on Settings close**, beside the queue (`SettingsScreen.show_screen`), since either can be up behind the page.
+
+The contrast walker moved to `tests/support/palette_contrast.gd` so `tests/ui/test_info_card_contrast.gd` asks the same law of these surfaces; it learned `RichTextLabel` (the squad box) on the way.
+
 ## A ring frames the CHARACTER, not the canvas ([#930](https://github.com/Phaazoid/Godoiosis/issues/930), BUILT 2026-09-12)
 
 The aura readout is a ring of ticks around a portrait, on the pre-mission card and in the inspect panel both. Three things it settled are about looking at things generally rather than about aura.
@@ -3338,6 +3373,9 @@ Two things about the SHAPE of that fix worth keeping. The old case pinned *the r
 **Fixed positions are what make a wheel learnable, so the ORDER is a rule with a reason.** `FIRE / AIR / WATER / AETHER / EARTH`, clockwise from twelve: Fire↔Water and Earth↔Air are the two elemental oppositions, five arcs put the furthest pair 144° apart, and this order puts *both* pairs there — Aether, the odd one, takes the arc left over. Because the positions never move, colour alone carries identity at card scale and no labels are needed; the tooltip names what the cursor is in.
 
 **A docked panel has a height budget and nothing says so out loud.** The inspect panel is 300 × **720** — the viewport's own height — and its body already wanted 648 of that before this ticket, so every future row competes for 72px. The first attempt put a 160px wheel in the body and overflowed by 92: the squad box and the states bar ran off the bottom of the screen, silently, because a `VBoxContainer` lays its children past its own rect without complaint. The ring moved onto the portrait (108px box, +12px of header) and the budget is now a law in `tests/ui/test_unit_info_panel_refresh.gd`, asked as a property against the panel's own height rather than as a pixel count — the lesson [#723](https://github.com/Phaazoid/Godoiosis/issues/723) learned on the title screen, arriving at a surface that is not a `ModalCard`. It reads the outermost CONTAINER, never the panel `Control`, because a plain Control aggregates nothing and answers `(0, 0)` however much is built underneath it.
+
+**The budget decided [#1105](https://github.com/Phaazoid/Godoiosis/issues/1105)'s first layout, and then the tile left the dock altogether.** Re-measured on every authored unit: **660 of 700**, so a tile's sections could not simply go under a unit's. The first build answered with a Unit/Tile switch in the dock's header and a scroll area for the tile body (three watches, two zones and a fire on one cell need 766 there); the 2026-09-27 ruling put the tile in the info card BESIDE the dock instead, which retired both. **The card cannot scroll** (the wheel zooms the board), so it has to fit: at its 300px width it measures 94 (plain grass) and 632 for the three-watch case, of the 704 the screen leaves it (98 and 636 before the palette's header strips), pinned alone and beside the dock by `tests/ui/test_tile_inspect.gd`. The two ways to show a unit card and a tile card at once were drawn for the dev first (stacked: 225 + 4 + up to 636, off the bottom; side by side: 464px wide), and his answer was one card at a time. Getting there needed one fix, and it later needed a second: a free-floating card of autowrapped rows reports a tall minimum before layout hands the rows their width, and the container never shrinks back by itself, so the first measurement read 514px for one line of grass; `HoverInfoPanelControl` snaps its tile panel down whenever its minimum settles lower. The second was the GIANT CARD (dev report 2026-09-27): the redraw also sized the card to that tall mid-layout minimum on the spot, and the snap waits on a signal that fires only when the minimum changes from the LAST value it reported -- so a second tile with the same readout settled straight back to it and the card stayed 514px tall, parked off the top. Nothing but the snap may write the size now; a per-frame fit was tried as a backstop and dropped, because no case needed it and it hid that old line coming back.
+
 
 
 ## What the enemy COULD do ([#710](https://github.com/Phaazoid/Godoiosis/issues/710) slice 1, BUILT 2026-09-16; reshaped by slice 3 and corrected by slice 4, 2026-09-17)

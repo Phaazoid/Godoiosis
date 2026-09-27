@@ -1,4 +1,4 @@
-[gd_scene load_steps=12 format=3 uid="uid://damgnt4d7qqj3"]
+[gd_scene load_steps=10 format=3 uid="uid://damgnt4d7qqj3"]
 
 [ext_resource type="Script" uid="uid://8y7b6ai5o6aj" path="res://Classes/ui/panels/UnitInfoPanelControl.gd" id="1_ctrl"]
 [ext_resource type="Script" uid="uid://cekw8ivergjuo" path="res://Classes/ui/panels/portrait_panel.gd" id="2_port"]
@@ -6,23 +6,6 @@
 [ext_resource type="Script" uid="uid://bn16gox5tv0c8" path="res://Classes/ui/panels/inventory_panel.gd" id="4_inv"]
 [ext_resource type="Script" uid="uid://b4eg3txg1aw5q" path="res://Classes/ui/panels/squad_info_panel.gd" id="5_squad"]
 [ext_resource type="Script" uid="uid://dped5mpr4jp3w" path="res://Classes/ui/panels/UnitStatesBar.gd" id="6_states"]
-
-[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_panel"]
-bg_color = Color(0.12, 0.12, 0.14, 0.97)
-border_width_right = 2
-border_color = Color(0.08, 0.08, 0.09, 1)
-
-[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_section"]
-bg_color = Color(0.09, 0.09, 0.1, 0.7)
-border_width_left = 1
-border_width_top = 1
-border_width_right = 1
-border_width_bottom = 1
-border_color = Color(0.2, 0.2, 0.22, 1)
-corner_radius_top_left = 4
-corner_radius_top_right = 4
-corner_radius_bottom_right = 4
-corner_radius_bottom_left = 4
 
 [sub_resource type="StyleBoxFlat" id="StyleBoxFlat_barbg"]
 bg_color = Color(0.07, 0.07, 0.08, 1)
@@ -61,7 +44,6 @@ anchor_right = 1.0
 anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
-theme_override_styles/panel = SubResource("StyleBoxFlat_panel")
 
 [node name="Margin" type="MarginContainer" parent="UnitInfoPanel"]
 layout_mode = 2
@@ -105,7 +87,6 @@ autowrap_mode = 3
 
 [node name="JobsLabel" type="Label" parent="UnitInfoPanel/Margin/VBox/HeaderRow/HeaderText"]
 layout_mode = 2
-theme_override_colors/font_color = Color(0.7, 0.72, 0.7, 1)
 theme_override_font_sizes/font_size = 12
 autowrap_mode = 3
 
@@ -127,7 +108,6 @@ theme_override_constants/separation = 6
 [node name="HPTag" type="Label" parent="UnitInfoPanel/Margin/VBox/StatsSection/HPRow"]
 custom_minimum_size = Vector2(30, 0)
 layout_mode = 2
-theme_override_colors/font_color = Color(0.6, 0.62, 0.6, 1)
 text = "HP"
 
 [node name="HPBar" type="ProgressBar" parent="UnitInfoPanel/Margin/VBox/StatsSection/HPRow"]
@@ -151,7 +131,6 @@ theme_override_constants/separation = 6
 [node name="WillTag" type="Label" parent="UnitInfoPanel/Margin/VBox/StatsSection/WillRow"]
 custom_minimum_size = Vector2(30, 0)
 layout_mode = 2
-theme_override_colors/font_color = Color(0.6, 0.62, 0.6, 1)
 text = "WIL"
 
 [node name="WillBar" type="ProgressBar" parent="UnitInfoPanel/Margin/VBox/StatsSection/WillRow"]
@@ -185,7 +164,6 @@ layout_mode = 2
 
 [node name="AbilitiesHeader" type="Label" parent="UnitInfoPanel/Margin/VBox/StatsSection"]
 layout_mode = 2
-theme_override_colors/font_color = Color(0.6, 0.62, 0.6, 1)
 theme_override_font_sizes/font_size = 12
 text = "ABILITIES"
 
@@ -198,7 +176,6 @@ layout_mode = 2
 
 [node name="InventoryPanel" type="PanelContainer" parent="UnitInfoPanel/Margin/VBox"]
 layout_mode = 2
-theme_override_styles/panel = SubResource("StyleBoxFlat_section")
 script = ExtResource("4_inv")
 
 [node name="MarginContainer" type="MarginContainer" parent="UnitInfoPanel/Margin/VBox/InventoryPanel"]
@@ -216,7 +193,6 @@ theme_override_constants/v_separation = 4
 
 [node name="SquadInfoPanel" type="PanelContainer" parent="UnitInfoPanel/Margin/VBox"]
 layout_mode = 2
-theme_override_styles/panel = SubResource("StyleBoxFlat_section")
 script = ExtResource("5_squad")
 
 [node name="MarginContainer" type="MarginContainer" parent="UnitInfoPanel/Margin/VBox/SquadInfoPanel"]

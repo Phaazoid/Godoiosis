@@ -169,7 +169,7 @@ is a declared category on that file's law rather than an exception to it. What i
 (2026-08-26).** They did not until then, and this section shipped before anyone measured that: the
 sheet paints both water tiles the **identical** flat blue `(77, 155, 230)` — all 256 pixels of the
 deep tile and 242 of the shallow one — so the whole of *wading versus drowning* was carried by the
-hover card's words. Two halves now say it, and the second is what makes the first safe: an authored
+tile card's words. Two halves now say it, and the second is what makes the first safe: an authored
 `TileData.modulate` per tile (lighter and tealer for shallow, darker for deep), which the flat view
 multiplies natively. **That one number served BOTH views until [#578](https://github.com/Phaazoid/Godoiosis/issues/578) (2026-08-28), and now serves the
 flat one alone** — 3D water takes its colour from a knob pair, and the generator composes water into

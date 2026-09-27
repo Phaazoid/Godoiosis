@@ -1,9 +1,9 @@
-# The tile hover card (#135, rebuilt round 2), on the real scene: EVERY real tile shows a card
-# (icon + name header), states join as content with their live clocks, a unit standing there
-# stacks both halves, and the interactions list is filtered through the resolver's own predicate
+# The tile card (#135, rebuilt round 2; asked for by a CLICK since #1105), on the real scene: EVERY
+# real tile shows a card (icon + name header), states join as content with their live clocks, and
+# the interactions list is filtered through the resolver's own predicate
 # (TerrainReaction.applies_to_tile) so the card never promises a deposit the resolver refuses.
-# Driven through the real hover path (HoverPresenter.update_hover_visuals), because composition,
-# panel and parking only meet there.
+# Driven through the real click door (game._on_left_click), because composition, panel and parking
+# only meet there. What a click on a UNIT, the ring and Inspect do is tests/ui/test_tile_inspect.gd.
 #
 # The card reads the TILE'S OWN data since 2026-08-12 -- authored terrain_name first, kind name
 # as the fallback, the tile's sprite as the picture (the palette rows' policy, shared through
@@ -81,6 +81,7 @@ func _author_tile(source: TileSetAtlasSource, coords: Vector2i, kind: Terrain.Ki
 
 
 func after_test() -> void:
+	await await_idle_frame()
 	get_tree().root.remove_child(_main)
 	_main.free()
 
@@ -92,13 +93,13 @@ func _set_tile_state(cell: Vector2i, state: Terrain.TileState) -> void:
 	game.terrain_states.apply(effect)
 
 
+func _click(cell: Vector2i) -> void:
+	game._on_left_click(cell)
+	await await_idle_frame()
+
+
 func _tile_block_text() -> String:
-	var parts: Array[String] = []
-	for child: Node in game.hover_info_panel._tile_lines_box.get_children():
-		var label := child as Label
-		if label != null:
-			parts.append(label.text)
-	return "\n".join(parts)
+	return "\n".join(game.hover_info_panel.tile_texts())
 
 
 func _tile_header_text() -> String:
@@ -115,10 +116,9 @@ func _screen_pos_in_top_half(cell: Vector2i) -> bool:
 
 
 func test_every_tile_shows_a_card_with_its_kind() -> void:
-	# Round 2 flip: plain grass now shows the card — the trigger is "a real tile", not "a
-	# notable one" (dev: "it should trigger on every tile").
-	game.hover_presenter.update_hover_visuals(Vector2i(2, 0))
-	await await_idle_frame()
+	# Round 2 flip: plain grass shows the card too — the trigger is "a real tile", not "a notable
+	# one" (dev: "it should trigger on every tile").
+	await _click(Vector2i(2, 0))
 
 	assert_bool(game.hover_info_panel.visible) \
 		.override_failure_message("plain grass shows no tile card — the every-tile trigger is gone").is_true()
@@ -126,35 +126,37 @@ func test_every_tile_shows_a_card_with_its_kind() -> void:
 	assert_str(_tile_header_text()).is_equal(Terrain.kind_display_name(Terrain.Kind.GRASS))
 	assert_object(game.hover_info_panel._tile_icon.texture) \
 		.override_failure_message("the tile card has no kind picture").is_not_null()
-	# And the unit half stays down — nobody is standing there.
+	# And the unit card stays down — nobody is standing there.
 	assert_bool(game.hover_info_panel.hover_panel.visible).is_false()
 
 
-func test_leaving_the_map_takes_the_card_with_it() -> void:
-	# #582: the off-map branch used to bare-return, so the last card stayed up and went on
-	# describing a cell the pointer had left. A card is about NOW or it is a lie -- and this one
-	# lied about a tile's height while the dev was hunting why he could not click it.
+func test_the_pointer_never_raises_or_clears_a_card() -> void:
+	# #582 was a card describing a cell the pointer had LEFT. Since #1105 the card describes the cell
+	# that was CLICKED, so the pointer is simply not its business: hovering raises none, and moving
+	# on -- off the map included -- leaves a clicked one standing, still about the clicked tile.
 	game.hover_presenter.update_hover_visuals(Vector2i(2, 0))
 	await await_idle_frame()
 	assert_bool(game.hover_info_panel.visible) \
-		.override_failure_message("no card to leave behind; the case is vacuous").is_true()
+		.override_failure_message("hovering a tile put up a card").is_false()
 
+	await _click(Vector2i(2, 0))
 	var off_map := Vector2i(-40, -40)
 	assert_object(game.grid.get_cell_tile_data(off_map)) \
 		.override_failure_message("the fixture grew a tile out there").is_null()
+	game.hover_presenter.update_hover_visuals(Vector2i(5, 0))
 	game.hover_presenter.update_hover_visuals(off_map)
 	await await_idle_frame()
-	assert_bool(game.hover_info_panel.visible) \
-		.override_failure_message("the card outlived the tile it describes").is_false()
+
+	assert_bool(game.hover_info_panel.is_showing_tile_at(Vector2i(2, 0))) \
+		.override_failure_message("the pointer moved or took down a card the player clicked for").is_true()
 
 
 func test_dev_mode_does_not_inherit_the_last_card_from_play() -> void:
-	# The other half of the same lie (#582), and the one that actually bit: DEV_MODE never wrote
-	# the card at all, so it held whatever IDLE last hovered -- a readout from before the mode was
-	# even entered. Cleared rather than filled, because the dev-mode height readout belongs to
+	# The other half of #582, and the one that actually bit: DEV_MODE never wrote the card at all,
+	# so it held whatever play last left -- a readout from before the mode was even entered.
+	# Cleared rather than filled, because the dev-mode height readout belongs to
 	# HeightDebugOverlay and must not gain a second voice.
-	game.hover_presenter.update_hover_visuals(Vector2i(2, 0))
-	await await_idle_frame()
+	await _click(Vector2i(2, 0))
 	assert_bool(game.hover_info_panel.visible) \
 		.override_failure_message("no card to carry over; the case is vacuous").is_true()
 
@@ -169,8 +171,7 @@ func test_a_named_tile_headers_its_authored_name() -> void:
 	# The 2026-08-12 report: the card assumed the name off the Kind enum, so an authored
 	# variant read as plain "Grass" however it was named.
 	game.grid.set_cell(Vector2i(6, 0), _src_id, NAMED_GRASS_ATLAS)
-	game.hover_presenter.update_hover_visuals(Vector2i(6, 0))
-	await await_idle_frame()
+	await _click(Vector2i(6, 0))
 
 	assert_str(_tile_header_text()).is_equal("Spring Meadow")
 
@@ -179,8 +180,7 @@ func test_named_kindless_scenery_gets_a_named_card() -> void:
 	# Kind NONE used to mean a headerless card no matter what the tile was authored as -- a
 	# Crate is scenery with a name, and the card must say so.
 	game.grid.set_cell(Vector2i(6, 0), _src_id, CRATE_ATLAS)
-	game.hover_presenter.update_hover_visuals(Vector2i(6, 0))
-	await await_idle_frame()
+	await _click(Vector2i(6, 0))
 
 	assert_bool(game.hover_info_panel._tile_panel.visible).is_true()
 	assert_str(_tile_header_text()).is_equal("Crate")
@@ -191,8 +191,7 @@ func test_the_card_icon_is_the_tiles_own_sprite() -> void:
 	# hand-drawn kind icon -- TERRAIN_ICONS stays the queue rows' pathing glyph. NB the region
 	# getter returns Rect2i while AtlasTexture.region is Rect2; Variant equality across them is
 	# FALSE, hence the wrap.
-	game.hover_presenter.update_hover_visuals(Vector2i(2, 0))
-	await await_idle_frame()
+	await _click(Vector2i(2, 0))
 
 	var icon := game.hover_info_panel._tile_icon.texture as AtlasTexture
 	assert_object(icon).is_not_null()
@@ -204,8 +203,7 @@ func test_the_card_icon_is_the_tiles_own_sprite() -> void:
 func test_a_burning_tile_works_the_state_into_the_card() -> void:
 	var cell := Vector2i(3, 0)
 	_set_tile_state(cell, Terrain.TileState.BURNING)
-	game.hover_presenter.update_hover_visuals(cell)
-	await await_idle_frame()
+	await _click(cell)
 
 	assert_bool(game.hover_info_panel._tile_panel.visible).is_true()
 	assert_str(_tile_header_text()).is_equal(Terrain.kind_display_name(Terrain.Kind.GRASS))
@@ -214,20 +212,21 @@ func test_a_burning_tile_works_the_state_into_the_card() -> void:
 		.contains(Terrain.tile_state_display_name(Terrain.TileState.BURNING))
 
 
-func test_a_unit_on_a_burning_tile_shows_both_halves() -> void:
+func test_a_units_inspect_shows_its_burning_tile_beside_the_dock() -> void:
+	# A unit's tile is read in the card beside its Inspect dock (#1105), never inside the dock.
 	var cell := Vector2i(4, 0)
 	_set_tile_state(cell, Terrain.TileState.BURNING)
 	var unit: Unit = game.spawn_unit(H.make_unit_data({}, Team.Faction.PLAYER), cell)
 	assert_object(unit).is_not_null()
 
-	game.hover_presenter.update_hover_visuals(cell)
+	game.inspect_unit(unit)
 	await await_idle_frame()
 
-	assert_bool(game.hover_info_panel.visible).is_true()
-	assert_bool(game.hover_info_panel.hover_panel.visible) \
-		.override_failure_message("the unit half vanished when the tile card joined it").is_true()
+	assert_bool(game.unit_info_panel.is_showing_unit(unit)).is_true()
 	assert_bool(game.hover_info_panel._tile_panel.visible) \
-		.override_failure_message("the tile card vanished under a standing unit").is_true()
+		.override_failure_message("the unit's tile has no card beside its dock").is_true()
+	assert_bool(game.hover_info_panel.hover_panel.visible) \
+		.override_failure_message("a unit card beside the dock that already shows the unit").is_false()
 	assert_str(_tile_block_text()).contains(Terrain.tile_state_display_name(Terrain.TileState.BURNING))
 
 
@@ -238,8 +237,7 @@ func test_a_fire_on_ground_that_is_not_fuel_shows_no_countdown() -> void:
 	var cell := Vector2i(5, 0)
 	game.grid.set_cell(cell, _src_id, STONE_ATLAS)
 	_set_tile_state(cell, Terrain.TileState.BURNING)
-	game.hover_presenter.update_hover_visuals(cell)
-	await await_idle_frame()
+	await _click(cell)
 
 	assert_str(_tile_block_text()) \
 		.contains(Terrain.tile_state_display_name(Terrain.TileState.BURNING))
@@ -251,16 +249,16 @@ func test_a_fire_on_ground_that_is_not_fuel_shows_no_countdown() -> void:
 func test_a_bottom_parked_card_stays_on_screen_after_a_taller_one() -> void:
 	# Dev report (2026-08-11): a card parked on the bottom half ran mostly off screen. The
 	# mechanism is the RATCHET: a free-floating container grows to fit content but never shrinks
-	# back on its own, so sweeping the mouse across tiles (every tile carries a card since round
-	# 2) pumps the panel up to the tallest card ever shown — and a SHORT card parked bottom then
-	# draws that stale, taller size past the screen edge. So: show a tall card first, then a
-	# short one that parks bottom, and require the drawn rect to sit inside the viewport.
-	# Where the fixture's rows land on screen depends on the camera, so the case SEARCHES upward
-	# for a cell whose screen position is in the top half (painting grass as it climbs) — the
-	# vacuity guard below independently proves the short card really parked bottom.
+	# back on its own, so moving from card to card pumps the panel up to the tallest card ever
+	# shown — and a SHORT card parked bottom then draws that stale, taller size past the screen
+	# edge. So: show a tall card first, then a short one that parks bottom, and require the drawn
+	# rect to sit inside the viewport. Where the fixture's rows land on screen depends on the
+	# camera, so the case SEARCHES upward for a cell whose screen position is in the top half
+	# (painting grass as it climbs) — the vacuity guard below independently proves the short card
+	# really parked bottom.
 	var tall_cell := Vector2i(3, 0)
 	_set_tile_state(tall_cell, Terrain.TileState.BURNING)   # state line + long wrap = a tall card
-	game.hover_presenter.update_hover_visuals(tall_cell)
+	await _click(tall_cell)
 	for _i in 4:
 		await get_tree().process_frame
 
@@ -273,7 +271,7 @@ func test_a_bottom_parked_card_stays_on_screen_after_a_taller_one() -> void:
 		assert_int(attempts) \
 			.override_failure_message("could not find a cell in the top half of the viewport — fixture camera assumption is broken") \
 			.is_less(50)
-	game.hover_presenter.update_hover_visuals(cell)   # plain grass: header only, the SHORT card
+	await _click(cell)   # plain grass: the SHORT card
 	for _i in 4:
 		await get_tree().process_frame
 
@@ -310,8 +308,7 @@ func test_the_interactions_list_matches_the_catalog() -> void:
 		.override_failure_message("no authored reaction touches bare water — this case is vacuous; point it at a kind the catalog covers") \
 		.is_greater(0)
 
-	game.hover_presenter.update_hover_visuals(cell)
-	await await_idle_frame()
+	await _click(cell)
 	var text := _tile_block_text()
 	for reaction: TerrainReaction in expected:
 		assert_str(text) \

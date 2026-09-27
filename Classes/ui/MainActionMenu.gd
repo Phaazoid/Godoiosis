@@ -157,6 +157,7 @@ func show_main_menu(unit: Unit, pos: Vector2i) -> void:
 	controller.cancelled.connect(_on_menu_cancelled)
 
 	controller.open(build_tree(unit), Vector2(pos))
+	game.show_unit_card(unit)   # up exactly as long as the ring (#1105); _on_menu_cancelled takes it down
 
 
 # THE snapshot (#467): every ring the player can reach this open, built now. Categories in
@@ -366,10 +367,13 @@ func _attack_entry(unit: Unit, attack: AttackData) -> Dictionary:
 
 # ActionMenuController emits `cancelled` before `action_selected` even on a PICK, which is what
 # pins the clear-then-act order (see its header). Both effects the old game.gd wired as two
-# separate connections happen here, in that same order.
+# separate connections happen here, in that same order. The ring's unit card goes with it; a tile
+# card is left alone, since the deploy menu closes through here too and a ring never opened one.
 func _on_menu_cancelled(_controller) -> void:
 	game.clear_selection()
 	game.hover_presenter.refresh()
+	if game.hover_info_panel.is_showing_unit_card():
+		game.hover_info_panel.clear()
 
 # ==============================================================================
 #  Which options a unit has right now
@@ -597,7 +601,7 @@ func _dispatch(action_id: int, unit: Unit) -> void:
 			game.mission_log.record_squad_verb("leave", unit)
 			game.squad_manager.leave_squad(unit)
 		INSPECT:
-			game.unit_info_panel.set_unit(unit, game.can_control(unit), game._board())
+			game.inspect_unit(unit)
 		RESCUE:
 			# Same query as the populate gate above, plan included -- a predicted-down squadmate
 			# (#124) must be pickable exactly where the row said it would be. Picking the BODY no longer
