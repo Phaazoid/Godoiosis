@@ -783,6 +783,25 @@ func resolve_hypothetical(squad: Squad, candidates: Array[BaseAction], board: Bo
 	return _resolve_actions(squad, _hypothetical_actions(squad, candidates), board, reactions, terrain_reactions)
 
 
+# What an aim not yet queued would DROP (#1058 D2b): every payload row the resolve derives from
+# `candidate`, in the order it plays. Only a resolve can answer, because a sticky bomb goes off where
+# the hit LEAVES its victim (ruling 43) and that landing exists nowhere else. `source_aim` is the
+# back-link SpringspearWeaponRoutine reads for the candidate's own rows.
+#
+# It keeps resolve_hypothetical's contract HERE rather than leaving it to the caller: the pass
+# publishes the candidate's shoves onto the board, so a real resolve_plan follows before anyone reads
+# a projected position again -- and a hover asks this on every cell it crosses.
+func preview_payloads(squad: Squad, candidate: AttackAction, board: BoardContext) -> Array[AttackAction]:
+	var rows: Array[AttackAction] = []
+	var candidates: Array[BaseAction] = [candidate]
+	var plan := resolve_hypothetical(squad, candidates, board)
+	for row in plan.attacks:
+		if row.source_aim == candidate and row.dropped_by != null:
+			rows.append(row)
+	resolve_plan(squad, board)
+	return rows
+
+
 # One pass over ONE action list. Split out of resolve_plan so a hypothetical queue can be resolved
 # by the same code rather than a second copy of it; `actions` is what every queue walk below reads.
 #

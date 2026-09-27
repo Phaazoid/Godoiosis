@@ -11,6 +11,9 @@ extends Node2D
 # quads every frame and keeps no clock of its own, so the two views cannot drift -- and because this
 # node lives under Game, ModalLock's freeze holds the flash still in both views for free.
 #
+# A PAYLOAD's tile (#1058 D2b) is an INSET: the square a size smaller that InsetSquare draws, and its
+# flash whitens that square rather than the whole tile. Which tiles those are arrives beside the steps.
+#
 # PHOTOSENSITIVITY (#217) holds every tile still, GRADED IN WHITE by step (ruling 28): the first step
 # palest, the last plain. It is polled, because PlayerSettings has no changed signal.
 #
@@ -28,16 +31,18 @@ const RISE_SHARE := 0.2
 const HOLD_SHARE := 0.3
 
 var steps: Dictionary[Vector2i, Array] = {}
+var insets: Array[Vector2i] = []
 var clock := 0.0
 var _still := false
 
 
 # A new footprint starts the travel from the top; the SAME one keeps its running loop, so holding one
 # aim never restarts it on a re-hover.
-func show_steps(new_steps: Dictionary[Vector2i, Array]) -> void:
-	if new_steps == steps:
+func show_steps(new_steps: Dictionary[Vector2i, Array], new_insets: Array[Vector2i] = []) -> void:
+	if new_steps == steps and new_insets == insets:
 		return
 	steps = new_steps.duplicate(true)
+	insets = new_insets.duplicate()
 	clock = 0.0
 	queue_redraw()
 
@@ -78,7 +83,8 @@ func _draw() -> void:
 	var at := levels()
 	for cell: Vector2i in at:
 		if at[cell] > 0.0:
-			draw_rect(Rect2(Vector2(cell) * float(GridUtils.TILE_SIZE), size), Color(1, 1, 1, at[cell]))
+			var area: Rect2 = InsetSquare.rect(cell) if insets.has(cell) else Rect2(Vector2(cell) * float(GridUtils.TILE_SIZE), size)
+			draw_rect(area, Color(1, 1, 1, at[cell]))
 
 
 # --- The rule ---------------------------------------------------------------------------------------

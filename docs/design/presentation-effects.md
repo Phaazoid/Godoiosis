@@ -215,6 +215,14 @@ on any palette, heal or watch fill without a colour of its own.
 the pause menu stills both views at once. Five `GameKnobs` rows under Aiming: time between steps,
 flash length, rest before the loop repeats, brightness, and the still's brightness.
 
+**What the aim DROPS flashes too** ([#1058](https://github.com/Phaazoid/Godoiosis/issues/1058) D2b,
+ruling 52). A payload's tiles are INSET squares, the aim's yellow a size smaller, and each LEVEL
+flashes together one step after the level above it: level k at the aim's last step + k. They ride the
+same clock and the same one-channel rule: the steps arrive with an `insets` list beside them, and the
+flash whitens the inset square rather than the whole tile. In 3D they are their own layer
+(`Layer.PAYLOAD`), lit from the same `levels()` as AIM. A sixth Aiming row sizes the square; its colour
+is the footprint's own. The rule and the resolve behind it are in [weapons.md](weapons.md) → *Payloads*.
+
 **Photosensitivity (#217) holds it still, GRADED IN WHITE** (ruling 28): the first step palest, each
 later one less, the last step plain, and a true AoE plain throughout, since it has no order to show.
 The mockup first drew the grade as dimming the later tiles; that needed a second per-tile channel in

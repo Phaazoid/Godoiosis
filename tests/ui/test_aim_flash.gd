@@ -111,6 +111,17 @@ func test_the_same_steps_keep_the_clock_and_new_ones_restart_it() -> void:
 	assert_float(_flash.clock).is_equal(0.0)
 
 
+# Which tiles are payload INSETS (#1058 D2b) is part of what is shown: the same steps over different
+# insets are a different picture, so the second call has to land rather than be taken for a re-hover.
+func test_new_insets_over_the_same_steps_are_taken() -> void:
+	var first: Array[Vector2i] = [B]
+	var second: Array[Vector2i] = [C]
+	_flash.show_steps(_steps({A: [0], B: [1], C: [1]}), first)
+	_flash.show_steps(_steps({A: [0], B: [1], C: [1]}), second)
+	assert_array(_flash.insets).override_failure_message(
+			"the flash kept the last aim's insets").contains_exactly([C])
+
+
 # ==============================================================================
 #  Photosensitivity (#217): nothing moves, and the order is graded in white
 # ==============================================================================

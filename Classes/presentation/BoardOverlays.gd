@@ -40,6 +40,7 @@ enum Layer {
 	REACH, THREAT, ENEMY_FOCUS_EDGE, REACH_LINES,
 	COHESION_EDGE, TETHERS, TETHER_GHOST, TETHER_STRAIN, TETHER_MOMENT, TETHER_SHARDS,
 	ZONE_MARKS, ZONE_EMBLEMS,
+	PAYLOAD,
 }
 enum Kind { FILL, BRACKET, SPRITE, BILLBOARD, LINE }
 
@@ -211,6 +212,12 @@ const LAYERS: Dictionary[Layer, Dictionary] = {
 	# and the squad beam marches its dashes along a stroke, which would cut a falling piece up as it fell.
 	Layer.TETHER_SHARDS: {"color": Color(1, 1, 1, 1), "sort": 14, "beam": "shard", "kind": Kind.LINE},
 	Layer.AIM: {"color": Color(1, 1, 0, 1), "sort": 4, "kind": Kind.FILL},
+	# The aim's PAYLOAD tiles (#1058 D2b): the footprint's twin, inset a size smaller (InsetSquare), for the
+	# tiles only what the attack DROPS reaches. It SHARES AIM's sort, and may: its cells are the payloads'
+	# minus the aim's own, so the two are disjoint by construction and never meet on one plane -- ATTACK and
+	# ATTACK_BLOCKED's arrangement. Colour here is only the fallback; the mirror copies the footprint's.
+	# NB `"inset"` goes LAST -- see _texture_for.
+	Layer.PAYLOAD: {"color": Color(1, 1, 0, 1), "sort": 4, "kind": Kind.FILL, "inset": true},
 	Layer.TARGET_PICK: {"color": Color.WHITE, "sort": 5, "kind": Kind.SPRITE},
 	Layer.PATH_ARROWS: {"color": Color.WHITE, "sort": 6, "kind": Kind.SPRITE},
 	Layer.KNOCKBACK: {"color": Color.WHITE, "sort": 6, "kind": Kind.SPRITE},
@@ -473,6 +480,8 @@ var fill_texture: Texture2D
 # MoveGrid's art at the diorama's resolution (#1074), shared by every marker on a `"grid"` layer and
 # replaced wholesale by restyle_grid. Lazy -- a board that never shows a move range pays nothing.
 var _grid_texture: ImageTexture
+# ...and InsetSquare's, for the payload layer (#1058 D2b). Same lazy, wholesale-replaced shape.
+var _inset_texture: ImageTexture
 
 var _beams_animating := true   # the last composed photosensitivity read; see poll_beam_motion
 
@@ -508,7 +517,8 @@ func _ready() -> void:
 # layer marked `"grid"` wears MoveGrid's generated lattice instead (#1069, re-cut by #1074), which is
 # how MOVE draws as GRIDLINES without becoming a second render Kind -- every law this table already
 # carries (the sort, the lift, the ramp tilt, the corner-cell fold, set_layer_modulate, the mirror's
-# per-frame tint copy) goes on applying to it untouched, because it IS still a fill.
+# per-frame tint copy) goes on applying to it untouched, because it IS still a fill. A layer marked
+# `"inset"` wears InsetSquare's (#1058 D2b) on the same terms.
 #
 # The key is declared LAST on its LAYERS line, and that is not style: KnobSource's colour rewriter
 # is a regex requiring `"color"` to be an entry's FIRST key, so a key ahead of it would make every
@@ -516,6 +526,8 @@ func _ready() -> void:
 func _texture_for(spec: Dictionary) -> Texture2D:
 	if spec.get("grid", false):
 		return grid_texture()
+	if spec.get("inset", false):
+		return inset_texture()
 	return fill_texture
 
 
@@ -543,6 +555,25 @@ func restyle_grid() -> void:
 		for node: Node3D in _pool_for(layer):
 			var material := (node as MeshInstance3D).material_override as StandardMaterial3D
 			material.albedo_texture = _grid_texture
+
+
+func inset_texture() -> Texture2D:
+	if _inset_texture == null:
+		_inset_texture = ImageTexture.create_from_image(InsetSquare.image(MoveGrid.ART_TEXELS))
+	return _inset_texture
+
+
+# A turned inset knob (#1058 D2b): restyle_grid's shape and its reason for a new object.
+func restyle_inset() -> void:
+	if _inset_texture == null:
+		return
+	_inset_texture = ImageTexture.create_from_image(InsetSquare.image(MoveGrid.ART_TEXELS))
+	for layer: Layer in LAYERS:
+		if not LAYERS[layer].get("inset", false):
+			continue
+		for node: Node3D in _pool_for(layer):
+			var material := (node as MeshInstance3D).material_override as StandardMaterial3D
+			material.albedo_texture = _inset_texture
 
 
 # Replaces the layer's cells wholesale (idempotent — calling twice with the same
