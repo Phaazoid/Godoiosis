@@ -997,6 +997,33 @@ func test_a_tether_moment_hangs_at_its_chord_with_its_dashes_in_place() -> void:
 		.is_equal_approx(offset, 0.001)
 
 
+# #367 part 2B, the dev's Z2: a moment whose two ends stand on STAGED ground draws up there with the
+# fight, lifted by the staged offset -- not down under the diorama at the board's own height, which is
+# where a moment drawn off trace_point alone would play unseen.
+func test_a_tether_moment_over_the_staged_fight_draws_lifted_with_it() -> void:
+	var saved := SquadLines2D.REEL_IN_SECONDS
+	SquadLines2D.REEL_IN_SECONDS = 30.0
+	var pair := _squad_pair()
+	var links: Array[Dictionary] = [{"from": pair[1].movement.cell, "to": pair[0].movement.cell,
+			"moment": SquadLines2D.Moment.REEL_IN, "delay": 0.0}]
+	_om().play_tether_moments(links, game._board())
+	var lift := Vector3(0.0, BoardSpace.STAGE_LIFT, 0.0)
+	var cells: Array[Vector2i] = [pair[0].movement.cell, pair[1].movement.cell]
+	BoardSpace.stage(cells, lift)
+	await _settle()
+	var lines := _overlays.lines_of(BoardOverlays.Layer.TETHER_MOMENT)
+	var chord: PackedVector3Array = _om().squad_tether_moments[0]["chord"]
+	BoardSpace.clear_staging()
+	SquadLines2D.REEL_IN_SECONDS = saved
+
+	assert_bool(lines.size() > 0 and lines[0].size() > 0).override_failure_message(
+			"the moment never reached the diorama").is_true()
+	assert_float(lift.y).override_failure_message("fixture: the stage lifts nothing").is_greater(0.0)
+	assert_float(lines[0][0].y).override_failure_message(
+			"a moment over the staged fight drew at the board's height, under the diorama") \
+		.is_equal_approx(BoardSpace.trace_point(chord[0]).y + lift.y, 0.01)
+
+
 # A DRAW-IN stands in for its pair's standing tether: while it grows, the standing one is held back in
 # the diorama too (a whole tether under a growing one hides the growth), though the store still holds
 # it as the truth -- and once the draw-in has popped, the standing tether is handed back.

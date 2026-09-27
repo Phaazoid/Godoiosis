@@ -38,7 +38,7 @@ enum Layer {
 	GUARD_ICONS, GUARD_LINK, WATCH_ICONS,
 	ZONE_DEPLOYMENT, ZONE_DEFEND,
 	REACH, THREAT, ENEMY_FOCUS_EDGE, REACH_LINES,
-	COHESION_EDGE, TETHERS, TETHER_GHOST, TETHER_STRAIN, TETHER_MOMENT,
+	COHESION_EDGE, TETHERS, TETHER_GHOST, TETHER_STRAIN, TETHER_MOMENT, TETHER_SHARDS,
 	ZONE_MARKS, ZONE_EMBLEMS,
 }
 enum Kind { FILL, BRACKET, SPRITE, BILLBOARD, LINE }
@@ -207,6 +207,9 @@ const LAYERS: Dictionary[Layer, Dictionary] = {
 	# because each moment's own colour and fade ride its vertex colour -- several play at once, at
 	# different ages, on one material. Rebuilt per frame while one is in the air (ArcLightning's shape).
 	Layer.TETHER_MOMENT: {"color": Color(1, 1, 1, 1), "sort": 14, "beam": "squad", "kind": Kind.LINE, "cone_alpha": true},
+	# ...and a BREAK's pieces and sparks (#367 part 2B), which are SOLID: each piece is one dash already,
+	# and the squad beam marches its dashes along a stroke, which would cut a falling piece up as it fell.
+	Layer.TETHER_SHARDS: {"color": Color(1, 1, 1, 1), "sort": 14, "beam": "shard", "kind": Kind.LINE},
 	Layer.AIM: {"color": Color(1, 1, 0, 1), "sort": 4, "kind": Kind.FILL},
 	Layer.TARGET_PICK: {"color": Color.WHITE, "sort": 5, "kind": Kind.SPRITE},
 	Layer.PATH_ARROWS: {"color": Color.WHITE, "sort": 6, "kind": Kind.SPRITE},
@@ -979,7 +982,7 @@ func _style_beam(material: ShaderMaterial, spec: Dictionary = {}) -> void:
 		"mark":
 			width = mark_width
 			intensity = mark_intensity
-		"squad":
+		"squad", "shard":
 			width = squad_line_width
 			intensity = squad_line_intensity
 		"cohesion":

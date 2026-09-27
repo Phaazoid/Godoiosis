@@ -322,6 +322,72 @@ func _collect_scrolls(node: Node, out: Array[ScrollContainer]) -> void:
 		_collect_scrolls(child, out)
 
 
+# A SPLIT (#367): a blow the forecast says knocks someone out of a squad wears the chip on ITS row,
+# in the tether's ink, with the names on hover. The ink is compared against the row's own answer
+# rather than a hex -- TETHER_COLOR is a knob the dev drags.
+func test_a_forecast_split_wears_the_tether_ink_on_the_row_that_causes_it() -> void:
+	var lead := _named(Team.Faction.ENEMY, Vector2i(1, 1), "Lead", {Stats.Stat.LDR: 10})
+	var stray := _named(Team.Faction.ENEMY, Vector2i(4, 1), "Stray", {})
+	game.squad_manager.join_squad(stray, lead.squad)
+	var hero := _spawn(Team.Faction.PLAYER, Vector2i(3, 1))
+	var weapon := H.make_weapon(3)
+	(weapon.template.main_attack as WeaponAttackData).knockback = 2
+	hero.equipped_weapon = weapon
+	game.squad_manager.active_squad = hero.squad
+	game.squad_manager.queue_action(hero.squad, H.stamped_attack(hero, stray))
+	game.refresh_action_queue(hero.squad)
+	await await_idle_frame()
+
+	var split := _entry(_attack_row(), ActionQueueRow.BADGE_SPLIT)
+	assert_bool(split.is_empty()).override_failure_message(
+			"a shove out of range queued and its row says nothing about the Split — got %s"
+			% [_texts(_consequence_entries(_attack_row()))]).is_false()
+	assert_that(split["color"]).is_equal(ActionQueueRow.split_ink())
+	assert_str(String(split["tip"])).contains("Stray")
+
+
+# Two leave on one blow -- the downed leader and the member its successor cannot reach -- so the
+# chip counts, and the hover names both.
+func test_one_blow_that_splits_two_says_so() -> void:
+	var lead := _named(Team.Faction.ENEMY, Vector2i(4, 1), "Lead", {Stats.Stat.LDR: 10})
+	var heir := _named(Team.Faction.ENEMY, Vector2i(6, 1), "Heir", {Stats.Stat.LDR: 4})
+	var far := _named(Team.Faction.ENEMY, Vector2i(1, 1), "Far", {})
+	game.squad_manager.join_squad(heir, lead.squad)
+	game.squad_manager.join_squad(far, lead.squad)
+	var hero := _spawn(Team.Faction.PLAYER, Vector2i(4, 2))
+	hero.equipped_weapon = H.make_weapon(3)
+	game.squad_manager.active_squad = hero.squad
+	game.squad_manager.queue_action(hero.squad, H.stamped_attack(hero, lead))
+	game.refresh_action_queue(hero.squad)
+	await await_idle_frame()
+	# Exactly what the blow deals, so it lands a down rather than a kill (test_downed_ejection's reason).
+	lead.set_current_hp((_attack_row().action as AttackAction).resolved_outcome().damage)
+	game.refresh_action_queue(hero.squad)
+	await await_idle_frame()
+
+	var split := _entry(_attack_row(), ActionQueueRow.BADGE_SPLITS % 2)
+	assert_bool(split.is_empty()).override_failure_message(
+			"a downed leader whose successor strands a member does not say Split 2 — got %s"
+			% [_texts(_consequence_entries(_attack_row()))]).is_false()
+	assert_str(String(split["tip"])).contains("Lead").contains("Far")
+
+
+func _named(faction: Team.Faction, cell: Vector2i, display_name: String, stats: Dictionary) -> Unit:
+	var data := H.make_unit_data(stats, faction)
+	data.display_name = display_name
+	var unit: Unit = game.spawn_unit(data, cell)
+	assert_object(unit).is_not_null()
+	return unit
+
+
+func _entry(row: ActionQueueRow, text: String) -> Dictionary:
+	assert_object(row).override_failure_message("fixture: no attack row is showing").is_not_null()
+	for e in _consequence_entries(row):
+		if String(e["text"]) == text:
+			return e
+	return {}
+
+
 # A consequence the WORLD caused -- "Insulated!" here, and "Fell 2!" / "Drowning!" / "Into the void!"
 # on the same path -- must not wear the rail's structural grey. That value is chosen to DISAPPEAR,
 # which is exactly wrong for text: the dev read it off the screen as grey on grey (2026-09-03).

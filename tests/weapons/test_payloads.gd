@@ -1,6 +1,6 @@
 # PAYLOADS (#1058, slice D of #1054): an attack names another authored attack, which it DROPS where
 # it hits and which then resolves in full with the thrower still the actor. The rulings under test
-# are #1058's 31-46.
+# are #1058's 31-51.
 #
 # Through the REAL resolve wherever the rule lives there -- SquadManager.resolve_plan for aims and
 # counters, PlanResolver.fire_watch_on_arm for a watch shot -- because where a payload goes off, what
@@ -675,3 +675,174 @@ func test_a_weapon_payload_thrown_with_no_weapon_keeps_its_blend_and_its_element
 	assert_int(dropped.size()).override_failure_message("fixture: the carrier missed %s" % foe).is_equal(1)
 	assert_int(dropped[0].resolved.base_damage).is_equal(4 + thrower.get_effective_stat(Stats.Stat.DEX))
 	assert_array(dropped[0].resolved.elements).contains([Elemental.Element.FIRE])
+
+
+# ==============================================================================
+#  Playback: one beat per payload LEVEL (ruling 51)
+# ==============================================================================
+
+# A placed 3x3 tile blast, the whole stamp at once, so every level drops one per struck tile.
+func _blast(named: String) -> WeaponAttackData:
+	var a := WeaponAttackData.new()
+	a.display_name = named
+	a.power = 1
+	a.targets = MAP
+	var square: Array[Vector2i] = []
+	for x in range(-1, 2):
+		for y in range(-1, 2):
+			square.append(Vector2i(x, y))
+	P.stamped(a, 3, square)
+	a.swing = false
+	return a
+
+
+func _volley_beats(thrower: Unit, plan: ResolvedPlan) -> Array[BeatSheet.Beat]:
+	return BeatSheet.read(thrower.squad, plan).volleys(false)
+
+
+# The throw, then its nine payloads as ONE beat -- and a second level is one more, never eighty-one.
+func test_each_payload_level_plays_as_one_beat() -> void:
+	var carrier := _blast("Lob")
+	carrier.payload = _blast("Burst")
+	var thrower := _thrower(carrier)
+	var beats := _volley_beats(thrower, _resolve(thrower, Vector2i(0, -3)))
+	assert_int(beats.size()).override_failure_message(
+			"%d beats for a throw and one level of payloads" % beats.size()).is_equal(2)
+	assert_int(beats[1].actions.size()).is_equal(9)
+
+	var deeper := _blast("Lob")
+	var burst := _blast("Burst")
+	burst.payload = _blast("Spark")
+	deeper.payload = burst
+	(thrower.get_equipped_weapon() as WeaponInstance).template.main_attack = deeper
+	thrower.squad.action_queue.clear()
+	beats = _volley_beats(thrower, _resolve(thrower, Vector2i(0, -3)))
+	assert_int(beats.size()).override_failure_message(
+			"%d beats for a throw and two levels -- a level must not merge with the next" % beats.size()).is_equal(3)
+	assert_int(beats[2].actions.size()).is_equal(81)
+
+
+# Two paths onto one unit drop two SIBLING payloads whose parents differ: one fired attack, one level.
+func test_sibling_payloads_with_different_parents_share_their_levels_beat() -> void:
+	var left: Array[Vector2i] = [Vector2i(-1, -1), Vector2i(-1, -2), Vector2i(0, -2)]
+	var right: Array[Vector2i] = [Vector2i(1, -1), Vector2i(1, -2), Vector2i(0, -2)]
+	var carrier := WeaponAttackData.new()
+	carrier.display_name = "Pincer"
+	carrier.max_range = 0
+	carrier.attack_shape = P.pathed([left, right] as Array[Array])
+	carrier.swing = true
+	carrier.payload = _pointer()
+	var thrower := _thrower(carrier)
+	_foe(Vector2i(0, -2))
+	var plan := _resolve(thrower, Vector2i(0, -1))
+	var dropped := _dropped(plan.attacks)
+	assert_object(dropped[0].dropped_by).override_failure_message(
+			"fixture: the two payloads share a parent, so this proves nothing") \
+		.is_not_same(dropped[1].dropped_by)
+	assert_int(_volley_beats(thrower, plan).size()).is_equal(2)
+
+
+# ...and payloads two DIFFERENT fired attacks dropped never share one, even side by side.
+func test_a_level_never_merges_two_fired_attacks_payloads() -> void:
+	var list: Array[AttackAction] = []
+	for i in 2:
+		var root := AttackAction.new()
+		root.volley = [root] as Array[AttackAction]
+		var payload := AttackAction.new()
+		payload.dropped_by = root
+		payload.payload_depth = 1
+		list.append(payload)
+	assert_int(BeatSheet._group(list, false).size()).is_equal(2)
+	for atk in list:
+		atk.dropped_by.volley = [] as Array[AttackAction]
+
+
+# A counter's payloads are their own level behind it, among the counters.
+func test_a_counters_payload_level_is_its_own_beat_behind_it() -> void:
+	var tap := _attack("Tap")
+	var thrower := _thrower(tap)
+	var foe := _foe(Vector2i(0, -1))
+	var counter := _attack("Riposte")
+	counter.payload = _attack("Bomb", MAP)
+	(foe.get_equipped_weapon() as WeaponInstance).template.main_attack = counter
+	var plan := _resolve(thrower, Vector2i(0, -1))
+	var beats := BeatSheet.read(thrower.squad, plan).volleys(true)
+	assert_int(beats.size()).is_equal(2)
+	assert_bool(beats[1].is_payload_level()).is_true()
+
+
+# A level that hit nobody holds the camera where it is rather than swinging back to the thrower.
+func test_a_payload_level_that_hits_nobody_has_no_subject() -> void:
+	var carrier := _blast("Lob")
+	carrier.payload = _blast("Burst")
+	var thrower := _thrower(carrier)
+	var beats := _volley_beats(thrower, _resolve(thrower, Vector2i(0, -3)))
+	assert_object(beats[0].subject()).override_failure_message(
+			"fixture: the throw itself should still frame its thrower").is_same(thrower)
+	assert_object(beats[1].subject()).is_null()
+
+
+# ==============================================================================
+#  Three edges, kept as D1 built them (rulings 47-49)
+# ==============================================================================
+
+# 47: a knockback payload never shoves the unit it is stuck to -- a shove runs from where its attack
+# started, and a payload starts on its victim's own tile -- while everyone else in it goes outward.
+func test_a_knockback_payload_leaves_its_own_victim_and_shoves_the_rest_outward() -> void:
+	var blast := _blast("Blowback")
+	blast.knockback = 2
+	var carrier := _attack("Tap", UNIT, 2)
+	carrier.payload = blast
+	var thrower := _thrower(carrier)
+	# Every lane out of the stuck victim's tile is open, so staying put is the rule and never a
+	# shove that something blocked; the one beside it stands on a diagonal for the same reason.
+	var drop := Vector2i(0, -2)
+	var stuck := _foe(drop)
+	var beside := _foe(Vector2i(1, -1))
+	var plan := _resolve(thrower, drop)
+	assert_that(PlanResolver.projected_position(stuck, plan.hypo)).override_failure_message(
+			"the payload shoved the unit it was stuck to").is_equal(drop)
+	var landed := PlanResolver.projected_position(beside, plan.hypo)
+	assert_int(absi(landed.x - drop.x) + absi(landed.y - drop.y)).override_failure_message(
+			"the unit beside the drop landed at %s -- not shoved away from it" % landed).is_greater(2)
+
+
+# 48: a Guard that takes the carrier's hit carries the bomb -- it goes off where the BLOCKER lands.
+func test_a_guard_that_takes_the_hit_carries_the_bomb() -> void:
+	var carrier := _attack("Tap")
+	carrier.payload = _attack("Bomb", MAP)
+	var thrower := _thrower(carrier)
+	var ward := _foe(Vector2i(0, -1))
+	var blocker := _foe(Vector2i(1, -1))
+	blocker.arm_guard(ward, blocker.get_guard_range())
+	var plan := _resolve(thrower, Vector2i(0, -1))
+	var hit: AttackAction = plan.attacks[0]
+	assert_object(hit.blocked_for).override_failure_message(
+			"fixture: the Guard never caught the hit").is_same(ward)
+	var dropped := _dropped(plan.attacks)
+	assert_int(dropped.size()).is_equal(1)
+	assert_that(dropped[0].origin_cell).is_equal(Vector2i(1, -1))
+	assert_object(dropped[0].target).is_same(blocker)
+
+
+# 49: a reaction heal's own gather is ally-only; the payload it drops is a whole attack of its own.
+func test_a_reaction_heals_payload_can_hit_an_enemy() -> void:
+	var attacker := H.spawn_solo(self, _sm, ENEMY, Vector2i(0, 0), TOUGH)
+	var defender := H.spawn_solo(self, _sm, PLAYER, Vector2i(1, 0), {Stats.Stat.LDR: 9, Stats.Stat.MHP: 60})
+	var healer := H.spawn_solo(self, _sm, PLAYER, Vector2i(2, 0), TOUGH)
+	_sm.join_squad(healer, defender.squad)
+	var weapon := H.make_weapon(4)
+	weapon.template.main_attack.heals = true
+	weapon.template.main_attack.hits_allies = true
+	weapon.template.main_attack.payload = _blast("Scald")
+	healer.equipped_weapon = weapon
+	defender.set_current_hp(30)
+	attacker.squad._queue_action(H.stamped_attack(attacker, defender))
+	var plan := _sm.resolve_plan(attacker.squad, _board(), [] as Array[ElementalReaction], [] as Array[TerrainReaction])
+	_plans.append(plan)
+	var scalded := false
+	for ctr in plan.counters:
+		if ctr.dropped_by != null and ctr.target == attacker and ctr.resolved.damage > 0:
+			scalded = true
+	assert_bool(scalded).override_failure_message(
+			"the heal's payload never reached the attacker in its blast").is_true()

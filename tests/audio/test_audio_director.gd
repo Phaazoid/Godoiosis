@@ -253,14 +253,29 @@ func test_authored_beats_the_default_and_silence_is_still_silence() -> void:
 
 func test_more_cues_than_voices_steals_rather_than_growing_or_dropping() -> void:
 	var director := _director()
-	# Any stream will do -- the pool has no opinion about WHICH voice it steals for, and pinning the
-	# generic clip here made a pool law depend on a content asset (#139).
-	var voice := _own_stream()
+	# Any streams will do -- the pool has no opinion about WHICH voice it steals for, and pinning the
+	# generic clip here made a pool law depend on a content asset (#139). DISTINCT streams, since one
+	# stream twice in a frame plays once (#1058).
 	var voices := director.pool_size()
 	for i in voices + 3:
-		director.play(voice)
+		director.play(_own_stream())
 	assert_int(director.voices_playing()).override_failure_message(
 		"the pool grew or went silent under overload -- it should cap at its own size").is_equal(voices)
+
+
+# A level of payloads goes off in one frame (#1058, ruling 51), and one blast is one sound.
+func test_the_same_cue_twice_in_one_frame_plays_once() -> void:
+	var director := _director()
+	var voice := _own_stream()
+	director.play(voice)
+	director.play(voice)
+	director.play(voice)
+	assert_int(director.voices_playing()).override_failure_message(
+		"one clip stacked on the pool three times in one frame -- a payload level is one blast").is_equal(1)
+	await await_idle_frame()
+	director.play(voice)
+	assert_int(director.voices_playing()).override_failure_message(
+		"the next frame's blow never sounded -- the rule is per frame, not per stream").is_equal(2)
 
 
 # --- the volume rows ------------------------------------------------------------------------------

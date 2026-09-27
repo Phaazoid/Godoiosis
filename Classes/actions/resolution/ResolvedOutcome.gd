@@ -86,6 +86,15 @@ var drown_damage: int = 0
 # both executors call Unit.die() on it. Preview-side it also suppresses the landing ghost and the
 # projected-knockback publish (nothing stands in a hole, and nothing there may be pickable).
 var removed: bool = false
+# The units that leave a squad of two or more BECAUSE of this blow (#367): the victim going down, a
+# successor unable to hold someone, a shove out of range. Stamped after the pass resolves, by
+# SplitForecast in SquadManager.resolve_plan; a death is never counted (#1104). The queue's "Split"
+# chip reads it, and the pass-end settle must agree with it (Law #2).
+var splits: Array[Unit] = []
+# ...and the member -> leader LINKS this blow ends or begins (#367 part 2B), stamped beside `splits`
+# by the same walk: a leader's leaving ends every member's link and begins the survivors' links to
+# its successor. What the tether presenter plays at the blow, and where the zoom lifts the far end.
+var relinks: Array[Relink] = []
 # Both ends are recorded because a unit can be shoved MORE THAN ONCE in a plan (#105): the second
 # hit starts where the first one left it, not at its live board cell. The preview used to
 # reconstruct the start from `target.movement.cell`, which is a second answer to a question this
@@ -127,3 +136,15 @@ var reads_hp: bool = true
 # fired_attack: stamped from origin_cell + the threaded hypo position, never re-derived later, since
 # a shove earlier in the pass can change the target's level (Law #2). 0 with no board.
 var elevation_delta: int = 0
+
+
+# One link a blow changes (#367 part 2B). `cause` is the SquadManager.LeaveCause that ended it -- the
+# member's own if the member left, else its leader's -- and -1 on a link that begins. The cells are
+# where the two stand at that blow.
+class Relink:
+	var member: Unit
+	var leader: Unit
+	var ends: bool
+	var cause: int = -1
+	var member_cell: Vector2i
+	var leader_cell: Vector2i

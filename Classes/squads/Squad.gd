@@ -69,11 +69,19 @@ func has_any_queued_actions() -> bool:
 # shape as max_size() reading the leader's effective LDR. Leader-derived on purpose: squads churn
 # (leave_squad destroys and rebuilds one), units persist, so a leader swap re-derives this for free.
 func get_max_squad_range() -> int:
-	return leader.get_effective_stat(Stats.Stat.COH)
+	return range_of(leader)
 
 func max_size() -> int:
-	# Capacity budget (squad-system.md, ratified 2026-07-14): leader + floor(eLDR / cost).
-	return 1 + maxi(0, leader.get_effective_ldr() / MEMBER_LDR_COST)
+	return capacity_of(leader)
+
+# Both answers take the LEADER rather than the squad (#367), so SplitForecast can ask them of a
+# leader the plan has not appointed yet. The two instance forms above are delegates, not copies.
+static func range_of(squad_leader: Unit) -> int:
+	return squad_leader.get_effective_stat(Stats.Stat.COH)
+
+# Capacity budget (squad-system.md, ratified 2026-07-14): leader + floor(eLDR / cost).
+static func capacity_of(squad_leader: Unit) -> int:
+	return 1 + maxi(0, squad_leader.get_effective_ldr() / MEMBER_LDR_COST)
 
 func get_actions() -> Array[BaseAction]:
 	return action_queue.duplicate()

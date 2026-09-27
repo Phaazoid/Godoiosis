@@ -749,6 +749,9 @@ things about its shape are the reusable part:
   draw.
 - **One blast, one moment.** The `is_secondary_hit` gate lives on the action beside the readiness,
   vial and watch spends rather than at the subscriber, because it is the same rule they enforce.
+  A payload LEVEL (#1058, ruling 51) still emits once per payload volley, so each blast draws its own
+  bolt, but with nothing shoved it plays in one frame, and `AudioDirector.play` sounds the same cue
+  once per frame, so the level is one sound.
 
 The event carries the `AttackAction`, which is what makes it worth building once: everything an
 effect could want is already stamped on one — the aim, the attack, the footprint, and now the

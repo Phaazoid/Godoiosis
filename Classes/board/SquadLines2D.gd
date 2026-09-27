@@ -61,10 +61,11 @@ static var SHAKE_AMPLITUDE := 0.12
 static var SHAKE_SECONDS := 0.4
 static var SHAKE_SWINGS := 3.0
 
-# MEMBERSHIP MOMENTS (#367): a join DRAWS the tether in, a voluntary leave REELS it into the leader.
-# A moment is its own short-lived drawing, never a state on a standing tether, because tethers stand
-# only while something is selected and membership changes when nothing may be.
-enum Moment { DRAW_IN, REEL_IN }
+# MEMBERSHIP MOMENTS (#367): a join DRAWS the tether in, a voluntary leave REELS it into the leader,
+# a forced one BREAKS it. A moment is its own short-lived drawing, never a state on a standing
+# tether, because tethers stand only while something is selected and membership changes when nothing
+# may be.
+enum Moment { DRAW_IN, REEL_IN, BREAK }
 
 # The draw-in: how long the shaft takes to reach the leader, then the cone's pop -- how far past its
 # own size it swells (a multiple) and how long it takes to settle. With a standing tether to hand over
@@ -79,6 +80,24 @@ static var POP_BRIGHTEN := 0.8
 # The reel-in: how long the tether takes to be pulled into the leader. A new leader's links wait
 # this long before they draw in, which is the dev's "then".
 static var REEL_IN_SECONDS := 0.45
+# The break (#367 part 2B, the dev's "snap, sparks, and shatter"): the tether STRAINS toward the
+# strain red and shivers, SNAPS at the middle of its shaft, and its dashes and arrowhead SHATTER --
+# kicked apart along the chord, tumbling, landing on the ground under it as they fade. How long the
+# strain builds; how long the pieces take to land and fade.
+static var BREAK_STRAIN_SECONDS := 0.35
+static var BREAK_SHATTER_SECONDS := 0.7
+# How fast the pieces fly apart from the snap, in cells per second, and how many times each turns
+# over on the way down.
+static var BREAK_KICK := 0.8
+static var BREAK_TUMBLE_TURNS := 1.0
+# The sparks at the snap: how many, how fast they fly (cells per second), and how long they last.
+static var BREAK_SPARKS := 8
+static var BREAK_SPARK_SPEED := 2.5
+static var BREAK_SPARK_SECONDS := 0.3
+# A spark's streak is how far it travels in this long -- a motion trail, so a fast spark reads longer.
+const SPARK_TRAIL_SECONDS := 0.04
+# HealthBlockDebris's scatter: derived per index, never rolled.
+const GOLDEN_ANGLE := 2.39996323
 
 # What this node draws, handed down by OverlayManager (the store). Trace space, like ThreatLines2D.
 var outline: Array[PackedVector3Array] = []
@@ -152,6 +171,19 @@ static func shaft_between(tether_chord: PackedVector3Array, from: float, to: flo
 	for i in count:
 		shaft.append(a.lerp(b, float(i) / float(count - 1)))
 	return shaft
+
+
+# A sampled shaft plucked sideways by `bend` cells, pinned at both ends -- the flat view's _dashed
+# offset, for a view that draws the points themselves. The side is the chord's own in the ground plane.
+static func bent(shaft: PackedVector3Array, bend: float) -> PackedVector3Array:
+	if is_zero_approx(bend) or shaft.size() < 2:
+		return shaft
+	var span := shaft[shaft.size() - 1] - shaft[0]
+	var side := Vector3(-span.z, 0.0, span.x).normalized()
+	var out := PackedVector3Array()
+	for i in shaft.size():
+		out.append(shaft[i] + side * bend * sin(PI * float(i) / float(shaft.size() - 1)))
+	return out
 
 
 # The dash period, in cells. At least one dash per tile, whatever the knob says.
@@ -245,6 +277,16 @@ static func moment_at(moment: int, tether_chord: PackedVector3Array, elapsed: fl
 			if has_cone and pulled > shaft_end:
 				drawn["cone_scale"] = clampf((tip - pulled) / (tip - shaft_end), 0.0, 1.0)
 			drawn["done"] = elapsed >= maxf(REEL_IN_SECONDS, 0.0)
+		Moment.BREAK:
+			# Whole until it snaps, reddening; after the snap the tether is its pieces (moment_drawing).
+			var strain := maxf(BREAK_STRAIN_SECONDS, 0.0)
+			if elapsed < strain:
+				var tint := TETHER_COLOR.lerp(TETHER_STRAIN_COLOR, _phase(maxf(elapsed, 0.0), strain))
+				drawn["u1"] = shaft_end
+				drawn["cone_grow"] = 1.0 if has_cone else 0.0
+				drawn["tint"] = tint
+				drawn["cone_tint"] = tint
+			drawn["done"] = elapsed >= moment_seconds(Moment.BREAK)
 	return drawn
 
 
@@ -252,8 +294,20 @@ static func moment_at(moment: int, tether_chord: PackedVector3Array, elapsed: fl
 static func moment_seconds(moment: int) -> float:
 	if moment == Moment.REEL_IN:
 		return maxf(REEL_IN_SECONDS, 0.0)
+	if moment == Moment.BREAK:
+		return maxf(BREAK_STRAIN_SECONDS, 0.0) \
+				+ maxf(maxf(BREAK_SHATTER_SECONDS, 0.0), maxf(BREAK_SPARK_SECONDS, 0.0))
 	return maxf(DRAW_IN_SECONDS, 0.0) + maxf(POP_SECONDS, 0.0) + maxf(DRAWN_HOLD_SECONDS, 0.0) \
 			+ maxf(DRAWN_FADE_SECONDS, 0.0)
+
+
+# How long a moment takes to SAY what it says -- a draw-in once its cone has popped, the others at
+# their end. What a pass that plays one at the blow waits for; a draw-in's hold and fade need no one
+# watching.
+static func shown_seconds(moment: int) -> float:
+	if moment == Moment.DRAW_IN:
+		return maxf(DRAW_IN_SECONDS, 0.0) + maxf(POP_SECONDS, 0.0)
+	return moment_seconds(moment)
 
 
 # 0 to 1 through `seconds`. A zero duration is already over, never a division.
@@ -286,14 +340,16 @@ static func _faded(color: Color, alpha: float) -> Color:
 # A stored moment (OverlayManager.squad_tether_moments) as the geometry that draws it NOW, in trace
 # space: the shaft's points, the chord's origin (each view measures its own dash offset from it, so
 # the dashes stay where the standing tether's would be), its tint, and the cone -- base, tip, width
-# scale, tint -- or {} while there is none. The one conversion both views read.
+# scale, tint -- or {} while there is none; plus a break's `bend` (the shiver, in cells) and its
+# `pieces` (solid two-point strokes, each with its own tint). The one conversion both views read.
 static func moment_drawing(entry: Dictionary, now_msec: int, flash: bool) -> Dictionary:
 	var tether_chord: PackedVector3Array = entry["chord"]
 	var elapsed := float(now_msec - int(entry["start_msec"])) / 1000.0
 	var drawn := moment_at(int(entry["moment"]), tether_chord, elapsed, bool(entry.get("standing", false)),
 			flash)
+	var no_pieces: Array[Dictionary] = []
 	var out := {"origin": tether_chord[0], "shaft": PackedVector3Array(), "tint": drawn["tint"],
-			"cone": {}, "done": drawn["done"]}
+			"cone": {}, "done": drawn["done"], "bend": 0.0, "pieces": no_pieces}
 	var u0: float = drawn["u0"]
 	var u1: float = drawn["u1"]
 	if u1 > u0:
@@ -307,7 +363,85 @@ static func moment_drawing(entry: Dictionary, now_msec: int, flash: bool) -> Dic
 		var base := tip + (point_along(tether_chord, base_u) - tip) * scale
 		out["cone"] = {"base": base, "tip": tip, "scale": ARROW_WIDTH_SCALE * scale,
 				"tint": drawn["cone_tint"]}
+	if int(entry["moment"]) == Moment.BREAK:
+		# The dashes shatter where they stood at the snap, so the march is frozen at that instant.
+		var snap_shift := 0.0
+		if flash:
+			snap_shift = DASH_SPEED * (float(int(entry["start_msec"])) / 1000.0 + maxf(BREAK_STRAIN_SECONDS, 0.0))
+		_break_drawing(out, tether_chord, elapsed, snap_shift, flash)
 	return out
+
+
+# The break's own geometry, written into a moment's drawing (#367 part 2B). Before the snap: the
+# shiver, as a `bend` both views apply to the shaft the way the pluck does. After it: `pieces` -- each
+# dash on screen at the snap, and the sparks -- as two-point strokes with their own tints, and the
+# arrowhead falling in `cone`. Every piece is kicked away from the snap along the chord, scattered
+# sideways, tumbled about the chord's side axis, and lands on the ground under the chord (its body-
+# middle height taken back off) exactly as its time runs out, eased in like a fall.
+static func _break_drawing(out: Dictionary, tether_chord: PackedVector3Array, elapsed: float,
+		snap_shift: float, flash: bool) -> void:
+	var m := measure(tether_chord)
+	if m.is_empty():
+		return
+	var strain := maxf(BREAK_STRAIN_SECONDS, 0.0)
+	if elapsed < strain:
+		# A shake is motion, so #217 stills it (the pluck's own rule); the red still says it.
+		if flash:
+			var t := _phase(maxf(elapsed, 0.0), strain)
+			out["bend"] = SHAKE_AMPLITUDE * t * sin(TAU * SHAKE_SWINGS * t)
+		return
+	var after := elapsed - strain
+	var length: float = m["length"]
+	var shaft_end: float = m["shaft_end"]
+	var tip: float = m["tip"]
+	var snap_u := shaft_end * 0.5
+	var along := (tether_chord[1] - tether_chord[0]) / length
+	var side := Vector3(-along.z, 0.0, along.x).normalized()
+	var fall := _phase(after, BREAK_SHATTER_SECONDS)
+	var shard_tint := _faded(TETHER_STRAIN_COLOR, 1.0 - clampf(fall * 2.0 - 1.0, 0.0, 1.0))
+	var pieces: Array[Dictionary] = []
+	var spans := dash_spans(shaft_end, snap_shift)
+	for i in spans.size():
+		var span := spans[i]
+		var points := _falling(tether_chord, span.x, span.y, snap_u, i, fall, along, side)
+		pieces.append({"points": points, "tint": shard_tint})
+	if shaft_end < tip:
+		var head := _falling(tether_chord, shaft_end, tip, snap_u, spans.size(), fall, along, side)
+		out["cone"] = {"base": head[0], "tip": head[1], "scale": ARROW_WIDTH_SCALE, "tint": shard_tint}
+	var spark_life := maxf(BREAK_SPARK_SECONDS, 0.0)
+	if after < spark_life:
+		var age := _phase(after, spark_life)
+		var spark_tint := _faded(_brighten(TETHER_COLOR, 1.0 - age) if flash else TETHER_COLOR, 1.0 - age)
+		var snap := point_along(tether_chord, snap_u)
+		for i in maxi(BREAK_SPARKS, 0):
+			var turn := float(i) * GOLDEN_ANGLE
+			var heading := (side * cos(turn) + along * sin(turn) * 0.6 + Vector3.UP * 0.7).normalized()
+			var reach := BREAK_SPARK_SPEED * after
+			var trail := minf(BREAK_SPARK_SPEED * SPARK_TRAIL_SECONDS, reach)
+			pieces.append({"points": PackedVector3Array([snap + heading * (reach - trail),
+					snap + heading * reach]), "tint": spark_tint})
+	out["pieces"] = pieces
+
+
+# One falling piece: the stretch [u0, u1] of the chord as it stands `fall` (0-1) of the way through
+# the shatter, as its two end points. `index` scatters it (sideways, and which way it turns).
+static func _falling(tether_chord: PackedVector3Array, u0: float, u1: float, snap_u: float,
+		index: int, fall: float, along: Vector3, side: Vector3) -> PackedVector3Array:
+	var a := point_along(tether_chord, u0)
+	var b := point_along(tether_chord, u1)
+	var centre := (a + b) * 0.5
+	var half := (b - a) * 0.5
+	var mid := (u0 + u1) * 0.5
+	var away := 1.0 if mid >= snap_u else -1.0
+	var time := fall * maxf(BREAK_SHATTER_SECONDS, 0.0)
+	var drift := (along * away + side * sin(float(index) * GOLDEN_ANGLE) * 0.5) * BREAK_KICK * time
+	var ground := lerpf(tether_chord[0].y, tether_chord[1].y, mid / (tether_chord[1] - tether_chord[0]).length()) \
+			- body_middle_rule()
+	var landed := centre + drift
+	landed.y = lerpf(centre.y, ground, fall * fall)
+	var spin := TAU * BREAK_TUMBLE_TURNS * fall * (1.0 if index % 2 == 0 else -1.0)
+	var turned := half.rotated(side, spin)
+	return PackedVector3Array([landed - turned, landed + turned])
 
 
 static func color_of(state: int) -> Color:
@@ -365,11 +499,16 @@ func _draw() -> void:
 		if shaft.size() >= 2:
 			var origin := _flat(drawing["origin"])
 			var from := _flat(shaft[0])
-			_dashed(from, _flat(shaft[shaft.size() - 1]), drawing["tint"], shift, 0.0,
+			_dashed(from, _flat(shaft[shaft.size() - 1]), drawing["tint"], shift, float(drawing["bend"]),
 					from.distance_to(origin) / float(GridUtils.TILE_SIZE))
 		var cone: Dictionary = drawing["cone"]
 		if not cone.is_empty():
 			_cone(_flat(cone["base"]), _flat(cone["tip"]), float(cone["scale"]), cone["tint"])
+		# A break's pieces are SOLID -- each is one dash already. This view has no height, so their
+		# fall reads as a scatter and fade here (declared on #292).
+		for piece: Dictionary in drawing["pieces"]:
+			var points: PackedVector3Array = piece["points"]
+			draw_line(_flat(points[0]), _flat(points[1]), piece["tint"], LINE_WIDTH)
 
 
 # One straight stroke, dashed. `bend` plucks it: every point moves sideways by bend * sin(pi * u),

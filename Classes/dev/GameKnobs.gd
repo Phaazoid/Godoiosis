@@ -630,6 +630,29 @@ const CLASS_KNOBS: Array[Dictionary] = [
 	{"group": "Squad lines", "label": "Leave: reel-in time", "static": "REEL_IN_SECONDS", "script": SQUAD_LINES_SCRIPT,
 		"min": 0.0, "max": 2.0, "step": 0.05,
 		"tip": "How long a leaving member's tether takes to be pulled into the leader, in seconds (Leave Squad, Disband). When a leader leaves, the new leader's tethers wait this long before they draw in."},
+	# The BREAK (#367 part 2B): a forced exit -- a shove out of range, a downing, a new leader unable to
+	# hold someone. Read every frame one plays; the pass also waits this long at the blow that causes it.
+	{"group": "Squad lines", "label": "Break: strain time", "static": "BREAK_STRAIN_SECONDS", "script": SQUAD_LINES_SCRIPT,
+		"min": 0.0, "max": 2.0, "step": 0.05,
+		"tip": "How long a breaking tether reddens and shivers before it snaps, in seconds."},
+	{"group": "Squad lines", "label": "Break: shatter time", "static": "BREAK_SHATTER_SECONDS", "script": SQUAD_LINES_SCRIPT,
+		"min": 0.05, "max": 3.0, "step": 0.05,
+		"tip": "How long the snapped tether's pieces and arrowhead take to fall to the ground and fade, in seconds."},
+	{"group": "Squad lines", "label": "Break: kick", "static": "BREAK_KICK", "script": SQUAD_LINES_SCRIPT,
+		"min": 0.0, "max": 4.0, "step": 0.05,
+		"tip": "How fast the pieces fly apart from the snap, in cells per second."},
+	{"group": "Squad lines", "label": "Break: tumble", "static": "BREAK_TUMBLE_TURNS", "script": SQUAD_LINES_SCRIPT,
+		"min": 0.0, "max": 4.0, "step": 0.25,
+		"tip": "How many times each piece turns over on its way down."},
+	{"group": "Squad lines", "label": "Break: sparks", "static": "BREAK_SPARKS", "script": SQUAD_LINES_SCRIPT,
+		"min": 0.0, "max": 24.0, "step": 1.0,
+		"tip": "How many sparks fly from the snap. They brighten toward white unless the photosensitivity setting is on."},
+	{"group": "Squad lines", "label": "Break: spark speed", "static": "BREAK_SPARK_SPEED", "script": SQUAD_LINES_SCRIPT,
+		"min": 0.0, "max": 8.0, "step": 0.1,
+		"tip": "How fast the sparks fly, in cells per second. A faster spark draws a longer streak."},
+	{"group": "Squad lines", "label": "Break: spark time", "static": "BREAK_SPARK_SECONDS", "script": SQUAD_LINES_SCRIPT,
+		"min": 0.0, "max": 1.5, "step": 0.05,
+		"tip": "How long the sparks last, in seconds."},
 	# The Squad Up count beside the leader's crown (#1070). On OverlayManager, the store both views
 	# read; its size, outline and colour are the HP digits' own rows, so it has none here.
 	{"group": "Squad lines", "label": "Squad Up count hold (2D+3D)", "static": "SQUAD_COUNT_HOLD",
@@ -1780,6 +1803,13 @@ static func read_static(name: String) -> Variant:
 		"DRAWN_HOLD_SECONDS": return SquadLines2D.DRAWN_HOLD_SECONDS
 		"DRAWN_FADE_SECONDS": return SquadLines2D.DRAWN_FADE_SECONDS
 		"REEL_IN_SECONDS": return SquadLines2D.REEL_IN_SECONDS
+		"BREAK_STRAIN_SECONDS": return SquadLines2D.BREAK_STRAIN_SECONDS
+		"BREAK_SHATTER_SECONDS": return SquadLines2D.BREAK_SHATTER_SECONDS
+		"BREAK_KICK": return SquadLines2D.BREAK_KICK
+		"BREAK_TUMBLE_TURNS": return SquadLines2D.BREAK_TUMBLE_TURNS
+		"BREAK_SPARKS": return SquadLines2D.BREAK_SPARKS
+		"BREAK_SPARK_SPEED": return SquadLines2D.BREAK_SPARK_SPEED
+		"BREAK_SPARK_SECONDS": return SquadLines2D.BREAK_SPARK_SECONDS
 		"SQUAD_COUNT_HOLD": return OverlayManager.SQUAD_COUNT_HOLD
 		"SQUAD_COUNT_FADE": return OverlayManager.SQUAD_COUNT_FADE
 		"SQUAD_COUNT_GAP": return OverlayManager.SQUAD_COUNT_GAP
@@ -2099,7 +2129,8 @@ static func write_static(host: Node3D, name: String, value: Variant) -> void:
 			return
 		# The membership moments (#367) read these every frame one plays, so the write is the apply.
 		"DRAW_IN_SECONDS", "POP_SCALE", "POP_SECONDS", "POP_BRIGHTEN", "DRAWN_HOLD_SECONDS", \
-				"DRAWN_FADE_SECONDS", "REEL_IN_SECONDS":
+				"DRAWN_FADE_SECONDS", "REEL_IN_SECONDS", "BREAK_STRAIN_SECONDS", "BREAK_SHATTER_SECONDS", \
+				"BREAK_KICK", "BREAK_TUMBLE_TURNS", "BREAK_SPARKS", "BREAK_SPARK_SPEED", "BREAK_SPARK_SECONDS":
 			_write_squad_line(name, value)
 			return
 		"SQUAD_RING_ALPHA": OverlayManager.SQUAD_RING_ALPHA = value
@@ -2847,6 +2878,13 @@ static func _write_squad_line(name: String, value: Variant) -> void:
 		"DRAWN_HOLD_SECONDS": SquadLines2D.DRAWN_HOLD_SECONDS = value
 		"DRAWN_FADE_SECONDS": SquadLines2D.DRAWN_FADE_SECONDS = value
 		"REEL_IN_SECONDS": SquadLines2D.REEL_IN_SECONDS = value
+		"BREAK_STRAIN_SECONDS": SquadLines2D.BREAK_STRAIN_SECONDS = value
+		"BREAK_SHATTER_SECONDS": SquadLines2D.BREAK_SHATTER_SECONDS = value
+		"BREAK_KICK": SquadLines2D.BREAK_KICK = value
+		"BREAK_TUMBLE_TURNS": SquadLines2D.BREAK_TUMBLE_TURNS = value
+		"BREAK_SPARKS": SquadLines2D.BREAK_SPARKS = roundi(value)
+		"BREAK_SPARK_SPEED": SquadLines2D.BREAK_SPARK_SPEED = value
+		"BREAK_SPARK_SECONDS": SquadLines2D.BREAK_SPARK_SECONDS = value
 
 
 static func _write_zone_mark(name: String, value: Variant) -> void:
