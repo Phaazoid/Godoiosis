@@ -17,7 +17,10 @@ class_name SquadManager
 # What stays is squad lifecycle, order queueing, activation state, and plan resolution.
 
 var squads: Array[Squad] = []
-var active_squad: Squad = null
+# The squad whose plan is open. A setter because End Turn hides on it (#541) and its null writes land
+# AFTER squad_became_empty (revert_if_only_hold, remove_action, shed_orders) or with no signal at all
+# (destroy_empty_squad, clear_all_squads) -- a listener on the queue signals reads it still set.
+var active_squad: Squad = null: set = _set_active_squad
 
 # True while several orders are queued as ONE player action (Group Move): the expensive per-order
 # fan-out runs once at the end instead. Every order still passes queue_action's gates (Law #3).
@@ -63,6 +66,7 @@ signal squad_became_active(squad: Squad, action: BaseAction)
 signal squad_became_empty(squad: Squad)
 signal squad_action_queued(squad: Squad, action: BaseAction)
 signal squad_member_joined(squad: Squad, unit: Unit)   # emitted by join_squad, the one join door (#182, #367)
+signal active_squad_changed(squad: Squad)   # every write that CHANGES active_squad, whoever makes it (#541)
 
 # WHY a unit left a squad (#367). The tether look forks on it: a voluntary leave reels in, a forced
 # one breaks. DEATH and RELEASE (a pre-mission undeploy) leave the board as well as the squad.
@@ -72,6 +76,13 @@ enum LeaveCause { VOLUNTARY, FORCED, DOWNED, DEATH, RELEASE }
 # reassignment -- so a listener that needs the settled squad defers to the end of the operation.
 signal squad_member_left(squad: Squad, unit: Unit, cause: LeaveCause)
 
+
+# No-op on an unchanged value, so re-activating the open squad (every queue_action) emits nothing.
+func _set_active_squad(value: Squad) -> void:
+	if active_squad == value:
+		return
+	active_squad = value
+	active_squad_changed.emit(value)
 
 func any_squad_active() -> bool:
 	for squad in squads:
