@@ -140,7 +140,6 @@ func tile_texts() -> Array[String]:
 func _process(_delta: float) -> void:
 	if not (visible and is_showing_tile()):
 		return
-	_fit()
 	if _follow != null:
 		if not is_instance_valid(_follow):
 			clear()
@@ -198,10 +197,12 @@ func _apply_park() -> void:
 
 # The tile card is exactly as tall as what it says. Growing needs nothing -- a control is never
 # smaller than its minimum -- but shrinking does, because a free-floating container never shrinks by
-# itself (the 2026-08-11 ratchet). Two callers: the minimum-changed hook, deferred so it lands after
-# the layout pass that moved the minimum and inside the same frame; and every frame a tile card is
-# up, because that signal fires only on a change from the LAST value it reported, and a second tile
-# with the same readout settles straight back to it (the giant card, dev report 2026-09-27).
+# itself (the 2026-08-11 ratchet). Driven by the minimum-changed hook, deferred so it lands after the
+# layout pass that moved the minimum. That hook fires only on a change from the LAST value it
+# reported, which is safe exactly as long as nothing else writes the size: _draw_tile's old
+# reset_size() did, so a same-readout tile settled back to the reported value and the card stayed
+# giant (dev report 2026-09-27). A per-frame fit was tried as a backstop and DROPPED -- no case
+# needed it, and it hid that reset_size() coming back.
 func _fit() -> void:
 	if _tile_panel.size.y > _tile_panel.get_combined_minimum_size().y:
 		_tile_panel.reset_size()
