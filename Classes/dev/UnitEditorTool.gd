@@ -775,6 +775,7 @@ func _revive_unit(unit: Unit) -> void:
 		return
 	unit.revive()   # the same call RescueAction makes; the body keeps its solo squad
 	game.refresh_action_queue(game.squad_manager.active_squad)   # a rescue aimed here just went invalid
+	game.drop_threat_field()   # revive() has no signal, and a standing body threatens again
 	_mark_live_edit(unit, true)
 	_resync(unit)
 
