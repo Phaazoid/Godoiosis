@@ -122,6 +122,10 @@ func test_the_light_wall_stands_one_strip_per_outward_edge() -> void:
 	var walls := _mirror.get_node_or_null("ZoneWalls") as ZoneWalls
 	assert_object(walls).override_failure_message("look C built no wall").is_not_null()
 	assert_bool(walls.visible).is_true()
+	# The decal law walks what EXISTS, and the wall exists only under look C -- so it is asked here: off the
+	# ground layer, or the damp blot darkens it.
+	assert_int(walls.layers & BoardOverlays.GROUND_RENDER_LAYER).override_failure_message(
+			"the light wall is on the ground layer").is_equal(0)
 	assert_int(walls.strip_count).override_failure_message(
 			"two cells side by side have six outward edges and a lone cell four").is_equal(10)
 	# ...and it goes when the look does.
