@@ -372,6 +372,16 @@ static func stamp_sweep(group: Array, reach: Conduction.Sweep) -> void:
 			member.direct = reach.direct[i]
 			member.hit_facing = reach.hit_facings[i]
 
+# The hit a payload chain began with (#1058): dropped_by walked back to depth 0, or this hit itself
+# when it is not a payload. Two payloads came from the same fired attack when their roots share one
+# volley -- dropped_by alone is too fine, since two paths onto one unit drop two sibling payloads
+# whose immediate parents differ.
+func payload_root() -> AttackAction:
+	var root: AttackAction = self
+	while root.dropped_by != null:
+		root = root.dropped_by
+	return root
+
 func get_outcome_summary() -> String:
 	if resolved == null or target == null:   # cell attack (#47) — no unit outcome to summarize
 		return ""
