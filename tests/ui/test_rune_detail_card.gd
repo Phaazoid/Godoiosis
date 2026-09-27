@@ -255,6 +255,25 @@ func test_a_carvings_own_channels_reach_the_readout() -> void:
 	assert_str(_channel_text(card)).contains("Splashes allies")
 
 
+# A payload reaches the card too (#1058, ruling 53), one line per level of the chain -- the deeper
+# line is the one a readout that only looked at `payload` would drop.
+func test_a_carvings_payload_chain_reaches_the_readout() -> void:
+	var blast := _circle([FIRE], "Blast")
+	blast.payload = _circle([FIRE], "Spring")
+	var lob := _circle([FIRE], "Lob")
+	lob.payload = blast
+	var carvings: Array[TransmutationData] = [_circle([FIRE], "Plain"), lob]
+	var card := await _open(_rune(carvings), _alchemist({FIRE: 3}))
+
+	card._on_carving_picked(0)
+	assert_str(_channel_text(card)).not_contains("where it hits")
+	card._on_carving_picked(1)
+	var text := _channel_text(card)
+	assert_str(text).contains("Drops Blast where it hits")
+	assert_str(text).override_failure_message(
+		"the chain's second level never reached the card:\n%s" % text).contains("Blast drops Spring where it hits")
+
+
 # The ring is the element half of that same wire. Asserted through rows() rather than through pixels,
 # which is AuraRing's own division: rows() is the model and _draw only renders it.
 func test_the_ring_follows_the_picked_carving() -> void:

@@ -36,6 +36,16 @@ static func lines(attack: AttackData, knockback: int, elements: Array[Elemental.
 			named.append(Elemental.display_name(element))
 		out.append("Carries %s" % " and ".join(named))
 
+	# The payload chain (#1058, ruling 53): one line per level. Read off the attack, since no mod
+	# composes a payload.
+	var dropper := attack
+	for payload in attack.payload_chain():
+		if dropper == attack:
+			out.append("Drops %s where it hits" % _name_of(payload))
+		else:
+			out.append("%s drops %s where it hits" % [_name_of(dropper), _name_of(payload)])
+		dropper = payload
+
 	if can_overwatch:
 		out.append("Watch only — declared as a standing watch, never fired directly")
 	if hits_allies:
@@ -63,6 +73,13 @@ static func range_text(attack: AttackData) -> String:
 	var span := "Range %d" % attack.max_range if attack.min_range == attack.max_range \
 		else "Range %d-%d" % [attack.min_range, attack.max_range]
 	return "%s, bevelled corners" % span if attack.max_and_a_half else span
+
+
+# An attack's name as a card prints it, its file's name standing in for one never given.
+static func _name_of(attack: AttackData) -> String:
+	if attack.display_name != "":
+		return attack.display_name
+	return attack.resource_path.get_file().get_basename()
 
 
 # How this attack answers the height question. MELEE ignores the tolerances outright (AttackData's
