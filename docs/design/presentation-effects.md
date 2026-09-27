@@ -516,8 +516,9 @@ The mirror above answers *the AI is acting somewhere else*. #467's ring raised t
 does **not** lock the board, so the player can pan the diorama anywhere while choosing — and then
 commit an order that plays out around a unit no longer on screen. **A terminal pick brings the view
 back to the acting unit; backing out with no order leaves it exactly where the player put it.** The
-dev's line drawn once: *action versus no action*, not board-verbs versus UI-verbs. Inspect and Wait
-yank the camera too, and that is a knob to turn in play rather than a rule to guess at.
+dev's line drawn once: *action versus no action*, not board-verbs versus UI-verbs. Wait yanks the
+camera too, and that is a knob to turn in play rather than a rule to guess at. (Inspect did until
+[#1105](https://github.com/Phaazoid/Godoiosis/issues/1105) moved it off the ring to the Z key.)
 
 - **The gate above is untouched, and reaching for it would have been the wrong fix.** `pan_to` moves
   the hidden 2D camera, which under `HD_2D` nobody is looking at, so widening `ai_locked` was the

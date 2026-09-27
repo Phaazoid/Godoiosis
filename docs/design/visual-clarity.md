@@ -7,7 +7,7 @@ its child [#49 Action Queue UX](https://github.com/Phaazoid/Godoiosis/issues/49)
 This is a *guidelines* doc, not a spec — it captures the principles we're holding the work to,
 plus the running order of the queue-UX checklist. Update it as items land.
 
-**Canon checked through #1105 (2026-09-23).**
+**Canon checked through #1105 (2026-09-27).**
 
 ## Principles
 
@@ -59,15 +59,23 @@ plus the running order of the queue-UX checklist. Update it as items land.
 
    *A tile is INSPECTABLE since [#1105](https://github.com/Phaazoid/Godoiosis/issues/1105) slice 1
    (2026-09-23), out of the 2026-09-22 stream playtest ("no way to inspect things on tiles like
-   overwatch paint, and zones").* Clicking an empty tile opens its full readout in the Inspect dock,
-   one boxed section per layer — **Overwatch** (who watches it: side, unit, attack), **Zones** (each
-   drawn zone and what its kind asks, including *how* to take a capture point), **Ground** (this
-   card's own lines). A unit's Inspect reaches its tile through a Unit/Tile switch. `TileReadout`
-   (`Classes/board/`) is the ONE builder both surfaces read; it took over `_tile_readout_lines`
-   unchanged. **The dev's ruling from the mockup round replaces this item's "every tile carries a
-   card of states, rules and interactions" in slice 2: the HOVER NAMES what is on a tile (one tag per
-   layer, wearing its board marking), the CLICK EXPLAINS it.** Until slice 2 ships the card is
-   unchanged, so no information is lost while slice 1 stands alone.
+   overwatch paint, and zones").* **The INSPECT KEY (Z) reads what is under the pointer** — the
+   dev's play review of slice 1 (2026-09-26) threw out its left click (*"too intrusive"*) and its
+   full-height dock for a tile (*"far too much"*, and it stood beside the hover card for the same
+   tile — *"only one of the two should appear at a time"*). Over an empty tile Z **grows the hover
+   card in place** into the tile's full readout, at the dock's width and only as tall as it needs,
+   and the card shrinks when the pointer moves on or Z is pressed again, so there is only ever one
+   card. It holds one boxed section per layer — **Overwatch** (who watches it: side, unit, attack),
+   **Zones** (each drawn zone and what its kind asks, including *how* to take a capture point),
+   **Ground** (the card's own lines). Over a unit Z opens the Inspect dock, a second Z swaps its body
+   to the unit's tile, and a third closes it; **the ring's Inspect verb is gone**, so a unit with no
+   other verbs (an enemy on your turn) opens no ring at all. `TileReadout` (`Classes/board/`) is the
+   ONE builder both hosts read, and `TileInfoSections` is the one renderer and the one redraw diff —
+   whose `""` sentinel, doubling as an empty readout's signature, is what showed a rock the grass
+   tile's fire (dev report, 2026-09-26). **The dev's ruling from the mockup round replaces this
+   item's "every tile carries a card of states, rules and interactions" in slice 2: the HOVER NAMES
+   what is on a tile (one tag per layer, wearing its board marking), the INSPECT KEY EXPLAINS it.**
+   Until slice 2 ships the compact card is unchanged, so no information is lost.
 
 ## #49 Action Queue UX — CLOSED, all items shipped
 
@@ -1195,8 +1203,10 @@ Six items, and three of them had something underneath worth recording.
 **A category whose ONE child is its own verb collapses to a terminal slice.** *"There is no reason
 to put Move under Move."* Deliberately **not** "collapse whenever there is one child" — a lone Squad
 Up names something the word Squad does not, and single-option submenus are explicitly meant to
-survive (they just draw small, below). The same rule is the entire implementation of **"Inspect is
-top level"**: a group of one holding the verb of its own name. No special case, no new key.
+survive (they just draw small, below). The same rule was the entire implementation of **"Inspect is
+top level"**: a group of one holding the verb of its own name. No special case, no new key. (Inspect
+left the ring for the Z key in [#1105](https://github.com/Phaazoid/Godoiosis/issues/1105); Move is
+the rule's example now.)
 
 **The generic Attack row is gone and the ring lists every attack by its own name** — *"the whole
 point of that was to save time, but if we already have to navigate through a menu to get to it,
@@ -1285,8 +1295,10 @@ The ring deliberately does not lock the board — that is what lets the player p
 deciding. It also means the unit they are deciding *for* can be off screen by the time they commit,
 and the order plays out around that unit. **So a terminal pick snaps the view back to it, and
 backing out with no order does not.** One line, drawn where the dev drew it: action versus no
-action. Every terminal pick returns for now, Inspect included; narrowing it to *verbs that need the
-board* is a play call, not a design one, and would cost `ACTION_DATA` a new fact.
+action. Every terminal pick returns for now; narrowing it to *verbs that need the board* is a play
+call, not a design one, and would cost `ACTION_DATA` a new fact. (Inspect was the obvious candidate
+until [#1105](https://github.com/Phaazoid/Godoiosis/issues/1105) took it off the ring — the Z key
+moves no camera.)
 
 The mechanism belongs to the camera contract, not to the menu — see
 [`presentation-effects.md`](presentation-effects.md) → *The camera comes BACK when an order is
@@ -3351,7 +3363,7 @@ Two things about the SHAPE of that fix worth keeping. The old case pinned *the r
 
 **A docked panel has a height budget and nothing says so out loud.** The inspect panel is 300 × **720** — the viewport's own height — and its body already wanted 648 of that before this ticket, so every future row competes for 72px. The first attempt put a 160px wheel in the body and overflowed by 92: the squad box and the states bar ran off the bottom of the screen, silently, because a `VBoxContainer` lays its children past its own rect without complaint. The ring moved onto the portrait (108px box, +12px of header) and the budget is now a law in `tests/ui/test_unit_info_panel_refresh.gd`, asked as a property against the panel's own height rather than as a pixel count — the lesson [#723](https://github.com/Phaazoid/Godoiosis/issues/723) learned on the title screen, arriving at a surface that is not a `ModalCard`. It reads the outermost CONTAINER, never the panel `Control`, because a plain Control aggregates nothing and answers `(0, 0)` however much is built underneath it.
 
-**The budget decided [#1105](https://github.com/Phaazoid/Godoiosis/issues/1105)'s layout before a line of it was written.** Re-measured on every authored unit: **660 of 700**, so a tile's sections could not simply go under a unit's. The dev picked a **Unit/Tile SWITCH** in the header's free space beside the portrait (it costs no height) over scrolling the unit panel or showing tags only. The tile body then met the same wall from the other side: an ordinary tile needs well under 600 but three watches, two zones and a fire on one cell need 766. It sits in its **own scroll area** below the header as a safety net (dev ruling: never the ordinary look), with the Spacer standing down in tile view so the scroll area gets the whole remaining height. Both halves are laws in `tests/ui/test_tile_inspect.gd` — the busy tile scrolls inside the dock, an ordinary one shows no bar.
+**The budget decided [#1105](https://github.com/Phaazoid/Godoiosis/issues/1105)'s layout before a line of it was written.** Re-measured on every authored unit: **660 of 700**, so a tile's sections could not simply go under a unit's. The dev picked a **Unit/Tile SWITCH** in the header's free space beside the portrait (it costs no height) over scrolling the unit panel or showing tags only. The tile body then met the same wall from the other side: an ordinary tile needs well under 600 but three watches, two zones and a fire on one cell need 766. It sits in its **own scroll area** below the header as a safety net (dev ruling: never the ordinary look), with the Spacer standing down in tile view so the scroll area gets the whole remaining height. Both halves are laws in `tests/ui/test_tile_inspect.gd` — the busy tile scrolls inside the dock, an ordinary one shows no bar. **Since the Z-key rework the dock only ever shows a UNIT's tile; an empty tile grows the hover card instead, which cannot scroll** (the pointer is on the board and the wheel zooms), so it had to fit: measured at its 300px width, 98 (plain grass), 430 (a watch, a zone, a fire) and 636 for the three-watch case, of the 704 the screen leaves it — pinned by `test_the_grown_card_stays_on_screen`. A free-floating card of autowrapped rows needed one more fix to get there: the rows report a tall minimum before layout hands them their width, and the container never shrinks back by itself, so the first measurement read 514px for one line of grass. `HoverInfoPanelControl` snaps its tile block down whenever its minimum settles lower.
 
 
 ## What the enemy COULD do ([#710](https://github.com/Phaazoid/Godoiosis/issues/710) slice 1, BUILT 2026-09-16; reshaped by slice 3 and corrected by slice 4, 2026-09-17)
