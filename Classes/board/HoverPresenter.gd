@@ -289,6 +289,7 @@ func _hover_attack_targeting(cell: Vector2i) -> void:
 
 	var preview_cells: Array[Vector2i] = []
 	var travel: Dictionary[Vector2i, Array] = {}
+	var insets: Array[Vector2i] = []
 	var victims: Array[Unit] = []
 	var trace_shown := false
 	if attacker != null:
@@ -319,13 +320,42 @@ func _hover_attack_targeting(cell: Vector2i) -> void:
 			# answers as UNIT.
 			if aiming == null or aiming.hits_units():
 				victims = reach.victims
+			# ...and what it DROPS (#1058 D2b). A watch declares nothing here: its shot fires later, from
+			# wherever the crosser is, so there is no landing to show yet.
+			if aiming != null and aiming.payload != null and game.aim_intent != game.AimIntent.WATCH:
+				var candidate := AttackAction.declare(attacker, origin, cell)
+				var rows: Array[AttackAction] = game.squad_manager.preview_payloads(attacker.squad, candidate, board)
+				travel = travel.duplicate(true)
+				_add_payloads(rows, preview_cells, travel, insets, victims)
 
 	if not trace_shown:
 		game.overlay_manager.clear_sight_trace()
 	game.overlay_manager.show_overlay(OverlayManager.OverlayType.HOVER, preview_cells, OverlayManager.ATLAS_COORDS)
-	game.overlay_manager.set_aim_flash(travel)
+	game.overlay_manager.set_aim_flash(travel, insets)
 	game.overlay_manager.set_target_pulse(victims)
 	_set_cursor_for_preview(cell, not preview_cells.is_empty())
+
+
+# The payload rows an aim would drop, folded into what its hover shows (ruling 52). Each LEVEL flashes
+# together, one step after the level above it -- level k at the aim's last step + k -- so an aim tile a
+# payload also covers flashes twice. A tile only a payload reaches is an INSET, whatever its depth; one
+# the aim reaches itself stays the aim's full tile. Whoever a payload hits pulses with the aim's own.
+func _add_payloads(rows: Array[AttackAction], aim_cells: Array[Vector2i],
+		travel: Dictionary[Vector2i, Array], insets: Array[Vector2i], victims: Array[Unit]) -> void:
+	var last := AimFlash2D.last_step(travel)
+	for row in rows:
+		var step := last + row.payload_depth
+		for tile in row.footprint:
+			if not travel.has(tile):
+				travel[tile] = []
+			if not travel[tile].has(step):
+				travel[tile].append(step)
+			if not aim_cells.has(tile) and not insets.has(tile):
+				insets.append(tile)
+		var hit := row.target
+		if hit != null and is_instance_valid(hit) and row.fired_attack.hits_units() and not victims.has(hit):
+			victims.append(hit)
+	insets.sort()
 
 func _hover_choosing_move(cell: Vector2i) -> void:
 	var unit: Unit = game.selected_unit

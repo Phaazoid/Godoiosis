@@ -14,11 +14,14 @@ var _scene: Node3D
 # MoveGrid's four statics as they stood before the case (#1074). The grid cases set them explicitly
 # so they assert the RULE rather than the dev's tuned defaults, and a static outlives its case.
 var _grid_saved: Array[float] = []
+# ...and InsetSquare's one static (#1058 D2b), for the same reason.
+var _inset_saved := 0.0
 
 
 func before_test() -> void:
 	_grid_saved = [MoveGrid.GRID_LINE_INSET, MoveGrid.GRID_LINE_WIDTH, MoveGrid.GRID_FILL_GAP,
 		MoveGrid.GRID_FILL_ALPHA]
+	_inset_saved = InsetSquare.PAYLOAD_INSET
 	_scene = SCENE.instantiate() as Node3D
 	get_tree().root.add_child(_scene)
 	await await_idle_frame()
@@ -29,6 +32,7 @@ func after_test() -> void:
 	MoveGrid.GRID_LINE_WIDTH = _grid_saved[1]
 	MoveGrid.GRID_FILL_GAP = _grid_saved[2]
 	MoveGrid.GRID_FILL_ALPHA = _grid_saved[3]
+	InsetSquare.PAYLOAD_INSET = _inset_saved
 	get_tree().root.remove_child(_scene)
 	_scene.free()
 
@@ -1575,6 +1579,52 @@ func test_restyling_the_grid_repaints_every_standing_move_marker() -> void:
 	assert_float((newest.material_override as StandardMaterial3D).albedo_texture.get_image() \
 			.get_pixel(mid, mid).a).override_failure_message(
 			"a marker built after the restyle came up with the old grid").is_equal_approx(0.8, 0.01)
+
+
+# --- A payload's tile is an INSET (#1058 D2b) --------------------------------------------------
+
+# The rule, at a share this case sets rather than the dev's tuned one: a clear margin of that share of
+# the tile on every side, solid inside it. Asked at the diorama's 32 texels and the flat view's 16.
+func test_the_inset_square_is_solid_inside_a_clear_margin() -> void:
+	InsetSquare.PAYLOAD_INSET = 0.25
+	for size: int in [MoveGrid.ART_TEXELS, MoveGrid.ART_TEXELS / 2]:
+		var img := InsetSquare.image(size)
+		var margin := size / 4
+		var mid := size / 2
+		for texel: Vector2i in [Vector2i(margin - 1, mid), Vector2i(size - margin, mid),
+				Vector2i(mid, margin - 1), Vector2i(mid, size - margin)]:
+			assert_float(img.get_pixelv(texel).a).override_failure_message(
+					"texel %s is drawn inside the %d-texel tile's margin" % [texel, size]).is_equal(0.0)
+		for texel: Vector2i in [Vector2i(margin, mid), Vector2i(size - margin - 1, mid), Vector2i(mid, mid)]:
+			assert_float(img.get_pixelv(texel).a).override_failure_message(
+					"texel %s is not part of the %d-texel tile's square" % [texel, size]).is_equal(1.0)
+
+
+# The payload layer wears that square, not the aim's full wash -- the whole difference between a tile
+# the aim strikes and one only what it drops reaches.
+func test_the_payload_layer_draws_the_inset_and_not_the_aims_wash() -> void:
+	var overlays := _bare_overlays()
+	var cells: Array[Vector3i] = [Vector3i(0, 0, 0)]
+	overlays.set_cells(BoardOverlays.Layer.AIM, cells)
+	overlays.set_cells(BoardOverlays.Layer.PAYLOAD, cells)
+	assert_object(_albedo_of(overlays, BoardOverlays.Layer.PAYLOAD)).override_failure_message(
+			"the payload layer is not drawn with the inset square").is_same(overlays.inset_texture())
+	assert_object(_albedo_of(overlays, BoardOverlays.Layer.AIM)).is_same(overlays.fill_texture)
+
+
+func test_restyling_the_inset_repaints_every_standing_payload_marker() -> void:
+	var overlays := _bare_overlays()
+	var cells: Array[Vector3i] = [Vector3i(0, 0, 0), Vector3i(1, 0, 0)]
+	overlays.set_cells(BoardOverlays.Layer.PAYLOAD, cells)
+	var before := overlays.inset_texture()
+
+	InsetSquare.PAYLOAD_INSET = 0.1
+	overlays.restyle_inset()
+	assert_object(overlays.inset_texture()).is_not_same(before)
+	for node: Node3D in overlays._markers[BoardOverlays.Layer.PAYLOAD]:
+		var art := ((node as MeshInstance3D).material_override as StandardMaterial3D).albedo_texture
+		assert_object(art).override_failure_message(
+				"a standing payload marker still wears the old square").is_same(overlays.inset_texture())
 
 
 func _grid(inset: float, width: float, gap: float, fill: float) -> void:

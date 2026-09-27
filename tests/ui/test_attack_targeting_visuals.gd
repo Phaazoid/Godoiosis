@@ -448,3 +448,186 @@ func test_a_melee_aim_draws_no_sight_line() -> void:
 
 	assert_object(game.overlay_manager.sight_trace).is_null()
 	assert_bool(game.overlay_manager.hover_overlay.get_used_cells().is_empty()).is_false()
+
+
+# ==============================================================================
+#  What the aim DROPS (#1058 D2b, ruling 52)
+# ==============================================================================
+
+func _main_attack(attacker: Unit) -> WeaponAttackData:
+	return (attacker.equipped_weapon as WeaponInstance).template.main_attack
+
+
+# A payload that covers the one tile it goes off on.
+func _bomb(named: String) -> WeaponAttackData:
+	var bomb := WeaponAttackData.new()
+	bomb.display_name = named
+	bomb.power = 1
+	bomb.targets = EquippableData.TargetMode.MAP
+	P.point(bomb, 1)
+	return bomb
+
+
+# ...and one that goes off as a 3x3 true AoE centred on it.
+func _blast(named: String, targets := EquippableData.TargetMode.MAP) -> WeaponAttackData:
+	var blast := WeaponAttackData.new()
+	blast.display_name = named
+	blast.power = 1
+	blast.targets = targets
+	var square: Array[Vector2i] = []
+	for x in range(-1, 2):
+		for y in range(-1, 2):
+			square.append(Vector2i(x, y))
+	P.stamped(blast, 3, square)
+	blast.swing = false
+	return blast
+
+
+func _insets() -> Array[Vector2i]:
+	return game.overlay_manager.payload_overlay.get_used_cells()
+
+
+func _steps_at(cell: Vector2i) -> Array:
+	return game.overlay_manager.aim_flash_steps().get(cell, [])
+
+
+# The 3x3 round AWAY_CELL, stated rather than derived -- open ground on the cleared board, where the
+# column at x 3 is not for its top rows.
+func _square_round_away() -> Array[Vector2i]:
+	var cells: Array[Vector2i] = []
+	for x in range(0, 3):
+		for y in range(1, 4):
+			cells.append(Vector2i(x, y))
+	return cells
+
+
+# A sticky bomber: a UNIT hit that shoves one tile and drops a bomb, and its foe at AWAY_CELL, so the
+# shove runs south onto open ground.
+func _sticky_bomber() -> Unit:
+	var attacker: Unit = game.spawn_unit(H.make_unit_data({}, PLAYER), ATTACKER_CELL)
+	var foe: Unit = game.spawn_unit(H.make_unit_data({}, ENEMY), AWAY_CELL)
+	assert_object(attacker).is_not_null()
+	assert_object(foe).is_not_null()
+	var weapon := H.make_weapon(3)
+	weapon.template.main_attack.targets = EquippableData.TargetMode.UNIT
+	weapon.template.main_attack.knockback = 1
+	weapon.template.main_attack.payload = _bomb("Bomb")
+	attacker.equipped_weapon = weapon
+	return attacker
+
+
+# Ruling 43 at the hover: a sticky bomb goes off where the hit LEAVES its victim, so its square sits
+# on the landing tile. Only the resolve knows that tile, which is why the hover asks one.
+func test_a_sticky_bombs_inset_sits_where_the_shove_leaves_the_foe() -> void:
+	var attacker := _sticky_bomber()
+	var landing := AWAY_CELL + Vector2i.DOWN
+
+	_aim_at(attacker, AWAY_CELL)
+
+	assert_array(_insets()).override_failure_message(
+			"the bomb's square is at %s -- the landing tile is %s" % [_insets(), landing]
+		).contains_exactly([landing])
+	assert_array(_steps_at(landing)).override_failure_message(
+			"the bomb does not flash one step after the hit that sticks it").contains_exactly([1])
+
+
+# A tile only the payload reaches is an INSET; the tile the aim strikes itself stays the aim's full
+# tile, and flashes a second time when the payload goes off on it (ruling 52).
+func test_a_payloads_own_tiles_are_insets_flashing_one_step_after_the_aim() -> void:
+	var attacker := _armed_attacker(EquippableData.TargetMode.MAP)
+	_main_attack(attacker).payload = _blast("Blast")
+	var expected := _square_round_away()
+	expected.erase(AWAY_CELL)
+
+	_aim_at(attacker, AWAY_CELL)
+
+	assert_array(_insets()).override_failure_message(
+			"the blast's insets are %s" % [_insets()]).contains_exactly_in_any_order(expected)
+	assert_array(game.overlay_manager.hover_overlay.get_used_cells()).override_failure_message(
+			"the payload's tiles joined the aim's own footprint").contains_exactly([AWAY_CELL])
+	for cell in expected:
+		assert_array(_steps_at(cell)).override_failure_message(
+				"payload tile %s flashes at %s, not one step after the aim" % [cell, _steps_at(cell)]
+			).contains_exactly([1])
+	assert_array(_steps_at(AWAY_CELL)).override_failure_message(
+			"the tile the aim and its payload both hit does not flash twice").contains_exactly([0, 1])
+
+
+# Each LEVEL is one step later than the one above it, however deep the chain runs.
+func test_each_level_of_a_chain_flashes_one_step_after_the_last() -> void:
+	var attacker := _armed_attacker(EquippableData.TargetMode.MAP)
+	var bomb := _bomb("Bomb")
+	bomb.payload = _bomb("Second")
+	_main_attack(attacker).payload = bomb
+
+	_aim_at(attacker, FOE_CELL)
+
+	assert_array(_steps_at(FOE_CELL)).override_failure_message(
+			"a two-deep chain on one tile flashes at %s" % [_steps_at(FOE_CELL)]).contains_exactly([0, 1, 2])
+
+
+# Whoever a payload hits pulses with the aim's own victims: they are hit by this aim.
+func test_a_unit_the_payload_hits_pulses() -> void:
+	var attacker := _armed_attacker(EquippableData.TargetMode.MAP)
+	var main := _main_attack(attacker)
+	P.point(main, 2)
+	main.payload = _blast("Blast", EquippableData.TargetMode.BOTH)
+
+	_aim_at(attacker, Vector2i(2, 2))   # a tile only; the blast round it reaches the foe at (2,1)
+
+	assert_bool(_unit_pulsing(_foe())).override_failure_message(
+			"the foe the blast will hit is not pulsing").is_true()
+
+
+# The hover's resolve publishes the candidate's shove onto the board, so the restore has to follow it:
+# nothing a hover merely LOOKED at may be left projected.
+func test_the_hovers_shove_is_not_left_on_the_board() -> void:
+	var attacker := _sticky_bomber()
+
+	_aim_at(attacker, AWAY_CELL)
+	assert_array(_insets()).contains_exactly([AWAY_CELL + Vector2i.DOWN])   # the resolve saw the shove
+
+	assert_that(_foe().get_projected_destination()).override_failure_message(
+			"the foe is drawn where a shove nobody queued would leave them").is_equal(AWAY_CELL)
+
+
+# ...and a QUEUED shove survives it. Re-aiming displaces the queued order inside the hypothetical, so
+# without the restore the foe's real landing would be wiped by merely moving the pointer.
+func test_a_queued_shove_survives_the_hover() -> void:
+	var attacker := _sticky_bomber()
+	game.squad_manager.queue_action(attacker.squad, AttackAction.declare(attacker, ATTACKER_CELL, AWAY_CELL))
+	game.squad_manager.resolve_plan(attacker.squad, game._board())
+	var landing := AWAY_CELL + Vector2i.DOWN
+	assert_that(_foe().get_projected_destination()).is_equal(landing)   # the queued shove, published
+
+	_aim_at(attacker, FOE_CELL)
+
+	assert_that(_foe().get_projected_destination()).override_failure_message(
+			"hovering another aim wiped the queued shove off the board").is_equal(landing)
+
+
+func test_leaving_aim_mode_clears_the_payload_tiles() -> void:
+	var attacker := _armed_attacker(EquippableData.TargetMode.MAP)
+	_main_attack(attacker).payload = _blast("Blast")
+	_aim_at(attacker, FOE_CELL)
+	assert_bool(_insets().is_empty()).is_false()   # non-vacuity
+
+	game.exit_current_mode()
+
+	assert_array(_insets()).override_failure_message(
+			"the payload's squares outlived the aim").is_empty()
+	assert_array(game.overlay_manager._aim_flash.insets).is_empty()
+
+
+# A WATCH shows no payloads: its shot fires later, from wherever the crosser is.
+func test_a_watch_declaration_shows_no_payloads() -> void:
+	var attacker := _armed_attacker(EquippableData.TargetMode.MAP)
+	_main_attack(attacker).payload = _blast("Blast")
+
+	game.enter_overwatch_mode(attacker)
+	game.selected_unit = attacker
+	game.hover_presenter._hover_attack_targeting(FOE_CELL)
+
+	assert_bool(_tiles_flashing()).is_true()   # the watch's own aim still previews
+	assert_array(_insets()).override_failure_message(
+			"a watch previewed payloads that cannot know where they will go off").is_empty()

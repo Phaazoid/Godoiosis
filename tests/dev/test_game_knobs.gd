@@ -1090,6 +1090,30 @@ func test_a_movement_grid_knob_repaints_both_views() -> void:
 			"the flat view's tileset kept its old inner fill").is_equal_approx(0.9, 0.01)
 
 
+# ...and the payload inset (#1058 D2b), for the same reason: InsetSquare is one rule each view
+# rasterizes into a texture of its own. Asked at a texel inside the margin the new share opens.
+func test_the_payload_inset_knob_repaints_both_views() -> void:
+	var overlays := GameKnobs.overlays_of(_scene)
+	var manager := GameKnobs.overlay_manager_of(_scene)
+	overlays.inset_texture()   # built lazily, like the grid -- stand one up to be restyled
+	assert_object(manager.payload_inset_texture()).override_failure_message(
+			"the flat view generated no inset, so this case cannot see its claim").is_not_null()
+	var knob := _class_knob("static", "PAYLOAD_INSET")
+
+	GameKnobs.write_class(_scene, knob, 0.0)
+	GameKnobs.write_class(_scene, knob, 0.4)
+	assert_float(_edge_alpha(overlays.inset_texture())).override_failure_message(
+			"the diorama's payload square kept its old size").is_equal(0.0)
+	assert_float(_edge_alpha(manager.payload_inset_texture())).override_failure_message(
+			"the flat view's payload square kept its old size").is_equal(0.0)
+
+
+# A texel a quarter of the way in: inside any square a share of 0 leaves, outside one 0.4 leaves.
+func _edge_alpha(texture: Texture2D) -> float:
+	var img := texture.get_image()
+	return img.get_pixel(img.get_width() / 4, img.get_height() / 2).a
+
+
 func _centre_alpha(texture: Texture2D) -> float:
 	var img := texture.get_image()
 	return img.get_pixel(img.get_width() / 2, img.get_height() / 2).a
