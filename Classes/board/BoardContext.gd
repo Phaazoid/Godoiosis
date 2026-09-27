@@ -12,6 +12,9 @@ var squad_manager: SquadManager
 var terrain_states: TerrainStateManager
 var zones: ZoneManager
 var heights: BoardHeights
+# Terrain deposits not yet in the store, read as if they had landed (with_deposits). Empty on every
+# board the game builds.
+var deposits: Array[ResolvedCellEffect] = []
 
 # A unit whose death has RESOLVED is not on this board, and the filter lives HERE rather than in
 # any one builder because there are three of them -- game.gd's _board(), play/board_builder.gd and
@@ -113,12 +116,25 @@ func cover_def_at(cell: Vector2i) -> int:
 func tile_states_at(cell: Vector2i) -> Array[Terrain.TileState]:
 	if terrain_states == null:
 		return []
-	return terrain_states.states_at(cell)
+	if deposits.is_empty():
+		return terrain_states.states_at(cell)
+	return terrain_states.projected_states_at(cell, deposits)
 
 func has_tile_state(cell: Vector2i, state: Terrain.TileState) -> bool:
 	if terrain_states == null:
 		return false
-	return terrain_states.has_state(cell, state)
+	if deposits.is_empty():
+		return terrain_states.has_state(cell, state)
+	return terrain_states.projected_states_at(cell, deposits).has(state)
+
+# The board as it will stand once these deposits land (#367): the same world, with a pass's own
+# terrain deposits folded over the live store through the one fold the END OF TURN forecast already
+# reads (TerrainStateManager.projected_states_at). Every board the game and the Play API build has
+# none; SplitForecast asks for one, because the pass settles on ground its own attacks changed.
+func with_deposits(effects: Array[ResolvedCellEffect]) -> BoardContext:
+	var board := BoardContext.new(grid, units, squad_manager, terrain_states, zones, heights)
+	board.deposits = effects.duplicate()
+	return board
 
 # Is the prop standing on this cell ALIGHT (#272's prop_lit column)? Sibling of terrain_kind_at,
 # and null-safe on the GRID as well as the tile, because a stub board carries no TileMapLayer.

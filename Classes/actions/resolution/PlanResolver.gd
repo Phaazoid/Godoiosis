@@ -1328,6 +1328,7 @@ static func _resolve_cell_effects(action: AttackAction, board: BoardContext, ter
 	for cell in action.struck_cells:
 		var effect := _resolve_cell_effect_at(cell, elements, board, terrain_reactions)
 		if effect != null:
+			effect.cause = action
 			effects.append(effect)
 	return effects
 
