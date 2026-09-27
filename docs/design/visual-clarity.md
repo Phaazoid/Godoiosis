@@ -3382,6 +3382,8 @@ The aura readout is a ring of ticks around a portrait, on the pre-mission card a
 
 **...but the SWEEP that carried that law missed a surface, and the card is it ([#990](https://github.com/Phaazoid/Godoiosis/issues/990), 2026-09-16).** #937 re-derived `ActionMenuController`, `UnitSprite3D`, `MapSpriteInk` and `PreMissionScreen` off the ink and left `AuraRing` fitting the whole 64px CELL into its 52px box -- so 52px of column bought ~19px of character, and the ring, honestly framing ink that really was that small, came out 32px across inside a 52px node with the top 28 of it blank canvas. The **24px deployed-strip disc drew the same character larger**, cropping at 1:1, which is the measurement that settles *is there room* without an opinion in it. The card ZOOMS now -- `MapSpriteInk.ink_fit_rect` is the third answer beside the offset and the reach, and the sprite is drawn to fill the ring rather than the box -- which made the ring concentric with its node and retired the `Fit` enum, both of whose branches then computed the same centre. **A measurement law must be swept over every surface that DRAWS the art, not every surface that reads the helper**: all five read `MapSpriteInk`, and the one that was wrong was wrong about what it did with the answer.
 
+**[#1082](https://github.com/Phaazoid/Godoiosis/issues/1082) (2026-09-27) found the surface that law's own enumeration could not: the action-queue row drew the sheet without reading `MapSpriteInk` at all**, fitting the whole 64px cell into a 32px `TextureRect` -- a third playtest report of the same bug, and the one a grep for the helper can never list. **Enumerate by what reaches the ART** (`get_map_sprite_texture()`, `unit_data.map_sprite`), never by who calls the helper. It gave the helper a fourth answer, `portrait()` -- a 1:1 window of the sheet as a texture, ink centred across and feet on the window's floor, for a slot that can only be handed a texture -- and it passes anything not sheet-sized through untouched, because the row's target slot also shows a move's 16px terrain icon.
+
 Two things about the SHAPE of that fix worth keeping. The old case pinned *the ring sits below the box's middle*, which is how an ink-centred ring proved itself while the sprite was fitted cell-and-all -- and the fix makes that false, the centre being the box's middle exactly. **A test's assertion can be the right rule wearing the old mechanism's arithmetic**, so the rule was restated against the two values together (the drawn ink fills the ring's inner circle) rather than deleted. And filling the ring with the INK means the CELL is drawn larger than the node, so an outlier sprite -- `INK_RECT` is a MEDIAN and the pack's big monsters overflow it on purpose -- puts its own overflow outside the column; declared rather than clipped, because the ring's ticks reach the node's edge and a clip would shave them.
 
 **Geometry is derived from the rect a widget lands in, never from a size passed to it.** The panel's ring is a `FULL_RECT` child of a `Panel`, and a `Panel` aggregates no minimum from its children — so the constructor argument that looked like it sized the ring never did, and the scene's own 108 was silently the only answer. Two answers to *how big is this*, agreeing by luck. A mutant is what found it: growing the constant changed nothing at all, which is the tell that a value is not load-bearing.
@@ -3724,6 +3726,8 @@ Asked and answered: **regroup by subject**. Markup is now the readout, in this o
 
 This is the orange cohesion bubble and the mauve `INVALID_MOVE`, deferred through #1066 and #1069 until the dev had played the new board. He had, and brought four asks and a fifth from a friend's playtest. There were four rulings from the questions (below), and one follow-up went to [#423](https://github.com/Phaazoid/Godoiosis/issues/423).
 
+**Every squad line wears a dark CASING since [#1109](https://github.com/Phaazoid/Godoiosis/issues/1109) round 2**, both sides': see *An enemy squad's LINES* → *Round 2: the casing*.
+
 ### Hover and Move now answer the same question about a leader
 
 > a squad leader, when hovered, shows his full move range. When move is selected, that move range is cut if squad mates can't follow. These two floodfills disagreeing is problematic.
@@ -3890,7 +3894,41 @@ The dev, after playing #367 part 1: *"there's no good way to see the enemy's COH
 
 - **Pins draw no lines.** V and Shift+click stay field-only; this is hover alone, as the issue scoped it.
 - **The Split chip stays tether orange**, even on a row whose blow splits an enemy squad (2A's ruling, not revisited here).
-- **How the rose reads in the lit diorama** over the real threat fill is the dev's to judge. The mockup's field was a flat blend with no lighting.
+- ~~**How the rose reads in the lit diorama** over the real threat fill is the dev's to judge. The mockup's field was a flat blend with no lighting.~~ **It read badly, and Round 2 below answers it.**
+
+### Round 2: the casing (2026-09-27)
+
+The dev, after playing it: *"it is too hard to see this rose color inside the enemy threat field color."* He sent a Shift+F3 report, and its frame said why.
+
+**What the frame measured.**
+- Over pale stone the enemy field renders LIGHT PINK, about (215,163,174), and its brick pattern spans (208,96,128) to (216,200,208).
+- The enemy line pixels sat at about (250,145,185), inside the field's own range, so the lines vanished on colour.
+- The range stroke runs along cell edges, which is exactly where the grout lines are, so it vanished on pattern as well.
+
+**Why the first mockup lied.** It blended the threat purple over the floor flat and unlit, which made the field BROWN. The rose looked fine against brown. **Build a look mockup from a REAL FRAME, never a hand-composited floor:** the round-2 mockup took his own screenshot and repainted only the lines' own pixels.
+
+| Fork | Ruling |
+|---|---|
+| Treatment | **Keep the rose, add a dark CASING**: an outline round each dash, tether and arrowhead. It reads on any floor, the casing on light ground and the rose on dark. Not taken: dark plum ink (fails on dark ground), and a near-white core with a rose edge (reads as the white focus outline). |
+| Scope | **Both sides.** Your own orange lines wear the casing too, so it is one look for the whole system. |
+
+**How it is built.**
+- **The ribbon.** `sight_beam.gdshader` gained `casing_width` and `casing_color`, INERT at zero width: the fragment then takes its original path untouched, so the sight bead, the reach marks, the focus edge and the arc's bolts are unchanged by construction. The cased path draws a crisp core inside a dark band, and cuts the band with the dash window dilated by the casing's width, so every dash is outlined at its ends as well as its sides. The casing's alpha follows the line's, so a ghost's casing is as see-through as the ghost.
+- **Which lines.** `"casing": true` goes last on the six squad-line entries of `BoardOverlays.LAYERS`, and `_style_beam` pushes a width only where it is declared. A law case in `test_board_overlays` holds every other LINE layer at zero.
+- **The arrowhead.** An INVERTED HULL: a second, larger cone per arrowhead, drawn front-faces-culled on `reach_cone_casing.gdshader`, one render priority under its layer. `BoardOverlays.casing_cone` keeps the apex angle, pushes the base back by the width and the tip out by `width / sin(half_angle)`, which puts the whole cone exactly the width inside it.
+- **The flat view.** `SquadLines2D` draws a wider polyline under each dash, extended at both ends (`CASING_PX`, one pixel), a triangle grown about its incentre under each arrowhead, and the same under a break's pieces.
+- **Knobs.** Game tab → Squad lines → *Squad line casing (2D+3D)* (the colour, `SquadLines2D.CASING_COLOR`) and *Casing width (3D)* (`BoardOverlays.squad_casing_width`; zero takes the casing off).
+- **Checked by eye before building on it.** A headless suite cannot see a shader's pixels, so a scratch windowed render of a cased and an uncased ribbon over the measured pink came first. The uncased rose on a grout line all but vanished, as reported; the cased one did not.
+
+**The line's core is CRISP now**, where it had a soft falloff to its rim, so every squad line is a little harder-edged than it was.
+
+**Declared residuals.**
+- **Sparks are cased too.** They share `TETHER_SHARDS` with a break's falling pieces, and a material has one casing. Splitting them onto a layer of their own is the fix, if the outlined sparks look wrong.
+- **A ghost's arrowhead reads a little darker**, because its outline shows through the see-through cone.
+- **The arrowhead's outline runs to a longer point than the mockup's.** A constant-width outline round a sharp cone meets in a miter, `width / sin(half_angle)` past the tip, where the mockup's pixel dilation rounded it. The tip stops short of the leader (`TETHER_INSET`), so most of that point sits behind the leader's sprite. If it reads as a needle, capping the apex push is the fix.
+- **A stroke's free start can show a sliver of casing with no ink** for a moment, as a dash marches off it. A tether's start sits under its member's sprite.
+- **The Split chip is still orange** on a row whose blow splits an enemy squad.
+- **What only the dev can judge:** the casing's width and darkness in play, the harder edge, and outlined sparks.
 
 ## Membership MOMENTS: a join draws the tether in, a leave reels it in, a forced exit breaks it ([#367](https://github.com/Phaazoid/Godoiosis/issues/367), part 1 BUILT 2026-09-23, part 2 BUILT 2026-09-27)
 

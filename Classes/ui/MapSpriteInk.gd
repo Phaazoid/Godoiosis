@@ -58,3 +58,19 @@ static func window_offset(window_px: float) -> Vector2:
 static func ink_fit_rect(centre: Vector2, reach: float) -> Rect2:
 	var scale := reach / ink_reach(SHEET)
 	return Rect2(centre - ink_centre(SHEET) * scale, Vector2(SHEET, SHEET) * scale)
+
+
+# The TEXTURE answer, for a slot that can only be handed one (#1082): a window_px square of the sheet
+# at 1:1, the ink centred across and the feet on the window's floor. Floor rather than centred because
+# the sheet ends at the feet, so a centred window would run past it -- and the floor gives the tall
+# outliers the whole window's headroom. Anything not SHEET square is not a map sprite (a move row's
+# 16px terrain icon) and passes through untouched.
+static func portrait(texture: Texture2D, window_px: int) -> Texture2D:
+	if texture == null or Vector2i(texture.get_size()) != Vector2i(SHEET, SHEET):
+		return texture
+	var window := mini(window_px, SHEET)
+	var x := clampi(roundi(ink_centre(SHEET).x - window * 0.5), 0, SHEET - window)
+	var crop := AtlasTexture.new()
+	crop.atlas = texture
+	crop.region = Rect2(x, SHEET - window, window, window)
+	return crop

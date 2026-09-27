@@ -51,7 +51,7 @@ static var ZONE_WALL_HEIGHT := 0.45
 # How strong the wall is at its foot, as an alpha.
 static var ZONE_WALL_ALPHA := 0.8
 # How fast the wall's shimmer rises, in cycles a second. 0 holds it still.
-static var ZONE_SHIMMER_SPEED := 0.45
+static var ZONE_SHIMMER_SPEED := 0.4
 
 # Moved by restyle(), so a reader holding generated art knows to ask again.
 static var art_version := 0
