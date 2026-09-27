@@ -196,8 +196,8 @@ func release(unit: Unit):
 # #151's loss-of-contact backstop: a member whose SETTLED position cannot path to its leader within
 # COH leaves into a solo squad -- you cannot command what you cannot see or hear. Called at the two
 # points board state settles, mirroring OrderExecutor._process_downed_pending -- end of a resolution
-# pass and turn start after the terrain/downed ticks. Deliberately not previewed, same as downed
-# ejection.
+# pass and turn start after the terrain/downed ticks. A PASS's ejections, this sweep's and the downed
+# ones alike, are forecast by SplitForecast into the queue's Split chip (#367); turn start's are not.
 #
 # WHAT REACHES HERE, corrected at #1069. This used to say movement could no longer author a split
 # because "the validator refuses it", and that was FALSE for a leader's own move for as long as it
@@ -244,29 +244,39 @@ func check_reassign_leader(squad: Squad, unit: Unit):
 	if squad.leader != unit:
 		return
 	
-	var newLeader: Unit = squad.members[0]
-	for member in squad.members.duplicate():
-		if member.get_effective_ldr() > newLeader.get_effective_ldr():
-			newLeader = member
-	squad.leader = newLeader 
+	squad.leader = successor_among(squad.members)
 
 	var board: BoardContext = board_source.call()
 	for member in squad.members.duplicate():
 		if not SquadCohesion.in_range(squad, squad.leader.movement.cell, member, member.movement.cell, board):
 			eject(member, LeaveCause.FORCED)
 
-	# Capacity overflow (#63): the new leader may command less than the old one.
-	# Detach newest-first (join order = member order) until the squad fits — deterministic,
-	# mirrors the out-of-range detach above; the leader is never the one detached.
-	while squad.members.size() > squad.max_size():
-		var newest: Unit = null
-		for i in range(squad.members.size() - 1, -1, -1):
-			if squad.members[i] != squad.leader:
-				newest = squad.members[i]
-				break
-		if newest == null:
+	for member in capacity_overflow(squad.members, squad.leader):
+		eject(member, LeaveCause.FORCED)
+
+# Who takes over a squad whose leader left: the highest effective LDR, the first in member order on a
+# tie. Static so SplitForecast asks the same question of a squad it is only predicting (#367).
+static func successor_among(members: Array[Unit]) -> Unit:
+	var best: Unit = members[0]
+	for member in members:
+		if member.get_effective_ldr() > best.get_effective_ldr():
+			best = member
+	return best
+
+# Capacity overflow (#63): the new leader may command less than the old one. Newest-first (join
+# order = member order) until the squad fits -- deterministic, and never the leader. Returned rather
+# than acted on, so the live settle and SplitForecast drop the same members (#367).
+static func capacity_overflow(members: Array[Unit], squad_leader: Unit) -> Array[Unit]:
+	var dropped: Array[Unit] = []
+	var remaining := members.size()
+	for i in range(members.size() - 1, -1, -1):
+		if remaining <= Squad.capacity_of(squad_leader):
 			break
-		eject(newest, LeaveCause.FORCED)
+		if members[i] == squad_leader:
+			continue
+		dropped.append(members[i])
+		remaining -= 1
+	return dropped
 
 func validate_squad_plan(squad: Squad, plan: ResolvedPlan = null) -> bool:
 	return SquadPlanValidator.validate(squad, squad.action_queue, board_source.call(), plan)
@@ -721,6 +731,9 @@ func resolve_plan(squad: Squad, board: BoardContext,
 		reactions: Array[ElementalReaction] = ReactionCatalog.get_all(),
 		terrain_reactions: Array[TerrainReaction] = TerrainReactionCatalog.get_all()) -> ResolvedPlan:
 	var plan := _resolve_actions(squad, squad.action_queue, board, reactions, terrain_reactions)
+	# Who the pass will knock out of a squad, and which blow does it (#367). Here and not in
+	# _resolve_actions: a hypothetical is AI scoring, which reads no Split.
+	SplitForecast.stamp(plan, board)
 	_last_resolved_plan = plan
 	_last_resolved_squad = squad
 	return plan

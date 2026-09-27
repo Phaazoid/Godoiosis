@@ -35,6 +35,8 @@ const BADGE_VOID := "Void"
 const BADGE_INSULATED := "Shrug"
 const BADGE_VIAL := "Vial"
 const BADGE_TANK := "Tank"
+const BADGE_SPLIT := "Split"        # the dev's word (#367); one unit leaves its squad
+const BADGE_SPLITS := "Split %d"    # ...and the count when more than one does
 
 @onready var rail: ColorRect = $Frame/Rail
 @onready var actor_texture: TextureRect = $Frame/Pad/Body/Line/ActorTexture
@@ -184,6 +186,16 @@ func _build_consequence(outcome: ResolvedOutcome) -> void:
 	if outcome.charge_spent:
 		consequence.add_child(_chip(QueueStyle.ink(QueueStyle.Role.EVENT_TINT), BADGE_TANK,
 			UiText.wrap("Spends a supercharged shot")))
+	# A SPLIT (#367): this blow knocks someone out of a squad, forecast by SplitForecast. Tether
+	# orange because it is about the squad link; the hover names who, and nothing more -- the
+	# wording is the dev's to add.
+	if not outcome.splits.is_empty():
+		var word: String = BADGE_SPLIT if outcome.splits.size() == 1 else BADGE_SPLITS % outcome.splits.size()
+		var names: Array[String] = []
+		for unit in outcome.splits:
+			if is_instance_valid(unit):
+				names.append(unit.get_unit_name())
+		consequence.add_child(_chip(split_ink(), word, UiText.wrap(", ".join(names))))
 	# No visibility toggle: the container holds the line's horizontal EXPAND whether or not it has
 	# chips, which is what keeps the cancel X on the right edge of a row that has none. It WRAPS
 	# rather than clips, so a crowded hit costs the row a second line instead of losing a word.
@@ -206,6 +218,11 @@ func _chip(tint: Color, text: String, tip: String) -> Control:
 	pill.add_child(label)
 	return pill
 
+
+# The Split chip's ink (#367): the tether's own orange, adapted to the palette like any authored
+# tint. Opaque, because the chip builds its own translucent fill from it.
+static func split_ink() -> Color:
+	return QueueStyle.adapted_ink(Color(SquadLines2D.TETHER_COLOR, 1.0))
 
 # A world-event pill: this panel's short badge, with the resolver's dramatic word on hover.
 func _add_event(badge: String, spoken: String) -> void:
