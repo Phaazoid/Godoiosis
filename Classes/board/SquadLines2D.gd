@@ -34,20 +34,20 @@ const LINE_WIDTH := 2.0
 
 # One ORANGE for the tether and the range, which is what makes them read as one system. The cohesion
 # fill wore Color(1, 0.5, 0) for the project's whole life, so the hue is not new -- only its form is.
-static var TETHER_COLOR := Color(1.0, 0.55, 0.12, 0.95)
+static var TETHER_COLOR := Color(1.0, 0.55, 0.12, 1.0)
 # ...and an ENEMY squad's range and tethers (#1109): the threat field's purple, lightened so it reads
 # over that field and over bare ground alike. Standing lines and moments both; is_hostile picks the side.
-static var ENEMY_TETHER_COLOR := Color(1.0, 0.43, 0.59, 0.95)
+static var ENEMY_TETHER_COLOR := Color(1.0, 0.43, 0.59, 1.0)
 # The dark CASING round every squad line, both sides' (#1109 round 2): the rose vanished into its own
 # pink field over pale stone, and a dark edge reads on any floor. Its alpha is multiplied by the line's,
 # so a ghost's casing is as see-through as the ghost.
-static var CASING_COLOR := Color(0.13, 0.03, 0.10, 0.9)
+static var CASING_COLOR := Color(0.13, 0.03, 0.1, 1.0)
 # ...and its width in the flat view, in pixels each side. The diorama's is a BoardOverlays export, in
 # world units, which this class cannot see -- ARROW_WIDTH_SCALE's reason.
 const CASING_PX := 1.0
 # A tether that MIGHT be: dimmer and see-through, arrowhead included.
-static var TETHER_GHOST_COLOR := Color(0.72, 0.42, 0.16, 0.5)
-static var TETHER_STRAIN_COLOR := Color(1.0, 0.18, 0.14, 0.95)
+static var TETHER_GHOST_COLOR := Color(0.72, 0.42, 0.16, 1.0)
+static var TETHER_STRAIN_COLOR := Color(1.0, 0.18, 0.14, 1.0)
 # DASHES PER TILE, not a dash length, and that is what lets the range's stroke stay one pattern
 # without being chained into loops: the stroke is one segment per outward cell edge, so a period that
 # divides an edge meets the next edge in phase. A free length would restart visibly at every corner.

@@ -399,12 +399,12 @@ enum SelectorDepth { LEVEL, HALF }
 # range's dashes too faint on the ground (2026-09-22), which cohesion_line_width answers. Near the
 # bloom threshold, like the outline -- these are markup. The DASHES are not here: they are
 # SquadLines2D statics, because the flat view draws them too.
-@export var squad_line_width := 0.045: set = _set_squad_line_width
-@export var squad_line_intensity := 1.2: set = _set_squad_line_intensity
-@export var cohesion_line_width := 0.09: set = _set_cohesion_line_width
+@export var squad_line_width := 0.035: set = _set_squad_line_width
+@export var squad_line_intensity := 0.95: set = _set_squad_line_intensity
+@export var cohesion_line_width := 0.035: set = _set_cohesion_line_width
 # The dark CASING's width, world units EACH side (#1109 round 2), on every layer declaring `"casing"`.
 # Its colour is SquadLines2D.CASING_COLOR, since the flat view draws the casing too.
-@export var squad_casing_width := 0.02: set = _set_squad_casing_width
+@export var squad_casing_width := 0.015: set = _set_squad_casing_width
 
 
 func _set_squad_line_width(value: float) -> void:
