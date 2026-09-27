@@ -36,7 +36,8 @@ Then report a short per-idea summary: where each went, and anything that needs t
 
 ## 📥 Inbox (drop ideas here)
 
-*(empty — swept 2026-09-12)*
+ -- Some fun ideas for a different way to do a sympathetic link
+ Perhaps, if one's limb is cut off, and the limb is recovered/kept, it can have powerful alchemic uses for the unit who lost it.  Since it is alchemic material most closely associated with the user, perhaps it can be used in one of two ways.  First off, as a huge damage nuke.  Second off, as the more interesting part, it can be preserved and sympathetically linked to the original owner, as a sort of reverse voodoo doll, it can take one lethal hit for the owner.  
 
 ## 🗂 Dispersed (log)
 
