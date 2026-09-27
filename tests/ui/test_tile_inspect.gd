@@ -145,7 +145,7 @@ func _paint_quiet_tile(cell: Vector2i) -> bool:
 
 
 # Three watches, two zones and a fire on one cell -- busier than any authored board makes a single
-# tile, and the measure the card was sized against (636 of 704 when this was written).
+# tile, and the measure the card was sized against (675 of 704 since #955 split its zones by kind).
 func _build_busy_tile(cell: Vector2i) -> void:
 	_set_burning(cell)
 	for i in range(3):

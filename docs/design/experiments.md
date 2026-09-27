@@ -4,7 +4,7 @@ A lightweight way to build a proposed feature behind a toggle, *feel* it in play
 it on/off without committing to it. Lets us carry several "maybe" systems in the codebase
 at once and decide by playing, not arguing.
 
-**Canon checked through #68 (2026-07-16).**
+**Canon checked through #1113 (2026-09-27).**
 
 ## Shape
 
@@ -15,11 +15,11 @@ class-level statics.
 | Piece | File | Owner | Status |
 |---|---|---|---|
 | Registry: `enum Flag`, `DEFS` metadata, `is_on()` + state | `Classes/dev/Experiments.gd` | infra | **built** |
-| Dev tab: a live toggle per flag | `Classes/dev/ExperimentsTool.gd` + `Scenes/DevOverlay.tscn` | UI | **not built** — no such file, no tab wired into `DevOverlay.tscn` |
+| Dev tab: a live toggle per flag (a dropdown for a choice) | `Classes/dev/ExperimentsTool.gd`, the dev tools' Session > Experiments leaf (#382) | UI | **built** |
 | Persistence | `user://experiments.cfg` (keyed by flag name) | infra | **built** |
 | Guards | `tests/experiments/test_experiments.gd` | infra | **built** |
 
-**Found stale 2026-07-16:** this doc previously read as describing a complete, working harness. Only the registry + persistence + test guard exist — there is currently no in-game way to toggle a flag; use `Experiments.set_on(flag, value)` from code, or hand-edit the `.cfg`, until the dev tab is built.
+**The dev tab is built (#382)**: Session > Experiments draws a checkbox per flag and a dropdown per choice straight off the registry, so a new flag needs no UI wiring. (This doc said otherwise from 2026-07-16 until #955's sweep.)
 
 ## Add an experiment
 
@@ -34,10 +34,9 @@ class-level statics.
        # current behaviour
    ```
 
-**No dev tab exists yet** to pick this up automatically (see the Status column above) — for
-now, toggle via `Experiments.set_on(Experiments.Flag.MY_FEATURE, true)` from code, or hand-edit
-`user://experiments.cfg`. Toggle state persists across launches and survives F2 reset either way;
-once a dev tab is built, it would iterate the registry and need no per-flag wiring.
+The Experiments page picks it up automatically. Toggle state persists across launches and survives F2 reset.
+
+**A CHOICE, when two versions are not enough ([#955](https://github.com/Phaazoid/Godoiosis/issues/955), 2026-09-27).** Give the `DEFS` entry an `"options"` list of labels and an index as its `"default"`, and read it with `Experiments.choice_of(flag)`; the page draws it as a dropdown. The on/off calls REFUSE a choice and `choice_of` refuses an on/off flag (PlayerSettings' #647 rule: `bool(2)` is true, so a choice read or written as on/off is silently wrong, and a wrong write persists), and a saved choice loads back as its INDEX before the on/off fallback could turn it into `true`. A caller walking every flag uses `value_of`. The first choice is `ZONE_LOOK` -- four ways to mark an objective zone, compared in the real game (`ZoneMarks.look()` is its one reader; see visual-clarity.md).
 
 ## Reading a flag — the determinism contract
 
@@ -74,5 +73,5 @@ Leaving a flag in place forever is the failure mode; a stale flag is debt.
 ## Persistence
 
 `user://experiments.cfg`, section `[experiments]`, one `FLAG_NAME=bool` line per
-explicitly-set flag. Unset flags fall back to their `DEFS` default, so the file only lists
+explicitly-set flag (`FLAG_NAME=index` for a choice). Unset flags fall back to their `DEFS` default, so the file only lists
 deviations from default. Human-readable and hand-editable.
