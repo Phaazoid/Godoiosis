@@ -58,7 +58,7 @@ var _last_reach_line_version := -1   # ...and the reach lines, #710 slice 1 by w
 var _last_outline_version := -1  # ...and the focus stroke's (slice 4)
 var _last_squad_lines_version := -1   # ...and the squad's range and tethers (#1070)
 var _shake_pushed := 0.0   # the last pluck pushed, so a still tether costs no per-frame write
-var _moments_drawn := false   # whether TETHER_MOMENT holds anything, so an idle board costs nothing (#367)
+var _moments_drawn := false   # whether the moment layers hold anything, so an idle board costs nothing (#367)
 
 # How far the drop pointer stands off the cliff face it hangs on (#431), in cells. A depth-buffer
 # epsilon, not a feel value: big enough that a coplanar wall cannot stipple through it, small
@@ -842,11 +842,14 @@ func _squad_lines(om: OverlayManager) -> void:
 # reel are geometry, not a uniform -- and cleared once when the last one ends, so an idle board pays
 # nothing. SquadLines2D.moment_drawing is the one answer both views read; this only lifts it. Each
 # moment's colour and fade ride its vertex tint, and `starts` keeps its dashes where the standing
-# tether's would be, so a draw-in hands over to one without a jump.
+# tether's would be, so a draw-in hands over to one without a jump. A break's shiver is baked into
+# the shaft (the pluck's uniform is one per layer, and moments of every age share this one), and its
+# falling pieces and sparks ride TETHER_SHARDS, which does not march dashes.
 func _tether_moments(om: OverlayManager) -> void:
 	if om.squad_tether_moments.is_empty():
 		if _moments_drawn:
 			overlays.clear(BoardOverlays.Layer.TETHER_MOMENT)
+			overlays.clear(BoardOverlays.Layer.TETHER_SHARDS)
 			_moments_drawn = false
 		return
 	var now := Time.get_ticks_msec()
@@ -855,28 +858,56 @@ func _tether_moments(om: OverlayManager) -> void:
 	var cones: Array[Dictionary] = []
 	var tints: Array[Color] = []
 	var starts := PackedFloat32Array()
+	var shards: Array[Array] = []
+	var shard_tints: Array[Color] = []
 	for entry: Dictionary in om.squad_tether_moments:
 		var drawing := SquadLines2D.moment_drawing(entry, now, flash)
-		var trace_shaft: PackedVector3Array = drawing["shaft"]
+		var trace_shaft := SquadLines2D.bent(drawing["shaft"], float(drawing["bend"]))
 		var shaft := PackedVector3Array()
 		for p: Vector3 in trace_shaft:
-			shaft.append(BoardSpace.trace_point(p))
+			shaft.append(_moment_point(entry, p))
 		var strokes: Array[PackedVector3Array] = [shaft]
 		var cone: Dictionary = drawing["cone"]
 		if cone.is_empty():
 			cones.append({})
 		else:
-			var base := BoardSpace.trace_point(cone["base"])
-			var tip := BoardSpace.trace_point(cone["tip"])
+			var base := _moment_point(entry, cone["base"])
+			var tip := _moment_point(entry, cone["tip"])
 			strokes.append(PackedVector3Array([base, tip]))
 			cones.append({"base": base, "tip": tip,
 					"radius": overlays.squad_line_width * float(cone["scale"]) * 0.5, "tint": cone["tint"]})
 		marks.append(strokes)
 		tints.append(drawing["tint"])
-		var origin := BoardSpace.trace_point(drawing["origin"])
+		var origin := _moment_point(entry, drawing["origin"])
 		starts.append(origin.distance_to(shaft[0]) if not shaft.is_empty() else 0.0)
+		for piece: Dictionary in drawing["pieces"]:
+			var points: PackedVector3Array = piece["points"]
+			var stroke: Array[PackedVector3Array] = [PackedVector3Array([_moment_point(entry, points[0]),
+					_moment_point(entry, points[1])])]
+			shards.append(stroke)
+			shard_tints.append(piece["tint"])
 	overlays.set_marks(BoardOverlays.Layer.TETHER_MOMENT, marks, Color.WHITE, [], cones, tints, starts)
+	if shards.is_empty():
+		overlays.clear(BoardOverlays.Layer.TETHER_SHARDS)
+	else:
+		overlays.set_marks(BoardOverlays.Layer.TETHER_SHARDS, shards, Color.WHITE, [], [], shard_tints)
 	_moments_drawn = true
+
+
+# Where a moment's trace-space point draws: lifted with the fight when its ends are on stage (#367's
+# Z2 -- the zoom lifts the far end of a breaking tether with the fight). Each end's staged offset,
+# blended along the chord, so a moment with one end left on the board still draws joined.
+func _moment_point(entry: Dictionary, p: Vector3) -> Vector3:
+	var from: Vector2i = entry["from"]
+	var to: Vector2i = entry["to"]
+	var near := BoardSpace.staged_offset(from)
+	var far := BoardSpace.staged_offset(to)
+	if near == far:
+		return BoardSpace.trace_point(p) + near
+	var chord: PackedVector3Array = entry["chord"]
+	var span := chord[1] - chord[0]
+	var t := clampf((p - chord[0]).dot(span) / span.length_squared(), 0.0, 1.0)
+	return BoardSpace.trace_point(p) + near.lerp(far, t)
 
 
 # Which diorama layer draws each tether state.

@@ -361,7 +361,14 @@ func _gather_cells(plan: ResolvedPlan) -> void:
 			for cell in attack.footprint:
 				_mark(cell, seen)
 			var out := attack.resolved
-			if out == null or not out.knockback_applied:
+			if out == null:
+				continue
+			# Both ends of every tether this blow ends or begins (#367 part 2B, the dev's Z2): the break
+			# plays at the blow, in the diorama, so its far end has to be up there with the fight.
+			for link in out.relinks:
+				_mark(link.member_cell, seen)
+				_mark(link.leader_cell, seen)
+			if not out.knockback_applied:
 				continue
 			# The whole flight, not just its ends: #520 pans ALONG this and #521 has to tear out
 			# every cell it crosses. knockback_path is already the resolver's own route.

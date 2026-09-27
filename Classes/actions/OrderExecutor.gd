@@ -236,6 +236,13 @@ func execute_orders(unit):
 	# pass has settled, and a member a shove displaced out of its leader's path-bubble is no
 	# longer commandable. The plan could not have authored this -- the validator refuses it.
 	game.squad_manager.enforce_contact()
+	# ...and the tethers settle with it (#367 part 2B), NOW rather than deferred: the links this pass
+	# already broke at the blow are in the presenter's ledger, which the diff must read before the
+	# pass lets go of it. Anything the forecast could not see (ice this pass melted) breaks here.
+	var tethers: SquadTetherPresenter = game.squad_tether_presenter
+	if tethers != null:
+		tethers.flush()
+		tethers.end_pass()
 	# The pass has settled, so this is where a Guard has finished arming (side channel) or been spent
 	# (an absorbed hit). One redraw for both (#414).
 	game.refresh_guard_markers()
@@ -555,7 +562,28 @@ func _execute_action_sequence(actions: Array, beat: float = 0.0, holds: Dictiona
 		# Pacing.beat returns without awaiting in a headless run (that escape is what keeps every
 		# resolve-pass test off the wall clock). Same declaration clear_guard_preview carries at the
 		# top of this function, and for the same reason. What IS pinned is the schedule and the table.
-		await Pacing.beat(self, float(lingers.get(action, 0.0)))
+		await Pacing.beat(self, after_the_blow(action, float(lingers.get(action, 0.0))))
+
+
+# What a landed blow owes its squads' tethers (#367 part 2B): the links the forecast says it ends and
+# begins play NOW, at the blow, rather than at the settle once the fight is over -- and the pass waits
+# for them, since a break the camera has already left is the bug that asked for this. While the fight
+# is on stage the camera lets go of the victim, so the stage shot frames the whole diorama and the
+# tether's far end, lifted with it (the dev's Z2 and "pull back to the stage"). Returns the linger.
+func after_the_blow(action: BaseAction, linger: float) -> float:
+	var blow := action as AttackAction
+	if blow == null:
+		return linger
+	var presenter: SquadTetherPresenter = game.squad_tether_presenter
+	if presenter == null:
+		return linger
+	var shown := presenter.foretell(blow.resolved_outcome())
+	if shown <= 0.0:
+		return linger
+	var camera: CameraController = game.camera_controller
+	if not camera.shot_cells.is_empty():
+		camera.follow(null)
+	return maxf(linger, shown)
 
 
 # Subscribe to one order's landing, if it is the kind of order that lands (#887). Every attack in
