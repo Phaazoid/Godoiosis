@@ -2,7 +2,7 @@
 
 **Status: IDENTITIES + PHILOSOPHY (workshop); BALANCE OPEN (won't lock for a long time).** Distilled 2026-06-17 (issue #32) from the wiki (`Economy/Items/Weapons/{Main info, Weapon List, Upgrade System}`, `Code/Headers/Enums`) and reconciled with the implemented `WeaponData` / `WeaponCatalog`. Per the dev: *the outlines are here; specifics — especially balancing numbers — are not locked and won't be for a while.* So this captures **what each weapon family is for** and **the rules weapons obey**, not tuned stats.
 
-**Canon checked through #1112 (2026-09-27).**
+**Canon checked through #1115 (2026-09-27).**
 
 ## The architecture (implemented — [LOCKED shape])
 
@@ -98,7 +98,11 @@
 
 **The cards (ruling 53, D2a).** `AttackChannelText.lines` prints the chain after the element line, one line per level: "Drops X where it hits", then "X drops Y where it hits". The weapon and rune cards read it; the battle tooltip does not read those lines at all yet, which is [#1083](https://github.com/Phaazoid/Godoiosis/issues/1083).
 
-**D2b, not built here:** the aim preview — payload tiles as inset squares, each level flashing together one step after the level before it (ruling 52, replacing the timing half of 37/41).
+**The aim preview (ruling 52, D2b, replacing the timing half of 37/41).** Hovering an attack that carries a payload shows every tile its payloads will reach, as INSET squares: the aim's own yellow, a size smaller (`InsetSquare`, one generated texture both views draw, sized by the Game-tab knob *Payload inset*). A tile the aim strikes itself stays its full tile. Each LEVEL flashes together, level k at the aim's last step + k (`HoverPresenter._add_payloads`), so an aim tile a payload also covers flashes twice. Whoever a payload hits pulses with the aim's own victims.
+- **The tiles come from a resolve, because nothing else knows them.** A sticky bomb goes off where the shove LEAVES its victim (ruling 43), and that landing exists only inside the pass. `SquadManager.preview_payloads` runs `resolve_hypothetical` with the candidate and keeps the rows whose `source_aim` is the candidate and whose `dropped_by` is set, SpringspearWeaponRoutine's back-link.
+- **It restores the board itself.** The hypothetical publishes the candidate's shoves, so `preview_payloads` ends with the real `resolve_plan` — `resolve_hypothetical`'s documented contract, kept beside it rather than left to the hover. That is two resolves per hovered cell, and only for an attack that carries a payload: measured at ~28 ms with 9 payload volleys and 42–100 ms with 81, over one frame each (docs/performance.md).
+- **A watch shows none.** Its shot fires later, from wherever the crosser is, so there is no landing yet to show.
+- **Both views, one clock.** The flat layer (`OverlayManager.payload_overlay`) is a child of the footprint layer, so it wears the footprint's colour and z, and a watch aim or a player's palette reaches it with no second write; it is painted and cleared with the aim flash (`set_aim_flash(steps, insets)`), so every exit that stops the flash takes the squares too. `AimFlash2D` whitens the inset square rather than the whole tile. In 3D, `BoardOverlays.Layer.PAYLOAD` is a FILL on AIM's sort — legal, because its cells are the payloads' minus the aim's and never meet AIM's — and `OverlayMirror` lights it from the same `levels()` as AIM.
 
 ## Cross-cutting principles ([WORKSHOP])
 
