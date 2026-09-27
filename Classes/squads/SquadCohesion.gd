@@ -30,10 +30,18 @@ class_name SquadCohesion
 # build it at query time, never store one.
 
 static func field(squad: Squad, center: Vector2i, member: Unit, board: BoardContext) -> Dictionary:
-	return RulesService.path_hops(center, board, member, squad.get_max_squad_range())
+	return field_of(squad.leader, center, member, board)
 
 static func in_range(squad: Squad, center: Vector2i, member: Unit, cell: Vector2i, board: BoardContext) -> bool:
 	return field(squad, center, member, board).has(cell)
+
+# The same two, keyed on a LEADER rather than a squad (#367): SplitForecast asks about a successor
+# the plan has not appointed yet, and a leader is all the range ever read off the squad.
+static func field_of(leader: Unit, center: Vector2i, member: Unit, board: BoardContext) -> Dictionary:
+	return RulesService.path_hops(center, board, member, Squad.range_of(leader))
+
+static func in_range_of(leader: Unit, center: Vector2i, member: Unit, cell: Vector2i, board: BoardContext) -> bool:
+	return field_of(leader, center, member, board).has(cell)
 
 # Every cell in `member`'s bubble, INCLUDING the center -- callers that must exclude it (the
 # squad-up overlay wants somewhere to put a recruit) filter it themselves, because "in the bubble"

@@ -3884,3 +3884,35 @@ What plays, in part 1: VOLUNTARY reels in. FORCED and DOWNED play nothing until 
   - whether the pop reads at his zoom;
   - whether the new leader's "then" is too slow;
   - all of it in the flat view.
+
+### Part 2A: the Split forecast and the queue chip (BUILT 2026-09-27)
+
+The dev's playtest of part 1 found the queue silent about exactly this: *"when I have an attack queued up that will remove an enemy from their squad… there is no feedback anywhere telling me in advance"*. That is a Law #2 gap, so part 2 opens with the forecast rather than the look.
+
+**Rulings (2026-09-26/27, the second off an inline mockup of the row and the zoom):**
+
+| Question | Ruling |
+|---|---|
+| Queue | A chip on the **row that causes it**. The word is **"Split"**, and "Split 2" when one blow sends out two. |
+| Chip colour | **Tether orange** (`ActionQueueRow.split_ink()`, the tether's own knob adapted to the palette). |
+| Hover | The names only, until the dev words it. |
+| Break inside the battle zoom (part 2B) | The zoom lifts only the fight's cells, 40 cells up, and a moment draws at board height today, so it would play unseen. **Ruled Z2:** the far end of each breaking tether is lifted with the fight. **With battle zooms off, it plays on the board.** |
+
+**What counts.** A unit that leaves a squad of two or more because of the blow: the victim going down, anyone the successor cannot hold (range or capacity), a shove out of range. **So every blow that downs a squadded unit also wears Split.** A death is never counted (#1104), and nor is leaving a squad of one.
+
+**The forecast is `SplitForecast` (`squads/`), stamped into `ResolvedOutcome.splits` by `SquadManager.resolve_plan`** (not by `resolve_hypothetical`: AI scoring reads no Split). It replays the live settle in its live order:
+- a death settles at once, mid-pass, so a killed leader's successor is judged where everyone stands at that blow;
+- at pass end, the downed leave in the order they went down, skipping one finished off later in the pass, and a downed leader hands over;
+- then the contact sweep.
+
+The RULES inside each step are shared, never copied: `SquadManager.successor_among` and `capacity_overflow` are what `check_reassign_leader` now calls too, and range is `SquadCohesion.in_range_of` over `Squad.range_of` / `capacity_of`, which take a LEADER so a successor the plan has not appointed can be asked. **Positions at a blow are rebuilt, not snapshotted**: once the walk is over only a knockback moves a unit, and each outcome records its own `knockback_from` / `knockback_to`.
+
+**A contact break is owned by the blow after which the pair STAYED out of range**, the last in-range to out-of-range transition, whether the member or its leader was the one shoved. The last blow to MOVE either is the tempting wrong answer: a second shove that only carries a member further away would take the chip off the blow that broke the link.
+
+`tests/squad/test_split_forecast.gd` is the Law #2 harness: every case runs the REAL pass and requires the forecast to name exactly the units `squad_member_left` then reports as FORCED or DOWNED out of a squad with members left.
+
+**Declared residuals:**
+- **Same-pass terrain.** Cohesion reads live terrain, so ice this pass melts is not forecast.
+- **The end-of-turn burn.** A burn that downs a squadded unit gets no Split chip on its END OF TURN row.
+- **A watch shot that halts a walk short**, stranding a member without shoving anyone, has no blow to own it. Relatedly, a leader KILLED by a watch shot mid-walk is judged at the members' post-walk cells, where the live handover reads them mid-walk.
+- **A collapsed volley** shows no chips on its summary row (the same as every other consequence); expanding it shows the Split on the victim's row.

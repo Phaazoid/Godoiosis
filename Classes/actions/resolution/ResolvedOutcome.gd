@@ -86,6 +86,11 @@ var drown_damage: int = 0
 # both executors call Unit.die() on it. Preview-side it also suppresses the landing ghost and the
 # projected-knockback publish (nothing stands in a hole, and nothing there may be pickable).
 var removed: bool = false
+# The units that leave a squad of two or more BECAUSE of this blow (#367): the victim going down, a
+# successor unable to hold someone, a shove out of range. Stamped after the pass resolves, by
+# SplitForecast in SquadManager.resolve_plan; a death is never counted (#1104). The queue's "Split"
+# chip reads it, and the pass-end settle must agree with it (Law #2).
+var splits: Array[Unit] = []
 # Both ends are recorded because a unit can be shoved MORE THAN ONCE in a plan (#105): the second
 # hit starts where the first one left it, not at its live board cell. The preview used to
 # reconstruct the start from `target.movement.cell`, which is a second answer to a question this
