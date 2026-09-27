@@ -58,7 +58,7 @@ var _last_reach_line_version := -1   # ...and the reach lines, #710 slice 1 by w
 var _last_outline_version := -1  # ...and the focus stroke's (slice 4)
 var _last_squad_lines_version := -1   # ...and the squad's range and tethers (#1070)
 var _shake_pushed := 0.0   # the last pluck pushed, so a still tether costs no per-frame write
-var _moments_drawn := false   # whether TETHER_MOMENT holds anything, so an idle board costs nothing (#367)
+var _moments_drawn := false   # whether the moment layers hold anything, so an idle board costs nothing (#367)
 
 # How far the drop pointer stands off the cliff face it hangs on (#431), in cells. A depth-buffer
 # epsilon, not a feel value: big enough that a coplanar wall cannot stipple through it, small
