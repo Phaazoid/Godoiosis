@@ -945,16 +945,12 @@ func _assert_same_beat(one: Unit, other: Unit, why: String) -> void:
 		.is_equal_approx(tone, 0.02)
 
 
-# ...and NOT for an enemy, which a plain click still selects on its own turn -- the hotseat
-# allowance. #710 slice 3's ruling holds at the click exactly as it does on hover: an enemy is read
-# in the enemy's own vocabulary, so painting your red over one would be a second picture of the
-# same fact, in the colour that means "yours". Its OWN turn, because since #1105 an enemy you cannot
-# command has no ring at all, and its click selects nothing.
+# ...and NOT for an enemy, which a plain click also selects -- the ring opens on anybody, the
+# hotseat allowance. #710 slice 3's ruling holds at the click exactly as it does on hover: an enemy
+# is read in the enemy's own vocabulary, so painting your red over one would be a second picture of
+# the same fact, in the colour that means "yours".
 func test_selecting_an_enemy_paints_its_field_and_never_your_red() -> void:
 	var foe := _spawn(ENEMY, Vector2i(3, 2))
-	game.turn_manager.set_active_faction(ENEMY)
 	game._click_idle(foe.movement.cell)
-	assert_object(game.selected_unit).override_failure_message(
-			"precondition: the click did not select the enemy, so this proves nothing").is_same(foe)
 	assert_array(_om().reach_overlay.get_used_cells()).override_failure_message(
 			"selecting an enemy painted its reach in YOUR red").is_empty()

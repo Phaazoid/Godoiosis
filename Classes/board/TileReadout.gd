@@ -1,9 +1,9 @@
 extends RefCounted
 class_name TileReadout
 
-# THE tile-facts builder (#1105): what a cell carries, one Section per layer. Two readers -- the
-# hover card, which draws the GROUND lines, and the Inspect dock's tile mode, which draws every
-# section whole. Composed fresh per ask and never cached, so it is always about now.
+# THE tile-facts builder (#1105): what a cell carries, one Section per layer. Its reader is the tile
+# card (HoverInfoPanelControl), opened by clicking a tile or by a unit's Inspect. Composed fresh
+# per ask and never cached, so it is always about now.
 #
 # Every fact comes off the store that already answers it, never a re-derivation: watches off
 # OverlayManager's marked set (so a watch whose reticle is gone is never named), zones off
@@ -45,7 +45,22 @@ class Section:
 	var rows: Array[Row] = []
 
 
-# Every section this cell has, in the dock's order: the threat, then objectives, then the ground.
+# The whole card for one cell: its name, its picture and its sections.
+class Readout:
+	var title: String
+	var icon: Texture2D
+	var sections: Array[Section] = []
+
+
+static func read(game, cell: Vector2i) -> Readout:
+	var readout := Readout.new()
+	readout.title = title_of(game, cell)
+	readout.icon = icon_of(game, cell)
+	readout.sections = compose(game, cell)
+	return readout
+
+
+# Every section this cell has, in the card's order: the threat, then objectives, then the ground.
 # A layer with nothing to say is absent.
 static func compose(game, cell: Vector2i) -> Array[Section]:
 	var sections: Array[Section] = []
@@ -77,7 +92,7 @@ static func signature(sections: Array[Section]) -> String:
 
 # The card's name for this tile (2026-08-12): authored terrain_name first, kind name as the
 # fallback -- the same policy the brush palette rows read (GridUtils.authored_tile_display_name), so
-# hover, dock and palette cannot disagree. A bare unnamed NONE-kind tile stays nameless on purpose.
+# the card and the palette cannot disagree. A bare unnamed NONE-kind tile stays nameless on purpose.
 static func title_of(game, cell: Vector2i) -> String:
 	var board: BoardContext = game._board()
 	var kind: Terrain.Kind = board.terrain_kind_at(cell)
@@ -88,7 +103,7 @@ static func title_of(game, cell: Vector2i) -> String:
 	return Terrain.kind_display_name(kind) if kind != Terrain.Kind.NONE else ""
 
 
-# The tile's own sprite, the picture both cards wear.
+# The tile's own sprite, the picture the card wears.
 static func icon_of(game, cell: Vector2i) -> Texture2D:
 	var source: TileSetAtlasSource = game.grid.tile_set.get_source(game.grid.get_cell_source_id(cell)) as TileSetAtlasSource
 	return GridUtils.tile_sprite(source, game.grid.get_cell_atlas_coords(cell))

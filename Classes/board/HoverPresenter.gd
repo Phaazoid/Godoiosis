@@ -1,8 +1,9 @@
 extends Node
 class_name HoverPresenter
 
-# Turns "where is the mouse" into board feedback: cursor state/position, the hover info card,
-# range + preview overlays, and the queue panel's row-hover highlight. Pulled out of game.gd
+# Turns "where is the mouse" into board feedback: cursor state/position, range + preview overlays,
+# and the queue panel's row-hover highlight. It shows no card: since #1105 a card is asked for by a
+# click (dev: "Nothing on hover, at all"), so game's click paths and the ring own it. Pulled out of game.gd
 # 2026-07-26, where it lived as one 133-line per-state switch; holds a back-ref to the Game
 # coordinator (same pattern as DevController/AIController/MainActionMenu).
 #
@@ -30,11 +31,6 @@ var pointer_source: Callable
 
 var last_hovered_cell: Vector2i = GridUtils.NO_CELL
 
-# The tile the hover card is GROWN for (#1105) -- the Inspect key's work on an empty tile. Reset on
-# every cell change in _process, which is the "point at another tile and it shrinks" ruling living
-# where the cell change is detected.
-var grown_cell: Vector2i = GridUtils.NO_CELL
-
 var _highlighted_queue_units: Array[Unit] = []
 
 func _ready() -> void:
@@ -53,7 +49,6 @@ func _process(_delta: float) -> void:
 	if hovered_cell == last_hovered_cell:   # everything below only runs on a CELL change
 		return
 
-	grown_cell = GridUtils.NO_CELL
 	var previous: Unit = game.unit_at_pointer(last_hovered_cell)
 	var current: Unit = game.unit_at_pointer(hovered_cell)
 	hovered_unit_changed.emit(previous, current)
@@ -70,12 +65,6 @@ func refresh() -> void:
 	update_hover_visuals(last_hovered_cell)
 
 
-# The Inspect key over an empty tile: grow the card for it, or shrink it back if it already is.
-func toggle_grown(cell: Vector2i) -> void:
-	grown_cell = GridUtils.NO_CELL if grown_cell == cell else cell
-	refresh()
-
-
 # The enemy under the pointer, or null -- the TRANSIENT half of what the range view draws (#710
 # slice 3). Asked by game._redraw_enemy_ranges' callers, which can fire from a key or a pin rather
 # than from a pointer move and so have no hovered unit in hand.
@@ -88,12 +77,8 @@ func hovered_enemy() -> Unit:
 func update_hover_visuals(hovered_cell: Vector2i) -> void:
 	_clear_threat_markup()   # cleared on every cell change; the branch that wants it draws it back
 	if game.grid.get_cell_tile_data(hovered_cell) == null:
-		# Off the map -- every mode draws nothing out there. CLEARING is part of drawing nothing
-		# (#582): a bare return left the last card standing, so the readout went on describing a
-		# cell the pointer had left, and while chasing an unclickable tile it insisted the cell was
-		# at height -1 when the board said -3. A card that cannot be trusted to be about NOW is
-		# worse than no card.
-		game.hover_info_panel.clear()
+		# Off the map -- every mode draws nothing out there. A card is left alone: it describes the
+		# cell that was clicked, not the one under the pointer (#1105).
 		return
 
 	# Only IDLE produces squad icons. They're collected rather than drawn inline because that
@@ -126,9 +111,9 @@ func update_hover_visuals(hovered_cell: Vector2i) -> void:
 		for icontype in icons_to_draw[unit]:
 			game.overlay_manager.create_unit_icon(unit, icontype)
 
-# CLEARS the card rather than filling it (#582). Dev mode never wrote it, so it held whatever the
-# last IDLE hover had left -- a card from before the mode was even entered, which is how a readout
-# for a cell at -3 came to say -1. Clearing rather than describing, because the dev-mode height
+# CLEARS the card rather than filling it (#582). Dev mode never wrote it, so it held whatever play
+# had left -- a card from before the mode was even entered, which is how a readout for a cell at
+# -3 came to say -1. Clearing rather than describing, because the dev-mode height
 # readout is HeightDebugOverlay's and a second voice for it is a second thing to keep in step.
 func _hover_dev_mode(cell: Vector2i) -> void:
 	game.hover_info_panel.clear()
@@ -146,7 +131,6 @@ func _hover_idle(cell: Vector2i) -> Dictionary:
 
 	var hovered: Unit = game.unit_at_pointer(cell)
 	if hovered == null:
-		_show_hover_panel(null, cell)   # every real tile carries a card (dev, #135 round 2)
 		game.overlay_manager.clear_selection_overlays()
 		game.cursor_controller.set_state(CursorController.CursorState.DEFAULT)
 		if game.squad_manager.active_squad == null:
@@ -164,7 +148,6 @@ func _hover_idle(cell: Vector2i) -> Dictionary:
 	# The fork is the whole branch rather than one call, because every one of those three is the
 	# wrong question to ask about somebody you do not command.
 	if Team.is_enemy(Team.Faction.PLAYER, hovered.get_faction()):
-		_show_hover_panel(hovered, cell)
 		game._redraw_enemy_ranges(hovered)
 		if hovered.has_squad() and game.squad_manager.active_squad == null:
 			return game.get_squad_icons(hovered.squad)
@@ -195,7 +178,6 @@ func _hover_idle(cell: Vector2i) -> Dictionary:
 		standable = split["green"]
 		blocked = split["blocked"]
 	game.overlay_manager.show_overlay(OverlayManager.OverlayType.MOVE, standable, OverlayManager.ATLAS_COORDS)
-	_show_hover_panel(hovered, cell)
 	game.overlay_manager.show_overlay(OverlayManager.OverlayType.INVALIDMOVE, blocked, OverlayManager.ATLAS_COORDS)
 
 	# Idle only: an active squad's own markers are already up, and a second set for whoever the
@@ -478,27 +460,3 @@ func _set_cursor_for_preview(cell: Vector2i, valid: bool) -> void:
 	else:
 		game.cursor_controller.set_state(CursorController.CursorState.DEFAULT)
 	game.cursor_controller.set_cursor_pos(cell)
-
-func _show_hover_panel(hovered: Unit, cell: Vector2i) -> void:
-	# Inspect + hover must never overlap. The inspect panel is a docked left column (#68):
-	#   - hovering the inspected unit adds nothing -> suppress the hover card (tile card too)
-	#   - anything else -> the card keeps its own top/bottom logic, shifted right of the column
-	# The card is a stack since #135, and the tile half shows for EVERY real tile (dev, round 2):
-	# icon + name header, then the tile's ground lines. Name, picture and lines all come off
-	# TileReadout, the one builder the Inspect dock's Tile view reads too (#1105), so the two cannot
-	# disagree. TERRAIN_ICONS stays the queue rows' pathing glyph, not a display read.
-	# A GROWN card (the Inspect key on an empty tile, #1105) is still this one card, so a tile is
-	# never shown twice: the grown readout replaces the lines rather than opening a second surface.
-	var header: String = TileReadout.title_of(game, cell)
-	var icon: Texture2D = TileReadout.icon_of(game, cell)
-	var tile_lines: Array[String] = TileReadout.ground_lines(game, cell)
-	var world_pos: Vector2 = hovered.global_position if hovered != null \
-		else GridUtils.cell_world(game.grid, cell)
-	var grown := cell if cell == grown_cell else GridUtils.NO_CELL
-	var left_x := HoverInfoPanelControl.MARGIN
-	if game.unit_info_panel.is_showing():
-		if hovered != null and game.unit_info_panel.is_showing_unit(hovered):
-			game.hover_info_panel.clear()
-			return
-		left_x = int(game.unit_info_panel.panel_width()) + 8
-	game.hover_info_panel.show_hover(hovered, icon, header, tile_lines, world_pos, left_x, grown)

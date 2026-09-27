@@ -3,11 +3,11 @@ class_name TileInfoSections
 
 # A tile's full readout (#1105): draws TileReadout's sections, one boxed section per layer -- a
 # heading (wearing the layer's board mark when it has one) over its rows, an explanation drawn
-# quieter than a fact. Code-built (data-shaped UI) and handed the dock's own section stylebox, so
-# both hosts -- the Inspect dock's Tile view and the grown hover card -- draw the same boxes.
+# quieter than a fact. Code-built (data-shaped UI) and handed the Inspect dock's section stylebox, so
+# the tile card's boxes match the dock's inventory box beside it.
 #
 # Which cell, and when to re-read it, is the host's; whether the re-read changed anything is this
-# file's (show_if_changed), so the two hosts share one diff.
+# file's (show_if_changed), so no host keeps a diff of its own.
 
 const HEADING_SIZE := 12
 const NOTE_SIZE := 14

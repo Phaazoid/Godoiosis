@@ -210,6 +210,7 @@ func test_the_phase_ring_offers_no_turn_verb() -> void:
 			"the phase ring offered '%s', which is a turn verb: %s" % [forbidden, str(names)]).is_false()
 	assert_bool(names.has("Undeploy")).override_failure_message(
 		"a drawn unit could not be taken off the board: %s" % str(names)).is_true()
+	assert_bool(names.has("Inspect")).is_true()
 
 
 # Ruling 2c: authored units are additive and belong to the BOARD, so they are not the player's to

@@ -24,10 +24,7 @@ class_name MainActionMenu
 #              ability-driven verbs) plus Wait, which spends the squad's turn the same way.
 #              Labelled "Action".
 #   SQUAD   -- Squad Up, Join, Leave, Disband
-#
-# INSPECT LEFT THE RING in #1105 for the Inspect KEY (dev: "If Z inspects units, then we should do
-# away with the inspect option in the menu"), so a unit with nothing else to offer has no ring at
-# all -- has_verbs is how the click paths ask.
+#   INSPECT -- itself, and therefore a top-level slice; see Group below
 #
 # THREE VERBS LEFT THE RING in round 2 because each already had a better door: Execute Orders (the
 # queue panel's button, with three readiness states), Cancel Actions (that panel's per-row X, plus
@@ -65,6 +62,7 @@ const SQUADUP := 6
 const JOINSQUAD := 7
 const LEAVESQUAD := 8
 const DISBAND_SQUAD := 9
+const INSPECT := 10
 const RESCUE := 12
 const RALLY := 13
 const GROUP_MOVE := 14
@@ -78,20 +76,22 @@ const REPOSITION := 21  # ...and its sibling (#772)
 
 # The ring's categories, and their order IS the inner ring's clockwise order.
 #
-# A category of ONE holding the verb of its own name collapses to a terminal slice (build_tree) --
-# Move holding only Move. Inspect was the other example until #1105 took it out of the ring.
+# INSPECT_GROUP is a category of ONE, holding the verb of the same name, which means the collapse
+# rule in build_tree hands it up as a plain terminal slice -- "Inspect is top level" (dev, #467
+# round 2) costs no new mechanism, just a group nobody else joins.
 #
-enum Group { MOVE_GROUP, ATTACK_GROUP, ACT_GROUP, SQUAD_GROUP, DEPLOY_GROUP }
+enum Group { MOVE_GROUP, ATTACK_GROUP, ACT_GROUP, SQUAD_GROUP, INSPECT_GROUP, DEPLOY_GROUP }
 
 # A category is a row the player hovers, so it owes a readout like any other (#135's law reaches
-# it, pinned by tests/law/test_glossary_coverage.gd). Move and Attack reuse the verb terms of the
-# same name; ACT and SQUAD_ACTIONS were authored for the ring.
+# it, pinned by tests/law/test_glossary_coverage.gd). Move / Attack / Inspect reuse the verb terms
+# of the same name; ACT and SQUAD_ACTIONS were authored for the ring.
 const CATEGORIES := {
 	Group.MOVE_GROUP: {"name": "Move", "term": Glossary.Term.MOVE},
 	Group.ATTACK_GROUP: {"name": "Weapon", "term": Glossary.Term.WEAPON_ACTION},
 	Group.ACT_GROUP: {"name": "Action", "term": Glossary.Term.ACTION},
 	Group.SQUAD_GROUP: {"name": "Squad", "term": Glossary.Term.SQUAD_ACTIONS},
-	# TWO verbs since #772, so this no longer collapses the way Move does -- and the name
+	Group.INSPECT_GROUP: {"name": "Inspect", "term": Glossary.Term.INSPECT},
+	# TWO verbs since #772, so this no longer collapses the way Move and Inspect do -- and the name
 	# had to stop being one of its own children's. "Placement" is what the pair answers together:
 	# where the unit stands, and whether it stands at all.
 	Group.DEPLOY_GROUP: {"name": "Placement", "term": Glossary.Term.PLACEMENT},
@@ -131,6 +131,7 @@ const ACTION_DATA := {
 	DISBAND_SQUAD: {"name": "Disband Squad", "term": Glossary.Term.DISBAND_SQUAD, "group": Group.SQUAD_GROUP},
 	REPOSITION: {"name": "Reposition", "term": Glossary.Term.REPOSITION, "group": Group.DEPLOY_GROUP},
 	UNDEPLOY: {"name": "Undeploy", "term": Glossary.Term.UNDEPLOY, "group": Group.DEPLOY_GROUP},
+	INSPECT: {"name": "Inspect", "term": Glossary.Term.INSPECT, "group": Group.INSPECT_GROUP},
 }
 
 # A child that is not an ACTION_DATA verb (a carving, a weapon's secondary, an ability verb) needs
@@ -156,6 +157,7 @@ func show_main_menu(unit: Unit, pos: Vector2i) -> void:
 	controller.cancelled.connect(_on_menu_cancelled)
 
 	controller.open(build_tree(unit), Vector2(pos))
+	game.show_unit_card(unit)   # up exactly as long as the ring (#1105); _on_menu_cancelled takes it down
 
 
 # THE snapshot (#467): every ring the player can reach this open, built now. Categories in
@@ -365,10 +367,13 @@ func _attack_entry(unit: Unit, attack: AttackData) -> Dictionary:
 
 # ActionMenuController emits `cancelled` before `action_selected` even on a PICK, which is what
 # pins the clear-then-act order (see its header). Both effects the old game.gd wired as two
-# separate connections happen here, in that same order.
+# separate connections happen here, in that same order. The ring's unit card goes with it; a tile
+# card is left alone, since the deploy menu closes through here too and a ring never opened one.
 func _on_menu_cancelled(_controller) -> void:
 	game.clear_selection()
 	game.hover_presenter.refresh()
+	if game.hover_info_panel.is_showing_unit_card():
+		game.hover_info_panel.clear()
 
 # ==============================================================================
 #  Which options a unit has right now
@@ -406,13 +411,6 @@ func _can_group_move(unit: Unit) -> bool:
 			return false
 	return true
 
-# Would this unit's ring say anything? An enemy on your turn has no verbs at all since Inspect left
-# the ring (#1105), and an empty ring is not a menu -- the click paths ask this before opening one.
-# It asks the BUILT tree, since an expanding id can contribute no children; that re-snapshots the
-# picks, so it is asked only while no ring is open.
-func has_verbs(unit: Unit) -> bool:
-	return not build_tree(unit).is_empty()
-
 func populate(unit: Unit) -> Array:
 	var options = []
 
@@ -424,6 +422,7 @@ func populate(unit: Unit) -> Array:
 		return _pre_mission_options(unit)
 
 	if not game.can_control(unit):
+		options.append(INSPECT)
 		return options
 
 	if _can_move(unit):
@@ -469,6 +468,9 @@ func populate(unit: Unit) -> Array:
 			if unit.squad.get_leader() == unit:
 				options.append(DISBAND_SQUAD)
 
+	if unit != null:
+		options.append(INSPECT)
+
 	# Wait is a choice a squad makes ONCE; an acted squad has nothing left to end (#190).
 	if game.squad_manager.active_squad == null and not unit.squad.has_acted:
 		options.append(WAIT)
@@ -483,8 +485,8 @@ func populate(unit: Unit) -> Array:
 #  Dispatch
 # ==============================================================================
 
-# What the ring offers DURING the phase (#739): the squad verbs and taking a unit back off the
-# board (Inspect went to the Z key in #1105). Deliberately no turn verb -- no Move, no attack, no Wait -- and that absence is the
+# What the ring offers DURING the phase (#739): the squad verbs, taking a unit back off the board,
+# and Inspect. Deliberately no turn verb -- no Move, no attack, no Wait -- and that absence is the
 # testable form of "a click on a deployed unit must not open the action menu": the ring is the same
 # widget, and what changes is that it can no longer say anything about a turn.
 #
@@ -510,6 +512,7 @@ func _pre_mission_options(unit: Unit) -> Array:
 		options.append(LEAVESQUAD)
 		if unit.squad.get_leader() == unit:
 			options.append(DISBAND_SQUAD)
+	options.append(INSPECT)
 
 	var ordered := []
 	for id in ACTION_DATA:
@@ -597,6 +600,8 @@ func _dispatch(action_id: int, unit: Unit) -> void:
 		LEAVESQUAD:
 			game.mission_log.record_squad_verb("leave", unit)
 			game.squad_manager.leave_squad(unit)
+		INSPECT:
+			game.inspect_unit(unit)
 		RESCUE:
 			# Same query as the populate gate above, plan included -- a predicted-down squadmate
 			# (#124) must be pickable exactly where the row said it would be. Picking the BODY no longer

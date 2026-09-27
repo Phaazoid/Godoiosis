@@ -10,7 +10,7 @@ extends Node2D
 # Reorganized 2026-07-26 into the sections marked below. Three collaborators were split out;
 # each is built in _build_collaborators and holds a back-ref here (the DevController pattern):
 #   MainActionMenu (ui/)     — every menu: what's offered, how it's drawn, where a pick goes
-#   HoverPresenter (board/)  — mouse position -> cursor, overlays, hover card, row highlight
+#   HoverPresenter (board/)  — mouse position -> cursor, overlays, row highlight
 #   OrderExecutor (actions/) — running a squad's plan, and the Crisis/downed fallout it makes
 #
 # Still the heaviest file in the project. Prefer moving domain logic out to the system that
@@ -308,14 +308,15 @@ func _wire_signals() -> void:
 	# every edge the panel can be open on.
 	unit_info_panel.loadout_changed.connect(func() -> void:
 		refresh_action_queue(squad_manager.active_squad))
-	# A tile's full readout (#1105) reads the one tile-facts builder, handed over rather than looked
-	# up so neither panel learns what a game is. Two hosts: the dock's Tile view and the grown hover
-	# card, which draws its sections in the dock's boxes.
-	var tile_sections := func(cell: Vector2i) -> Array[TileReadout.Section]:
+	# The info card's tile face reads the one tile-facts builder (#1105), handed over rather than
+	# looked up so the card never learns what a game is. It draws its sections in the dock's box, and
+	# closes with the dock: a tile card beside the dock was opened with it.
+	hover_info_panel.tile_source = func(cell: Vector2i) -> TileReadout.Readout:
+		return TileReadout.read(self, cell)
+	hover_info_panel.tile_sections_source = func(cell: Vector2i) -> Array[TileReadout.Section]:
 		return TileReadout.compose(self, cell)
-	unit_info_panel.tile_sections_source = tile_sections
-	hover_info_panel.tile_sections_source = tile_sections
 	hover_info_panel.set_section_box(unit_info_panel.section_box())
+	unit_info_panel.closed.connect(hover_info_panel.clear)
 
 	squad_action_queue_control.execute_requested.connect(_on_queue_execute_requested)
 	squad_action_queue_control.cancel_requested.connect(_on_queue_cancel_requested)
@@ -371,12 +372,6 @@ func _input(event: InputEvent) -> void:
 	if event.is_action_pressed("toggle_enemy_ranges") and not ModalLock.any_open(get_tree()) \
 			and not _board_locked_for_player():
 		toggle_enemy_ranges()
-	# The Inspect key (#1105). Here for the same both-views reason, and only on a resting board --
-	# idle or deploying -- which is also what keeps it clear of the Tile Brush's Z in DEV_MODE.
-	if event.is_action_pressed("inspect") and not ModalLock.any_open(get_tree()) \
-			and not _board_locked_for_player() \
-			and (game_state == GameState.IDLE or game_state == GameState.PRE_MISSION):
-		inspect_at_pointer()
 
 	# THE PLAYER'S REPORT KEY (#1050). Here rather than in _unhandled_input for the reason Esc and
 	# the two above are: a 3D host sets board_input_delegated and _unhandled_input returns on it
@@ -562,7 +557,15 @@ func _on_left_click(cell: Vector2i, shift_held := false) -> void:
 # MOVES get one extra rung in between (#417 round 2, dev call): a queued move re-opens its
 # planning rather than being deleted, so the press cycles move queued -> planning -> nothing.
 # The second press needs no code -- planning already spent the order on entry.
+#
+# And a READOUT is a rung too (#1105): at rest, a tile card or the Inspect dock is what is open, so
+# the press closes it and stops. A tile card comes up on every empty-tile click, and dismissing one
+# must never cost the player an order.
 func _on_right_click() -> void:
+	if game_state == _base_state() and (hover_info_panel.is_showing_tile() or unit_info_panel.is_showing()):
+		hover_info_panel.clear()
+		unit_info_panel.clear()
+		return
 	if game_state == GameState.CHOOSING_MOVE:
 		overlay_manager.clear_planned_path(selected_unit)
 	# Read BEFORE exiting, since exit_current_mode is what returns the board to rest.
@@ -606,51 +609,65 @@ func _lone_queued_move(gesture: Array[BaseAction]) -> MoveAction:
 # still allowed here for hotseat/testing; the AI_TURN lock above is what stops it in play.
 # The phase's own click (#739), and the reason "a click on a deployed unit must not open the action
 # ring" needs no gate anywhere: _click_idle is the only arm that opens the battle ring, and this
-# state never reaches it. What a unit gets instead is the PHASE ring -- squad verbs and Undeploy --
-# built by the same MainActionMenu.build_tree, so the squad flow is the one that already exists
-# rather than a second one authored for a screen.
+# state never reaches it. What a unit gets instead is the PHASE ring -- squad verbs, Undeploy,
+# Inspect -- built by the same MainActionMenu.build_tree, so the squad flow is the one that already
+# exists rather than a second one authored for a screen.
 #
 # An empty DEPLOYMENT cell offers the units still in reserve, which is the dev's own description:
 # "click a blank spot and click add, and get a dropdown of all deployable units to bring one in."
-# A click anywhere else rests the board, so a mis-click closes whatever was open. A unit with
-# nothing to offer rests it too: its ring would open empty (#1105 took Inspect out of it).
+# A click anywhere else rests the board, so a mis-click closes whatever was open, and shows the
+# clicked tile's card (#1105).
 func _click_pre_mission(cell: Vector2i) -> void:
 	var target := unit_at_pointer(cell)
-	if target != null and main_action_menu.has_verbs(target):
+	if target != null:
 		select_unit(target, cell)
 		show_selected_reach(target)
 		main_action_menu.show_main_menu(target, get_viewport().get_mouse_position())
 		return
-	if target == null and mission_controller.can_deploy_another() \
-			and mission_controller.open_deployment_cells().has(cell):
+	if mission_controller.can_deploy_another() and mission_controller.open_deployment_cells().has(cell):
+		hover_info_panel.clear()
 		main_action_menu.show_deploy_menu(cell, get_viewport().get_mouse_position())
 		return
 	clear_selection()
+	show_tile_card(cell)
 
 func _click_idle(cell: Vector2i) -> void:
 	var target := unit_at_pointer(cell)
-	# An enemy on your turn has no verbs since Inspect left the ring (#1105), so its click does what
-	# an empty tile's does: nothing. Z is how you read it.
-	if target == null or not main_action_menu.has_verbs(target):
+	if target == null:
+		show_tile_card(cell)
 		return
 	select_unit(target, cell)
 	game_state = GameState.TILE_SELECTED
 	show_selected_reach(target)
 	main_action_menu.show_main_menu(target, get_viewport().get_mouse_position())
 
-# THE INSPECT KEY (#1105, dev: "having them pop up from a left click is too intrusive. We should
-# designate an inspect button"). It reads what is under the pointer: a unit steps the dock through
-# unit -> its tile -> closed, and an empty tile grows the hover card in place.
-func inspect_at_pointer() -> void:
-	var cell: Vector2i = hover_presenter.last_hovered_cell
-	if grid.get_cell_tile_data(cell) == null:
+# THE INFO CARD (#1105, dev: "Nothing on hover, at all... Clicking a tile brings up the full tile for
+# it"). One card, the last request wins; these are its three openers.
+
+# A clicked tile's card. The same tile again closes it, and a click off the map closes it too.
+func show_tile_card(cell: Vector2i) -> void:
+	if grid.get_cell_tile_data(cell) == null or hover_info_panel.is_showing_tile_at(cell):
+		hover_info_panel.clear()
 		return
-	var unit := unit_at_pointer(cell)
-	if unit == null:
-		hover_presenter.toggle_grown(cell)
+	hover_info_panel.show_tile(cell, GridUtils.cell_world(grid, cell), _card_left_x())
+
+# The unit card while that unit's ring is up. With the dock already showing this unit, the dock IS
+# its card, and whatever sits beside it stays.
+func show_unit_card(unit: Unit) -> void:
+	if unit_info_panel.is_showing_unit(unit):
 		return
-	unit_info_panel.inspect_step(unit, can_control(unit), _board())
-	hover_presenter.refresh()   # the card steps aside for the unit the dock now shows
+	hover_info_panel.show_unit(unit, unit.global_position, _card_left_x())
+
+# The ring's Inspect: the unit in the dock, and the tile it stands on in the card beside it.
+func inspect_unit(unit: Unit) -> void:
+	unit_info_panel.set_unit(unit, can_control(unit), _board())
+	hover_info_panel.show_tile_of(unit, _card_left_x())
+
+# The card parks right of an open dock rather than under it (#68).
+func _card_left_x() -> int:
+	if unit_info_panel.is_showing():
+		return int(unit_info_panel.panel_width()) + 8
+	return HoverInfoPanelControl.MARGIN
 
 # WHAT A SELECTED UNIT THREATENS FROM WHERE IT STANDS (#1069, dev: "Selecting a unit, though (for
 # us, bringing up the radial menu, and also choosing a move, etc), brings up the unit's attack
@@ -668,11 +685,10 @@ func inspect_at_pointer() -> void:
 func show_selected_reach(unit: Unit) -> void:
 	if unit == null or not is_instance_valid(unit):
 		return
-	# NOT FOR AN ENEMY, which a plain click still selects on its own turn -- the hotseat allowance
-	# (one you cannot command has no ring since #1105). #710 slice 3's ruling holds here exactly as it
-	# does on hover: an enemy is read in the ENEMY's own vocabulary, which is the one unbroken purple
-	# field, and painting your red over one would be a second picture of the same fact in the colour
-	# that means "yours".
+	# NOT FOR AN ENEMY, which a plain click also selects -- the hotseat allowance means the ring
+	# opens on anybody. #710 slice 3's ruling holds here exactly as it does on hover: an enemy is
+	# read in the ENEMY's own vocabulary, which is the one unbroken purple field, and painting your
+	# red over one would be a second picture of the same fact in the colour that means "yours".
 	if Team.is_enemy(Team.Faction.PLAYER, unit.get_faction()):
 		return
 	show_player_reach(unit, unit.get_projected_destination())
@@ -932,7 +948,7 @@ func focus_view_on(unit: Unit) -> void:
 		return
 	var cell := unit.get_projected_destination()
 	# A 3D host owns the visible camera and answers the signal below for it; THIS camera is hidden
-	# there, and battle3d._update_pointer snaps it per motion to park the hover card, so writing it
+	# there, and battle3d._update_pointer snaps it per motion to park the info card, so writing it
 	# here would only mis-anchor that card. Same flag and the same reason CameraController's WASD
 	# poll stands down on (#176 4d).
 	if not board_input_delegated:
@@ -1350,8 +1366,8 @@ func refresh_end_turn_button() -> void:
 #
 # Each surface conjoins the flag into its OWN gate rather than being written here (visual-clarity's
 # "one gate, no second visibility expression"), which is what keeps a mid-pass re-show impossible:
-# the hover card is re-driven on every cursor-cell change, and a player's own Execute never leaves
-# game_state IDLE.
+# the info card is re-shown by every click and redraws itself as its unit walks, and a player's own
+# Execute never leaves game_state IDLE.
 func set_hud_hidden_for_playback(hidden: bool) -> void:
 	set_battle_hud_hidden(hidden)
 	hover_info_panel.set_hidden_for_playback(hidden)
@@ -2093,7 +2109,7 @@ func get_unit_at_cell(cell: Vector2i) -> Unit:
 	return null
 
 # Which unit's SPRITE is on this cell? The one answer for every pointer question -- what a click
-# selects, what the hover card shows, what hovered_unit_changed names.
+# selects, what the info card shows, what hovered_unit_changed names.
 #
 # Nothing is derived here. The board draws exactly one sprite per unit, at that unit's PROJECTED
 # cell: both ghost-drawers pair "hide the real sprite" with "draw a ghost" (redraw_projected_units

@@ -210,7 +210,17 @@ func test_move_is_a_terminal_slice_when_group_move_is_not_offered() -> void:
 		.override_failure_message("Move opened a ring holding nothing but Move").is_true()
 
 
-# (Inspect was this rule's second example until #1105 moved it to the Z key; Move above carries it.)
+# Inspect is top level, and it is the same rule doing it: a group of one holding the verb of its own
+# name. Nothing about Inspect is special-cased, which is the point.
+func test_inspect_is_a_terminal_top_level_slice() -> void:
+	var unit := _spawn(Vector2i(1, 0))
+	var controller := await _open(unit)
+
+	var inspect := _row_named(controller.level_nodes(), "Inspect")
+	assert_bool(inspect.is_empty()) \
+		.override_failure_message("Inspect was not on the inner ring").is_false()
+	assert_bool((inspect.get("children", []) as Array).is_empty()) \
+		.override_failure_message("Inspect grew a ring of one").is_true()
 
 
 # The other side of the same rule, and the reason it is not just "collapse when there is one child":
