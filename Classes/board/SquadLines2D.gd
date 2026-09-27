@@ -38,6 +38,13 @@ static var TETHER_COLOR := Color(1.0, 0.55, 0.12, 0.95)
 # ...and an ENEMY squad's range and tethers (#1109): the threat field's purple, lightened so it reads
 # over that field and over bare ground alike. Standing lines and moments both; is_hostile picks the side.
 static var ENEMY_TETHER_COLOR := Color(1.0, 0.43, 0.59, 0.95)
+# The dark CASING round every squad line, both sides' (#1109 round 2): the rose vanished into its own
+# pink field over pale stone, and a dark edge reads on any floor. Its alpha is multiplied by the line's,
+# so a ghost's casing is as see-through as the ghost.
+static var CASING_COLOR := Color(0.13, 0.03, 0.10, 0.9)
+# ...and its width in the flat view, in pixels each side. The diorama's is a BoardOverlays export, in
+# world units, which this class cannot see -- ARROW_WIDTH_SCALE's reason.
+const CASING_PX := 1.0
 # A tether that MIGHT be: dimmer and see-through, arrowhead included.
 static var TETHER_GHOST_COLOR := Color(0.72, 0.42, 0.16, 0.5)
 static var TETHER_STRAIN_COLOR := Color(1.0, 0.18, 0.14, 0.95)
@@ -511,8 +518,12 @@ func _draw() -> void:
 		var color := color_of(state, hostile)
 		var shaft := strokes[0]
 		var bend := shake if state == Strain.STRAIN else 0.0
-		_dashed(_flat(shaft[0]), _flat(shaft[shaft.size() - 1]), color, shift, bend)
 		var cone := ThreatLines2D.cone_of(strokes, ARROW_WIDTH_SCALE)
+		# The arrowhead's casing goes down FIRST, so the shaft's last dash lies over it -- the diorama's
+		# order, where the hull sits a render priority under the tether.
+		if not cone.is_empty():
+			_cone_casing(_flat(cone["base"]), _flat(cone["tip"]), float(cone["scale"]), color)
+		_dashed(_flat(shaft[0]), _flat(shaft[shaft.size() - 1]), color, shift, bend)
 		if not cone.is_empty():
 			_cone(_flat(cone["base"]), _flat(cone["tip"]), float(cone["scale"]), color)
 	var now := Time.get_ticks_msec()
@@ -520,19 +531,24 @@ func _draw() -> void:
 	for entry in moments:
 		var drawing := moment_drawing(entry, now, flash)
 		var shaft: PackedVector3Array = drawing["shaft"]
+		var cone: Dictionary = drawing["cone"]
+		if not cone.is_empty():
+			_cone_casing(_flat(cone["base"]), _flat(cone["tip"]), float(cone["scale"]), cone["tint"])
 		if shaft.size() >= 2:
 			var origin := _flat(drawing["origin"])
 			var from := _flat(shaft[0])
 			_dashed(from, _flat(shaft[shaft.size() - 1]), drawing["tint"], shift, float(drawing["bend"]),
 					from.distance_to(origin) / float(GridUtils.TILE_SIZE))
-		var cone: Dictionary = drawing["cone"]
 		if not cone.is_empty():
 			_cone(_flat(cone["base"]), _flat(cone["tip"]), float(cone["scale"]), cone["tint"])
 		# A break's pieces are SOLID -- each is one dash already. This view has no height, so their
 		# fall reads as a scatter and fade here (declared on #292).
 		for piece: Dictionary in drawing["pieces"]:
 			var points: PackedVector3Array = piece["points"]
-			draw_line(_flat(points[0]), _flat(points[1]), piece["tint"], LINE_WIDTH)
+			var a := _flat(points[0])
+			var b := _flat(points[1])
+			_cased_line(PackedVector2Array([a, b]), piece["tint"])
+			draw_line(a, b, piece["tint"], LINE_WIDTH)
 
 
 # One straight stroke, dashed. `bend` plucks it: every point moves sideways by bend * sin(pi * u),
@@ -548,6 +564,7 @@ func _dashed(from: Vector2, to: Vector2, color: Color, shift: float, bend: float
 	var dir := span / length_px
 	var side := Vector2(-dir.y, dir.x) * bend * cell_px
 	var length := length_px / cell_px
+	var lines: Array[PackedVector2Array] = []
 	for dash in dash_spans(start + length, shift):
 		var a := maxf(dash.x - start, 0.0)
 		var b := dash.y - start
@@ -558,17 +575,71 @@ func _dashed(from: Vector2, to: Vector2, color: Color, shift: float, bend: float
 			var d: float = lerpf(a, b, float(k) / 3.0) * cell_px
 			var u := d / length_px
 			line.append(from + dir * d + side * sin(PI * u))
+		lines.append(line)
+	# Every casing before any dash, so no dash's outline lands over its neighbour's ink.
+	for line in lines:
+		_cased_line(line, color)
+	for line in lines:
 		draw_polyline(line, color, LINE_WIDTH)
+
+
+# One stroke's CASING: the same polyline wider by CASING_PX a side and longer by it at each end, so
+# the ends are outlined as well as the sides.
+func _cased_line(line: PackedVector2Array, color: Color) -> void:
+	var count := line.size()
+	if count < 2:
+		return
+	var cased := line.duplicate()
+	var head := line[0] - line[1]
+	var tail := line[count - 1] - line[count - 2]
+	if head.length_squared() > 0.0:
+		cased[0] = line[0] + head.normalized() * CASING_PX
+	if tail.length_squared() > 0.0:
+		cased[count - 1] = line[count - 1] + tail.normalized() * CASING_PX
+	draw_polyline(cased, _casing_of(color), LINE_WIDTH + CASING_PX * 2.0)
 
 
 # The arrowhead: a filled triangle, the flat twin of the diorama's solid cone.
 func _cone(base: Vector2, tip: Vector2, scale: float, color: Color) -> void:
+	var triangle := _arrow_triangle(base, tip, scale)
+	if not triangle.is_empty():
+		draw_colored_polygon(triangle, color)
+
+
+# ...and its casing: the same triangle grown about its incentre until every edge sits CASING_PX out,
+# which keeps its angles -- the flat twin of the diorama's casing_cone.
+func _cone_casing(base: Vector2, tip: Vector2, scale: float, color: Color) -> void:
+	var triangle := _arrow_triangle(base, tip, scale)
+	if triangle.is_empty():
+		return
+	var a := triangle[1].distance_to(triangle[2])
+	var b := triangle[2].distance_to(triangle[0])
+	var c := triangle[0].distance_to(triangle[1])
+	var perimeter := a + b + c
+	var area := absf((triangle[1] - triangle[0]).cross(triangle[2] - triangle[0])) * 0.5
+	if perimeter <= 0.0 or area <= 0.0:
+		return
+	var incentre := (triangle[0] * a + triangle[1] * b + triangle[2] * c) / perimeter
+	var inradius := area / (perimeter * 0.5)
+	var grow := (inradius + CASING_PX) / inradius
+	var grown := PackedVector2Array()
+	for p in triangle:
+		grown.append(incentre + (p - incentre) * grow)
+	draw_colored_polygon(grown, _casing_of(color))
+
+
+func _arrow_triangle(base: Vector2, tip: Vector2, scale: float) -> PackedVector2Array:
 	var span := tip - base
 	if span.length_squared() <= 0.0:
-		return
+		return PackedVector2Array()
 	var dir := span.normalized()
 	var side := Vector2(-dir.y, dir.x) * LINE_WIDTH * scale * 0.5
-	draw_colored_polygon(PackedVector2Array([base + side, tip, base - side]), color)
+	return PackedVector2Array([base + side, tip, base - side])
+
+
+# The casing colour at the line's own alpha, so a ghost's casing fades with the ghost.
+static func _casing_of(color: Color) -> Color:
+	return Color(CASING_COLOR.r, CASING_COLOR.g, CASING_COLOR.b, CASING_COLOR.a * color.a)
 
 
 func _flat(p: Vector3) -> Vector2:

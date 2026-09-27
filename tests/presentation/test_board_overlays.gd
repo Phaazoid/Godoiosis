@@ -1190,6 +1190,145 @@ func test_the_range_outline_and_the_tethers_each_take_their_own_width() -> void:
 		.override_failure_message("the tethers moved off their own width").is_equal_approx(0.03, 0.0001)
 
 
+# --- The CASING (#1109 round 2) -------------------------------------------------------------------
+
+# Every LINE layer, drawn once with a cone, so each has its ribbon material and (where it draws one) its
+# arrowhead built.
+func _draw_every_line_layer(overlays: BoardOverlays) -> void:
+	var marks: Array[Array] = [[
+		PackedVector3Array([Vector3(0, 1, 0), Vector3(3, 1, 0)]),
+		PackedVector3Array([Vector3(3, 1, 0), Vector3(3.5, 1, 0)]),
+	]]
+	var cones: Array[Dictionary] = [{"base": Vector3(3, 1, 0), "tip": Vector3(3.5, 1, 0), "radius": 0.1}]
+	for layer: BoardOverlays.Layer in BoardOverlays.LAYERS:
+		if BoardOverlays.LAYERS[layer]["kind"] == BoardOverlays.Kind.LINE:
+			overlays.set_marks(layer, marks, Color.WHITE, [], cones)
+
+
+# THE LAW: a line wears a casing exactly when its table entry DECLARES one. The dev asked for the squad's
+# lines, both sides; the sight bead, the reach marks, the focus edge and the arc's bolts share the shader
+# and must stay exactly what they were -- which zero width guarantees, and only a zero width.
+func test_only_the_layers_that_declare_a_casing_wear_one() -> void:
+	var overlays := _bare_overlays()
+	_draw_every_line_layer(overlays)
+	var cased := 0
+	for layer: BoardOverlays.Layer in BoardOverlays.LAYERS:
+		if BoardOverlays.LAYERS[layer]["kind"] != BoardOverlays.Kind.LINE:
+			continue
+		var name: String = BoardOverlays.Layer.keys()[layer]
+		var width := float(overlays.beam_parameter(layer, &"casing_width"))
+		if BoardOverlays.LAYERS[layer].get("casing", false):
+			cased += 1
+			assert_float(width).override_failure_message("%s declares a casing and draws none" % name) \
+				.is_greater(0.0)
+		else:
+			assert_float(width).override_failure_message("%s wears a casing it never declared" % name) \
+				.is_equal_approx(0.0, 0.00001)
+	assert_int(cased).override_failure_message("no layer declares a casing, so the law above checked nothing") \
+		.is_greater(0)
+	# ...and every squad line is one of them, both sides' and every state's.
+	for layer: BoardOverlays.Layer in SQUAD_LINE_LAYERS + [BoardOverlays.Layer.TETHER_SHARDS]:
+		assert_bool(BoardOverlays.LAYERS[layer].get("casing", false)).override_failure_message(
+				"%s is a squad line without a casing" % BoardOverlays.Layer.keys()[layer]).is_true()
+
+
+# The WIRE from both knobs to a line that is already standing -- the width on the node, the colour on
+# SquadLines2D -- through the re-apply the Game tab calls. A width set and never pushed is #264's slider.
+func test_the_casing_follows_its_two_knobs_onto_a_standing_line() -> void:
+	var saved := SquadLines2D.CASING_COLOR
+	var overlays := _bare_overlays()
+	_draw_every_line_layer(overlays)
+	var width := overlays.squad_casing_width + 0.017
+	var color := Color(0.2, 0.4, 0.6, 0.7)
+	# The width is read BEFORE the restyle below, which re-pushes every beam and would hide a setter
+	# that never re-applied its own knob.
+	overlays.squad_casing_width = width
+	var ribbon_width := float(overlays.beam_parameter(BoardOverlays.Layer.TETHERS, &"casing_width"))
+	SquadLines2D.CASING_COLOR = color
+	overlays.restyle_squad_lines()
+	var ribbon_color: Color = overlays.beam_parameter(BoardOverlays.Layer.TETHERS, &"casing_color")
+	var hull_color: Color = overlays.hull_material_of(BoardOverlays.Layer.TETHERS) \
+		.get_shader_parameter(&"casing_color")
+	SquadLines2D.CASING_COLOR = saved
+
+	assert_float(ribbon_width).override_failure_message("the width knob never reached a standing tether") \
+		.is_equal_approx(width, 0.0001)
+	assert_bool(ribbon_color.is_equal_approx(color)).override_failure_message(
+			"the casing colour never reached a standing tether").is_true()
+	assert_bool(hull_color.is_equal_approx(color)).override_failure_message(
+			"the casing colour never reached a standing arrowhead's outline").is_true()
+
+
+# Distance from a point INSIDE a cone to its surface -- the nearer of the slanted face and the base cap.
+func _depth_inside(point: Vector3, cone: Dictionary) -> float:
+	var base: Vector3 = cone["base"]
+	var tip: Vector3 = cone["tip"]
+	var length := base.distance_to(tip)
+	var down := (base - tip) / length
+	var half_angle := atan2(float(cone["radius"]), length)
+	var along := (point - tip).dot(down)
+	var out := (point - tip - down * along).length()
+	return minf(along * sin(half_angle) - out * cos(half_angle), length - along)
+
+
+# The arrowhead's outline is a cone that WRAPS its own by the casing width all round: every point of the
+# arrowhead -- the tip, the base ring -- sits exactly that deep inside it, at the same apex angle. Asked
+# of the pure builder, so the geometry is checked rather than photographed.
+func test_the_casing_cone_wraps_its_cone_by_the_width_all_round() -> void:
+	var base := Vector3(3, 1, 0)
+	var tip := Vector3(3.6, 1.2, 0.3)
+	var radius := 0.07
+	var width := 0.025
+	var hull := BoardOverlays.casing_cone(base, tip, radius, width)
+	var axis := (tip - base).normalized()
+	var seed := axis.cross(Vector3.UP).normalized()
+	var points: Array[Vector3] = [tip]
+	for i in 6:
+		points.append(base + seed.rotated(axis, TAU * float(i) / 6.0) * radius)
+	for p in points:
+		assert_float(_depth_inside(p, hull)).override_failure_message(
+				"%s on the arrowhead is not the casing width inside its outline" % p) \
+			.is_equal_approx(width, 0.0001)
+	var hull_base: Vector3 = hull["base"]
+	var hull_tip: Vector3 = hull["tip"]
+	assert_float(atan2(float(hull["radius"]), hull_base.distance_to(hull_tip))) \
+		.override_failure_message("the outline is not the arrowhead's own shape") \
+		.is_equal_approx(atan2(radius, base.distance_to(tip)), 0.0001)
+	# ...and no width is the arrowhead it was handed.
+	var same := BoardOverlays.casing_cone(base, tip, radius, 0.0)
+	assert_bool((same["base"] as Vector3).is_equal_approx(base) and (same["tip"] as Vector3).is_equal_approx(tip)
+			and is_equal_approx(float(same["radius"]), radius)).is_true()
+
+
+# The outline DRAWS with a cased layer's arrowhead, UNDER it, and carries each cone's own fade; an uncased
+# layer's arrowhead builds none, and a zero width takes it away.
+func test_a_cased_arrowhead_draws_its_outline_beneath_it_and_an_uncased_one_none() -> void:
+	var overlays := _bare_overlays()
+	var marks: Array[Array] = [[
+		PackedVector3Array([Vector3(0, 1, 0), Vector3(3, 1, 0)]),
+		PackedVector3Array([Vector3(3, 1, 0), Vector3(3.5, 1, 0)]),
+	]]
+	var cones: Array[Dictionary] = [{"base": Vector3(3, 1, 0), "tip": Vector3(3.5, 1, 0), "radius": 0.1,
+		"tint": Color(1, 1, 1, 0.4)}]
+	overlays.set_marks(BoardOverlays.Layer.TETHERS, marks, Color.WHITE, [], cones)
+	overlays.set_marks(BoardOverlays.Layer.REACH_LINES, marks, Color.WHITE, [], cones)
+
+	var hull := overlays.hull_vertices_of(BoardOverlays.Layer.TETHERS)
+	assert_int(hull.size()).override_failure_message("a cased arrowhead drew no outline").is_greater(0)
+	for vertex: Dictionary in hull:
+		assert_float((vertex["color"] as Color).a).override_failure_message(
+				"the outline did not take its cone's own fade").is_equal_approx(0.4, 1.5 / 255.0)
+	assert_int(overlays.hull_material_of(BoardOverlays.Layer.TETHERS).render_priority) \
+		.override_failure_message("the outline sorts level with its arrowhead, so its far side can land on top") \
+		.is_less(overlays.cone_material_of(BoardOverlays.Layer.TETHERS).render_priority)
+	assert_object(overlays.hull_material_of(BoardOverlays.Layer.REACH_LINES)) \
+		.override_failure_message("the reach mark's arrowhead grew an outline it never declared").is_null()
+
+	overlays.squad_casing_width = 0.0
+	assert_array(overlays.hull_vertices_of(BoardOverlays.Layer.TETHERS)).override_failure_message(
+			"a zero casing width left the arrowhead's outline standing").is_empty()
+
+
 # The PLUCK reaches the strained tethers and no other line (#1070): a refused click shakes the tether
 # it would break, and the solid tethers beside it hold still. That is the whole reason STRAIN is a
 # layer of its own -- a layer is one material, and the shake is a uniform.
