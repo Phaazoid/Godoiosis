@@ -7,7 +7,7 @@ its child [#49 Action Queue UX](https://github.com/Phaazoid/Godoiosis/issues/49)
 This is a *guidelines* doc, not a spec — it captures the principles we're holding the work to,
 plus the running order of the queue-UX checklist. Update it as items land.
 
-**Canon checked through #1115 (2026-09-27).**
+**Canon checked through #1119 (2026-09-27).**
 
 ## Principles
 
@@ -3428,7 +3428,7 @@ The problem and the rulings are `missions.md`'s; this is how it draws. **`ZoneMa
 - **Hovering an enemy** -- that one enemy, transiently.
 - **Shift+left-click an enemy** -- PINS it, so it stays up past the pointer AND past V going off (dev: the pin overrides the toggle). Keyed by instance id, dropped in `game._on_unit_died`, and scoped to IDLE and PRE_MISSION -- the modes below own their click outright. **Right-click could not take this gesture**: it is the LIFO undo, and the most common moment to undo is right after queueing an attack, when the cursor is still sitting on the enemy you targeted.
 
-**HOVERING AN ENEMY IS READ IN THE ENEMY'S OWN VOCABULARY (dev ruling: unify).** It used to borrow THREE of the player's layers -- the yellow `MOVE` range, the orange `SQUAD_RANGE` cohesion bubble and the red `INVALID_MOVE` -- and all three answer the RAW question, *where could this body physically walk*. The cohesion bubble was the sharpest: a third picture of enemy movement, and the one `ThreatField` deliberately ignores. The enemy arm of `_hover_idle` draws the enemy's own field and the leash and none of those.
+**HOVERING AN ENEMY IS READ IN THE ENEMY'S OWN VOCABULARY (dev ruling: unify).** It used to borrow THREE of the player's layers -- the yellow `MOVE` range, the orange `SQUAD_RANGE` cohesion bubble and the red `INVALID_MOVE` -- and all three answer the RAW question, *where could this body physically walk*. The cohesion bubble was the sharpest: a third picture of enemy movement, and the one `ThreatField` deliberately ignores. The enemy arm of `_hover_idle` draws the enemy's own field and the leash and none of those. **[#1109](https://github.com/Phaazoid/Godoiosis/issues/1109) brought one back in another form**: the enemy squad's range and tethers, as a membership readout in the enemy's colour. See *An enemy squad's LINES* below.
 
 **The FRIENDLY arm grew the other half of that ruling in [#1066](https://github.com/Phaazoid/Godoiosis/issues/1066)**, and the dev's words were the whole spec: *"friendly units having different colors for showing movement and nothing for attack range is really outdated, and needs to be fixed. Blue for movement, attack range as red, like everyone else."* Until then your unit answered where it could WALK and said nothing at all about where it could HIT, while every enemy on the board answered both. The reach is drawn on HOVER as well as on selection, on his ruling: deciding who to move is when you want to know who they can touch.
 
@@ -3843,6 +3843,37 @@ This repeals #1069's "the reach still moves onto a refused cell", above.
   - whether grey reads as "walkable, not now";
   - all of it in the flat view.
 
+## An enemy squad's LINES, on enemy hover ([#1109](https://github.com/Phaazoid/Godoiosis/issues/1109), BUILT 2026-09-27)
+
+The dev, after playing #367 part 1: *"there's no good way to see the enemy's COH range at all."* Hovering an enemy now draws its squad's cohesion range and tethers, exactly as your own squad's are drawn, in the enemy's colour.
+
+**It reopens one line of #1066.** That ruling (*an enemy is read in the enemy's own vocabulary*) took the orange cohesion bubble off enemy hover before tethers existed. What came back is a readout of who is in the squad and how far its leash reaches, not a third picture of where it will move: `ThreatField` still ignores cohesion.
+
+### Rulings (grill, 2026-09-27, off an inline mockup on the real sprites)
+
+| Fork | Ruling |
+|---|---|
+| Colour | The threat field's purple, **lightened** (`SquadLines2D.ENEMY_TETHER_COLOR`) so it reads over that field and over bare ground alike. One colour for every enemy squad. Not taken: the exact threat purple (its dashes vanished over its own field), the squad's ring hue (dealt per squad, and the enemy orange nearly matches your tethers), bone white (reads as the white focus outline). |
+| What shows | **Both** the range stroke and the tethers. |
+| An enemy's break and draw-in | **The enemy colour too**, so an enemy tether looks the same standing or breaking. A break still strains to the one strain red, which means "breaking" for either side. |
+| While your squad is mid-plan | **Shown anyway**: that is when a shove to split them gets planned. The enemy's rings keep their gate. |
+
+### How it is built
+
+- **Whose side** is `SquadLines2D.is_hostile(faction)`, which is `Team.is_enemy(PLAYER, faction)`. It asks WHOSE SIDE, never who is in control (`MusicDirector`'s ruling), so a hotseat enemy squad wears the enemy colour while you command it, Join Squad included.
+- **One side per draw.** `OverlayManager.show_squad_lines(..., hostile)` stores `squad_lines_hostile`, which both views read. `game.draw_squad_cohesion` reads the side off the squad's leader, so all its callers are right with no edit. This holds because no caller draws two sides' squads at once; one that ever must would need the flag per link.
+- **Moments carry their own side.** `SquadTetherPresenter._link` stamps `hostile` and `moment_drawing` reads it. Moments of both sides already share `TETHER_MOMENT`, since each rides its own vertex tint.
+- **A pass takes the hover's lines down when it starts** (`OrderExecutor.execute_orders`). The 3D picker stops polling while the board is locked, so a hovered tether would otherwise stand intact, at its old cells, beside its own break at the blow. This covers your own squad's lines too, which had the same gap.
+- **Knob:** Game tab → Squad lines → *Enemy tether and range (2D+3D)*.
+
+**Test-craft worth carrying.** A case about hover markup during a pass has to hold the pointer the way the 3D picker does (`HoverPresenter.pointer_source`). In the flat scene the hover reads the live mouse, the pass pans the camera, and the hover's own repaint clears the lines by accident. The mutant without the pass-start clear passed that way until the case held its pointer.
+
+### Declared residuals
+
+- **Pins draw no lines.** V and Shift+click stay field-only; this is hover alone, as the issue scoped it.
+- **The Split chip stays tether orange**, even on a row whose blow splits an enemy squad (2A's ruling, not revisited here).
+- **How the rose reads in the lit diorama** over the real threat fill is the dev's to judge. The mockup's field was a flat blend with no lighting.
+
 ## Membership MOMENTS: a join draws the tether in, a leave reels it in, a forced exit breaks it ([#367](https://github.com/Phaazoid/Godoiosis/issues/367), part 1 BUILT 2026-09-23, part 2 BUILT 2026-09-27)
 
 #367 asked for a visible moment when a squad forms, a unit joins, or one leaves. #1070's tethers gave membership a body, and the dev's framing was that they are the vehicle: *"We have new tethers now for additional effect vectors."* [#423](https://github.com/Phaazoid/Godoiosis/issues/423)'s break folded in the same day. It is one mechanism, built as two PRs, and #423 closes with the second.
@@ -3857,7 +3888,7 @@ This repeals #1069's "the reach still moves onto a refused cell", above.
 | Downed | Breaks, like a shove (part 2). |
 | Death | *"death should have other effects, for a later issue"*: [#1104](https://github.com/Phaazoid/Godoiosis/issues/1104). |
 | Leadership passes | The old links play their exit, **then** each remaining member draws in to the new leader. |
-| Factions | Breaks play for every faction. Joins and leaves only ever come from the player; nothing in `ai/` forms or leaves a squad mid-battle. |
+| Factions | Breaks play for every faction, each in its own side's colour since [#1109](https://github.com/Phaazoid/Godoiosis/issues/1109). Joins and leaves only ever come from the player; nothing in `ai/` forms or leaves a squad mid-battle. |
 
 ### A moment is its own drawing, never a state on a standing tether
 
