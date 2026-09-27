@@ -7,7 +7,7 @@ its child [#49 Action Queue UX](https://github.com/Phaazoid/Godoiosis/issues/49)
 This is a *guidelines* doc, not a spec — it captures the principles we're holding the work to,
 plus the running order of the queue-UX checklist. Update it as items land.
 
-**Canon checked through #1119 (2026-09-27).**
+**Canon checked through #1126 (2026-09-27).**
 
 ## Principles
 
@@ -1225,12 +1225,21 @@ already had a richer HUD door. The principle worth keeping: **the unit's menu is
 the turn is the HUD's business.** The one capability genuinely lost is *"wipe everything this unit
 has queued in one press"*, which is now N presses of the queue row's X.
 
-**So the End Turn button is permanent** — with TWO exceptions, and they are one mechanism answering
-two questions. [#722](https://github.com/Phaazoid/Godoiosis/issues/722) stands it down while a
-cinematic pass owns the frame, on a different predicate entirely (see *The shell's menus, and what the
-cinematic owns* below); [#739](https://github.com/Phaazoid/Godoiosis/issues/739) stands the same pair
-down -- End Turn and the queue dock, through `game.set_battle_hud_hidden` -- for the pre-mission
-placement phase. A cinematic is nobody LOOKING; the phase is nobody ACTING, which is why the two
+**So the End Turn button stopped waiting for every squad to act** — it is up whenever ending the turn
+is on offer, and ONE `visible` composes two terms. The CONTENT term is
+[#541](https://github.com/Phaazoid/Godoiosis/issues/541)'s (dev, 2026-09-27: *"The End Turn button
+should not appear while queuing orders… the buttons are easily confused. It should also be hidden
+during the enemy turn."*): not while the ACTIVE FACTION is an AI faction, and not while a squad's plan
+is open (`squad_manager.active_squad`), where it sat under Execute as the same red rectangle. The
+AI's turn is read off the active faction rather than `playback_owns_board()`, because the faction
+switches at the handoff, a whole `TURN_HANDOFF` beat before the lock is claimed; and "the AI's turn"
+rather than "not the player's", so a hotseat faction keeps its door. `active_squad` got a SETTER for
+it, since its null writes land after `squad_became_empty` or with no signal at all. The HIDE term is
+one mechanism answering two questions. [#722](https://github.com/Phaazoid/Godoiosis/issues/722) stands
+it down while a cinematic pass owns the frame, on a different predicate entirely (see *The shell's
+menus, and what the cinematic owns* below); [#739](https://github.com/Phaazoid/Godoiosis/issues/739)
+stands the same pair down -- End Turn and the queue dock, through `game.set_battle_hud_hidden` -- for
+the pre-mission placement phase. A cinematic is nobody LOOKING; the phase is nobody ACTING, which is why the two
 readouts stay up there and not here. The second one is load-bearing rather than tidy: the button's
 press gates on `_board_locked_for_player()`, which is FALSE during the phase, so an un-hidden button
 would run `end_turn()` on a turn that never started.
@@ -1244,13 +1253,18 @@ its height FROM the reservation (`BUTTON_CLEARANCE - CORNER_MARGIN`) rather than
 third time. The general rule the pair of tickets makes: **a surface that stands down owes the frame
 whatever the player still needs from that corner.**
 
-A plain enemy turn still leaves it up, which is #541's ruling. What its old visibility rule became is the FLASH, and the
+What its old visibility rule became is the FLASH, and the
 same predicate (`faction_all_squads_acted`) now also decides whether pressing it **asks first** —
 so a flashing button never interrupts and a still one always does, and the cue and the confirmation
 cannot disagree. Two notes measured rather than assumed while making it permanent: `MissionStatusPanel`
 already reserved its corner slot *even while it was hidden*, so nothing reflows; and the queue dock
 occupies y 25..490 against the button's y 676..712, so the old "these two are never on screen
-together" argument was retired without its conclusion changing.
+together" argument was retired without its conclusion changing. #541 then made them rarely on screen
+together again, for a reason that is not layout; the measured gap is still what the suite asserts.
+What #541 leaves up is declared: behind a menu or a finished mission (the press refuses there), and
+ending a turn with a half-built queue now means executing or cancelling it first —
+[#1086](https://github.com/Phaazoid/Godoiosis/issues/1086)'s cancel-the-whole-queue is what makes that
+cheap.
 
 **A wedge is capped at how much it PAINTS** (`MAX_WEDGE_DEGREES`) — *"the massive balloon arcs just
 don't look great."* A compacting ring produces rings of one and two constantly, and without a cap
@@ -2892,8 +2906,10 @@ every show re-runs the info card's gate (and since #1105 a tile card redraws its
 player's own Execute never leaves `game_state` at IDLE, so a one-shot write at the claim edge is undone by the next show.
 `UnitInfoPanelControl.is_showing()`/`is_showing_unit()` therefore read the CONTENT half — a panel hidden
 for a cinematic has not let go of its unit, and game asks those two where to park the card.
-`#541` closed into this: one predicate writes the End Turn button's `visible`, and a plain enemy turn
-leaves it up.
+`#541` closed into this, and was REOPENED on 2026-09-27 for the wider rule its closing comment named:
+End Turn now also stands down for the whole AI turn and while a squad's plan is open. It is still ONE
+`visible` — the cinematic is the button's hide term and #541 its content term, the shape the other
+three surfaces already had (see *So the End Turn button stopped waiting* above).
 
 **2. The pause list is a build history, not a decision
 ([#724](https://github.com/Phaazoid/Godoiosis/issues/724)).** `PauseMenu._build`'s `_add_button` sequence

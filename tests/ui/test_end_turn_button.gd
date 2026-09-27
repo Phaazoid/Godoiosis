@@ -330,16 +330,22 @@ func test_back_when_the_queue_is_cancelled() -> void:
 
 
 # The player's OWN pass, with the zoom off so the cinematic term stays out of it. active_squad
-# holds for the whole pass and is let go in _end_squad_turn, so the one change is the return.
+# holds for the whole pass and is let go in _end_squad_turn, so the one change is the return -- and
+# it comes AFTER the blow, which is what the victim's HP at that moment says. A pass cannot be
+# sampled mid-flight headlessly (Pacing collapses every beat), so the stamp is the only witness.
 func test_hidden_through_the_players_own_pass_and_back_on_the_settled_board() -> void:
 	var was_zoom := PlayerSettings.choice_of(PlayerSettings.Setting.BATTLE_ZOOM_MODE)
 	PlayerSettings.set_choice(PlayerSettings.Setting.BATTLE_ZOOM_MODE, PlayerSettings.BattleZoom.OFF)
 	var attacker := _spawn(Team.Faction.PLAYER, Vector2i(2, 2))
 	var victim := _spawn(Team.Faction.ENEMY, Vector2i(3, 2))
+	var hp_before := victim.get_current_hp()
 	assert_bool(game.squad_manager.queue_action(attacker.squad, H.stamped_attack(attacker, victim))) \
 		.override_failure_message("fixture: the attack was refused").is_true()
 	assert_bool(game.end_turn_button.visible).is_false()
-	var seen := _record_visibility()
+	var seen: Array = []
+	var button: Control = game.end_turn_button
+	button.visibility_changed.connect(func() -> void:
+		seen.append([button.visible, victim.get_current_hp() < hp_before]))
 
 	await game.order_executor.execute_orders(attacker)
 	PlayerSettings.set_choice(PlayerSettings.Setting.BATTLE_ZOOM_MODE, was_zoom)
@@ -347,8 +353,9 @@ func test_hidden_through_the_players_own_pass_and_back_on_the_settled_board() ->
 	assert_bool(attacker.squad.has_acted).override_failure_message(
 		"fixture: the pass never ran, so an empty recording would prove nothing").is_true()
 	assert_array(seen).override_failure_message(
-		"End Turn moved mid-pass or never came back: %s" % [seen]) \
-		.is_equal([[true, Team.Faction.PLAYER]])
+		"End Turn moved mid-pass, came back before the blow landed, or never came back " \
+		+ "([visible, blow landed]): %s" % [seen]) \
+		.is_equal([[true, true]])
 
 
 # The whole enemy turn, driven by the real press. One hide stamped ENEMY -- at the handoff, before
