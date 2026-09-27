@@ -18,6 +18,10 @@ func before_test() -> void:
 		"swings": SquadLines2D.SHAKE_SWINGS, "cone": ThreatLines2D.CONE_LENGTH,
 		"arrow": SquadLines2D.ARROW_LENGTH,
 		"photo": PlayerSettings.is_on(PlayerSettings.Setting.PHOTOSENSITIVITY),
+		"draw_in": SquadLines2D.DRAW_IN_SECONDS, "pop_scale": SquadLines2D.POP_SCALE,
+		"pop_secs": SquadLines2D.POP_SECONDS, "hold": SquadLines2D.DRAWN_HOLD_SECONDS,
+		"fade": SquadLines2D.DRAWN_FADE_SECONDS, "reel": SquadLines2D.REEL_IN_SECONDS,
+		"brighten": SquadLines2D.POP_BRIGHTEN,
 	}
 
 
@@ -32,6 +36,13 @@ func after_test() -> void:
 	ThreatLines2D.CONE_LENGTH = _saved["cone"]
 	SquadLines2D.ARROW_LENGTH = _saved["arrow"]
 	PlayerSettings.set_on(PlayerSettings.Setting.PHOTOSENSITIVITY, _saved["photo"])
+	SquadLines2D.DRAW_IN_SECONDS = _saved["draw_in"]
+	SquadLines2D.POP_SCALE = _saved["pop_scale"]
+	SquadLines2D.POP_SECONDS = _saved["pop_secs"]
+	SquadLines2D.DRAWN_HOLD_SECONDS = _saved["hold"]
+	SquadLines2D.DRAWN_FADE_SECONDS = _saved["fade"]
+	SquadLines2D.REEL_IN_SECONDS = _saved["reel"]
+	SquadLines2D.POP_BRIGHTEN = _saved["brighten"]
 
 
 # --- The range's stroke -------------------------------------------------------------------------
@@ -195,3 +206,140 @@ func test_the_photosensitivity_setting_stills_the_pluck() -> void:
 	PlayerSettings.set_on(PlayerSettings.Setting.PHOTOSENSITIVITY, true)
 	assert_float(SquadLines2D.shake_now(stamp)).override_failure_message(
 			"the tether shook with the photosensitivity setting on").is_equal_approx(0.0, 0.0001)
+
+
+# --- Membership moments (#367) -------------------------------------------------------------------
+
+const _CHORD_MEMBER := Vector3(0.5, 1.0, 0.5)
+const _CHORD_LEADER := Vector3(4.5, 1.0, 0.5)
+
+
+func _moment_times(draw_in: float, pop: float, hold: float, fade: float, reel: float) -> void:
+	SquadLines2D.TETHER_INSET = 0.25
+	SquadLines2D.ARROW_LENGTH = 0.4
+	SquadLines2D.DRAW_IN_SECONDS = draw_in
+	SquadLines2D.POP_SCALE = 1.8
+	SquadLines2D.POP_SECONDS = pop
+	SquadLines2D.DRAWN_HOLD_SECONDS = hold
+	SquadLines2D.DRAWN_FADE_SECONDS = fade
+	SquadLines2D.REEL_IN_SECONDS = reel
+
+
+func _at(moment: int, elapsed: float, standing := false) -> Dictionary:
+	return SquadLines2D.moment_at(moment, PackedVector3Array([_CHORD_MEMBER, _CHORD_LEADER]), elapsed,
+			standing)
+
+
+# A draw-in GROWS from the member: the shaft's far end only ever advances, it never passes where the
+# cone begins, and the cone appears only once the shaft has reached it -- then grows to the full tip.
+func test_a_draw_in_grows_from_the_member_and_the_cone_follows_the_shaft() -> void:
+	_moment_times(0.4, 0.2, 0.5, 0.3, 0.4)
+	var m := SquadLines2D.measure(PackedVector3Array([_CHORD_MEMBER, _CHORD_LEADER]))
+	var last := -1.0
+	var cone_seen := false
+	for i in 41:
+		var drawn := _at(SquadLines2D.Moment.DRAW_IN, 0.4 * float(i) / 40.0)
+		var u1: float = drawn["u1"]
+		assert_float(float(drawn["u0"])).override_failure_message("a draw-in did not start at the member") \
+				.is_equal_approx(0.0, 0.0001)
+		assert_bool(u1 >= last).override_failure_message("the draw-in's front went backwards").is_true()
+		assert_bool(u1 <= float(m["shaft_end"]) + 0.0001).override_failure_message(
+				"the shaft ran into the cone").is_true()
+		if float(drawn["cone_grow"]) > 0.0:
+			cone_seen = true
+			assert_float(u1).override_failure_message("the cone appeared before the shaft reached it") \
+					.is_equal_approx(float(m["shaft_end"]), 0.0001)
+		last = u1
+	assert_bool(cone_seen).override_failure_message("the cone never appeared").is_true()
+	assert_float(float(_at(SquadLines2D.Moment.DRAW_IN, 0.4)["cone_grow"])).override_failure_message(
+			"the cone never reached the full tip").is_equal_approx(1.0, 0.0001)
+	assert_float(float(_at(SquadLines2D.Moment.DRAW_IN, -0.1)["u1"])).override_failure_message(
+			"a draw-in waiting its turn drew something").is_equal_approx(0.0, 0.0001)
+
+
+# The pop: the cone swells past its own size the moment the tether arrives, then settles back.
+func test_the_pop_swells_the_cone_then_settles_it() -> void:
+	_moment_times(0.4, 0.2, 0.5, 0.3, 0.4)
+	var at_arrival := float(_at(SquadLines2D.Moment.DRAW_IN, 0.4)["cone_scale"])
+	var settled := float(_at(SquadLines2D.Moment.DRAW_IN, 0.4 + 0.2)["cone_scale"])
+	var before := float(_at(SquadLines2D.Moment.DRAW_IN, 0.3)["cone_scale"])
+	assert_float(at_arrival).override_failure_message("the cone did not pop").is_greater(1.0)
+	assert_float(settled).override_failure_message("the pop never settled").is_equal_approx(1.0, 0.0001)
+	assert_float(before).override_failure_message("the cone popped before the tether arrived") \
+			.is_equal_approx(1.0, 0.0001)
+
+
+# With a standing tether for the pair (mid-Squad Up) the draw-in hands over as soon as it has popped;
+# with none (Join Squad just closed) it holds, fades to nothing, and only then is done.
+func test_a_draw_in_hands_over_to_a_standing_tether_or_holds_and_fades() -> void:
+	_moment_times(0.4, 0.2, 0.5, 0.3, 0.4)
+	var popped := 0.4 + 0.2 + 0.01
+	assert_bool(bool(_at(SquadLines2D.Moment.DRAW_IN, popped, true)["done"])).override_failure_message(
+			"a draw-in did not hand over to the standing tether").is_true()
+	assert_bool(bool(_at(SquadLines2D.Moment.DRAW_IN, popped, false)["done"])).override_failure_message(
+			"a draw-in with nothing to hand to ended instead of holding").is_false()
+	var held: Color = _at(SquadLines2D.Moment.DRAW_IN, 0.4 + 0.2 + 0.4, false)["tint"]
+	assert_float(held.a).override_failure_message("the held tether had already started fading") \
+			.is_equal_approx(SquadLines2D.TETHER_COLOR.a, 0.0001)
+	var fading: Color = _at(SquadLines2D.Moment.DRAW_IN, 0.4 + 0.2 + 0.5 + 0.15, false)["tint"]
+	assert_bool(fading.a < SquadLines2D.TETHER_COLOR.a and fading.a > 0.0).override_failure_message(
+			"the held tether was not fading halfway through its fade").is_true()
+	var gone := _at(SquadLines2D.Moment.DRAW_IN, 0.4 + 0.2 + 0.5 + 0.3 + 0.01, false)
+	assert_bool(bool(gone["done"])).override_failure_message("the faded tether never finished").is_true()
+
+
+# A reel-in is pulled INTO the leader: the member end only ever advances, the shaft is gone before the
+# cone starts to shrink, and the moment is over when the reel is.
+func test_a_reel_in_pulls_the_tether_into_the_leader() -> void:
+	_moment_times(0.4, 0.2, 0.5, 0.3, 0.4)
+	var last := -1.0
+	var shaft_gone_at := -1.0
+	var shrink_at := -1.0
+	for i in 41:
+		var t := 0.4 * float(i) / 40.0
+		var drawn := _at(SquadLines2D.Moment.REEL_IN, t)
+		var u0: float = drawn["u0"]
+		assert_bool(u0 >= last).override_failure_message("the reel-in's member end went backwards").is_true()
+		last = u0
+		if shaft_gone_at < 0.0 and u0 >= float(drawn["u1"]):
+			shaft_gone_at = t
+		if shrink_at < 0.0 and float(drawn["cone_scale"]) < 1.0:
+			shrink_at = t
+	assert_bool(shrink_at >= shaft_gone_at and shaft_gone_at >= 0.0).override_failure_message(
+			"the cone shrank while the shaft was still there").is_true()
+	assert_bool(bool(_at(SquadLines2D.Moment.REEL_IN, 0.4)["done"])).override_failure_message(
+			"the reel-in did not end with the reel").is_true()
+	assert_bool(bool(_at(SquadLines2D.Moment.REEL_IN, 0.3)["done"])).is_false()
+
+
+# The times are the knobs', as RATIOS: doubling the draw-in time doubles when the cone first shows.
+func test_a_moments_timing_follows_its_knob() -> void:
+	_moment_times(0.4, 0.2, 0.5, 0.3, 0.4)
+	var first := _first_cone_time()
+	SquadLines2D.DRAW_IN_SECONDS = 0.8
+	var doubled := _first_cone_time()
+	assert_float(doubled).override_failure_message("the draw-in ignored its time knob") \
+			.is_equal_approx(first * 2.0, 0.02)
+
+
+func _first_cone_time() -> float:
+	for i in 400:
+		var t := 2.0 * float(i) / 400.0
+		if float(_at(SquadLines2D.Moment.DRAW_IN, t)["cone_grow"]) > 0.0:
+			return t
+	return -1.0
+
+
+# #217: the pop's whitening is a flash, so the setting drops it -- and nothing else. The swell stays.
+func test_the_photosensitivity_setting_drops_the_pop_flash_but_not_the_swell() -> void:
+	_moment_times(0.4, 0.2, 0.5, 0.3, 0.4)
+	SquadLines2D.POP_BRIGHTEN = 0.8
+	var chord := PackedVector3Array([_CHORD_MEMBER, _CHORD_LEADER])
+	var lit := SquadLines2D.moment_at(SquadLines2D.Moment.DRAW_IN, chord, 0.4, false, true)
+	var still := SquadLines2D.moment_at(SquadLines2D.Moment.DRAW_IN, chord, 0.4, false, false)
+	assert_bool((lit["cone_tint"] as Color).is_equal_approx(SquadLines2D.TETHER_COLOR)) \
+			.override_failure_message("fixture: the pop did not flash").is_false()
+	assert_bool((still["cone_tint"] as Color).is_equal_approx(SquadLines2D.TETHER_COLOR)) \
+			.override_failure_message("the pop flashed with the photosensitivity setting on").is_true()
+	assert_float(float(still["cone_scale"])).override_failure_message(
+			"the setting stilled the swell as well as the flash").is_greater(1.0)

@@ -58,6 +58,7 @@ var _last_reach_line_version := -1   # ...and the reach lines, #710 slice 1 by w
 var _last_outline_version := -1  # ...and the focus stroke's (slice 4)
 var _last_squad_lines_version := -1   # ...and the squad's range and tethers (#1070)
 var _shake_pushed := 0.0   # the last pluck pushed, so a still tether costs no per-frame write
+var _moments_drawn := false   # whether TETHER_MOMENT holds anything, so an idle board costs nothing (#367)
 
 # How far the drop pointer stands off the cliff face it hangs on (#431), in cells. A depth-buffer
 # epsilon, not a feel value: big enough that a coplanar wall cannot stipple through it, small
@@ -120,6 +121,7 @@ func _process(_delta: float) -> void:
 	_reach_lines(om)
 	_focus_outline(om)
 	_squad_lines(om)
+	_tether_moments(om)
 	_arrows(om)
 
 	var kb_trails: Array[Dictionary] = []
@@ -810,7 +812,8 @@ func _squad_lines(om: OverlayManager) -> void:
 		var marks: Array[Array] = []
 		var widths: Array[Array] = []
 		var cones: Array[Dictionary] = []
-		for entry: Dictionary in om.squad_tethers:
+		# The DRAWN set, not the truth: a tether a draw-in moment stands in for waits for it (#367).
+		for entry: Dictionary in om.drawn_squad_tethers:
 			if entry["state"] != state:
 				continue
 			var flat: Array[PackedVector3Array] = []
@@ -833,6 +836,47 @@ func _squad_lines(om: OverlayManager) -> void:
 					"radius": overlays.squad_line_width * float(cone["scale"]) * 0.5,
 				})
 		overlays.set_marks(TETHER_LAYERS[state], marks, SquadLines2D.color_of(state), widths, cones)
+
+
+# The membership moments (#367), rebuilt EVERY frame one is in the air -- the growth, the pop and the
+# reel are geometry, not a uniform -- and cleared once when the last one ends, so an idle board pays
+# nothing. SquadLines2D.moment_drawing is the one answer both views read; this only lifts it. Each
+# moment's colour and fade ride its vertex tint, and `starts` keeps its dashes where the standing
+# tether's would be, so a draw-in hands over to one without a jump.
+func _tether_moments(om: OverlayManager) -> void:
+	if om.squad_tether_moments.is_empty():
+		if _moments_drawn:
+			overlays.clear(BoardOverlays.Layer.TETHER_MOMENT)
+			_moments_drawn = false
+		return
+	var now := Time.get_ticks_msec()
+	var flash := BoardOverlays.beams_animating()
+	var marks: Array[Array] = []
+	var cones: Array[Dictionary] = []
+	var tints: Array[Color] = []
+	var starts := PackedFloat32Array()
+	for entry: Dictionary in om.squad_tether_moments:
+		var drawing := SquadLines2D.moment_drawing(entry, now, flash)
+		var trace_shaft: PackedVector3Array = drawing["shaft"]
+		var shaft := PackedVector3Array()
+		for p: Vector3 in trace_shaft:
+			shaft.append(BoardSpace.trace_point(p))
+		var strokes: Array[PackedVector3Array] = [shaft]
+		var cone: Dictionary = drawing["cone"]
+		if cone.is_empty():
+			cones.append({})
+		else:
+			var base := BoardSpace.trace_point(cone["base"])
+			var tip := BoardSpace.trace_point(cone["tip"])
+			strokes.append(PackedVector3Array([base, tip]))
+			cones.append({"base": base, "tip": tip,
+					"radius": overlays.squad_line_width * float(cone["scale"]) * 0.5, "tint": cone["tint"]})
+		marks.append(strokes)
+		tints.append(drawing["tint"])
+		var origin := BoardSpace.trace_point(drawing["origin"])
+		starts.append(origin.distance_to(shaft[0]) if not shaft.is_empty() else 0.0)
+	overlays.set_marks(BoardOverlays.Layer.TETHER_MOMENT, marks, Color.WHITE, [], cones, tints, starts)
+	_moments_drawn = true
 
 
 # Which diorama layer draws each tether state.
