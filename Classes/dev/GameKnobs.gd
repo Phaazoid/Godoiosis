@@ -429,6 +429,7 @@ const SIGHT_TRACE_SCRIPT := "res://Classes/board/SightTrace2D.gd"
 const THREAT_LINES_SCRIPT := "res://Classes/board/ThreatLines2D.gd"
 const AIM_FLASH_SCRIPT := "res://Classes/board/AimFlash2D.gd"
 const MOVE_GRID_SCRIPT := "res://Classes/board/MoveGrid.gd"
+const ZONE_MARKS_SCRIPT := "res://Classes/board/ZoneMarks.gd"
 const SQUAD_LINES_SCRIPT := "res://Classes/board/SquadLines2D.gd"
 const UNIT_VISUALS_SCRIPT := "res://Classes/units/UnitVisuals.gd"
 const MUSIC_DIRECTOR_SCRIPT := "res://Classes/audio/MusicDirector.gd"
@@ -459,6 +460,29 @@ const CLASS_KNOBS: Array[Dictionary] = [
 		"tip": "A painted zone your units must reach to extract. Also visible all battle."},
 	{"group": "Squads & zones", "label": "Deployment zone", "layer": BoardOverlays.Layer.ZONE_DEPLOYMENT,
 		"tip": "Where the force you bring may be placed before the mission starts. Unlike the two above it is gone the moment turn 1 begins, so this colour only has to read against the map for as long as you are choosing."},
+	# The zone-look experiment (#955): each edge look and the wall, tunable before the choice is made.
+	# All seven regenerate the art ZoneMarks holds; the mirror picks it up the next frame.
+	{"group": "Zone marks", "label": "A: band width", "static": "ZONE_BAND_WIDTH", "script": ZONE_MARKS_SCRIPT,
+		"min": 0.02, "max": 0.4, "step": 0.01,
+		"tip": "Look A (Experiments > Zone look): how wide the solid band along a zone's inside edge is, as a fraction of a tile."},
+	{"group": "Zone marks", "label": "Edge outline", "static": "ZONE_EDGE_OUTLINE", "script": ZONE_MARKS_SCRIPT,
+		"min": 0.0, "max": 4.0, "step": 1.0,
+		"tip": "Looks A, B and C: the dark line on each side of a zone's edge, in pixels of the 32-pixel tile. It is what keeps a green zone readable on green grass. 0 is none."},
+	{"group": "Zone marks", "label": "B: rim width", "static": "ZONE_RIM_WIDTH", "script": ZONE_MARKS_SCRIPT,
+		"min": 0.05, "max": 0.5, "step": 0.01,
+		"tip": "Look B: how far in from the edge the glow reaches, as a fraction of a tile."},
+	{"group": "Zone marks", "label": "Inside fill", "static": "ZONE_FILL_ALPHA", "script": ZONE_MARKS_SCRIPT,
+		"min": 0.0, "max": 0.6, "step": 0.01,
+		"tip": "Looks A, B and C: the faint wash left inside a zone, as an alpha. 0 leaves the edge alone."},
+	{"group": "Zone marks", "label": "C: wall height", "static": "ZONE_WALL_HEIGHT", "script": ZONE_MARKS_SCRIPT,
+		"min": 0.05, "max": 1.5, "step": 0.05,
+		"tip": "Look C: how tall the wall of light stands, in tiles."},
+	{"group": "Zone marks", "label": "C: wall strength", "static": "ZONE_WALL_ALPHA", "script": ZONE_MARKS_SCRIPT,
+		"min": 0.0, "max": 1.0, "step": 0.05,
+		"tip": "Look C: how strong the wall is at its foot; it fades to nothing at the top."},
+	{"group": "Zone marks", "label": "C: shimmer speed", "static": "ZONE_SHIMMER_SPEED", "script": ZONE_MARKS_SCRIPT,
+		"min": 0.0, "max": 2.0, "step": 0.05,
+		"tip": "Look C: how fast the shimmer rises up the wall, in cycles a second. 0 holds it still."},
 	{"group": "Aiming", "label": "Attack reach (2D+3D)", "static": "ATTACK_MODULATE",
 		"tip": "The reach fill while aiming a damaging attack. Red reads as hostile, which is the whole reason a healing pick paints green instead."},
 	{"group": "Aiming", "label": "Heal reach (2D+3D)", "static": "HEAL_ATTACK_MODULATE",
@@ -1532,6 +1556,7 @@ const GROUP_TABS: Dictionary[String, String] = {
 	"Arrows & trails": "Markers",
 	"Guard": "Markers",
 	"Squads & zones": "Markers",
+	"Zone marks": "Markers",
 	"Squad lines": "Markers",
 	"Tile pick": "Markers",
 	"Lift, brackets & icons": "Markers",
@@ -1729,6 +1754,13 @@ static func read_static(name: String) -> Variant:
 		"GRID_LINE_WIDTH": return MoveGrid.GRID_LINE_WIDTH
 		"GRID_FILL_GAP": return MoveGrid.GRID_FILL_GAP
 		"GRID_FILL_ALPHA": return MoveGrid.GRID_FILL_ALPHA
+		"ZONE_BAND_WIDTH": return ZoneMarks.ZONE_BAND_WIDTH
+		"ZONE_EDGE_OUTLINE": return ZoneMarks.ZONE_EDGE_OUTLINE
+		"ZONE_RIM_WIDTH": return ZoneMarks.ZONE_RIM_WIDTH
+		"ZONE_FILL_ALPHA": return ZoneMarks.ZONE_FILL_ALPHA
+		"ZONE_WALL_HEIGHT": return ZoneMarks.ZONE_WALL_HEIGHT
+		"ZONE_WALL_ALPHA": return ZoneMarks.ZONE_WALL_ALPHA
+		"ZONE_SHIMMER_SPEED": return ZoneMarks.ZONE_SHIMMER_SPEED
 		"TETHER_COLOR": return SquadLines2D.TETHER_COLOR
 		"TETHER_GHOST_COLOR": return SquadLines2D.TETHER_GHOST_COLOR
 		"TETHER_STRAIN_COLOR": return SquadLines2D.TETHER_STRAIN_COLOR
@@ -2049,6 +2081,13 @@ static func write_static(host: Node3D, name: String, value: Variant) -> void:
 		"GRID_FILL_ALPHA":
 			MoveGrid.GRID_FILL_ALPHA = value
 			_restyle_move_grid(host)
+			return
+		# The zone-look experiment (#955). The art is generated, so every one of them regenerates it; the
+		# mirror reads the new textures and the wall its new shape on its next frame.
+		"ZONE_BAND_WIDTH", "ZONE_EDGE_OUTLINE", "ZONE_RIM_WIDTH", "ZONE_FILL_ALPHA", "ZONE_WALL_HEIGHT", \
+				"ZONE_WALL_ALPHA", "ZONE_SHIMMER_SPEED":
+			_write_zone_mark(name, value)
+			ZoneMarks.restyle()
 			return
 		# The squad's lines (#1070). Every one re-applies to BOTH views through one door: the 3D beam
 		# params (the dashes are shader uniforms) and the store, which re-derives the tethers -- the
@@ -2808,6 +2847,17 @@ static func _write_squad_line(name: String, value: Variant) -> void:
 		"DRAWN_HOLD_SECONDS": SquadLines2D.DRAWN_HOLD_SECONDS = value
 		"DRAWN_FADE_SECONDS": SquadLines2D.DRAWN_FADE_SECONDS = value
 		"REEL_IN_SECONDS": SquadLines2D.REEL_IN_SECONDS = value
+
+
+static func _write_zone_mark(name: String, value: Variant) -> void:
+	match name:
+		"ZONE_BAND_WIDTH": ZoneMarks.ZONE_BAND_WIDTH = value
+		"ZONE_EDGE_OUTLINE": ZoneMarks.ZONE_EDGE_OUTLINE = value
+		"ZONE_RIM_WIDTH": ZoneMarks.ZONE_RIM_WIDTH = value
+		"ZONE_FILL_ALPHA": ZoneMarks.ZONE_FILL_ALPHA = value
+		"ZONE_WALL_HEIGHT": ZoneMarks.ZONE_WALL_HEIGHT = value
+		"ZONE_WALL_ALPHA": ZoneMarks.ZONE_WALL_ALPHA = value
+		"ZONE_SHIMMER_SPEED": ZoneMarks.ZONE_SHIMMER_SPEED = value
 
 
 # The squad lines' re-apply (#1070): the diorama's beam params and the store's derived tethers, the

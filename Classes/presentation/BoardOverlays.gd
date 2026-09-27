@@ -39,6 +39,7 @@ enum Layer {
 	ZONE_DEPLOYMENT, ZONE_DEFEND,
 	REACH, THREAT, ENEMY_FOCUS_EDGE, REACH_LINES,
 	COHESION_EDGE, TETHERS, TETHER_GHOST, TETHER_STRAIN, TETHER_MOMENT,
+	ZONE_MARKS, ZONE_EMBLEMS,
 }
 enum Kind { FILL, BRACKET, SPRITE, BILLBOARD, LINE }
 
@@ -132,8 +133,9 @@ const LAYERS: Dictionary[Layer, Dictionary] = {
 	# not pool-allocation luck. A test pins THREAT < REACH < MOVE.
 	#
 	# Sorts -3 and -4 fell vacant when slice 4's dim pair went (the dev: "they shouldn't dim at
-	# all"), and -5 when #1070 retired the orange squad fills for lines. They are left vacant rather
-	# than compacted: the FLOOR is what a shift threatens --
+	# all"), and -5 when #1070 retired the orange squad fills for lines. #955 re-let -5 and -3 to the
+	# zone marks and emblems; -4 is still vacant. They were left vacant rather than compacted: the
+	# FLOOR is what a shift threatens --
 	# _lift_of is fill_lift + sort * lift_step, and the -7 zones sit at 0.012 with fill_lift 0.04.
 	Layer.THREAT: {"color": Color(0.72, 0.15, 0.28, 0.5), "sort": -2, "kind": Kind.FILL},
 	# ...and a stroke round the OUTSIDE of the hovered enemy's whole footprint (slice 4, the dev's
@@ -261,6 +263,13 @@ const LAYERS: Dictionary[Layer, Dictionary] = {
 	# the lawful band -- a law pins every layer under EFFECT_RENDER_PRIORITY. A BILLBOARD
 	# ignores _lift_of and rides billboard_lift, so this moves PRIORITY only, not geometry.
 	Layer.ICONS: {"color": Color.WHITE, "sort": 15, "kind": Kind.BILLBOARD},
+	# A zone's EDGE (#955), per cell, drawn as the experiment ZoneMarks.look() picks -- in place of the
+	# kind's wash above, not over it. -5 is a vacated slot in the zone band's neighbourhood: above the
+	# wash and the picked-zone highlight, UNDER every range tone, because a zone is ground and the
+	# interaction reads over it (#346). Tint arrives per marker, so the colour here is WHITE.
+	Layer.ZONE_MARKS: {"color": Color.WHITE, "sort": -5, "kind": Kind.SPRITE},
+	# ...and its EMBLEM, one per zone, a slot above the edge it can share a cell with.
+	Layer.ZONE_EMBLEMS: {"color": Color.WHITE, "sort": -3, "kind": Kind.SPRITE},
 }
 
 const FILL_TEXTURE_PATH := "res://Art/LookDev/cell_fill.png"

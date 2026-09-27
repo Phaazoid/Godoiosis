@@ -8,7 +8,8 @@ class_name TileReadout
 # Every fact comes off the store that already answers it, never a re-derivation: watches off
 # OverlayManager's marked set (so a watch whose reticle is gone is never named), zones off
 # ZoneManager filtered by MissionController.hidden_zone_names (so a zone whose tint is gone is never
-# named), meanings off Glossary. The GROUND section is HoverPresenter._tile_readout_lines, moved
+# named), each kind heading its own section with the emblem the board wears (ZoneMarks, #955),
+# meanings off Glossary. The GROUND section is HoverPresenter._tile_readout_lines, moved
 # here unchanged.
 #
 # Explicit types throughout: `game` is untyped (game.gd has no class_name).
@@ -16,7 +17,6 @@ class_name TileReadout
 enum Layer { WATCH, ZONE, GROUND }
 
 # PLACEHOLDER headings and side words, the dev's to rewrite.
-const HEADING_ZONES := "Zones"
 const HEADING_GROUND := "Ground"
 const SIDE_WORDS: Dictionary[Team.Faction, String] = {
 	Team.Faction.PLAYER: "yours",
@@ -67,9 +67,7 @@ static func compose(game, cell: Vector2i) -> Array[Section]:
 	var watch := _watch_section(game, cell)
 	if watch != null:
 		sections.append(watch)
-	var zones := _zone_section(game, cell)
-	if zones != null:
-		sections.append(zones)
+	sections.append_array(_zone_sections(game, cell))
 	var ground := Section.new()
 	ground.layer = Layer.GROUND
 	ground.heading = HEADING_GROUND
@@ -133,22 +131,32 @@ static func _watch_line(watch: Watch) -> String:
 	return line
 
 
-static func _zone_section(game, cell: Vector2i) -> Section:
+# One section per zone KIND on this cell, in the kind enum's order: headed by the kind's name and the
+# emblem the board wears for it, then each zone of that kind by name, then once what the kind means.
+static func _zone_sections(game, cell: Vector2i) -> Array[Section]:
 	var zones: ZoneManager = game.zone_manager
 	var hidden: Array[String] = game.mission_controller.hidden_zone_names()
-	var section := Section.new()
-	section.layer = Layer.ZONE
-	section.heading = HEADING_ZONES
+	var by_kind: Dictionary[ZoneManager.Kind, Section] = {}
 	for zone_name in zones.zone_names():
 		var kind: ZoneManager.Kind = zones.kind_of(zone_name)
 		if ZoneManager.AUTHORING_KINDS.has(kind) or hidden.has(zone_name):
 			continue
 		if not zones.contains(zone_name, cell):
 			continue
-		var term: Glossary.Term = Glossary.term_for_zone_kind(kind)
-		section.rows.append(Row.make("%s: %s" % [zone_name, Glossary.title(term)]))
-		section.rows.append(Row.make(Glossary.short(term), true))
-	return null if section.rows.is_empty() else section
+		if not by_kind.has(kind):
+			var section := Section.new()
+			section.layer = Layer.ZONE
+			section.heading = Glossary.title(Glossary.term_for_zone_kind(kind))
+			section.marking = ZoneMarks.emblem_of(kind)
+			section.marking_color = ZoneMarks.colour_of(kind)
+			by_kind[kind] = section
+		by_kind[kind].rows.append(Row.make(zone_name))
+	var sections: Array[Section] = []
+	for kind: ZoneManager.Kind in ZoneManager.Kind.values():
+		if by_kind.has(kind):
+			by_kind[kind].rows.append(Row.make(Glossary.short(Glossary.term_for_zone_kind(kind)), true))
+			sections.append(by_kind[kind])
+	return sections
 
 
 # The tile card's body (#135): each dynamic state (with its live clock), the ground rules worth
