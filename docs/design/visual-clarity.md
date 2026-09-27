@@ -1362,6 +1362,8 @@ first as `ALWAYS_SHOW_SQUAD_RINGS`. What remains open is the animation itself, a
 question the restraint doctrine sharpens: squads re-form often, and three of these firing at once
 during a settle is worth designing for rather than discovering.
 
+**Built on the TETHER rather than the ring by [#367](https://github.com/Phaazoid/Godoiosis/issues/367) (2026-09-23)**, #423 folded in: see *Membership MOMENTS* at the end of this file.
+
 **Warn when a move ends on — or crosses — an element-afflicted tile — the QUEUE half BUILT
 ([#419](https://github.com/Phaazoid/Godoiosis/issues/419), 2026-09-01).** *(Merged capture: the
 action-menu warning recorded 2026-08-18 and the queue-row warning recorded 2026-08-19 are the same
@@ -3782,11 +3784,65 @@ This repeals #1069's "the reach still moves onto a refused cell", above.
 ### Declared residuals
 
 - ~~**A ghost cone is darker, not see-through.**~~ **Built the same day**, on the dev's first look: see *The shape is shared* above. It took the second shader file this line predicted.
-- **The tether BREAKING** when a shove or melting ice ejects a member went to #423, with the correction comment's warning attached. Tethers are interaction-scoped, so at a settle point there is usually none on screen to snap, and the break has to be its own short-lived effect.
+- **The tether BREAKING** when a shove or melting ice ejects a member went to #423, with the correction comment's warning attached. Tethers are interaction-scoped, so at a settle point there is usually none on screen to snap, and the break has to be its own short-lived effect. **#423 folded into [#367](https://github.com/Phaazoid/Godoiosis/issues/367) on 2026-09-23 — see *Membership MOMENTS* below.**
 - **What only the dev can judge:**
   - dash size and speed;
   - whether the range and the tethers read as one system;
   - whether ghosts read as "maybe";
   - the pluck's feel;
   - whether grey reads as "walkable, not now";
+  - all of it in the flat view.
+
+## Membership MOMENTS: a join draws the tether in, a leave reels it in ([#367](https://github.com/Phaazoid/Godoiosis/issues/367), part 1 BUILT 2026-09-23)
+
+#367 asked for a visible moment when a squad forms, a unit joins, or one leaves. #1070's tethers gave membership a body, and the dev's framing was that they are the vehicle: *"We have new tethers now for additional effect vectors."* [#423](https://github.com/Phaazoid/Godoiosis/issues/423)'s break folded in the same day. It is one mechanism, built as two PRs, and #423 closes with the second.
+
+### The rulings (grill, 2026-09-23, off animated mockups with the real sprites)
+
+| Question | Ruling |
+|---|---|
+| Join | **Draw in.** The tether grows from the member to the leader, then the cone pops. |
+| Voluntary leave (Leave Squad, Disband) | **Reel in.** The tether is pulled into the leader. |
+| Forced break (part 2) | *"the snap, sparks, and shatter"*: red strain, a snap with sparks at the break, the dashes shatter and fall, and the arrowhead drops too. |
+| Downed | Breaks, like a shove (part 2). |
+| Death | *"death should have other effects, for a later issue"*: [#1104](https://github.com/Phaazoid/Godoiosis/issues/1104). |
+| Leadership passes | The old links play their exit, **then** each remaining member draws in to the new leader. |
+| Factions | Breaks play for every faction. Joins and leaves only ever come from the player; nothing in `ai/` forms or leaves a squad mid-battle. |
+
+### A moment is its own drawing, never a state on a standing tether
+
+Tethers stand only while something is selected, and membership changes at settle points when nothing is. That is #423's visibility-schedule law, and it rules out animating a standing tether. So each change plays a short-lived **moment** that draws whether or not a tether was up.
+
+- **Who does what.** `SquadTetherPresenter` (`board/`) decides which moments play. `OverlayManager.squad_tether_moments` holds them while they do. `SquadLines2D.moment_at` / `moment_drawing` is the one answer to what a moment looks like at a given age, and both views read it. The diorama draws on `Layer.TETHER_MOMENT`, rebuilt every frame while a moment is in the air and cleared once after: `ArcLightning`'s rebuild-while-alive shape, costing nothing when idle.
+- **The presenter diffs; it does not react per signal.** One call can change membership several times: a leader leaving picks a new leader, and that leader's range and capacity can eject members in the same call. Handled per signal, a tether would draw in to the new leader and end in the same frame. So the presenter keeps a baseline of every member-to-leader link and asks, once the operation is over, which links ended, which began, and why each ended. An ended link takes the MEMBER's cause if the member left, otherwise its leader's. The baseline advances on every flush whether or not anything plays, so it cannot go stale.
+- **A join settles at once, a leave at the end of the frame.** `join_squad` emits last, and Squad Up redraws the squad's tethers one line later in the same frame. Settling first is what lets the recruit's tether be held back from its first frame; a deferred settle showed it whole for one frame in 3D, because `OverlayMirror._process` lifts before the deferred queue runs. A leave defers because a disband loops and a leader's leave cascades.
+- **A draw-in holds back its pair's standing tether.** A draw-in over a tether that is already whole is invisible. `squad_tethers` stays the truth, and `drawn_squad_tethers` omits any pair a draw-in is standing in for, running or waiting its turn. Both views read the drawn list. The draw-in hands over once it has popped if a standing tether exists for its pair (mid-Squad Up); if none does (Join Squad has just closed its pick), it holds, then fades.
+- **Where the new leader's links wait.** A link that begins in the same operation as one that ends waits for the exit to finish. That is the dev's "then", and today it is the reel-in time.
+- **Dashes stay where the whole tether's would be.** A part-drawn tether carries its distance from the chord's origin: the flat view's `_dashed(start)` and the diorama's `set_marks(..., starts)`. The pattern neither slides nor restarts, and the hand-over is seamless.
+- **Loading is inert.** `arm()` takes the baseline silently. `MissionController._begin_turn` and `_open_deployment` call it, and those are where every load lands: fresh start, commit, restart, resume and the pre-mission phase. `ScenarioManager.clear_board` resets it.
+
+### Why a unit left: `SquadManager.LeaveCause`
+
+`squad_member_left(squad, unit, cause)` is the twin #182 deliberately left unbuilt. It is emitted from `_erase_from`, the one erase door. **`disband_squad` used to erase directly and was the one loss nothing announced**; it goes through the door now.
+
+- `leave_squad(unit)` is the VERB. The menu, replay and the Play API call it, and it is always VOLUNTARY.
+- Every forced exit that keeps the unit standing is `eject(unit, cause)`: FORCED for `enforce_contact` and both `check_reassign_leader` ejections, DOWNED for `handle_unit_downed`.
+- `handle_unit_death` is DEATH. `release` (the pre-mission undeploy) is RELEASE.
+- Leaving a solo squad to join another is VOLUNTARY too, and ends no link.
+
+What plays, in part 1: VOLUNTARY reels in. FORCED and DOWNED play nothing until part 2's break. DEATH plays nothing (#1104). RELEASE plays nothing, since an undeploy has no ruling.
+
+### Two facts the build measured
+
+- **A vertex colour is stored at EIGHT BITS a channel** (0.5 reads back 0.498). The moments' colours and fades ride the vertex colour, which is fine for a fade, but a case comparing colours needs a step's tolerance.
+- **`reach_cone_alpha.gdshader` reads `COLOR.rgb` and `COLOR.a` now**, with a cone's tint multiplied into its baked facet shade (`add_beam_cone`'s `tint`). White bakes (shade, shade, shade, 1), which is exactly the `COLOR.r` read it replaced. The solid `reach_cone.gdshader` is untouched.
+
+### Declared residuals
+
+- **Forced exits play nothing yet.** A shove, melting ice, a reassignment's ejections and a downing wait for part 2's break.
+- **The moments run on the wall clock**, like the pluck. A modal opened mid-moment lets it finish unseen, and a hitstop does not freeze it.
+- **What only the dev can judge:**
+  - the timings;
+  - whether the pop reads at his zoom;
+  - whether the new leader's "then" is too slow;
   - all of it in the flat view.

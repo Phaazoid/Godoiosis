@@ -963,6 +963,78 @@ func test_squad_lines_and_icons_mirror() -> void:
 	assert_int(_overlays.markers_of(BoardOverlays.Layer.ICONS).size()).is_equal(1)
 
 
+# --- Membership moments (#367) ---------------------------------------------------------------------
+
+# A moment reaches the diorama off the same store the flat view draws, hanging at its chord like the
+# tether it stands for -- and part-drawn, its dash measure counts on from the chord's origin, so its
+# dashes sit where the whole tether's would. Played with a long reel and aged by hand to mid-reel,
+# so the member end has moved and there is an offset to see.
+func test_a_tether_moment_hangs_at_its_chord_with_its_dashes_in_place() -> void:
+	var saved := SquadLines2D.REEL_IN_SECONDS
+	SquadLines2D.REEL_IN_SECONDS = 30.0
+	var pair := _squad_pair()
+	var links: Array[Dictionary] = [{"from": pair[1].movement.cell, "to": pair[0].movement.cell,
+			"moment": SquadLines2D.Moment.REEL_IN, "delay": 0.0}]
+	_om().play_tether_moments(links, game._board())
+	_om().squad_tether_moments[0]["start_msec"] = Time.get_ticks_msec() - 15000
+	await _settle()
+	var lines := _overlays.lines_of(BoardOverlays.Layer.TETHER_MOMENT)
+	var chord: PackedVector3Array = _om().squad_tether_moments[0]["chord"]
+	var marker := _overlays._markers[BoardOverlays.Layer.TETHER_MOMENT][0] as MeshInstance3D
+	var uv2: PackedVector2Array = (marker.mesh as ImmediateMesh).surface_get_arrays(0)[Mesh.ARRAY_TEX_UV2]
+	SquadLines2D.REEL_IN_SECONDS = saved
+
+	assert_bool(lines.size() > 0 and lines[0].size() > 0).override_failure_message(
+			"the moment never reached the diorama").is_true()
+	var origin := BoardSpace.trace_point(chord[0])
+	assert_float(lines[0][0].y).override_failure_message("the moment does not hang at its chord's height") \
+		.is_equal_approx(origin.y, 0.001)
+	var offset := origin.distance_to(lines[0][0])
+	assert_float(offset).override_failure_message("fixture: the member end has not moved yet") \
+		.is_greater(0.0)
+	assert_float(uv2[0].x).override_failure_message(
+			"the moment's dashes restarted at its own end instead of counting from the chord's origin") \
+		.is_equal_approx(offset, 0.001)
+
+
+# A DRAW-IN stands in for its pair's standing tether: while it grows, the standing one is held back in
+# the diorama too (a whole tether under a growing one hides the growth), though the store still holds
+# it as the truth -- and once the draw-in has popped, the standing tether is handed back.
+func test_a_draw_in_holds_back_its_pairs_standing_tether_then_hands_it_over() -> void:
+	var saved := [SquadLines2D.DRAW_IN_SECONDS, SquadLines2D.POP_SECONDS]
+	var pair := _squad_pair()
+	game.draw_squad_cohesion(pair[0].squad, pair[0].movement.cell)
+	await _settle()
+	assert_bool(_overlays.lines_of(BoardOverlays.Layer.TETHERS).is_empty()).override_failure_message(
+			"fixture: no standing tether to hold back").is_false()
+
+	SquadLines2D.DRAW_IN_SECONDS = 30.0
+	var links: Array[Dictionary] = [{"from": pair[1].movement.cell, "to": pair[0].movement.cell,
+			"moment": SquadLines2D.Moment.DRAW_IN, "delay": 0.0}]
+	_om().play_tether_moments(links, game._board())
+	await _settle()
+	var held_back := _overlays.lines_of(BoardOverlays.Layer.TETHERS).is_empty()
+	var truth := _om().squad_tethers.size()
+	var growing := not _overlays.lines_of(BoardOverlays.Layer.TETHER_MOMENT).is_empty()
+
+	SquadLines2D.DRAW_IN_SECONDS = 0.0
+	SquadLines2D.POP_SECONDS = 0.0
+	await _settle()
+	var handed_back := not _overlays.lines_of(BoardOverlays.Layer.TETHERS).is_empty()
+	var moment_gone := _overlays.lines_of(BoardOverlays.Layer.TETHER_MOMENT).is_empty()
+	SquadLines2D.DRAW_IN_SECONDS = saved[0]
+	SquadLines2D.POP_SECONDS = saved[1]
+
+	assert_bool(growing).override_failure_message("the draw-in never reached the diorama").is_true()
+	assert_bool(held_back).override_failure_message(
+			"the standing tether drew underneath its own draw-in").is_true()
+	assert_int(truth).override_failure_message("holding the tether back dropped it from the store's truth") \
+		.is_equal(1)
+	assert_bool(handed_back).override_failure_message(
+			"the standing tether never came back after its draw-in").is_true()
+	assert_bool(moment_gone).override_failure_message("the finished moment stayed in the diorama").is_true()
+
+
 # The tether's arrowhead is sized by ITS OWN knob (dev, 2026-09-22): the diorama's cone scales with
 # SquadLines2D.ARROW_WIDTH_SCALE, and the reach mark's CONE_WIDTH_SCALE -- the enemy intent's -- does
 # not reach it. Asked as ratios against the drawn geometry, never as the widths themselves.

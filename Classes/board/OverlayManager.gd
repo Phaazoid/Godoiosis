@@ -385,8 +385,16 @@ var focus_outline_version := 0
 # the source and `squad_tethers` is derived from them, so a knob that reshapes a tether re-derives
 # without anyone holding a BoardContext across frames for a slider (ThreatLines2D.mark's reason).
 var squad_outline: Array[PackedVector3Array] = []
-var squad_tether_chords: Array[Dictionary] = []   # {"chord": PackedVector3Array, "state": SquadLines2D.Strain}
+# {"chord": PackedVector3Array, "state": SquadLines2D.Strain, "from": member cell, "to": leader cell}
+var squad_tether_chords: Array[Dictionary] = []
 var squad_tethers: Array[Dictionary] = []   # {"strokes": Array[PackedVector3Array], "state": ...}
+# ...the ones the views DRAW (#367): the same, minus any tether a draw-in moment is standing in for,
+# since a draw-in over an already-whole tether is invisible. squad_tethers stays the truth.
+var drawn_squad_tethers: Array[Dictionary] = []
+# The membership MOMENTS in the air (#367): {"from", "to", "chord", "moment": SquadLines2D.Moment,
+# "start_msec", "standing"}. `standing` is whether a standing tether exists for the same pair, which
+# is what lets a draw-in hand over to it rather than fade. Played on one clock, pruned by _process.
+var squad_tether_moments: Array[Dictionary] = []
 var squad_lines_version := 0
 # When the strained tethers were last plucked (#1070), in Time.get_ticks_msec; -1 is never. A stamp
 # rather than a running animation, so both views read one clock and neither owns a tween.
@@ -560,6 +568,8 @@ func _ready() -> void:
 	_squad_lines_2d.name = "SquadLines2D"
 	_squad_lines_2d.z_index = TERRAIN_Z_INDEX
 	add_child(_squad_lines_2d)
+	# The moments' clock (#367) runs only while one is in the air.
+	set_process(false)
 
 
 # The flat view's half of MoveGrid (#1074): the move tileset's one tile, drawn from the same rule the
@@ -791,7 +801,8 @@ func show_squad_lines(bubbles: Array, links: Array[Dictionary], board: BoardCont
 	var chords: Array[Dictionary] = []
 	for link: Dictionary in links:
 		chords.append({"chord": SquadLines2D.chord(link["from"], link["to"], board),
-				"state": link.get("state", SquadLines2D.Strain.SOLID)})
+				"state": link.get("state", SquadLines2D.Strain.SOLID),
+				"from": link["from"], "to": link["to"]})
 	squad_outline = outline
 	squad_tether_chords = chords
 	_rebuild_squad_tethers()
@@ -807,17 +818,84 @@ func restyle_squad_lines() -> void:
 	_rebuild_squad_tethers()
 
 
-# THE ONE derivation from chord to strokes, so the draw path and the knob path cannot disagree.
+# THE ONE derivation from chord to strokes, so the draw path and the knob path cannot disagree. It also
+# settles the two facts the standing set and the moments decide about each other (#367): which
+# standing tethers a draw-in is standing in for, and which moments have a standing tether to hand to.
 func _rebuild_squad_tethers() -> void:
 	var built: Array[Dictionary] = []
+	var drawn: Array[Dictionary] = []
 	for entry: Dictionary in squad_tether_chords:
-		built.append({"strokes": SquadLines2D.tether(entry["chord"]), "state": entry["state"]})
+		var tether := {"strokes": SquadLines2D.tether(entry["chord"]), "state": entry["state"]}
+		built.append(tether)
+		if not _drawing_in(entry["from"], entry["to"]):
+			drawn.append(tether)
+	for moment: Dictionary in squad_tether_moments:
+		moment["standing"] = _has_standing_tether(moment["from"], moment["to"])
 	squad_tethers = built
+	drawn_squad_tethers = drawn
 	squad_lines_version += 1
 	if _squad_lines_2d != null:
 		_squad_lines_2d.outline = squad_outline
-		_squad_lines_2d.tethers = squad_tethers
+		_squad_lines_2d.tethers = drawn_squad_tethers
+		_squad_lines_2d.moments = squad_tether_moments
 		_squad_lines_2d.refresh()
+
+
+# --- Membership moments (#367) ------------------------------------------------------------------
+# SquadTetherPresenter decides WHICH moments play; this is where they live while they do, the same
+# store/two-views shape as the tethers. Each link is {"from": member cell, "to": leader cell,
+# "moment": SquadLines2D.Moment, "delay": seconds before it starts}.
+
+func play_tether_moments(links: Array[Dictionary], board: BoardContext) -> void:
+	if links.is_empty():
+		return
+	var now := Time.get_ticks_msec()
+	for link: Dictionary in links:
+		squad_tether_moments.append({"from": link["from"], "to": link["to"],
+				"chord": SquadLines2D.chord(link["from"], link["to"], board),
+				"moment": link["moment"], "start_msec": now + int(float(link.get("delay", 0.0)) * 1000.0),
+				"standing": false})
+	_rebuild_squad_tethers()
+	set_process(true)
+
+
+func clear_tether_moments() -> void:
+	if squad_tether_moments.is_empty():
+		return
+	squad_tether_moments = []
+	_rebuild_squad_tethers()
+	set_process(false)
+
+
+# The moments' clock: a finished one leaves, and the tether it stood in for comes back.
+func _process(_delta: float) -> void:
+	var now := Time.get_ticks_msec()
+	var live: Array[Dictionary] = []
+	for moment: Dictionary in squad_tether_moments:
+		var elapsed := float(now - int(moment["start_msec"])) / 1000.0
+		var drawn := SquadLines2D.moment_at(moment["moment"], moment["chord"], elapsed, moment["standing"])
+		if not drawn["done"]:
+			live.append(moment)
+	if live.size() != squad_tether_moments.size():
+		squad_tether_moments = live
+		_rebuild_squad_tethers()
+	if squad_tether_moments.is_empty():
+		set_process(false)
+
+
+# Is a draw-in, running or waiting its turn, standing in for this pair's tether?
+func _drawing_in(from: Vector2i, to: Vector2i) -> bool:
+	for moment: Dictionary in squad_tether_moments:
+		if moment["moment"] == SquadLines2D.Moment.DRAW_IN and moment["from"] == from and moment["to"] == to:
+			return true
+	return false
+
+
+func _has_standing_tether(from: Vector2i, to: Vector2i) -> bool:
+	for entry: Dictionary in squad_tether_chords:
+		if entry["from"] == from and entry["to"] == to:
+			return true
+	return false
 
 
 # The refused click (#1070): pluck every STRAINED tether. A stamp both views read against one clock.

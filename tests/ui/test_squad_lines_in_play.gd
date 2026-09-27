@@ -472,3 +472,99 @@ func test_the_join_that_fills_the_squad_holds_its_count_then_fades_it() -> void:
 			"the full count never faded out").is_null()
 	OverlayManager.SQUAD_COUNT_HOLD = hold
 	OverlayManager.SQUAD_COUNT_FADE = fade
+
+
+# --- Membership moments (#367) -------------------------------------------------------------------
+# What a join or a leave DOES on the real board: the presenter hears the real SquadManager, the store
+# plays the moment, and a draw-in holds its pair's standing tether back. This fixture clears the board
+# rather than landing a mission, so each case arms the presenter itself -- except the one that pins
+# the landing doing it.
+
+# A Squad Up pick draws the recruit's tether IN, and the squad's redraw one line later -- which puts
+# the recruit's tether up whole -- must find it already held back. Asked the moment the click returns,
+# which is the frame the player would see it in.
+func test_a_squad_up_pick_draws_the_recruit_in_and_holds_its_standing_tether_back() -> void:
+	var saved := [SquadLines2D.DRAW_IN_SECONDS, SquadLines2D.POP_SECONDS]
+	SquadLines2D.DRAW_IN_SECONDS = 30.0
+	var board: Dictionary = await _squad(5, [])
+	var leader: Unit = board.leader
+	var first := _spawn(5, Vector2i(1, 0))
+	_spawn(5, Vector2i(0, 1))
+	await await_idle_frame()
+	game.squad_tether_presenter.arm()
+
+	game.create_squad(leader)
+	game._click_picking_target(first.movement.cell)
+	var moments: Array[Dictionary] = _om().squad_tether_moments.duplicate()
+	var drawn := _om().drawn_squad_tethers.size()
+	var standing := _om().squad_tethers.size()
+	var recruit_standing := _tether_state_of(first)
+
+	SquadLines2D.DRAW_IN_SECONDS = 0.0
+	SquadLines2D.POP_SECONDS = 0.0
+	await await_idle_frame()
+	await await_idle_frame()
+	var after_moments := _om().squad_tether_moments.size()
+	var after_drawn := _om().drawn_squad_tethers.size()
+	SquadLines2D.DRAW_IN_SECONDS = saved[0]
+	SquadLines2D.POP_SECONDS = saved[1]
+
+	assert_int(moments.size()).override_failure_message(
+			"the pick played %d moments the moment it returned" % moments.size()).is_equal(1)
+	assert_int(int(moments[0]["moment"])).is_equal(SquadLines2D.Moment.DRAW_IN)
+	assert_that(moments[0]["from"]).override_failure_message("the draw-in is not the recruit's") \
+		.is_equal(first.get_projected_destination())
+	assert_that(moments[0]["to"]).is_equal(leader.get_projected_destination())
+	assert_int(recruit_standing).override_failure_message(
+			"fixture: the reopened pick did not put the recruit's tether up").is_equal(SquadLines2D.Strain.SOLID)
+	assert_int(drawn).override_failure_message(
+			"the recruit's whole tether drew under its own draw-in").is_equal(standing - 1)
+	assert_int(after_moments).override_failure_message("the draw-in never finished").is_equal(0)
+	assert_int(after_drawn).override_failure_message(
+			"the recruit's tether was not handed back after its draw-in").is_equal(_om().squad_tethers.size())
+
+
+# The menu's Leave Squad reels the member's tether into its leader -- the cause is the verb's, so a
+# forced-exit door answering here would reel nothing.
+func test_leave_squad_from_the_menu_reels_the_tether_in() -> void:
+	var board: Dictionary = await _squad(5, [{"dex": 5, "cell": Vector2i(1, 0)}])
+	var leader: Unit = board.leader
+	var member: Unit = board.members[0]
+	var from := member.get_projected_destination()
+	var to := leader.get_projected_destination()
+	game.squad_tether_presenter.arm()
+
+	game.main_action_menu.on_pressed(MainActionMenu.LEAVESQUAD, member)
+	await await_idle_frame()   # a leave settles at the end of the frame, after any cascade
+
+	var reels: Array[Dictionary] = []
+	for entry: Dictionary in _om().squad_tether_moments:
+		if entry["moment"] == SquadLines2D.Moment.REEL_IN:
+			reels.append(entry)
+	assert_bool(member.squad == leader.squad).override_failure_message("fixture: the member did not leave") \
+		.is_false()
+	assert_int(reels.size()).override_failure_message("Leave Squad reeled in %d tethers" % reels.size()) \
+		.is_equal(1)
+	assert_that(reels[0]["from"]).is_equal(from)
+	assert_that(reels[0]["to"]).is_equal(to)
+
+
+# LOADING IS INERT, and the landing is what says so: the squads a board arrives with are the baseline,
+# and only what changes after the battle begins plays. Driven through the real landing door.
+func test_the_battle_landing_arms_the_moments_and_the_board_it_lands_on_plays_nothing() -> void:
+	var board: Dictionary = await _squad(5, [{"dex": 5, "cell": Vector2i(1, 0)}])
+	var leader: Unit = board.leader
+	assert_bool(game.squad_tether_presenter.is_live()).override_failure_message(
+			"fixture: a cleared board is already armed").is_false()
+
+	game.mission_controller._begin_turn(false)
+	await await_idle_frame()
+	var on_landing := _om().squad_tether_moments.size()
+	var late := _spawn(5, Vector2i(0, 1))
+	game.squad_manager.join_squad(late, leader.squad)
+
+	assert_int(on_landing).override_failure_message(
+			"the squads the board landed with played as moments").is_equal(0)
+	assert_int(_om().squad_tether_moments.size()).override_failure_message(
+			"a join after the battle began played nothing -- the landing never armed the moments") \
+		.is_equal(1)

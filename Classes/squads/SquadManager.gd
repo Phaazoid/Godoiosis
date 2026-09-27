@@ -55,7 +55,15 @@ signal squad_action_cancelled(squad: Squad, unit: Unit, actiontype: BaseAction.A
 signal squad_became_active(squad: Squad, action: BaseAction)
 signal squad_became_empty(squad: Squad)
 signal squad_action_queued(squad: Squad, action: BaseAction)
-signal squad_member_joined(squad: Squad, unit: Unit)   # emitted by join_squad, the one join door (#182; #367 will consume it too)
+signal squad_member_joined(squad: Squad, unit: Unit)   # emitted by join_squad, the one join door (#182, #367)
+
+# WHY a unit left a squad (#367). The tether look forks on it: a voluntary leave reels in, a forced
+# one breaks. DEATH and RELEASE (a pre-mission undeploy) leave the board as well as the squad.
+enum LeaveCause { VOLUNTARY, FORCED, DOWNED, DEATH, RELEASE }
+
+# Its twin (#367): emitted by _erase_from, the one erase door, AFTER the erase and before any leader
+# reassignment -- so a listener that needs the settled squad defers to the end of the operation.
+signal squad_member_left(squad: Squad, unit: Unit, cause: LeaveCause)
 
 
 func any_squad_active() -> bool:
@@ -129,22 +137,28 @@ func create_squad(leader: Unit) -> Squad:
 	squad_created.emit(squad)
 	return squad
 	
-func _detach_from_current_squad(unit: Unit): #This should be the only place that ever erases a unit from a squad
+# THE erase door (#367): every membership loss passes here, so squad_member_left can never miss one.
+# disband_squad used to call _erase_member directly and was the one loss nothing announced.
+func _erase_from(squad: Squad, unit: Unit, cause: LeaveCause) -> void:
+	squad._erase_member(unit)
+	squad_member_left.emit(squad, unit, cause)
+
+func _detach_from_current_squad(unit: Unit, cause: LeaveCause):
 	var old_squad := unit.squad
 	if old_squad == null:
 		return
 
-	old_squad._erase_member(unit)
+	_erase_from(old_squad, unit, cause)
 	check_reassign_leader(old_squad, unit)
 
 	if old_squad.get_members().is_empty():
 		destroy_empty_squad(old_squad)
-		
+
 func join_squad(unit: Unit, target_squad: Squad):
 	if unit.squad == target_squad:
 		return
 
-	_detach_from_current_squad(unit)
+	_detach_from_current_squad(unit, LeaveCause.VOLUNTARY)
 	target_squad._add_member(unit)
 	# #325: the marker hue is dealt at the first moment a squad actually HAS squadmates -- this
 	# is the one growth funnel (_add_member's only other caller is set_leader's solo birth), so
@@ -156,20 +170,28 @@ func join_squad(unit: Unit, target_squad: Squad):
 	if target_squad.members.size() > target_squad.max_size():
 		push_warning("Squad '%s' over capacity (%d/%d) — grandfathered (direct/loaded join)." % [target_squad.squad_name, target_squad.members.size(), target_squad.max_size()])
 
+# The Leave Squad VERB: the unit chose to go. Every forced exit that keeps the unit on the board is
+# eject below, which names its cause -- the split keeps the verb's many callers (menu, replay, the
+# Play API, tests) from having to say "voluntary" (#367).
 func leave_squad(unit: Unit):
-	_detach_from_current_squad(unit)
+	eject(unit, LeaveCause.VOLUNTARY)
+
+# Detach and re-solo, for a unit that stays standing: loss of contact, a leader swap's range or
+# capacity overflow (FORCED), a downing (DOWNED).
+func eject(unit: Unit, cause: LeaveCause):
+	_detach_from_current_squad(unit, cause)
 	create_squad(unit)
 
 # The detach WITHOUT the re-solo (#738) -- for a unit that is leaving the BOARD, not just its squad.
-# leave_squad directly above cannot serve that: it exists for a unit that stays standing (downed
-# ejection, loss of contact), so it hands out a fresh solo squad, and using it to undeploy would
-# leave a live Squad holding a unit in the reserve and emit squad_created on the way out.
+# leave_squad/eject directly above cannot serve that: they exist for a unit that stays standing, so
+# they hand out a fresh solo squad, and using one to undeploy would leave a live Squad holding a unit
+# in the reserve and emit squad_created on the way out.
 #
 # This is the ONE exception to handle_unit_downed's invariant that every unit is in exactly one
 # squad, and the scope of the exception is exactly "is it on the board": game.deploy_unit gives a
 # squad back on the way in.
 func release(unit: Unit):
-	_detach_from_current_squad(unit)
+	_detach_from_current_squad(unit, LeaveCause.RELEASE)
 
 # #151's loss-of-contact backstop: a member whose SETTLED position cannot path to its leader within
 # COH leaves into a solo squad -- you cannot command what you cannot see or hear. Called at the two
@@ -193,7 +215,7 @@ func release(unit: Unit):
 # corner, ice melting under a formation.
 func enforce_contact() -> void:
 	for member in contact_breaks():
-		leave_squad(member)
+		eject(member, LeaveCause.FORCED)
 
 # The predicate half of enforce_contact, split out for #390 rather than copied into it: the board
 # lint warns about exactly the members this sweep is about to eject, so it has to ask the sweep's
@@ -231,7 +253,7 @@ func check_reassign_leader(squad: Squad, unit: Unit):
 	var board: BoardContext = board_source.call()
 	for member in squad.members.duplicate():
 		if not SquadCohesion.in_range(squad, squad.leader.movement.cell, member, member.movement.cell, board):
-			leave_squad(member)
+			eject(member, LeaveCause.FORCED)
 
 	# Capacity overflow (#63): the new leader may command less than the old one.
 	# Detach newest-first (join order = member order) until the squad fits — deterministic,
@@ -244,7 +266,7 @@ func check_reassign_leader(squad: Squad, unit: Unit):
 				break
 		if newest == null:
 			break
-		leave_squad(newest)
+		eject(newest, LeaveCause.FORCED)
 
 func validate_squad_plan(squad: Squad, plan: ResolvedPlan = null) -> bool:
 	return SquadPlanValidator.validate(squad, squad.action_queue, board_source.call(), plan)
@@ -286,7 +308,7 @@ func disband_squad(squad: Squad):
 		return
 	
 	for member in squad.get_members().duplicate():
-		squad._erase_member(member)
+		_erase_from(squad, member, LeaveCause.VOLUNTARY)
 		create_squad(member)
 		
 	destroy_empty_squad(squad)
@@ -1078,7 +1100,7 @@ func handle_unit_death(unit: Unit) -> void:
 	_remove_from_squad_and_revalidate(unit, false)
 
 # A downed unit SURVIVES as a body on the board, so it can't be left squad-less (invariant: every
-# unit is in exactly one squad) — leave_squad detaches it AND gives it a fresh solo squad.
+# unit is in exactly one squad) — eject detaches it AND gives it a fresh solo squad.
 func handle_unit_downed(unit: Unit) -> void:
 	_remove_from_squad_and_revalidate(unit, true)
 
@@ -1093,9 +1115,9 @@ func _remove_from_squad_and_revalidate(unit: Unit, keep_on_board: bool) -> void:
 	squad._remove_actions_for_actor_silent(unit)
 
 	if keep_on_board:
-		leave_squad(unit)
+		eject(unit, LeaveCause.DOWNED)
 	else:
-		_detach_from_current_squad(unit)
+		_detach_from_current_squad(unit, LeaveCause.DEATH)
 
 	if is_instance_valid(squad) and not squad.get_members().is_empty():
 		validate_squad_plan(squad)

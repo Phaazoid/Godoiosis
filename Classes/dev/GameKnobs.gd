@@ -583,6 +583,29 @@ const CLASS_KNOBS: Array[Dictionary] = [
 	{"group": "Squad lines", "label": "Shake swings", "static": "SHAKE_SWINGS", "script": SQUAD_LINES_SCRIPT,
 		"min": 0.5, "max": 8.0, "step": 0.5,
 		"tip": "How many times it swings back and forth in that time."},
+	# The membership MOMENTS (#367): a join draws the tether in, a voluntary leave reels it in. Read
+	# every frame one plays, so a drag shows on the next join or leave.
+	{"group": "Squad lines", "label": "Join: draw-in time", "static": "DRAW_IN_SECONDS", "script": SQUAD_LINES_SCRIPT,
+		"min": 0.0, "max": 2.0, "step": 0.05,
+		"tip": "How long a new member's tether takes to grow from the member to the leader, in seconds. Zero draws it whole at once."},
+	{"group": "Squad lines", "label": "Join: pop size", "static": "POP_SCALE", "script": SQUAD_LINES_SCRIPT,
+		"min": 1.0, "max": 4.0, "step": 0.05,
+		"tip": "How big the arrowhead swells when the tether reaches the leader, as a multiple of its own size. 1.0 is no pop."},
+	{"group": "Squad lines", "label": "Join: pop time", "static": "POP_SECONDS", "script": SQUAD_LINES_SCRIPT,
+		"min": 0.0, "max": 1.0, "step": 0.01,
+		"tip": "How long the arrowhead takes to settle back to its size after the pop, in seconds."},
+	{"group": "Squad lines", "label": "Join: pop brighten", "static": "POP_BRIGHTEN", "script": SQUAD_LINES_SCRIPT,
+		"min": 0.0, "max": 1.0, "step": 0.05,
+		"tip": "How far the popping arrowhead whitens, 0 to 1. A flash, so the photosensitivity setting turns it off; the swell still plays."},
+	{"group": "Squad lines", "label": "Join: hold", "static": "DRAWN_HOLD_SECONDS", "script": SQUAD_LINES_SCRIPT,
+		"min": 0.0, "max": 3.0, "step": 0.05,
+		"tip": "When nothing is selected afterwards (Join Squad closes its pick), how long the new tether stays up before it fades, in seconds. During Squad Up the squad's own tether takes over instead."},
+	{"group": "Squad lines", "label": "Join: fade", "static": "DRAWN_FADE_SECONDS", "script": SQUAD_LINES_SCRIPT,
+		"min": 0.0, "max": 3.0, "step": 0.05,
+		"tip": "How long that held tether takes to fade out, in seconds."},
+	{"group": "Squad lines", "label": "Leave: reel-in time", "static": "REEL_IN_SECONDS", "script": SQUAD_LINES_SCRIPT,
+		"min": 0.0, "max": 2.0, "step": 0.05,
+		"tip": "How long a leaving member's tether takes to be pulled into the leader, in seconds (Leave Squad, Disband). When a leader leaves, the new leader's tethers wait this long before they draw in."},
 	# The Squad Up count beside the leader's crown (#1070). On OverlayManager, the store both views
 	# read; its size, outline and colour are the HP digits' own rows, so it has none here.
 	{"group": "Squad lines", "label": "Squad Up count hold (2D+3D)", "static": "SQUAD_COUNT_HOLD",
@@ -1718,6 +1741,13 @@ static func read_static(name: String) -> Variant:
 		"SHAKE_AMPLITUDE": return SquadLines2D.SHAKE_AMPLITUDE
 		"SHAKE_SECONDS": return SquadLines2D.SHAKE_SECONDS
 		"SHAKE_SWINGS": return SquadLines2D.SHAKE_SWINGS
+		"DRAW_IN_SECONDS": return SquadLines2D.DRAW_IN_SECONDS
+		"POP_SCALE": return SquadLines2D.POP_SCALE
+		"POP_SECONDS": return SquadLines2D.POP_SECONDS
+		"POP_BRIGHTEN": return SquadLines2D.POP_BRIGHTEN
+		"DRAWN_HOLD_SECONDS": return SquadLines2D.DRAWN_HOLD_SECONDS
+		"DRAWN_FADE_SECONDS": return SquadLines2D.DRAWN_FADE_SECONDS
+		"REEL_IN_SECONDS": return SquadLines2D.REEL_IN_SECONDS
 		"SQUAD_COUNT_HOLD": return OverlayManager.SQUAD_COUNT_HOLD
 		"SQUAD_COUNT_FADE": return OverlayManager.SQUAD_COUNT_FADE
 		"SQUAD_COUNT_GAP": return OverlayManager.SQUAD_COUNT_GAP
@@ -2027,6 +2057,11 @@ static func write_static(host: Node3D, name: String, value: Variant) -> void:
 				"DASH_SPEED", "TETHER_INSET", "ARROW_LENGTH", "ARROW_WIDTH_SCALE", "SHAKE_AMPLITUDE", 				"SHAKE_SECONDS", "SHAKE_SWINGS":
 			_write_squad_line(name, value)
 			_restyle_squad_lines(host)
+			return
+		# The membership moments (#367) read these every frame one plays, so the write is the apply.
+		"DRAW_IN_SECONDS", "POP_SCALE", "POP_SECONDS", "POP_BRIGHTEN", "DRAWN_HOLD_SECONDS", \
+				"DRAWN_FADE_SECONDS", "REEL_IN_SECONDS":
+			_write_squad_line(name, value)
 			return
 		"SQUAD_RING_ALPHA": OverlayManager.SQUAD_RING_ALPHA = value
 		"SQUAD_RING_PULSE_GAIN": OverlayManager.SQUAD_RING_PULSE_GAIN = value
@@ -2766,6 +2801,13 @@ static func _write_squad_line(name: String, value: Variant) -> void:
 		"SHAKE_AMPLITUDE": SquadLines2D.SHAKE_AMPLITUDE = value
 		"SHAKE_SECONDS": SquadLines2D.SHAKE_SECONDS = value
 		"SHAKE_SWINGS": SquadLines2D.SHAKE_SWINGS = value
+		"DRAW_IN_SECONDS": SquadLines2D.DRAW_IN_SECONDS = value
+		"POP_SCALE": SquadLines2D.POP_SCALE = value
+		"POP_SECONDS": SquadLines2D.POP_SECONDS = value
+		"POP_BRIGHTEN": SquadLines2D.POP_BRIGHTEN = value
+		"DRAWN_HOLD_SECONDS": SquadLines2D.DRAWN_HOLD_SECONDS = value
+		"DRAWN_FADE_SECONDS": SquadLines2D.DRAWN_FADE_SECONDS = value
+		"REEL_IN_SECONDS": SquadLines2D.REEL_IN_SECONDS = value
 
 
 # The squad lines' re-apply (#1070): the diorama's beam params and the store's derived tethers, the
