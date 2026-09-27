@@ -341,6 +341,56 @@ func test_clicking_another_tile_swaps_it() -> void:
 	assert_str(_card_texts()).not_contains(Glossary.short(Glossary.Term.BURNING))
 
 
+# THE GIANT CARD (dev report, 2026-09-27: "giant display"). A second tile with the SAME readout settles
+# to exactly the height the first one had, so a shrink that waits for the minimum to change never
+# comes -- and every case above clicks two tiles of different heights.
+func _assert_fits() -> void:
+	for i in range(3):
+		await await_idle_frame()
+	var panel: Control = _card()._tile_panel
+	var wanted: float = panel.get_combined_minimum_size().y
+	assert_float(panel.size.y).override_failure_message(
+			"the card is %d tall for %d of content" % [panel.size.y, wanted]).is_less_equal(wanted + 1.0)
+	var rect: Rect2 = panel.get_global_rect()
+	var screen: Rect2 = _card().get_viewport_rect()
+	assert_float(rect.position.y).override_failure_message("the card starts above the screen") \
+			.is_greater_equal(0.0)
+	assert_float(rect.end.y).override_failure_message(
+			"the card runs off the bottom (%d of %d)" % [rect.end.y, screen.size.y]).is_less_equal(screen.size.y)
+
+
+func _settle() -> void:
+	for i in range(3):
+		await await_idle_frame()
+
+
+func test_a_second_tile_with_the_same_readout_keeps_the_card_its_size() -> void:
+	var first := Vector2i(3, 3)
+	var second := Vector2i(5, 3)
+	assert_str(TileReadout.signature(TileReadout.compose(game, second))).override_failure_message(
+			"precondition: the two tiles must say the same thing").is_equal(
+			TileReadout.signature(TileReadout.compose(game, first)))
+	await _click(first)
+	await _settle()
+
+	await _click(second)
+
+	await _assert_fits()
+
+
+func test_the_same_readout_across_a_unit_card_keeps_the_card_its_size() -> void:
+	var unit := _spawn(PLAYER, Vector2i(1, 1), "Aldin")
+	await _click(Vector2i(3, 3))
+	await _settle()
+	await _click(unit.movement.cell)
+	_ring().dismiss()
+	await _settle()
+
+	await _click(Vector2i(5, 3))
+
+	await _assert_fits()
+
+
 func test_a_click_off_the_map_closes_the_card() -> void:
 	await _click(Vector2i(3, 3))
 	assert_bool(_card().visible).is_true()

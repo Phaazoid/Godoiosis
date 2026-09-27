@@ -12,7 +12,6 @@ extends VBoxContainer
 # reads the same short and long labels, and this file has no class_name for a second surface to
 # reach. What stays here is the CHIP -- the battle-scoped at-risk colour is not the card's question.
 
-const DIM_COLOR := Color(0.6, 0.62, 0.6)
 const NATURAL_COLOR := Color(0.75, 0.78, 0.75)
 const EMPTY_COLOR := Color(0.9, 0.3, 0.3)
 const PROSTHETIC_COLOR := Color(0.45, 0.8, 0.95)
@@ -29,9 +28,21 @@ const NO_TINT := Color(0, 0, 0, 0)                   # alpha 0 = leave the theme
 @onready var limbs_row: HBoxContainer = $LimbsRow
 @onready var stats_grid: GridContainer = $StatsGrid
 @onready var abilities_list: VBoxContainer = $AbilitiesList
+@onready var _muted_labels: Array[Label] = [$HPRow/HPTag, $WillRow/WillTag, $AbilitiesHeader]
 
 var unit: Unit
 var board: BoardContext   # for board-dependent readouts (terrain Cover DEF); null = armor only
+
+# This panel sits on the dock's FRAME, which is dark under both palettes (#1105), so only its muted
+# text takes a palette role; the values and the semantic limb/state colours read on either.
+func restyle() -> void:
+	for label in _muted_labels:
+		label.add_theme_color_override("font_color", _dim())
+	if unit != null and is_instance_valid(unit):
+		_refresh()
+
+static func _dim() -> Color:
+	return QueueStyle.ink(QueueStyle.Role.FRAME_TEXT)
 
 func set_unit(target: Unit, context: BoardContext = null):
 	board = context
@@ -199,7 +210,7 @@ func _add_stat(stat_name: String, value: String, term: Glossary.Term, provenance
 		value_color := NO_TINT):
 	var name_lbl := Label.new()
 	name_lbl.text = stat_name
-	name_lbl.add_theme_color_override("font_color", DIM_COLOR)
+	name_lbl.add_theme_color_override("font_color", _dim())
 	var value_lbl := Label.new()
 	value_lbl.text = value
 	value_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
@@ -221,7 +232,7 @@ func _refresh_abilities():
 		child.queue_free()
 	var live := unit.get_live_abilities()
 	if live.is_empty():
-		abilities_list.add_child(_badge("None", DIM_COLOR, ""))
+		abilities_list.add_child(_badge("None", _dim(), ""))
 		return
 	for ability in live:
 		abilities_list.add_child(_ability_row(ability))
@@ -236,7 +247,7 @@ func _ability_row(ability: AbilityData) -> HBoxContainer:
 	name_lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	var kind_lbl := Label.new()
 	kind_lbl.text = kind_name
-	kind_lbl.add_theme_color_override("font_color", DIM_COLOR)
+	kind_lbl.add_theme_color_override("font_color", _dim())
 	row.add_child(name_lbl)
 	row.add_child(kind_lbl)
 	return row

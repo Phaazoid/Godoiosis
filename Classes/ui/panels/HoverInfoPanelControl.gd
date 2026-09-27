@@ -45,13 +45,12 @@ var _content_shown := false
 
 # Set here rather than in the .tscn so UiLayers is the single answer for the whole UI stack --
 # the scene used to author a bare 2, which agreed with the rest of the order only by luck.
-# The tile card is code-built (data-shaped UI) in the unit card's own stylebox, so the two faces
-# match by construction rather than by copied values.
+# The tile card is code-built (data-shaped UI), and both faces wear QueueStyle's one frame (restyle), so
+# they match each other and the palette by construction rather than by copied values.
 func _ready() -> void:
 	z_index = UiLayers.HOVER_PANEL
 	_tile_panel = PanelContainer.new()
 	_tile_panel.visible = false
-	_tile_panel.add_theme_stylebox_override("panel", hover_panel.get_theme_stylebox("panel"))
 	_tile_panel.custom_minimum_size.x = TILE_WIDTH
 	var box := VBoxContainer.new()
 	_tile_panel.add_child(box)
@@ -69,15 +68,25 @@ func _ready() -> void:
 	_sections = TileInfoSections.new()
 	box.add_child(_sections)
 	add_child(_tile_panel)
-	# Autowrapped labels report a ONE-LINE minimum height until layout hands them their width, and
-	# that can cascade across passes — so a park computed at show time can be short, and a
-	# bottom-parked card overflows the screen edge (dev report, 2026-08-11). The card re-parks
-	# whenever its real size settles; `resized` fires only on actual change, and re-parking never
-	# changes size, so this cannot loop.
+	# Autowrapped rows report the wrong minimum height until layout hands them their width, and that
+	# can cascade across passes — so a park computed at show time can be wrong, and a bottom-parked
+	# card overflows the screen edge (dev report, 2026-08-11). The card re-parks whenever its real
+	# size settles; `resized` fires only on actual change, and re-parking never changes size, so this
+	# cannot loop.
 	_tile_panel.resized.connect(_on_tile_panel_resized)
-	# The same rows report a tall minimum before they get a width, and a free-floating container
-	# never shrinks back by itself. Measured: 514px of card for one line of grass before this.
-	_tile_panel.minimum_size_changed.connect(_fit_tile_panel)
+	_tile_panel.minimum_size_changed.connect(_fit.call_deferred)
+	restyle()
+
+# The palette's chrome (#1105): both faces wear QueueStyle's frame and its inks, asked fresh here
+# because nothing is pushed on a palette switch -- SettingsScreen calls this on close.
+func restyle() -> void:
+	var frame: StyleBox = QueueStyle.panel_box()
+	hover_panel.add_theme_stylebox_override("panel", frame)
+	_tile_panel.add_theme_stylebox_override("panel", frame)
+	_tile_header.add_theme_color_override("font_color", QueueStyle.ink(QueueStyle.Role.TITLE_TEXT))
+	hover_gridcontainer.restyle()
+	if is_showing_tile():
+		_draw_tile(_tile_cell)
 
 # The unit card alone. world_pos anchors the top-or-bottom parking decision.
 func show_unit(unit: Unit, world_pos: Vector2, left_x: int = MARGIN) -> void:
@@ -117,10 +126,6 @@ func is_showing_tile_at(cell: Vector2i) -> bool:
 func is_showing_unit_card() -> bool:
 	return _content_shown and current_unit != null
 
-# The Inspect dock's section box, so the tile card's boxes match the dock beside it.
-func set_section_box(box: StyleBox) -> void:
-	_sections.section_box = box
-
 # What the tile card says, its name first -- empty unless a tile card is up.
 func tile_texts() -> Array[String]:
 	var said: Array[String] = []
@@ -135,6 +140,7 @@ func tile_texts() -> Array[String]:
 func _process(_delta: float) -> void:
 	if not (visible and is_showing_tile()):
 		return
+	_fit()
 	if _follow != null:
 		if not is_instance_valid(_follow):
 			clear()
@@ -174,10 +180,9 @@ func _draw_tile(cell: Vector2i) -> void:
 	_tile_header.visible = readout.title != ""
 	_sections.forget()
 	_sections.show_if_changed(readout.sections)
-	# A free-floating container grows to fit content but never shrinks back on its own — without
-	# this, a short card after a tall one keeps the tall size and parks/draws wrong (the ratchet
-	# behind the 2026-08-11 off-screen report; pinned by the bottom-park regression case).
-	_tile_panel.reset_size()
+	# NO reset_size() here, and that is the giant-card fix (2026-09-27): the rows were just rebuilt, so
+	# their minimum is the tall one a wrapped row reports before layout hands it a width, and sizing to
+	# it left a same-readout card 514px tall for 98 of content. _fit() sizes it once layout has run.
 
 func _park(world_pos: Vector2, left_x: int) -> void:
 	var screen_pos: Vector2 = get_viewport().get_canvas_transform() * world_pos
@@ -191,11 +196,15 @@ func _apply_park() -> void:
 		y = int(get_viewport_rect().size.y - _card_height() - MARGIN)
 	position = Vector2(_park_left_x, y)
 
-# The minimum settled lower than the size it left behind: snap down to it. Deferred, so the resize
-# lands after the layout pass that moved the minimum rather than inside it.
-func _fit_tile_panel() -> void:
+# The tile card is exactly as tall as what it says. Growing needs nothing -- a control is never
+# smaller than its minimum -- but shrinking does, because a free-floating container never shrinks by
+# itself (the 2026-08-11 ratchet). Two callers: the minimum-changed hook, deferred so it lands after
+# the layout pass that moved the minimum and inside the same frame; and every frame a tile card is
+# up, because that signal fires only on a change from the LAST value it reported, and a second tile
+# with the same readout settles straight back to it (the giant card, dev report 2026-09-27).
+func _fit() -> void:
 	if _tile_panel.size.y > _tile_panel.get_combined_minimum_size().y:
-		_tile_panel.reset_size.call_deferred()
+		_tile_panel.reset_size()
 
 # The tile card settled taller (or shorter) than the park estimated — land it again with the real
 # number. The half decision is unchanged: it depends only on the anchor's position.
@@ -206,6 +215,7 @@ func _on_tile_panel_resized() -> void:
 func _card_height() -> float:
 	if hover_panel.visible:
 		return hover_panel.size.y
-	# The real size once layout has run, the minimum as the floor before it has — and the resized
-	# hook above re-parks when the real number arrives.
-	return maxf(_tile_panel.size.y, _tile_panel.get_combined_minimum_size().y)
+	# The SIZE, never the minimum: straight after a redraw the minimum is the mid-layout one, and
+	# parking on it put the giant card's contents off the top of the screen. The resized hook above
+	# re-parks when the real size arrives.
+	return _tile_panel.size.y

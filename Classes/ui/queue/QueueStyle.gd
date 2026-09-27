@@ -72,6 +72,7 @@ enum Role {
 	READOUT_BENCHED,
 	EVENT_TINT,
 	RAIL_NEUTRAL,
+	EMPHASIS_TEXT,
 }
 
 # --- SLATE: the authored set, and DEFAULT's fall-through ------------------------------------------
@@ -166,6 +167,13 @@ const READOUT_ENEMY := Color(1.0, 0.541, 0.478)
 # screen and means commit.
 const READOUT_BENCHED := Color(0.831, 0.341, 0.290)
 
+# The one highlighted word on the Inspect dock: an equipped or worn item, a squad's count and leader
+# (#1105). CRIMSON IN BOTH PALETTES (dev, 2026-09-27, picked from drawn candidates): the adapted gold
+# it replaced read badly on paper, and "we don't want to communicate things differently in the slate
+# than in the parchment". Equal to READOUT_ENEMY today and a role of its own all the same -- what
+# marks your gear and what marks an enemy are two questions, so retuning one must not move the other.
+const EMPHASIS_TEXT := Color(1.0, 0.541, 0.478)
+
 # What the WORLD did, not what an element did -- "Fell 2!", "Drowning!", "Into the void!",
 # "Insulated!". These wore ElementPalette.NEUTRAL until the dev read them off the screen
 # (2026-09-03): that value is the RAIL's off state, a structural grey chosen to disappear, and text
@@ -238,6 +246,7 @@ const PALETTES := {
 		# The rail's OFF state, with the same job here: DISAPPEAR. A hair under the row, the way
 		# slate's sits a hair over it -- promoting either to text is the round-4 bug.
 		Role.RAIL_NEUTRAL: Color(0.910, 0.855, 0.773),
+		Role.EMPHASIS_TEXT: Color(0.659, 0.204, 0.165),
 	},
 }
 
@@ -346,6 +355,7 @@ static func _authored(role: Role) -> Color:
 		Role.READOUT_BENCHED: return READOUT_BENCHED
 		Role.EVENT_TINT: return EVENT_TINT
 		Role.RAIL_NEUTRAL: return ElementPalette.NEUTRAL
+		Role.EMPHASIS_TEXT: return EMPHASIS_TEXT
 	push_error("QueueStyle: no authored colour for role %d" % role)
 	return Color.MAGENTA
 

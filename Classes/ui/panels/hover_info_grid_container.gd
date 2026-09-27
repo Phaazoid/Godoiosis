@@ -1,5 +1,9 @@
 extends GridContainer
 
+# The unit face of the info card (HoverInfoPanelControl): portrait, name with its state icons, and
+# HP, shown while that unit's ring is up (#1105). It sits on the card's dark frame in both palettes,
+# so its inks are QueueStyle's frame roles.
+
 const SEVERED_ARM := preload("res://Art/Icons/StateIcons/SeveredArm.png")
 const SEVERED_LEG := preload("res://Art/Icons/StateIcons/SeveredLeg.png")
 const STATUS_ICON_SIZE := Vector2i(16, 16)
@@ -10,6 +14,10 @@ var unit: Unit
 @onready var name_label = $NameRow/NameLabel
 @onready var states_row = $NameRow/StatesRow
 @onready var hp_label = $HPLabel
+
+func restyle() -> void:
+	name_label.add_theme_color_override("font_color", QueueStyle.ink(QueueStyle.Role.TITLE_TEXT))
+	hp_label.add_theme_color_override("font_color", QueueStyle.ink(QueueStyle.Role.FRAME_TEXT))
 
 func set_unit(target: Unit):
 	if unit:

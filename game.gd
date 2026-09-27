@@ -309,13 +309,12 @@ func _wire_signals() -> void:
 	unit_info_panel.loadout_changed.connect(func() -> void:
 		refresh_action_queue(squad_manager.active_squad))
 	# The info card's tile face reads the one tile-facts builder (#1105), handed over rather than
-	# looked up so the card never learns what a game is. It draws its sections in the dock's box, and
-	# closes with the dock: a tile card beside the dock was opened with it.
+	# looked up so the card never learns what a game is. It closes with the dock: a tile card beside
+	# the dock was opened with it.
 	hover_info_panel.tile_source = func(cell: Vector2i) -> TileReadout.Readout:
 		return TileReadout.read(self, cell)
 	hover_info_panel.tile_sections_source = func(cell: Vector2i) -> Array[TileReadout.Section]:
 		return TileReadout.compose(self, cell)
-	hover_info_panel.set_section_box(unit_info_panel.section_box())
 	unit_info_panel.closed.connect(hover_info_panel.clear)
 
 	squad_action_queue_control.execute_requested.connect(_on_queue_execute_requested)

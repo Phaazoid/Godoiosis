@@ -38,6 +38,21 @@ func _ready() -> void:
 	inventory_panel.loadout_changed.connect(_refresh_derived_rows)
 	inventory_panel.loadout_changed.connect(loadout_changed.emit)
 	inventory_panel.loadout_acted.connect(loadout_acted.emit)   # #53: forwarded on the line above's idiom
+	restyle()
+
+# The player's palette (#1105): the frame, the two paper boxes and the header's inks, asked of
+# QueueStyle -- the dock's own old colours are where slate was copied from, so slate looks as it
+# did. Nothing is pushed on a palette switch, so SettingsScreen calls this on close; the children
+# re-ink themselves from it.
+func restyle() -> void:
+	$UnitInfoPanel.add_theme_stylebox_override("panel", QueueStyle.panel_box())
+	inventory_panel.add_theme_stylebox_override("panel", QueueStyle.section_box())
+	squad_panel.add_theme_stylebox_override("panel", QueueStyle.section_box())
+	name_label.add_theme_color_override("font_color", QueueStyle.ink(QueueStyle.Role.TITLE_TEXT))
+	jobs_label.add_theme_color_override("font_color", QueueStyle.ink(QueueStyle.Role.FRAME_TEXT))
+	stats_section.restyle()
+	inventory_panel.restyle()
+	squad_panel.restyle()
 
 func set_unit(unit: Unit, can_act := false, board: BoardContext = null):
 	if current_unit == unit:
@@ -105,10 +120,6 @@ func is_showing_unit(unit: Unit) -> bool:
 
 func panel_width() -> float:
 	return $UnitInfoPanel.size.x
-
-# The box the inventory is drawn in, so the tile card beside the dock draws its sections to match.
-func section_box() -> StyleBox:
-	return inventory_panel.get_theme_stylebox("panel")
 
 func _jobs_text(unit: Unit) -> String:
 	# Always-reveal placeholder (#69: the real PER-gated enemy-job reveal needs a

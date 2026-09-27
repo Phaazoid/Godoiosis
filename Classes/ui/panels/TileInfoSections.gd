@@ -2,27 +2,23 @@ extends VBoxContainer
 class_name TileInfoSections
 
 # A tile's full readout (#1105): draws TileReadout's sections, one boxed section per layer -- a
-# heading (wearing the layer's board mark when it has one) over its rows, an explanation drawn
-# quieter than a fact. Code-built (data-shaped UI) and handed the Inspect dock's section stylebox, so
-# the tile card's boxes match the dock's inventory box beside it.
+# header strip (wearing the layer's board mark when it has one) over its rows, an explanation drawn
+# quieter than a fact. Code-built (data-shaped UI) in QueueStyle's section box, header strip and
+# paper inks, the same family as the action queue's sections, so it follows the player's palette.
+# Boxes are asked at build time, so a redraw is all a palette switch needs (the host's restyle()).
 #
 # Which cell, and when to re-read it, is the host's; whether the re-read changed anything is this
 # file's (show_if_changed), so no host keeps a diff of its own.
 
 const HEADING_SIZE := 12
 const NOTE_SIZE := 14
-const HEADING_COLOR := Color(0.6, 0.62, 0.6)
-const NOTE_COLOR := Color(0.7, 0.72, 0.7)
 const MARK_SIZE := Vector2i(16, 16)
-
-var section_box: StyleBox
 
 var _drawn := ""          # TileReadout.signature of what is drawn now
 var _has_drawn := false   # a flag, not a "" sentinel: an empty readout signs as "" too (the rock bug)
 
 
-func _init(box: StyleBox = null) -> void:
-	section_box = box
+func _init() -> void:
 	add_theme_constant_override("separation", 8)
 
 
@@ -52,20 +48,17 @@ func show_sections(sections: Array[TileReadout.Section]) -> void:
 
 func _build_section(section: TileReadout.Section) -> PanelContainer:
 	var panel := PanelContainer.new()
-	if section_box != null:
-		panel.add_theme_stylebox_override("panel", section_box)
-	var margin := MarginContainer.new()
-	for side in ["left", "right"]:
-		margin.add_theme_constant_override("margin_" + side, 8)
-	for side in ["top", "bottom"]:
-		margin.add_theme_constant_override("margin_" + side, 6)
-	panel.add_child(margin)
-	var box := VBoxContainer.new()
-	box.add_theme_constant_override("separation", 4)
-	margin.add_child(box)
+	panel.add_theme_stylebox_override("panel", QueueStyle.section_box())
+	var column := VBoxContainer.new()
+	column.add_theme_constant_override("separation", 0)
+	panel.add_child(column)
 
+	var strip := PanelContainer.new()
+	strip.add_theme_stylebox_override("panel", QueueStyle.header_box())
+	column.add_child(strip)
 	var heading_row := HBoxContainer.new()
 	heading_row.add_theme_constant_override("separation", 6)
+	strip.add_child(heading_row)
 	if section.marking != null:
 		var mark := TextureRect.new()
 		mark.texture = section.marking
@@ -78,22 +71,32 @@ func _build_section(section: TileReadout.Section) -> PanelContainer:
 	var heading := Label.new()
 	heading.text = section.heading
 	heading.add_theme_font_size_override("font_size", HEADING_SIZE)
-	heading.add_theme_color_override("font_color", HEADING_COLOR)
+	heading.add_theme_color_override("font_color", QueueStyle.ink(QueueStyle.Role.HEADER_TEXT))
 	heading_row.add_child(heading)
-	box.add_child(heading_row)
 
+	var margin := MarginContainer.new()
+	for side in ["left", "right"]:
+		margin.add_theme_constant_override("margin_" + side, 8)
+	margin.add_theme_constant_override("margin_top", 4)
+	margin.add_theme_constant_override("margin_bottom", 6)
+	column.add_child(margin)
+	var box := VBoxContainer.new()
+	box.add_theme_constant_override("separation", 4)
+	margin.add_child(box)
 	for row in section.rows:
 		var label := Label.new()
 		label.text = row.text
 		label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 		if row.note:
 			label.add_theme_font_size_override("font_size", NOTE_SIZE)
-			label.add_theme_color_override("font_color", NOTE_COLOR)
+			label.add_theme_color_override("font_color", QueueStyle.ink(QueueStyle.Role.HEADER_TEXT))
+		else:
+			label.add_theme_color_override("font_color", QueueStyle.ink(QueueStyle.Role.BODY_TEXT))
 		box.add_child(label)
 	return panel
 
 
-# Every label drawn, headings included, in order -- what a reader of the dock sees.
+# Every label drawn, headings included, in order -- what a reader of the card sees.
 func drawn_texts() -> Array[String]:
 	var out: Array[String] = []
 	for label in find_children("*", "Label", true, false):
