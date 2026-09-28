@@ -12,6 +12,8 @@ class_name SplitForecast
 #     leader's successor is judged where everyone stands at that blow -- except during the WALK,
 #     where the successor is named at once and its reach waits for the walk to end
 #     (SquadManager.hold_handovers);
+#   - a unit the pass's own melt drops into the water (#922) goes under when the deposits land, right
+#     after the volley -- or once the pass has settled, for a melt only a counter or tail shot made;
 #   - at pass end, OrderExecutor._process_downed_pending ejects each downed unit in the order it went
 #     down -- skipping one finished off later in the pass -- and a downed leader hands over;
 #   - then SquadManager.enforce_contact ejects every member out of its leader's range;
@@ -50,6 +52,7 @@ static func stamp(plan: ResolvedPlan, board: BoardContext) -> void:
 	var hits: Array[BaseAction] = []
 	hits.append_array(blows)
 	hits.append_array(plan.tile_hits)
+	hits.append_array(plan.sinks)
 	for hit in hits:
 		var outcome := hit.resolved_outcome()
 		if outcome != null:
@@ -76,9 +79,13 @@ static func stamp(plan: ResolvedPlan, board: BoardContext) -> void:
 	var downs: Array[BaseAction] = []
 	var downed: Dictionary[Unit, bool] = {}
 	var held: Array[_Handover] = []
+	var sunk := false
 	for i in blows.size():
 		if i == walk_ends:
 			_hand_over_held(held, bands, pos, board)
+		if i == deposits_land:
+			_sink(plan.sinks_at(SinkAction.Moment.DEPOSITS_LAND), bands, pos, landed, dead, downed, downs)
+			sunk = true
 		var blow := blows[i]
 		var outcome := blow.resolved_outcome()
 		var victim := blow.target
@@ -98,6 +105,9 @@ static func stamp(plan: ResolvedPlan, board: BoardContext) -> void:
 					downed[victim] = true
 					downs.append(blow)
 	_hand_over_held(held, bands, pos, board)   # a pass that is nothing but its walk
+	if not sunk:   # nothing played after the volley, so the loop never reached the deposits' moment
+		_sink(plan.sinks_at(SinkAction.Moment.DEPOSITS_LAND), bands, pos, landed, dead, downed, downs)
+	_sink(plan.sinks_at(SinkAction.Moment.PASS_END), bands, pos, landed, dead, downed, downs)
 
 	# A body finished off later in the pass is never ejected -- and needs no check here: its death
 	# already took it out of its copied squad, so _leave finds nothing to do.
@@ -258,6 +268,28 @@ static func _settle_downs(downs: Array[BaseAction], bands: Dictionary[Unit, _Ban
 		pos: Dictionary[Unit, Vector2i], board: BoardContext) -> void:
 	for hit in downs:
 		_leave(_victim(hit), hit.resolved_outcome(), bands, pos, board, SquadManager.LeaveCause.DOWNED)
+
+
+# The pass's own terrain dropping units into the water (#922), at the moment they go under: the burn's
+# two halves -- a death leaves at once, a down waits for the settle with the rest, in the order it went
+# down. The ground is the landed one, since the deposits are what took the floor away.
+static func _sink(sinks: Array[SinkAction], bands: Dictionary[Unit, _Band], pos: Dictionary[Unit, Vector2i],
+		ground: BoardContext, dead: Dictionary[Unit, bool], downed: Dictionary[Unit, bool],
+		downs: Array[BaseAction]) -> void:
+	for sink in sinks:
+		var outcome := sink.resolved_outcome()
+		var victim := sink.actor
+		if not _landed(outcome) or victim == null or not is_instance_valid(victim):
+			continue
+		match LethalityRules.lifecycle_for(outcome.lethality):
+			Unit.LifecycleState.DEAD:
+				if not dead.has(victim):
+					dead[victim] = true
+					_leave(victim, outcome, bands, pos, ground, SquadManager.LeaveCause.DEATH)
+			Unit.LifecycleState.DOWNED:
+				if not downed.has(victim):
+					downed[victim] = true
+					downs.append(sink)
 
 
 # END OF TURN, after the pass has settled: a burn death hands over at once, and the burned-down leave

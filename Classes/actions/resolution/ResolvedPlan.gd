@@ -17,6 +17,10 @@ var cell_effects: Array[ResolvedCellEffect] = []
 # nothing walking `attacks` may treat a tile's damage as an attack.
 var tile_hits: Array[TileHitAction] = []
 
+# Who the pass's own terrain dropped into the water (#922), in the order they went under. Its own list
+# for tile_hits' reason, and each is stamped with its MOMENT, which is when both execution twins play it.
+var sinks: Array[SinkAction] = []
+
 # The Guards this pass can see (#414), in ARM ORDER — so a stacked pair absorbs earliest-first with
 # no precedence rule to write down. Two sources, one list: wards armed in an EARLIER pass (copied
 # off the units, oldest sequence first) and Guards queued in THIS plan, appended by
@@ -79,6 +83,33 @@ func shots_fired_during(order: BaseAction) -> Array[AttackAction]:
 		if shot.triggered_during == order:
 			shots.append(shot)
 	return shots
+
+
+# The sinkings that play at one moment (#922) -- the executor's and the Play API's one read.
+func sinks_at(moment: SinkAction.Moment) -> Array[SinkAction]:
+	var at: Array[SinkAction] = []
+	for sink in sinks:
+		if sink.moment == moment:
+			at.append(sink)
+	return at
+
+
+# ...and the ones a row's deposit caused, which the queue panel hangs under that row.
+func sinks_caused_by(action: BaseAction) -> Array[SinkAction]:
+	var caused: Array[SinkAction] = []
+	if action == null:
+		return caused
+	for sink in sinks:
+		if sink.cause == action:
+			caused.append(sink)
+	return caused
+
+
+func has_sunk(unit: Unit) -> bool:
+	for sink in sinks:
+		if sink.actor == unit:
+			return true
+	return false
 
 
 # The partition boundary, asked of the MOMENT rather than of the verb: a shot whose order executes

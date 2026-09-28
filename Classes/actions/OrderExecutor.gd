@@ -189,6 +189,7 @@ func execute_orders(unit):
 	await _execute_action_sequence(plan.attack_playback(), beat, holds, subjects, lines, lingers, emphases,
 			profiles)
 	_apply_cell_effects(plan.cell_effects)
+	await _play_sinks(plan.sinks_at(SinkAction.Moment.DEPOSITS_LAND))   # the ice just went (#922)
 	# The act break, held once between the two montages rather than folded into the first counter --
 	# a turnover the counters then pace on top of, not instead of. It is a COMBAT beat under
 	# COMBAT_ONLY (dev, 2026-08-28), so it keeps the cinematic's hold there.
@@ -229,6 +230,8 @@ func execute_orders(unit):
 		await _execute_action_sequence(batch, beat, _beat_holds(codas, is_ai).merged(holds),
 				_beat_subjects(codas).merged(subjects), lines, _beat_lingers(codas).merged(lingers),
 				_beat_emphases(codas).merged(emphases), _beat_profiles(codas).merged(profiles))
+	# The melts only a counter or a tail shot made (#922) -- the pass has settled, and the stage is still up.
+	await _play_sinks(plan.sinks_at(SinkAction.Moment.PASS_END))
 	await _bring_the_board_home()   # the tiles travel back into their sockets (#521 slice B)
 	game.camera_controller.set_playback_locked(camera_was_locked)
 	# The last await has returned, so the pass is played out: released HERE rather than beside
@@ -579,24 +582,23 @@ func _execute_action_sequence(actions: Array, beat: float = 0.0, holds: Dictiona
 		await Pacing.beat(self, after_the_blow(action, float(lingers.get(action, 0.0))))
 
 
-# What a landed blow owes its squads' tethers (#367 part 2B): the links the forecast says it ends and
+# What a landed blow -- or a sinking (#922) -- owes its squads' tethers (#367 part 2B): the links the forecast says it ends and
 # begins play NOW, at the blow, rather than at the settle once the fight is over -- and the pass waits
 # for them, since a break the camera has already left is the bug that asked for this. While the fight
 # is on stage the camera lets go of the victim, so the stage shot frames the whole diorama and the
 # tether's far end, lifted with it (the dev's Z2 and "pull back to the stage"). Returns the linger.
 func after_the_blow(action: BaseAction, linger: float) -> float:
-	var blow := action as AttackAction
-	if blow == null:
+	var outcome := action.resolved_outcome()
+	if outcome == null:
 		return linger
 	var presenter: SquadTetherPresenter = game.squad_tether_presenter
 	if presenter == null:
 		return linger
-	# The victim, if the blow left one (#1104: a down's links play ITS look). A kill has freed it by now,
-	# and a freed ref must be let go before any typed read of it (#149).
-	var victim: Unit = null
-	if is_instance_valid(blow.target):
-		victim = blow.target
-	var shown := presenter.foretell(blow.resolved_outcome(), victim)
+	# Whose down this is (#1104: a down's links play ITS look), through the order's own door -- asked
+	# only of a DOWN, whose body stands by definition: a kill has freed its victim by now, and a freed ref
+	# must never meet a typed read (#149).
+	var victim: Unit = action.aimed_at() if outcome.lethality == ResolvedOutcome.Lethality.DOWNED else null
+	var shown := presenter.foretell(outcome, victim)
 	if shown <= 0.0:
 		return linger
 	var camera: CameraController = game.camera_controller
@@ -898,6 +900,15 @@ func _beat_lines(beats: Array[BeatSheet.Beat]) -> Dictionary:
 		if not line.is_empty() and not beat.actions.is_empty():
 			lines[beat.actions[0]] = line
 	return lines
+
+# The units the pass's own terrain dropped into the water (#922), played back as resolved (R3) -- each
+# goes under, then the same look the end-of-turn burn gives a unit the ground hurt. The stage the
+# deposits' beat staged is still up, so the camera stays where it is.
+func _play_sinks(sinks: Array[SinkAction]) -> void:
+	for sink in sinks:
+		sink.execute()
+		await Pacing.beat(self, after_the_blow(sink, Pacing.ENVIRONMENT_HOLD))
+
 
 # Play the resolved terrain deposits into the live store, then redraw the board (#50). Runs after
 # the attack phase that produced them.

@@ -311,12 +311,24 @@ func record_pass(squad: Squad, plan: ResolvedPlan) -> void:
 			"added": _names(Terrain.TileState, effect.states_added),
 			"removed": _names(Terrain.TileState, effect.states_removed),
 		})
+	# Who the pass's own terrain dropped into the water (#922) -- the ground's damage, recorded beside
+	# the hits the way turn_effects records a burn, because no hit carries it.
+	var sinks: Array[Dictionary] = []
+	for sink: SinkAction in plan.sinks:
+		sinks.append({
+			"unit": _ref(sink.actor),
+			"at": _cell(sink.cell),
+			"moment": SinkAction.Moment.keys()[sink.moment],
+			"damage": sink.resolved.damage,
+			"lethality": ResolvedOutcome.Lethality.keys()[sink.resolved.lethality],
+		})
 	_record("pass", {
 		"squad": _squad_ref(squad),
 		"faction": _faction_name(squad.leader),
 		"orders": orders,
 		"hits": hits,
 		"cell_effects": effects,
+		"sinks": sinks,
 	})
 
 

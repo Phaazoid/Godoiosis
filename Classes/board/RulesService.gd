@@ -31,7 +31,9 @@ static func can_traverse(cell: Vector2i, unit: Unit, board: BoardContext) -> boo
 		and unit.has_live_ability(Abilities.Id.WATERWALK)
 
 # Does this cell DROWN this unit — water it cannot stand on (#116)? One answer for all three sites a
-# shove asks it: where the flight stops, whether the landing goes under, and where a tumble ends.
+# shove asks it: where the flight stops, whether the landing goes under, and where a tumble ends --
+# and for the fourth, since #922: whether the ground a pass's deposits leave has gone out from under
+# a unit standing on it (PlanResolver.settle_sinks, which hands it the landed board).
 #
 # It REPEALS #115's declared exception ("a shove asks the cell-level is_walkable, never the per-unit
 # can_traverse — being thrown is not walking"), which was harmless while water STOPPED a shove:
@@ -53,10 +55,12 @@ static func drowns_in(cell: Vector2i, unit: Unit, board: BoardContext) -> bool:
 #   Waterwalk -- the holder "stands on the surface instead" (Glossary's WATER_TILE entry). Asked of
 #                the ABILITY, not through can_traverse, which answers this for deep water and not
 #                for shallow -- shallow is walkable to everyone.
-#   FROZEN    -- ice is dry ground (dev, 2026-09-10). Read LIVE and never through a projection:
-#                cell effects apply after the whole attack phase (OrderExecutor), so a lake THIS
-#                pass froze is still water when this pass's shove lands in it. drowns_in reads live
-#                for the same reason.
+#   FROZEN    -- ice is dry ground (dev, 2026-09-10). Read the ground AS IT STANDS WHEN THE UNIT
+#                ARRIVES: cell effects apply after the whole attack phase (OrderExecutor), so a lake
+#                THIS pass froze is still water when this pass's shove lands in it, and a walk or a
+#                shove reads the live store. drowns_in reads live for the same reason. The one caller
+#                asking AT the deposits' moment -- a unit the melt sinks (#922) -- is handed the
+#                landed board instead, which is the same rule, not an exception to it.
 static func wets_in(cell: Vector2i, unit: Unit, board: BoardContext) -> bool:
 	if board.terrain_kind_at(cell) != Terrain.Kind.WATER:
 		return false

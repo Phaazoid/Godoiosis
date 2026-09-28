@@ -49,7 +49,8 @@ enum ActionType {
 	CAPTURE,
 	GUARD,
 	OVERWATCH,
-	TILE_HIT   # derived, never queued (#419) — the tile's own end-of-turn damage
+	TILE_HIT,  # derived, never queued (#419) — the tile's own end-of-turn damage
+	SINK       # derived, never queued (#922) — the ground leaving a unit, so it goes under
 }
 
 # The action registry: a new action type is added to the enum + whichever lists apply.
