@@ -776,19 +776,7 @@ static func _resolve_one(action: AttackAction, plan: ResolvedPlan, reactions: Ar
 		outcome.lethality = ResolvedOutcome.Lethality.KILLED
 		outcome.removed = true
 		outcome.popups.append(VOID_POPUP)
-	# The lifecycle a rung leaves behind is ONE map (#313) — a preview holding only an outcome reads
-	# the same one, and since #1002 the HP it leaves behind is its sibling. What a rung SPENDS stays
-	# here: it differs per rung and it is spent from the hypo.
-	target_hypo.lifecycle = LethalityRules.lifecycle_for(outcome.lethality, target_hypo.lifecycle)
-	if outcome.lethality == ResolvedOutcome.Lethality.DOWNED:
-		target_hypo.will -= UnitInstance.DOWN_WILL_COST
-	elif outcome.lethality == ResolvedOutcome.Lethality.MAIMED:
-		target_hypo.will = 0
-	elif outcome.lethality == ResolvedOutcome.Lethality.CRISIS:
-		target_hypo.in_crisis = true                          # the gambit: no safety net from here on
-		target_hypo.will = 0
-
-	target_hypo.hp = LethalityRules.hp_after(outcome.lethality, target_hypo.hp, outcome.damage)
+	_land_rung(target_hypo, outcome.lethality, outcome.damage)
 	outcome.target_hp_after = target_hypo.hp
 
 	# Displacement stage (#84/#259): apply the landing computed above -- position threaded into
@@ -803,6 +791,69 @@ static func _resolve_one(action: AttackAction, plan: ResolvedPlan, reactions: Ar
 		target_hypo.position = landing.cell
 
 	action.resolved = outcome
+
+# Thread a named rung onto the hypo: the lifecycle it leaves, what it SPENDS, the HP it leaves. The
+# lifecycle a rung leaves behind is ONE map (#313) -- a preview holding only an outcome reads the same
+# one, and since #1002 the HP it leaves behind is its sibling. What a rung spends differs per rung and
+# is spent from the hypo. Shared by the hit and the sinking (#922), the two paths that name a rung here.
+static func _land_rung(h: _Hypo, rung: ResolvedOutcome.Lethality, damage: int) -> void:
+	h.lifecycle = LethalityRules.lifecycle_for(rung, h.lifecycle)
+	if rung == ResolvedOutcome.Lethality.DOWNED:
+		h.will -= UnitInstance.DOWN_WILL_COST
+	elif rung == ResolvedOutcome.Lethality.MAIMED:
+		h.will = 0
+	elif rung == ResolvedOutcome.Lethality.CRISIS:
+		h.in_crisis = true                          # the gambit: no safety net from here on
+		h.will = 0
+	h.hp = LethalityRules.hp_after(rung, h.hp, damage)
+
+
+# --- The floor leaving (#922) ---------------------------------------------------------------
+#
+# Everyone this pass's own terrain deposits leave standing on water they cannot stand on goes under
+# -- ice melted beneath them. Asked of the deposits as a WHOLE against the live ground, one comparison
+# and no FROZEN clause: "the landed board drowns you and the live one did not". A refreeze in the same
+# pass nets to nothing, a Waterwalker and shallow water never drown, and a unit shoved INTO water this
+# pass already drowned on the live board, so none of them is asked twice.
+#
+# Called at the two moments a sinking plays (SinkAction.Moment): once the attack walk has resolved,
+# with the deposits known then -- the ice melts straight after the volley, before any counter, so a
+# sunk unit does not counter -- and once the pass has settled, for the melts only a counter or a tail
+# shot made and for anyone moved onto melted ice after the first call. A unit sinks at most once.
+static func settle_sinks(plan: ResolvedPlan, hypo: Dictionary, board: BoardContext,
+		moment: SinkAction.Moment) -> void:
+	if board == null or board.terrain_states == null or plan.cell_effects.is_empty():
+		return
+	var landed := board.with_deposits(plan.cell_effects)
+	for unit in board.units:
+		if not is_instance_valid(unit) or plan.has_sunk(unit):
+			continue
+		if projected_lifecycle(unit, hypo) == Unit.LifecycleState.DEAD:
+			continue
+		var cell := projected_position(unit, hypo)
+		if not RulesService.drowns_in(cell, unit, landed) or RulesService.drowns_in(cell, unit, board):
+			continue
+		var h := _hypo_for(unit, hypo)
+		var sink := SinkAction.make(unit, h, cell, _floor_taken_by(cell, unit, board, plan.cell_effects),
+				moment, RulesService.wets_in(cell, unit, landed))
+		_land_rung(h, sink.resolved.lethality, sink.resolved.damage)
+		for s in sink.resolved.states_added:
+			if not h.states.has(s):
+				h.states.append(s)
+		plan.sinks.append(sink)
+
+
+# Which deposit took the floor away: the first after which this cell drowns this unit. Its attack is
+# where the queue hangs the sinking's row.
+static func _floor_taken_by(cell: Vector2i, unit: Unit, board: BoardContext,
+		deposits: Array[ResolvedCellEffect]) -> AttackAction:
+	var so_far: Array[ResolvedCellEffect] = []
+	for effect in deposits:
+		so_far.append(effect)
+		if effect.cell == cell and RulesService.drowns_in(cell, unit, board.with_deposits(so_far)):
+			return effect.cause
+	return null
+
 
 # Elements that survive the target's gear. A blocked element is erased from the hit entirely, so
 # no reaction keyed on it can fire -- canon calls this shape "immune to SHOCK reactions"
