@@ -264,7 +264,7 @@ func _boot() -> void:
 
 
 func _select_screen() -> MissionSelectScreen:
-	var layer: CanvasLayer = game.ui_layer
+	var layer: CanvasLayer = game.card_layer
 	for node: Node in layer.get_children():
 		if node is MissionSelectScreen and not node.is_queued_for_deletion():
 			return node as MissionSelectScreen

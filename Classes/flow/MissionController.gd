@@ -252,7 +252,7 @@ func _open_mission_select(dev: bool) -> void:
 	# that when both are due on one launch, the notice is the later sibling and sits on top.
 	_nag_if_outdated()
 	# What changed since this install last looked (#1075). A child of the title screen rather than
-	# of ui_layer, so it cannot follow a mission out. Before the notice, which needs an answer and
+	# of card_layer, so it cannot follow a mission out. Before the notice, which needs an answer and
 	# so belongs on top when both are due.
 	WhatsNewCard.show_if_needed(_select_screen)
 	# The first-launch notice (#53 slice 3), stacked over the screen we just built. Here rather
@@ -379,6 +379,10 @@ func _on_director_quiet() -> void:
 # growing a second teardown -- reset, commit and abandon already all come through this one door.
 func _close_deployment_menu() -> void:
 	_briefing = false   # #882: every exit passes here, and reset() does not cover abandon_mission
+	# So does an open ring (#1034): Enter's confirm card became clickable over the deploy wheel, and
+	# "Begin" left it offering reserve units to a battle already running. reset() is every board
+	# teardown too, and runs before clear_board frees a unit, so no ring outlives its board.
+	game.main_action_menu.close_ring()
 	if is_instance_valid(_premission_screen):
 		_premission_screen.queue_free()
 	_premission_screen = null

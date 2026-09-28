@@ -141,9 +141,22 @@ const ACTION_DATA := {
 var _pick_by_id: Dictionary = {}
 var _next_synthetic_id := -1
 
+# The ring that is up, if one is (#1034). Nothing but the ring itself ever called dismiss(), so a ring
+# frozen under a card outlived the board it was built on -- held here so a door that can change the
+# board closes it first. A pick and a dismiss both free the controller, so a stale ref reads invalid.
+var _open_ring: ActionMenuController = null
+
 # ==============================================================================
 #  Opening menus
 # ==============================================================================
+
+# Close the ring if one is up, through dismiss() so _on_menu_cancelled still takes its unit card
+# down. Called by the doors that can change the board under it: Esc's pause menu, and the end of the
+# pre-mission phase.
+func close_ring() -> void:
+	if is_instance_valid(_open_ring) and not _open_ring.is_queued_for_deletion():
+		_open_ring.dismiss()
+	_open_ring = null
 
 # The one door: build the whole tree, hand it to one controller, place it at the cursor. The
 # controller owns every level from here -- there is no second open for a submenu, which is what
@@ -152,6 +165,7 @@ func show_main_menu(unit: Unit, pos: Vector2i) -> void:
 	var controller := ActionMenuController.new()
 	game.add_child(controller)
 	controller.setup(unit)
+	_open_ring = controller
 
 	controller.action_selected.connect(on_pressed)
 	controller.cancelled.connect(_on_menu_cancelled)
@@ -542,6 +556,7 @@ func show_deploy_menu(cell: Vector2i, pos: Vector2i) -> void:
 	var controller := ActionMenuController.new()
 	game.add_child(controller)
 	controller.setup(null)
+	_open_ring = controller
 	controller.action_selected.connect(on_pressed)
 	controller.cancelled.connect(_on_menu_cancelled)
 	controller.open(children, Vector2(pos))

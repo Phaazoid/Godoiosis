@@ -51,7 +51,7 @@ func after_test() -> void:
 
 
 func _title_screen() -> MissionSelectScreen:
-	var layer: Node = _game.get("ui_layer")
+	var layer: Node = _game.get("card_layer")
 	for child: Node in layer.get_children():
 		if child is MissionSelectScreen:
 			return child as MissionSelectScreen

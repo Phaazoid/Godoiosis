@@ -58,7 +58,7 @@ func _menu() -> Node:
 
 
 func _title_screen() -> Node:
-	for node: Node in game.ui_layer.get_children():
+	for node: Node in game.card_layer.get_children():
 		if node is MissionSelectScreen:
 			return node
 	return null

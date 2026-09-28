@@ -3,7 +3,7 @@
 # copy is his and unaltered, the link is the url itself, and OK makes it stay gone for the launch.
 #
 # Fixture is test_mission_status_panel's: a real game scene, root named "Main" under /root, because
-# the banner parents to game.ui_layer.
+# the banner parents to game.card_layer.
 extends GdUnitTestSuite
 
 const MAIN_SCENE := "res://Scenes/Main.tscn"
@@ -152,9 +152,9 @@ func test_the_nag_waits_for_the_title_screen_and_gives_up_without_it() -> void:
 	mc._select_screen = MissionSelectScreen.open(game, [], [], false)
 	await mc._nag_if_outdated()
 	await await_idle_frame()
-	assert_object(_banner_under(game.ui_layer)).is_not_null()
+	assert_object(_banner_under(game.card_layer)).is_not_null()
 
-	_banner_under(game.ui_layer).free()
+	_banner_under(game.card_layer).free()
 	mc._select_screen.free()
 	mc._select_screen = null
 	UpdateBanner._dismissed = false
@@ -163,7 +163,7 @@ func test_the_nag_waits_for_the_title_screen_and_gives_up_without_it() -> void:
 	# Gone from it -- the reply is the same, and nothing may appear.
 	await mc._nag_if_outdated()
 	await await_idle_frame()
-	assert_object(_banner_under(game.ui_layer)).is_null()
+	assert_object(_banner_under(game.card_layer)).is_null()
 
 	VersionCheck.enabled = was_enabled
 	VersionCheck._asked = was_asked

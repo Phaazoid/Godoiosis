@@ -70,7 +70,7 @@ static func open(game_node: Node, rune: RuneData, wielder: Unit) -> RuneDetailCa
 	var card := RuneDetailCard.new()
 	card._rune = rune
 	card._wielder = wielder
-	game_node.ui_layer.add_child(card)
+	game_node.card_layer.add_child(card)
 	card._build(game_node)
 	return card
 

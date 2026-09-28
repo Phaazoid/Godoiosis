@@ -86,7 +86,7 @@ func _init() -> void:
 static func open(game_node: Node, controller: MissionController) -> PreMissionScreen:
 	var screen := PreMissionScreen.new()
 	screen._controller = controller
-	game_node.ui_layer.add_child(screen)
+	game_node.card_layer.add_child(screen)
 	screen._build(game_node)
 	return screen
 
