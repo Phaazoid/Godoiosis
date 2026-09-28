@@ -266,6 +266,11 @@ const PALETTES := {
 static var PARCHMENT_INK_DEPTH := 0.62
 static var PARCHMENT_INK_SATURATION := 1.5
 
+# How far a refused row swings when Execute is pressed over it (#1121), in design px. Only the SIZE
+# is the queue's own: the swing's length and count are the tether pluck's (SquadLines2D.SHAKE_SECONDS
+# / SHAKE_SWINGS), so the board's refusal and the queue's wobble alike.
+static var REFUSAL_SHAKE_PX := 3.0
+
 # --- reads ----------------------------------------------------------------------------------------
 
 # One role's colour in whichever palette the player has picked. DEFAULT returns the authored const --
@@ -366,6 +371,7 @@ static func _authored(role: Role) -> Color:
 # palette is a COLOUR decision, and a dock that changed shape under one would be a second layout.
 const HEADER_FONT_SIZE := 10
 const CONSEQUENCE_FONT_SIZE := 10
+const REFUSAL_FONT_SIZE := 10   # the refusal box's lines (#1121)
 const ROW_GAP := 2          # a row wrapper's own top/bottom margin inside its section
 const ROW_INSET := 3        # a row's clearance from its section's edges
 const CHIP_ICON := 16       # a state chip's icon, rendered size
@@ -482,6 +488,18 @@ static func execute_box() -> StyleBoxFlat:
 static func execute_hover_box() -> StyleBoxFlat:
 	return _cached("execute_hover", func() -> StyleBoxFlat:
 		return _flat(ink(Role.EXECUTE_HOVER_BG), ink(Role.EXECUTE_BORDER), 1, 5))
+
+
+# Why Execute was refused (#1121), in the refused ROW's own fill and border -- the dev's pick, so the
+# box reads as "the reasons for the red rows". Its text is NAME_TEXT then BODY_TEXT, the paper roles.
+static func refusal_box() -> StyleBoxFlat:
+	return _cached("refusal", func() -> StyleBoxFlat:
+		var box := _flat(ink(Role.ROW_REFUSED_BG), ink(Role.ROW_REFUSED_BORDER), 1, 4)
+		box.content_margin_left = 6.0
+		box.content_margin_right = 6.0
+		box.content_margin_top = 4.0
+		box.content_margin_bottom = 4.0
+		return box)
 
 
 # The pre-mission deploy toggle's three states (#978). A unit is COMING, STAYING, or cannot be placed

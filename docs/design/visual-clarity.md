@@ -7,7 +7,7 @@ its child [#49 Action Queue UX](https://github.com/Phaazoid/Godoiosis/issues/49)
 This is a *guidelines* doc, not a spec — it captures the principles we're holding the work to,
 plus the running order of the queue-UX checklist. Update it as items land.
 
-**Canon checked through #1138 (2026-09-28).**
+**Canon checked through #1150 (2026-09-28).**
 
 ## Principles
 
@@ -3860,7 +3860,7 @@ The dev's addition:
 
 A click on a grey tile calls `OverlayManager.shake_tethers()` and **stays in the mode** (ruled over shake-then-leave). A click outside the whole range still leaves, as before.
 
-**It is the board's one refusal that answers back.** Every other refusal stays silent. Nothing here makes that a general rule; it is scoped to the case where the reason is on screen as a red line.
+**It is the board's one refusal that answers back.** Every other refusal stays silent. Nothing here makes that a general rule; it is scoped to the case where the reason is on screen as a red line. (A refused EXECUTE answers back too since #1121, on the same scope: its reasons are red rows already on screen. See *A refused Execute says why* below.)
 
 The pluck is a string plucked in the middle: a perpendicular offset weighted by `sin(pi * along)`, so both ends stay pinned, with a decaying swing. One envelope drives both views:
 
@@ -4212,3 +4212,43 @@ A death used to play nothing on its tether; only the health cubes burst (#314). 
 - **A void-killed leader's heir draws in while the camera is down the pit.** Its draw-in still waits a fixed break's length from the blow, so with a long hang or a long slide it can begin before the held break snaps.
 - **On a raised board the body can drop before it hangs.** A hole lower than the lip gets #602's step-off fall to the hole's own height first, then the hang, then the plummet. The Causeway is flat, so this is untested in play.
 - **What blocks the zoom's view** (units, terrain) is #1132, not this.
+
+## A refused Execute says why ([#1121](https://github.com/Phaazoid/Godoiosis/issues/1121), BUILT 2026-09-28)
+
+The dev's playtest note:
+
+> Trying to click execute orders while invalid orders should shake the invalid order rows, and give an short explanation of why the orders cannot yet be executed.
+
+**The press never arrived.** `set_execute_state(DISABLED)` set `execute_button.disabled`, and a disabled Button emits no `pressed`. So `OrderExecutor.execute_orders`' human refusal branch, which flashes each refused unit and hands the plan back, had never been reachable by a click. The reasons already existed as data (`BaseAction.validation_errors`, written by `SquadPlanValidator`); nothing under `Classes/ui/` read them.
+
+**This is the Execute ATTEMPT, not queue authoring.** The 2026-07-31 ruling that queue-time refusals stay silent is unchanged. What speaks here is the press on a plan that has gone red since it was authored.
+
+### Rulings (grill, 2026-09-28, off rendered mockups on the real dock and sprites)
+
+| Question | Ruling |
+|---|---|
+| Where the reason goes | Between the list and Execute (candidate A, over a per-row line or a tooltip) |
+| Its look | A box of its own, in the refused ROW's fill and border, one line per refused order: `Name:` then the validator's reasons |
+| A title strip | None for now |
+| When it shows | After a refused press; it re-reads the refusals on every refresh and goes when nothing is red |
+| Board units | Flash too (the existing `play_invalid_flash`) |
+| A red row below the fold | The press scrolls the first one into view |
+| A refusal sound | Not built; noted on #934 |
+
+### How it is built
+
+- **`ExecuteState.REFUSED`**: the DISABLED look, but pressable. `game.refresh_action_queue` splits the old `can_execute` into *offered* (active squad, not hold-only, board not locked) and *refused* (`squad_has_invalid_actions`). Not offered wins and stays truly disabled, so a hold-only squad's press can never run its hold-only plan.
+- **`execute_orders` stays the authority.** The press takes the ordinary path, re-validates, and refuses in the branch that was already there. The button's look is only a preview of that answer.
+- **`SquadManager.refused_orders`** is the one list of refused orders. `squad_has_invalid_actions` and the AI concede log read it; the Play API's twin (`play_session.gd`) still walks the queue itself.
+- **`play_refusal` runs AFTER the branch's own refresh**, because that refresh frees and rebuilds every row. A shake started before it plays on freed rows.
+- **`_execute` hides the button only when the press was not refused.** The hide comes after the emit (the refresh inside re-shows the button) and stops a second press during a pass, so it cannot simply go.
+- **The shake is the tether pluck's envelope** (`SquadLines2D.shake_envelope`, split out of `shake_offset`) at the queue's own size (`QueueStyle.REFUSAL_SHAKE_PX`, a Game-tab row). It runs through the row wrapper's margins, so the container's layout moves the row and a refresh that frees the row ends the shake. #217 stills it; the box and the red rows still carry the refusal.
+- **The box is built in code**, not added to the `.tscn`, so no hand-authored scene node goes stale under an editor save.
+- **This is now the second refusal that answers back**, beside #1070's grey tile. Both are scoped the same way: the reason is already on screen as red.
+
+### Declared residuals
+
+- **A unit hidden behind its move ghost flashes invisibly** (a unit with a valid move and a refused rescue, say): the flash plays on the real sprite, which the ghost has hidden. Filed as [#1150](https://github.com/Phaazoid/Godoiosis/issues/1150).
+- **The validator's strings become player-visible for the first time.** Several were written as internal messages; their wording is the dev's to change.
+- **Many refusals make a tall box.** It takes its height from the list, which scrolls; nothing caps it.
+- **What only the dev can judge:** the shake's size and feel, and whether the box reads as the reasons for the red rows.

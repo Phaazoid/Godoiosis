@@ -262,10 +262,16 @@ static func dash_spans(length: float, shift: float) -> PackedVector2Array:
 # decaying swing, so the pluck rings and settles; zero outside the shake. The one envelope both views
 # read, so the flat line and the ribbon swing together.
 static func shake_offset(elapsed: float) -> float:
+	return SHAKE_AMPLITUDE * shake_envelope(elapsed)
+
+
+# The pluck's SHAPE at unit size, -1..1 -- its length and swings are these knobs, its size is the
+# caller's. A refused queue row shakes on it too (#1121), so the two refusals wobble alike.
+static func shake_envelope(elapsed: float) -> float:
 	if elapsed < 0.0 or SHAKE_SECONDS <= 0.0 or elapsed >= SHAKE_SECONDS:
 		return 0.0
 	var t := elapsed / SHAKE_SECONDS
-	return SHAKE_AMPLITUDE * (1.0 - t) * (1.0 - t) * sin(TAU * SHAKE_SWINGS * t)
+	return (1.0 - t) * (1.0 - t) * sin(TAU * SHAKE_SWINGS * t)
 
 
 # ...and the same, asked of a store's stamp. A shake is motion, so #217's rule stills it -- the RED is

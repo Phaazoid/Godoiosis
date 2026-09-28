@@ -64,18 +64,22 @@ func execute_orders(unit):
 	game.refresh_action_queue(squad)
 
 	if game.squad_manager.squad_has_invalid_actions(squad):
-		# A human gets control BACK here: flash the bad rows, leave the plan queued, let them fix it
-		# and press Execute again. An AI squad has nobody to hand control back TO -- nothing in the
-		# turn cycle mutates the state that produced the plan, so the identical plan is refused every
-		# turn while the board keeps its ghosts and the squad never acts (#103). It concedes instead:
-		# however a plan turns out, an AI pass must reach _end_squad_turn.
+		# A human gets control BACK here: flash the refused units, shake their rows and say why
+		# (#1121), leave the plan queued, let them fix it and press Execute again. An AI squad has
+		# nobody to hand control back TO -- nothing in the turn cycle mutates the state that produced
+		# the plan, so the identical plan is refused every turn while the board keeps its ghosts and
+		# the squad never acts (#103). It concedes instead: however a plan turns out, an AI pass must
+		# reach _end_squad_turn.
 		if game.ai_controller.is_ai_faction(squad.leader.get_faction()):
 			push_warning("AI squad conceded its turn: %s" % _invalid_plan_summary(squad))
 			_end_squad_turn(squad)
 			return
-		for action in squad.action_queue:
-			if not action.is_valid:
-				action.actor.visuals.play_invalid_flash()
+		var refused: Array[BaseAction] = game.squad_manager.refused_orders(squad)
+		for action in refused:
+			action.actor.visuals.play_invalid_flash()
+		# AFTER the refresh above, which rebuilt every row: a shake started before it would play on
+		# rows that are already freed.
+		game.squad_action_queue_control.play_refusal()
 		return
 
 	game.clear_selection_icons()
@@ -294,9 +298,9 @@ func _end_squad_turn(squad: Squad) -> void:
 # the refusal is visible at all.
 func _invalid_plan_summary(squad: Squad) -> String:
 	var lines: Array[String] = []
-	for action in squad.action_queue:
-		if not action.is_valid:
-			lines.append("%s: %s" % [action.actor.get_unit_name(), ", ".join(action.validation_errors)])
+	var refused: Array[BaseAction] = game.squad_manager.refused_orders(squad)
+	for action in refused:
+		lines.append("%s: %s" % [action.actor.get_unit_name(), ", ".join(action.validation_errors)])
 	return " | ".join(lines)
 
 # The move phase: every walk starts at once and they are awaited together, which is the whole of

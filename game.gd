@@ -1374,6 +1374,8 @@ func refresh_action_queue(squad: Squad):
 		overlay_manager.clear_guard_preview()
 		overlay_manager.clear_watch_preview()
 		squad_action_queue_control.set_execute_state(SquadActionQueueControl.ExecuteState.DISABLED)
+		var none: Array[BaseAction] = []
+		squad_action_queue_control.set_refusals(none)
 		return
 	# A running pass owns its plan (#361). Every order is still in the queue until _end_squad_turn,
 	# so a re-derive mid-pass re-simulates attacks that have ALREADY landed — _hypo_for seeds from
@@ -1402,12 +1404,17 @@ func refresh_action_queue(squad: Squad):
 	# watch must stop drawing its footprint now, not when it lands. Takes the plan the resolve above
 	# produced -- the cache read would be the same object, but passing it says which pass answered.
 	refresh_watch_markers(plan)
-	var can_execute: bool = (squad_manager.active_squad == squad
+	# Whether Execute is on offer at all, and then whether it would be refused (#1121). A refused plan
+	# still takes the press -- execute_orders refuses it out loud -- while one not on offer never can:
+	# a hold-only squad whose press arrived would run its hold-only plan.
+	var offered: bool = (squad_manager.active_squad == squad
 		and not squad_manager.only_hold_actions(squad)
-		and not squad_manager.squad_has_invalid_actions(squad)
 		and not _board_locked_for_player())
-	if not can_execute:
+	squad_action_queue_control.set_refusals(squad_manager.refused_orders(squad))
+	if not offered:
 		squad_action_queue_control.set_execute_state(SquadActionQueueControl.ExecuteState.DISABLED)
+	elif squad_manager.squad_has_invalid_actions(squad):
+		squad_action_queue_control.set_execute_state(SquadActionQueueControl.ExecuteState.REFUSED)
 	elif _squad_all_committed(squad):
 		squad_action_queue_control.set_execute_state(SquadActionQueueControl.ExecuteState.ALL_COMMITTED)
 	else:
