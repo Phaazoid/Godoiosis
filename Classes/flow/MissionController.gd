@@ -536,15 +536,16 @@ func reposition(unit: Unit, cell: Vector2i) -> bool:
 	return true
 
 
-# The roster in ENTRY ORDER -- what #740's card grid iterates. Node order cannot serve: deploying
-# and undeploying REPARENT between units_root and reserve_root, so both lists reshuffle every time
-# the player changes their mind, and a grid drawn off them would reorder mid-decision.
 # The phase's gear, for the screen that edits it. Never null: an empty Loadout is what a board with
 # no roster has, and a surface asking a null one is a crash a missing stash does not deserve.
 func loadout() -> Loadout:
 	return _loadout
 
 
+# The roster in ENTRY ORDER, which the restart buffer's rows are indexed by (#763). Node order cannot
+# serve: deploying and undeploying REPARENT between units_root and reserve_root, so both lists
+# reshuffle every time the player changes their mind. The card grid orders ITSELF (#1089) and reads
+# this for membership and a tie-break only.
 func roster_units() -> Array[Unit]:
 	return _roster_units
 
