@@ -2791,8 +2791,11 @@ root window is the wrong place for it here: the root's base size would clamp `Ga
 Text follows without help — `Viewport.oversampling` reads the same transform, so glyphs
 re-rasterize at the effective scale rather than being magnified.
 
-**One seam, deliberately.** Every panel, menu, modal and screen mounts at `game.ui_layer` inside
-that viewport, so all of them scale with no per-surface work — and so does anything added later.
+**One seam, deliberately.** Every panel mounts at `game.ui_layer` and every card and screen at
+`game.card_layer` ([#1034](https://github.com/Phaazoid/Godoiosis/issues/1034)), both inside that
+viewport, so all of them scale with no per-surface work — and so does anything added later. The seam
+is the VIEWPORT, not either layer: any CanvasLayer mounted in it scales, which is what let #1034 add
+one without touching this section's mechanism.
 It rides on the *container* rather than on `Battle3D` because all four hosting paths must get it:
 Battle3D's three views each work by setting that node's anchors or size, and a bare `Main.tscn`
 launch sets neither, so `resized` covers the lot and `battle3d.gd` needs no edit at all. CORNER
@@ -2844,7 +2847,14 @@ milestone was the first UI a stranger sees. `ScenarioDirector._start` now hands
   frozen subtree. None of that applies one level up: `ModalLock` disables the **`Game` node**, and
   the layout is a `CanvasLayer` at 1 over `UILayer`'s 0 — exactly the relationship it had to
   `GameContainer` at the root. Dev ruling 2026-09-08, asked before the plan: *preserve today's
-  semantics*, the dialog still draws over everything and is still not frozen by a card.
+  semantics*, the dialog still draws over everything and is still not frozen by a card. **Both
+  halves of that ruling were REPLACED by [#1034](https://github.com/Phaazoid/Godoiosis/issues/1034)
+  (dev, 2026-09-27)** — "preserve" was the right call for a scaling ticket, and the semantics it
+  preserved were the bug a playtester then reported: a click on the pause menu advanced the dialog,
+  because a `CanvasLayer` at 1 beats a card's `z_index` for the mouse as well as the eye. Cards now
+  sit on their own layer above it, and `ModalLock` pauses Dialogic from the same group state as the
+  Game freeze, since no card takes focus and Enter/Space otherwise advanced it behind the menu. The
+  dialog still sits BESIDE `Game`; only what the freeze reaches moved. See `UiLayers`' header.
 - **The ticket's own alternative was wrong, and the reason generalizes.** It proposed scaling the
   layout's `CanvasLayer` transform in place. A Control whose parent is a `CanvasLayer` anchors
   against `get_viewport().get_visible_rect()` — the canvas transform is not in it — so the layer's

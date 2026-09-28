@@ -112,7 +112,7 @@ static func _walk(root: Node) -> Array[Node]:
 
 
 func _screen() -> PreMissionScreen:
-	for child in game.ui_layer.get_children():
+	for child in game.card_layer.get_children():
 		if child is PreMissionScreen:
 			return child
 	return null
@@ -485,7 +485,7 @@ func test_the_screens_own_door_opens_the_rune_card_and_not_the_weapons() -> void
 	await await_idle_frame()
 
 	var opened: RuneDetailCard = null
-	for child in game.ui_layer.get_children():
+	for child in game.card_layer.get_children():
 		if child is RuneDetailCard:
 			opened = child
 		assert_bool(child is ModFittingCard).override_failure_message(

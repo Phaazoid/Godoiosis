@@ -21,7 +21,7 @@ func _init() -> void:
 # screen passes false -- there is nothing in progress to lose.
 static func show_screen(game_node: Node, mode: Mode, confirm_load := false) -> int:
 	var screen := SaveLoadScreen.new()
-	game_node.ui_layer.add_child(screen)
+	game_node.card_layer.add_child(screen)
 	screen._build(mode, confirm_load, game_node)
 	var slot: int = await screen.finished
 	screen.queue_free()

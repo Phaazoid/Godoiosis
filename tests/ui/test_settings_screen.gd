@@ -265,7 +265,7 @@ func test_every_option_of_a_choice_row_is_reachable() -> void:
 # ==============================================================================
 
 # Esc through the OS-driver entry, test_input_bridge's idiom -- the real pipeline, so what is under
-# test is the whole chain root viewport -> SubViewportContainer -> ui_layer -> ModalCard._input.
+# test is the whole chain root viewport -> SubViewportContainer -> card_layer -> ModalCard._input.
 func _press_escape() -> void:
 	var esc := InputEventKey.new()
 	esc.keycode = KEY_ESCAPE

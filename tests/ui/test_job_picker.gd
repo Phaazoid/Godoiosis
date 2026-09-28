@@ -121,7 +121,7 @@ func _enter_phase(cap := 2) -> bool:
 
 
 func _a_card() -> PreMissionCard:
-	for child in game.ui_layer.get_children():
+	for child in game.card_layer.get_children():
 		if child is PreMissionScreen:
 			for node in _walk(child):
 				if node is PreMissionCard:

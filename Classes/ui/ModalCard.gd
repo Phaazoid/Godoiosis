@@ -9,6 +9,10 @@ class_name ModalCard
 # onto it. NOT the in-world ActionMenuController (a positioned context menu on its own CanvasLayer,
 # a different surface entirely).
 #
+# EVERY CARD MOUNTS ON game.card_layer (#1034), its own CanvasLayer over the wheel and the dialogue.
+# They mounted in UILayer (layer 0) until then, where a z_index of 200 lost to both -- a z_index never
+# crosses a CanvasLayer, for the eye or for the mouse. Each factory spells the mount itself.
+#
 # WHY IT EXISTS: these surfaces hand-built the same chrome five times, which is why one mistake
 # (set_anchors_preset instead of set_anchors_and_offsets_preset, #132) rendered three of them in
 # the top-left corner at once. Sizing is now answered here, once.
@@ -55,7 +59,7 @@ func _input(event: InputEvent) -> void:
 
 # --- Styling ------------------------------------------------------------------------------------
 
-var card_z_index: int = UiLayers.MODAL_CARD
+var card_z_index: int = UiLayers.MODAL_CARD   # z within LAYER_CARDS: a card over a menu screen
 var backdrop_color: Color = Color(0, 0, 0, 0.70)   # a Color, not an alpha: a takeover needs RGB too
 var margin_h: int = 48
 var margin_v: int = 32

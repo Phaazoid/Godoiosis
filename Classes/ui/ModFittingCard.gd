@@ -68,7 +68,7 @@ static func open(game_node: Node, weapon: WeaponInstance, wielder: Unit,
 	card._weapon = weapon
 	card._pool = pool
 	card._wielder = wielder
-	game_node.ui_layer.add_child(card)
+	game_node.card_layer.add_child(card)
 	card._build(game_node)
 	return card
 

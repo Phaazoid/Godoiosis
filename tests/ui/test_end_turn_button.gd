@@ -42,7 +42,7 @@ func _flashing() -> bool:
 
 # The card the early-press confirm puts up, if any.
 func _open_confirm() -> ConfirmCard:
-	for child in game.ui_layer.get_children():
+	for child in game.card_layer.get_children():
 		if child is ConfirmCard:
 			return child
 	return null

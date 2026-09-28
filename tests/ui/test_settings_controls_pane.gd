@@ -46,7 +46,7 @@ func _frames(count: int) -> void:
 
 func _open() -> SettingsScreen:
 	var screen := SettingsScreen.new()
-	game.ui_layer.add_child(screen)
+	game.card_layer.add_child(screen)
 	screen._build(game)
 	await _frames(2)
 	return screen

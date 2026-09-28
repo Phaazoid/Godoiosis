@@ -24,7 +24,7 @@ func _init() -> void:
 # Takes the Game node rather than a parent, for the reason PauseMenu.show_menu does.
 static func show_banner(game_node: Node, victory: bool, can_retry: bool, reason := "") -> Choice:
 	var banner := MissionEndBanner.new()
-	game_node.ui_layer.add_child(banner)
+	game_node.card_layer.add_child(banner)
 	banner._build(victory, can_retry, game_node, reason)
 	var choice: Choice = await banner.chosen
 	banner.queue_free()

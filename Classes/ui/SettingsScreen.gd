@@ -97,7 +97,7 @@ func _init() -> void:
 # callbacks, not method calls, so ModalLock does not block either.
 static func show_screen(game_node: Node) -> void:
 	var screen := SettingsScreen.new()
-	game_node.ui_layer.add_child(screen)
+	game_node.card_layer.add_child(screen)
 	screen._build(game_node)
 	await screen.closed
 	var overlays: OverlayManager = game_node.overlay_manager

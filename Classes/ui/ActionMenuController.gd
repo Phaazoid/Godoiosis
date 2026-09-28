@@ -110,8 +110,9 @@ signal cancelled(me)
 func setup(unit: Unit) -> void:
 	local_unit = unit
 
+	# Its own CanvasLayer, over the HUD and the dialogue and under every card (UiLayers says why).
 	_layer = CanvasLayer.new()
-	_layer.layer = UiLayers.ACTION_MENU
+	_layer.layer = UiLayers.LAYER_ACTION_MENU
 	add_child(_layer)
 
 	_root = Control.new()
