@@ -494,6 +494,22 @@ func test_a_short_drag_still_reads_as_a_click() -> void:
 	assert_bool(rig.last_gesture_was_click()).is_false()
 
 
+# A release the rig never saw pressed is not a click (#1081). The action ring eats the press and
+# frees itself on it, so the release arrives here alone -- and a verdict read off the PREVIOUS
+# gesture's travel undid an order whenever that gesture had been a click.
+func test_a_release_with_no_press_is_not_a_click() -> void:
+	var rig := _rig()
+	_drag(rig.orbit_button, Vector2(1.0, 0.0))
+	assert_bool(rig.last_gesture_was_click()).override_failure_message(
+			"precondition: the gesture before it must read as a click, or this proves nothing").is_true()
+	_release(rig.orbit_button)
+	assert_bool(rig.last_gesture_was_click()).override_failure_message(
+			"a stray release inherited the last gesture's verdict").is_false()
+	_drag(rig.orbit_button, Vector2(1.0, 0.0))
+	assert_bool(rig.last_gesture_was_click()).override_failure_message(
+			"the next gesture the rig does see is no longer judged on its own").is_true()
+
+
 # --- Bounds and the manual gate ----------------------------------------------------
 
 func test_panning_is_clamped_to_the_framed_board() -> void:

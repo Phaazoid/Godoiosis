@@ -2,17 +2,17 @@ extends Control
 class_name EndTurnButton
 
 # The bottom-right "your move is done" affordance (#189), and since #467 the ONLY door to ending a
-# turn -- the action ring dropped its End Turn row, so this button is up whenever the player could
-# act rather than appearing once every squad has acted. What the old visibility rule became is the
-# FLASH: it pulses exactly when `game.refresh_end_turn_button()` finds every squad on the active
-# faction acted or waited, on the SAME Pulse cue SquadActionQueueControl's Execute button uses
-# (EXECUTE_BRIGHT/EXECUTE_FLASH), not a second flash.
+# turn -- the action ring dropped its End Turn row, so this button no longer waits for every squad
+# to have acted. What that old visibility rule became is the FLASH: it pulses exactly when
+# `game.refresh_end_turn_button()` finds every squad on the active faction acted or waited, on the
+# SAME Pulse cue SquadActionQueueControl's Execute button uses (EXECUTE_BRIGHT/EXECUTE_FLASH).
 #
-# #722 gave it its FIRST visibility rule since that ruling, and it is the whole of one: a cinematic
-# owns the frame, so this goes down for the pass and comes back after. #541 (whether it should also
-# stand down for a plain enemy turn) was closed into #722 -- one predicate writes this `visible`.
+# ONE `visible`, two terms (the #722 surfaces' shape). OFFERED is the content rule (#541, dev
+# 2026-09-27): not on an AI faction's turn, and not while a squad's plan is open, where it sat under
+# Execute and read as the same red button. HIDDEN is a cinematic pass (#722) or the pre-mission
+# phase (#739), both through game.set_battle_hud_hidden.
 #
-# The same predicate is why pressing it early ASKS first (game._on_end_turn_button_pressed): the
+# The flash predicate is why pressing it early ASKS first (game._on_end_turn_button_pressed): the
 # button asks exactly when it is not flashing, so the cue and the confirmation can never disagree
 # about whether you are done.
 #
@@ -20,8 +20,8 @@ class_name EndTurnButton
 # UILayer without eating clicks anywhere but its own button.
 #
 # It shares the bottom-right corner with MissionStatusPanel, which reserves this button's slot by
-# sitting BUTTON_CLEARANCE above it -- reserved even when the button was hidden, so making it
-# permanent reflows nothing. The queue dock is the other neighbour, and it is safe by MEASUREMENT
+# sitting BUTTON_CLEARANCE above it -- reserved whether or not the button is up, so hiding it
+# reflows nothing. The queue dock is the other neighbour, and it is safe by MEASUREMENT
 # rather than by the old "these two are never up together" argument, which #467 retired: the dock
 # occupies y 25..490 and this button y 676..712 at a 720-tall viewport, so they do not meet.
 # tests/ui/test_end_turn_button.gd asserts the gap rather than trusting this note.
@@ -32,9 +32,9 @@ const CORNER_MARGIN := 8
 
 var _flash_tween: Tween = null
 var _urgent := false
-# Hidden while a cinematic pass owns the frame (#722). This button has no CONTENT rule of its own --
-# since #467 it is up whenever it is not hidden -- so it is the one surface of the four where the
-# playback term IS the whole gate rather than a conjunct.
+# The content rule's last answer (#541), written only by game.refresh_end_turn_button.
+var _content_shown := true
+# Hidden while a cinematic pass owns the frame (#722) or the pre-mission phase is open (#739).
 var _hidden_for_playback := false
 
 signal end_turn_requested
@@ -47,7 +47,7 @@ func _ready() -> void:
 	_button.pressed.connect(func(): end_turn_requested.emit())
 	_button.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_RIGHT, Control.PRESET_MODE_MINSIZE, CORNER_MARGIN)
 
-# "Every squad is done -- this is what you want next." The button is up either way.
+# "Every squad is done -- this is what you want next."
 func set_urgent(urgent: bool) -> void:
 	if urgent == _urgent:
 		return
@@ -60,7 +60,12 @@ func set_urgent(urgent: bool) -> void:
 func is_urgent() -> bool:
 	return _urgent
 
-# #722's one input. The flash is left alone on purpose: refresh_end_turn_button already clears
+# #541's input: is ending the turn on offer right now.
+func set_offered(offered: bool) -> void:
+	_content_shown = offered
+	_apply_visibility()
+
+# #722's input. The flash is left alone on purpose: refresh_end_turn_button already clears
 # `urgent` while the board is locked, and a hidden button that comes back mid-flash is telling the
 # truth about a turn that is still finished.
 func set_hidden_for_playback(hidden: bool) -> void:
@@ -68,7 +73,7 @@ func set_hidden_for_playback(hidden: bool) -> void:
 	_apply_visibility()
 
 func _apply_visibility() -> void:
-	visible = not _hidden_for_playback
+	visible = _content_shown and not _hidden_for_playback
 
 func _start_flash() -> void:
 	_flash_tween = Pulse.start(self, _button, &"modulate", SquadActionQueueControl.EXECUTE_BRIGHT, SquadActionQueueControl.EXECUTE_FLASH)

@@ -290,6 +290,7 @@ func _wire_signals() -> void:
 	scenario_manager.board_loaded.connect(drop_threat_field)   # a new board is a new field (#710)
 	squad_manager.squad_became_active.connect(_on_squad_became_active)
 	squad_manager.squad_became_empty.connect(_on_squad_has_no_actions)
+	squad_manager.active_squad_changed.connect(_on_active_squad_changed)   # End Turn hides mid-queue (#541)
 
 	# Standing squad rings follow membership (#423 slice 1). squad_created covers every LEAVE as
 	# well as every birth -- leave_squad ends in create_squad -- so the two ejection sweeps that
@@ -321,6 +322,9 @@ func _wire_signals() -> void:
 	squad_action_queue_control.cancel_requested.connect(_on_queue_cancel_requested)
 	squad_action_queue_control.reorder_requested.connect(_on_queue_reorder)
 	squad_action_queue_control.row_hover_changed.connect(hover_presenter.on_queue_row_hover_changed)
+	mission_status_panel.drawn_zone_kinds = overlay_manager.drawn_zone_kinds
+	mission_status_panel.zone_row_hovered.connect(hover_presenter.on_objective_row_hover_changed)
+	mission_status_panel.zone_row_clicked.connect(look_at_next_zone)
 	end_turn_button.end_turn_requested.connect(_on_end_turn_button_pressed)
 
 	# HoverPresenter connects its own handlers in its _ready, so this one runs after them.
@@ -845,8 +849,8 @@ func end_turn():
 	turn_manager.end_turn(_board().present_factions())
 
 # The bottom-right End Turn button's one caller (#189) -- same guard `_on_queue_execute_requested`
-# uses. It stopped being belt-and-braces with #467: the button is permanently on screen now, so a
-# press really can arrive during an AI turn or over a finished mission, and this is what refuses it.
+# uses. Still load-bearing after #541 took the button off the AI turn: it stays up over a finished
+# mission and behind a menu, and a press arriving there is what this refuses.
 #
 # It also ASKS when there is anything left to do (dev call, #467). The question is
 # `faction_all_squads_acted` -- the same predicate that decides whether the button is flashing --
@@ -945,7 +949,11 @@ func can_control(unit: Unit) -> bool:
 func focus_view_on(unit: Unit) -> void:
 	if unit == null or not is_instance_valid(unit):
 		return
-	var cell := unit.get_projected_destination()
+	focus_view_on_cell(unit.get_projected_destination())
+
+# The door above with the cell already in hand (#955 part 3). Neither half asks whether the board is
+# locked -- a caller that can fire while it is must ask first (look_at_next_zone does).
+func focus_view_on_cell(cell: Vector2i) -> void:
 	# A 3D host owns the visible camera and answers the signal below for it; THIS camera is hidden
 	# there, and battle3d._update_pointer snaps it per motion to park the info card, so writing it
 	# here would only mis-anchor that card. Same flag and the same reason CameraController's WASD
@@ -953,6 +961,26 @@ func focus_view_on(unit: Unit) -> void:
 	if not board_input_delegated:
 		camera_controller.snap_to_position(GridUtils.cell_world(grid, cell))
 	view_focus_requested.emit(cell)
+
+# An objectives-panel zone row was clicked (#955 part 3): the camera goes to the next drawn zone of
+# that kind, in drawn order and wrapping, aimed at the cell its emblem stands on. Refused while the
+# board is locked, since that panel stays up through enemy turns, the pass and the mission's end.
+var _zone_look_turn: Dictionary[int, int] = {}
+
+func look_at_next_zone(kind: int) -> void:
+	if _board_locked_for_player():
+		return
+	var zones: Array[Dictionary] = []
+	for zone in overlay_manager.drawn_zones:
+		if int(zone["kind"]) == kind:
+			zones.append(zone)
+	if zones.is_empty():
+		return
+	var turn: int = _zone_look_turn.get(kind, 0) % zones.size()
+	_zone_look_turn[kind] = turn + 1
+	var cells: Array[Vector2i] = []
+	cells.assign(zones[turn]["cells"])
+	focus_view_on_cell(ZoneMarks.emblem_cell(cells))
 
 # ==============================================================================
 #  Modes — entering and leaving
@@ -1340,20 +1368,30 @@ func refresh_mission_status() -> void:
 		return
 	mission_status_panel.show_status(mission_controller, _board(), instruction)
 
-# The bottom-right End Turn affordance (#189): flashes with the SAME Pulse cue as Execute Orders
-# once every squad on the active faction has acted or waited -- there's nothing left to click but
-# this. Called from has_acted's write points (SquadManager.set_has_acted's callers) and the turn
-# handoff -- the refresh_mission_status pattern above (#134), a write-point call, not a signal.
+# The bottom-right End Turn affordance (#189): whether it is OFFERED, and whether it flashes with the
+# SAME Pulse cue as Execute Orders once every squad on the active faction has acted or waited.
+# Called from has_acted's write points (SquadManager.set_has_acted's callers), the turn handoff and
+# every active_squad change -- the refresh_mission_status pattern above (#134), a write-point call.
 func refresh_end_turn_button() -> void:
 	var faction: Team.Faction = turn_manager.active_faction()
-	# Since #467 this decides the FLASH, not the visibility -- the button is up whenever the player
-	# could act, so this predicate never hides it. Same predicate the early-press confirm reads,
-	# which is what makes "it is flashing" and "it will not ask" the same fact. What DOES hide it is
-	# a cinematic (#722), on a different predicate and through set_hud_hidden_for_playback below.
+	var ai_turn: bool = ai_controller.is_ai_faction(faction)
+	# #541: not on an AI faction's turn -- read off the ACTIVE FACTION, which switches at the handoff,
+	# ahead of the TURN_HANDOFF beat that playback_owns_board() would miss -- and not while a squad's
+	# plan is open, where it sits under Execute and reads as the same red button. A cinematic (#722)
+	# and the pre-mission phase hide it too, through set_battle_hud_hidden below.
+	end_turn_button.set_offered(not ai_turn and squad_manager.active_squad == null)
+	# The FLASH. Same predicate the early-press confirm reads, which is what makes "it is flashing"
+	# and "it will not ask" the same fact.
 	var urgent: bool = (not _board_locked_for_player()
-		and not ai_controller.is_ai_faction(faction)
+		and not ai_turn
 		and squad_manager.faction_all_squads_acted(faction))
 	end_turn_button.set_urgent(urgent)
+
+# The threat preview queues and rolls back (#710), so its writes round-trip and repaint nothing.
+func _on_active_squad_changed(_squad: Squad) -> void:
+	if squad_manager.previewing:
+		return
+	refresh_end_turn_button()
 
 # THE CINEMATIC OWNS THE FRAME (#722). Called from CameraController's playback_cinematic setter --
 # the one edge, since that field is cleared on both lock edges and published once per pass.

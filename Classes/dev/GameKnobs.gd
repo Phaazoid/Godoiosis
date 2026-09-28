@@ -490,6 +490,15 @@ const CLASS_KNOBS: Array[Dictionary] = [
 	{"group": "Zone marks", "label": "Shimmer speed", "static": "ZONE_SHIMMER_SPEED", "script": ZONE_MARKS_SCRIPT,
 		"min": 0.0, "max": 2.0, "step": 0.05,
 		"tip": "How fast the shimmer rises up the wall, in cycles a second. 0 holds it still. 3D only."},
+	{"group": "Zone marks", "label": "Lit fill", "static": "ZONE_LIT_FILL_ALPHA", "script": ZONE_MARKS_SCRIPT,
+		"min": 0.0, "max": 1.0, "step": 0.01,
+		"tip": "The wash inside a LIT zone (its row in the objectives panel is under the pointer), as an alpha."},
+	{"group": "Zone marks", "label": "Lit wall height", "static": "ZONE_LIT_WALL_HEIGHT", "script": ZONE_MARKS_SCRIPT,
+		"min": 0.05, "max": 3.0, "step": 0.05,
+		"tip": "How tall a LIT zone's wall stands, in tiles. 3D only."},
+	{"group": "Zone marks", "label": "Lit wall strength", "static": "ZONE_LIT_WALL_ALPHA", "script": ZONE_MARKS_SCRIPT,
+		"min": 0.0, "max": 1.0, "step": 0.05,
+		"tip": "How strong a LIT zone's wall is at its foot. 3D only."},
 	{"group": "Aiming", "label": "Attack reach (2D+3D)", "static": "ATTACK_MODULATE",
 		"tip": "The reach fill while aiming a damaging attack. Red reads as hostile, which is the whole reason a healing pick paints green instead."},
 	{"group": "Aiming", "label": "Heal reach (2D+3D)", "static": "HEAL_ATTACK_MODULATE",
@@ -1848,6 +1857,9 @@ static func read_static(name: String) -> Variant:
 		"ZONE_WALL_HEIGHT": return ZoneMarks.ZONE_WALL_HEIGHT
 		"ZONE_WALL_ALPHA": return ZoneMarks.ZONE_WALL_ALPHA
 		"ZONE_SHIMMER_SPEED": return ZoneMarks.ZONE_SHIMMER_SPEED
+		"ZONE_LIT_FILL_ALPHA": return ZoneMarks.ZONE_LIT_FILL_ALPHA
+		"ZONE_LIT_WALL_HEIGHT": return ZoneMarks.ZONE_LIT_WALL_HEIGHT
+		"ZONE_LIT_WALL_ALPHA": return ZoneMarks.ZONE_LIT_WALL_ALPHA
 		"TETHER_COLOR": return SquadLines2D.TETHER_COLOR
 		"ENEMY_TETHER_COLOR": return SquadLines2D.ENEMY_TETHER_COLOR
 		"CASING_COLOR": return SquadLines2D.CASING_COLOR
@@ -2202,7 +2214,8 @@ static func write_static(host: Node3D, name: String, value: Variant) -> void:
 		# The zone marks (#955). The art is generated, so every one of them regenerates it: the mirror
 		# reads the new textures and the wall its new shape on its next frame, and the flat view rebuilds.
 		"ZONE_EDGE_OUTLINE", "ZONE_RIM_WIDTH", "ZONE_FILL_ALPHA", "ZONE_WALL_HEIGHT", \
-				"ZONE_WALL_ALPHA", "ZONE_SHIMMER_SPEED":
+				"ZONE_WALL_ALPHA", "ZONE_SHIMMER_SPEED", "ZONE_LIT_FILL_ALPHA", "ZONE_LIT_WALL_HEIGHT", \
+				"ZONE_LIT_WALL_ALPHA":
 			_write_zone_mark(name, value)
 			ZoneMarks.restyle()
 			_restyle_zone_marks(host)
@@ -3006,6 +3019,9 @@ static func _write_zone_mark(name: String, value: Variant) -> void:
 		"ZONE_WALL_HEIGHT": ZoneMarks.ZONE_WALL_HEIGHT = value
 		"ZONE_WALL_ALPHA": ZoneMarks.ZONE_WALL_ALPHA = value
 		"ZONE_SHIMMER_SPEED": ZoneMarks.ZONE_SHIMMER_SPEED = value
+		"ZONE_LIT_FILL_ALPHA": ZoneMarks.ZONE_LIT_FILL_ALPHA = value
+		"ZONE_LIT_WALL_HEIGHT": ZoneMarks.ZONE_LIT_WALL_HEIGHT = value
+		"ZONE_LIT_WALL_ALPHA": ZoneMarks.ZONE_LIT_WALL_ALPHA = value
 
 
 # The squad lines' re-apply (#1070): the diorama's beam params and the store's derived tethers, the

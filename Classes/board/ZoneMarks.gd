@@ -5,7 +5,9 @@ class_name ZoneMarks
 # from its edge on its own cells, a light WALL standing just inside its border (ZoneWalls, the
 # diorama only), and one EMBLEM saying what kind it is -- the emblem also heads the card's section
 # for that kind (the watch reticle's one-texture, one-colour shape). The dev picked the rim + wall
-# out of three looks tried in play behind an experiment (2026-09-27).
+# out of three looks tried in play behind an experiment (2026-09-27). A zone whose row in the
+# objectives panel is under the pointer is LIT (#955 part 3): a fuller wash and, in the diorama, a
+# taller and stronger wall. OverlayManager.lit_zone_kind is the one store that says which.
 #
 # MoveGrid's shape: a board/ class of statics both views read and GameKnobs.CLASS_KNOBS tunes, with
 # the art GENERATED here rather than baked, so a knob moves it. Both views draw the same texture per
@@ -17,6 +19,8 @@ class_name ZoneMarks
 # Which sides of a cell face out of its zone, and which inner corners need a notch (a cell whose two
 # neighbours on a corner are in the zone while the diagonal between them is not).
 enum Side { N = 1, E = 2, S = 4, W = 8, NE = 16, SE = 32, SW = 64, NW = 128 }
+# The art cache's key bit for a lit zone's art, above every Side.
+const LIT_BIT := 256
 
 # The art's texels across a cell: the 3D view sizes a ground mark by its pixels, so it is that metric.
 const TEXELS := int(BoardOverlays.ART_PIXELS_PER_CELL)
@@ -52,6 +56,12 @@ static var ZONE_WALL_HEIGHT := 0.45
 static var ZONE_WALL_ALPHA := 0.8
 # How fast the wall's shimmer rises, in cycles a second. 0 holds it still.
 static var ZONE_SHIMMER_SPEED := 0.4
+# A LIT zone (#955 part 3: its row in the objectives panel is under the pointer). Its wash, as an alpha.
+static var ZONE_LIT_FILL_ALPHA := 0.4
+# How tall a lit zone's wall stands, in cells.
+static var ZONE_LIT_WALL_HEIGHT := 0.9
+# How strong a lit zone's wall is at its foot, as an alpha.
+static var ZONE_LIT_WALL_ALPHA := 1.0
 
 # Moved by restyle(), so a reader holding generated art knows to ask again.
 static var art_version := 0
@@ -119,11 +129,13 @@ static func emblem_cell(cells: Array[Vector2i]) -> Vector2i:
 	return best
 
 
-# One cell's art for a cell wearing `mask`, cached. Both views draw this same texture.
-static func texture(mask: int) -> Texture2D:
-	if not _art_cache.has(mask):
-		_art_cache[mask] = ImageTexture.create_from_image(image(mask))
-	return _art_cache[mask] as Texture2D
+# One cell's art for a cell wearing `mask`, cached. Both views draw this same texture. A LIT zone's
+# art is the same rim over a fuller wash (ZONE_LIT_FILL_ALPHA), so the rim reads unchanged.
+static func texture(mask: int, lit := false) -> Texture2D:
+	var key := mask | (LIT_BIT if lit else 0)
+	if not _art_cache.has(key):
+		_art_cache[key] = ImageTexture.create_from_image(image(mask, TEXELS, lit))
+	return _art_cache[key] as Texture2D
 
 
 # A texel's distance in from the nearest thing the zone ends at -- an outward side, or the corner of
@@ -145,20 +157,21 @@ static func edge_distance(mask: int, x: int, y: int, size: int) -> float:
 	return d
 
 
-static func image(mask: int, size: int = TEXELS) -> Image:
+static func image(mask: int, size: int = TEXELS, lit := false) -> Image:
 	var img := Image.create_empty(size, size, false, Image.FORMAT_RGBA8)
 	var scale := float(size) / float(TEXELS)
 	var outline := ZONE_EDGE_OUTLINE * scale
+	var fill_alpha := ZONE_LIT_FILL_ALPHA if lit else ZONE_FILL_ALPHA
 	for y in size:
 		for x in size:
 			var d := edge_distance(mask, x, y, size)
-			img.set_pixel(x, y, _texel(d, outline, float(size)))
+			img.set_pixel(x, y, _texel(d, outline, float(size), fill_alpha))
 	return img
 
 
 # The rim: the dark outline, a bright line, then a glow fading inward to the faint fill.
-static func _texel(d: float, outline: float, size: float) -> Color:
-	var fill := Color(1, 1, 1, ZONE_FILL_ALPHA)
+static func _texel(d: float, outline: float, size: float, fill_alpha: float) -> Color:
+	var fill := Color(1, 1, 1, fill_alpha)
 	if d == INF:
 		return fill
 	if d < outline:
@@ -170,7 +183,7 @@ static func _texel(d: float, outline: float, size: float) -> Color:
 	var reach := ZONE_RIM_WIDTH * size
 	if past < line + reach:
 		var t := 1.0 - (past - line) / reach
-		return Color(1, 1, 1, lerpf(ZONE_FILL_ALPHA, 0.75, t * t))
+		return Color(1, 1, 1, lerpf(fill_alpha, 0.75, t * t))
 	return fill
 
 

@@ -378,6 +378,9 @@ var zone_highlight_overlay: TileMapLayer = null   # the Tile Brush's picked zone
 # walls all read. The version is the mirror's change signal (#308).
 var drawn_zones: Array[Dictionary] = []
 var drawn_zones_version := 0
+# Which zone kind is LIT (#955 part 3): the objectives panel row under the pointer names one, and
+# every drawn zone of it brightens in both views. MissionRules.NO_ZONE lights nothing.
+var lit_zone_kind := MissionRules.NO_ZONE
 var _zone_sprites: Array[Sprite2D] = []   # the flat view's rims and emblems, rebuilt with the zones
 var reach_overlay: TileMapLayer = null   # YOUR unit's attack reach (#1066); built in _ready
 var threat_overlay: TileMapLayer = null   # ...and the enemy's one undifferentiated field, under it
@@ -1234,6 +1237,30 @@ func restyle_zone_marks() -> void:
 	_rebuild_zone_marks()
 
 
+# Light every drawn zone of `kind`, or none (#955 part 3). A hover is a discrete event, so the
+# version moves and both views rebuild only when the lit kind changes.
+func set_lit_zone_kind(kind: int) -> void:
+	if kind == lit_zone_kind:
+		return
+	lit_zone_kind = kind
+	drawn_zones_version += 1
+	_rebuild_zone_marks()
+
+
+func is_lit(zone: Dictionary) -> bool:
+	return lit_zone_kind != MissionRules.NO_ZONE and int(zone["kind"]) == lit_zone_kind
+
+
+# The kinds drawn_zones holds -- what the objectives panel may light or visit.
+func drawn_zone_kinds() -> Array[int]:
+	var kinds: Array[int] = []
+	for zone in drawn_zones:
+		var kind := int(zone["kind"])
+		if not kinds.has(kind):
+			kinds.append(kind)
+	return kinds
+
+
 # The flat view's zone marks (#955): per drawn zone cell, the SAME rim texture the diorama draws,
 # sized to this tileset's own tile, plus one emblem per zone on the cell ZoneMarks picks, all in the
 # kind's colour. Sprites for the watch marks' reason: a tile layer holds one tile per cell, and the rim
@@ -1256,9 +1283,10 @@ func _rebuild_zone_marks() -> void:
 		cells.assign(zone["cells"])
 		var colour := ZoneMarks.colour_of(kind)
 		var masks := ZoneMarks.cell_masks(cells)
+		var lit := is_lit(zone)
 		for cell: Vector2i in masks:
 			var rim := Sprite2D.new()
-			rim.texture = ZoneMarks.texture(masks[cell])
+			rim.texture = ZoneMarks.texture(masks[cell], lit)
 			rim.modulate = colour
 			rim.scale = art_scale
 			rim.z_index = ZONE_MARK_Z_INDEX

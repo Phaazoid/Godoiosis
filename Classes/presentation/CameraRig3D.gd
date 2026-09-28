@@ -304,6 +304,9 @@ var pan_limit := Rect2()
 
 var _orbiting := false
 var _orbit_travel_px := 0.0
+# This gesture's press reached the rig and its release has not. Separate from _orbiting, which
+# release_orbit() clears while the physical press is still down.
+var _press_held := false
 
 # The camera's black box (#669), dumped into report.md beside the View line. It lives HERE rather
 # than on the host because the rig is the one place every channel is readable at once -- so a trace
@@ -351,6 +354,12 @@ func _unhandled_input(event: InputEvent) -> void:
 		_orbiting = button.pressed
 		if button.pressed:
 			_orbit_travel_px = 0.0
+		elif not _press_held:
+			# A release whose press never reached us (#1081): a UI surface ate the press and freed
+			# itself on it -- the action ring backing out of its last level -- so nothing was left
+			# to eat the release. That gesture was not ours, so it is never a click.
+			_orbit_travel_px = INF
+		_press_held = button.pressed
 		return
 
 	if _orbiting:
@@ -416,7 +425,8 @@ func is_orbiting() -> bool:
 
 
 # Did the gesture that just ended stay inside the click slop? Only meaningful to a
-# host that shares orbit_button with a click verb (Battle3D's right-click cancel).
+# host that shares orbit_button with a click verb (Battle3D's right-click cancel). A
+# release the rig never saw pressed answers false.
 func last_gesture_was_click() -> bool:
 	return _orbit_travel_px <= orbit_click_slop_px
 

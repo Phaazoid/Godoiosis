@@ -631,8 +631,9 @@ func _zones(om: OverlayManager) -> void:
 		tint.a = 1.0
 		emblems.append(_marker(_anchor(ZoneMarks.emblem_cell(cells)), ZoneMarks.emblem_of(kind), tint))
 		var masks := ZoneMarks.cell_masks(cells)
+		var lit := om.is_lit(zone)
 		for cell: Vector2i in masks:
-			marks.append(_marker(_anchor(cell), ZoneMarks.texture(masks[cell]), tint))
+			marks.append(_marker(_anchor(cell), ZoneMarks.texture(masks[cell], lit), tint))
 	_markers(BoardOverlays.Layer.ZONE_MARKS, marks)
 	_markers(BoardOverlays.Layer.ZONE_EMBLEMS, emblems)
 	_zone_wall_sync(om)
@@ -667,12 +668,14 @@ func _zone_wall_sync(om: OverlayManager) -> void:
 		var cells: Array[Vector2i] = []
 		cells.assign(zone["cells"])
 		var colour := overlays.layer_modulate(ZoneMarks.LAYER_OF_KIND[kind])
-		colour.a = 1.0
+		# A lit zone (#955 part 3) stands taller and stronger; its strength rides the vertex alpha.
+		var lit := om.is_lit(zone)
+		colour.a = ZoneMarks.ZONE_LIT_WALL_ALPHA if lit else ZoneMarks.ZONE_WALL_ALPHA
+		var height := (ZoneMarks.ZONE_LIT_WALL_HEIGHT if lit else ZoneMarks.ZONE_WALL_HEIGHT) * BoardSpace.CELL_SIZE
 		for segment in ZoneMarks.wall_outline(cells, board):
 			strips.append({"from": BoardSpace.trace_point(segment[0]) + lift,
-					"to": BoardSpace.trace_point(segment[1]) + lift, "colour": colour})
-	_zone_walls.build(strips, ZoneMarks.ZONE_WALL_HEIGHT * BoardSpace.CELL_SIZE,
-			ZoneMarks.ZONE_WALL_ALPHA, ZoneMarks.ZONE_SHIMMER_SPEED)
+					"to": BoardSpace.trace_point(segment[1]) + lift, "colour": colour, "height": height})
+	_zone_walls.build(strips, ZoneMarks.ZONE_SHIMMER_SPEED)
 
 
 # Where a leader's crown STANDS (#1070): its cell's ground, as every marker here, lifted by the
