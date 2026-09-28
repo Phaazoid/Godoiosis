@@ -187,9 +187,7 @@ theme_override_constants/margin_bottom = 5
 
 [node name="InventorySlots" type="GridContainer" parent="UnitInfoPanel/Margin/VBox/InventoryPanel/MarginContainer"]
 layout_mode = 2
-columns = 2
-theme_override_constants/h_separation = 4
-theme_override_constants/v_separation = 4
+theme_override_constants/v_separation = 2
 
 [node name="SquadInfoPanel" type="PanelContainer" parent="UnitInfoPanel/Margin/VBox"]
 layout_mode = 2

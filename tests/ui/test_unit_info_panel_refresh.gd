@@ -182,6 +182,7 @@ func _def_value() -> String:
 # budget any future row has to fit in. That ticket's first attempt put a 160px wheel in the body and
 # overflowed by 92 -- the squad box and the states bar ran off the bottom of the screen, silently,
 # because a VBoxContainer simply lays its children past its own rect and nothing complains.
+# #966 then spent 38 of the rest on a one-column inventory: 698 of 720, 22px left.
 #
 # Asked as a PROPERTY against the panel's own height rather than a pixel count, which is what
 # tests/ui/test_title_screen_fits_the_viewport.gd learned: the design space is exactly 720 tall for
