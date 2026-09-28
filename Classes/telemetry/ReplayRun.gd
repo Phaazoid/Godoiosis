@@ -183,6 +183,7 @@ func headline() -> Dictionary:
 		# this was found: it froze the tab on every swept run.
 		"dev_touched": end.get("dev_touched", false),
 		# Read off WHERE THE FOLDER IS, never off a stored flag (#53 slice 5) -- the move is the
-		# state, so this cannot go stale the way a marker could.
+		# state, so this cannot go stale the way a marker could. Neither sent nor held is owed.
 		"sent": TelemetryStore.is_sent(run_id),
+		"held": TelemetryStore.is_held(run_id),
 	}
