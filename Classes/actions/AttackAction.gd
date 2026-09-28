@@ -101,6 +101,17 @@ var preview_sprites: Array[Node2D] = []
 # is drawn, and an unlistened emit is free.
 signal impact(attack: AttackAction)
 
+# ...and the blow sending its victim OVER THE EDGE (#1104): a removal, emitted before the slide so the
+# victim's tethers break while the body is still on screen. Per VICTIM, where impact is per volley.
+# OrderExecutor answers it, and sets tether_held when a tether broke.
+signal going_over(attack: AttackAction)
+# A tether that removal broke is holding the body up (#1104): it hangs over the hole for
+# Pacing.VOID_HANG once it arrives, wile e coyote style, and falls when the tether snaps.
+var tether_held := false
+# When that tether snapped (Time.get_ticks_msec): the instant the body let go, stamped as the hang
+# ENDS so a pause mid-hang holds the tether too. 0 until then. The held break reads it every frame.
+var tether_snap_msec := 0
+
 const ATTACK_ICON := preload("res://Art/Icons/ActionIcons/FightActionIcon.png")
 const DOWN_ICON := preload("res://Art/Icons/StateIcons/Down.png")
 const KILL_ICON := preload("res://Art/Icons/StateIcons/DedIcon.png")
@@ -186,6 +197,8 @@ func execute():
 		# Knockback (#84, animated by the #259 rework): the target SLIDES the resolver's own trail
 		# to its landing, holding its facing (the mirror gates on movement.sliding). Awaited, so a
 		# sequential later attack finds the body where the plan already said it lands.
+		if resolved.removed:
+			going_over.emit(self)
 		if resolved.knockback_applied and is_instance_valid(target):
 			target.movement.slide_along_path(resolved.knockback_path, resolved.knockback_landing_index)
 			if target.movement.sliding:
@@ -195,11 +208,16 @@ func execute():
 		# MIRRORED in play_session._apply_attack (the hand-copied twin, per the went_downed trap) --
 		# except for the plummet, which is pure spectacle: the sprite falls a long way past the lip
 		# before it goes (#431, dev: it used to vanish in mid-air), and the headless twin has no
-		# sprite to drop. Awaited so the removal lands after the fall, not during it.
+		# sprite to drop. Awaited so the removal lands after the fall, not during it. A body a tether is
+		# holding first HANGS over the hole from its arrival, and the tether snaps as it lets go (#1104).
 		if resolved.removed and is_instance_valid(target):
-			await target.movement.plummet()
-			if is_instance_valid(target):   # the await spans frames; the board can go in them
-				target.die()
+			if tether_held:
+				await Pacing.beat(target, Pacing.VOID_HANG)
+				tether_snap_msec = Time.get_ticks_msec()
+			if is_instance_valid(target):   # each await spans frames; the board can go in them
+				await target.movement.plummet()
+				if is_instance_valid(target):
+					target.die()
 
 	# The watch broken by this blow (#810), the charge spend's shape: the resolver already decided
 	# WHETHER this hit ended a standing watch -- here there is only the marking. MARKS, never lapses

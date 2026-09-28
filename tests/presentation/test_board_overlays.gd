@@ -1157,7 +1157,7 @@ func test_only_the_squad_lines_are_dashed() -> void:
 	]]
 	var cones: Array[Dictionary] = [{"base": Vector3(3, 1, 0), "tip": Vector3(3.5, 1, 0), "radius": 0.1}]
 	var solid: Array[BoardOverlays.Layer] = [BoardOverlays.Layer.REACH_LINES,
-		BoardOverlays.Layer.SIGHT_TRACE, BoardOverlays.Layer.ENEMY_FOCUS_EDGE]
+		BoardOverlays.Layer.SIGHT_TRACE, BoardOverlays.Layer.ENEMY_FOCUS_EDGE, BoardOverlays.Layer.TETHER_GLOW]
 	for layer: BoardOverlays.Layer in SQUAD_LINE_LAYERS + solid:
 		overlays.set_marks(layer, marks, Color.WHITE, [], cones)
 

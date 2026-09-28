@@ -88,8 +88,9 @@ var drown_damage: int = 0
 var removed: bool = false
 # The units that leave a squad of two or more BECAUSE of this blow (#367): the victim going down, a
 # successor unable to hold someone, a shove out of range. Stamped after the pass resolves, by
-# SplitForecast in SquadManager.resolve_plan; a death is never counted (#1104). The queue's "Split"
-# chip reads it, and the pass-end settle must agree with it (Law #2).
+# SplitForecast in SquadManager.resolve_plan; a death is never counted -- it is not a split, and its
+# tether plays a look of its own (#1104). The queue's "Split" chip reads it, and the pass-end settle
+# must agree with it (Law #2).
 var splits: Array[Unit] = []
 # ...and the member -> leader LINKS this blow ends or begins (#367 part 2B), stamped beside `splits`
 # by the same walk: a leader's leaving ends every member's link and begins the survivors' links to

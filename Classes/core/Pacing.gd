@@ -289,6 +289,11 @@ static var CLIFF_RECOVER := 1.6
 # -- ending the tween and then waiting would have the rig climbing out during the very pause the
 # pause is for. A void fall only; a cliff drop lands and the slide carries on.
 static var PLUMMET_HOLD := 0.9
+# The beat at the TOP (#1104, dev: "hover over the ledge a moment, wile e coyote style, until the
+# tether snaps, then the unit falls"): how long a body shoved over a hole hangs there before it drops.
+# Counted from its ARRIVAL, not the blow, and only while a tether it broke is holding it -- the tether
+# snaps as the hang ends. A unit with no tether falls at once, as it always did.
+static var VOID_HANG := 0.6
 # How far ABOVE the ground the units stand on the tear-out's shot sits, in cells (dev, 2026-08-29:
 # "the units need to be at the center"). Aiming at their feet is what the board's own recentre does
 # and it leaves a sprite sitting high in frame; this is the half-body lift that centres them, and it

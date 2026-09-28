@@ -3944,7 +3944,7 @@ The dev, after playing it: *"it is too hard to see this rose color inside the en
 - **The Split chip is still orange** on a row whose blow splits an enemy squad.
 - **What only the dev can judge:** the casing's width and darkness in play, the harder edge, and outlined sparks.
 
-## Membership MOMENTS: a join draws the tether in, a leave reels it in, a forced exit breaks it ([#367](https://github.com/Phaazoid/Godoiosis/issues/367), part 1 BUILT 2026-09-23, part 2 BUILT 2026-09-27)
+## Membership MOMENTS: a join draws the tether in, a leave reels it in, a forced exit breaks it, a death or a down plays a look of its own ([#367](https://github.com/Phaazoid/Godoiosis/issues/367), part 1 BUILT 2026-09-23, part 2 BUILT 2026-09-27; [#1104](https://github.com/Phaazoid/Godoiosis/issues/1104) BUILT 2026-09-27)
 
 #367 asked for a visible moment when a squad forms, a unit joins, or one leaves. #1070's tethers gave membership a body, and the dev's framing was that they are the vehicle: *"We have new tethers now for additional effect vectors."* [#423](https://github.com/Phaazoid/Godoiosis/issues/423)'s break folded in the same day. It is one mechanism, built as two PRs, and #423 closes with the second.
 
@@ -3955,8 +3955,8 @@ The dev, after playing it: *"it is too hard to see this rose color inside the en
 | Join | **Draw in.** The tether grows from the member to the leader, then the cone pops. |
 | Voluntary leave (Leave Squad, Disband) | **Reel in.** The tether is pulled into the leader. |
 | Forced break (part 2) | *"the snap, sparks, and shatter"*: red strain, a snap with sparks at the break, the dashes shatter and fall, and the arrowhead drops too. |
-| Downed | Breaks, like a shove (part 2). |
-| Death | *"death should have other effects, for a later issue"*: [#1104](https://github.com/Phaazoid/Godoiosis/issues/1104). |
+| Downed | Breaks, like a shove (part 2). **Superseded 2026-09-27 (#1104):** a down plays the death looks, and the snap is kept for displacement. |
+| Death | *"death should have other effects, for a later issue"*: [#1104](https://github.com/Phaazoid/Godoiosis/issues/1104), since built (*A death's own moment*, below). |
 | Leadership passes | The old links play their exit, **then** each remaining member draws in to the new leader. |
 | Factions | Breaks play for every faction, each in its own side's colour since [#1109](https://github.com/Phaazoid/Godoiosis/issues/1109). Joins and leaves only ever come from the player; nothing in `ai/` forms or leaves a squad mid-battle. |
 
@@ -3965,7 +3965,7 @@ The dev, after playing it: *"it is too hard to see this rose color inside the en
 Tethers stand only while something is selected, and membership changes at settle points when nothing is. That is #423's visibility-schedule law, and it rules out animating a standing tether. So each change plays a short-lived **moment** that draws whether or not a tether was up.
 
 - **Who does what.** `SquadTetherPresenter` (`board/`) decides which moments play. `OverlayManager.squad_tether_moments` holds them while they do. `SquadLines2D.moment_at` / `moment_drawing` is the one answer to what a moment looks like at a given age, and both views read it. The diorama draws on `Layer.TETHER_MOMENT`, rebuilt every frame while a moment is in the air and cleared once after: `ArcLightning`'s rebuild-while-alive shape, costing nothing when idle.
-- **The presenter diffs; it does not react per signal.** One call can change membership several times: a leader leaving picks a new leader, and that leader's range and capacity can eject members in the same call. Handled per signal, a tether would draw in to the new leader and end in the same frame. So the presenter keeps a baseline of every member-to-leader link and asks, once the operation is over, which links ended, which began, and why each ended. An ended link takes the MEMBER's cause if the member left, otherwise its leader's. The baseline advances on every flush whether or not anything plays, so it cannot go stale.
+- **The presenter diffs; it does not react per signal.** One call can change membership several times: a leader leaving picks a new leader, and that leader's range and capacity can eject members in the same call. Handled per signal, a tether would draw in to the new leader and end in the same frame. So the presenter keeps a baseline of every member-to-leader link and asks, once the operation is over, which links ended, which began, and why each ended. An ended link takes the MEMBER's cause if the member left, otherwise its leader's; a death at either end wins over both (#1104). The baseline advances on every flush whether or not anything plays, so it cannot go stale.
 - **A join settles at once, a leave at the end of the frame.** `join_squad` emits last, and Squad Up redraws the squad's tethers one line later in the same frame. Settling first is what lets the recruit's tether be held back from its first frame; a deferred settle showed it whole for one frame in 3D, because `OverlayMirror._process` lifts before the deferred queue runs. A leave defers because a disband loops and a leader's leave cascades.
 - **A draw-in holds back its pair's standing tether.** A draw-in over a tether that is already whole is invisible. `squad_tethers` stays the truth, and `drawn_squad_tethers` omits any pair a draw-in is standing in for, running or waiting its turn. Both views read the drawn list. The draw-in hands over once it has popped if a standing tether exists for its pair (mid-Squad Up); if none does (Join Squad has just closed its pick), it holds, then fades.
 - **Where the new leader's links wait.** A link that begins in the same operation as one that ends waits for the exit to finish. That is the dev's "then": the reel-in's time after a voluntary leave, the break's after a forced one.
@@ -3981,7 +3981,7 @@ Tethers stand only while something is selected, and membership changes at settle
 - `handle_unit_death` is DEATH. `release` (the pre-mission undeploy) is RELEASE.
 - Leaving a solo squad to join another is VOLUNTARY too, and ends no link.
 
-What plays: VOLUNTARY reels in. FORCED and DOWNED BREAK (part 2B, below). DEATH plays nothing (#1104). RELEASE plays nothing, since an undeploy has no ruling.
+What plays: VOLUNTARY reels in. FORCED BREAKS (part 2B, below). DEATH and DOWNED play one of four looks of their own (*A death's own moment*, below), and a body shoved into a hole breaks at the ledge. RELEASE plays nothing, since an undeploy has no ruling.
 
 ### Two facts the build measured
 
@@ -4010,7 +4010,7 @@ The dev's playtest of part 1 found the queue silent about exactly this: *"when I
 | Hover | The names only, until the dev words it. |
 | Break inside the battle zoom (part 2B) | The zoom lifts only the fight's cells, 40 cells up, and a moment draws at board height today, so it would play unseen. **Ruled Z2:** the far end of each breaking tether is lifted with the fight. **With battle zooms off, it plays on the board.** |
 
-**What counts.** A unit that leaves a squad of two or more because of the blow: the victim going down, anyone the successor cannot hold (range or capacity), a shove out of range. **So every blow that downs a squadded unit also wears Split.** A death is never counted (#1104), and nor is leaving a squad of one.
+**What counts.** A unit that leaves a squad of two or more because of the blow: the victim going down, anyone the successor cannot hold (range or capacity), a shove out of range. **So every blow that downs a squadded unit also wears Split.** A death is never counted: it is not a split, and its tether plays a look of its own (#1104). Nor is leaving a squad of one.
 
 **The forecast is `SplitForecast` (`squads/`), stamped into `ResolvedOutcome.splits` by `SquadManager.resolve_plan`** (not by `resolve_hypothetical`: AI scoring reads no Split). It replays the live settle in its live order:
 - a death settles at once, mid-pass, so a killed leader's successor is judged where everyone stands at that blow;
@@ -4057,7 +4057,7 @@ The RULES inside each step are shared, never copied: `SquadManager.successor_amo
   - It asks `SquadTetherPresenter.foretell(outcome)` to play the outcome's relinks now.
   - While a fight is staged (`shot_cells` non-empty), it releases the follow, so `ShotDirector` falls from TRAINED to STAGE.
   - It lingers `max(linger, shown)`. `shown` is the break's own length, plus a handover's draw-in up to its pop (`SquadLines2D.shown_seconds`), so tuning a break can never outrun the camera.
-- **A kill already settled live.** `handle_unit_death` runs mid-blow, and the presenter's ordinary deferred flush plays it at that blow. So `foretell` skips any link `_current_links()` has already changed, and nothing plays twice whichever of the two gets there first.
+- **A kill already settled live.** `handle_unit_death` runs mid-blow, and the presenter's ordinary deferred flush plays it at that blow. So `foretell` skips any link `_current_links()` has already changed, and nothing plays twice whichever of the two gets there first. Since #1104 the kill's own look still holds its blow (*A death's own moment*, below).
 - **The settle reads a ledger.** Everything foretold goes into `_foretold_ends` / `_foretold_begins`. After `enforce_contact`, the executor calls `flush()` SYNCHRONOUSLY, and the diff consumes the ledger instead of playing those links again. Then `end_pass()` clears whatever is left, so a link the forecast named but the pass never changed cannot swallow a later, real leave.
 - **An exit no forecast saw breaks at the settle, on the board**, through the ordinary diff. Since *Part 2A's leftovers* the pass's own ice is forecast; what still arrives this way is a burn's break, at the end-of-turn settle, and the contact backstops outside a pass (turn start, a pre-mission reposition).
 
@@ -4073,7 +4073,7 @@ With zooms off nothing stages: the break plays on the board, at the blow, with t
 - **A moment still fading when the tiles go home drops to the board with them.** The wait covers the break and a draw-in's pop, not a draw-in's hold and fade.
 - **A mid-walk watch shot's break plays on the board**, before the tear-out, like its footprint.
 - **A break the forecast predicted but the pass did not deliver has already played**, and nothing redraws the tether until it is next shown. The link check makes this a bug to fix rather than a mode.
-- **A down's handover is judged at end-of-pass positions** (the settle's own order), so a member shoved out of the successor's reach before the down breaks at the down's blow, as its chip says.
+- **A down's handover is judged at end-of-pass positions** (the settle's own order), so a member shoved out of the successor's reach before the down plays the down's look at its blow, as its chip says.
 - **The dashes' march is frozen at the snap from the flat view's clock.** The diorama's shader marches on its own `TIME`, so its last dash positions and the pieces can differ by a fraction of a dash.
 
 ### Part 2A's leftovers (BUILT 2026-09-27)
@@ -4092,3 +4092,70 @@ With zooms off nothing stages: the break plays on the board, at the blow, with t
 - **A burn's break plays as the burn phase settles, on the board**, not at each burn: the live burn list is rebuilt at end of turn (`_tile_hits_for`), so there is no forecast outcome at a burn to play it from.
 - **A burn is forecast against this squad's pass.** Another squad's pass later in the turn can change it, as with any forecast.
 - **A mid-walk kill and a later mid-walk shove that both matter**: the kill's row wears the chip.
+
+### A death's own moment ([#1104](https://github.com/Phaazoid/Godoiosis/issues/1104), BUILT 2026-09-27)
+
+A death used to play nothing on its tether; only the health cubes burst (#314). The dev picked the look off an animated mockup on the real sprites.
+
+**Rulings (grill, 2026-09-27):**
+
+| Question | Ruling |
+|---|---|
+| Look | **All four, one at random per death**: Drain, Slack, Pulse and Motes (below). |
+| Colour | The tether **turns grey** (ash), whichever side it was. |
+| Pacing | **The pass waits for it, like a break.** In the zoom the camera pulls back to the stage. |
+| A leader dies | Every member's tether plays **the same** look, and the heir's tethers draw in after it (the "then" rule, unchanged). |
+| A down (his play-check, 2026-09-27) | A squadded enemy almost always goes DOWN before it dies, so **a down plays the looks too**, the same ash. **The snap is kept for displacement** (a FORCED exit). |
+| Shoved into a hole (same play-check) | It is broken off by the distance as much as by the death, so it **SNAPS at the ledge, before the camera follows the body down**, and the dead end **rides the body to the ledge** (picked off a second mockup). |
+| The hang (his play-check of that, same day) | *"hover over the ledge a moment, wile e coyote style, until the tether snaps, then the unit falls."* The body **hangs over the hole from its arrival** (`Pacing.VOID_HANG`, a knob), the tether **holds taut and keeps shivering** until the body lets go (off a third mockup), and only a tethered body hangs. |
+
+**The four looks** are `Moment.DRAIN`, `SLACK`, `PULSE` and `MOTES` (appended; `SquadLines2D.DEATH_LOOKS`), drawn by `_death_drawing` beside the break's. In each, the dashes stop where they stood and become solid pieces on `TETHER_SHARDS`:
+- **Drain.** Ash runs from the dead end to the other, then the tether fades.
+- **Slack.** It sags, and the dead end drops to the ground under it, greying as it falls, then fades. `slack_point` clamps to the ground the break's pieces land on.
+- **Pulse.** A warm light runs from the dead end to whoever is left, emptying the tether behind it, and the one it reaches flashes.
+- **Motes.** It greys, then crumbles into pale motes that rise and fade.
+
+**Which look is DERIVED, never rolled** (`SquadLines2D.death_look`). It hashes where the body fell and how many deaths the board has seen, and steps on if it would repeat the look before it. That is the presentation's scatter rule (`HealthBlockDebris`, `ParticleFan`), so a replay plays the same looks. Law #1 is untouched: none of this is gameplay. `DEATH_LOOK` pins one look for tuning (Game → Markers → Squad lines → *Death look*).
+
+**The fall is taken at the fall.** `squad_member_left(DEATH)` fires inside `Unit.die()`, before `queue_free()`. The presenter's flush is deferred, and by then the body is going. So `_note_fall` reads the cell, the side and the look at the death, and `_link` strings a dead body's end from that capture; any other gone end still leaves the link empty.
+- **A unit's moment is decided ONCE.** A down foretold at its blow and a body that broke at the ledge already have one. So a unit downed then killed in one pass plays once, and owes no second wait.
+- **A fall at either end wins** (`_fallen_end`, then `_exit_for`), a death or a down, over the other end's own reason. A member the heir cannot hold is ejected FORCED in the same call, and would otherwise break while its squadmates played the look.
+- **Each link says which end fell** (`leader_died`), so Drain and Pulse run the right way and Slack drops the right end. It also names the survivor, for the flash.
+
+**The pass waits for it.** A kill settles mid-blow, so its look plays from the ordinary flush, not from `foretell`. While a pass runs (`OrderExecutor.executing_plan`), `_note_fall` also owes the blow the look's time, plus a draw-in when a dead leader leaves two or more. The next `foretell` (the same blow's `after_the_blow`) returns it: the same linger and camera release a break gets. A death outside a pass holds nothing.
+
+**A down plays at its blow.** Its ejection waits for the pass's end, but the forecast names the down's links. `foretell` now takes the blow's victim: when the outcome is DOWNED, every relink touching the victim plays the victim's look, including a FORCED relink whose leader is the victim. The settle's flush then finds those links in the ledger. Foretold links are strung from the relink's own cells, the ones the stage lifts. At every call today these agree with the live cells (a mutant swapping them survives), so that choice is declared rather than pinned.
+
+**A body shoved into a hole snaps at the ledge.** The removal plays slide, plummet, then `die()`. The camera rides the plummet and holds in the pit for the burst, so a look played at `die()` was never on screen, and the playtest found exactly that.
+- **At the blow, before the slide**, `AttackAction` emits `going_over`, per victim. It is wired beside `impact` in `OrderExecutor._listen_for_the_blow`, which covers aims, counters and watch shots.
+- **The executor's `_break_at_the_ledge` calls `SquadTetherPresenter.foretell_removal`.** That plays the removal's relinks as BREAK, strung from the struck cell, and marks the victim decided, so its death plays nothing more.
+- **The break is HELD until the body lets go** (round 3, the wile e coyote hang). Round 2 timed the snap from the blow, and the slide into the hole used most of that clock up, so the body arrived and dropped with no beat of its own. Now:
+  - `foretell_removal` returns whether a tether broke, and marks its breaks `held_by` the attack with `snap` at INF. The executor sets `AttackAction.tether_held`.
+  - After the slide, a held body **hangs** for `Pacing.VOID_HANG` (`Pacing.beat`), THEN stamps `tether_snap_msec`, then plummets. The stamp is written as the hang ENDS, so a pause mid-hang holds the tether too.
+  - `OverlayManager._await_the_snap` reads that stamp every frame and adopts it as the entry's `snap`. An attack that is gone snaps it at once, so a break can never hold the clock open for ever.
+  - **A break's snap time is the entry's own fact**: `SquadLines2D.snap_seconds`, defaulting to the strain's end, so every ordinary break is unchanged. `moment_at`, `moment_drawing` and `_break_drawing` read it, and the dash freeze and "done" key off it. Past its strain a held break stays whole at full strain red and keeps shivering at the strain's full swing; #217 stills that like the strain's own shake.
+  - **Only a tethered body hangs.** The hang exists to show the snap, so a unit with no tether falls as it always did.
+- **The dead end RIDES THE BODY**: until the break snaps, `OverlayManager._follow` moves the victim's chord end to the body's live position. It reads `UnitMirror.board_xz`, the one conversion that places the sprite, extracted for this. At the snap it lets go, and the pieces fall from where the body hung. The height stays the struck cell's, which is the lip's, and that is the height `UnitMirror.stand_height` holds an airborne body at.
+
+**The survivor's flash** fires off the moments' own clock. `OverlayManager._process` calls `UnitVisuals.play_loss_flash()` once, when a Pulse's run ends; a tween delay would drift out of step with the light under the modal lock and the kill's hitstop. **It is the lowest tier on `sprite.modulate`**: it yields to an aim pulse, to a pin flash (a pinned survivor is already white), and to a running one-shot, since that tween also drives the lunge and the shake.
+
+**The light in 3D** is its own LINE layer, `TETHER_GLOW`, on a `"glow"` beam set: uncased, undashed, no bead, with its own width, intensity and softness (three Game-tab rows). The probe found that a solid ribbon read as a lit dash. So `OverlayMirror` samples the stroke at nine points and tapers it to nothing at both ends (`GLOW_TAPER`, as per-point widths), with a softer falloff than the laser's. The flat view draws soft rings.
+
+**#217.** The light and the flash are stilled; the grey, the fall and the fade still play.
+
+**Tests.**
+- `test_squad_lines`: each look against its knobs, and the pick. A break that snaps late holds whole, red and shivering (still under #217) until its snap, then falls exactly as an ordinary one only later; a held one never ends on its own.
+- `test_squad_tether_presenter`: the capture, the precedence, the pacing, the flash and its tier, a down at the settle and at the blow, a downed leader's dropped member, down-then-kill, the ledge break (held, by its attack), the ride through the hold until the attack lets go, and a break whose attack is freed snapping at once.
+- `test_overlay_mirror`: both layers, and their clearing.
+- `test_split_break_in_play`: a real kill, the pacing wire through `Unit.die`, a real down (its look already playing when the settle ejects it, and no snap), and a real shove into a hole (one break from the struck cell, no death look, the body held, the snap stamped no earlier than the body's ARRIVAL, and the break hearing it).
+- 36 mutants across the three rounds, each red on its case except the declared relink-cell one above. Round 3's ten are the hang: the snap stamped at the blow or never, the overlay not adopting it, either snap reader ignoring it, the follow letting go at the strain, a freed attack holding for ever, the held shiver removed, the attack never marked held, and the links never held. One of them found a real hole: a down that reached `foretell` without its victim was ledgered before it played, and swallowed. The ledger now takes only what played.
+
+**Declared residuals:**
+- **Motes are cased specks in 3D.** They ride `TETHER_SHARDS`, which wears the casing; moving them to the glow layer is the fix if they read wrong.
+- **The first instant plays through the kill's hitstop.** The moments run on the wall clock.
+- **The flat view has no height.** Slack reads there as its grey and fade, and the motes as their drift (#292).
+- **Pulse's closing fade has nothing left to fade.** The light has emptied the tether by then, so the fade is a short hold while the survivor flashes.
+- **The hang's LENGTH is a play-check.** `Pacing.beat` collapses headless, so no suite sees how long the body hangs; that the snap comes after the arrival is pinned.
+- **A void-killed leader's heir draws in while the camera is down the pit.** Its draw-in still waits a fixed break's length from the blow, so with a long hang or a long slide it can begin before the held break snaps.
+- **On a raised board the body can drop before it hangs.** A hole lower than the lip gets #602's step-off fall to the hole's own height first, then the hang, then the plummet. The Causeway is flat, so this is untested in play.
+- **What blocks the zoom's view** (units, terrain) is #1132, not this.

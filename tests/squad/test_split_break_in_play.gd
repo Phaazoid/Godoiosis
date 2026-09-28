@@ -10,7 +10,8 @@
 # it -- the settle's own ejection signal.
 #
 # The break's two times are SET long here and restored, so a moment cannot expire mid-case and nothing
-# pins the dev's tuning. Fixture is test_split_forecast.gd's.
+# pins the dev's tuning; so are a death look's (#1104), whose kill plays the same way. Fixture is
+# test_split_forecast.gd's.
 extends GdUnitTestSuite
 
 const MAIN_SCENE := "res://Scenes/Main.tscn"
@@ -31,9 +32,12 @@ var _playing_at_settle := -1
 
 func before_test() -> void:
 	_saved = {"strain": SquadLines2D.BREAK_STRAIN_SECONDS, "shatter": SquadLines2D.BREAK_SHATTER_SECONDS,
-			"zoom": PlayerSettings.choice_of(PlayerSettings.Setting.BATTLE_ZOOM_MODE)}
+			"zoom": PlayerSettings.choice_of(PlayerSettings.Setting.BATTLE_ZOOM_MODE),
+			"death_fade": SquadLines2D.DEATH_FADE_SECONDS, "motes": SquadLines2D.MOTE_SECONDS}
 	SquadLines2D.BREAK_STRAIN_SECONDS = 30.0
 	SquadLines2D.BREAK_SHATTER_SECONDS = 30.0
+	SquadLines2D.DEATH_FADE_SECONDS = 30.0
+	SquadLines2D.MOTE_SECONDS = 30.0
 	_main = (load(MAIN_SCENE) as PackedScene).instantiate()
 	_main.name = "Main"
 	get_tree().root.add_child(_main)
@@ -52,6 +56,8 @@ func after_test() -> void:
 	SquadLines2D.BREAK_STRAIN_SECONDS = _saved["strain"]
 	SquadLines2D.BREAK_SHATTER_SECONDS = _saved["shatter"]
 	PlayerSettings.set_choice(PlayerSettings.Setting.BATTLE_ZOOM_MODE, _saved["zoom"])
+	SquadLines2D.DEATH_FADE_SECONDS = _saved["death_fade"]
+	SquadLines2D.MOTE_SECONDS = _saved["motes"]
 	await await_idle_frame()
 	get_tree().root.remove_child(_main)
 	_main.free()
@@ -200,3 +206,213 @@ func test_after_the_blow_pulls_the_camera_back_to_the_stage_and_waits_out_the_br
 			.is_greater_equal(SquadLines2D.shown_seconds(SquadLines2D.Moment.BREAK))
 	assert_bool(kept).override_failure_message(
 			"with no stage up the camera let go of the victim anyway").is_true()
+
+
+# --- A kill's own moment (#1104) -----------------------------------------------------------------
+
+# A two-strong enemy squad, and a hero whose queued blow KILLS its member outright (overkill past the
+# ceiling). Armed after, like the shove's.
+func _kill_in_reach() -> Unit:
+	_leader = _spawn(ENEMY, Vector2i(1, 2), {Stats.Stat.LDR: 10})
+	_watched = _spawn(ENEMY, Vector2i(4, 2))
+	game.squad_manager.join_squad(_watched, _leader.squad)
+	var hero := _spawn(PLAYER, Vector2i(3, 2), {}, 999)
+	game.squad_manager.active_squad = hero.squad
+	var aim := AttackAction.declare(hero, hero.movement.cell, _watched.movement.cell)
+	assert_bool(game.squad_manager.queue_action(hero.squad, aim)).override_failure_message(
+			"fixture: the killing blow never queued").is_true()
+	game.refresh_action_queue(hero.squad)
+	var presenter: SquadTetherPresenter = game.squad_tether_presenter
+	presenter.arm()
+	return hero
+
+
+# The death looks in the store toward the watched pair's leader.
+func _deaths(leader_cell: Vector2i) -> Array[Dictionary]:
+	var found: Array[Dictionary] = []
+	var overlays: OverlayManager = game.overlay_manager
+	for entry: Dictionary in overlays.squad_tether_moments:
+		if SquadLines2D.DEATH_LOOKS.has(int(entry["moment"])) and entry["to"] == leader_cell:
+			found.append(entry)
+	return found
+
+
+# A real pass that kills a squad member plays one death look on its tether, strung from where it fell --
+# the body is freed mid-blow, so only what the death captured can say where that was.
+func test_a_kill_in_a_real_pass_plays_a_death_look_from_where_the_member_fell() -> void:
+	var hero := _kill_in_reach()
+	var blow := _the_shove(hero)
+	assert_int(blow.resolved_outcome().lethality).override_failure_message(
+			"fixture: the blow does not kill").is_equal(ResolvedOutcome.Lethality.KILLED)
+	var fell := _watched.movement.cell
+	var leader_cell := _leader.movement.cell
+	var executor: OrderExecutor = game.order_executor
+	await executor.execute_orders(hero)
+	await await_idle_frame()
+
+	assert_bool(is_instance_valid(_watched)).override_failure_message("fixture: the member survived") \
+			.is_false()
+	var deaths := _deaths(leader_cell)
+	assert_int(deaths.size()).override_failure_message(
+			"the kill played %d death looks on its tether" % deaths.size()).is_equal(1)
+	if deaths.is_empty():
+		return
+	assert_that(deaths[0]["from"]).override_failure_message(
+			"the death look was not strung from where the member fell").is_equal(fell)
+
+
+# The pacing wire: a killing blow holds the pass for its death look, like a break. The death runs its
+# real path -- Unit.die, game._on_unit_died, the squad's teardown, the presenter -- inside a pass SET as
+# running (a headless pass collapses every beat, so the wait cannot be seen any other way).
+func test_a_killing_blow_waits_out_its_death_look() -> void:
+	var hero := _kill_in_reach()
+	var blow := _the_shove(hero)
+	var leader_cell := _leader.movement.cell
+	var executor: OrderExecutor = game.order_executor
+	executor.executing_plan = game.squad_manager.resolve_plan(hero.squad, game._board())
+	_watched.die()
+	var linger := executor.after_the_blow(blow, 0.1)
+	executor.executing_plan = null
+	var presenter: SquadTetherPresenter = game.squad_tether_presenter
+	presenter.flush()
+	presenter.end_pass()
+
+	var deaths := _deaths(leader_cell)
+	assert_int(deaths.size()).override_failure_message("fixture: the kill played no death look").is_equal(1)
+	if deaths.is_empty():
+		return
+	assert_float(linger).override_failure_message("the killing blow did not wait out its death look") \
+			.is_equal_approx(SquadLines2D.shown_seconds(int(deaths[0]["moment"])), 0.0001)
+
+
+# --- A shove into a hole breaks at the ledge (#1104) ---------------------------------------------
+
+const HOLE_TILE := Vector2i(18, 2)   # the authored VOID tile ("hole") in TestTiles
+
+# The blow that really executed, caught off the executor's relay: a resolve rebuilds every derived
+# action, so the one _the_shove finds is a copy and never carries what execution stamps on it.
+var _executed: AttackAction
+
+
+func _on_struck(attack: AttackAction) -> void:
+	_executed = attack
+
+
+# When the shoved body ARRIVED over the hole (its slide's end, in Time.get_ticks_msec); 0 until then.
+var _arrived_msec := 0
+
+
+func _on_arrived() -> void:
+	_arrived_msec = Time.get_ticks_msec()
+
+
+# A two-strong enemy squad whose member stands on the edge of a hole, and a hero whose queued shove
+# puts it in. Armed after, like the others.
+func _shove_into_a_hole() -> Unit:
+	game.grid.set_cell(Vector2i(5, 2), GRASS_SOURCE, HOLE_TILE)
+	_leader = _spawn(ENEMY, Vector2i(1, 2), {Stats.Stat.LDR: 10})
+	_watched = _spawn(ENEMY, Vector2i(4, 2))
+	game.squad_manager.join_squad(_watched, _leader.squad)
+	_watched.movement.movement_finished.connect(_on_arrived, CONNECT_ONE_SHOT)
+	var hero := _spawn(PLAYER, Vector2i(3, 2), {}, 3, 1)
+	game.squad_manager.active_squad = hero.squad
+	var aim := AttackAction.declare(hero, hero.movement.cell, _watched.movement.cell)
+	assert_bool(game.squad_manager.queue_action(hero.squad, aim)).override_failure_message(
+			"fixture: the shove never queued").is_true()
+	game.refresh_action_queue(hero.squad)
+	var presenter: SquadTetherPresenter = game.squad_tether_presenter
+	presenter.arm()
+	var executor: OrderExecutor = game.order_executor
+	executor.volley_struck.connect(_on_struck)
+	return hero
+
+
+# The dev's ruling: a body shoved into a hole is broken off by the DISTANCE as much as by the death, so
+# its tether SNAPS -- one break, at the blow, strung from where it was struck -- and plays no death look
+# after it; and the body HANGS there (the dev's wile e coyote hang): the tether holds from the blow and
+# snaps when the body lets go, which is after it ARRIVES -- never on a clock started at the blow, which
+# the slide itself would use up. The hang's LENGTH collapses headless (Pacing.beat); its order does not.
+func test_a_shove_into_a_hole_breaks_its_tether_at_the_ledge() -> void:
+	var hero := _shove_into_a_hole()
+	var blow := _the_shove(hero)
+	assert_bool(blow != null and blow.resolved_outcome().removed).override_failure_message(
+			"fixture: the shove does not put the member in the hole").is_true()
+	var struck := _watched.movement.cell
+	var leader_cell := _leader.movement.cell
+	var executor: OrderExecutor = game.order_executor
+	await executor.execute_orders(hero)
+	await await_idle_frame()
+
+	assert_bool(is_instance_valid(_watched)).override_failure_message("fixture: the member did not go") \
+			.is_false()
+	var breaks := _breaks()
+	assert_int(breaks.size()).override_failure_message(
+			"the shove into the hole broke its tether %d times" % breaks.size()).is_equal(1)
+	if not breaks.is_empty():
+		assert_that(breaks[0]["from"]).override_failure_message(
+				"the break was not strung from where the member was struck").is_equal(struck)
+	assert_int(_deaths(leader_cell).size()).override_failure_message(
+			"the fall into the hole played a death look as well as the snap").is_equal(0)
+	assert_object(_executed).override_failure_message("fixture: no blow was relayed").is_not_null()
+	if _executed != null:
+		assert_bool(_executed.tether_held).override_failure_message(
+				"nothing told the body a tether was holding it").is_true()
+		assert_int(_arrived_msec).override_failure_message("fixture: the body never slid").is_greater(0)
+		assert_int(_executed.tether_snap_msec).override_failure_message(
+				"the tether snapped %d ms before the body even arrived over the hole"
+				% (_arrived_msec - _executed.tether_snap_msec)).is_greater_equal(_arrived_msec)
+	if not breaks.is_empty():
+		var still_held := breaks[0].has("held_by") or is_inf(SquadLines2D.snap_seconds(breaks[0]))
+		assert_bool(still_held).override_failure_message("the body let go and the break never heard").is_false()
+
+
+# --- A down plays its look at the blow (#1104) ---------------------------------------------------
+
+# How many death looks toward the leader were in the store when the settle ejected the downed member;
+# -1 until it did.
+var _looks_at_settle := -1
+
+
+func _on_down_settled(_squad: Squad, unit: Unit, _cause: SquadManager.LeaveCause) -> void:
+	if unit == _watched and _looks_at_settle < 0:
+		_looks_at_settle = _deaths(_leader.movement.cell).size()
+
+
+# The dev's play-check: a squadded enemy goes DOWN far more often than it dies, so a down plays the death
+# looks -- at its blow, through after_the_blow's own victim, and once, with no snap. Its ejection waits
+# for the pass's end, which is where the order is read: the look must already be playing there.
+func test_a_down_plays_its_look_at_the_blow_and_not_a_snap() -> void:
+	_leader = _spawn(ENEMY, Vector2i(1, 2), {Stats.Stat.LDR: 10})
+	_watched = _spawn(ENEMY, Vector2i(4, 2))
+	game.squad_manager.join_squad(_watched, _leader.squad)
+	var hero := _spawn(PLAYER, Vector2i(3, 2))
+	game.squad_manager.active_squad = hero.squad
+	var aim := AttackAction.declare(hero, hero.movement.cell, _watched.movement.cell)
+	assert_bool(game.squad_manager.queue_action(hero.squad, aim)).override_failure_message(
+			"fixture: the blow never queued").is_true()
+	var blow := _the_shove(hero)
+	assert_bool(blow != null and blow.resolved_outcome().damage > 0).override_failure_message(
+			"fixture: no blow reaches the member, or it deals nothing").is_true()
+	if blow == null:
+		return
+	_watched.set_current_hp(blow.resolved_outcome().damage)   # exactly what it deals: a down
+	game.refresh_action_queue(hero.squad)
+	assert_int(_the_shove(hero).resolved_outcome().lethality).override_failure_message(
+			"fixture: the blow does not down the member").is_equal(ResolvedOutcome.Lethality.DOWNED)
+	var presenter: SquadTetherPresenter = game.squad_tether_presenter
+	presenter.arm()
+	var squads: SquadManager = game.squad_manager
+	squads.squad_member_left.connect(_on_down_settled)
+	var leader_cell := _leader.movement.cell
+	var executor: OrderExecutor = game.order_executor
+	await executor.execute_orders(hero)
+	await await_idle_frame()
+
+	assert_int(_looks_at_settle).override_failure_message(
+			"fixture: the settle never ejected the downed member").is_greater_equal(0)
+	assert_int(_looks_at_settle).override_failure_message(
+			"the down's look was not playing when the pass settled -- it waited for the settle, not the blow") \
+			.is_equal(1)
+	assert_int(_deaths(leader_cell).size()).override_failure_message(
+			"the down played %d looks across the pass" % _deaths(leader_cell).size()).is_equal(1)
+	assert_int(_breaks().size()).override_failure_message("the down snapped its tether").is_equal(0)

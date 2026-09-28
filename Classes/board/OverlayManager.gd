@@ -406,7 +406,9 @@ var squad_lines_hostile := false
 # The membership MOMENTS in the air (#367): {"from", "to", "chord", "moment": SquadLines2D.Moment,
 # "start_msec", "standing", "hostile"}. `standing` is whether a standing tether exists for the same
 # pair, which is what lets a draw-in hand over to it rather than fade; `hostile` is whose squad it
-# was (#1109). Played on one clock, pruned by _process.
+# was (#1109). A break at the ledge (#1104) also carries "follow"/"follow_end" (the body its end rides)
+# and, while it holds, "held_by" (the attack whose stamp snaps it) with "snap" at INF. Played on one
+# clock, pruned by _process.
 var squad_tether_moments: Array[Dictionary] = []
 var squad_lines_version := 0
 # When the strained tethers were last plucked (#1070), in Time.get_ticks_msec; -1 is never. A stamp
@@ -904,10 +906,18 @@ func play_tether_moments(links: Array[Dictionary], board: BoardContext) -> void:
 		return
 	var now := Time.get_ticks_msec()
 	for link: Dictionary in links:
-		squad_tether_moments.append({"from": link["from"], "to": link["to"],
+		var entry := {"from": link["from"], "to": link["to"],
 				"chord": SquadLines2D.chord(link["from"], link["to"], board),
 				"moment": link["moment"], "start_msec": now + int(float(link.get("delay", 0.0)) * 1000.0),
-				"standing": false, "hostile": bool(link.get("hostile", false))})
+				"standing": false, "hostile": bool(link.get("hostile", false)),
+				"leader_died": bool(link.get("leader_died", false)), "survivor": int(link.get("survivor", 0))}
+		if link.has("follow"):
+			entry["follow"] = int(link["follow"])
+			entry["follow_end"] = int(link["follow_end"])
+		if link.has("held_by"):
+			entry["held_by"] = int(link["held_by"])
+			entry["snap"] = INF
+		squad_tether_moments.append(entry)
 	_rebuild_squad_tethers()
 	set_process(true)
 
@@ -920,13 +930,24 @@ func clear_tether_moments() -> void:
 	set_process(false)
 
 
-# The moments' clock: a finished one leaves, and the tether it stood in for comes back.
+# The moments' clock: a finished one leaves, and the tether it stood in for comes back. A death's
+# PULSE flashes whoever it runs to as it arrives (#1104) -- on THIS clock rather than a tween's delay,
+# which the modal lock and the kill's hitstop would pull out of step with the light.
 func _process(_delta: float) -> void:
 	var now := Time.get_ticks_msec()
 	var live: Array[Dictionary] = []
 	for moment: Dictionary in squad_tether_moments:
 		var elapsed := float(now - int(moment["start_msec"])) / 1000.0
-		var drawn := SquadLines2D.moment_at(moment["moment"], moment["chord"], elapsed, moment["standing"])
+		if moment.has("held_by"):
+			_await_the_snap(moment, now)
+		if moment.has("follow"):
+			_follow(moment, elapsed)
+		var drawn := SquadLines2D.moment_at(moment["moment"], moment["chord"], elapsed, moment["standing"],
+				true, false, SquadLines2D.snap_seconds(moment))
+		if int(moment["moment"]) == SquadLines2D.Moment.PULSE and elapsed >= SquadLines2D.PULSE_SECONDS \
+				and not moment.get("flashed", false):
+			moment["flashed"] = true
+			_flash_survivor(int(moment.get("survivor", 0)))
 		if not drawn["done"]:
 			live.append(moment)
 	if live.size() != squad_tether_moments.size():
@@ -934,6 +955,44 @@ func _process(_delta: float) -> void:
 		_rebuild_squad_tethers()
 	if squad_tether_moments.is_empty():
 		set_process(false)
+
+
+# A held break (#1104, the dev's wile e coyote hang) snaps when its attack says the body let go: the
+# stamp is the attack's, read here rather than copied at the blow, because the hang starts only when
+# the body ARRIVES. An attack that is gone snaps it at once, so a break can never hold for ever.
+func _await_the_snap(moment: Dictionary, now: int) -> void:
+	var attack := instance_from_id(int(moment["held_by"])) as AttackAction
+	var at := now if attack == null else attack.tether_snap_msec
+	if at <= 0:
+		return
+	moment["snap"] = maxf(float(at - int(moment["start_msec"])) / 1000.0, 0.0)
+	moment.erase("held_by")
+
+
+# A break at the ledge RIDES THE BODY there (#1104, the dev off the mockup): until it snaps, the
+# shoved body's end of the chord is wherever that body is now, and at the snap it lets go and stays
+# put, so the pieces fall from where the body hung. Only x/z move, off the one derivation the sprite
+# is placed from; the height stays the struck cell's, which is the lip's -- the height a body holds
+# over a hole.
+func _follow(moment: Dictionary, elapsed: float) -> void:
+	var unit := instance_from_id(int(moment["follow"])) as Unit
+	if elapsed >= SquadLines2D.snap_seconds(moment) or unit == null or unit.is_queued_for_deletion():
+		moment.erase("follow")
+		return
+	var chord: PackedVector3Array = moment["chord"]
+	var end := int(moment["follow_end"])
+	var at := UnitMirror.board_xz(unit)
+	chord[end] = Vector3(at.x, chord[end].y, at.y)
+	moment["chord"] = chord
+
+
+# The one a PULSE ran to, if it is still on the board. #217's setting stills the flash with the light.
+func _flash_survivor(id: int) -> void:
+	if id == 0 or not BoardOverlays.beams_animating():
+		return
+	var unit := instance_from_id(id) as Unit
+	if unit != null and not unit.is_queued_for_deletion():
+		unit.visuals.play_loss_flash()
 
 
 # Is a draw-in, running or waiting its turn, standing in for this pair's tether?

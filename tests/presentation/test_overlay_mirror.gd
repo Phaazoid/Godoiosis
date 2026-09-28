@@ -1159,6 +1159,45 @@ func test_a_draw_in_holds_back_its_pairs_standing_tether_then_hands_it_over() ->
 	assert_bool(moment_gone).override_failure_message("the finished moment stayed in the diorama").is_true()
 
 
+# #1104: a death's pieces reach the diorama on the shard layer, like a break's, and a PULSE's light on
+# its own glow layer -- one tapered stroke per light. The light goes out when it arrives, while the
+# moment is still live, and everything leaves with the moment. Aged by hand, with a long run and fade.
+func test_a_deaths_pieces_and_its_light_reach_the_diorama_and_leave_with_it() -> void:
+	var saved := [SquadLines2D.PULSE_SECONDS, SquadLines2D.DEATH_FADE_SECONDS]
+	SquadLines2D.PULSE_SECONDS = 10.0
+	SquadLines2D.DEATH_FADE_SECONDS = 10.0
+	var pair := _squad_pair()
+	var links: Array[Dictionary] = [{"from": pair[1].movement.cell, "to": pair[0].movement.cell,
+			"moment": SquadLines2D.Moment.PULSE, "delay": 0.0}]
+	_om().play_tether_moments(links, game._board())
+	var entry: Dictionary = _om().squad_tether_moments[0]
+	entry["start_msec"] = Time.get_ticks_msec() - 4000
+	await _settle()
+	var running_shards := _overlays.lines_of(BoardOverlays.Layer.TETHER_SHARDS).size()
+	var running_glow := _overlays.lines_of(BoardOverlays.Layer.TETHER_GLOW)
+	entry["start_msec"] = Time.get_ticks_msec() - 12000
+	await _settle()
+	var arrived_glow := _overlays.lines_of(BoardOverlays.Layer.TETHER_GLOW).size()
+	var arrived_live := _om().squad_tether_moments.size()
+	entry["start_msec"] = Time.get_ticks_msec() - 25000
+	await _settle()
+	var ended_shards := _overlays.lines_of(BoardOverlays.Layer.TETHER_SHARDS).size()
+	var ended_glow := _overlays.lines_of(BoardOverlays.Layer.TETHER_GLOW).size()
+	SquadLines2D.PULSE_SECONDS = saved[0]
+	SquadLines2D.DEATH_FADE_SECONDS = saved[1]
+
+	assert_int(running_shards).override_failure_message("the death's pieces never reached the diorama") \
+		.is_greater(0)
+	assert_int(running_glow.size()).override_failure_message("the pulse's light never reached the diorama") \
+		.is_equal(1)
+	assert_int(running_glow[0].size()).override_failure_message("the light was not drawn tapered") \
+		.is_equal(OverlayMirror.GLOW_TAPER.size())
+	assert_int(arrived_live).override_failure_message("fixture: the moment ended with its light").is_equal(1)
+	assert_int(arrived_glow).override_failure_message("the light stayed lit after it arrived").is_equal(0)
+	assert_int(ended_shards + ended_glow).override_failure_message(
+			"the death stayed in the diorama after its moment ended").is_equal(0)
+
+
 # The tether's arrowhead is sized by ITS OWN knob (dev, 2026-09-22): the diorama's cone scales with
 # SquadLines2D.ARROW_WIDTH_SCALE, and the reach mark's CONE_WIDTH_SCALE -- the enemy intent's -- does
 # not reach it. Asked as ratios against the drawn geometry, never as the widths themselves.

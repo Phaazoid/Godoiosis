@@ -659,8 +659,14 @@ func ghost_count() -> int:
 # cells, and reading the destination would pop the sprite to the new level before it arrives.
 # Derived from the same pixels that place X and Z, so it steps up as the sprite crosses the edge.
 static func cell_under(unit: Unit) -> Vector2i:
-	return Vector2i(floori(unit.position.x / PIXELS_PER_CELL),
-			floori(unit.position.y / PIXELS_PER_CELL))
+	var at := board_xz(unit)
+	return Vector2i(floori(at.x), floori(at.y))
+
+
+# Where a unit's PIXELS are, in cells (x, z) -- the one conversion that places the sprite's X and Z,
+# and that a tether riding a shoved body to the ledge reads too (#1104), so the two cannot part.
+static func board_xz(unit: Unit) -> Vector2:
+	return unit.position / PIXELS_PER_CELL
 
 
 # Where the unit is STANDING in world Y -- the surface under those pixels, unless one of the three
@@ -695,8 +701,8 @@ static func stand_height(unit: Unit, heights: BoardHeights) -> float:
 		if m.airborne:
 			stand_y = BoardSpace.surface_point(m.slide_origin, heights).y
 		else:
-			stand_y = BoardSpace.surface_height_at(over, unit.position.x / PIXELS_PER_CELL,
-					unit.position.y / PIXELS_PER_CELL, heights)
+			var at := board_xz(unit)
+			stand_y = BoardSpace.surface_height_at(over, at.x, at.y, heights)
 	return stand_y
 
 
@@ -715,8 +721,8 @@ func _sync(unit: Unit, sprite: UnitSprite3D) -> void:
 	var previous := sprite.position - sprite.art_offset
 	var over := cell_under(unit)
 	var stand_y := stand_height(unit, heights)
-	var stand := Vector3(unit.position.x / PIXELS_PER_CELL,
-			stand_y, unit.position.y / PIXELS_PER_CELL)
+	var at := board_xz(unit)
+	var stand := Vector3(at.x, stand_y, at.y)
 	# Half a ROW down, not half a cell (#427 slice 2): the standing point sits exactly on a row
 	# boundary, and the cell wanted is the one BELOW it — dropping a whole row would name the one
 	# under that.
