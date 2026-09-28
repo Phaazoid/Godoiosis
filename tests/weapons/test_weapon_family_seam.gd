@@ -258,8 +258,8 @@ func test_a_familys_verbs_never_leak_onto_another_family() -> void:
 			"%s.can_reload() disagrees with its declared row (checked after its state verb ran)" % name
 			).is_equal(bool(row["reload"]))
 		assert_bool(weapon.has_reload_verb()).override_failure_message(
-			"%s.has_reload_verb() disagrees with its declared row -- this is what OPENS the Weapon"
-			+ " Action slice, so a wrong answer either hides the verb or lights a dead button" % name
+			("%s.has_reload_verb() disagrees with its declared row -- this is what OPENS the Weapon"
+			+ " Action slice, so a wrong answer either hides the verb or lights a dead button") % name
 			).is_equal(bool(RELOAD_VERB[family]))
 		assert_bool(weapon.can_burrow()).override_failure_message(
 			"%s.can_burrow() disagrees with its declared row" % name).is_equal(bool(row["burrow"]))
