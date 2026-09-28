@@ -58,8 +58,8 @@ static func claim(modal: Control, game_root: Node) -> void:
 static func _apply(tree: SceneTree, game_root: Node) -> void:
 	if not is_instance_valid(tree):
 		return
-	# BEFORE the game_root check: a scene freed with a card still up takes game_root first, and the
-	# pause must still lift -- Dialogic is an autoload, so a stuck one hangs every dialogue after it.
+	# BEFORE the game_root check, so the pause lifts even for a card that outlives its Game --
+	# Dialogic is an autoload, so a stuck pause hangs every dialogue after it.
 	var frozen := any_open(tree)
 	if Dialogic.paused != frozen:
 		Dialogic.paused = frozen

@@ -447,8 +447,8 @@ func _unhandled_input(event: InputEvent) -> void:
 func _open_pause_menu() -> void:
 	# An open wheel closes first (#1034, dev ruling): three rows below tear the board down, and a ring
 	# frozen under the card would come back over the new board holding a freed unit. FIRST, because
-	# closing it clears the selection, which writes game_state -- after MENU lands, _restore_state
-	# would see that write and skip the restore.
+	# closing it clears the selection, which writes game_state -- landing after MENU, it would rest the
+	# board under the open card and _restore_state would then skip the restore.
 	main_action_menu.close_ring()
 	var prior: GameState = game_state
 	# READ BEFORE THE WRITE BELOW (#723): playback_owns_board() asks about game_state, so once MENU
