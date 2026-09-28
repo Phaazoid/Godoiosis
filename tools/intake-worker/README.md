@@ -229,7 +229,8 @@ Clean it up afterwards with
 | `Authentication error [code: 10000]` on `/d1/.../import` | `--file` under an OAuth login -- see *Running SQL when `--file` is refused* |
 
 **Then the real check:** play a mission to the end. The run should appear in the first query below,
-`user://telemetry/sent/` should hold its folder, and `pending/` should be empty. Alt-F4 mid-mission
+`user://telemetry/sent/` should hold its folder, and `pending/` should be empty (a board you opened and
+left without acting lands in `held/` instead -- never sent, still replayable, #852). Alt-F4 mid-mission
 and relaunch to see slice 4b and slice 5 together — the swept `CRASHED` run uploads on launch.
 
 ---
