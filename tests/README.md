@@ -319,7 +319,8 @@ The hard part of Tier-2 was standing up real `Unit`/`SquadManager` nodes cheaply
 | suite | asserts | spec |
 |---|---|---|
 | `squad/test_counters.gd` | C1–C7 via `can_counter` / `choose_counter_target` / `calculate_reactions_for_squad` | Reaction rules |
-| `squad/test_reaction_heal.gd` | C8–C10 (#148) — a healer's reaction heals its own side, never the attacker; below-max is a filter and lowest-HP the sort; downed allies skipped; every HP read off the threaded hypo; heals ordered after strikes | Reaction rules |
+| `squad/test_reaction_trigger.gd` | what may trigger a reaction (C5, #767: a squad hitting itself draws nothing; a heal aimed at an enemy still draws theirs) and the repeal of the reactive heal (#148 → #1135: a healer answers nothing, never tops the attacker up) | Reaction rules |
+| `squad/test_map_only_attacks.gd` | #1135 — a MAP-only attack hits no unit through the real resolve (no damage, no counter, not even with `hits_self`), its deposit still lands, a SHOCK's current still catches a wet unit, and a map-only counter-er cannot counter | Reaction rules |
 | `squad/test_invariants.gd` | I1–I7 lifecycle (create/join/leave/detach/reassign/disband) | squad-system.md Invariants |
 | `squad/test_volley.gd` | one `AttackAction` per victim, shared `volley`, primary vs secondary | AoE / volley |
 
