@@ -337,6 +337,8 @@ func test_a_death_plays_a_death_look() -> void:
 			"a death played %d moments" % _om.squad_tether_moments.size()).is_equal(1)
 	var deaths := _death_moments()
 	assert_int(deaths.size()).override_failure_message("a death played no death look").is_equal(1)
+	if deaths.is_empty():
+		return
 	assert_that(deaths[0]["from"]).is_equal(stood)
 	assert_that(deaths[0]["to"]).is_equal(leader.movement.cell)
 	assert_bool(bool(deaths[0]["leader_died"])).override_failure_message(
@@ -394,6 +396,8 @@ func test_a_leaders_death_plays_its_look_then_the_heir_draws_in() -> void:
 	var deaths := _death_moments()
 	assert_int(deaths.size()).override_failure_message("the dead leader's links did not all play") \
 			.is_equal(2)
+	if deaths.is_empty():
+		return
 	var look := int(deaths[0]["moment"])
 	var draws := _moments(Moment.DRAW_IN, other, heir)
 	assert_int(draws.size()).is_equal(1)
@@ -432,6 +436,8 @@ func test_a_kill_mid_pass_holds_its_blow_for_the_look_and_the_handover() -> void
 	var deaths := _death_moments()
 	assert_int(deaths.size()).override_failure_message("the kill's look did not play once per link") \
 			.is_equal(2)
+	if deaths.is_empty():
+		return
 	assert_int(_moments(Moment.DRAW_IN, other, heir).size()).override_failure_message(
 			"the kill's handover did not draw in exactly once").is_equal(1)
 	var owed := SquadLines2D.moment_seconds(int(deaths[0]["moment"])) \
@@ -443,10 +449,12 @@ func test_a_kill_mid_pass_holds_its_blow_for_the_look_and_the_handover() -> void
 
 
 # A death outside a pass -- the dev kill, a load -- holds no blow: there is none to hold. It still plays.
+# The game's executor is always there; between passes it has no plan running, which is the state here.
 func test_a_death_outside_a_pass_holds_nothing() -> void:
 	var leader := _solo(Vector2i(0, 0))
 	var dies := _solo(Vector2i(1, 0))
 	_sm.join_squad(dies, leader.squad)
+	_game.order_executor = auto_free(OrderExecutor.new())
 	_presenter.arm()
 	_sm.handle_unit_death(dies)
 	assert_float(_presenter.foretell(_outcome([]))).override_failure_message(

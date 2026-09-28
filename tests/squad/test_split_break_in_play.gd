@@ -255,6 +255,8 @@ func test_a_kill_in_a_real_pass_plays_a_death_look_from_where_the_member_fell() 
 	var deaths := _deaths(leader_cell)
 	assert_int(deaths.size()).override_failure_message(
 			"the kill played %d death looks on its tether" % deaths.size()).is_equal(1)
+	if deaths.is_empty():
+		return
 	assert_that(deaths[0]["from"]).override_failure_message(
 			"the death look was not strung from where the member fell").is_equal(fell)
 
@@ -277,5 +279,7 @@ func test_a_killing_blow_waits_out_its_death_look() -> void:
 
 	var deaths := _deaths(leader_cell)
 	assert_int(deaths.size()).override_failure_message("fixture: the kill played no death look").is_equal(1)
+	if deaths.is_empty():
+		return
 	assert_float(linger).override_failure_message("the killing blow did not wait out its death look") \
 			.is_equal_approx(SquadLines2D.shown_seconds(int(deaths[0]["moment"])), 0.0001)
