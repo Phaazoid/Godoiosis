@@ -263,10 +263,13 @@ func _on_timeline_ended() -> void:
 #
 # game.get_viewport(), never a path -- in the shipped tree that IS GameView, and in a suite whose
 # board sits under the root it IS the root, so no existing dialog fixture changes. A sibling of Game
-# rather than a child of it, which is what keeps ModalLock (it disables the Game node) and the
-# stacking exactly as they were: the layout is a CanvasLayer at 1, over UILayer's 0.
+# rather than a child of it, so the Game freeze cannot reach it -- ModalLock pauses Dialogic instead
+# (#1034). Its layer comes from UiLayers, which is where the whole stack is stated: over the HUD,
+# under the wheel and every card. Set after load_style, which applies the style's own layer.
 func _start(timeline: DialogicTimeline) -> void:
 	if not Dialogic.Styles.has_active_layout_node():
 		var host: Viewport = game.get_viewport()
-		Dialogic.Styles.load_style("", host)
+		var layout := Dialogic.Styles.load_style("", host) as CanvasLayer
+		if layout != null:
+			layout.layer = UiLayers.LAYER_DIALOGUE
 	Dialogic.start(timeline)

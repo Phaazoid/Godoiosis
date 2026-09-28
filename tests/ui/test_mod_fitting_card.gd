@@ -74,7 +74,7 @@ static func _walk(root: Node) -> Array[Node]:
 
 
 func _screen() -> PreMissionScreen:
-	for child in game.ui_layer.get_children():
+	for child in game.card_layer.get_children():
 		if child is PreMissionScreen:
 			return child
 	return null
@@ -477,7 +477,7 @@ func test_the_screen_hands_the_card_the_missions_mod_pool() -> void:
 	await await_idle_frame()
 
 	var card: ModFittingCard = null
-	for child in game.ui_layer.get_children():
+	for child in game.card_layer.get_children():
 		if child is ModFittingCard:
 			card = child
 	assert_object(card).override_failure_message("the screen opened no card").is_not_null()

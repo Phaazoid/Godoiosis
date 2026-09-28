@@ -91,7 +91,7 @@ static func show_if_needed(game_node: Node) -> TelemetryNotice:
 	if not should_show():
 		return null
 	var card := TelemetryNotice.new()
-	game_node.ui_layer.add_child(card)
+	game_node.card_layer.add_child(card)
 	card._build(game_node)
 	return card
 

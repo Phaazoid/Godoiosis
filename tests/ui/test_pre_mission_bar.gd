@@ -88,14 +88,14 @@ func _press(physical: int) -> void:
 
 
 func _confirm() -> ConfirmCard:
-	for child in game.ui_layer.get_children():
+	for child in game.card_layer.get_children():
 		if child is ConfirmCard:
 			return child
 	return null
 
 
 func _screen() -> PreMissionScreen:
-	for child in game.ui_layer.get_children():
+	for child in game.card_layer.get_children():
 		if child is PreMissionScreen:
 			return child
 	return null
