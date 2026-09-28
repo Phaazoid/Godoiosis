@@ -36,8 +36,8 @@ func _ready() -> void:
 
 func is_configured() -> bool:
 	# A headless run is a test run or CI, never a player. Without this the suite would POST on every
-	# green run -- and the first anyone would know is the intake filling up. It also keeps the report
-	# card's disclosure honest: a build that will not send says so instead of promising delivery.
+	# green run -- and the first anyone would know is the intake filling up. A build that will not
+	# send says so after Submit, through the report form's could-not-reach outcome.
 	if DisplayServer.get_name() == "headless":
 		return false
 	return ENDPOINT != ""

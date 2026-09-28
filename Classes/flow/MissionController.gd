@@ -1127,7 +1127,11 @@ func _end_mission() -> void:
 
 	var victory: bool = outcome == MissionRules.Outcome.VICTORY
 	var reason: String = MissionRules.defeat_reason(_failed_by)   # "" on a victory; the banner falls back
-	var choice: MissionEndBanner.Choice = await MissionEndBanner.show_banner(game, victory, can_restart(), reason)
+	# Grabbed BEFORE the banner draws, which carries a report form (#1052): a report filed from it
+	# wants the board as the mission ended, not a picture of the form. _open_pause_menu's rule, and
+	# its reason for locking first -- the extra frame is not interactive.
+	var frame: Image = await game.bug_reporter.capture_frame()
+	var choice: MissionEndBanner.Choice = await MissionEndBanner.show_banner(game, victory, can_restart(), reason, frame)
 
 	_ending = false
 	game.game_state = game._base_state()   # unlock; dev mode survives a mission end (2026-08-11)
