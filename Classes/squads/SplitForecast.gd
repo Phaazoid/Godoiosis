@@ -28,7 +28,8 @@ class_name SplitForecast
 # in one batch after the attack volley (OrderExecutor._apply_cell_effects), so the walk and the volley
 # settle on the board as it was, and everything after on BoardContext.with_deposits.
 #
-# A DEATH IS NEVER COUNTED (#1104's), and neither is a unit that leaves a squad of one.
+# A DEATH IS NEVER COUNTED -- a death is not a split, and its tether plays a look of its own (#1104) --
+# and neither is a unit that leaves a squad of one.
 
 class _Band:
 	var leader: Unit
