@@ -94,11 +94,12 @@ func _plan(squad: Squad) -> ResolvedPlan:
 	return game.squad_manager.resolve_plan(squad, game._board())
 
 
-# Every row that can own a split: the pass's blows, then its END OF TURN burns.
+# Every row that can own a split: the pass's blows, its sinkings (#922), then its END OF TURN burns.
 func _rows(squad: Squad) -> Array[BaseAction]:
 	var plan := _plan(squad)
 	var rows: Array[BaseAction] = []
 	rows.append_array(SplitForecast.playback(plan))
+	rows.append_array(plan.sinks)
 	rows.append_array(plan.tile_hits)
 	return rows
 
@@ -613,6 +614,31 @@ func test_a_fire_that_melts_the_ice_between_them_splits_on_the_fire() -> void:
 			"a member stranded by melting ice has no Split").is_true()
 	assert_object((owners[member.get_instance_id()] as AttackAction).actor).override_failure_message(
 			"the Split is not on the fire that melted the crossing").is_same(hero)
+	await _execute(hero)
+	_assert_agrees(owners)
+
+
+# A member standing ON the ice the fire melts goes under (#922) -- a down, so a split, and on the
+# sinking's own row: the fire's blow does not down it, the water does.
+func test_a_member_the_melt_sinks_splits_on_its_sinking() -> void:
+	_river(2, [Vector2i(1, 2)])
+	var lead := _spawn(ENEMY, Vector2i(1, 1), {Stats.Stat.LDR: 10, Stats.Stat.COH: 3})
+	var member := _spawn(ENEMY, Vector2i(1, 2), {Stats.Stat.MHP: 30})
+	_squad(lead, [member])
+	var hero := _spawn(PLAYER, Vector2i(1, 3))
+	_imbue(hero, Elemental.Element.FIRE)
+	_queue(hero, Vector2i(1, 2))
+	var blow := _blow_on(hero.squad, member, hero)
+	assert_that(LethalityRules.lifecycle_for(blow.resolved_outcome().lethality)).override_failure_message(
+			"fixture: the fire alone must leave the member standing").is_equal(Unit.LifecycleState.ACTIVE)
+	assert_int(_plan(hero.squad).sinks.size()).override_failure_message(
+			"fixture: the member must go under").is_equal(1)
+
+	var owners := _forecast(hero.squad)
+	assert_bool(owners.has(member.get_instance_id())).override_failure_message(
+			"a member the melt sank has no Split").is_true()
+	assert_bool(owners[member.get_instance_id()] is SinkAction).override_failure_message(
+			"the Split is not on the sinking").is_true()
 	await _execute(hero)
 	_assert_agrees(owners)
 

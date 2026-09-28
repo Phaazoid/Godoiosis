@@ -994,6 +994,10 @@ func _resolve_actions(squad: Squad, actions: Array[BaseAction], board: BoardCont
 			plan.attacks.append_array(dropped)
 			_settle_shoves(dropped, plan, hypo, reactions, board, terrain_reactions)
 
+	# The deposits land after the volley (#922): whoever the melt took the floor from goes under NOW,
+	# before any reaction is derived -- a sunk unit is down, and a body does not counter.
+	PlanResolver.settle_sinks(plan, hypo, board, SinkAction.Moment.DEPOSITS_LAND)
+
 	# Reactions are derived as single-target "aims" (who reacts to whom, strike or heal). Expand
 	# each into its own volley from the reactor's projected cell — the same AoE + friendly-fire
 	# gather the attack loop above uses — so an AoE counter splashes everyone in the blast, not
@@ -1117,6 +1121,10 @@ func _resolve_actions(squad: Squad, actions: Array[BaseAction], board: BoardCont
 	# Same verdict, same reason, for a watch its own pass's shove combo already fired (#413).
 	for armed in watch_orders:
 		(watch_orders[armed] as OverwatchAction).resolved_spent = (armed as Watch).spent
+
+	# ...and the melts only a counter or a tail shot made (#922), once the pass has settled -- ahead of
+	# the END OF TURN forecast, which must read a sunk unit as down.
+	PlanResolver.settle_sinks(plan, hypo, board, SinkAction.Moment.PASS_END)
 
 	# The END OF TURN forecast (#419), last of all: it reads where the pass leaves every member and
 	# which deposits the pass made, so it can only be derived once both are settled.

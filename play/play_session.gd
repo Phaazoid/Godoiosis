@@ -524,8 +524,14 @@ func _describe_plan(squad: Squad, plan: ResolvedPlan) -> Dictionary:
 	var tile_hits: Array = []
 	for hit in plan.tile_hits:
 		tile_hits.append({"actor": handle_for(hit.actor), "description": hit.get_description()})
+	# Who the pass's own terrain drops into the water (#922), in the order they go under.
+	var sinks: Array = []
+	for sink in plan.sinks:
+		var lethality: String = ResolvedOutcome.Lethality.keys()[sink.resolved.lethality]
+		sinks.append({"actor": handle_for(sink.actor), "description": sink.get_description(),
+				"lethality": lethality})
 	return {"moves": moves, "attacks": attacks, "counters": counters,
-			"side_actions": side_actions, "tile_hits": tile_hits}
+			"side_actions": side_actions, "tile_hits": tile_hits, "sinks": sinks}
 
 func _describe_attack(atk: AttackAction) -> Dictionary:
 	var r := atk.resolved
@@ -577,6 +583,9 @@ func execute() -> Dictionary:
 	for atk in plan.attack_playback():
 		_apply_attack(atk, events)
 	_apply_cell_effects(plan.cell_effects, events)
+	# ...and whoever the melt took the floor from goes under (#922), before any counter -- MIRRORS
+	# OrderExecutor.execute_orders. SinkAction.execute is synchronous pure playback, so the real one runs.
+	_apply_sinks(plan.sinks_at(SinkAction.Moment.DEPOSITS_LAND), events)
 	for ctr in plan.counters:
 		_apply_attack(ctr, events)
 
@@ -603,6 +612,9 @@ func execute() -> Dictionary:
 			for shot in plan.shots_fired_during(action):
 				_apply_attack(shot, events)
 
+	# 4b) the melts only a counter or a tail shot made (#922) -- the pass has settled.
+	_apply_sinks(plan.sinks_at(SinkAction.Moment.PASS_END), events)
+
 	# 5) eject units downed during the pass into solo squads (mirrors OrderExecutor._process_downed_pending)
 	_process_downed_pending()
 
@@ -628,6 +640,12 @@ func _apply_cell_effects(cell_effects: Array[ResolvedCellEffect], events: Array[
 		terrain_states.apply(effect)
 		for state in effect.states_added:
 			events.append("%s becomes %s" % [str(effect.cell), Terrain.TileState.keys()[state]])
+
+
+func _apply_sinks(sinks: Array[SinkAction], events: Array[String]) -> void:
+	for sink in sinks:
+		sink.execute()
+		events.append(sink.get_description())
 
 
 func _apply_attack(atk: AttackAction, events: Array[String]) -> void:

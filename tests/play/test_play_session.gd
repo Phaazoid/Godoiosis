@@ -239,6 +239,47 @@ func test_frozen_water_reads_walkable_to_the_headless_view() -> void:
 
 	assert_bool(_session.terrain_at(cell).walkable).is_true()
 
+# #922: melting the ice under a unit drops it in, and the headless twin plays that where the game
+# does -- when the deposits land, before any counter -- with the preview naming it first (Law #2).
+func test_melting_the_ice_under_a_unit_sinks_it_headlessly_too() -> void:
+	var b: Dictionary = BoardBuilder.build(self, "SinkRoot")
+	auto_free(b.root)
+	BoardBuilder.paint_rect(b.grid, Rect2i(-2, -2, 8, 8))
+	var ice := Vector2i(2, 0)
+	BoardBuilder.paint_cell(b.grid, ice, BoardBuilder.WATER_ATLAS)
+	var freeze := ResolvedCellEffect.new()
+	freeze.cell = ice
+	freeze.states_added.assign([Terrain.TileState.FROZEN])
+	(b.terrain_states as TerrainStateManager).apply(freeze)
+	var sturdy := Stats.STAT_DEFAULTS.duplicate()
+	sturdy[Stats.Stat.MHP] = 40
+	var hero: Unit = BoardBuilder.spawn(b, _data("Hero", PLAYER), Vector2i(1, 0))
+	var foe: Unit = BoardBuilder.spawn(b, UnitFactory.create_unit_data(sturdy, "Foe", ENEMY), ice)
+	BoardBuilder.arm(hero, 3)
+	BoardBuilder.arm(foe, 3)
+	var fire: WeaponAttackData = (hero.get_equipped_weapon() as WeaponInstance).template.main_attack
+	fire.elemental_damage_type = Elemental.Element.FIRE
+	fire.targets = EquippableData.TargetMode.BOTH
+	var sess = PlaySession.new(b)
+	assert_bool(sess.queue_attack(sess.handle_for(hero), ice).ok).is_true()
+
+	var prev: Dictionary = sess.preview()
+	assert_bool(prev.ok).is_true()
+	assert_int(prev.plan.attacks[0].lethality).override_failure_message(
+			"fixture: the fire alone must leave the foe standing").is_equal(ResolvedOutcome.Lethality.NONE)
+	assert_int(prev.plan.sinks.size()).is_equal(1)
+	assert_str(prev.plan.sinks[0].actor).is_equal(sess.handle_for(foe))
+	assert_str(prev.plan.sinks[0].lethality).is_equal("DOWNED")
+	for counter: Dictionary in prev.plan.counters:
+		assert_bool(counter.skipped).override_failure_message("a sunk unit still counters").is_true()
+
+	var hero_hp := hero.get_current_hp()
+	assert_bool(sess.execute().ok).is_true()
+	assert_bool(foe.is_downed()).override_failure_message(
+			"the headless twin left the foe standing on the water").is_true()
+	assert_bool(foe.element_states.has(Elemental.State.WET)).is_true()
+	assert_int(hero.get_current_hp()).is_equal(hero_hp)
+
 func test_join_and_leave_squad() -> void:
 	var b: Dictionary = BoardBuilder.build(self, "SquadRoot")
 	auto_free(b.root)

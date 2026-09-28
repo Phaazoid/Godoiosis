@@ -127,6 +127,23 @@ func test_every_written_hit_reconciles_against_the_snapshots() -> void:
 	assert_int(int(player.get("unattributed"))).is_equal(0)
 
 
+# #922: the water a melt drops a unit into is damage no hit carries, recorded on the pass beside its
+# hits. It must reconcile like a burn, or every sinking reads as a hole in the log.
+func test_a_sinking_is_attributed_damage_not_a_gap() -> void:
+	var events := _events()
+	var pass_line: Dictionary = events[8]
+	pass_line["sinks"] = [{"unit": _ref(A, "Aldin"), "at": [3, 1], "moment": "DEPOSITS_LAND",
+		"damage": 15, "lethality": "DOWNED"}]
+	var ending: Dictionary = events[9]
+	ending["units"] = [_unit(A, "Aldin", "PLAYER", 0, 20, "DOWNED"), _unit(B, "Brigand", "ENEMY", 1, 10, "DOWNED")]
+	var s := MissionSummary.of(events)
+	var player: Dictionary = (s.get("reconciliation") as Dictionary).get("PLAYER")
+	assert_int(int(player.get("net_hp_loss"))).is_equal(20)
+	assert_int(int(player.get("attributed_damage"))).is_equal(20)   # 5 counter + 15 water
+	assert_int(int(player.get("unattributed"))).override_failure_message(
+		"a sinking the pass recorded reads as damage nobody accounted for").is_equal(0)
+
+
 func test_a_hit_the_log_dropped_shows_as_a_gap() -> void:
 	var events := _events()
 	events.remove_at(8)   # the enemy's counter never gets written
