@@ -4107,6 +4107,7 @@ A death used to play nothing on its tether; only the health cubes burst (#314). 
 | A leader dies | Every member's tether plays **the same** look, and the heir's tethers draw in after it (the "then" rule, unchanged). |
 | A down (his play-check, 2026-09-27) | A squadded enemy almost always goes DOWN before it dies, so **a down plays the looks too**, the same ash. **The snap is kept for displacement** (a FORCED exit). |
 | Shoved into a hole (same play-check) | It is broken off by the distance as much as by the death, so it **SNAPS at the ledge, before the camera follows the body down**, and the dead end **rides the body to the ledge** (picked off a second mockup). |
+| The hang (his play-check of that, same day) | *"hover over the ledge a moment, wile e coyote style, until the tether snaps, then the unit falls."* The body **hangs over the hole from its arrival** (`Pacing.VOID_HANG`, a knob), the tether **holds taut and keeps shivering** until the body lets go (off a third mockup), and only a tethered body hangs. |
 
 **The four looks** are `Moment.DRAIN`, `SLACK`, `PULSE` and `MOTES` (appended; `SquadLines2D.DEATH_LOOKS`), drawn by `_death_drawing` beside the break's. In each, the dashes stop where they stood and become solid pieces on `TETHER_SHARDS`:
 - **Drain.** Ash runs from the dead end to the other, then the tether fades.
@@ -4128,8 +4129,13 @@ A death used to play nothing on its tether; only the health cubes burst (#314). 
 **A body shoved into a hole snaps at the ledge.** The removal plays slide, plummet, then `die()`. The camera rides the plummet and holds in the pit for the burst, so a look played at `die()` was never on screen, and the playtest found exactly that.
 - **At the blow, before the slide**, `AttackAction` emits `going_over`, per victim. It is wired beside `impact` in `OrderExecutor._listen_for_the_blow`, which covers aims, counters and watch shots.
 - **The executor's `_break_at_the_ledge` calls `SquadTetherPresenter.foretell_removal`.** That plays the removal's relinks as BREAK, strung from the struck cell, and marks the victim decided, so its death plays nothing more.
-- **It stamps `tether_snap_msec`**, and the body **hangs over the hole** (`Pacing.beat`) until the snap, then drops.
-- **The dead end RIDES THE BODY**: while the break strains, `OverlayManager._follow` moves the victim's chord end to the body's live position. It reads `UnitMirror.board_xz`, the one conversion that places the sprite, extracted for this. At the snap it lets go, and the pieces fall from where the body hung. The height stays the struck cell's, which is the lip's, and that is the height `UnitMirror.stand_height` holds an airborne body at.
+- **The break is HELD until the body lets go** (round 3, the wile e coyote hang). Round 2 timed the snap from the blow, and the slide into the hole used most of that clock up, so the body arrived and dropped with no beat of its own. Now:
+  - `foretell_removal` returns whether a tether broke, and marks its breaks `held_by` the attack with `snap` at INF. The executor sets `AttackAction.tether_held`.
+  - After the slide, a held body **hangs** for `Pacing.VOID_HANG` (`Pacing.beat`), THEN stamps `tether_snap_msec`, then plummets. The stamp is written as the hang ENDS, so a pause mid-hang holds the tether too.
+  - `OverlayManager._await_the_snap` reads that stamp every frame and adopts it as the entry's `snap`. An attack that is gone snaps it at once, so a break can never hold the clock open for ever.
+  - **A break's snap time is the entry's own fact**: `SquadLines2D.snap_seconds`, defaulting to the strain's end, so every ordinary break is unchanged. `moment_at`, `moment_drawing` and `_break_drawing` read it, and the dash freeze and "done" key off it. Past its strain a held break stays whole at full strain red and keeps shivering at the strain's full swing; #217 stills that like the strain's own shake.
+  - **Only a tethered body hangs.** The hang exists to show the snap, so a unit with no tether falls as it always did.
+- **The dead end RIDES THE BODY**: until the break snaps, `OverlayManager._follow` moves the victim's chord end to the body's live position. It reads `UnitMirror.board_xz`, the one conversion that places the sprite, extracted for this. At the snap it lets go, and the pieces fall from where the body hung. The height stays the struck cell's, which is the lip's, and that is the height `UnitMirror.stand_height` holds an airborne body at.
 
 **The survivor's flash** fires off the moments' own clock. `OverlayManager._process` calls `UnitVisuals.play_loss_flash()` once, when a Pulse's run ends; a tween delay would drift out of step with the light under the modal lock and the kill's hitstop. **It is the lowest tier on `sprite.modulate`**: it yields to an aim pulse, to a pin flash (a pinned survivor is already white), and to a running one-shot, since that tween also drives the lunge and the shake.
 
@@ -4138,17 +4144,18 @@ A death used to play nothing on its tether; only the health cubes burst (#314). 
 **#217.** The light and the flash are stilled; the grey, the fall and the fade still play.
 
 **Tests.**
-- `test_squad_lines`: each look against its knobs, and the pick.
-- `test_squad_tether_presenter`: the capture, the precedence, the pacing, the flash and its tier, a down at the settle and at the blow, a downed leader's dropped member, down-then-kill, the ledge break, and the ride.
+- `test_squad_lines`: each look against its knobs, and the pick. A break that snaps late holds whole, red and shivering (still under #217) until its snap, then falls exactly as an ordinary one only later; a held one never ends on its own.
+- `test_squad_tether_presenter`: the capture, the precedence, the pacing, the flash and its tier, a down at the settle and at the blow, a downed leader's dropped member, down-then-kill, the ledge break (held, by its attack), the ride through the hold until the attack lets go, and a break whose attack is freed snapping at once.
 - `test_overlay_mirror`: both layers, and their clearing.
-- `test_split_break_in_play`: a real kill, the pacing wire through `Unit.die`, a real down (its look already playing when the settle ejects it, and no snap), and a real shove into a hole (one break from the struck cell, no death look, the snap stamped).
-- 26 mutants across the two rounds, each red on its case except the declared relink-cell one above. One of them found a real hole: a down that reached `foretell` without its victim was ledgered before it played, and swallowed. The ledger now takes only what played.
+- `test_split_break_in_play`: a real kill, the pacing wire through `Unit.die`, a real down (its look already playing when the settle ejects it, and no snap), and a real shove into a hole (one break from the struck cell, no death look, the body held, the snap stamped no earlier than the body's ARRIVAL, and the break hearing it).
+- 36 mutants across the three rounds, each red on its case except the declared relink-cell one above. Round 3's ten are the hang: the snap stamped at the blow or never, the overlay not adopting it, either snap reader ignoring it, the follow letting go at the strain, a freed attack holding for ever, the held shiver removed, the attack never marked held, and the links never held. One of them found a real hole: a down that reached `foretell` without its victim was ledgered before it played, and swallowed. The ledger now takes only what played.
 
 **Declared residuals:**
 - **Motes are cased specks in 3D.** They ride `TETHER_SHARDS`, which wears the casing; moving them to the glow layer is the fix if they read wrong.
 - **The first instant plays through the kill's hitstop.** The moments run on the wall clock.
 - **The flat view has no height.** Slack reads there as its grey and fade, and the motes as their drift (#292).
 - **Pulse's closing fade has nothing left to fade.** The light has emptied the tether by then, so the fade is a short hold while the survivor flashes.
-- **The hang over the hole is a play-check.** `Pacing.beat` collapses headless, so no suite sees it; the stamp it waits on is pinned.
-- **A void-killed leader's heir draws in while the camera is down the pit.**
+- **The hang's LENGTH is a play-check.** `Pacing.beat` collapses headless, so no suite sees how long the body hangs; that the snap comes after the arrival is pinned.
+- **A void-killed leader's heir draws in while the camera is down the pit.** Its draw-in still waits a fixed break's length from the blow, so with a long hang or a long slide it can begin before the held break snaps.
+- **On a raised board the body can drop before it hangs.** A hole lower than the lip gets #602's step-off fall to the hole's own height first, then the hang, then the plummet. The Causeway is flat, so this is untested in play.
 - **What blocks the zoom's view** (units, terrain) is #1132, not this.
