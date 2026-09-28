@@ -541,7 +541,7 @@ had. What landed:
 **The widget is a SEGMENTED STRIP, and an `OptionButton` was structurally out.** A dropdown opens an
 embedded `PopupMenu`, and `CLAUDE.md`'s SubViewport gotcha (2) records that those do not dismiss on
 outside-click inside `GameView` — the #26 reason the action menu has been Control-based ever since
-and "must not go back to a `Popup`". `ReportPanel._build_kind_row` is the same shape already
+and "must not go back to a `Popup`". `ReportForm._build_kind_row` is the same shape already
 shipped, and its own comment states the other half of the reason: every choice is readable, and
 which one is picked is readable, without a click. Three toggle `Button`s in one `ButtonGroup`, so
 "two modes chosen at once" is unrepresentable rather than merely avoided.

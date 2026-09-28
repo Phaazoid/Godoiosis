@@ -172,17 +172,24 @@ func _build_button_row(parent: Container, vertical: bool, separation: int) -> Bo
 
 func _add_button(row: Container, text: String, on_pressed: Callable,
 		tint: Color = Color.WHITE) -> Button:
-	var button := Button.new()
-	button.text = text
-	button.custom_minimum_size = button_size
-	button.modulate = tint
-	button.pressed.connect(on_pressed)
+	var button := make_button(text, button_size, on_pressed, tint)
 	row.add_child(button)
 	return button
 
-# For a surface whose choices CHANGE while it is up (ReportPanel: collecting -> sending -> outcome).
+# The one way a card button is built, static so content that is not itself a card (ReportForm,
+# which two cards host) builds its buttons the same way.
+static func make_button(text: String, size: Vector2, on_pressed: Callable,
+		tint: Color = Color.WHITE) -> Button:
+	var button := Button.new()
+	button.text = text
+	button.custom_minimum_size = size
+	button.modulate = tint
+	button.pressed.connect(on_pressed)
+	return button
+
+# For a surface whose choices CHANGE while it is up (ReportForm: collecting -> sending -> outcome).
 # remove_child as well as queue_free, so a rebuild in the same frame does not briefly show both sets.
-func _clear_button_row(row: Container) -> void:
+static func clear_button_row(row: Container) -> void:
 	for child in row.get_children():
 		row.remove_child(child)
 		child.queue_free()

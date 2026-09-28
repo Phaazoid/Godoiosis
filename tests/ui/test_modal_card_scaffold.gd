@@ -127,7 +127,7 @@ func test_mission_end_banner_fills_the_viewport_and_locks_the_board() -> void:
 
 
 func test_report_panel_fills_the_viewport_and_locks_the_board() -> void:
-	var panel := ReportPanel.open(game, BugReporter.Kind.BUG, false, false)
+	var panel := ReportPanel.open(game, BugReporter.Kind.BUG)
 	await _frames(4)
 
 	_assert_chrome(panel, UiLayers.MODAL_CARD)

@@ -78,10 +78,10 @@ func _ready() -> void:
 func upload_configured() -> bool:
 	return _uploader != null and _uploader.is_configured()
 
-# The ONE path from "the player wants to say something" to a filed report. All four entry points
-# call this and nothing else, because the frame has to be grabbed BEFORE the card covers the
-# screen -- four callers each having to remember that is how you get three that do and one that
-# doesn't. state_name is passed for the same reason report() takes it: game.gd owns GameState.
+# The door every CARD comes through -- the pause menu's row, the title screen's Send Feedback, F3 --
+# because the frame has to be grabbed BEFORE the card covers the screen, and three callers each
+# having to remember that is how you get two that do and one that doesn't. state_name is passed for
+# the same reason report() takes it: game.gd owns GameState.
 func open_card(state_name: String, default_kind: Kind, frame: Image = null) -> void:
 	if is_instance_valid(_card):
 		return   # already collecting; a second Esc must not stack a second card
@@ -90,26 +90,32 @@ func open_card(state_name: String, default_kind: Kind, frame: Image = null) -> v
 	# (the pause menu does). Everyone else is opening the card over a clean board.
 	if frame == null:
 		frame = await capture_frame()
-	var units: Array[Unit] = game._all_units()
-	_card = ReportPanel.open(game, default_kind, not units.is_empty(), upload_configured())
+	_card = ReportPanel.open(game, default_kind)
 
-	var submitted: bool = await _card.finished
+	var filed: bool = await serve(_card.form, state_name, frame)
+	if filed and is_instance_valid(_card):
+		await _card.form.dismissed
+	_close_card()
+
+# The ONE path from "the player wants to say something" to a filed report: collect, send, show the
+# outcome, for one ReportForm whoever hosts it (#1052) -- the card above, or the mission-end banner's
+# form through game.serve_report_form. Returns whether a report was filed; a Cancel files nothing.
+# Once the outcome is showing the exchange is over, and what becomes of the host is its own business.
+func serve(form: ReportForm, state_name: String, frame: Image) -> bool:
+	var submitted: bool = await form.finished
 	if not submitted:
-		_close_card()
-		return
+		return false
 
-	var kind := _card.selected_kind()
-	var note := _card.note_text()
-	_card.show_sending()
+	var kind := form.selected_kind()
+	var note := form.note_text()
+	form.show_sending()
 	var result: Dictionary = await report(state_name, kind, note, frame)
 
-	# The upload can outlive its card: returning to mission select frees the whole ui_layer.
-	if not is_instance_valid(_card):
-		_card = null
-		return
-	_card.show_outcome(result["dir"], result["sent"])
-	await _card.dismissed
-	_close_card()
+	# The upload can outlive its form: leaving the banner, or returning to mission select, frees it.
+	if not is_instance_valid(form):
+		return true
+	form.show_outcome(result["dir"], result["sent"])
+	return true
 
 func _close_card() -> void:
 	if is_instance_valid(_card):

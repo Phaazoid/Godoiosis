@@ -537,6 +537,11 @@ func _restore_state(prior: GameState) -> void:
 func open_report_card(default_kind: BugReporter.Kind) -> void:
 	bug_reporter.open_card(GameState.keys()[game_state], default_kind)
 
+# The mission-end banner's form (#1052), handed to the same exchange a card runs. Named here for the
+# reason above; the banner is up, so the state it names is MISSION_OVER.
+func serve_report_form(form: ReportForm, frame: Image) -> void:
+	bug_reporter.serve(form, GameState.keys()[game_state], frame)
+
 # One handler per mode, mirroring HoverPresenter's branches. Each is responsible for leaving
 # the mode it handles (exit_current_mode), so the dispatcher stays a plain table.
 func _on_left_click(cell: Vector2i, shift_held := false) -> void:
