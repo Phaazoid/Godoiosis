@@ -35,7 +35,7 @@ func _init() -> void:
 static func open(game_node: Node, default_kind: BugReporter.Kind, has_board: bool,
 		upload_enabled: bool) -> ReportPanel:
 	var panel := ReportPanel.new()
-	game_node.ui_layer.add_child(panel)
+	game_node.card_layer.add_child(panel)
 	panel._build(default_kind, has_board, upload_enabled, game_node)
 	return panel
 

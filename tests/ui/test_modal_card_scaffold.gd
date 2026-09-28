@@ -70,6 +70,8 @@ func _assert_chrome(card: ModalCard, expected_z: int) -> void:
 	var viewport_size: Vector2 = card.get_viewport_rect().size
 	assert_vector(card.size).is_equal(viewport_size)
 	assert_int(card.z_index).is_equal(expected_z)
+	# ...and that z orders it inside the CARD layer, over the wheel and the dialogue (#1034).
+	assert_int(card.get_canvas_layer_node().layer).is_equal(UiLayers.LAYER_CARDS)
 
 	var panel := _chrome_panel(card)
 	if not card.framed:
@@ -90,15 +92,17 @@ func _assert_chrome(card: ModalCard, expected_z: int) -> void:
 
 func test_pause_menu_fills_the_viewport_locks_and_outranks_the_hover_panel() -> void:
 	var menu := PauseMenu.new()
-	game.ui_layer.add_child(menu)
+	game.card_layer.add_child(menu)
 	menu._build(true, true, game, false)
 	await _frames(4)
 
 	_assert_chrome(menu, UiLayers.MODAL_CARD)
 	assert_bool(ModalLock.any_open(get_tree())).is_true()
 	assert_bool(game.can_process()).is_false()
-	# The bug the z-table closes: the hover card is a sibling under this same UILayer.
-	assert_bool(menu.z_index > UiLayers.HOVER_PANEL).is_true()
+	# The bug the z-table first closed -- the hover card over the pause menu -- is a LAYER apart now
+	# (#1034): a z_index never crosses a CanvasLayer, so comparing the two z values would say nothing.
+	assert_int(menu.get_canvas_layer_node().layer).is_greater(
+			(game.hover_info_panel as Control).get_canvas_layer_node().layer)
 
 	menu.chosen.emit(PauseMenu.Choice.RESUME)
 	menu.queue_free()
@@ -108,7 +112,7 @@ func test_pause_menu_fills_the_viewport_locks_and_outranks_the_hover_panel() -> 
 
 func test_mission_end_banner_fills_the_viewport_and_locks_the_board() -> void:
 	var banner := MissionEndBanner.new()
-	game.ui_layer.add_child(banner)
+	game.card_layer.add_child(banner)
 	banner._build(true, true, game)
 	await _frames(4)
 
@@ -137,7 +141,7 @@ func test_report_panel_fills_the_viewport_and_locks_the_board() -> void:
 
 func test_save_load_screen_fills_the_viewport_and_locks_the_board() -> void:
 	var screen := SaveLoadScreen.new()
-	game.ui_layer.add_child(screen)
+	game.card_layer.add_child(screen)
 	screen._build(SaveLoadScreen.Mode.LOAD, false, game)
 	await _frames(4)
 
@@ -153,7 +157,7 @@ func test_save_load_screen_fills_the_viewport_and_locks_the_board() -> void:
 
 func test_confirm_card_fills_the_viewport_and_locks_the_board() -> void:
 	var card := ConfirmCard.new()
-	game.ui_layer.add_child(card)
+	game.card_layer.add_child(card)
 	card._build("Really?", "Yes", "No", game)
 	await _frames(4)
 
@@ -205,8 +209,10 @@ func test_mission_select_backdrop_is_fully_opaque() -> void:
 func test_a_card_outranks_the_menu_screen_it_can_open_over() -> void:
 	# The report card is reachable FROM mission select (its Send Feedback row), so it has to draw
 	# over it. That relationship used to live only in a comment on ReportPanel.PANEL_Z.
+	# Each comparison stays on ONE axis (#1034): two z values inside the card layer, the layers
+	# themselves, two z values inside the HUD layer.
 	assert_bool(UiLayers.MODAL_CARD > UiLayers.MENU_SCREEN).is_true()
-	assert_bool(UiLayers.MENU_SCREEN > UiLayers.INVENTORY_POPUP).is_true()
+	assert_bool(UiLayers.LAYER_CARDS > UiLayers.LAYER_HUD).is_true()
 	assert_bool(UiLayers.INVENTORY_POPUP > UiLayers.HOVER_PANEL).is_true()
 
 

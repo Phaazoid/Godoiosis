@@ -11,7 +11,7 @@ class_name ModalLock
 #
 # WHY THE GAME SUBTREE AND NOT get_tree().paused -- measured 2026-08-05, and the tree-pause version
 # SHIPPED BROKEN for one round. The modal lives inside a SubViewport, so a click travels
-#   root viewport -> GameContainer (SubViewportContainer) -> GameView (SubViewport) -> ui_layer -> modal
+#   root viewport -> GameContainer (SubViewportContainer) -> GameView (SubViewport) -> card_layer -> modal
 # and GameContainer only forwards input into the viewport while IT can process. Pausing the tree
 # froze that link, so PROCESS_MODE_ALWAYS made the modal processable and it still could not be
 # clicked -- the pause menu drew, ate the board, and had no working way out. Disabling the Game
@@ -31,6 +31,13 @@ class_name ModalLock
 # every dev key (F1/F2/F3) and is ALWAYS, so they still fire behind a card. A dev key added to
 # game.gd instead would die silently whenever a modal is up. Board manipulation (dev spawn, tile
 # brush) deliberately stays frozen -- it is not worth editing what the card is covering.
+#
+# THE DIALOGUE IS INSIDE THE FREEZE TOO (#1034, dev ruling, replacing #687's "not frozen by a card").
+# #687 mounted Dialogic's layout BESIDE Game so it would scale, which put it outside the subtree this
+# lock disables: under the pause menu it kept typing, and Enter/Space -- which no card takes, having
+# no focus -- still advanced it. Dialogic.paused is derived from the same group as the Game freeze
+# (#154's shape: widen the line, never add a second one), which stops the typewriter, auto-advance
+# and every advance until the last card goes. A timeline started under a card waits for the release.
 
 const GROUP := "modal"
 
@@ -49,9 +56,16 @@ static func claim(modal: Control, game_root: Node) -> void:
 	modal.tree_exited.connect(func() -> void: _apply(tree, game_root))
 
 static func _apply(tree: SceneTree, game_root: Node) -> void:
-	if not is_instance_valid(tree) or not is_instance_valid(game_root):
+	if not is_instance_valid(tree):
 		return
-	if any_open(tree):
+	# BEFORE the game_root check, so the pause lifts even for a card that outlives its Game --
+	# Dialogic is an autoload, so a stuck pause hangs every dialogue after it.
+	var frozen := any_open(tree)
+	if Dialogic.paused != frozen:
+		Dialogic.paused = frozen
+	if not is_instance_valid(game_root):
+		return
+	if frozen:
 		game_root.process_mode = Node.PROCESS_MODE_DISABLED
 	else:
 		game_root.process_mode = Node.PROCESS_MODE_INHERIT

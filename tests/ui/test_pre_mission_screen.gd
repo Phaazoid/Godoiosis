@@ -90,7 +90,7 @@ func _enter_phase(cap := 2) -> bool:
 
 
 func _screen() -> PreMissionScreen:
-	for child in game.ui_layer.get_children():
+	for child in game.card_layer.get_children():
 		if child is PreMissionScreen:
 			return child
 	return null
@@ -172,7 +172,7 @@ func test_beginning_the_mission_from_the_screen_closes_it() -> void:
 	_screen()._on_begin()
 	await await_idle_frame()
 	# #774 put a confirm in front of the commit, on all three of its doors.
-	for child in game.ui_layer.get_children():
+	for child in game.card_layer.get_children():
 		if child is ConfirmCard:
 			child.answered.emit(true)
 	await await_idle_frame()

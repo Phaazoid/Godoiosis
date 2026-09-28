@@ -56,7 +56,7 @@ static func show_if_needed(game_node: Node, url: String) -> UpdateBanner:
 	if not should_show() or url == "":
 		return null
 	var banner := UpdateBanner.new()
-	game_node.ui_layer.add_child(banner)
+	game_node.card_layer.add_child(banner)
 	banner._build(game_node, url)
 	return banner
 

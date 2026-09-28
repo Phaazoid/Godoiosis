@@ -74,7 +74,7 @@ func _director() -> MusicDirector:
 
 
 func _title_screen() -> MissionSelectScreen:
-	var layer: Node = game.get("ui_layer")
+	var layer: Node = game.get("card_layer")
 	for child: Node in layer.get_children():
 		if child is MissionSelectScreen:
 			return child as MissionSelectScreen

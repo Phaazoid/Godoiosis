@@ -48,6 +48,9 @@ extends Node2D
 @onready var turn_manager = $TurnManager
 @onready var turn_banner = $TurnBanner
 @onready var ui_layer: CanvasLayer = $UILayer
+# Every ModalCard mounts here, a CanvasLayer over the wheel and the dialogue (#1034). Built in code
+# so its number lives only in UiLayers.
+var card_layer: CanvasLayer
 @onready var unit_info_panel: Control = $UILayer/UnitInfoPanelControl
 @onready var hover_info_panel: Control = $UILayer/HoverInfoPanelControl
 @onready var dev_overlay: DevOverlay = _find_dev_overlay()
@@ -164,6 +167,7 @@ func _ready() -> void:
 	# ending, and a launch is the only moment anything can finish one. FIRST, and ahead of
 	# _build_collaborators: this must never meet a run this process is about to open.
 	MissionLog.sweep_unsealed()
+	_build_ui_layers()
 	_build_collaborators()
 	# ...AND THEN SEND THEM (#53 slice 5), in that order and for that reason: the sweep is what
 	# turns a killed run into a complete record, so sending first would ship the fragment. This is
@@ -195,6 +199,15 @@ func _find_dev_overlay() -> DevOverlay:
 	if not DevTools.enabled():
 		return null
 	return get_node_or_null("../../../DevOverlay")
+
+# Both UI layers take their numbers from UiLayers, so the whole stack is stated in one table. Before
+# anything else is built: the title screen and the first-launch notice are cards.
+func _build_ui_layers() -> void:
+	ui_layer.layer = UiLayers.LAYER_HUD
+	card_layer = CanvasLayer.new()
+	card_layer.name = "CardLayer"
+	card_layer.layer = UiLayers.LAYER_CARDS
+	add_child(card_layer)
 
 func _build_collaborators() -> void:
 	dev_controller = DevController.new()
@@ -432,6 +445,11 @@ func _unhandled_input(event: InputEvent) -> void:
 # Esc during play. MENU locks the board while the card is up; the prior state is restored on
 # Resume so an in-progress aim survives the pause.
 func _open_pause_menu() -> void:
+	# An open wheel closes first (#1034, dev ruling): three rows below tear the board down, and a ring
+	# frozen under the card would come back over the new board holding a freed unit. FIRST, because
+	# closing it clears the selection, which writes game_state -- landing after MENU, it would rest the
+	# board under the open card and _restore_state would then skip the restore.
+	main_action_menu.close_ring()
 	var prior: GameState = game_state
 	# READ BEFORE THE WRITE BELOW (#723): playback_owns_board() asks about game_state, so once MENU
 	# lands here an AI turn no longer looks like one and the card would grey nothing. The card is

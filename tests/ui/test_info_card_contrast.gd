@@ -163,7 +163,7 @@ func test_a_palette_picked_in_settings_reaches_the_dock_and_the_card() -> void:
 	SettingsScreen.show_screen(game)
 	await _frames(3)
 	var screen: SettingsScreen = null
-	for child in game.ui_layer.get_children():
+	for child in game.card_layer.get_children():
 		if child is SettingsScreen:
 			screen = child
 	assert_object(screen).override_failure_message("the settings page did not open").is_not_null()
