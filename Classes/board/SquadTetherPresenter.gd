@@ -268,14 +268,16 @@ func _foretell_links(outcome: ResolvedOutcome, victim: Unit) -> float:
 		# Already gone, or already played: something settled it first, and the flush plays it.
 		if live.get(member_id, 0) != leader_id or _foretold_ends.get(member_id, 0) == leader_id:
 			continue
-		_foretold_ends[member_id] = leader_id
 		var fallen := victim_id if downed and touches else 0
 		var moment: int = SquadLines2D.Moment.BREAK if removal else _exit_moment(relink.cause)
 		if fallen != 0:
 			moment = _looks[fallen] if _looks.has(fallen) \
 					else _pick_look(fallen, relink.member_cell if member_id == fallen else relink.leader_cell)
+		# Into the ledger only once it plays: a link this cannot decide is left for the settle, which reads
+		# the cause itself, rather than swallowed.
 		if moment < 0:
 			continue
+		_foretold_ends[member_id] = leader_id
 		var link := _link(member_id, leader_id, moment, 0.0, fallen)
 		if link.is_empty():
 			continue

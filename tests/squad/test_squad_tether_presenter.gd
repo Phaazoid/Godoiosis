@@ -348,6 +348,23 @@ func test_a_foretold_down_plays_its_look_at_the_blow_and_not_again() -> void:
 			"the settle played the down a second time").is_equal(1)
 
 
+# A link the blow cannot decide -- here a down foretold without its victim -- is LEFT for the settle,
+# which reads the cause itself, rather than put in the ledger and swallowed (#1104).
+func test_a_down_foretold_without_its_victim_is_left_for_the_settle() -> void:
+	var leader := _solo(Vector2i(0, 0))
+	var member := _solo(Vector2i(1, 0))
+	_sm.join_squad(member, leader.squad)
+	_presenter.arm()
+	_presenter.foretell(_outcome([{"member": member, "leader": leader, "ends": true,
+			"cause": SquadManager.LeaveCause.DOWNED}], ResolvedOutcome.Lethality.DOWNED), null)
+	assert_int(_om.squad_tether_moments.size()).override_failure_message(
+			"fixture: the blow decided the down without its victim").is_equal(0)
+	_sm.handle_unit_downed(member)
+	_presenter.flush()
+	assert_int(_death_moments().size()).override_failure_message(
+			"the undecided down was swallowed by the ledger and never played").is_equal(1)
+
+
 # A downed leader's member its heir cannot hold leaves FORCED in the same settle -- and still plays the
 # leader's look rather than a snap: the link ended as the leader fell (#1104).
 func test_a_downed_leaders_dropped_member_plays_the_same_look() -> void:

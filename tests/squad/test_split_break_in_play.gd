@@ -346,3 +346,55 @@ func test_a_shove_into_a_hole_breaks_its_tether_at_the_ledge() -> void:
 	if _executed != null:
 		assert_int(_executed.tether_snap_msec).override_failure_message(
 				"nothing told the body to hang over the hole until the snap").is_greater(0)
+
+
+# --- A down plays its look at the blow (#1104) ---------------------------------------------------
+
+# How many death looks toward the leader were in the store when the settle ejected the downed member;
+# -1 until it did.
+var _looks_at_settle := -1
+
+
+func _on_down_settled(_squad: Squad, unit: Unit, _cause: SquadManager.LeaveCause) -> void:
+	if unit == _watched and _looks_at_settle < 0:
+		_looks_at_settle = _deaths(_leader.movement.cell).size()
+
+
+# The dev's play-check: a squadded enemy goes DOWN far more often than it dies, so a down plays the death
+# looks -- at its blow, through after_the_blow's own victim, and once, with no snap. Its ejection waits
+# for the pass's end, which is where the order is read: the look must already be playing there.
+func test_a_down_plays_its_look_at_the_blow_and_not_a_snap() -> void:
+	_leader = _spawn(ENEMY, Vector2i(1, 2), {Stats.Stat.LDR: 10})
+	_watched = _spawn(ENEMY, Vector2i(4, 2))
+	game.squad_manager.join_squad(_watched, _leader.squad)
+	var hero := _spawn(PLAYER, Vector2i(3, 2))
+	game.squad_manager.active_squad = hero.squad
+	var aim := AttackAction.declare(hero, hero.movement.cell, _watched.movement.cell)
+	assert_bool(game.squad_manager.queue_action(hero.squad, aim)).override_failure_message(
+			"fixture: the blow never queued").is_true()
+	var blow := _the_shove(hero)
+	assert_bool(blow != null and blow.resolved_outcome().damage > 0).override_failure_message(
+			"fixture: no blow reaches the member, or it deals nothing").is_true()
+	if blow == null:
+		return
+	_watched.set_current_hp(blow.resolved_outcome().damage)   # exactly what it deals: a down
+	game.refresh_action_queue(hero.squad)
+	assert_int(_the_shove(hero).resolved_outcome().lethality).override_failure_message(
+			"fixture: the blow does not down the member").is_equal(ResolvedOutcome.Lethality.DOWNED)
+	var presenter: SquadTetherPresenter = game.squad_tether_presenter
+	presenter.arm()
+	var squads: SquadManager = game.squad_manager
+	squads.squad_member_left.connect(_on_down_settled)
+	var leader_cell := _leader.movement.cell
+	var executor: OrderExecutor = game.order_executor
+	await executor.execute_orders(hero)
+	await await_idle_frame()
+
+	assert_int(_looks_at_settle).override_failure_message(
+			"fixture: the settle never ejected the downed member").is_greater_equal(0)
+	assert_int(_looks_at_settle).override_failure_message(
+			"the down's look was not playing when the pass settled -- it waited for the settle, not the blow") \
+			.is_equal(1)
+	assert_int(_deaths(leader_cell).size()).override_failure_message(
+			"the down played %d looks across the pass" % _deaths(leader_cell).size()).is_equal(1)
+	assert_int(_breaks().size()).override_failure_message("the down snapped its tether").is_equal(0)
