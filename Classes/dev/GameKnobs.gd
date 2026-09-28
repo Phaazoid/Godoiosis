@@ -1546,6 +1546,9 @@ const CLASS_KNOBS: Array[Dictionary] = [
 	{"group": "Ring: readout", "label": "Readout detail", "static": "READOUT_DETAIL_COLOR",
 		"script": ACTION_MENU_SCRIPT,
 		"tip": "The explanation under that name -- what the option does, and why it is greyed when it is. Dimmer than the name, but still solid."},
+	{"group": "Ring: readout", "label": "Rev timer text", "static": "GAUGE_TIMER_COLOR",
+		"script": ACTION_MENU_SCRIPT,
+		"tip": "The turns-left count beside a revved Chainsword's attacks (\"Slash 2 turns\"). Tinted so a timer never reads as an ammo count, which wears the name's own colour."},
 	{"group": "Ring: shape", "label": "Widest wedge", "static": "MAX_WEDGE_DEGREES",
 		"script": ACTION_MENU_SCRIPT, "min": 20.0, "max": 360.0, "step": 1.0,
 		"tip": "Ceiling on how many degrees any one wedge PAINTS. Without it a submenu holding a single option balloons into a whole donut. It never moves a hit boundary -- the sectors still tile the circle, so the leftover angle belongs to the nearest wedge and the highlight says which."},
@@ -2111,6 +2114,7 @@ static func read_static(name: String) -> Variant:
 		"READOUT_BORDER_WIDTH": return ActionMenuController.READOUT_BORDER_WIDTH
 		"READOUT_TITLE_COLOR": return ActionMenuController.READOUT_TITLE_COLOR
 		"READOUT_DETAIL_COLOR": return ActionMenuController.READOUT_DETAIL_COLOR
+		"GAUGE_TIMER_COLOR": return ActionMenuController.GAUGE_TIMER_COLOR
 		"MAX_WEDGE_DEGREES": return ActionMenuController.MAX_WEDGE_DEGREES
 		"CENTRE_COLOR": return ActionMenuController.CENTRE_COLOR
 		"CENTRE_RIM_COLOR": return ActionMenuController.CENTRE_RIM_COLOR
@@ -2815,6 +2819,9 @@ static func write_static(host: Node3D, name: String, value: Variant) -> void:
 			return
 		"READOUT_DETAIL_COLOR":
 			ActionMenuController.READOUT_DETAIL_COLOR = value
+			return
+		"GAUGE_TIMER_COLOR":
+			ActionMenuController.GAUGE_TIMER_COLOR = value
 			return
 		"MAX_WEDGE_DEGREES":
 			ActionMenuController.MAX_WEDGE_DEGREES = value

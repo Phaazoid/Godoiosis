@@ -81,10 +81,18 @@ func _tank_element(wielder: Unit) -> Elemental.Element:
 	return main.elemental_damage_type if main != null else Elemental.Element.NONE
 
 
+func gauge() -> WeaponGauge:
+	return WeaponGauge.stock(charges, TANK_SIZE)
+
+# The tank reaches no attack through the readiness flags (see the header), so the row it shows on is
+# the one it changes: the main, under either form.
+func attack_gauge(wielder: Unit, attack: AttackData) -> WeaponGauge:
+	return gauge() if is_main_form(wielder, attack) else null
+
 func status_text() -> String:
 	if charges <= 0:
 		return "Tank empty -- fires its baseline"
-	return "Tank %d/%d" % [charges, TANK_SIZE]
+	return "Tank %s" % gauge().label()
 
 
 # Battle-state seam (#87), the Carbine's shape. Clamped on the way back in: a save written before

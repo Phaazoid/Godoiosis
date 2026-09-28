@@ -335,8 +335,8 @@ func _transmutation_children(unit: Unit) -> Array:
 func _overwatch_rows(unit: Unit) -> Array:
 	var rows: Array = []
 	for atk: AttackData in unit.overwatch_attacks():
-		rows.append(_synthetic_leaf(
-			_entry(atk.display_name, unit.attack_block_reason(atk), Glossary.short(Glossary.Term.OVERWATCH)),
+		var row := _entry(atk.display_name, unit.attack_block_reason(atk), Glossary.short(Glossary.Term.OVERWATCH))
+		rows.append(_synthetic_leaf(_with_gauge(row, unit, atk),
 			func(picking_unit: Unit) -> void: _pick_watch(picking_unit, atk)))
 	return rows
 
@@ -377,7 +377,17 @@ func _entry(name: String, blocked_reason: String = "", detail: String = "") -> D
 # One attack's menu row. Law #2: an unfireable pick (a sprung weapon, #73; a dry magazine, #84; an
 # unchannelable carving, #166) stays LISTED but disabled — the menu shows it, it never hides it.
 func _attack_entry(unit: Unit, attack: AttackData) -> Dictionary:
-	return _entry(attack.display_name, unit.attack_block_reason(attack), unit.attack_detail(attack))
+	return _with_gauge(_entry(attack.display_name, unit.attack_block_reason(attack), unit.attack_detail(attack)),
+		unit, attack)
+
+# The weapon's live count beside the attack's name (#1045) -- carried BESIDE `name`, never folded into
+# it, so the name stays the row's identity (_append_unique, the readout title). Both attack-row
+# builders come through here; the ring decides how it looks.
+func _with_gauge(entry: Dictionary, unit: Unit, attack: AttackData) -> Dictionary:
+	var gauge := unit.attack_gauge(attack)
+	if gauge != null:
+		entry["gauge"] = gauge
+	return entry
 
 # ActionMenuController emits `cancelled` before `action_selected` even on a PICK, which is what
 # pins the clear-then-act order (see its header). Both effects the old game.gd wired as two

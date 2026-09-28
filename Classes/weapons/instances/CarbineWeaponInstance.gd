@@ -30,10 +30,12 @@ func consume_readiness_for(attack: WeaponAttackData) -> void:
 	if attack.consumes_readiness:
 		shots_remaining = maxi(0, shots_remaining - 1)
 
+func gauge() -> WeaponGauge:
+	return WeaponGauge.stock(shots_remaining, MAGAZINE_SIZE)
+
 func status_text() -> String:
-	if shots_remaining <= 0:
-		return "Ammo 0/%d — needs Reload" % MAGAZINE_SIZE
-	return "Ammo %d/%d" % [shots_remaining, MAGAZINE_SIZE]
+	var ammo := "Ammo %s" % gauge().label()
+	return ammo + " — needs Reload" if shots_remaining <= 0 else ammo
 
 func readiness_noun() -> String:
 	return "round"

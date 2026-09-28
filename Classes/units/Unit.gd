@@ -1388,6 +1388,12 @@ func attack_detail(attack: AttackData) -> String:
 		return ""
 	return equipped_weapon.attack_detail(self, attack)
 
+# The live count this attack's menu row prints (#1045). Same delegation; null = nothing to print.
+func attack_gauge(attack: AttackData) -> WeaponGauge:
+	if attack == null or equipped_weapon == null:
+		return null
+	return equipped_weapon.attack_gauge(self, attack)
+
 # Readiness seam (#73), widened to aura by #166 — and DERIVED from the reason above rather than
 # re-asking, so a greyed menu row and a refused order can never disagree about what is fireable.
 # Note it now answers false for an unchannelable carving, which it could not before: the rune's
