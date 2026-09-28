@@ -234,7 +234,7 @@ func test_a_refused_press_says_why_and_runs_nothing() -> void:
 	var lines := _box_lines()
 	assert_int(lines.size()).override_failure_message("want one line per refused order, got %s" % str(lines)) \
 		.is_equal(refused.size())
-	for i in refused.size():
+	for i in mini(lines.size(), refused.size()):
 		var order := refused[i]
 		assert_str(lines[i]).contains(order.actor.get_unit_name())
 		assert_int(order.validation_errors.size()).is_greater(0)
