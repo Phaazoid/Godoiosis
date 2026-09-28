@@ -4141,8 +4141,8 @@ A death used to play nothing on its tether; only the health cubes burst (#314). 
 - `test_squad_lines`: each look against its knobs, and the pick.
 - `test_squad_tether_presenter`: the capture, the precedence, the pacing, the flash and its tier, a down at the settle and at the blow, a downed leader's dropped member, down-then-kill, the ledge break, and the ride.
 - `test_overlay_mirror`: both layers, and their clearing.
-- `test_split_break_in_play`: a real kill, the pacing wire through `Unit.die`, and a real shove into a hole (one break from the struck cell, no death look, the snap stamped).
-- Twenty-four mutants across the two rounds, each red on its case except the declared one above.
+- `test_split_break_in_play`: a real kill, the pacing wire through `Unit.die`, a real down (its look already playing when the settle ejects it, and no snap), and a real shove into a hole (one break from the struck cell, no death look, the snap stamped).
+- 26 mutants across the two rounds, each red on its case except the declared relink-cell one above. One of them found a real hole: a down that reached `foretell` without its victim was ledgered before it played, and swallowed. The ledger now takes only what played.
 
 **Declared residuals:**
 - **Motes are cased specks in 3D.** They ride `TETHER_SHARDS`, which wears the casing; moving them to the glow layer is the fix if they read wrong.
