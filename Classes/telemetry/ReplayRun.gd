@@ -38,12 +38,13 @@ var problems: Array[String] = []
 var degraded: Array[String] = []
 
 
-# EVERY run this machine can replay, newest first -- BOTH folders since #53 slice 5, because
-# whether a run has been sent has nothing to do with whether it can be replayed. The listing
+# EVERY run this machine can replay, newest first -- EVERY folder (#53 slice 5, `held/` since #852),
+# because whether a run has been sent has nothing to do with whether it can be replayed. The listing
 # mechanism is TelemetryStore's (it owns the paths); the MERGE is this question's own answer.
 static func list_runs() -> PackedStringArray:
 	var ids := TelemetryStore.pending_runs()
 	ids.append_array(TelemetryStore.sent_runs())
+	ids.append_array(TelemetryStore.held_runs())
 	ids.sort()
 	ids.reverse()
 	return ids

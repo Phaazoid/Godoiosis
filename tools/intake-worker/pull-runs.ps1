@@ -122,7 +122,7 @@ function Get-Rows {
 }
 
 # A TRUNCATED DOWNLOAD MUST NOT BE ABLE TO LOOK LIKE A CRASH. MissionLog.sweep_unsealed() runs at every
-# launch over ReplayRun.list_runs(), which merges BOTH folders, and finishes any run with no
+# launch over ReplayRun.list_runs(), which merges every run folder, and finishes any run with no
 # mission_end by writing a CRASHED ending stamped swept:true. So a half-written blob does not fail
 # loudly - it gets "finished" into a completely plausible player crash, which is then evidence you
 # would go and investigate. A run can only reach D1 sealed, so a blob whose last line is not the

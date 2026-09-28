@@ -52,10 +52,14 @@ static func _static_init() -> void:
 		persistence_enabled = false
 
 
-# TWO FOLDERS, AND THE NAMES ARE THE STATE (#53 slice 5). `pending/` means exactly *still owed to
-# the server*, which is what makes the retry queue self-describing -- no marker file, no flag, and
-# nothing that can disagree with where the folder actually is. A sent run is KEPT rather than
-# deleted (dev, 2026-09-08) so the dev Replay tab can still open it.
+# THREE FOLDERS, AND THE NAMES ARE THE STATE (#53 slice 5, the third by #852). `pending/` means
+# exactly *still owed to the server*, which is what makes the retry queue self-describing -- no
+# marker file, no flag, and nothing that can disagree with where the folder actually is. A sent run
+# is KEPT rather than deleted (dev, 2026-09-08) so the dev Replay tab can still open it.
+#
+# `held/` is a sealed run the client will NEVER send (TelemetryUploader.never_sendable), kept for
+# the same reason. Before it, those runs sat in `pending/` and were retried at every launch, so
+# "owed" also meant "never owed to anyone" -- 101 of 102 on the dev's machine when it was built.
 static func pending_dir() -> String:
 	return root + "pending/"
 
@@ -64,16 +68,22 @@ static func sent_dir() -> String:
 	return root + "sent/"
 
 
+static func held_dir() -> String:
+	return root + "held/"
+
+
 # A run is a FOLDER, not a lone file (#53 slice 2) -- `user://reports/<stamp>/`'s exact shape, and
 # for its reason: a run now carries a board snapshot beside its events, and the uploader already
 # ships a folder through one ATTACHMENTS table.
 #
-# It RESOLVES rather than composing (#53 slice 5): sent if the folder is there, else pending. One
-# function for two homes, and every existing WRITER is unchanged by that -- a new run's id is in
-# neither folder, so it falls through to pending, which is where a new run belongs.
+# It RESOLVES rather than composing (#53 slice 5): sent, else held, else pending. One function for
+# every home, and every existing WRITER is unchanged by that -- a new run's id is in no folder, so
+# it falls through to pending, which is where a new run belongs.
 static func run_dir(run_id: String) -> String:
 	if is_sent(run_id):
 		return sent_dir() + run_id + "/"
+	if is_held(run_id):
+		return held_dir() + run_id + "/"
 	return pending_dir() + run_id + "/"
 
 
@@ -81,8 +91,12 @@ static func is_sent(run_id: String) -> bool:
 	return DirAccess.dir_exists_absolute(sent_dir() + run_id + "/")
 
 
-# Newest first -- the id starts with a sortable stamp. One listing mechanism; the THREE questions
-# built on it (what can I replay / what is owed / what has gone) are its callers' business.
+static func is_held(run_id: String) -> bool:
+	return DirAccess.dir_exists_absolute(held_dir() + run_id + "/")
+
+
+# Newest first -- the id starts with a sortable stamp. One listing mechanism; the questions built on
+# it (what can I replay / what is owed / what has gone / what never will) are its callers' business.
 static func runs_in(dir: String) -> PackedStringArray:
 	if not DirAccess.dir_exists_absolute(dir):
 		return PackedStringArray()
@@ -100,15 +114,33 @@ static func sent_runs() -> PackedStringArray:
 	return runs_in(sent_dir())
 
 
+static func held_runs() -> PackedStringArray:
+	return runs_in(held_dir())
+
+
 # THE RUN HAS LANDED (#53 slice 5) -- move it, do not copy it, so the two folders can never both
 # claim one run. Called only after the far end answered 2xx.
 static func mark_sent(run_id: String) -> bool:
-	if not persistence_enabled or is_sent(run_id):
+	if is_sent(run_id):
 		return false
-	DirAccess.make_dir_recursive_absolute(sent_dir())
-	var err := DirAccess.rename_absolute(pending_dir() + run_id, sent_dir() + run_id)
+	return _move_out_of_pending(run_id, sent_dir())
+
+
+# THE RUN WILL NEVER BE SENT (#852) -- the same move, to the third folder. Only ever out of
+# `pending/`: a sent run has already gone, and a held one is already here.
+static func mark_held(run_id: String) -> bool:
+	if is_sent(run_id) or is_held(run_id):
+		return false
+	return _move_out_of_pending(run_id, held_dir())
+
+
+static func _move_out_of_pending(run_id: String, to_dir: String) -> bool:
+	if not persistence_enabled:
+		return false
+	DirAccess.make_dir_recursive_absolute(to_dir)
+	var err := DirAccess.rename_absolute(pending_dir() + run_id, to_dir + run_id)
 	if err != OK:
-		push_error("Telemetry: could not move run %s to sent/ (error %s)" % [run_id, err])
+		push_error("Telemetry: could not move run %s to %s (error %s)" % [run_id, to_dir, err])
 		return false
 	return true
 
