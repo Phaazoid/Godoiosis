@@ -437,4 +437,7 @@ func test_a_revved_chainswords_attack_carries_a_timer() -> void:
 	var slash := _row_named(_open_rows(), "Slash")
 	assert_str(_drawn_label(slash)).is_equal("Slash " + sword.gauge().label())
 	var gauge := slash.get("gauge") as WeaponGauge
+	assert_object(gauge).override_failure_message("the revved sword's row reached the ring with no gauge").is_not_null()
+	if gauge == null:
+		return
 	assert_int(gauge.kind).override_failure_message("the rev timer reached the ring as a stock").is_equal(WeaponGauge.Kind.TIMER)
