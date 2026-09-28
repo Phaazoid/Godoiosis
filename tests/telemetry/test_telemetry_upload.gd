@@ -185,6 +185,8 @@ func test_an_empty_run_that_was_deliberately_abandoned_is_not_sent() -> void:
 
 	assert_bool(uploader.build_payload(run_id).is_empty()).override_failure_message(
 		"a run in which nothing happened, abandoned on purpose, was shipped").is_true()
+	# #852, through the real wire: nobody called send_pending here -- the seal did.
+	_assert_held(run_id, "an empty abandoned run was left in pending/ to be retried at every launch")
 
 
 # INTERRUPTED is the MAIN door out, not an edge case: MissionController.reset() is the universal
@@ -202,6 +204,7 @@ func test_an_empty_run_the_board_teardown_interrupted_is_not_sent() -> void:
 
 	assert_bool(uploader.build_payload(run_id).is_empty()).override_failure_message(
 		"a board opened and backed out of was shipped").is_true()
+	_assert_held(run_id, "a board opened and backed out of was left owed -- this is the commonest run there is")
 
 
 # THE CASE THE WHOLE RULE IS SHAPED AROUND. A CRASHED run is swept -- nobody chose it -- so its
@@ -216,6 +219,7 @@ func test_an_empty_run_that_crashed_is_still_sent() -> void:
 	assert_bool(payload.is_empty()).override_failure_message(
 		"a crash before the player could act was refused -- that emptiness is the finding").is_false()
 	assert_array(_filenames(payload)).contains([TelemetryStore.EVENTS_FILE])
+	_assert_owed(run_id, "an empty CRASHED run was held back -- the one empty run the intake most wants")
 
 
 # An order the player queued and took back is CONTENT: they expressed an intent, and a `pass` is
@@ -250,7 +254,7 @@ func test_marking_a_run_sent_moves_the_folder_and_the_replay_tab_still_finds_it(
 	assert_array(Array(TelemetryStore.pending_runs())).override_failure_message(
 		"the run is still owed to the server after it landed").not_contains([run_id])
 	assert_array(Array(TelemetryStore.sent_runs())).contains([run_id])
-	# The whole point of keeping it: the dev Replay tab reads BOTH folders.
+	# The whole point of keeping it: the dev Replay tab reads every folder.
 	assert_array(Array(ReplayRun.list_runs())).override_failure_message(
 		"a sent run vanished from the replay list").contains([run_id])
 	assert_bool(bool(ReplayRun.load_run(run_id).headline().get("sent", false))).is_true()
@@ -269,6 +273,82 @@ func test_run_dir_resolves_a_run_that_has_moved_to_sent() -> void:
 func test_a_brand_new_run_id_resolves_to_pending() -> void:
 	assert_str(TelemetryStore.run_dir("never_seen")).is_equal(
 		TelemetryStore.pending_dir() + "never_seen/")
+
+
+# ==============================================================================
+#  held/ (#852) -- a run the client will never send leaves pending/
+# ==============================================================================
+#
+# The empty ABANDONED / INTERRUPTED / CRASHED cases above carry the seal-time half. These are the
+# other doors in, and the runs that must NOT go.
+
+# A QUIT seal starts no upload (see the wire below), so the 57 empty QUIT runs on the dev's machine
+# when this was built are held by the NEXT launch's send_pending, which is this call.
+func test_an_empty_quit_run_is_held_at_the_next_send() -> void:
+	var run_id := await _record_an_empty_mission()
+	mission_log.seal(MissionLog.Ending.QUIT)
+	_assert_recorded_but_empty(run_id)
+	assert_bool(TelemetryStore.is_held(run_id)).override_failure_message(
+		"fixture: a QUIT seal already held the run, so the send below is testing nothing").is_false()
+
+	await uploader.send_pending()
+
+	_assert_held(run_id, "an empty QUIT run is still owed after a send -- it would be retried forever")
+
+
+func test_a_run_that_predates_the_id_field_is_held() -> void:
+	var run_id := await _record_and_seal(MissionLog.Ending.VICTORY)
+	var rewritten := PackedStringArray()
+	for raw: String in _read_lines(run_id):
+		rewritten.append(raw.replace("\"run_id\":\"%s\"" % run_id, "\"run_id\":\"\""))
+	assert_bool(TelemetryStore.rewrite_run_events(run_id, rewritten)).is_true()
+
+	await uploader.send_pending()
+
+	_assert_held(run_id, "a run the intake can never key was left owed")
+
+
+func test_a_run_that_may_still_be_sent_stays_owed() -> void:
+	var run_id := await _record_and_seal(MissionLog.Ending.VICTORY)
+	await uploader.send_pending()
+	_assert_owed(run_id, "a sealed, non-empty run with an id was held back")
+
+
+# The one refusal deliberately NOT held: a raised cap could make it sendable, and nothing retries held/.
+func test_a_run_over_the_payload_cap_stays_owed() -> void:
+	var run_id := await _record_and_seal(MissionLog.Ending.VICTORY)
+	var lines := _read_lines(run_id)
+	lines.append('{"seq":9999,"t_ms":0,"round":1,"event":"pad","pad":"%s"}' % "x".repeat(
+		TelemetryUploader.MAX_PAYLOAD_BYTES))
+	assert_bool(TelemetryStore.rewrite_run_events(run_id, lines)).is_true()
+
+	await uploader.send_pending()
+
+	_assert_owed(run_id, "an over-cap run was held back, so raising the cap would never send it")
+
+
+# THE TRAP IN THE PREDICATE: an unsealed run has no summary, so an id check alone reads it as
+# "predates the id". Its handle is dropped so the folder CAN move -- with the file still open,
+# Windows refuses the rename and a wrong hold would pass here unseen.
+func test_an_unsealed_run_is_never_held() -> void:
+	var run_id := await _record_a_mission()
+	_drop_the_handle()
+
+	await uploader.send_pending()
+
+	_assert_owed(run_id, "an unsealed run was held -- the launch sweep can no longer finish it")
+
+
+func test_a_held_run_still_lists_and_replays() -> void:
+	var run_id := await _record_and_seal(MissionLog.Ending.VICTORY)
+	assert_bool(TelemetryStore.mark_held(run_id)).is_true()
+
+	assert_str(TelemetryStore.run_dir(run_id)).is_equal(TelemetryStore.held_dir() + run_id + "/")
+	assert_array(Array(ReplayRun.list_runs())).override_failure_message(
+		"a held run vanished from the Replay tab's list").contains([run_id])
+	var run := ReplayRun.load_run(run_id)
+	assert_bool(run.can_replay()).override_failure_message(
+		"a held run cannot be replayed: %s" % str(run.problems)).is_true()
 
 
 # ==============================================================================
@@ -349,6 +429,19 @@ func _assert_recorded_but_empty(run_id: String) -> void:
 		"fixture: an order was queued, so this run is not empty").is_equal(0)
 
 
+# Both halves, because the folders are the state and a run claimed by two of them is its own bug.
+func _assert_held(run_id: String, message: String) -> void:
+	assert_bool(TelemetryStore.is_held(run_id)).override_failure_message(message).is_true()
+	assert_array(Array(TelemetryStore.pending_runs())).override_failure_message(
+		"the run is in held/ and still listed as owed").not_contains([run_id])
+
+
+func _assert_owed(run_id: String, message: String) -> void:
+	assert_bool(TelemetryStore.is_held(run_id)).override_failure_message(message).is_false()
+	assert_array(Array(TelemetryStore.pending_runs())).override_failure_message(
+		"the run is in neither held/ nor pending/").contains([run_id])
+
+
 func _record_a_mission() -> String:
 	var hero := _spawn(Team.Faction.PLAYER, Vector2i(0, 0))
 	var foe := _spawn(Team.Faction.ENEMY, Vector2i(3, 0))
@@ -425,7 +518,7 @@ func _wipe() -> void:
 	_wipe_dir(SCRATCH_ROOT)
 
 
-# Recursive: a run is <root>/<pending|sent>/<id>/, and DirAccess.remove fails SILENTLY on a
+# Recursive: a run is <root>/<pending|sent|held>/<id>/, and DirAccess.remove fails SILENTLY on a
 # non-empty folder, so a shallow sweep hands every case the last one's runs (#846).
 func _wipe_dir(path: String) -> void:
 	var dir := DirAccess.open(path)
