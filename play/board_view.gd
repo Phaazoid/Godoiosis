@@ -374,7 +374,7 @@ static func _weapon_str(e: EquippableData, wielder: Unit) -> String:
 		s += " +%datk" % w.extra_attacks.size()   # stock alternates beyond the main (#72)
 	if main != null and main.elemental_damage_type != Elemental.Element.NONE:
 		s += "/" + Elemental.Element.keys()[main.elemental_damage_type]
-	if main != null and main.can_counter:
+	if main != null and main.can_ever_counter():
 		s += "/ctr"
 	if main != null and main.hits_allies:
 		s += "/ff"   # friendly-fire: its blast hits allies in range too
@@ -412,7 +412,7 @@ static func _carving_str(rune: RuneData, wielder: Unit, attack: AttackData) -> S
 		s += "/heal"
 	if attack.deals_no_damage:
 		s += "/nodmg"
-	if attack.can_counter:
+	if attack.can_ever_counter():
 		s += "/ctr"
 	if attack.hits_allies:
 		s += "/ff"

@@ -7,10 +7,8 @@ class_name CounterAttackAction
 # regardless of any live pick, while a rune counters with whatever it would currently fire
 # (#30/#72).
 #
-# One class, two kinds, forked off the source's AttackData.heals (#148): a damaging source strikes
-# the attacking party, a healing one heals the defender's own side. Nothing else about the action
-# differs, so the kind is READ from the flag everywhere rather than stored — the same fork
-# PlanResolver._resolve_one, AttackAction.execute and OverlayManager.attack_reach_color make.
+# Always a STRIKE at the attacking party. It had a second kind, a reactive heal on the defender's own
+# side (#148), until the dev repealed it (2026-09-28); a heal never counters now (AttackData.can_ever_counter).
 
 var source_attack: AttackAction
 
