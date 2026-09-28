@@ -904,11 +904,15 @@ func play_tether_moments(links: Array[Dictionary], board: BoardContext) -> void:
 		return
 	var now := Time.get_ticks_msec()
 	for link: Dictionary in links:
-		squad_tether_moments.append({"from": link["from"], "to": link["to"],
+		var entry := {"from": link["from"], "to": link["to"],
 				"chord": SquadLines2D.chord(link["from"], link["to"], board),
 				"moment": link["moment"], "start_msec": now + int(float(link.get("delay", 0.0)) * 1000.0),
 				"standing": false, "hostile": bool(link.get("hostile", false)),
-				"leader_died": bool(link.get("leader_died", false)), "survivor": int(link.get("survivor", 0))})
+				"leader_died": bool(link.get("leader_died", false)), "survivor": int(link.get("survivor", 0))}
+		if link.has("follow"):
+			entry["follow"] = int(link["follow"])
+			entry["follow_end"] = int(link["follow_end"])
+		squad_tether_moments.append(entry)
 	_rebuild_squad_tethers()
 	set_process(true)
 
@@ -929,6 +933,8 @@ func _process(_delta: float) -> void:
 	var live: Array[Dictionary] = []
 	for moment: Dictionary in squad_tether_moments:
 		var elapsed := float(now - int(moment["start_msec"])) / 1000.0
+		if moment.has("follow"):
+			_follow(moment, elapsed)
 		var drawn := SquadLines2D.moment_at(moment["moment"], moment["chord"], elapsed, moment["standing"])
 		if int(moment["moment"]) == SquadLines2D.Moment.PULSE and elapsed >= SquadLines2D.PULSE_SECONDS \
 				and not moment.get("flashed", false):
@@ -941,6 +947,23 @@ func _process(_delta: float) -> void:
 		_rebuild_squad_tethers()
 	if squad_tether_moments.is_empty():
 		set_process(false)
+
+
+# A break at the ledge RIDES THE BODY there (#1104, the dev off the mockup): while it strains, the
+# shoved body's end of the chord is wherever that body is now, and at the snap it lets go and stays
+# put, so the pieces fall from where the body hung. Only x/z move, off the one derivation the sprite
+# is placed from; the height stays the struck cell's, which is the lip's -- the height a body holds
+# over a hole.
+func _follow(moment: Dictionary, elapsed: float) -> void:
+	var unit := instance_from_id(int(moment["follow"])) as Unit
+	if elapsed >= maxf(SquadLines2D.BREAK_STRAIN_SECONDS, 0.0) or unit == null or unit.is_queued_for_deletion():
+		moment.erase("follow")
+		return
+	var chord: PackedVector3Array = moment["chord"]
+	var end := int(moment["follow_end"])
+	var at := UnitMirror.board_xz(unit)
+	chord[end] = Vector3(at.x, chord[end].y, at.y)
+	moment["chord"] = chord
 
 
 # The one a PULSE ran to, if it is still on the board. #217's setting stills the flash with the light.

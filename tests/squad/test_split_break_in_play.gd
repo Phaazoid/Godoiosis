@@ -283,3 +283,66 @@ func test_a_killing_blow_waits_out_its_death_look() -> void:
 		return
 	assert_float(linger).override_failure_message("the killing blow did not wait out its death look") \
 			.is_equal_approx(SquadLines2D.shown_seconds(int(deaths[0]["moment"])), 0.0001)
+
+
+# --- A shove into a hole breaks at the ledge (#1104) ---------------------------------------------
+
+const HOLE_TILE := Vector2i(18, 2)   # the authored VOID tile ("hole") in TestTiles
+
+# The blow that really executed, caught off the executor's relay: a resolve rebuilds every derived
+# action, so the one _the_shove finds is a copy and never carries what execution stamps on it.
+var _executed: AttackAction
+
+
+func _on_struck(attack: AttackAction) -> void:
+	_executed = attack
+
+
+# A two-strong enemy squad whose member stands on the edge of a hole, and a hero whose queued shove
+# puts it in. Armed after, like the others.
+func _shove_into_a_hole() -> Unit:
+	game.grid.set_cell(Vector2i(5, 2), GRASS_SOURCE, HOLE_TILE)
+	_leader = _spawn(ENEMY, Vector2i(1, 2), {Stats.Stat.LDR: 10})
+	_watched = _spawn(ENEMY, Vector2i(4, 2))
+	game.squad_manager.join_squad(_watched, _leader.squad)
+	var hero := _spawn(PLAYER, Vector2i(3, 2), {}, 3, 1)
+	game.squad_manager.active_squad = hero.squad
+	var aim := AttackAction.declare(hero, hero.movement.cell, _watched.movement.cell)
+	assert_bool(game.squad_manager.queue_action(hero.squad, aim)).override_failure_message(
+			"fixture: the shove never queued").is_true()
+	game.refresh_action_queue(hero.squad)
+	var presenter: SquadTetherPresenter = game.squad_tether_presenter
+	presenter.arm()
+	var executor: OrderExecutor = game.order_executor
+	executor.volley_struck.connect(_on_struck)
+	return hero
+
+
+# The dev's ruling: a body shoved into a hole is broken off by the DISTANCE as much as by the death, so
+# its tether SNAPS -- one break, at the blow, strung from where it was struck -- and plays no death look
+# after it; and the blow tells the body to hang over the hole until that snap.
+func test_a_shove_into_a_hole_breaks_its_tether_at_the_ledge() -> void:
+	var hero := _shove_into_a_hole()
+	var blow := _the_shove(hero)
+	assert_bool(blow != null and blow.resolved_outcome().removed).override_failure_message(
+			"fixture: the shove does not put the member in the hole").is_true()
+	var struck := _watched.movement.cell
+	var leader_cell := _leader.movement.cell
+	var executor: OrderExecutor = game.order_executor
+	await executor.execute_orders(hero)
+	await await_idle_frame()
+
+	assert_bool(is_instance_valid(_watched)).override_failure_message("fixture: the member did not go") \
+			.is_false()
+	var breaks := _breaks()
+	assert_int(breaks.size()).override_failure_message(
+			"the shove into the hole broke its tether %d times" % breaks.size()).is_equal(1)
+	if not breaks.is_empty():
+		assert_that(breaks[0]["from"]).override_failure_message(
+				"the break was not strung from where the member was struck").is_equal(struck)
+	assert_int(_deaths(leader_cell).size()).override_failure_message(
+			"the fall into the hole played a death look as well as the snap").is_equal(0)
+	assert_object(_executed).override_failure_message("fixture: no blow was relayed").is_not_null()
+	if _executed != null:
+		assert_int(_executed.tether_snap_msec).override_failure_message(
+				"nothing told the body to hang over the hole until the snap").is_greater(0)

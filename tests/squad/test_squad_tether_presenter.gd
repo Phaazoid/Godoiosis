@@ -180,9 +180,9 @@ func test_a_forced_exit_does_not_reel_in() -> void:
 			"a unit thrown out of range reeled in like a voluntary leave").is_equal(0)
 
 
-# #367 part 2B: a forced exit BREAKS the tether, and so does a downing (the dev: "breaks, like a
-# shove").
-func test_a_forced_or_downed_exit_breaks_the_tether() -> void:
+# #367 part 2B: a forced exit -- a DISPLACEMENT -- BREAKS the tether. A down no longer does (#1104, dev
+# 2026-09-27: the snap is kept for displacement); it plays one of the death looks, from the downed end.
+func test_a_forced_exit_breaks_the_tether_and_a_down_plays_a_death_look() -> void:
 	var leader := _solo(Vector2i(0, 0), 5)
 	var thrown := _solo(Vector2i(1, 0))
 	var downed := _solo(Vector2i(0, 1))
@@ -196,7 +196,14 @@ func test_a_forced_or_downed_exit_breaks_the_tether() -> void:
 	assert_int(_moments(Moment.BREAK, thrown, leader).size()).override_failure_message(
 			"a unit thrown out of range did not break its tether").is_equal(1)
 	assert_int(_moments(Moment.BREAK, downed, leader).size()).override_failure_message(
-			"a downed unit did not break its tether").is_equal(1)
+			"a downed unit still snapped its tether").is_equal(0)
+	var looks := _death_moments()
+	assert_int(looks.size()).override_failure_message("a downed unit played no death look").is_equal(1)
+	if looks.is_empty():
+		return
+	assert_that(looks[0]["from"]).is_equal(downed.movement.cell)
+	assert_bool(bool(looks[0]["leader_died"])).override_failure_message(
+			"the downed member was taken for the leader").is_false()
 
 
 # An ENEMY squad's break carries its side into the store, so it plays in the enemy colour (#1109); a
@@ -223,8 +230,8 @@ func test_a_moment_knows_whose_squad_it_was() -> void:
 			"the player's own break was stored as an enemy's").is_false()
 
 
-# A downed LEADER's links all break, THEN the new leader's draw in -- the "then" now waits for a break.
-func test_a_downed_leaders_links_break_then_the_new_leaders_draw_in() -> void:
+# A downed LEADER's links all play ONE look (#1104), THEN the heir's draw in -- the "then" waits for it.
+func test_a_downed_leaders_links_play_one_look_then_the_heir_draws_in() -> void:
 	var leader := _solo(Vector2i(0, 0), 5)
 	var heir := _solo(Vector2i(1, 0), 4)
 	var other := _solo(Vector2i(0, 1), 2)
@@ -235,20 +242,34 @@ func test_a_downed_leaders_links_break_then_the_new_leaders_draw_in() -> void:
 	_presenter.flush()
 	assert_object(other.squad.leader).override_failure_message(
 			"fixture: leadership did not pass to the heir").is_same(heir)
-	var breaks := _moments(Moment.BREAK)
-	assert_int(breaks.size()).override_failure_message("the downed leader's links did not all break") \
+	assert_int(_moments(Moment.BREAK).size()).override_failure_message(
+			"the downed leader's links snapped").is_equal(0)
+	var looks := _death_moments()
+	assert_int(looks.size()).override_failure_message("the downed leader's links did not all play") \
 			.is_equal(2)
+	if looks.size() < 2:
+		return
+	var look := int(looks[0]["moment"])
+	assert_int(int(looks[1]["moment"])).override_failure_message(
+			"the downed leader's links played different looks").is_equal(look)
+	for entry: Dictionary in looks:
+		assert_bool(bool(entry["leader_died"])).override_failure_message(
+				"the leader's fall was taken for a member's").is_true()
 	var draws := _moments(Moment.DRAW_IN, other, heir)
 	assert_int(draws.size()).is_equal(1)
-	var waited := int(draws[0]["start_msec"]) - int(breaks[0]["start_msec"])
+	if draws.is_empty():
+		return
+	var waited := int(draws[0]["start_msec"]) - int(looks[0]["start_msec"])
 	assert_int(waited).override_failure_message(
-			"the new leader's tether did not wait for the break (waited %d ms)" % waited) \
-			.is_equal(int(SquadLines2D.moment_seconds(Moment.BREAK) * 1000.0))
+			"the heir's tether did not wait for the look (waited %d ms)" % waited) \
+			.is_equal(int(SquadLines2D.moment_seconds(look) * 1000.0))
 
 
 # The blow's link changes, spelled as the forecast stamps them.
-func _outcome(changes: Array) -> ResolvedOutcome:
+func _outcome(changes: Array, lethality := ResolvedOutcome.Lethality.NONE, removed := false) -> ResolvedOutcome:
 	var outcome := ResolvedOutcome.new()
+	outcome.lethality = lethality
+	outcome.removed = removed
 	for change: Dictionary in changes:
 		var link := ResolvedOutcome.Relink.new()
 		link.member = change["member"]
@@ -269,7 +290,7 @@ func test_a_foretold_break_plays_at_the_blow_and_not_again_at_the_settle() -> vo
 	_sm.join_squad(member, leader.squad)
 	_presenter.arm()
 	var shown := _presenter.foretell(_outcome([{"member": member, "leader": leader, "ends": true,
-			"cause": SquadManager.LeaveCause.FORCED}]))
+			"cause": SquadManager.LeaveCause.FORCED}]), member)
 	assert_int(_moments(Moment.BREAK, member, leader).size()).override_failure_message(
 			"the foretold break did not play at the blow").is_equal(1)
 	assert_float(shown).override_failure_message("the blow was not told how long its break needs") \
@@ -294,7 +315,7 @@ func test_a_foretold_link_the_pass_never_changed_does_not_swallow_a_later_leave(
 	_sm.join_squad(member, leader.squad)
 	_presenter.arm()
 	_presenter.foretell(_outcome([{"member": member, "leader": leader, "ends": true,
-			"cause": SquadManager.LeaveCause.FORCED}]))
+			"cause": SquadManager.LeaveCause.FORCED}]), member)
 	_presenter.flush()
 	_presenter.end_pass()
 	_om.clear_tether_moments()
@@ -302,6 +323,161 @@ func test_a_foretold_link_the_pass_never_changed_does_not_swallow_a_later_leave(
 	_presenter.flush()
 	assert_int(_moments(Moment.REEL_IN, member, leader).size()).override_failure_message(
 			"a later Leave Squad was swallowed by a break the pass never delivered").is_equal(1)
+
+
+# A down at the BLOW (#1104): the forecast's DOWNED relink plays the victim's look now, and says how long
+# it needs; when the pass settles and the down's ejection really happens, the flush plays nothing more.
+func test_a_foretold_down_plays_its_look_at_the_blow_and_not_again() -> void:
+	var leader := _solo(Vector2i(0, 0))
+	var member := _solo(Vector2i(1, 0))
+	_sm.join_squad(member, leader.squad)
+	_presenter.arm()
+	var shown := _presenter.foretell(_outcome([{"member": member, "leader": leader, "ends": true,
+			"cause": SquadManager.LeaveCause.DOWNED}], ResolvedOutcome.Lethality.DOWNED), member)
+	assert_int(_moments(Moment.BREAK).size()).override_failure_message("the down snapped").is_equal(0)
+	var looks := _death_moments()
+	assert_int(looks.size()).override_failure_message("the down played no look at the blow").is_equal(1)
+	if looks.is_empty():
+		return
+	assert_float(shown).override_failure_message("the blow was not told how long the look needs") \
+			.is_equal_approx(SquadLines2D.shown_seconds(int(looks[0]["moment"])), 0.0001)
+	_sm.handle_unit_downed(member)
+	_presenter.flush()
+	_presenter.end_pass()
+	assert_int(_om.squad_tether_moments.size()).override_failure_message(
+			"the settle played the down a second time").is_equal(1)
+
+
+# A downed leader's member its heir cannot hold leaves FORCED in the same settle -- and still plays the
+# leader's look rather than a snap: the link ended as the leader fell (#1104).
+func test_a_downed_leaders_dropped_member_plays_the_same_look() -> void:
+	var leader := _solo(Vector2i(0, 0), 5)
+	var heir := _solo(Vector2i(1, 0), 4)
+	var dropped := _solo(Vector2i(0, 1), 2)
+	_sm.join_squad(heir, leader.squad)
+	_sm.join_squad(dropped, leader.squad)
+	_presenter.arm()
+	_presenter.foretell(_outcome([
+			{"member": heir, "leader": leader, "ends": true, "cause": SquadManager.LeaveCause.DOWNED},
+			{"member": dropped, "leader": leader, "ends": true, "cause": SquadManager.LeaveCause.FORCED}],
+			ResolvedOutcome.Lethality.DOWNED), leader)
+	assert_int(_moments(Moment.BREAK).size()).override_failure_message(
+			"the dropped member snapped instead of playing its leader's fall").is_equal(0)
+	var looks := _death_moments()
+	assert_int(looks.size()).override_failure_message(
+			"%d of the downed leader's 2 links played its look" % looks.size()).is_equal(2)
+	if looks.size() < 2:
+		return
+	assert_int(int(looks[1]["moment"])).is_equal(int(looks[0]["moment"]))
+	for entry: Dictionary in looks:
+		assert_bool(bool(entry["leader_died"])).override_failure_message(
+				"the leader's fall was taken for a member's").is_true()
+
+
+# A unit downed and then killed in the same pass plays ONCE -- its down's look -- and the killing blow
+# owes no second wait for it (#1104).
+func test_a_unit_downed_then_killed_plays_once() -> void:
+	var leader := _solo(Vector2i(0, 0))
+	var member := _solo(Vector2i(1, 0))
+	_sm.join_squad(member, leader.squad)
+	_presenter.arm()
+	_mid_pass()
+	_presenter.foretell(_outcome([{"member": member, "leader": leader, "ends": true,
+			"cause": SquadManager.LeaveCause.DOWNED}], ResolvedOutcome.Lethality.DOWNED), member)
+	_sm.handle_unit_death(member)
+	_presenter.flush()
+	assert_int(_death_moments().size()).override_failure_message(
+			"the kill played its fall a second time").is_equal(1)
+	assert_float(_presenter.foretell(_outcome([]), null)).override_failure_message(
+			"the killing blow waited again for a fall that had already played").is_equal_approx(0.0, 0.0001)
+
+
+# A blow that shoves its victim into a hole, as the forecast stamps it: a removal, and a kill.
+func _removal(attacker: Unit, victim: Unit, changes: Array) -> AttackAction:
+	var attack := H.stamped_attack(attacker, victim)
+	attack.resolved = _outcome(changes, ResolvedOutcome.Lethality.KILLED, true)
+	return attack
+
+
+# At the LEDGE (#1104, the dev's ruling): a blow shoving its victim into a hole breaks the victim's links
+# at the blow -- a BREAK, the distance's snap, strung from the cell it was struck on and riding the body
+# -- and the death that follows plays nothing more and holds the blow for nothing.
+func test_a_removal_breaks_at_the_ledge_and_its_death_plays_nothing_more() -> void:
+	var leader := _solo(Vector2i(0, 0))
+	var member := _solo(Vector2i(1, 0))
+	var shover: Unit = H.spawn_solo(self, _sm, Team.Faction.ENEMY, Vector2i(1, 1))
+	_sm.join_squad(member, leader.squad)
+	_presenter.arm()
+	_mid_pass()
+	var struck := member.movement.cell
+	var attack := _removal(shover, member, [{"member": member, "leader": leader, "ends": true,
+			"cause": SquadManager.LeaveCause.DEATH}])
+	var snap := _presenter.foretell_removal(attack)
+	var breaks := _moments(Moment.BREAK, member, leader)
+	assert_int(breaks.size()).override_failure_message("the removal did not break at the ledge").is_equal(1)
+	assert_float(snap).override_failure_message("the body was not told to hang until the snap") \
+			.is_equal_approx(maxf(SquadLines2D.BREAK_STRAIN_SECONDS, 0.0), 0.0001)
+	if breaks.is_empty():
+		return
+	assert_that(breaks[0]["from"]).override_failure_message(
+			"the break was not strung from where the body was struck").is_equal(struck)
+	assert_int(int(breaks[0].get("follow", 0))).override_failure_message(
+			"the break does not ride the body to the ledge").is_equal(member.get_instance_id())
+	_sm.handle_unit_death(member)
+	_presenter.flush()
+	assert_int(_om.squad_tether_moments.size()).override_failure_message(
+			"the death after the ledge played a second moment").is_equal(1)
+	assert_float(_presenter.foretell(attack.resolved_outcome(), null)).override_failure_message(
+			"the killing blow waited for a look that never played").is_equal_approx(0.0, 0.0001)
+
+
+# The ledge break RIDES THE BODY (#1104, the dev off the mockup): while it strains, the victim's end of
+# the chord is wherever the body is and the other end stays put; past the snap it lets go, and moving
+# the body moves nothing. Driven through the moments' own clock, aged by hand.
+func test_a_ledge_break_rides_the_body_until_it_snaps() -> void:
+	var saved := [SquadLines2D.BREAK_STRAIN_SECONDS, SquadLines2D.BREAK_SHATTER_SECONDS]
+	SquadLines2D.BREAK_STRAIN_SECONDS = 0.5
+	SquadLines2D.BREAK_SHATTER_SECONDS = 5.0
+	var leader := _solo(Vector2i(0, 0))
+	var member := _solo(Vector2i(1, 0))
+	var shover: Unit = H.spawn_solo(self, _sm, Team.Faction.ENEMY, Vector2i(1, 1))
+	_sm.join_squad(member, leader.squad)
+	_presenter.arm()
+	_presenter.foretell_removal(_removal(shover, member, [{"member": member, "leader": leader,
+			"ends": true, "cause": SquadManager.LeaveCause.DEATH}]))
+	var breaks := _moments(Moment.BREAK, member, leader)
+	var riding := Vector3.ZERO
+	var leader_before := Vector3.ZERO
+	var leader_after := Vector3.ZERO
+	var at := Vector2.ZERO
+	var snapped := Vector3.ZERO
+	var after_snap := Vector3.ZERO
+	if not breaks.is_empty():
+		var entry: Dictionary = breaks[0]
+		leader_before = (entry["chord"] as PackedVector3Array)[1]
+		member.position += Vector2(GridUtils.TILE_SIZE, GridUtils.TILE_SIZE)
+		_om._process(0.0)
+		riding = (entry["chord"] as PackedVector3Array)[0]
+		leader_after = (entry["chord"] as PackedVector3Array)[1]
+		at = UnitMirror.board_xz(member)
+		entry["start_msec"] = Time.get_ticks_msec() - roundi(SquadLines2D.BREAK_STRAIN_SECONDS * 1000.0) - 1
+		_om._process(0.0)
+		snapped = (entry["chord"] as PackedVector3Array)[0]
+		member.position += Vector2(GridUtils.TILE_SIZE, 0)
+		_om._process(0.0)
+		after_snap = (entry["chord"] as PackedVector3Array)[0]
+	SquadLines2D.BREAK_STRAIN_SECONDS = saved[0]
+	SquadLines2D.BREAK_SHATTER_SECONDS = saved[1]
+
+	assert_int(breaks.size()).override_failure_message("fixture: the removal did not break").is_equal(1)
+	assert_float(riding.x).override_failure_message("the break's end did not ride the body") \
+			.is_equal_approx(at.x, 0.0001)
+	assert_float(riding.z).override_failure_message("the break's end did not ride the body") \
+			.is_equal_approx(at.y, 0.0001)
+	assert_vector(leader_after).override_failure_message("the living end moved with the body") \
+			.is_equal_approx(leader_before, Vector3(0.0001, 0.0001, 0.0001))
+	assert_vector(after_snap).override_failure_message("the break kept riding the body past the snap") \
+			.is_equal_approx(snapped, Vector3(0.0001, 0.0001, 0.0001))
 
 
 func test_an_undeploy_plays_nothing() -> void:
@@ -429,7 +605,7 @@ func test_a_kill_mid_pass_holds_its_blow_for_the_look_and_the_handover() -> void
 	var shown := _presenter.foretell(_outcome([
 			{"member": heir, "leader": leader, "ends": true, "cause": SquadManager.LeaveCause.DEATH},
 			{"member": other, "leader": leader, "ends": true, "cause": SquadManager.LeaveCause.DEATH},
-			{"member": other, "leader": heir, "ends": false}]))
+			{"member": other, "leader": heir, "ends": false}]), null)
 	assert_int(_om.squad_tether_moments.size()).override_failure_message(
 			"foretell played the kill itself").is_equal(0)
 	_presenter.flush()
@@ -444,7 +620,7 @@ func test_a_kill_mid_pass_holds_its_blow_for_the_look_and_the_handover() -> void
 			+ SquadLines2D.shown_seconds(Moment.DRAW_IN)
 	assert_float(shown).override_failure_message(
 			"the blow did not wait for the look and the draw-in after it").is_equal_approx(owed, 0.0001)
-	assert_float(_presenter.foretell(_outcome([]))).override_failure_message(
+	assert_float(_presenter.foretell(_outcome([]), null)).override_failure_message(
 			"the next blow waited for a death it did not cause").is_equal_approx(0.0, 0.0001)
 
 
@@ -457,7 +633,7 @@ func test_a_death_outside_a_pass_holds_nothing() -> void:
 	_game.order_executor = auto_free(OrderExecutor.new())
 	_presenter.arm()
 	_sm.handle_unit_death(dies)
-	assert_float(_presenter.foretell(_outcome([]))).override_failure_message(
+	assert_float(_presenter.foretell(_outcome([]), null)).override_failure_message(
 			"a death outside a pass held a blow").is_equal_approx(0.0, 0.0001)
 	_presenter.flush()
 	assert_int(_death_moments().size()).is_equal(1)

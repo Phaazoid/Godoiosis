@@ -591,7 +591,12 @@ func after_the_blow(action: BaseAction, linger: float) -> float:
 	var presenter: SquadTetherPresenter = game.squad_tether_presenter
 	if presenter == null:
 		return linger
-	var shown := presenter.foretell(blow.resolved_outcome())
+	# The victim, if the blow left one (#1104: a down's links play ITS look). A kill has freed it by now,
+	# and a freed ref must be let go before any typed read of it (#149).
+	var victim: Unit = null
+	if is_instance_valid(blow.target):
+		victim = blow.target
+	var shown := presenter.foretell(blow.resolved_outcome(), victim)
 	if shown <= 0.0:
 		return linger
 	var camera: CameraController = game.camera_controller
@@ -607,16 +612,31 @@ func after_the_blow(action: BaseAction, linger: float) -> float:
 #
 # ONE-SHOT, because a blow lands once; the guard is for the connect rather than the fire, since a
 # derived action rebuilt every resolve is a fresh object and a re-executed one would need a fresh
-# connection anyway. Belt and braces on a wire whose failure mode is a second flash.
+# connection anyway. Belt and braces on a wire whose failure mode is a second flash. The same loop
+# is why going_over (#1104) is wired here too: a shove into a hole can be any of the three.
 func _listen_for_the_blow(action: BaseAction) -> void:
 	var blow := action as AttackAction
-	if blow == null or blow.impact.is_connected(_relay_the_blow):
+	if blow == null:
 		return
-	blow.impact.connect(_relay_the_blow, CONNECT_ONE_SHOT)
+	if not blow.impact.is_connected(_relay_the_blow):
+		blow.impact.connect(_relay_the_blow, CONNECT_ONE_SHOT)
+	if not blow.going_over.is_connected(_break_at_the_ledge):
+		blow.going_over.connect(_break_at_the_ledge, CONNECT_ONE_SHOT)
 
 
 func _relay_the_blow(attack: AttackAction) -> void:
 	volley_struck.emit(attack)
+
+
+# A blow sending its victim over the edge (#1104): its tethers break NOW, at the ledge, and the body
+# hangs there until they snap -- the stamp is what AttackAction waits on before the plummet.
+func _break_at_the_ledge(attack: AttackAction) -> void:
+	var presenter: SquadTetherPresenter = game.squad_tether_presenter
+	if presenter == null:
+		return
+	var snap := presenter.foretell_removal(attack)
+	if snap > 0.0:
+		attack.tether_snap_msec = Time.get_ticks_msec() + roundi(snap * 1000.0)
 
 
 # Which ground goes on stage (#521). BOARD stages nothing at all -- the tear-out is the cinematic's,
