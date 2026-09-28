@@ -2,7 +2,7 @@
 
 **Status: ALL FOUR SLICES BUILT 2026-07-28 ([#96](https://github.com/Phaazoid/Godoiosis/issues/96)).** Filed 2026-07-27, when the project acquired a win condition for the first time. Before this, Iosis had ten interlocking systems and no way to finish a battle — which meant a design question could be answered *"is this coherent?"* but never *"does this improve play?"*
 
-**Canon checked through #1142 (2026-09-28).**
+**Canon checked through #1152 (2026-09-28).**
 
 ## What a mission is
 
@@ -267,6 +267,8 @@ sentence stays on the card, where there is a unit to validate against.
 ### Fitting mods, and the card that does it ([#732](https://github.com/Phaazoid/Godoiosis/issues/732), 2026-09-06)
 
 A weapon row in a unit card or in the stash carries a **chip** reading `1/3` — **occupied spaces over spaces**, the dev's own framing (*"I like 1/3 mod spaces"*), and deliberately not a count of mods, which can print `4/3` since one capacity-3 space holds three size-1 mods. Pressing it opens `ModFittingCard`: the weapon's spaces down the left with what is in them, the mods that fit its family down the right, and one line of hint carrying the last refusal in the model's own words. Dragging and clicking both work, through the same pair of callables, because `GearDropZone` judges nothing and the rule is `WeaponInstance.fit_block_reason` either way.
+
+**The same card is READ in battle since [#1152](https://github.com/Phaazoid/Godoiosis/issues/1152)** (dev, 2026-09-28: the battle ring stays succinct, and *"we should let the player, in the inventory, have an inspect option alongside the equip/toss options, and that should bring up the weapon's big inspect card"*). The inspect dock's item popup leads with **Inspect** for any item `ItemDetail.has_card` answers yes to (a weapon or a rune), and it is offered for **any unit you can inspect**, enemies and your own units off-turn included, whose popup then holds Inspect and Cancel alone (the loadout verbs still need a unit you command). The weapon card opens **read-only** (`ItemDetail.open(..., read_only = true)`): the readout and the spaces with their fitted mods, no library, no hint, and nothing wired, since an unwired `GearDropZone` refuses every drop and an uncarried `GearRow` cannot be picked up. Fitting stays a pre-mission act. The rune card was a display already. **`has_card` is not `chip_for`**: the chip is the pre-mission FITTING affordance and stays null for a weapon with no spaces, while such a weapon still has a card to read. No shipped template has zero spaces today, so the two agree on every authored weapon. The panel emits `detail_requested`, the dock forwards it, and `game.gd` opens the card, so the panel still knows nothing of cards. Inspect is not a loadout act and records nothing in telemetry.
 
 **The source WAS the whole authored catalog** (dev, 2026-09-06: *"Perhaps we start this simple with the whole authored catalog, and file a followup issue for controlling what items/mods are in a scenario"*) and is the MISSION'S POOL since [#812](https://github.com/Phaazoid/Godoiosis/issues/812) — see *The roster editor* below. The filter is `WeaponModCatalog.offerable_for`, shared with the Item Editor's own picker rather than copied beside it — same source, same question — and it takes the pool as a parameter, because family is a fact about the weapon and availability a fact about the mission.
 

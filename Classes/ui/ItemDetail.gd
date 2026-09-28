@@ -1,9 +1,10 @@
 class_name ItemDetail
 
 # WHICH DETAIL CARD A PIECE OF GEAR HAS, and how it is opened (#1019). ONE file, because the question
-# is asked twice per surface -- once to build the affordance, once to act on it -- across two surfaces
-# (PreMissionCard's unit gear rows and PreMissionScreen's stash rows). Four hand-written kind forks is
-# four places to forget the third kind the day one exists.
+# is asked twice per surface -- once to build the affordance, once to act on it -- across three surfaces
+# (PreMissionCard's unit gear rows, PreMissionScreen's stash rows, and since #1152 the battle
+# inventory's Inspect). Hand-written kind forks at each are places to forget the next kind the day one
+# exists.
 #
 # IT IS ALSO WHY THERE IS ONE SIGNAL. `PreMissionCard.detail_requested` carries an `Item`, not a
 # weapon, so the chip and the handler ask the same question of the same value; a per-kind signal would
