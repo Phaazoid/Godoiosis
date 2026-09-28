@@ -59,10 +59,9 @@ func _create_slots():
 		var name_label := Label.new()
 		name_label.text = ""
 		name_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		name_label.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 		# A guard, not a look: no authored name trims today, but an over-long one must not widen the
-		# slot and walk the panel out of its column (the #685 edge).
-		name_label.clip_text = true
+		# slot and walk the panel out of its column (the #685 edge). Trimming alone drops the label's
+		# minimum width, so no clip_text is needed.
 		name_label.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
 		name_label.name = "ItemName"
 		name_label.mouse_filter = Control.MOUSE_FILTER_IGNORE

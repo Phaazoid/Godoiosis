@@ -5,7 +5,7 @@ extends GdUnitTestSuite
 # a plain Panel, which sizes and positions nothing, so its row sat at the top-left at its own width.
 #
 # The dev's ruling on the fix is ONE COLUMN of full-width rows, so nothing authored trims. The label
-# still clips, as a guard: an over-long name must trim rather than widen the panel (#685's edge).
+# still trims with an ellipsis, as a guard: an over-long name must not widen the panel (#685's edge).
 #
 # Every assertion compares one rect against another. None pins a pixel count, and the one width
 # budget is priced against the panel's ANCHORED rect, never a sibling that grows in the same pass.
@@ -47,13 +47,12 @@ func _frames(n: int) -> void:
 
 
 # An equipped weapon, worn armour and empty slots: every kind of row the section draws.
-func _inspect(weapon_name := "") -> void:
+func _inspect(weapon_name := "Test Blade") -> void:
 	var data := H.make_unit_data({Stats.Stat.MHP: 80}, PLAYER)
 	data.display_name = "Aldin"
 	var unit: Unit = game.spawn_unit(data, Vector2i(2, 2))
 	var weapon := H.make_weapon(4)
-	if weapon_name != "":
-		weapon.display_name = weapon_name
+	weapon.display_name = weapon_name
 	assert_bool(unit.add_item(weapon)).override_failure_message(
 			"the fixture could not carry its weapon").is_true()
 	assert_object(unit.get_equipped_weapon()).override_failure_message(
@@ -92,8 +91,9 @@ func test_every_slot_centres_its_row() -> void:
 
 
 # The label's RECT is only its text's line when the label does not fill the row, and that is what
-# keeps the text centred at any row height. At the shipped height the row is barely taller than one
-# line, so this case makes the row tall enough for a label that filled it to show.
+# keeps the text centred at any row height. Label's own default vertical flag is SHRINK_CENTER, so
+# this pins that nobody sets FILL. At the shipped height the row is barely taller than one line, so
+# the case makes the row tall enough for a label that filled it to show.
 func test_the_name_stays_centred_in_a_taller_row() -> void:
 	await _inspect()
 	var slot: Control = _slots()[0]
@@ -141,9 +141,12 @@ func test_an_over_long_name_trims_instead_of_widening_the_panel() -> void:
 			"the name fits after all, so this case proves nothing about trimming").is_false()
 
 
-func test_no_clipped_label_goes_unasked() -> void:
+# The report's own complaint, (E) cut off, stated for names that fit. A trimming label declares
+# almost no minimum width, so without SIZE_EXPAND it would draw as an ellipsis (the #1024 family).
+func test_a_name_that_fits_draws_in_full() -> void:
 	await _inspect()
-	var unasked := FIT.unasked_labels(game.unit_info_panel.inventory_panel)
-	assert_int(unasked.size()).override_failure_message(
-			"%d clipped label(s) will draw as a sliver of their first glyph" % unasked.size()
-			).is_equal(0)
+	for slot: Control in _slots():
+		var label := slot.get_node("SlotHBox/ItemName") as Label
+		assert_bool(FIT.draws_in_full(label)).override_failure_message(
+				"'%s' is drawn %dpx wide and needs %dpx" % [label.text, label.size.x,
+					FIT.ink_width(label)]).is_true()
