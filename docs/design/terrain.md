@@ -56,7 +56,7 @@
 >
 > **The dial's floor is ONE** (dev, 2026-09-12). An absent clock is legal `.tres` and means *burns forever* — but `tests/terrain/test_fire_clock.gd` refuses one on a shipped fuel, because a grass field that never goes out would ship silently. Forever is already spelled, and better: **ground that is not fuel never runs out**, which is what Prolog's braziers on flagstone have always been. So the TICK is how you say forever, and the dial cannot author a file CI reds.
 
-**Canon checked through #902 (2026-09-12); the burn-rule surface folded in 2026-09-12; the #895 firebreak measurement and fireproofing #892 folded in 2026-09-11; shallow water re-costed 2026-09-10.**
+**Canon checked through #902 (2026-09-12); #922's melt-sinking folded in 2026-09-27; the burn-rule surface folded in 2026-09-12; the #895 firebreak measurement and fireproofing #892 folded in 2026-09-11; shallow water re-costed 2026-09-10.**
 
 ## The tile model (implemented — [LOCKED shape])
 
@@ -157,6 +157,26 @@ in the codebase that legally occupies a cell nothing may stand on, so `game.spaw
 a drowning came back one unit short. And a body nobody can reach is a body nobody can save: the clock
 simply runs out, which is the deliberate cost of the catch rule keeping most bodies one cell from
 shore.
+
+**The floor can leave instead ([#922](https://github.com/Phaazoid/Godoiosis/issues/922), 2026-09-27).**
+Ice melting under a standing unit is the same event from the other side, so it reaches the same rung:
+the water takes everything the unit has left, it comes up WET, and a rescue from the bank is the
+answer. That is what makes the Toll Road move (*"freeze it into an ice bridge, cross, then melt it
+behind you"*, `level-concepts.md`) drown rather than merely strand. `PlanResolver.settle_sinks` is
+the one rule and it names no state: *the ground this pass's deposits leave drowns you, and the live
+ground did not* -- so a refreeze in the same pass nets to nothing, and a Waterwalker or shallow water
+never sinks, for `drowns_in`'s own reasons. The resolver predicts it (a derived `SinkAction` row,
+hung in the queue under the attack whose deposit melted the ice) and execution plays it back, never
+the store's `apply()`, which is also the brush's and a load's door. **WHEN is the dev's ruling:** the
+ice melts when the pass's deposits land, straight after the volley and before any counter
+(`OrderExecutor._apply_cell_effects`), so a unit that sinks there cannot hit back; a melt only a
+COUNTER or a tail shot makes is not known until those resolve, so its stander goes under once the
+pass has settled -- visibly standing on the open water until then, the one cost of that timing. No
+fall damage: the unit was already at water height. A body already down on the ice is finished by the
+water, exactly as a shove into it finishes one. Two declared residuals: a same-pass rescue of a unit
+your own pass sinks reads the ice as still there (`rescue_landings` reads the live store), and the AI
+will still stand on ice you can melt -- it scores the sinkings it causes but not the ones it risks
+([#117](https://github.com/Phaazoid/Godoiosis/issues/117)).
 
 **The water shader has a SECOND kind of tenant since [#887](https://github.com/Phaazoid/Godoiosis/issues/887)
 (2026-09-10): an EVENT.** A shock's current crawls across the surface as filaments, driven by a mask
