@@ -25,14 +25,20 @@ func _outside_radius() -> float:
 # failed assertion truncates the rest of its case and would otherwise leak a knob into the next one.
 var _dead_zone := 0.0
 var _name_baseline := 0.0
+var _title_color := Color()
+var _timer_color := Color()
 
 func before_test() -> void:
 	_dead_zone = AMC.DEAD_ZONE_RADIUS
 	_name_baseline = AMC.CENTRE_NAME_BASELINE
+	_title_color = AMC.READOUT_TITLE_COLOR
+	_timer_color = AMC.GAUGE_TIMER_COLOR
 
 func after_test() -> void:
 	AMC.DEAD_ZONE_RADIUS = _dead_zone
 	AMC.CENTRE_NAME_BASELINE = _name_baseline
+	AMC.READOUT_TITLE_COLOR = _title_color
+	AMC.GAUGE_TIMER_COLOR = _timer_color
 
 
 # ==============================================================================
@@ -264,3 +270,45 @@ func test_pushing_the_name_down_the_disc_narrows_what_fits() -> void:
 	assert_int(AMC.centre_name_font_size(font, 16, "Wilhelmina")) \
 		.override_failure_message("the same name fitted equally well at the rim as on the centre line") \
 		.is_less(high)
+
+
+# ==============================================================================
+#  A wedge's label and the weapon's live count (#1045)
+# ==============================================================================
+
+# The two colours are driven to sentinels first, so a case reads which KNOB each run wears rather than
+# leaning on the shipped values happening to differ.
+func _distinct_label_colours() -> void:
+	AMC.READOUT_TITLE_COLOR = Color(0.1, 0.9, 0.1, 1)
+	AMC.GAUGE_TIMER_COLOR = Color(0.9, 0.1, 0.9, 1)
+
+
+func test_a_row_without_a_gauge_is_its_name_alone() -> void:
+	_distinct_label_colours()
+	var parts := AMC.slice_label_parts({"name": "Reload"})
+	assert_int(parts.size()).is_equal(1)
+	assert_str(String(parts[0][0])).is_equal("Reload")
+	assert_int(AMC.slice_label_parts({"name": ""}).size()).is_equal(0)
+
+
+# A stock ("4/6") wears the NAME's colour -- form A, one line of plain text (dev, 2026-09-28).
+func test_a_stock_count_follows_the_name_in_the_names_colour() -> void:
+	_distinct_label_colours()
+	var parts := AMC.slice_label_parts({"name": "Shot", "gauge": WeaponGauge.stock(4, 6)})
+	assert_int(parts.size()).is_equal(2)
+	assert_str(String(parts[1][0])).is_equal(" " + WeaponGauge.stock(4, 6).label())
+	var tint: Color = parts[1][1]
+	assert_bool(tint.is_equal_approx(AMC.READOUT_TITLE_COLOR)).override_failure_message(
+			"an ammo count was tinted like a timer").is_true()
+
+
+# A timer is tinted, so it can never be read as a stock (dev: "meaningfully different").
+func test_a_timer_count_wears_the_timer_colour() -> void:
+	_distinct_label_colours()
+	var parts := AMC.slice_label_parts({"name": "Slash", "gauge": WeaponGauge.timer(2, 3)})
+	assert_int(parts.size()).is_equal(2)
+	var tint: Color = parts[1][1]
+	assert_bool(tint.is_equal_approx(AMC.GAUGE_TIMER_COLOR)).override_failure_message(
+			"the rev timer drew in the name's colour, so it reads as an ammo count").is_true()
+	var name_tint: Color = parts[0][1]
+	assert_bool(name_tint.is_equal_approx(AMC.READOUT_TITLE_COLOR)).is_true()

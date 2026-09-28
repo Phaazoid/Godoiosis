@@ -7,7 +7,7 @@ its child [#49 Action Queue UX](https://github.com/Phaazoid/Godoiosis/issues/49)
 This is a *guidelines* doc, not a spec — it captures the principles we're holding the work to,
 plus the running order of the queue-UX checklist. Update it as items land.
 
-**Canon checked through #1136 (2026-09-28).**
+**Canon checked through #1138 (2026-09-28).**
 
 ## Principles
 
@@ -1200,6 +1200,42 @@ goes stale when that knob moves, and a wider name has less room precisely becaus
 Overrun shrinks the font to `MIN_LABEL_FONT_SIZE`, the same floor and the same rule a slice label
 uses. Nothing shipped reaches it: the budget is ~83px and *Rebecca*, the longest name in
 `Resources/units/`, is ~64.
+
+### A weapon's live count rides its attack rows ([#1045](https://github.com/Phaazoid/Godoiosis/issues/1045) + [#663](https://github.com/Phaazoid/Godoiosis/issues/663), 2026-09-28)
+
+From the watched first-time playtest: *"There is no easy way to see a Carbine's current and total
+ammo. Should be much more obvious. Next to the attack name in the menu, even."* The magazine was
+readable in Inspect and on the pre-mission card (`ItemText` → `status_text()`) and nowhere on the
+board. The look was grilled against a to-scale mockup of the real ring, and five rulings came out:
+
+- **Form A, plain text** — `Shot 4/6`, the count after the name in the name's own colour. Pips and
+  a segmented rim strip were drawn beside it; text read best at 1x and needs no new drawing.
+- **Kit rows only**, never the Weapon category slice — hovering Weapon already ghosts the kit ring
+  legibly, so the count is one hover away without a click.
+- **Every family's count**: Carbine rounds, Mace charge, Springspear spring (`Stab 0/1`), the
+  Chemical Spitter's tank (on its main, under either form), **and the Chainsword's rev timer**.
+- **The timer must look meaningfully different from an ammo count** — so it reads in turns and is
+  TINTED (`Slash 2 turns`, `ActionMenuController.GAUGE_TIMER_COLOR`, a Game-tab row under *Ring:
+  readout*). Orange on the selected blue wedge is the weakest contrast of the candidates, which is
+  why it is a knob rather than a number.
+- **#663 in the same diff**: the headless unit legend appends the family's `status_text()`.
+
+**One answer, and what keeps it one.** `WeaponGauge` is the structured answer — a STOCK or a TIMER,
+current and maximum — and `WeaponInstance.gauge()` is each family's. `status_text()` now words its
+numbers FROM it, so the Inspect sentence and the ring cannot disagree about how many rounds there
+are; `readiness_noun()` stays the other question (the rule, not the state). **Which rows print it** is
+`EquippableData.attack_gauge(wielder, attack)`: the readiness flags by default (#108 — the flags are
+the only thing a family may consult), with two declared overrides because neither reaches its attacks
+through a flag — the tank rides `is_main_form`, and rev rides every attack the sword fires (it is what
+makes all of them ignore DEF). `MainActionMenu._with_gauge` attaches it BESIDE `name`, never into it,
+so the name stays the row's identity for `_append_unique` and the readout title.
+
+**The label is drawn only through `ActionMenuController.slice_label_parts`** — `[text, colour]` runs —
+so a headless case reads what reaches the screen and a gauge has no second path to take. The whole
+label shares the existing shrink-to-fit floor, so a crowded kit ring (a Carbine carrying three
+granted attacks, six rows) shrinks `Overwatch 6/6` rather than dropping the count; that was the
+declared residual at build time. What no headless suite can see is the draw itself and how the tint
+reads over a live board — those are play-checks.
 
 ### Round 2: what the first play-through changed (dev, same day)
 

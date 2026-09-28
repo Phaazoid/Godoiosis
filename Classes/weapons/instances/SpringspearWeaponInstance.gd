@@ -26,6 +26,10 @@ func consume_readiness_for(attack: WeaponAttackData) -> void:
 	if attack.consumes_readiness:
 		ready = false
 
+# A one-deep stock: the spring is wound or it is not. The sentence below stays in words.
+func gauge() -> WeaponGauge:
+	return WeaponGauge.stock(1 if ready else 0, 1)
+
 func status_text() -> String:
 	return "Loaded" if ready else "Spent — needs Spring Load"
 

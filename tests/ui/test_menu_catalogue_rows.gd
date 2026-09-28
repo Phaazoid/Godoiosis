@@ -353,3 +353,91 @@ func test_a_watch_attack_gets_one_reachable_row_and_no_fire_row() -> void:
 			"the row opened an ordinary shot's aim, not a watch").is_equal(watching)
 	assert_object(watcher.active_attack).override_failure_message(
 			"the row aimed no attack -- clicking Overwatch is what chooses it").is_same(watch)
+
+
+# ==============================================================================
+#  #1045: a weapon's live count on its attack rows
+# ==============================================================================
+
+# The label the ring DRAWS for a row, run for run -- slice_label_parts is the only path
+# _draw_slice_label takes, so this is the text on screen rather than the data behind it.
+func _drawn_label(row: Dictionary) -> String:
+	assert_bool(row.is_empty()).override_failure_message("row not found on the ring").is_false()
+	var text := ""
+	for part: Array in ActionMenuController.slice_label_parts(row):
+		text += String(part[0])
+	return text
+
+
+# A Carbine whose main and whose watch both spend rounds -- the shipped family's shape, built here so
+# nothing below leans on authored content.
+func _carbine() -> CarbineWeaponInstance:
+	var template := WeaponData.new()
+	template.weapon_type = WeaponData.WeaponType.CARBINE
+	template.display_name = "Carbine"
+	template.main_attack = WeaponAttackData.new()
+	template.main_attack.display_name = "Shot"
+	template.main_attack.power = 4
+	template.main_attack.requires_readiness = true
+	template.main_attack.consumes_readiness = true
+	var watch := WeaponAttackData.new()
+	watch.display_name = "Overwatch"
+	watch.can_overwatch = true
+	watch.requires_readiness = true
+	watch.consumes_readiness = true
+	template.extra_attacks = [watch]
+	return WeaponInstance.make(template) as CarbineWeaponInstance
+
+
+# Both doors an attack row comes through carry the count -- the main through _attack_entry, the watch
+# through _overwatch_rows -- and the verb beside them carries none. Re-opened after a round is spent,
+# because a count frozen at the first build is exactly what one open cannot see.
+func test_a_carbines_rows_carry_the_live_magazine_to_the_ring() -> void:
+	var unit := _spawn(Vector2i(2, 0))
+	var carbine := _carbine()
+	unit.add_item(carbine)
+	assert_object(unit.get_equipped_weapon()).is_same(carbine)
+
+	await _enter_attack_ring(unit)
+	var rows := _open_rows()
+	var full := carbine.gauge().label()
+	assert_str(_drawn_label(_row_named(rows, "Shot"))).is_equal("Shot " + full)
+	assert_str(_drawn_label(_row_named(rows, "Overwatch"))) \
+		.override_failure_message("the watch row lost the count the fire row carries") \
+		.is_equal("Overwatch " + full)
+	assert_str(_drawn_label(_row_named(rows, "Reload"))).is_equal("Reload")
+
+	carbine.consume_readiness_for(carbine.template.main_attack)
+	_controller().dismiss()
+	await await_idle_frame()
+	await _enter_attack_ring(unit)
+	var after := _drawn_label(_row_named(_open_rows(), "Shot"))
+	assert_str(after).is_equal("Shot " + carbine.gauge().label())
+	assert_str(after).override_failure_message("the ring kept the full magazine after a shot").is_not_equal("Shot " + full)
+
+
+# The rev timer rides the Chainsword's attack as a TIMER -- the kind the ring tints -- and an idle sword
+# prints nothing at all. Slash authors no readiness flag, so the flag rule alone would miss it.
+func test_a_revved_chainswords_attack_carries_a_timer() -> void:
+	var unit := _spawn(Vector2i(3, 0))
+	var template := WeaponData.new()
+	template.weapon_type = WeaponData.WeaponType.CHAINSWORD
+	template.main_attack = WeaponAttackData.new()
+	template.main_attack.display_name = "Slash"
+	var sword := WeaponInstance.make(template) as ChainswordWeaponInstance
+	unit.add_item(sword)
+
+	await _enter_attack_ring(unit)
+	assert_str(_drawn_label(_row_named(_open_rows(), "Slash"))).is_equal("Slash")
+	_controller().dismiss()
+	await await_idle_frame()
+
+	sword.rev()
+	await _enter_attack_ring(unit)
+	var slash := _row_named(_open_rows(), "Slash")
+	assert_str(_drawn_label(slash)).is_equal("Slash " + sword.gauge().label())
+	var gauge := slash.get("gauge") as WeaponGauge
+	assert_object(gauge).override_failure_message("the revved sword's row reached the ring with no gauge").is_not_null()
+	if gauge == null:
+		return
+	assert_int(gauge.kind).override_failure_message("the rev timer reached the ring as a stock").is_equal(WeaponGauge.Kind.TIMER)

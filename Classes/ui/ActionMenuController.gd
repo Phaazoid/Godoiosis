@@ -91,6 +91,9 @@ static var READOUT_BORDER := Color(0.55, 0.62, 0.75, 0.7)
 static var READOUT_BORDER_WIDTH := 1.0
 static var READOUT_TITLE_COLOR := Color(1, 1, 1, 1)
 static var READOUT_DETAIL_COLOR := Color(0.78, 0.82, 0.88, 1)
+# A wedge's TIMER count (#1045, the Chainsword's "2 turns"). A stock count ("4/6") wears the name's
+# own colour; a timer is tinted so the two cannot be read as the same kind of number (dev call).
+static var GAUGE_TIMER_COLOR := Color(1.0, 0.56, 0.24, 1)
 
 var local_unit: Unit
 
@@ -439,12 +442,15 @@ func _draw_ring(nodes: Array, start_deg: float, level: int, live: bool, alpha: f
 #
 #   THE SHRINK. If the name is still wider than the arc it has, the font drops until it fits, to
 #   a floor -- a name that overruns is worse than a name that is small.
+#
+# The label is drawn ONLY through slice_label_parts, so what a headless case reads there is what lands
+# on screen -- there is no second path for a gauge to take.
 func _draw_slice_label(node: Dictionary, radii: Vector2, index: int, count: int, start_deg: float,
 		span_deg: float, font: Font, font_size: int, alpha: float) -> void:
 	if font == null:
 		return
-	var text: String = node.get("name", "")
-	if text == "":
+	var parts := slice_label_parts(node)
+	if parts.is_empty():
 		return
 
 	var mid := slice_mid_deg(index, count, start_deg)
@@ -455,22 +461,47 @@ func _draw_slice_label(node: Dictionary, radii: Vector2, index: int, count: int,
 
 	var available := deg_to_rad(span_deg) * radius
 	var size := font_size
-	var width := font.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1.0, size).x
+	var width := _parts_width(font, parts, size)
 	if width > available and width > 0.0:
 		size = maxi(MIN_LABEL_FONT_SIZE, int(floor(float(size) * available / width)))
-		width = font.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1.0, size).x
+		width = _parts_width(font, parts, size)
 
 	# Deliberately NOT scaled by the ring's alpha: on a ghosted ring the label is the entire point
 	# of the preview, so it stays solid even while its wedge is not.
-	var color := READOUT_TITLE_COLOR
-	if bool(node.get("disabled", false)):
-		color = Color(color.r, color.g, color.b, 0.55)
+	var dim := bool(node.get("disabled", false))
 
 	# draw_set_transform applies to everything after it, so the identity has to go back on.
 	_root.draw_set_transform(point_at(_centre, radius, mid), rot, Vector2.ONE)
-	_root.draw_string(font, Vector2(-width * 0.5, float(size) * 0.35), text,
-		HORIZONTAL_ALIGNMENT_LEFT, -1.0, size, color)
+	var x := -width * 0.5
+	for part: Array in parts:
+		var text: String = part[0]
+		var color: Color = part[1]
+		if dim:
+			color = Color(color.r, color.g, color.b, 0.55)
+		_root.draw_string(font, Vector2(x, float(size) * 0.35), text,
+			HORIZONTAL_ALIGNMENT_LEFT, -1.0, size, color)
+		x += font.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1.0, size).x
 	_root.draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
+
+# What a wedge's label says, as [text, colour] runs drawn left to right: the name, then the weapon's
+# live count when the row carries one (#1045). Pure, so a headless case asserts on the label itself.
+static func slice_label_parts(node: Dictionary) -> Array:
+	var parts: Array = []
+	var text := String(node.get("name", ""))
+	if text == "":
+		return parts
+	parts.append([text, READOUT_TITLE_COLOR])
+	var gauge := node.get("gauge") as WeaponGauge
+	if gauge != null:
+		var tint: Color = GAUGE_TIMER_COLOR if gauge.kind == WeaponGauge.Kind.TIMER else READOUT_TITLE_COLOR
+		parts.append([" " + gauge.label(), tint])
+	return parts
+
+static func _parts_width(font: Font, parts: Array, size: int) -> float:
+	var width := 0.0
+	for part: Array in parts:
+		width += font.get_string_size(String(part[0]), HORIZONTAL_ALIGNMENT_LEFT, -1.0, size).x
+	return width
 
 # The centre is the unit's map sprite and its NAME (#560) -- the whole point of the wide gap. Same
 # accessor the action queue's actor icon reads, so the two surfaces can never show different art.

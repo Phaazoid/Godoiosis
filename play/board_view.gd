@@ -378,6 +378,11 @@ static func _weapon_str(e: EquippableData, wielder: Unit) -> String:
 		s += "/ctr"
 	if main != null and main.hits_allies:
 		s += "/ff"   # friendly-fire: its blast hits allies in range too
+	# Its live state in the family's own words (#663) -- a dry magazine or a sprung spear gates the next
+	# order, and the ring shows the same count off the same answer (#1045).
+	var status := inst.status_text()
+	if status != "":
+		s += " [%s]" % status
 	return s
 
 # A rune gets the same treatment the weapon branch above gets, for the reason stated there (#614):
