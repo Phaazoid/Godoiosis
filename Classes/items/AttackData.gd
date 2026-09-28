@@ -300,6 +300,13 @@ func is_directional() -> bool:
 func is_single_target_swing() -> bool:
 	return swing and attack_shape != null and attack_shape.is_path_shape()
 
+# Does this attack's footprint cover ONE cell -- the aimed one, nothing beside it? A null shape is the
+# anchor alone, and so is a one-tile stamp. A single-target swing does NOT: its paths cross cells an
+# ally can stand on, and hits_allies decides whether that ally is struck or passed through (#1054
+# ruling 8). Asked by the friendly-fire line (#1083): on one cell, hitting an ally is a choice of aim.
+func covers_one_cell() -> bool:
+	return attack_shape == null or attack_shape.tiles().size() <= 1
+
 # The sentence under the Attack Editor's stamp grid, which has to say what the CENTRE is -- and
 # that is the ANCHOR rule, so the attack answers it rather than the widget or the shape. The SHAPE
 # cannot: it holds no range, which is the whole reason this lives here after #808. Reads through
@@ -439,7 +446,7 @@ static func property_tips() -> Dictionary:
 		"attack_shape": "The SHAPE this attack covers once aimed, picked from the shared library. Shapes are shared BY REFERENCE: editing one changes every attack that uses it. No shape at all = the aimed cell alone.",
 		"swing": "Does this attack STOP at what it meets?\nON, it travels: a shape on the attacker is cut short wherever a lane cannot reach, and one placed at range spreads outward from where it lands -- so a wall shields whatever stands behind it. That is what every shaped attack did before this box existed.\nOFF, it is a TRUE AoE: every cell of the shape lands at once, straight through walls.\nON with a shape drawn as PATHS, it is a single-target swing: each path takes the first valid target it reaches and stops there.\nHeight applies either way -- a cell outside this attack's up/down tolerance is missed whichever way this is set.",
 		"can_counter": "May this attack be used when countering? A weapon always counters with its MAIN attack whatever is picked, so this only matters on a main.",
-		"hits_allies": "Splash reaches your own side too, not just enemies.",
+		"hits_allies": "Splash reaches your own side too, not just enemies. On a single-target attack it lets the attack be aimed at an ally (a heal needs it).",
 		"hits_self": "The attacker is a legal victim of its own attack.",
 		"targets": "What an aim may land on -- a unit, a tile, or either.",
 		"knockback": "Tiles the target is shoved directly away from the attacker, stopping at the first wall, unit or board edge. 0 = no shove.",

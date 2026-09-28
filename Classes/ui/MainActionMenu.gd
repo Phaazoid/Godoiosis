@@ -335,7 +335,8 @@ func _transmutation_children(unit: Unit) -> Array:
 func _overwatch_rows(unit: Unit) -> Array:
 	var rows: Array = []
 	for atk: AttackData in unit.overwatch_attacks():
-		var row := _entry(atk.display_name, unit.attack_block_reason(atk), Glossary.short(Glossary.Term.OVERWATCH))
+		var row := _entry(atk.display_name, unit.attack_block_reason(atk),
+			_with_ally_line(Glossary.short(Glossary.Term.OVERWATCH), unit, atk))
 		rows.append(_synthetic_leaf(_with_gauge(row, unit, atk),
 			func(picking_unit: Unit) -> void: _pick_watch(picking_unit, atk)))
 	return rows
@@ -377,8 +378,18 @@ func _entry(name: String, blocked_reason: String = "", detail: String = "") -> D
 # One attack's menu row. Law #2: an unfireable pick (a sprung weapon, #73; a dry magazine, #84; an
 # unchannelable carving, #166) stays LISTED but disabled — the menu shows it, it never hides it.
 func _attack_entry(unit: Unit, attack: AttackData) -> Dictionary:
-	return _with_gauge(_entry(attack.display_name, unit.attack_block_reason(attack), unit.attack_detail(attack)),
-		unit, attack)
+	return _with_gauge(_entry(attack.display_name, unit.attack_block_reason(attack),
+		_with_ally_line(unit.attack_detail(attack), unit, attack)), unit, attack)
+
+# Whether the attack hits allies, under the row's own detail (#1083). The ONE channel line the ring
+# carries (dev, 2026-09-28: the readout stays succinct; the full list is the item's card). COMPOSED
+# through the unit, the answer RulesService.is_attack_victim gives, so a fitted OFF mod reads here as
+# it plays. Both attack-row builders come through here, the watch's included: a watch is an attack.
+static func _with_ally_line(detail: String, unit: Unit, attack: AttackData) -> String:
+	var allies := AttackChannelText.ally_line(attack, unit.attack_hits_allies(attack))
+	if allies == "":
+		return detail
+	return allies if detail == "" else "%s\n%s" % [detail, allies]
 
 # The weapon's live count beside the attack's name (#1045) -- carried BESIDE `name`, never folded into
 # it, so the name stays the row's identity (_append_unique, the readout title). Both attack-row

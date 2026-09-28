@@ -441,3 +441,88 @@ func test_a_revved_chainswords_attack_carries_a_timer() -> void:
 	if gauge == null:
 		return
 	assert_int(gauge.kind).override_failure_message("the rev timer reached the ring as a stock").is_equal(WeaponGauge.Kind.TIMER)
+
+
+# ==============================================================================
+#  #1083: whether an attack hits allies
+# ==============================================================================
+
+# A three-cell row around the aimed cell -- a footprint an ally can stand in.
+func _row_shape() -> AttackShape:
+	var stamp: Array[Vector2i] = [Vector2i(-1, 0), Vector2i.ZERO, Vector2i(1, 0)]
+	var shape := AttackShape.new()
+	shape.stamp = stamp
+	return shape
+
+
+func _swing(name: String, splashes: bool, shape: AttackShape) -> WeaponAttackData:
+	var attack := WeaponAttackData.new()
+	attack.display_name = name
+	attack.power = 3
+	attack.hits_allies = splashes
+	attack.attack_shape = shape
+	return attack
+
+
+func _sword(main: WeaponAttackData, extras: Array[WeaponAttackData]) -> WeaponInstance:
+	var template := WeaponData.new()
+	template.weapon_type = WeaponData.WeaponType.CHAINSWORD
+	template.display_name = "Test Sword"
+	template.main_attack = main
+	template.extra_attacks = extras
+	return WeaponInstance.make(template)
+
+
+# The ruled pair and the ruled silence, on the readout the ring draws (#1083): an area attack says
+# Splashes or Spares, and a one-cell attack says neither. Jab authors hits_allies on purpose -- it is
+# the state a rule that forgot the footprint would print "Splashes allies" for.
+func test_an_attack_row_says_whether_it_hits_allies_only_when_its_footprint_can_hold_one() -> void:
+	var unit := _spawn(Vector2i(2, 0))
+	var extras: Array[WeaponAttackData] = [_swing("Cleave", false, _row_shape()), _swing("Jab", true, null)]
+	unit.add_item(_sword(_swing("Sweep", true, _row_shape()), extras))
+
+	await _enter_attack_ring(unit)
+	var rows := _open_rows()
+	assert_str(_tooltip(_row_named(rows, "Sweep"))).contains("Splashes allies")
+	assert_str(_tooltip(_row_named(rows, "Cleave"))).contains("Spares allies")
+	var jab_row := _row_named(rows, "Jab")
+	assert_bool(jab_row.is_empty()).override_failure_message(
+		"no Jab row on the ring -- the silence below would pass for want of a row").is_false()
+	var jab := _tooltip(jab_row)
+	assert_str(jab).override_failure_message(
+		"a one-cell attack's row still speaks about allies:\n%s" % jab).not_contains("allies")
+
+
+# The COMPOSED answer reaches the ring, not the authored one: a fitted mod turning the splash off makes
+# the row say Spares, because that is what RulesService.is_attack_victim will then do with an ally.
+func test_a_fitted_mod_turning_the_splash_off_reaches_the_rings_readout() -> void:
+	var unit := _spawn(Vector2i(2, 0))
+	var none: Array[WeaponAttackData] = []
+	var sword := _sword(_swing("Sweep", true, _row_shape()), none)
+	var mod := WeaponModData.new()
+	mod.hits_allies_override = WeaponModData.Override.OFF
+	assert_bool(sword.fit(0, mod)).override_failure_message(
+		"fixture: the mod must actually fit, or the override reads as absent").is_true()
+	unit.add_item(sword)
+
+	await _enter_attack_ring(unit)
+	var sweep := _tooltip(_row_named(_open_rows(), "Sweep"))
+	assert_str(sweep).override_failure_message(
+		"the ring read the authored splash, not the fitted weapon's:\n%s" % sweep).contains("Spares allies")
+	assert_str(sweep).not_contains("Splashes allies")
+
+
+# The watch row is an attack row too: its shot gathers victims by the same rule, so it carries the same
+# line under its own explanation.
+func test_a_watch_row_says_whether_its_shot_hits_allies() -> void:
+	var unit := _spawn(Vector2i(2, 0))
+	var carbine := _carbine()
+	(carbine.template.extra_attacks[0] as WeaponAttackData).attack_shape = _row_shape()
+	unit.add_item(carbine)
+
+	await _enter_attack_ring(unit)
+	var watch := _tooltip(_row_named(_open_rows(), "Overwatch"))
+	assert_str(watch).contains("Spares allies")
+	assert_str(watch).override_failure_message(
+		"the ally line replaced the watch's own explanation:\n%s" % watch) \
+		.contains(UiText.wrap(Glossary.short(Glossary.Term.OVERWATCH)).split("\n")[0])

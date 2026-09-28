@@ -19,6 +19,11 @@ class_name AttackChannelText
 #
 # A LINE ONLY APPEARS WHEN IT HAS SOMETHING TO SAY, so a plain sword's readout stays exactly as short
 # as it was before any of this.
+#
+# THE ALLY LINE IS THE ONE THAT SPEAKS BOTH WAYS (#1083, dev ruling 2026-09-27): on an attack whose
+# footprint can hold an ally, silence was exactly what a player could not read, so it says Splashes
+# or Spares. It is also the ONE line the battle ring reads (dev, 2026-09-28: the ring stays succinct
+# and carries what nothing else in battle says before the aim), which is why it is its own function.
 
 
 static func lines(attack: AttackData, knockback: int, elements: Array[Elemental.Element],
@@ -48,8 +53,9 @@ static func lines(attack: AttackData, knockback: int, elements: Array[Elemental.
 
 	if can_overwatch:
 		out.append("Watch only — declared as a standing watch, never fired directly")
-	if hits_allies:
-		out.append("Splashes allies")
+	var allies := ally_line(attack, hits_allies)
+	if allies != "":
+		out.append(allies)
 	if attack.hits_self:
 		out.append("Catches the attacker too")
 	if attack.pierces_guard:
@@ -62,6 +68,15 @@ static func lines(attack: AttackData, knockback: int, elements: Array[Elemental.
 
 	out.append_array(_height_lines(attack))
 	return out
+
+
+# Whether this attack hits allies, or "" where that means nothing: a single cell (hitting an ally is a
+# choice of aim there, dev 2026-09-28) or an attack that hits no unit at all (#1135). `hits_allies` is
+# the COMPOSED answer, passed in for the reason the header gives.
+static func ally_line(attack: AttackData, hits_allies: bool) -> String:
+	if attack == null or not attack.hits_units() or attack.covers_one_cell():
+		return ""
+	return "Splashes allies" if hits_allies else "Spares allies"
 
 
 # What this attack reaches, in one line. Shared for the same reason the channels are: both cards draw
