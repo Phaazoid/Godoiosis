@@ -259,7 +259,7 @@ static func reconstruct_path(came_from: Dictionary, start: Vector2i, goal: Vecto
 # `occupant_at` is gather_path_victims' parameter, for its reason: empty is the board's projected
 # answer, which every aim site wants, and a PAYLOAD (#1058) passes the resolver's threaded one,
 # since it goes off mid-pass where only the aims' shoves have been published.
-static func gather_attack_victims(attacker: Unit, affected_cells: Array[Vector2i], board: BoardContext, attack: AttackData, allies_only := false, occupant_at := Callable()) -> Array[Unit]:
+static func gather_attack_victims(attacker: Unit, affected_cells: Array[Vector2i], board: BoardContext, attack: AttackData, occupant_at := Callable()) -> Array[Unit]:
 	var victims: Array[Unit] = []
 	for cell in affected_cells:
 		# One question, one lookup (#105): who ENDS UP here. The old dance (physical occupant ->
@@ -268,7 +268,7 @@ static func gather_attack_victims(attacker: Unit, affected_cells: Array[Vector2i
 		var unit: Unit = occupant_at.call(cell) if occupant_at.is_valid() else board.projected_unit_at_cell(cell)
 		if unit == null or victims.has(unit):
 			continue
-		if is_attack_victim(attacker, unit, attack, allies_only):
+		if is_attack_victim(attacker, unit, attack):
 			victims.append(unit)
 	return victims
 
@@ -289,14 +289,14 @@ class PathHit extends RefCounted:
 # projected answer and a watch shot asks the resolver's threaded one, so one rule has two sources of
 # who is standing where and each caller states its own.
 static func gather_path_victims(attacker: Unit, paths: Array[Array], attack: AttackData,
-		occupant_at: Callable, allies_only := false) -> Array[PathHit]:
+		occupant_at: Callable) -> Array[PathHit]:
 	var hits: Array[PathHit] = []
 	for path in paths:
 		var hit := PathHit.new()
 		for cell: Vector2i in path:
 			hit.cells.append(cell)
 			var unit: Unit = occupant_at.call(cell)
-			if is_attack_victim(attacker, unit, attack, allies_only):
+			if is_attack_victim(attacker, unit, attack):
 				hit.victim = unit
 				break
 		hits.append(hit)
@@ -306,17 +306,18 @@ static func gather_path_victims(attacker: Unit, paths: Array[Array], attack: Att
 # SquadPlanValidator asks the identical question with no board. Friendly fire is a property of the
 # ATTACK BEING FIRED, not of whatever the attacker last aimed with (#102).
 #
-# allies_only is an OPT-IN each caller states, the path_hops(block_on_occupancy) shape from #127 --
-# and the default is the load-bearing half. Aiming a heal at an enemy stays legal on purpose (dev,
-# #148): it is a niche the player may want. What is never legal is a DERIVED reaction heal landing
-# on the attacker, so SquadManager's reaction expansion is the one caller that passes true.
-static func is_attack_victim(attacker: Unit, unit: Unit, attack: AttackData, allies_only := false) -> bool:
+# A MAP-ONLY attack hits nobody (#1135), itself included -- asked ahead of hits_self so a map-only
+# blast cannot fell its own caster. This is the gather every unit hit goes through, so no damage,
+# state, shove or counter follows either. The one thing that still reaches a unit is a SHOCK's
+# current, which is Conduction.caught's and deliberately tag-blind (dev, 2026-09-28). A null attack
+# is bare fists, which hit units.
+static func is_attack_victim(attacker: Unit, unit: Unit, attack: AttackData) -> bool:
 	if unit == null or not is_instance_valid(unit):
+		return false
+	if attack != null and not attack.hits_units():
 		return false
 	if unit == attacker:
 		return attack != null and attack.hits_self
-	if allies_only and can_target(attacker, unit):
-		return false
 	if can_target(attacker, unit):
 		return true
 	if attack == null:

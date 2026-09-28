@@ -2,7 +2,7 @@
 
 **Status: RATIFIED DIRECTION (2026-07-06 grill); co-dev pass 2026-07-11 — verdict: BUILD TO TEST; descoped 2026-07-20 (#61) to the load-bearing minimum for ability-balance testing.** The hypothesis on trial: *jobs as the system that ties together units having abilities + slight stat variations.* "Even in a classless society, people have jobs." Supersedes the captured ideas in [progression.md](progression.md) (the *pre-grill stances* section records the inputs). Distinct from the **Bounty Board** (mission contracts — [philosophy.md](philosophy.md)).
 
-**Canon checked through #1008 (2026-09-17).**
+**Canon checked through #1008 (2026-09-17); #1135's repeal of the reactive heal folded in 2026-09-28.**
 
 **#61 DESCOPED 2026-07-20:** #58 (2026-07-16) had built a fuller model — certify-once qualification, a 1-main+2-sub linked trio, stat ceilings, job-driven MOV base — but none of it had earned its keep against a playtest yet, and it stood between the actual open question (do abilities feel good?) and testing it. Stripped to the load-bearing minimum: **a job is `{id, display_name, stat_nudges, ability_pool}` — no cap on how many a unit holds, no certification step, abilities are live the instant a job is assigned.** The removed material is preserved below (*Parked*), not deleted from thought — it's shelved pending a playtest verdict on whether jobs are even the right vehicle for it. **#61 also shipped the actual keystone this whole system exists to test: a working ability chassis** — see *The ability chassis* below.
 
@@ -34,9 +34,9 @@
    - **Crisis** (Reaction) joined the roster 2026-08-09 ([#158](https://github.com/Phaazoid/Godoiosis/issues/158)) — the will-and-death gambit re-homed as an equipped ability, first carried by the **Berserker** job (`Resources/Jobs/Berserker.tres`, a pure ability carrier — nudges open content): at full Will, a would-be-down stands straight back up surged, deterministic and previewed, under this chassis's own no-prompt rule. Canon: [will-and-death.md](will-and-death.md) → Crisis Mode.
 5. **Dispatch is explicit and boring, not a generic effects engine**: each seed ability's mechanic is a hardcoded check (`UnitInstance.has_live_ability("iron_will")` etc.) at its one relevant hook — the resolver, the action layer, the counter layer, or the movement layer. `AbilityData` itself stays identity-only (no effects payload); a future content pass would need to decide whether that changes.
 
-### Reactive healing, and the phase it would need (2026-07-31 capture; derived half BUILT 2026-08-07)
+### Reactive healing, and the phase it would need (2026-07-31 capture; derived half BUILT 2026-08-07, REPEALED 2026-09-28)
 
-**The DERIVED half is built — [#148](https://github.com/Phaazoid/Godoiosis/issues/148). The player-authored half is still captured-not-decided.** Two scratchpad ideas that arrived separately and turn out to be **one seam**, which is why they were written down together rather than picked off one at a time (Law #4 — the second answer always looks like it solves a different problem):
+**The DERIVED half was built — [#148](https://github.com/Phaazoid/Godoiosis/issues/148) — and REPEALED on 2026-09-28 ([#1135](https://github.com/Phaazoid/Godoiosis/issues/1135); dev: *"healing on counters is too strong and doesn't make logical sense as well"*): a defending healer now takes no reaction at all, and [squad-system.md](squad-system.md) C8–C10 are the record. What follows is kept as history, and the constraints it lists are what a player-authored "act after counters" would meet again. The player-authored half is still captured-not-decided.** Two scratchpad ideas that arrived separately and turn out to be **one seam**, which is why they were written down together rather than picked off one at a time (Law #4 — the second answer always looks like it solves a different problem):
 
 > There should be an ability that lets you act after counters so that healers can heal after a friendly takes damage.
 

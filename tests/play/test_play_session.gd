@@ -280,6 +280,31 @@ func test_melting_the_ice_under_a_unit_sinks_it_headlessly_too() -> void:
 	assert_bool(foe.element_states.has(Elemental.State.WET)).is_true()
 	assert_int(hero.get_current_hp()).is_equal(hero_hp)
 
+# #1135: a map-only aim at a unit hits nobody and is still LEGAL -- the game's whiff policy never
+# refuses a map-hitting aim (#47), and the twin asks that policy rather than "did it find a victim",
+# which would refuse the very order the game accepts. The foe's HP is the Law #2 half.
+func test_a_map_only_aim_at_a_unit_is_offered_accepted_and_hits_nobody() -> void:
+	var b: Dictionary = BoardBuilder.build(self, "MapOnlyRoot")
+	auto_free(b.root)
+	BoardBuilder.paint_rect(b.grid, Rect2i(-2, -2, 8, 8))
+	var hero: Unit = BoardBuilder.spawn(b, _data("Hero", PLAYER), Vector2i(0, 0))
+	var foe: Unit = BoardBuilder.spawn(b, _data("Foe", ENEMY), Vector2i(1, 0))
+	BoardBuilder.arm(hero, 3)
+	BoardBuilder.arm(foe, 3)
+	(hero.get_equipped_weapon() as WeaponInstance).template.main_attack.targets = EquippableData.TargetMode.MAP
+	var sess = PlaySession.new(b)
+	var hero_h: String = sess.handle_for(hero)
+
+	var offered: Array[Vector2i] = []
+	for aim: Dictionary in sess.legal_targets(hero_h).aims:
+		offered.append(aim.cell)
+	assert_array(offered).contains([Vector2i(1, 0)])
+	assert_bool(sess.queue_attack(hero_h, Vector2i(1, 0)).ok).is_true()
+
+	var hp := foe.get_current_hp()
+	assert_bool(sess.execute().ok).is_true()
+	assert_int(foe.get_current_hp()).is_equal(hp)
+
 func test_join_and_leave_squad() -> void:
 	var b: Dictionary = BoardBuilder.build(self, "SquadRoot")
 	auto_free(b.root)

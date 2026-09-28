@@ -211,6 +211,15 @@ func hits_map() -> bool:
 func hits_units() -> bool:
 	return targets == EquippableData.TargetMode.UNIT or targets == EquippableData.TargetMode.BOTH
 
+# May this attack ever answer a hit? A counter strikes back at a UNIT, so an attack that touches none
+# has nothing to answer with (#1135), and a heal is never a counter (#148 repealed, dev 2026-09-28).
+# Unit.attack_source_can_counter reads it; hidden_fields hides the can_counter box when it is moot.
+func can_ever_counter() -> bool:
+	return can_counter and not _counter_is_moot()
+
+func _counter_is_moot() -> bool:
+	return heals or not hits_units()
+
 # The attacks this one's chain fires, one per LEVEL below it -- its payload, that payload's payload,
 # and so on to the end. The resolver walks it level by level and the editor's fan-out readout reads
 # it, so the two cannot disagree about how deep a chain goes. Stops at the first attack it has
@@ -378,6 +387,8 @@ static func in_section(sections: Array[Dictionary], title: String, fields: Packe
 #                           delivered. deliver() is that rule's one home.
 #   payload_turns        -- read only when THIS attack has no shape (a shaped one always turns its
 #                           payloads onward) and the payload HAS one (a single cell has no facing).
+#   can_counter          -- read only through can_ever_counter, which a heal or a map-only attack
+#                           answers false whatever the box says.
 # `scaling_blend` is named from here though only WeaponAttackData has it: the RULE is this class's
 # (deals_no_damage suppresses scaling, per its own comment), and a name matching no row is ignored.
 #
@@ -397,6 +408,8 @@ func hidden_fields() -> PackedStringArray:
 		hidden.append("damage_kind")
 	if attack_shape != null or payload == null or payload.attack_shape == null:
 		hidden.append("payload_turns")
+	if _counter_is_moot():
+		hidden.append("can_counter")
 	# ...and the look section is absent unless this attack carries an element that HAS one (#900).
 	# Its heading goes with it: a section drawn as a bare title over nothing is worse than no
 	# section, and _draw_sections derives that rather than being told (see its own note).
