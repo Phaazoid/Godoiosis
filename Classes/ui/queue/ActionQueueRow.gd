@@ -294,9 +294,10 @@ func _gui_input(event: InputEvent) -> void:
 		accept_event()
 
 # A unit's sheet is 64px holding a ~23x20 character, so fitting the whole CELL into a 32px slot drew
-# everyone at a third of the slot (#1082, the #937 law). The slot's own size is the window.
+# everyone at a third of the slot (#1082, the #937 law). The slot is handed the square around the
+# sprite's own ink and stretches it, so every unit fills its slot on its own scale (dev ruling).
 func _show_in(slot: TextureRect, texture: Texture2D) -> void:
-	slot.texture = MapSpriteInk.portrait(texture, int(slot.custom_minimum_size.x))
+	slot.texture = MapSpriteInk.portrait(texture)
 
 func setup_volley_summary(lead: AttackAction, count: int, expanded: bool) -> void:
 	action = lead

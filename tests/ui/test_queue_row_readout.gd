@@ -686,15 +686,33 @@ func test_the_damage_number_names_the_def_it_subtracted() -> void:
 # ------------------------------------------------------------------------------------------------
 
 # The #937 law in the queue: a unit's sheet is 64px holding a ~23x20 character, so fitting the whole
-# CELL into the 32px slot drew everyone at a third of it. What a slot shows must be the ink window at
-# 1:1 -- a texture exactly as big as the slot, cut from inside the sheet, holding INK_RECT. Every
-# number is MapSpriteInk's own or the slot's, so re-cutting the art moves the expectation with it.
-func test_a_unit_in_a_row_is_drawn_at_one_to_one_with_its_ink_in_view() -> void:
+# CELL into the 32px slot drew everyone at a third of it. Then the dev asked for the sprites to FILL
+# the slot: what a slot is handed is the square around that sprite's OWN ink, its longest side edge to
+# edge, feet on the floor. The ink is read off the sheet here by the same rule the code declares, so
+# re-cutting the art moves the expectation with it and no per-character number appears.
+func test_a_unit_in_a_row_fills_its_slot_with_its_own_ink() -> void:
 	await _queue_elemental_attack(Elemental.Element.WATER, [])
 	var row := _attack_row()
 	assert_object(row).is_not_null()
-	_assert_ink_window(row.actor_texture, row.action.get_actor_texture(), "actor")
-	_assert_ink_window(row.target_texture, row.action.get_target_texture(), "target")
+	_assert_fills_slot(row.actor_texture, row.action.get_actor_texture(), "actor")
+	_assert_fills_slot(row.target_texture, row.action.get_target_texture(), "target")
+
+
+# The fill happens in the TextureRect, not the texture: portrait hands over a square SMALLER than the
+# slot and the slot stretches it. A headless run draws nothing, so the setting that does the stretching
+# is the one wire a green suite could otherwise miss -- a slot drawing its texture at native size would
+# pass every case above and show the player a small sprite in a big box.
+func test_both_sprite_slots_stretch_what_they_are_handed() -> void:
+	await _queue_elemental_attack(Elemental.Element.WATER, [])
+	var row := _attack_row()
+	assert_object(row).is_not_null()
+	for pair: Array in [[row.actor_texture, "actor"], [row.target_texture, "target"]]:
+		var slot: TextureRect = pair[0]
+		assert_bool(slot.stretch_mode in [TextureRect.STRETCH_KEEP_ASPECT, TextureRect.STRETCH_KEEP_ASPECT_CENTERED]) \
+			.override_failure_message("the %s slot does not scale its texture to fit, so a portrait draws at native size"
+				% pair[1]) \
+			.is_true()
+		assert_int(slot.expand_mode).is_not_equal(TextureRect.EXPAND_KEEP_SIZE)
 
 
 # The volley header draws its lead's sprite through its own setup, so it gets its own case -- without
@@ -705,7 +723,7 @@ func test_a_volley_header_frames_its_lead_the_same_way() -> void:
 	var header: ActionQueueRow = (load("res://Scenes/ActionQueueRow.tscn") as PackedScene).instantiate()
 	_main.add_child(header)   # freed with _main in after_test
 	header.setup_volley_summary(lead, 2, false)
-	_assert_ink_window(header.actor_texture, lead.get_actor_texture(), "volley header")
+	_assert_fills_slot(header.actor_texture, lead.get_actor_texture(), "volley header")
 
 
 # The target slot also shows a move's destination tile -- a 16px icon, not a unit. Only a map sheet
@@ -715,10 +733,10 @@ func test_a_terrain_icon_passes_through_the_portrait_whole() -> void:
 	assert_that(Vector2i(icon.get_size())) \
 		.override_failure_message("the tile icon is sheet-sized now, so this case no longer tells the two apart") \
 		.is_not_equal(Vector2i(MapSpriteInk.SHEET, MapSpriteInk.SHEET))
-	assert_object(MapSpriteInk.portrait(icon, 32)).is_same(icon)
+	assert_object(MapSpriteInk.portrait(icon)).is_same(icon)
 
 
-func _assert_ink_window(slot: TextureRect, sheet: Texture2D, which: String) -> void:
+func _assert_fills_slot(slot: TextureRect, sheet: Texture2D, which: String) -> void:
 	var sheet_px := Vector2i(MapSpriteInk.SHEET, MapSpriteInk.SHEET)
 	assert_object(sheet).override_failure_message("the %s has no sprite to frame" % which).is_not_null()
 	if sheet == null:
@@ -727,23 +745,40 @@ func _assert_ink_window(slot: TextureRect, sheet: Texture2D, which: String) -> v
 		.override_failure_message("the %s's sprite is not a map sheet, so this case would pass vacuously" % which) \
 		.is_equal(sheet_px)
 
-	var slot_px := Vector2i(slot.custom_minimum_size)
 	var shown := slot.texture as AtlasTexture
 	assert_object(shown) \
-		.override_failure_message("the %s slot is handed the whole %dpx sheet to squeeze into %dpx -- the #1082 bug"
-			% [which, MapSpriteInk.SHEET, slot_px.x]) \
+		.override_failure_message("the %s slot is handed the whole %dpx sheet to squeeze -- the #1082 bug"
+			% [which, MapSpriteInk.SHEET]) \
 		.is_not_null()
 	if shown == null:
 		return
 	assert_object(shown.atlas).is_same(sheet)
-	assert_that(Vector2i(shown.get_size())) \
-		.override_failure_message("the %s window is %s in a %s slot, so it is not drawn 1:1"
-			% [which, Vector2i(shown.get_size()), slot_px]) \
-		.is_equal(slot_px)
-	assert_bool(Rect2(Vector2.ZERO, Vector2(sheet_px)).encloses(shown.region)) \
-		.override_failure_message("the %s window %s runs off the %dpx sheet" % [which, shown.region, MapSpriteInk.SHEET]) \
+
+	var image := sheet.get_image()
+	if image.is_compressed():
+		image = image.duplicate()
+		image.decompress()
+	var ink := Rect2(BoardMirror.opaque_bounds(image, Rect2i(Vector2i.ZERO, image.get_size())))
+	# Non-vacuity: were this sprite's ink the median box, the shared answer and the per-sprite one
+	# would coincide and the "fills" check below could not tell them apart.
+	assert_bool(Rect2i(ink) == MapSpriteInk.INK_RECT) \
+		.override_failure_message("the %s's ink IS the median box, so this case cannot tell a per-sprite fit from the shared one"
+			% which) \
+		.is_false()
+
+	var region := shown.region
+	assert_float(region.size.x).override_failure_message("the %s window %s is not square" % [which, region]) \
+		.is_equal(region.size.y)
+	assert_bool(Rect2(Vector2.ZERO, Vector2(sheet_px)).encloses(region)) \
+		.override_failure_message("the %s window %s runs off the %dpx sheet" % [which, region, MapSpriteInk.SHEET]) \
 		.is_true()
-	assert_bool(shown.region.encloses(Rect2(MapSpriteInk.INK_RECT))) \
-		.override_failure_message("the %s window %s cuts into the character's ink %s"
-			% [which, shown.region, MapSpriteInk.INK_RECT]) \
+	assert_bool(region.encloses(ink)) \
+		.override_failure_message("the %s window %s cuts into the character's ink %s" % [which, region, ink]) \
 		.is_true()
+	assert_float(region.size.x) \
+		.override_failure_message("the %s window %s is wider than the ink's longest side %s, so the sprite does not fill its slot"
+			% [which, region, ink.size]) \
+		.is_equal(maxf(ink.size.x, ink.size.y))
+	assert_float(region.end.y) \
+		.override_failure_message("the %s window %s does not stand the feet (row %d) on its floor" % [which, region, ink.end.y]) \
+		.is_equal(ink.end.y)
