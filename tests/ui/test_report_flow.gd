@@ -410,7 +410,11 @@ func test_the_report_hotkey_fires_behind_a_modal() -> void:
 	# rather than to the player's F3: DevController is PROCESS_MODE_ALWAYS and fires behind a card,
 	# where game.gd._input receives nothing while one is up (see the player case below).
 	assert_bool(DevTools.enabled()).is_true()   # the gate; without this the case passes vacuously
-	var before: int = _report_dirs().size()
+	# A report already on disk, which this case must leave alone (#1147): its cleanup used to queue
+	# every folder under user://reports, deleting the saved reports of whoever ran the suite.
+	var planted := "user://reports/__planted_by_1147"
+	DirAccess.make_dir_recursive_absolute(planted)
+	var before: Array[String] = _report_dirs()
 
 	game._open_pause_menu()
 	await _frames(4)
@@ -422,10 +426,10 @@ func test_the_report_hotkey_fires_behind_a_modal() -> void:
 	game.dev_controller._input(press)
 	await _frames(4)
 
-	var after: Array[String] = _report_dirs()
-	assert_int(after.size()).is_equal(before + 1)
-	for dir: String in after:
-		_written.append("user://reports/".path_join(dir))
+	assert_int(_new_report_dirs(before).size()).is_equal(1)
+	assert_bool(_written.has(planted)).override_failure_message(
+		"the cleanup queued a report folder this case did not write").is_false()
+	DirAccess.remove_absolute(planted)
 
 
 # ==============================================================================
