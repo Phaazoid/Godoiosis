@@ -5,7 +5,8 @@ class_name ActionQueueRow
 # sprite, an hp->hp readout, the cancel X -- and, when the hit had elemental consequences, a second
 # CONSEQUENCE line under them. Draws whatever BaseAction it is handed and asks the ORDER every
 # question about itself (icon, description, validity, whether it may be dragged), so a new action
-# type needs nothing here. Built by SquadActionQueueControl, which owns the drag and the sectioning.
+# type needs nothing here. Built by SquadActionQueueControl, which owns the drag, the click (#1122)
+# and the sectioning.
 #
 # EVERY FACT GETS ITS OWN SLOT (#685). The row used to stack four of them into three 32px squares
 # through `show_behind_parent`: state icons under the verb, the hp readout over it, reaction art
@@ -55,7 +56,8 @@ var _hovered := false
 
 signal cancel_requested(action: BaseAction)
 signal hover_changed(action: BaseAction, hovering: bool)
-signal drag_requested(row: ActionQueueRow)
+signal pressed(row: ActionQueueRow)          # the left press; the panel decides drag or click on release
+signal expand_toggled(row: ActionQueueRow)   # a volley header's readout (#1122)
 
 func setup(action_ref: BaseAction):
 	action = action_ref
@@ -203,9 +205,10 @@ func _build_consequence(outcome: ResolvedOutcome) -> void:
 # One tinted pill. The tooltip goes on the pill AND its label: a Label defaults to
 # MOUSE_FILTER_IGNORE, so the viewport never picks it and the text is dead however right it is.
 func _chip(tint: Color, text: String, tip: String) -> Control:
+	# PASS, not STOP: picked for the tooltip, and the press still reaches the row's click (#1122).
 	var pill := PanelContainer.new()
 	pill.add_theme_stylebox_override("panel", QueueStyle.tint_box(tint))
-	pill.mouse_filter = Control.MOUSE_FILTER_STOP
+	pill.mouse_filter = Control.MOUSE_FILTER_PASS
 	pill.tooltip_text = tip
 
 	var label := Label.new()
@@ -213,7 +216,7 @@ func _chip(tint: Color, text: String, tip: String) -> Control:
 	label.add_theme_font_size_override("font_size", QueueStyle.CONSEQUENCE_FONT_SIZE)
 	label.add_theme_color_override("font_color", tint)
 	label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	label.mouse_filter = Control.MOUSE_FILTER_STOP
+	label.mouse_filter = Control.MOUSE_FILTER_PASS
 	label.tooltip_text = tip
 	pill.add_child(label)
 	return pill
@@ -248,7 +251,7 @@ func _show_hp_delta(outcome: ResolvedOutcome, subject: Unit) -> void:
 	var tip := damage_tip(outcome, subject)
 	readout.tooltip_text = tip
 	readout_card.tooltip_text = tip
-	readout.mouse_filter = Control.MOUSE_FILTER_STOP
+	readout.mouse_filter = Control.MOUSE_FILTER_PASS   # the chips' reason, see _chip
 
 	# Team-color the readout: green when a friendly is losing HP, red for an enemy.
 	var friendly := true
@@ -286,12 +289,20 @@ func is_reorderable_row() -> bool:
 	return action != null and action.is_reorderable()
 
 func _gui_input(event: InputEvent) -> void:
-	# Draggable single attacks AND volley headers (collapsed header: drag to reorder / click to expand).
-	if not (draggable or is_volley_header):
+	# EVERY row takes the press since #1122, because a click on any row means something. Which it
+	# was, a drag or a click, is only known on the release, so that call is the panel's.
+	if action == null:
 		return
 	if event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT and event.pressed:
-		drag_requested.emit(self)
+		pressed.emit(self)
 		accept_event()
+
+# A volley header's readout is its expand toggle (#1122): a click on the row requeues the volley like
+# any other order, so expanding needed a target of its own. STOP keeps this press from the row.
+func _on_readout_input(event: InputEvent) -> void:
+	if event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT and event.pressed:
+		expand_toggled.emit(self)
+		readout_card.accept_event()
 
 # A unit's sheet is 64px holding a ~23x20 character, so fitting the whole CELL into a 32px slot drew
 # everyone at a third of the slot (#1082, the #937 law). The slot is handed the square around the
@@ -316,6 +327,8 @@ func setup_volley_summary(lead: AttackAction, count: int, expanded: bool) -> voi
 	# and this is the slot that is free rather than one to draw over (#685).
 	readout.text = ("[-] x%d" if expanded else "[+] x%d") % count
 	_show_readout(QueueStyle.ink(QueueStyle.Role.HEADER_TEXT))
+	readout_card.mouse_filter = Control.MOUSE_FILTER_STOP
+	readout_card.gui_input.connect(_on_readout_input)
 	_apply_row_style()
 
 	# Cancelling the summary cancels the whole volley (it's one aim) — keep the X live.

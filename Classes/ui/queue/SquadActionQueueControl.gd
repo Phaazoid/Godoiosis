@@ -2,9 +2,9 @@ extends Control
 class_name SquadActionQueueControl
 
 # The action-queue panel: renders a squad's plan as sectioned rows (via ActionQueueDisplayEntry)
-# with drag-reorder and the Execute button. A section IS an action type and a drag never leaves its
-# own section, so the sections are the pass's phase order and the rows inside one are its clock
-# (#412). Which rows may be dragged is the ORDER's answer, not this panel's -- see
+# with drag-reorder, click-to-requeue (#1122) and the Execute button. A section IS an action type
+# and a drag never leaves its own section, so the sections are the pass's phase order and the rows
+# inside one are its clock (#412). Which rows may be dragged is the ORDER's answer, not this panel's -- see
 # ActionQueueRow.is_reorderable_row. Layout invariant (#160): the scene ROOT
 # is full-rect with mouse_filter IGNORE — never STOP, or it eats every board click — and
 # BackgroundPanel is anchored to the RIGHT edge so the dock follows a window resize; don't let
@@ -38,6 +38,7 @@ var _flash_tween: Tween = null
 var _drag_row: ActionQueueRow = null
 var _drag_section: VBoxContainer = null
 var _drag_dirty := false
+var _press_at := Vector2.ZERO                          # where the press landed; a click travels no further than CLICK_SLOP
 var _expanded_actors: Dictionary = {}                  # actor instance_id -> bool (volley expanded?)
 var _last_entries: Array[ActionQueueDisplayEntry] = []  # cached so a toggle re-renders without the backend
 # Hidden while a cinematic pass owns the frame (#722), and what the CONTENT rule last decided.
@@ -54,6 +55,7 @@ signal execute_requested
 signal cancel_requested(action: BaseAction)
 signal row_hover_changed(action: BaseAction, hovering: bool)
 signal reorder_requested(action_type: BaseAction.ActionType, ordered_actors: Array)
+signal row_clicked(action: BaseAction)   # #1122; what a click DOES is game's, asked of the order
 
 func _ready() -> void:
 	execute_button.text = "Execute Orders"
@@ -277,7 +279,8 @@ func _new_row(list: VBoxContainer, indent_level: int) -> ActionQueueRow:
 func _wire_row(row: ActionQueueRow) -> void:
 	row.cancel_requested.connect(func(a): cancel_requested.emit(a))
 	row.hover_changed.connect(func(a, h): row_hover_changed.emit(a, h))
-	row.drag_requested.connect(_on_row_drag_requested)
+	row.pressed.connect(_on_row_pressed)
+	row.expand_toggled.connect(_toggle_volley)
 
 func clear():
 	current_squad = null
@@ -299,13 +302,15 @@ func _clear_sections():
 	for child in sections_box.get_children():
 		child.queue_free()
 
-func _on_row_drag_requested(row: ActionQueueRow) -> void:
+func _on_row_pressed(row: ActionQueueRow) -> void:
 	if not is_instance_valid(row):
 		return
 	_drag_row = row
 	_drag_section = row.get_parent().get_parent() as VBoxContainer   # row -> MarginContainer wrapper -> section VBox
 	_drag_dirty = false
-	row.modulate = Color(1, 1, 1, 0.6)                               # lift cue
+	_press_at = get_global_mouse_position()
+	if row.draggable:
+		row.modulate = Color(1, 1, 1, 0.6)                           # lift cue
 	set_process(true)
 
 func _process(_delta: float) -> void:
@@ -342,6 +347,7 @@ func _end_drag() -> void:
 	var section := _drag_section
 	var row := _drag_row
 	var dirty := _drag_dirty
+	var travelled := _press_at.distance_to(get_global_mouse_position())
 	if is_instance_valid(row):
 		row.modulate = Color(1, 1, 1, 1)
 	_drag_row = null
@@ -360,11 +366,19 @@ func _end_drag() -> void:
 		reorder_requested.emit(reordered_type, ordered_actors)
 		return
 
-	# No movement = a click. On a volley header, that toggles expand/collapse (UI-only re-render).
-	if is_instance_valid(row) and row.is_volley_header and row.action != null and is_instance_valid(row.action.actor):
-		var id := row.action.actor.get_instance_id()
-		_expanded_actors[id] = not _expanded_actors.get(id, false)
-		_render()
+	# A CLICK is a release that reordered nothing AND stayed where it was pressed (#1122). Reordering
+	# nothing alone is not enough: a drag that never crossed a neighbour's midpoint reorders nothing
+	# either, and a click now spends the order.
+	if travelled <= GearDropZone.CLICK_SLOP and is_instance_valid(row) and row.action != null:
+		row_clicked.emit(row.action)
+
+# A volley header's expand/collapse, off its readout since #1122 (UI-only re-render).
+func _toggle_volley(row: ActionQueueRow) -> void:
+	if not is_instance_valid(row) or row.action == null or not is_instance_valid(row.action.actor):
+		return
+	var id := row.action.actor.get_instance_id()
+	_expanded_actors[id] = not _expanded_actors.get(id, false)
+	_render()
 
 func _cancel_drag() -> void:
 	if is_instance_valid(_drag_row):
