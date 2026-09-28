@@ -1,9 +1,12 @@
 extends PanelContainer
 
-# Inventory section of the inspect panel (UnitInfoPanel.tscn): the fixed grid of item slots
-# (code-generated), with an equip/unequip/toss action popup when the inspected unit is
+# Inventory section of the inspect panel (UnitInfoPanel.tscn): one column of full-width item slots
+# (code-generated, #966), with an equip/unequip/toss action popup when the inspected unit is
 # controllable (can_act). Slot rows show the computed weapon view (elements incl. mods). The slots
 # are the action queue's rows, in the player's palette (#1105).
+#
+# A slot is a PanelContainer, never a Panel: a Panel lays out nothing, so its row sat at the top
+# edge at its own minimum width and ran past the border (#966).
 
 @onready var slots_container = $MarginContainer/InventorySlots
 signal loadout_changed
@@ -33,8 +36,8 @@ static func _ink_name(label: Label, role: QueueStyle.Role) -> void:
 
 func _create_slots():
 	for i in range(Unit.MAX_INVENTORY_SIZE):
-		var slot_panel := Panel.new()
-		slot_panel.custom_minimum_size = Vector2i(130, 40)
+		var slot_panel := PanelContainer.new()
+		slot_panel.size_flags_horizontal = Control.SIZE_EXPAND_FILL   # span the one grid column
 		slot_panel.mouse_filter = Control.MOUSE_FILTER_STOP
 
 		slot_panel.add_theme_stylebox_override("panel", QueueStyle.row_box(false, false))
@@ -56,6 +59,11 @@ func _create_slots():
 		var name_label := Label.new()
 		name_label.text = ""
 		name_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		name_label.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+		# A guard, not a look: no authored name trims today, but an over-long one must not widen the
+		# slot and walk the panel out of its column (the #685 edge).
+		name_label.clip_text = true
+		name_label.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
 		name_label.name = "ItemName"
 		name_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
 
