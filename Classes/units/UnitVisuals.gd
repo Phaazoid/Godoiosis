@@ -35,6 +35,9 @@ static var PIN_PULSE_MODULATE := Color(2.2, 2.2, 2.2)
 # How long it sits at that peak, in seconds. The ramp either side is Pulse.PERIOD, so this is the
 # share of the cycle the cue actually occupies rather than one frame at the top of a ramp.
 static var PIN_PULSE_HOLD := 0.2
+# How white the one a death's PULSE ran to flashes as it arrives (#1104), and how long the flash takes.
+static var LOSS_FLASH_MODULATE := Color(2.0, 2.0, 2.0)
+static var LOSS_FLASH_SECONDS := 0.3
 # Every unit whose pin flash is RUNNING right now (#1074) -- the set a new flash looks in for a beat to
 # join, so every pinned enemy flashes on one timer. Membership is maintained at the two doors a pin
 # tween opens and closes through, sync_pin_flash and drop_pin_flash.
@@ -151,6 +154,19 @@ func reset_visuals():
 	sprite.modulate = base_modulate
 	sprite.scale = base_scale
 	
+# A one-shot flash for the one a death's PULSE ran to (#1104). It YIELDS where play_invalid_flash
+# seizes: to an aim pulse (news about this unit), to a pin flash (already white), and to any one-shot
+# already running -- that tween also drives the lunge and the shake, and killing it mid-lunge would
+# leave the sprite where the lunge had it. The lowest tier on sprite.modulate.
+func play_loss_flash() -> void:
+	if sprite == null or pulse_tween != null or pin_tween != null:
+		return
+	if visual_tween != null and visual_tween.is_running():
+		return
+	visual_tween = create_tween()
+	visual_tween.tween_property(sprite, "modulate", LOSS_FLASH_MODULATE, LOSS_FLASH_SECONDS * 0.3)
+	visual_tween.tween_property(sprite, "modulate", base_modulate, LOSS_FLASH_SECONDS * 0.7)
+
 func play_invalid_flash():
 	if sprite == null:
 		return

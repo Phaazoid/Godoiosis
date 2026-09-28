@@ -41,6 +41,7 @@ enum Layer {
 	COHESION_EDGE, TETHERS, TETHER_GHOST, TETHER_STRAIN, TETHER_MOMENT, TETHER_SHARDS,
 	ZONE_MARKS, ZONE_EMBLEMS,
 	PAYLOAD,
+	TETHER_GLOW,
 }
 enum Kind { FILL, BRACKET, SPRITE, BILLBOARD, LINE }
 
@@ -216,6 +217,11 @@ const LAYERS: Dictionary[Layer, Dictionary] = {
 	# and the squad beam marches its dashes along a stroke, which would cut a falling piece up as it fell.
 	Layer.TETHER_SHARDS: {"color": Color(1, 1, 1, 1), "sort": 14, "beam": "shard", "kind": Kind.LINE,
 		"casing": true},
+	# ...and a death's PULSE (#1104): the warm light that runs down a dead member's tether to whoever is
+	# left. A SOFT stroke, uncased and blooming ("glow"), tapered at both ends by per-point widths so it
+	# reads as a light rather than a dash -- the windowed probe's finding. 14, with the tethers it runs
+	# along: the icons' billboards sit at 15, and every other kind of layer sorts below them.
+	Layer.TETHER_GLOW: {"color": Color(1.0, 0.72, 0.38, 1), "sort": 14, "beam": "glow", "kind": Kind.LINE},
 	Layer.AIM: {"color": Color(1, 1, 0, 1), "sort": 4, "kind": Kind.FILL},
 	# The aim's PAYLOAD tiles (#1058 D2b): the footprint's twin, inset a size smaller (InsetSquare), for the
 	# tiles only what the attack DROPS reaches. It SHARES AIM's sort, and may: its cells are the payloads'
@@ -405,6 +411,27 @@ enum SelectorDepth { LEVEL, HALF }
 # The dark CASING's width, world units EACH side (#1109 round 2), on every layer declaring `"casing"`.
 # Its colour is SquadLines2D.CASING_COLOR, since the flat view draws the casing too.
 @export var squad_casing_width := 0.015: set = _set_squad_casing_width
+# A death's PULSE light (#1104): its width at the middle (world units; the ends taper to nothing), its
+# brightness (past the diorama's 1.2 glow threshold, so it blooms) and its own falloff -- softer than
+# the shared one, which is tuned for a laser.
+@export var pulse_glow_width := 0.18: set = _set_pulse_glow_width
+@export var pulse_glow_intensity := 2.6: set = _set_pulse_glow_intensity
+@export var pulse_glow_softness := 1.6: set = _set_pulse_glow_softness
+
+
+func _set_pulse_glow_width(value: float) -> void:
+	pulse_glow_width = value
+	_apply_beam_params()
+
+
+func _set_pulse_glow_intensity(value: float) -> void:
+	pulse_glow_intensity = value
+	_apply_beam_params()
+
+
+func _set_pulse_glow_softness(value: float) -> void:
+	pulse_glow_softness = value
+	_apply_beam_params()
 
 
 func _set_squad_line_width(value: float) -> void:
@@ -1059,8 +1086,9 @@ const DASHED_BEAMS: Array[String] = ["squad", "cohesion"]
 
 # A LINE layer may name its own set (slice 4). The shared trio is tuned for a LASER -- the sight
 # bead's width and an intensity whose own comment reads ">1.2 blooms" -- and the focus outline is
-# markup, so inheriting them made it a glowing rope around forty cells. Softness stays shared: the
-# falloff SHAPE is not a thing the three want to differ about.
+# markup, so inheriting them made it a glowing rope around forty cells. Softness stays shared, but
+# for the one set that IS a light rather than a line -- a death's PULSE ("glow", #1104), whose probe
+# only read as a light once its falloff was softer than the laser's.
 #
 # Three tenants since #1042, so the binary fork became a named lookup rather than a second ternary
 # per parameter -- a fourth adds a row here and nothing else.
@@ -1082,8 +1110,12 @@ func _style_beam(material: ShaderMaterial, spec: Dictionary = {}) -> void:
 		"cohesion":
 			width = cohesion_line_width
 			intensity = squad_line_intensity
+		"glow":
+			width = pulse_glow_width
+			intensity = pulse_glow_intensity
 	material.set_shader_parameter("beam_width", width)
-	material.set_shader_parameter("beam_softness", beam_softness)
+	material.set_shader_parameter("beam_softness",
+			pulse_glow_softness if spec.get("beam", "") == "glow" else beam_softness)
 	material.set_shader_parameter("beam_intensity", intensity)
 	# The bead rides ONLY the layers that ask for it; everything else reads a zero length and the
 	# shader's whole motion branch drops out. `motion` is the composed photosensitivity read.

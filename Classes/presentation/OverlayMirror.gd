@@ -59,6 +59,9 @@ var _last_outline_version := -1  # ...and the focus stroke's (slice 4)
 var _last_squad_lines_version := -1   # ...and the squad's range and tethers (#1070)
 var _shake_pushed := 0.0   # the last pluck pushed, so a still tether costs no per-frame write
 var _moments_drawn := false   # whether the moment layers hold anything, so an idle board costs nothing (#367)
+# A death's PULSE light (#1104) narrows to nothing at both ends and swells in the middle -- the shape,
+# as per-point width scales along its sampled stroke (sin over nine points).
+const GLOW_TAPER: Array[float] = [0.0, 0.383, 0.707, 0.924, 1.0, 0.924, 0.707, 0.383, 0.0]
 # The zones' wall (#955), built on first need, and what it was last built from -- the zones, the
 # knobs and the colours -- so a still board rebuilds nothing.
 var _zone_walls: ZoneWalls
@@ -918,6 +921,7 @@ func _tether_moments(om: OverlayManager) -> void:
 		if _moments_drawn:
 			overlays.clear(BoardOverlays.Layer.TETHER_MOMENT)
 			overlays.clear(BoardOverlays.Layer.TETHER_SHARDS)
+			overlays.clear(BoardOverlays.Layer.TETHER_GLOW)
 			_moments_drawn = false
 		return
 	var now := Time.get_ticks_msec()
@@ -928,6 +932,9 @@ func _tether_moments(om: OverlayManager) -> void:
 	var starts := PackedFloat32Array()
 	var shards: Array[Array] = []
 	var shard_tints: Array[Color] = []
+	var glows: Array[Array] = []
+	var glow_widths: Array[Array] = []
+	var glow_tints: Array[Color] = []
 	for entry: Dictionary in om.squad_tether_moments:
 		var drawing := SquadLines2D.moment_drawing(entry, now, flash)
 		var trace_shaft := SquadLines2D.bent(drawing["shaft"], float(drawing["bend"]))
@@ -954,12 +961,32 @@ func _tether_moments(om: OverlayManager) -> void:
 					_moment_point(entry, points[1])])]
 			shards.append(stroke)
 			shard_tints.append(piece["tint"])
+		var glow: Dictionary = drawing["glow"]
+		if not glow.is_empty():
+			var ends: PackedVector3Array = glow["points"]
+			glows.append([_glow_stroke(entry, ends)])
+			glow_widths.append([PackedFloat32Array(GLOW_TAPER)])
+			glow_tints.append(glow["tint"])
 	overlays.set_marks(BoardOverlays.Layer.TETHER_MOMENT, marks, Color.WHITE, [], cones, tints, starts)
 	if shards.is_empty():
 		overlays.clear(BoardOverlays.Layer.TETHER_SHARDS)
 	else:
 		overlays.set_marks(BoardOverlays.Layer.TETHER_SHARDS, shards, Color.WHITE, [], [], shard_tints)
+	if glows.is_empty():
+		overlays.clear(BoardOverlays.Layer.TETHER_GLOW)
+	else:
+		overlays.set_marks(BoardOverlays.Layer.TETHER_GLOW, glows, Color.WHITE, glow_widths, [], glow_tints)
 	_moments_drawn = true
+
+
+# A death's PULSE light as the stroke that draws it (#1104): sampled between its two ends so GLOW_TAPER
+# can narrow it to nothing at both -- a solid-ended ribbon read as a lit dash in the probe, not a light.
+func _glow_stroke(entry: Dictionary, ends: PackedVector3Array) -> PackedVector3Array:
+	var stroke := PackedVector3Array()
+	var count := GLOW_TAPER.size()
+	for i in count:
+		stroke.append(_moment_point(entry, ends[0].lerp(ends[1], float(i) / float(count - 1))))
+	return stroke
 
 
 # Where a moment's trace-space point draws: lifted with the fight when its ends are on stage (#367's

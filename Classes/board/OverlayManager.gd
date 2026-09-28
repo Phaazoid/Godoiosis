@@ -904,7 +904,8 @@ func play_tether_moments(links: Array[Dictionary], board: BoardContext) -> void:
 		squad_tether_moments.append({"from": link["from"], "to": link["to"],
 				"chord": SquadLines2D.chord(link["from"], link["to"], board),
 				"moment": link["moment"], "start_msec": now + int(float(link.get("delay", 0.0)) * 1000.0),
-				"standing": false, "hostile": bool(link.get("hostile", false))})
+				"standing": false, "hostile": bool(link.get("hostile", false)),
+				"leader_died": bool(link.get("leader_died", false)), "survivor": int(link.get("survivor", 0))})
 	_rebuild_squad_tethers()
 	set_process(true)
 
@@ -917,13 +918,19 @@ func clear_tether_moments() -> void:
 	set_process(false)
 
 
-# The moments' clock: a finished one leaves, and the tether it stood in for comes back.
+# The moments' clock: a finished one leaves, and the tether it stood in for comes back. A death's
+# PULSE flashes whoever it runs to as it arrives (#1104) -- on THIS clock rather than a tween's delay,
+# which the modal lock and the kill's hitstop would pull out of step with the light.
 func _process(_delta: float) -> void:
 	var now := Time.get_ticks_msec()
 	var live: Array[Dictionary] = []
 	for moment: Dictionary in squad_tether_moments:
 		var elapsed := float(now - int(moment["start_msec"])) / 1000.0
 		var drawn := SquadLines2D.moment_at(moment["moment"], moment["chord"], elapsed, moment["standing"])
+		if int(moment["moment"]) == SquadLines2D.Moment.PULSE and elapsed >= SquadLines2D.PULSE_SECONDS \
+				and not moment.get("flashed", false):
+			moment["flashed"] = true
+			_flash_survivor(int(moment.get("survivor", 0)))
 		if not drawn["done"]:
 			live.append(moment)
 	if live.size() != squad_tether_moments.size():
@@ -931,6 +938,15 @@ func _process(_delta: float) -> void:
 		_rebuild_squad_tethers()
 	if squad_tether_moments.is_empty():
 		set_process(false)
+
+
+# The one a PULSE ran to, if it is still on the board. #217's setting stills the flash with the light.
+func _flash_survivor(id: int) -> void:
+	if id == 0 or not BoardOverlays.beams_animating():
+		return
+	var unit := instance_from_id(id) as Unit
+	if unit != null and not unit.is_queued_for_deletion():
+		unit.visuals.play_loss_flash()
 
 
 # Is a draw-in, running or waiting its turn, standing in for this pair's tether?

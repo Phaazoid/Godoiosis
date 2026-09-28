@@ -45,7 +45,7 @@ static var CASING_COLOR := Color(0.13, 0.03, 0.1, 1.0)
 # ...and its width in the flat view, in pixels each side. The diorama's is a BoardOverlays export, in
 # world units, which this class cannot see -- ARROW_WIDTH_SCALE's reason.
 const CASING_PX := 1.0
-# A tether that MIGHT be: dimmer and see-through, arrowhead included.
+# A tether that MIGHT be: dimmer than a standing one. Its alpha fades the arrowhead with the shaft.
 static var TETHER_GHOST_COLOR := Color(0.72, 0.42, 0.16, 1.0)
 static var TETHER_STRAIN_COLOR := Color(1.0, 0.18, 0.14, 1.0)
 # DASHES PER TILE, not a dash length, and that is what lets the range's stroke stay one pattern
@@ -74,8 +74,14 @@ static var SHAKE_SWINGS := 3.0
 # MEMBERSHIP MOMENTS (#367): a join DRAWS the tether in, a voluntary leave REELS it into the leader,
 # a forced one BREAKS it. A moment is its own short-lived drawing, never a state on a standing
 # tether, because tethers stand only while something is selected and membership changes when nothing
-# may be.
-enum Moment { DRAW_IN, REEL_IN, BREAK }
+# may be. A DEATH plays one of the last four (#1104) -- see DEATH_LOOKS.
+enum Moment { DRAW_IN, REEL_IN, BREAK, DRAIN, SLACK, PULSE, MOTES }
+
+# The four a death picks between (#1104; the dev: all of them, a different one each time). In each the
+# dashes stop where they stood and the tether turns to ash: DRAIN runs the ash from the dead end to the
+# other, SLACK sags and drops the dead end to the ground, PULSE runs a warm light to whoever is left, and
+# MOTES crumbles into pale motes that drift up.
+const DEATH_LOOKS: Array[int] = [Moment.DRAIN, Moment.SLACK, Moment.PULSE, Moment.MOTES]
 
 # The draw-in: how long the shaft takes to reach the leader, then the cone's pop -- how far past its
 # own size it swells (a multiple) and how long it takes to settle. With a standing tether to hand over
@@ -108,6 +114,35 @@ static var BREAK_SPARK_SECONDS := 0.3
 const SPARK_TRAIL_SECONDS := 0.04
 # HealthBlockDebris's scatter: derived per index, never rolled.
 const GOLDEN_ANGLE := 2.39996323
+
+# A DEATH's moment (#1104). Which look plays: 0 picks one per death (death_look), 1-4 pins DRAIN, SLACK,
+# PULSE or MOTES, for tuning one at a time.
+static var DEATH_LOOK := 0
+# The ash every look turns to, whichever side the tether was.
+static var DEATH_ASH_COLOR := Color(0.59, 0.56, 0.53, 1.0)
+# How long the ash takes to come in (PULSE and MOTES; DRAIN and SLACK grey as they go), how long a look
+# holds it, and how long the fade that closes it takes.
+static var DEATH_GREY_SECONDS := 0.2
+static var DEATH_HOLD_SECONDS := 0.25
+static var DEATH_FADE_SECONDS := 0.45
+# DRAIN: how long the ash takes to run the tether's length.
+static var DRAIN_SECONDS := 0.55
+# SLACK: how long the fall takes, and how far the middle sags below where it hung, in cells.
+static var SLACK_SECONDS := 0.5
+static var SLACK_SAG := 0.2
+# PULSE: how long the light takes to reach whoever is left, its colour, and its length in cells.
+static var PULSE_SECONDS := 0.55
+static var PULSE_COLOR := Color(1.0, 0.72, 0.38, 1.0)
+static var PULSE_LENGTH := 0.35
+# MOTES: how many each dash crumbles into, how far they rise (cells), and how long one lasts at most.
+static var MOTES_PER_DASH := 4
+static var MOTE_RISE := 0.5
+static var MOTE_SECONDS := 0.9
+# How far the ash front's edge blends, in cells, and how long a crumbling dash takes to go.
+const DRAIN_BLEND := 0.5
+const CRUMBLE_SECONDS := 0.1
+# A mote's own length, in cells: a speck, drawn as the shortest stroke that still reads.
+const MOTE_SIZE := 0.05
 
 # What this node draws, handed down by OverlayManager (the store). Trace space, like ThreatLines2D.
 var outline: Array[PackedVector3Array] = []
@@ -302,18 +337,45 @@ static func moment_at(moment: int, tether_chord: PackedVector3Array, elapsed: fl
 				drawn["tint"] = tint
 				drawn["cone_tint"] = tint
 			drawn["done"] = elapsed >= moment_seconds(Moment.BREAK)
+		Moment.DRAIN, Moment.SLACK, Moment.PULSE, Moment.MOTES:
+			# A death is its pieces from the first frame (moment_drawing): no shaft, no cone here.
+			drawn["done"] = elapsed >= moment_seconds(moment)
+		_:
+			push_error("moment_at: no arm for moment %d" % moment)
+			drawn["done"] = true
 	return drawn
 
 
 # How long a moment lasts at most, for a caller that has to know when to stop asking.
 static func moment_seconds(moment: int) -> float:
-	if moment == Moment.REEL_IN:
-		return maxf(REEL_IN_SECONDS, 0.0)
-	if moment == Moment.BREAK:
-		return maxf(BREAK_STRAIN_SECONDS, 0.0) \
-				+ maxf(maxf(BREAK_SHATTER_SECONDS, 0.0), maxf(BREAK_SPARK_SECONDS, 0.0))
-	return maxf(DRAW_IN_SECONDS, 0.0) + maxf(POP_SECONDS, 0.0) + maxf(DRAWN_HOLD_SECONDS, 0.0) \
-			+ maxf(DRAWN_FADE_SECONDS, 0.0)
+	match moment:
+		Moment.DRAW_IN:
+			return maxf(DRAW_IN_SECONDS, 0.0) + maxf(POP_SECONDS, 0.0) + maxf(DRAWN_HOLD_SECONDS, 0.0) \
+					+ maxf(DRAWN_FADE_SECONDS, 0.0)
+		Moment.REEL_IN:
+			return maxf(REEL_IN_SECONDS, 0.0)
+		Moment.BREAK:
+			return maxf(BREAK_STRAIN_SECONDS, 0.0) \
+					+ maxf(maxf(BREAK_SHATTER_SECONDS, 0.0), maxf(BREAK_SPARK_SECONDS, 0.0))
+		Moment.DRAIN, Moment.SLACK, Moment.PULSE:
+			return _death_fade_start(moment) + maxf(DEATH_FADE_SECONDS, 0.0)
+		Moment.MOTES:
+			return maxf(DEATH_GREY_SECONDS, 0.0) + maxf(MOTE_SECONDS, 0.0)
+	push_error("moment_seconds: no arm for moment %d" % moment)
+	return 0.0
+
+
+# When a death look's closing fade begins: DRAIN and SLACK hold their ash once it has run or fallen,
+# PULSE fades as its light arrives. MOTES has no fade of its own -- every mote fades as it rises.
+static func _death_fade_start(moment: int) -> float:
+	match moment:
+		Moment.DRAIN:
+			return maxf(DRAIN_SECONDS, 0.0) + maxf(DEATH_HOLD_SECONDS, 0.0)
+		Moment.SLACK:
+			return maxf(SLACK_SECONDS, 0.0) + maxf(DEATH_HOLD_SECONDS, 0.0)
+		Moment.PULSE:
+			return maxf(maxf(PULSE_SECONDS, 0.0), maxf(DEATH_GREY_SECONDS, 0.0))
+	return 0.0
 
 
 # How long a moment takes to SAY what it says -- a draw-in once its cone has popped, the others at
@@ -355,9 +417,11 @@ static func _faded(color: Color, alpha: float) -> Color:
 # A stored moment (OverlayManager.squad_tether_moments) as the geometry that draws it NOW, in trace
 # space: the shaft's points, the chord's origin (each view measures its own dash offset from it, so
 # the dashes stay where the standing tether's would be), its tint, and the cone -- base, tip, width
-# scale, tint -- or {} while there is none; plus a break's `bend` (the shiver, in cells) and its
-# `pieces` (solid two-point strokes, each with its own tint). The one conversion both views read.
-# The entry's `hostile` (#1109) says whose squad the link was, which picks the colour.
+# scale, tint -- or {} while there is none; plus a break's `bend` (the shiver, in cells), its and a
+# death's `pieces` (solid two-point strokes, each with its own tint), and a PULSE's `glow` (its light:
+# `points`, a stroke along the chord, and `tint`) or {}. The one conversion both views read.
+# The entry's `hostile` (#1109) says whose squad the link was, which picks the colour; a death's
+# `leader_died` says which end is gone (#1104).
 static func moment_drawing(entry: Dictionary, now_msec: int, flash: bool) -> Dictionary:
 	var tether_chord: PackedVector3Array = entry["chord"]
 	var elapsed := float(now_msec - int(entry["start_msec"])) / 1000.0
@@ -366,7 +430,7 @@ static func moment_drawing(entry: Dictionary, now_msec: int, flash: bool) -> Dic
 			flash, hostile_side)
 	var no_pieces: Array[Dictionary] = []
 	var out := {"origin": tether_chord[0], "shaft": PackedVector3Array(), "tint": drawn["tint"],
-			"cone": {}, "done": drawn["done"], "bend": 0.0, "pieces": no_pieces}
+			"cone": {}, "done": drawn["done"], "bend": 0.0, "pieces": no_pieces, "glow": {}}
 	var u0: float = drawn["u0"]
 	var u1: float = drawn["u1"]
 	if u1 > u0:
@@ -386,6 +450,11 @@ static func moment_drawing(entry: Dictionary, now_msec: int, flash: bool) -> Dic
 		if flash:
 			snap_shift = DASH_SPEED * (float(int(entry["start_msec"])) / 1000.0 + maxf(BREAK_STRAIN_SECONDS, 0.0))
 		_break_drawing(out, tether_chord, elapsed, snap_shift, flash, hostile_side)
+	elif DEATH_LOOKS.has(int(entry["moment"])):
+		# ...and a death's stop where they stood at the death.
+		var death_shift := DASH_SPEED * float(int(entry["start_msec"])) / 1000.0 if flash else 0.0
+		_death_drawing(out, int(entry["moment"]), tether_chord, elapsed, death_shift, flash, hostile_side,
+				bool(entry.get("leader_died", false)))
 	return out
 
 
@@ -460,6 +529,163 @@ static func _falling(tether_chord: PackedVector3Array, u0: float, u1: float, sna
 	var spin := TAU * BREAK_TUMBLE_TURNS * fall * (1.0 if index % 2 == 0 else -1.0)
 	var turned := half.rotated(side, spin)
 	return PackedVector3Array([landed - turned, landed + turned])
+
+
+# WHICH look a death plays (#1104; the dev: "make it random each time"). DERIVED, never rolled -- the
+# presentation's scatter rule (HealthBlockDebris, ParticleFan) -- from where the body fell and how many
+# deaths the board has seen, so a replay of the same fight plays the same looks and a case can state
+# what it expects. It never repeats the look before it. DEATH_LOOK pins one while it is tuned.
+static func death_look(cell: Vector2i, count: int, last: int) -> int:
+	var looks := DEATH_LOOKS.size()
+	if DEATH_LOOK >= 1 and DEATH_LOOK <= looks:
+		return DEATH_LOOKS[DEATH_LOOK - 1]
+	var pick := posmod(hash(Vector3i(cell.x, cell.y, count)), looks)
+	if DEATH_LOOKS[pick] == last:
+		pick = (pick + 1) % looks
+	return DEATH_LOOKS[pick]
+
+
+# A death's own geometry (#1104), written into its moment's drawing. The dashes stop where they stood
+# (`shift`) and each is a solid piece with its own tint; the arrowhead is `cone`; every look turns them
+# to DEATH_ASH_COLOR. `leader_died` says which end is gone: the ash runs FROM it, the slack DROPS it,
+# and the light runs AWAY from it, to whoever is left. Distances run to the arrowhead's tip, where the
+# tether meets the leader.
+static func _death_drawing(out: Dictionary, look: int, tether_chord: PackedVector3Array, elapsed: float,
+		shift: float, flash: bool, hostile_side: bool, leader_died: bool) -> void:
+	var m := measure(tether_chord)
+	if m.is_empty():
+		return
+	var shaft_end: float = m["shaft_end"]
+	var tip: float = m["tip"]
+	var has_cone := shaft_end < tip
+	var head_mid := (shaft_end + tip) * 0.5
+	var base := tether_color(hostile_side)
+	var ash := DEATH_ASH_COLOR
+	var fade := 1.0 - _phase(elapsed - _death_fade_start(look), DEATH_FADE_SECONDS)
+	var spans := dash_spans(shaft_end, shift)
+	var pieces: Array[Dictionary] = []
+	match look:
+		Moment.DRAIN:
+			# How far from the dead end the ash has reached, run past the far end by its own blend so the
+			# last dash turns too.
+			var front := _ease_out(_phase(elapsed, DRAIN_SECONDS)) * (tip + DRAIN_BLEND)
+			for span: Vector2 in spans:
+				var mid := (span.x + span.y) * 0.5
+				var ashen := clampf((front - _from_dead(mid, tip, leader_died)) / DRAIN_BLEND, 0.0, 1.0)
+				pieces.append(_death_piece(tether_chord, span.x, span.y, _faded(base.lerp(ash, ashen), fade)))
+			if has_cone:
+				var ashen := clampf((front - _from_dead(head_mid, tip, leader_died)) / DRAIN_BLEND, 0.0, 1.0)
+				out["cone"] = _death_cone(tether_chord, shaft_end, tip, _faded(base.lerp(ash, ashen), fade))
+		Moment.SLACK:
+			var fall := _ease_out(_phase(elapsed, SLACK_SECONDS))
+			var tint := _faded(base.lerp(ash, _phase(elapsed, SLACK_SECONDS)), fade)
+			for span: Vector2 in spans:
+				pieces.append({"points": PackedVector3Array([slack_point(tether_chord, span.x, fall, leader_died),
+						slack_point(tether_chord, span.y, fall, leader_died)]), "tint": tint})
+			# The arrow lets go as the tension does.
+			var holding := 1.0 - _phase(elapsed, SLACK_SECONDS)
+			if has_cone and holding > 0.0:
+				out["cone"] = {"base": slack_point(tether_chord, shaft_end, fall, leader_died),
+						"tip": slack_point(tether_chord, tip, fall, leader_died), "scale": ARROW_WIDTH_SCALE,
+						"tint": _faded(tint, holding)}
+		Moment.PULSE:
+			var tint := _faded(base.lerp(ash, _phase(elapsed, DEATH_GREY_SECONDS)), fade)
+			# The light's centre, measured from the dead end, and everything behind it is gone.
+			var run := _ease_in(_phase(elapsed, PULSE_SECONDS)) * tip
+			var half := maxf(PULSE_LENGTH, 0.0) * 0.5
+			for span: Vector2 in spans:
+				if _from_dead((span.x + span.y) * 0.5, tip, leader_died) >= run - half:
+					pieces.append(_death_piece(tether_chord, span.x, span.y, tint))
+			if has_cone and _from_dead(head_mid, tip, leader_died) >= run - half:
+				out["cone"] = _death_cone(tether_chord, shaft_end, tip, tint)
+			# The light is motion, so #217 stills it; the ash and the fade still say what happened.
+			if flash and elapsed < PULSE_SECONDS:
+				var centre := tip - run if leader_died else run
+				out["glow"] = {"points": PackedVector3Array([
+						point_along(tether_chord, clampf(centre - half, 0.0, tip)),
+						point_along(tether_chord, clampf(centre + half, 0.0, tip))]), "tint": PULSE_COLOR}
+		Moment.MOTES:
+			var tint := base.lerp(ash, _phase(elapsed, DEATH_GREY_SECONDS))
+			var grey := maxf(DEATH_GREY_SECONDS, 0.0)
+			var crumble := 1.0 - _phase(elapsed - grey, CRUMBLE_SECONDS)
+			if crumble > 0.0:
+				for span: Vector2 in spans:
+					pieces.append(_death_piece(tether_chord, span.x, span.y, _faded(tint, crumble)))
+				if has_cone:
+					out["cone"] = _death_cone(tether_chord, shaft_end, tip, _faded(tint, crumble))
+			var after := elapsed - grey
+			if after >= 0.0:
+				var ranges: Array[Vector2] = []
+				for span: Vector2 in spans:
+					ranges.append(span)
+				if has_cone:
+					ranges.append(Vector2(shaft_end, tip))
+				pieces.append_array(_motes(tether_chord, ranges, after))
+	out["pieces"] = pieces
+
+
+# Where a SLACK tether's point `u` (from the member end) hangs `fall` (0-1) of the way down: sagged below
+# the straight chord, the dead end dropped to the ground under it -- the body-middle height taken back
+# off, as the break's pieces land -- and never below that ground. Public for the case that pins it.
+static func slack_point(tether_chord: PackedVector3Array, u: float, fall: float, leader_died: bool) -> Vector3:
+	var p := point_along(tether_chord, u)
+	var length := (tether_chord[1] - tether_chord[0]).length()
+	var t := clampf(u / length, 0.0, 1.0) if length > 0.0 else 0.0
+	var ground := lerpf(tether_chord[0].y, tether_chord[1].y, t) - body_middle_rule()
+	var sag := _cells_to_rule(maxf(SLACK_SAG, 0.0)) * sin(PI * t)
+	var drop := body_middle_rule() * (t if leader_died else 1.0 - t)
+	p.y = maxf(p.y - (sag + drop) * clampf(fall, 0.0, 1.0), ground)
+	return p
+
+
+# The MOTES a crumbled tether leaves, `after` seconds past the crumble: MOTES_PER_DASH along each range,
+# each rising and drifting and fading on a life scattered by its index (never rolled). A mote is a speck
+# laid along the chord, so the flat view -- which has no height -- still sees it drift and fade.
+static func _motes(tether_chord: PackedVector3Array, ranges: Array[Vector2], after: float) -> Array[Dictionary]:
+	var motes: Array[Dictionary] = []
+	var length := (tether_chord[1] - tether_chord[0]).length()
+	if length <= 0.0:
+		return motes
+	var along := (tether_chord[1] - tether_chord[0]) / length
+	var side := Vector3(-along.z, 0.0, along.x).normalized()
+	var speck := along * MOTE_SIZE * 0.5
+	var rise := _cells_to_rule(maxf(MOTE_RISE, 0.0))
+	var tint := _brighten(DEATH_ASH_COLOR, 0.5)
+	var per := maxi(MOTES_PER_DASH, 0)
+	var index := 0
+	for span: Vector2 in ranges:
+		for j in per:
+			index += 1
+			var life := maxf(MOTE_SECONDS, 0.0) * (0.6 + 0.4 * fposmod(float(index) * GOLDEN_ANGLE / TAU, 1.0))
+			if life <= 0.0 or after >= life:
+				continue
+			var k := after / life
+			var p := point_along(tether_chord, lerpf(span.x, span.y, (float(j) + 0.5) / float(per)))
+			p += side * sin(float(index) * GOLDEN_ANGLE) * 0.1 * k
+			p.y += rise * _ease_out(k)
+			motes.append({"points": PackedVector3Array([p - speck, p + speck]), "tint": _faded(tint, 1.0 - k * k)})
+	return motes
+
+
+# A stretch of the chord at rest, as one death piece.
+static func _death_piece(tether_chord: PackedVector3Array, u0: float, u1: float, tint: Color) -> Dictionary:
+	return {"points": PackedVector3Array([point_along(tether_chord, u0), point_along(tether_chord, u1)]),
+			"tint": tint}
+
+
+static func _death_cone(tether_chord: PackedVector3Array, base_u: float, tip_u: float, tint: Color) -> Dictionary:
+	return {"base": point_along(tether_chord, base_u), "tip": point_along(tether_chord, tip_u),
+			"scale": ARROW_WIDTH_SCALE, "tint": tint}
+
+
+# How far `u` (from the member end) is from the end that died, the tip standing for the leader's end.
+static func _from_dead(u: float, tip: float, leader_died: bool) -> float:
+	return tip - u if leader_died else u
+
+
+# A length in cells as trace space's height units (body_middle_rule's conversion).
+static func _cells_to_rule(cells: float) -> float:
+	return cells * BoardSpace.CELL_SIZE / BoardSpace.ROW_HEIGHT
 
 
 # Whose side a squad's lines are drawn for (#1109): hostile to the player or not. WHOSE SIDE, never who
@@ -542,13 +768,19 @@ func _draw() -> void:
 		if not cone.is_empty():
 			_cone(_flat(cone["base"]), _flat(cone["tip"]), float(cone["scale"]), cone["tint"])
 		# A break's pieces are SOLID -- each is one dash already. This view has no height, so their
-		# fall reads as a scatter and fade here (declared on #292).
+		# fall reads as a scatter and fade here (declared on #292); a death's SLACK sag and rising
+		# MOTES likewise read as their fade and drift alone (#1104).
 		for piece: Dictionary in drawing["pieces"]:
 			var points: PackedVector3Array = piece["points"]
 			var a := _flat(points[0])
 			var b := _flat(points[1])
 			_cased_line(PackedVector2Array([a, b]), piece["tint"])
 			draw_line(a, b, piece["tint"], LINE_WIDTH)
+		var glow: Dictionary = drawing["glow"]
+		if not glow.is_empty():
+			var ends: PackedVector3Array = glow["points"]
+			_soft_light((_flat(ends[0]) + _flat(ends[1])) * 0.5,
+					_flat(ends[0]).distance_to(_flat(ends[1])) * 0.5, glow["tint"])
 
 
 # One straight stroke, dashed. `bend` plucks it: every point moves sideways by bend * sin(pi * u),
@@ -635,6 +867,14 @@ func _arrow_triangle(base: Vector2, tip: Vector2, scale: float) -> PackedVector2
 	var dir := span.normalized()
 	var side := Vector2(-dir.y, dir.x) * LINE_WIDTH * scale * 0.5
 	return PackedVector2Array([base + side, tip, base - side])
+
+
+# A PULSE's light in the flat view (#1104): rings of the light's colour, fainter outward -- the soft
+# ribbon the diorama draws, as far as a canvas without bloom goes.
+func _soft_light(centre: Vector2, radius: float, color: Color) -> void:
+	var r := maxf(radius, 1.5)
+	for ring: Vector2 in [Vector2(1.0, 0.2), Vector2(0.65, 0.45), Vector2(0.35, 1.0)]:
+		draw_circle(centre, r * ring.x, Color(color.r, color.g, color.b, color.a * ring.y))
 
 
 # The casing colour at the line's own alpha, so a ghost's casing fades with the ghost.

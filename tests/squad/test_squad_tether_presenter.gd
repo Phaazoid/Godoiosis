@@ -3,8 +3,9 @@
 # read what landed in the store (OverlayManager.squad_tether_moments) -- never a signal count, since
 # one operation can emit several.
 #
-# A stand-in Game carries the three things the presenter reaches for. The reel-in time is SET here and
-# restored, so the re-point delay is pinned as a relationship and never as the tuned number.
+# A stand-in Game carries what the presenter reaches for -- an order executor only while a case plays a
+# pass. The reel-in time is SET here and restored, so the re-point delay is pinned as a relationship
+# and never as the tuned number; so are the death look and the light's run (#1104).
 extends GdUnitTestSuite
 
 const H := preload("res://tests/support/squad_fixtures.gd")
@@ -16,6 +17,7 @@ const Moment := SquadLines2D.Moment
 class FakeGame extends Node:
 	var squad_manager: SquadManager
 	var overlay_manager: OverlayManager
+	var order_executor: OrderExecutor
 
 	func _board() -> BoardContext:
 		return squad_manager.board_source.call()
@@ -25,24 +27,36 @@ var _sm: SquadManager
 var _om: OverlayManager
 var _presenter: SquadTetherPresenter
 var _saved_reel := 0.0
+var _saved_look := 0
+var _saved_pulse := 0.0
+var _saved_photo := false
+var _game: FakeGame
 
 
 func before_test() -> void:
 	_saved_reel = SquadLines2D.REEL_IN_SECONDS
 	SquadLines2D.REEL_IN_SECONDS = 0.5
+	_saved_look = SquadLines2D.DEATH_LOOK
+	_saved_pulse = SquadLines2D.PULSE_SECONDS
+	_saved_photo = PlayerSettings.is_on(PlayerSettings.Setting.PHOTOSENSITIVITY)
+	SquadLines2D.DEATH_LOOK = 0
+	SquadLines2D.PULSE_SECONDS = 0.2
 	_sm = H.make_manager(self)
 	_om = _sm.get_node("../OverlayManager")
-	var game: FakeGame = auto_free(FakeGame.new())
-	game.squad_manager = _sm
-	game.overlay_manager = _om
-	add_child(game)
+	_game = auto_free(FakeGame.new())
+	_game.squad_manager = _sm
+	_game.overlay_manager = _om
+	add_child(_game)
 	_presenter = SquadTetherPresenter.new()
-	_presenter.game = game
-	game.add_child(_presenter)
+	_presenter.game = _game
+	_game.add_child(_presenter)
 
 
 func after_test() -> void:
 	SquadLines2D.REEL_IN_SECONDS = _saved_reel
+	SquadLines2D.DEATH_LOOK = _saved_look
+	SquadLines2D.PULSE_SECONDS = _saved_pulse
+	PlayerSettings.set_on(PlayerSettings.Setting.PHOTOSENSITIVITY, _saved_photo)
 
 
 func _solo(cell: Vector2i, ldr := 3) -> Unit:
@@ -272,28 +286,6 @@ func test_a_foretold_break_plays_at_the_blow_and_not_again_at_the_settle() -> vo
 			"the settle played the break a second time").is_equal(0)
 
 
-# A KILL settles mid-blow (handle_unit_death), so by the time its blow is foretold the ordinary flush
-# owns it: foretell plays none of it, and the flush plays each link once.
-func test_foretell_leaves_a_kills_handover_to_the_flush() -> void:
-	var leader := _solo(Vector2i(0, 0), 5)
-	var heir := _solo(Vector2i(1, 0), 4)
-	var other := _solo(Vector2i(0, 1), 2)
-	_sm.join_squad(heir, leader.squad)
-	_sm.join_squad(other, leader.squad)
-	_presenter.arm()
-	_sm.handle_unit_death(leader)
-	var shown := _presenter.foretell(_outcome([
-			{"member": heir, "leader": leader, "ends": true, "cause": SquadManager.LeaveCause.DEATH},
-			{"member": other, "leader": leader, "ends": true, "cause": SquadManager.LeaveCause.DEATH},
-			{"member": other, "leader": heir, "ends": false}]))
-	assert_float(shown).override_failure_message("foretell played a kill that had already settled") \
-			.is_equal_approx(0.0, 0.0001)
-	assert_int(_om.squad_tether_moments.size()).is_equal(0)
-	_presenter.flush()
-	assert_int(_moments(Moment.DRAW_IN, other, heir).size()).override_failure_message(
-			"the kill's handover did not draw in exactly once").is_equal(1)
-
-
 # A break the forecast foretold but the pass never delivered must not swallow a later, real leave of
 # that link: end_pass forgets it.
 func test_a_foretold_link_the_pass_never_changed_does_not_swallow_a_later_leave() -> void:
@@ -312,18 +304,222 @@ func test_a_foretold_link_the_pass_never_changed_does_not_swallow_a_later_leave(
 			"a later Leave Squad was swallowed by a break the pass never delivered").is_equal(1)
 
 
-func test_a_death_and_an_undeploy_play_nothing() -> void:
+func test_an_undeploy_plays_nothing() -> void:
 	var leader := _solo(Vector2i(0, 0))
-	var dies := _solo(Vector2i(1, 0))
 	var leaves_the_board := _solo(Vector2i(0, 1))
-	_sm.join_squad(dies, leader.squad)
 	_sm.join_squad(leaves_the_board, leader.squad)
 	_presenter.arm()
-	_sm.handle_unit_death(dies)
 	_sm.release(leaves_the_board)
 	_presenter.flush()
 	assert_int(_om.squad_tether_moments.size()).override_failure_message(
-			"a death or an undeploy played a tether moment").is_equal(0)
+			"an undeploy played a tether moment").is_equal(0)
+
+
+func _death_moments() -> Array[Dictionary]:
+	var found: Array[Dictionary] = []
+	for entry: Dictionary in _om.squad_tether_moments:
+		if SquadLines2D.DEATH_LOOKS.has(int(entry["moment"])):
+			found.append(entry)
+	return found
+
+
+# A death plays one of the four looks, strung from where the body stood to its leader, and says the
+# member is the end that died and the leader the one left.
+func test_a_death_plays_a_death_look() -> void:
+	var leader := _solo(Vector2i(0, 0))
+	var dies := _solo(Vector2i(1, 0))
+	_sm.join_squad(dies, leader.squad)
+	var stood := dies.movement.cell
+	_presenter.arm()
+	_sm.handle_unit_death(dies)
+	_presenter.flush()
+	assert_int(_om.squad_tether_moments.size()).override_failure_message(
+			"a death played %d moments" % _om.squad_tether_moments.size()).is_equal(1)
+	var deaths := _death_moments()
+	assert_int(deaths.size()).override_failure_message("a death played no death look").is_equal(1)
+	assert_that(deaths[0]["from"]).is_equal(stood)
+	assert_that(deaths[0]["to"]).is_equal(leader.movement.cell)
+	assert_bool(bool(deaths[0]["leader_died"])).override_failure_message(
+			"the dead member was taken for the leader").is_false()
+	assert_int(int(deaths[0]["survivor"])).override_failure_message(
+			"the one left was not the leader").is_equal(leader.get_instance_id())
+
+
+# A REAL death frees the body before the deferred flush can ask where it stood, so the moment is strung
+# from what the death captured: where it fell and whose it was. An ENEMY leader, so the captured side is
+# what picks the colour -- and every link it led plays the SAME look, the member its successor could not
+# hold (ejected, a FORCED leave of its own) included.
+func test_a_real_death_plays_from_where_the_body_fell() -> void:
+	var leader: Unit = H.spawn_solo(self, _sm, Team.Faction.ENEMY, Vector2i(0, 0), {Stats.Stat.LDR: 5})
+	var heir: Unit = H.spawn_solo(self, _sm, Team.Faction.ENEMY, Vector2i(1, 0), {Stats.Stat.LDR: 1})
+	var ejected: Unit = H.spawn_solo(self, _sm, Team.Faction.ENEMY, Vector2i(0, 1), {Stats.Stat.LDR: 1})
+	_sm.join_squad(heir, leader.squad)
+	_sm.join_squad(ejected, leader.squad)
+	leader.unit_died.connect(_sm.handle_unit_death)   # game._on_unit_died's hop
+	var fell := leader.movement.cell
+	_presenter.arm()
+	leader.die()
+	assert_bool(leader.is_queued_for_deletion()).override_failure_message(
+			"fixture: the body was not on its way out").is_true()
+	assert_bool(ejected.squad == heir.squad).override_failure_message(
+			"fixture: the successor held every member, so nobody was ejected").is_false()
+	_presenter.flush()
+	var deaths := _death_moments()
+	assert_int(deaths.size()).override_failure_message(
+			"%d of the dead leader's 2 links played its look" % deaths.size()).is_equal(2)
+	for entry: Dictionary in deaths:
+		assert_that(entry["to"]).override_failure_message(
+				"a link was not strung to where the leader fell").is_equal(fell)
+		assert_bool(bool(entry["hostile"])).override_failure_message(
+				"the dead enemy's side was lost with its body").is_true()
+		assert_bool(bool(entry["leader_died"])).is_true()
+		assert_int(int(entry["moment"])).override_failure_message(
+				"the leader's links played different looks").is_equal(int(deaths[0]["moment"]))
+	assert_int(_moments(Moment.BREAK).size()).override_failure_message(
+			"the ejected member broke its tether instead of playing its leader's death").is_equal(0)
+
+
+# The dev's "then", for a death: the heir's tethers draw in once the dead leader's look has played.
+func test_a_leaders_death_plays_its_look_then_the_heir_draws_in() -> void:
+	var leader := _solo(Vector2i(0, 0), 5)
+	var heir := _solo(Vector2i(1, 0), 4)
+	var other := _solo(Vector2i(0, 1), 2)
+	_sm.join_squad(heir, leader.squad)
+	_sm.join_squad(other, leader.squad)
+	_presenter.arm()
+	_sm.handle_unit_death(leader)
+	_presenter.flush()
+	assert_object(other.squad.leader).override_failure_message(
+			"fixture: leadership did not pass to the heir").is_same(heir)
+	var deaths := _death_moments()
+	assert_int(deaths.size()).override_failure_message("the dead leader's links did not all play") \
+			.is_equal(2)
+	var look := int(deaths[0]["moment"])
+	var draws := _moments(Moment.DRAW_IN, other, heir)
+	assert_int(draws.size()).is_equal(1)
+	var waited := int(draws[0]["start_msec"]) - int(deaths[0]["start_msec"])
+	assert_int(waited).override_failure_message(
+			"the heir's tether did not wait for the death (waited %d ms)" % waited) \
+			.is_equal(int(SquadLines2D.moment_seconds(look) * 1000.0))
+
+
+# A pass running, as OrderExecutor holds one while it plays a plan.
+func _mid_pass() -> void:
+	var executor: OrderExecutor = auto_free(OrderExecutor.new())
+	executor.executing_plan = ResolvedPlan.new()
+	_game.order_executor = executor
+
+
+# A KILL settles mid-blow (handle_unit_death), so its look plays from the ordinary flush -- but the blow
+# that killed waits for it like a break, and for the heir's draw-in after it (the dev: "waits, like a
+# break"). The wait is paid once, and foretell itself plays none of it.
+func test_a_kill_mid_pass_holds_its_blow_for_the_look_and_the_handover() -> void:
+	var leader := _solo(Vector2i(0, 0), 5)
+	var heir := _solo(Vector2i(1, 0), 4)
+	var other := _solo(Vector2i(0, 1), 2)
+	_sm.join_squad(heir, leader.squad)
+	_sm.join_squad(other, leader.squad)
+	_presenter.arm()
+	_mid_pass()
+	_sm.handle_unit_death(leader)
+	var shown := _presenter.foretell(_outcome([
+			{"member": heir, "leader": leader, "ends": true, "cause": SquadManager.LeaveCause.DEATH},
+			{"member": other, "leader": leader, "ends": true, "cause": SquadManager.LeaveCause.DEATH},
+			{"member": other, "leader": heir, "ends": false}]))
+	assert_int(_om.squad_tether_moments.size()).override_failure_message(
+			"foretell played the kill itself").is_equal(0)
+	_presenter.flush()
+	var deaths := _death_moments()
+	assert_int(deaths.size()).override_failure_message("the kill's look did not play once per link") \
+			.is_equal(2)
+	assert_int(_moments(Moment.DRAW_IN, other, heir).size()).override_failure_message(
+			"the kill's handover did not draw in exactly once").is_equal(1)
+	var owed := SquadLines2D.moment_seconds(int(deaths[0]["moment"])) \
+			+ SquadLines2D.shown_seconds(Moment.DRAW_IN)
+	assert_float(shown).override_failure_message(
+			"the blow did not wait for the look and the draw-in after it").is_equal_approx(owed, 0.0001)
+	assert_float(_presenter.foretell(_outcome([]))).override_failure_message(
+			"the next blow waited for a death it did not cause").is_equal_approx(0.0, 0.0001)
+
+
+# A death outside a pass -- the dev kill, a load -- holds no blow: there is none to hold. It still plays.
+func test_a_death_outside_a_pass_holds_nothing() -> void:
+	var leader := _solo(Vector2i(0, 0))
+	var dies := _solo(Vector2i(1, 0))
+	_sm.join_squad(dies, leader.squad)
+	_presenter.arm()
+	_sm.handle_unit_death(dies)
+	assert_float(_presenter.foretell(_outcome([]))).override_failure_message(
+			"a death outside a pass held a blow").is_equal_approx(0.0, 0.0001)
+	_presenter.flush()
+	assert_int(_death_moments().size()).is_equal(1)
+
+
+# A PULSE's light arrives at whoever is left, and THEY flash as it does -- fired off the moments' own
+# clock (OverlayManager._process), so the case moves the moment's start back rather than waiting.
+func test_the_one_a_pulse_runs_to_flashes_as_it_arrives() -> void:
+	SquadLines2D.DEATH_LOOK = SquadLines2D.DEATH_LOOKS.find(Moment.PULSE) + 1
+	PlayerSettings.set_on(PlayerSettings.Setting.PHOTOSENSITIVITY, false)
+	var leader := _solo(Vector2i(0, 0))
+	var dies := _solo(Vector2i(1, 0))
+	_sm.join_squad(dies, leader.squad)
+	_presenter.arm()
+	_sm.handle_unit_death(dies)
+	_presenter.flush()
+	var pulses := _moments(Moment.PULSE)
+	assert_int(pulses.size()).override_failure_message("fixture: the pinned look was not a PULSE") \
+			.is_equal(1)
+	_om._process(0.0)
+	assert_object(leader.visuals.visual_tween).override_failure_message(
+			"the survivor flashed before the light reached it").is_null()
+	pulses[0]["start_msec"] = Time.get_ticks_msec() - roundi(SquadLines2D.PULSE_SECONDS * 1000.0) - 1
+	_om._process(0.0)
+	assert_bool(leader.visuals.visual_tween != null and leader.visuals.visual_tween.is_running()) \
+			.override_failure_message("the survivor did not flash as the light reached it").is_true()
+
+
+# #217: the light is stilled by the photosensitivity setting, and so is the flash it would bring.
+func test_the_photosensitivity_setting_stills_the_survivors_flash() -> void:
+	SquadLines2D.DEATH_LOOK = SquadLines2D.DEATH_LOOKS.find(Moment.PULSE) + 1
+	PlayerSettings.set_on(PlayerSettings.Setting.PHOTOSENSITIVITY, true)
+	var leader := _solo(Vector2i(0, 0))
+	var dies := _solo(Vector2i(1, 0))
+	_sm.join_squad(dies, leader.squad)
+	_presenter.arm()
+	_sm.handle_unit_death(dies)
+	_presenter.flush()
+	var pulses := _moments(Moment.PULSE)
+	pulses[0]["start_msec"] = Time.get_ticks_msec() - roundi(SquadLines2D.PULSE_SECONDS * 1000.0) - 1
+	_om._process(0.0)
+	assert_object(leader.visuals.visual_tween).override_failure_message(
+			"the survivor flashed with the setting on").is_null()
+
+
+# The loss flash is the LOWEST tier on sprite.modulate: it yields to a pin flash (a pinned survivor is
+# already white), to an aim pulse, and to a lunge or shake already running on the one-shot tween.
+func test_the_loss_flash_yields_to_the_pin_the_aim_and_a_running_one_shot() -> void:
+	var unit := _solo(Vector2i(0, 0))
+	var visuals: UnitVisuals = unit.visuals
+	visuals.set_pinned(true)
+	visuals.play_loss_flash()
+	assert_object(visuals.visual_tween).override_failure_message("the flash stomped a pin flash").is_null()
+	assert_bool(visuals.pin_tween != null and visuals.pin_tween.is_valid()).override_failure_message(
+			"the pin flash did not survive the loss flash").is_true()
+	visuals.set_pinned(false)
+	visuals.start_pulse()
+	visuals.play_loss_flash()
+	assert_object(visuals.visual_tween).override_failure_message("the flash stomped an aim pulse").is_null()
+	visuals.stop_pulse()
+	var lunge := visuals.create_tween()
+	lunge.tween_property(visuals.sprite, "position", visuals.base_position + Vector2(8, 0), 1.0)
+	visuals.visual_tween = lunge
+	visuals.play_loss_flash()
+	assert_object(visuals.visual_tween).override_failure_message("the flash cut a running lunge") \
+			.is_same(lunge)
+	visuals.reset_visuals()
+	visuals.play_loss_flash()
+	assert_bool(visuals.visual_tween != lunge and visuals.visual_tween.is_running()) \
+			.override_failure_message("fixture: with nothing running, no flash played").is_true()
 
 
 # Loading is inert: arm() takes what stands as the baseline, so a change still waiting to settle when

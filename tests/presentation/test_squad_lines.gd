@@ -26,6 +26,13 @@ func before_test() -> void:
 		"kick": SquadLines2D.BREAK_KICK, "turns": SquadLines2D.BREAK_TUMBLE_TURNS,
 		"sparks": SquadLines2D.BREAK_SPARKS, "spark_speed": SquadLines2D.BREAK_SPARK_SPEED,
 		"spark_secs": SquadLines2D.BREAK_SPARK_SECONDS,
+		"death_look": SquadLines2D.DEATH_LOOK, "ash": SquadLines2D.DEATH_ASH_COLOR,
+		"grey": SquadLines2D.DEATH_GREY_SECONDS, "death_hold": SquadLines2D.DEATH_HOLD_SECONDS,
+		"death_fade": SquadLines2D.DEATH_FADE_SECONDS, "drain": SquadLines2D.DRAIN_SECONDS,
+		"slack": SquadLines2D.SLACK_SECONDS, "sag": SquadLines2D.SLACK_SAG,
+		"pulse": SquadLines2D.PULSE_SECONDS, "pulse_len": SquadLines2D.PULSE_LENGTH,
+		"motes": SquadLines2D.MOTES_PER_DASH, "mote_rise": SquadLines2D.MOTE_RISE,
+		"mote_secs": SquadLines2D.MOTE_SECONDS,
 	}
 
 
@@ -54,6 +61,19 @@ func after_test() -> void:
 	SquadLines2D.BREAK_SPARKS = _saved["sparks"]
 	SquadLines2D.BREAK_SPARK_SPEED = _saved["spark_speed"]
 	SquadLines2D.BREAK_SPARK_SECONDS = _saved["spark_secs"]
+	SquadLines2D.DEATH_LOOK = _saved["death_look"]
+	SquadLines2D.DEATH_ASH_COLOR = _saved["ash"]
+	SquadLines2D.DEATH_GREY_SECONDS = _saved["grey"]
+	SquadLines2D.DEATH_HOLD_SECONDS = _saved["death_hold"]
+	SquadLines2D.DEATH_FADE_SECONDS = _saved["death_fade"]
+	SquadLines2D.DRAIN_SECONDS = _saved["drain"]
+	SquadLines2D.SLACK_SECONDS = _saved["slack"]
+	SquadLines2D.SLACK_SAG = _saved["sag"]
+	SquadLines2D.PULSE_SECONDS = _saved["pulse"]
+	SquadLines2D.PULSE_LENGTH = _saved["pulse_len"]
+	SquadLines2D.MOTES_PER_DASH = _saved["motes"]
+	SquadLines2D.MOTE_RISE = _saved["mote_rise"]
+	SquadLines2D.MOTE_SECONDS = _saved["mote_secs"]
 
 
 # --- The range's stroke -------------------------------------------------------------------------
@@ -522,6 +542,232 @@ func _snap_time() -> float:
 		if not (_break(t)["pieces"] as Array).is_empty():
 			return t
 	return -1.0
+
+
+# --- A death's own moment (#1104) ---------------------------------------------------------------
+
+func _death_times() -> void:
+	_break_times(0.4, 0.6, 0, 0.3)
+	SquadLines2D.DEATH_LOOK = 0
+	SquadLines2D.DEATH_ASH_COLOR = Color(0.5, 0.5, 0.5, 1.0)
+	SquadLines2D.DEATH_GREY_SECONDS = 0.2
+	SquadLines2D.DEATH_HOLD_SECONDS = 0.25
+	SquadLines2D.DEATH_FADE_SECONDS = 0.45
+	SquadLines2D.DRAIN_SECONDS = 0.55
+	SquadLines2D.SLACK_SECONDS = 0.5
+	SquadLines2D.SLACK_SAG = 0.2
+	SquadLines2D.PULSE_SECONDS = 0.55
+	SquadLines2D.PULSE_LENGTH = 0.35
+	SquadLines2D.MOTES_PER_DASH = 3
+	SquadLines2D.MOTE_RISE = 0.5
+	SquadLines2D.MOTE_SECONDS = 0.9
+	assert_bool(_rgb(SquadLines2D.TETHER_COLOR).is_equal_approx(_rgb(SquadLines2D.DEATH_ASH_COLOR))) \
+			.override_failure_message("fixture: the tether is already the ash colour").is_false()
+
+
+# The drawing a death look makes `seconds` in. `leader_died` says which end is gone.
+func _death(look: int, seconds: float, leader_died := false, flash := true) -> Dictionary:
+	var entry := {"chord": _chord(), "moment": look, "start_msec": 0, "standing": false,
+			"leader_died": leader_died}
+	return SquadLines2D.moment_drawing(entry, roundi(seconds * 1000.0), flash)
+
+
+func _rgb(color: Color) -> Color:
+	return Color(color, 1.0)
+
+
+func _is_ash(tint: Color) -> bool:
+	return _rgb(tint).is_equal_approx(_rgb(SquadLines2D.DEATH_ASH_COLOR))
+
+
+func _is_side(tint: Color) -> bool:
+	return _rgb(tint).is_equal_approx(_rgb(SquadLines2D.TETHER_COLOR))
+
+
+# When each look has greyed through: DRAIN's ash has run the length, SLACK has fallen, PULSE and MOTES
+# have taken their grey.
+func _greyed_at(look: int) -> float:
+	match look:
+		SquadLines2D.Moment.DRAIN:
+			return SquadLines2D.DRAIN_SECONDS
+		SquadLines2D.Moment.SLACK:
+			return SquadLines2D.SLACK_SECONDS
+	return SquadLines2D.DEATH_GREY_SECONDS
+
+
+# Every look ends where its knobs say, turns the dashes on screen to ash on the way, and leaves nothing
+# standing at its end.
+func test_every_death_look_turns_to_ash_and_ends_on_its_time() -> void:
+	_death_times()
+	var dashes := SquadLines2D.dash_spans(float(SquadLines2D.measure(_chord())["shaft_end"]), 0.0).size()
+	for look: int in SquadLines2D.DEATH_LOOKS:
+		var name: String = SquadLines2D.Moment.keys()[look]
+		var seconds := SquadLines2D.moment_seconds(look)
+		assert_bool(bool(SquadLines2D.moment_at(look, _chord(), seconds - 0.01, true)["done"])) \
+				.override_failure_message("%s ended before its time" % name).is_false()
+		assert_bool(bool(SquadLines2D.moment_at(look, _chord(), seconds, true)["done"])) \
+				.override_failure_message("%s outlived its time" % name).is_true()
+		var greyed: Array = _death(look, _greyed_at(look))["pieces"]
+		assert_bool(greyed.is_empty()).override_failure_message("%s drew no dashes" % name).is_false()
+		for i in mini(greyed.size(), dashes):
+			assert_bool(_is_ash((greyed[i] as Dictionary)["tint"])).override_failure_message(
+					"%s did not turn its dashes to ash" % name).is_true()
+		var last := _death(look, seconds)
+		for piece: Dictionary in last["pieces"]:
+			assert_float((piece["tint"] as Color).a).override_failure_message(
+					"%s left a piece standing at its end" % name).is_equal_approx(0.0, 0.001)
+		var cone: Dictionary = last["cone"]
+		if not cone.is_empty():
+			assert_float((cone["tint"] as Color).a).override_failure_message(
+					"%s left its arrowhead standing at its end" % name).is_equal_approx(0.0, 0.001)
+
+
+# DRAIN: the ash runs FROM the end that died. Part way, the dashes at the dead end are ash while the
+# far end's are still the side's colour -- and the other way round when the leader is the one gone.
+func test_the_drain_runs_the_ash_from_the_dead_end() -> void:
+	_death_times()
+	var part_way := SquadLines2D.DRAIN_SECONDS * 0.4
+	var member_died: Array = _death(SquadLines2D.Moment.DRAIN, part_way, false)["pieces"]
+	assert_bool(_is_ash((member_died[0] as Dictionary)["tint"])).override_failure_message(
+			"the dead member's end was not ash yet").is_true()
+	assert_bool(_is_side((member_died[member_died.size() - 1] as Dictionary)["tint"])) \
+			.override_failure_message("the ash reached the living leader's end at once").is_true()
+	var leader_died: Array = _death(SquadLines2D.Moment.DRAIN, part_way, true)["pieces"]
+	assert_bool(_is_side((leader_died[0] as Dictionary)["tint"])).override_failure_message(
+			"the ash reached the living member's end at once").is_true()
+	assert_bool(_is_ash((leader_died[leader_died.size() - 1] as Dictionary)["tint"])) \
+			.override_failure_message("the dead leader's end was not ash yet").is_true()
+
+
+# SLACK: once the fall is done the DEAD end lies on the ground and the living end still hangs where it
+# did; nothing sinks below the ground anywhere between. Both ways round, through the drawing both views
+# read.
+func test_the_slack_drops_the_dead_end_to_the_ground() -> void:
+	_death_times()
+	var chord := _chord()
+	var ground := _CHORD_MEMBER.y - SquadLines2D.body_middle_rule()
+	var length := (chord[1] - chord[0]).length()
+	for leader_died: bool in [false, true]:
+		var dead_u := length if leader_died else 0.0
+		var live_u := 0.0 if leader_died else length
+		assert_float(SquadLines2D.slack_point(chord, dead_u, 1.0, leader_died).y).override_failure_message(
+				"the dead end did not reach the ground (leader died: %s)" % leader_died) \
+				.is_equal_approx(ground, 0.001)
+		assert_float(SquadLines2D.slack_point(chord, live_u, 1.0, leader_died).y).override_failure_message(
+				"the living end dropped too (leader died: %s)" % leader_died) \
+				.is_equal_approx(chord[0].y, 0.001)
+		for i in 21:
+			var y := SquadLines2D.slack_point(chord, length * float(i) / 20.0, 1.0, leader_died).y
+			assert_bool(y >= ground - 0.0001).override_failure_message("the slack sank below the ground") \
+					.is_true()
+		var fallen: Array = _death(SquadLines2D.Moment.SLACK, SquadLines2D.SLACK_SECONDS, leader_died)["pieces"]
+		var near_dead: Dictionary = fallen[fallen.size() - 1] if leader_died else fallen[0]
+		var near_live: Dictionary = fallen[0] if leader_died else fallen[fallen.size() - 1]
+		assert_float(_middle(near_dead).y).override_failure_message(
+				"the drawing did not drop the dead end (leader died: %s)" % leader_died) \
+				.is_less(_middle(near_live).y)
+
+
+# PULSE: the light runs AWAY from the end that died, toward whoever is left, and the tether behind it is
+# gone; with the photosensitivity setting on there is no light at all (#217), only the grey and the fade.
+func test_the_pulse_runs_to_whoever_is_left_and_empties_the_tether_behind_it() -> void:
+	_death_times()
+	var early := SquadLines2D.PULSE_SECONDS * 0.3
+	var late := SquadLines2D.PULSE_SECONDS * 0.9
+	for leader_died: bool in [false, true]:
+		var first := _glow_x(_death(SquadLines2D.Moment.PULSE, early, leader_died))
+		var then := _glow_x(_death(SquadLines2D.Moment.PULSE, late, leader_died))
+		var toward := _CHORD_MEMBER.x if leader_died else _CHORD_LEADER.x
+		assert_bool(absf(then - toward) < absf(first - toward)).override_failure_message(
+				"the light did not run toward whoever is left (leader died: %s)" % leader_died).is_true()
+		var before: Array = _death(SquadLines2D.Moment.PULSE, early, leader_died)["pieces"]
+		var after: Array = _death(SquadLines2D.Moment.PULSE, late, leader_died)["pieces"]
+		assert_int(after.size()).override_failure_message(
+				"the tether behind the light was not emptied (leader died: %s)" % leader_died) \
+				.is_less(before.size())
+		for piece: Dictionary in after:
+			var x := _middle(piece).x
+			var behind := x > then if leader_died else x < then
+			assert_bool(behind and absf(x - then) > SquadLines2D.PULSE_LENGTH) \
+					.override_failure_message("a piece stood well behind the light").is_false()
+	assert_bool((_death(SquadLines2D.Moment.PULSE, early, false, false)["glow"] as Dictionary).is_empty()) \
+			.override_failure_message("the light ran with the photosensitivity setting on").is_true()
+	assert_bool((_death(SquadLines2D.Moment.PULSE, SquadLines2D.PULSE_SECONDS, false)["glow"] as Dictionary) \
+			.is_empty()).override_failure_message("the light outlived its run").is_true()
+
+
+func _glow_x(drawing: Dictionary) -> float:
+	var glow: Dictionary = drawing["glow"]
+	assert_bool(glow.is_empty()).override_failure_message("fixture: no light to follow").is_false()
+	var points: PackedVector3Array = glow["points"]
+	return (points[0].x + points[1].x) * 0.5
+
+
+# MOTES: once greyed the tether crumbles, every dash and the arrowhead leaving MOTES_PER_DASH motes that
+# rise and fade -- and none is left when the moment ends.
+func test_the_motes_rise_and_fade() -> void:
+	_death_times()
+	var m := SquadLines2D.measure(_chord())
+	var ranges := SquadLines2D.dash_spans(float(m["shaft_end"]), 0.0).size() + 1
+	var crumbled := SquadLines2D.DEATH_GREY_SECONDS + SquadLines2D.CRUMBLE_SECONDS
+	var soon: Array = _death(SquadLines2D.Moment.MOTES, crumbled + 0.05)["pieces"]
+	var later: Array = _death(SquadLines2D.Moment.MOTES, crumbled + 0.3)["pieces"]
+	assert_int(soon.size()).override_failure_message("the tether did not crumble into its motes") \
+			.is_equal(ranges * SquadLines2D.MOTES_PER_DASH)
+	assert_int(later.size()).override_failure_message("fixture: motes died before the later look") \
+			.is_equal(soon.size())
+	for i in soon.size():
+		assert_float(_middle(later[i]).y).override_failure_message("a mote did not rise") \
+				.is_greater(_middle(soon[i]).y)
+		assert_float(((later[i] as Dictionary)["tint"] as Color).a).override_failure_message(
+				"a mote did not fade").is_less(((soon[i] as Dictionary)["tint"] as Color).a)
+	var ended: Array = _death(SquadLines2D.Moment.MOTES,
+			SquadLines2D.moment_seconds(SquadLines2D.Moment.MOTES))["pieces"]
+	assert_bool(ended.is_empty()).override_failure_message("a mote outlived the moment").is_true()
+
+
+# The times are the knobs': each look lasts its run (or grey) plus what follows it.
+func test_a_death_looks_timing_follows_its_knobs() -> void:
+	_death_times()
+	var hold := SquadLines2D.DEATH_HOLD_SECONDS
+	var fade := SquadLines2D.DEATH_FADE_SECONDS
+	assert_float(SquadLines2D.moment_seconds(SquadLines2D.Moment.DRAIN)) \
+			.is_equal_approx(SquadLines2D.DRAIN_SECONDS + hold + fade, 0.0001)
+	assert_float(SquadLines2D.moment_seconds(SquadLines2D.Moment.SLACK)) \
+			.is_equal_approx(SquadLines2D.SLACK_SECONDS + hold + fade, 0.0001)
+	assert_float(SquadLines2D.moment_seconds(SquadLines2D.Moment.PULSE)) \
+			.is_equal_approx(maxf(SquadLines2D.PULSE_SECONDS, SquadLines2D.DEATH_GREY_SECONDS) + fade, 0.0001)
+	assert_float(SquadLines2D.moment_seconds(SquadLines2D.Moment.MOTES)) \
+			.is_equal_approx(SquadLines2D.DEATH_GREY_SECONDS + SquadLines2D.MOTE_SECONDS, 0.0001)
+	SquadLines2D.DRAIN_SECONDS *= 2.0
+	assert_float(SquadLines2D.moment_seconds(SquadLines2D.Moment.DRAIN)) \
+			.override_failure_message("the drain ignored its time knob") \
+			.is_equal_approx(SquadLines2D.DRAIN_SECONDS + hold + fade, 0.0001)
+
+
+# WHICH look (the dev: all four, a different one each time). Derived rather than rolled, so the same
+# death picks the same look; never the one before it; every look turns up; and the pin overrides it.
+func test_the_death_look_is_derived_never_repeats_and_can_be_pinned() -> void:
+	_death_times()
+	var seen := {}
+	for x in 6:
+		for count in 6:
+			var cell := Vector2i(x, 3 - x)
+			var pick := SquadLines2D.death_look(cell, count, -1)
+			assert_int(SquadLines2D.death_look(cell, count, -1)).override_failure_message(
+					"the same death picked a different look").is_equal(pick)
+			assert_bool(SquadLines2D.DEATH_LOOKS.has(pick)).override_failure_message(
+					"a death picked a moment that is not a death look").is_true()
+			seen[pick] = true
+			for last: int in SquadLines2D.DEATH_LOOKS:
+				assert_int(SquadLines2D.death_look(cell, count, last)).override_failure_message(
+						"a death repeated the look before it").is_not_equal(last)
+	assert_int(seen.size()).override_failure_message("some look never turned up") \
+			.is_equal(SquadLines2D.DEATH_LOOKS.size())
+	for pin in SquadLines2D.DEATH_LOOKS.size():
+		SquadLines2D.DEATH_LOOK = pin + 1
+		assert_int(SquadLines2D.death_look(Vector2i(2, 2), 5, SquadLines2D.DEATH_LOOKS[pin])) \
+				.override_failure_message("the pin did not hold its look").is_equal(SquadLines2D.DEATH_LOOKS[pin])
 
 
 # --- An enemy squad's colour (#1109) --------------------------------------------------------------

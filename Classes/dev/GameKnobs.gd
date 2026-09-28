@@ -113,6 +113,13 @@ const KNOBS: Array[Dictionary] = [
 		"tip": "How thick the dashed stroke round the squad's range is, in cells. It lies on the ground, where it has more to compete with than a tether in the air does."},
 	{"group": "Squad lines", "node": "BoardOverlays", "prop": "squad_casing_width", "label": "Casing width (3D)", "min": 0.0, "max": 0.08, "step": 0.005,
 		"tip": "How far the dark outline round every squad line reaches past the line, on each side, in cells -- dashes, arrowheads and a break's pieces alike. Zero takes the outline off. Its colour is Squad line casing below."},
+	# A death's Last pulse light (#1104): a soft stroke of its own, so its shape has 3D-only rows.
+	{"group": "Squad lines", "node": "BoardOverlays", "prop": "pulse_glow_width", "label": "Last pulse: light width (3D)", "min": 0.02, "max": 0.6, "step": 0.01,
+		"tip": "How wide a death's Last pulse light is at its middle, in cells. It narrows to nothing at both ends."},
+	{"group": "Squad lines", "node": "BoardOverlays", "prop": "pulse_glow_intensity", "label": "Last pulse: light glow (3D)", "min": 0.5, "max": 6.0, "step": 0.1,
+		"tip": "How bright the light is. Past the scene's glow threshold (1.2) it blooms, which is what makes it read as a light rather than a dash."},
+	{"group": "Squad lines", "node": "BoardOverlays", "prop": "pulse_glow_softness", "label": "Last pulse: light softness (3D)", "min": 0.3, "max": 4.0, "step": 0.1,
+		"tip": "How the light fades toward its edges. Higher is a brighter core and a softer rim."},
 	{"group": "Squad lines", "node": "BoardOverlays", "prop": "squad_line_intensity", "label": "Squad line glow (3D)", "min": 0.2, "max": 4.0, "step": 0.05,
 		"tip": "Brightness multiplier on the squad's lines. Around 1 draws them flat, which is what markup wants; past the scene's glow threshold (1.2) they bloom and start reading as an effect."},
 
@@ -586,7 +593,7 @@ const CLASS_KNOBS: Array[Dictionary] = [
 	{"group": "Squad lines", "label": "Squad line casing (2D+3D)", "static": "CASING_COLOR", "script": SQUAD_LINES_SCRIPT,
 		"tip": "The dark outline round every squad line, yours and the enemy's: what keeps a line readable on a floor near its own colour. Its alpha is multiplied by the line's, so a ghost tether's outline is as see-through as the ghost. The 3D width is Casing width; the flat view's is one pixel."},
 	{"group": "Squad lines", "label": "Ghost tether (2D+3D)", "static": "TETHER_GHOST_COLOR", "script": SQUAD_LINES_SCRIPT,
-		"tip": "A tether that MIGHT be: every unit Squad Up could recruit, or every squad Join Squad could join. Dim the colour itself, not only its alpha -- the 3D arrowhead is solid and ignores alpha, so a ghost there reads as darker rather than see-through."},
+		"tip": "A tether that MIGHT be: every unit Squad Up could recruit, or every squad Join Squad could join. Its alpha fades the whole tether, arrowhead included, and the dark casing fades with it."},
 	{"group": "Squad lines", "label": "Strained tether (2D+3D)", "static": "TETHER_STRAIN_COLOR", "script": SQUAD_LINES_SCRIPT,
 		"tip": "The tether a hovered move would break -- a member past its leader's range, or a member the leader would strand. It is also the one that shakes when you click that tile anyway."},
 	{"group": "Squad lines", "label": "Dashes per tile", "static": "DASHES_PER_TILE", "script": SQUAD_LINES_SCRIPT,
@@ -662,6 +669,54 @@ const CLASS_KNOBS: Array[Dictionary] = [
 	{"group": "Squad lines", "label": "Break: spark time", "static": "BREAK_SPARK_SECONDS", "script": SQUAD_LINES_SCRIPT,
 		"min": 0.0, "max": 1.5, "step": 0.05,
 		"tip": "How long the sparks last, in seconds."},
+	# A DEATH (#1104): one of four looks per death, each turning the tether to ash. Read every frame one
+	# plays; the pass also waits for it at the blow that kills.
+	{"group": "Squad lines", "label": "Death look", "static": "DEATH_LOOK", "script": SQUAD_LINES_SCRIPT,
+		"options": ["Random", "Drain", "Slack", "Last pulse", "Ash motes"],
+		"tip": "Which look a dying squad member's tether plays. Random picks one per death and never the same one twice running; pick one to tune it on its own."},
+	{"group": "Squad lines", "label": "Death: ash colour", "static": "DEATH_ASH_COLOR", "script": SQUAD_LINES_SCRIPT,
+		"tip": "The grey every death look turns the tether to, whichever side it was."},
+	{"group": "Squad lines", "label": "Death: grey time", "static": "DEATH_GREY_SECONDS", "script": SQUAD_LINES_SCRIPT,
+		"min": 0.0, "max": 1.0, "step": 0.05,
+		"tip": "How long Last pulse and Ash motes take to turn grey, in seconds. Drain and Slack grey as they go."},
+	{"group": "Squad lines", "label": "Death: hold", "static": "DEATH_HOLD_SECONDS", "script": SQUAD_LINES_SCRIPT,
+		"min": 0.0, "max": 2.0, "step": 0.05,
+		"tip": "How long Drain and Slack hold their ash before the fade, in seconds."},
+	{"group": "Squad lines", "label": "Death: fade", "static": "DEATH_FADE_SECONDS", "script": SQUAD_LINES_SCRIPT,
+		"min": 0.0, "max": 2.0, "step": 0.05,
+		"tip": "How long the closing fade takes for Drain, Slack and Last pulse, in seconds."},
+	{"group": "Squad lines", "label": "Drain: run time", "static": "DRAIN_SECONDS", "script": SQUAD_LINES_SCRIPT,
+		"min": 0.05, "max": 3.0, "step": 0.05,
+		"tip": "How long the ash takes to run from the dead end of the tether to the other, in seconds."},
+	{"group": "Squad lines", "label": "Slack: fall time", "static": "SLACK_SECONDS", "script": SQUAD_LINES_SCRIPT,
+		"min": 0.05, "max": 3.0, "step": 0.05,
+		"tip": "How long a slack tether takes to sag and drop its dead end to the ground, in seconds."},
+	{"group": "Squad lines", "label": "Slack: sag", "static": "SLACK_SAG", "script": SQUAD_LINES_SCRIPT,
+		"min": 0.0, "max": 1.0, "step": 0.05,
+		"tip": "How far the middle of a slack tether sags below where it hung, in cells."},
+	{"group": "Squad lines", "label": "Last pulse: run time", "static": "PULSE_SECONDS", "script": SQUAD_LINES_SCRIPT,
+		"min": 0.05, "max": 3.0, "step": 0.05,
+		"tip": "How long the light takes to reach whoever is left, in seconds. They flash as it arrives."},
+	{"group": "Squad lines", "label": "Last pulse: colour", "static": "PULSE_COLOR", "script": SQUAD_LINES_SCRIPT,
+		"tip": "The light's colour, in both views. How bright it blooms in 3D is Last pulse: light glow."},
+	{"group": "Squad lines", "label": "Last pulse: length", "static": "PULSE_LENGTH", "script": SQUAD_LINES_SCRIPT,
+		"min": 0.05, "max": 1.5, "step": 0.05,
+		"tip": "How long the light is along the tether, in cells."},
+	{"group": "Squad lines", "label": "Last pulse: survivor flash", "static": "LOSS_FLASH_MODULATE",
+		"script": UNIT_VISUALS_SCRIPT,
+		"tip": "How white whoever the light reaches flashes. It yields to an aim pulse and a pin flash, which already own that sprite's colour."},
+	{"group": "Squad lines", "label": "Last pulse: flash time", "static": "LOSS_FLASH_SECONDS",
+		"script": UNIT_VISUALS_SCRIPT, "min": 0.05, "max": 1.5, "step": 0.05,
+		"tip": "How long the survivor's flash takes, in seconds."},
+	{"group": "Squad lines", "label": "Ash motes: per dash", "static": "MOTES_PER_DASH", "script": SQUAD_LINES_SCRIPT,
+		"min": 1.0, "max": 8.0, "step": 1.0,
+		"tip": "How many motes each dash crumbles into."},
+	{"group": "Squad lines", "label": "Ash motes: rise", "static": "MOTE_RISE", "script": SQUAD_LINES_SCRIPT,
+		"min": 0.0, "max": 2.0, "step": 0.05,
+		"tip": "How far the motes drift up, in cells. The flat view has no height, so there they only drift and fade."},
+	{"group": "Squad lines", "label": "Ash motes: life", "static": "MOTE_SECONDS", "script": SQUAD_LINES_SCRIPT,
+		"min": 0.1, "max": 3.0, "step": 0.05,
+		"tip": "How long the longest-lived mote lasts, in seconds. Each one lasts between 60% of this and all of it."},
 	# The Squad Up count beside the leader's crown (#1070). On OverlayManager, the store both views
 	# read; its size, outline and colour are the HP digits' own rows, so it has none here.
 	{"group": "Squad lines", "label": "Squad Up count hold (2D+3D)", "static": "SQUAD_COUNT_HOLD",
@@ -1821,6 +1876,22 @@ static func read_static(name: String) -> Variant:
 		"BREAK_SPARKS": return SquadLines2D.BREAK_SPARKS
 		"BREAK_SPARK_SPEED": return SquadLines2D.BREAK_SPARK_SPEED
 		"BREAK_SPARK_SECONDS": return SquadLines2D.BREAK_SPARK_SECONDS
+		"DEATH_LOOK": return SquadLines2D.DEATH_LOOK
+		"DEATH_ASH_COLOR": return SquadLines2D.DEATH_ASH_COLOR
+		"DEATH_GREY_SECONDS": return SquadLines2D.DEATH_GREY_SECONDS
+		"DEATH_HOLD_SECONDS": return SquadLines2D.DEATH_HOLD_SECONDS
+		"DEATH_FADE_SECONDS": return SquadLines2D.DEATH_FADE_SECONDS
+		"DRAIN_SECONDS": return SquadLines2D.DRAIN_SECONDS
+		"SLACK_SECONDS": return SquadLines2D.SLACK_SECONDS
+		"SLACK_SAG": return SquadLines2D.SLACK_SAG
+		"PULSE_SECONDS": return SquadLines2D.PULSE_SECONDS
+		"PULSE_COLOR": return SquadLines2D.PULSE_COLOR
+		"PULSE_LENGTH": return SquadLines2D.PULSE_LENGTH
+		"MOTES_PER_DASH": return SquadLines2D.MOTES_PER_DASH
+		"MOTE_RISE": return SquadLines2D.MOTE_RISE
+		"MOTE_SECONDS": return SquadLines2D.MOTE_SECONDS
+		"LOSS_FLASH_MODULATE": return UnitVisuals.LOSS_FLASH_MODULATE
+		"LOSS_FLASH_SECONDS": return UnitVisuals.LOSS_FLASH_SECONDS
 		"SQUAD_COUNT_HOLD": return OverlayManager.SQUAD_COUNT_HOLD
 		"SQUAD_COUNT_FADE": return OverlayManager.SQUAD_COUNT_FADE
 		"SQUAD_COUNT_GAP": return OverlayManager.SQUAD_COUNT_GAP
@@ -2148,9 +2219,15 @@ static func write_static(host: Node3D, name: String, value: Variant) -> void:
 		# The membership moments (#367) read these every frame one plays, so the write is the apply.
 		"DRAW_IN_SECONDS", "POP_SCALE", "POP_SECONDS", "POP_BRIGHTEN", "DRAWN_HOLD_SECONDS", \
 				"DRAWN_FADE_SECONDS", "REEL_IN_SECONDS", "BREAK_STRAIN_SECONDS", "BREAK_SHATTER_SECONDS", \
-				"BREAK_KICK", "BREAK_TUMBLE_TURNS", "BREAK_SPARKS", "BREAK_SPARK_SPEED", "BREAK_SPARK_SECONDS":
+				"BREAK_KICK", "BREAK_TUMBLE_TURNS", "BREAK_SPARKS", "BREAK_SPARK_SPEED", "BREAK_SPARK_SECONDS", \
+				"DEATH_LOOK", "DEATH_ASH_COLOR", "DEATH_GREY_SECONDS", "DEATH_HOLD_SECONDS", "DEATH_FADE_SECONDS", \
+				"DRAIN_SECONDS", "SLACK_SECONDS", "SLACK_SAG", "PULSE_SECONDS", "PULSE_COLOR", "PULSE_LENGTH", \
+				"MOTES_PER_DASH", "MOTE_RISE", "MOTE_SECONDS":
 			_write_squad_line(name, value)
 			return
+		# The survivor's flash (#1104) is read as it starts, so the write is the apply.
+		"LOSS_FLASH_MODULATE": UnitVisuals.LOSS_FLASH_MODULATE = value
+		"LOSS_FLASH_SECONDS": UnitVisuals.LOSS_FLASH_SECONDS = value
 		"SQUAD_RING_ALPHA": OverlayManager.SQUAD_RING_ALPHA = value
 		"SQUAD_RING_PULSE_GAIN": OverlayManager.SQUAD_RING_PULSE_GAIN = value
 		"KNOCKBACK_MODULATE": OverlayManager.KNOCKBACK_MODULATE = value
@@ -2905,6 +2982,20 @@ static func _write_squad_line(name: String, value: Variant) -> void:
 		"BREAK_SPARKS": SquadLines2D.BREAK_SPARKS = roundi(value)
 		"BREAK_SPARK_SPEED": SquadLines2D.BREAK_SPARK_SPEED = value
 		"BREAK_SPARK_SECONDS": SquadLines2D.BREAK_SPARK_SECONDS = value
+		"DEATH_LOOK": SquadLines2D.DEATH_LOOK = roundi(value)
+		"DEATH_ASH_COLOR": SquadLines2D.DEATH_ASH_COLOR = value
+		"DEATH_GREY_SECONDS": SquadLines2D.DEATH_GREY_SECONDS = value
+		"DEATH_HOLD_SECONDS": SquadLines2D.DEATH_HOLD_SECONDS = value
+		"DEATH_FADE_SECONDS": SquadLines2D.DEATH_FADE_SECONDS = value
+		"DRAIN_SECONDS": SquadLines2D.DRAIN_SECONDS = value
+		"SLACK_SECONDS": SquadLines2D.SLACK_SECONDS = value
+		"SLACK_SAG": SquadLines2D.SLACK_SAG = value
+		"PULSE_SECONDS": SquadLines2D.PULSE_SECONDS = value
+		"PULSE_COLOR": SquadLines2D.PULSE_COLOR = value
+		"PULSE_LENGTH": SquadLines2D.PULSE_LENGTH = value
+		"MOTES_PER_DASH": SquadLines2D.MOTES_PER_DASH = roundi(value)
+		"MOTE_RISE": SquadLines2D.MOTE_RISE = value
+		"MOTE_SECONDS": SquadLines2D.MOTE_SECONDS = value
 
 
 static func _write_zone_mark(name: String, value: Variant) -> void:
