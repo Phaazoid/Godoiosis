@@ -720,3 +720,19 @@ static func _names(enum_type: Dictionary, values: Array) -> Array[String]:
 
 static func _stamp() -> String:
 	return Time.get_datetime_string_from_system(true).replace(":", "-").replace("T", "_")
+
+
+# _stamp() read back (#939): the UTC unix time a run id begins with, or -1 when it carries none. Here
+# so one file owns the format both ways. UTC because _stamp() passes `true` -- a reader showing it
+# as local time adds the offset itself.
+const STAMP_LENGTH := 19
+
+
+static func stamp_unix(run_id: String) -> int:
+	if run_id.length() < STAMP_LENGTH:
+		return -1
+	var stamp := run_id.substr(0, STAMP_LENGTH)   # YYYY-MM-DD_HH-MM-SS
+	if stamp[4] != "-" or stamp[7] != "-" or stamp[10] != "_" or stamp[13] != "-" or stamp[16] != "-":
+		return -1
+	var iso := "%sT%s" % [stamp.substr(0, 10), stamp.substr(11).replace("-", ":")]
+	return Time.get_unix_time_from_datetime_string(iso)

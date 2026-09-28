@@ -8,7 +8,8 @@ class_name ReplayTool
 # The run list is rebuilt on show rather than cached: the folder gains a run every time the dev
 # plays a mission, and a list built once at _ready would never show the run they came here to look
 # at. DevInfoTool's refresh_on_show idiom, for the same reason it has one. It is also where the
-# one-turn filter is applied, since the filter is a property of the LIST rather than of a run.
+# one-turn filter is applied, since the filter is a property of the LIST rather than of a run. A row
+# reads as the run it is (row_label, #939); the run id travels as the item's metadata.
 #
 # A REPLAY REPLACES WHAT IS ON THE BOARD, because seeding is apply_scenario. That is stated on the
 # page rather than guarded against -- this is the dev tools, and refusing to load over a live battle
@@ -17,6 +18,7 @@ class_name ReplayTool
 const COPY := "Copy"
 const COPIED := "Copied"
 const COPIED_SECONDS := 1.0
+const NO_FILE := "(no file)"   # a board that was never saved records an empty scenario name
 
 var _game
 var _driver: ReplayDriver = null
@@ -48,18 +50,23 @@ func init(game) -> void:
 func refresh_on_show() -> void:
 	if _list == null:
 		return
-	var selected := _list.get_item_text(_list.selected) if _list.selected >= 0 else ""
+	# THE ID RIDES THE METADATA, never the text (#939): the text is a label for a person, and reading
+	# it back as the id is how a relabel silently breaks the pick and the selection both.
+	var selected := str(_list.get_item_metadata(_list.selected)) if _list.selected >= 0 else ""
 	_list.clear()
 	_list.select(-1)   # add_item auto-selects the first entry, so a vanished run would silently point at another
 	_hidden_count = 0
+	var bias := int(Time.get_time_zone_from_system().get("bias", 0))
 	for run_id: String in ReplayRun.list_runs():
-		# load_events, never load_run: the board is the expensive half and a filter has no use for it
-		# (#53 slice 5 split them for exactly this). A run the filter keeps is parsed twice, which is
-		# the cost of not caching a list that gains a run every time the dev plays.
-		if _hide_one_turn and ReplayRun.load_events(run_id).is_one_turn():
+		# load_events, never load_run: the board is the expensive half, and neither the filter nor the
+		# label has a use for it (#53 slice 5 split them for exactly this). ONE parse serves both; a run
+		# the filter keeps is parsed again only if it is picked.
+		var run := ReplayRun.load_events(run_id)
+		if _hide_one_turn and run.is_one_turn():
 			_hidden_count += 1
 			continue
-		_list.add_item(run_id)
+		_list.add_item(row_label(run.headline(), bias))
+		_list.set_item_metadata(_list.item_count - 1, run_id)
 		if run_id == selected:
 			_list.select(_list.item_count - 1)
 	if _list.item_count == 0:
@@ -130,24 +137,12 @@ func _build() -> void:
 func _on_pick(index: int) -> void:
 	if index < 0 or index >= _list.item_count:
 		return
-	_run = ReplayRun.load_run(_list.get_item_text(index))
+	_run = ReplayRun.load_run(str(_list.get_item_metadata(index)))
 	var head := _run.headline()
-	var flags: Array[String] = []
-	if bool(head.get("sandbox", false)):
-		flags.append("sandbox")
-	if bool(head.get("dev_mode", false)):
-		flags.append("dev mode")
-	# THREE-VALUED (see ReplayRun.headline). Null is a swept run: nobody was there to clear the flag,
-	# so it says so rather than reporting the clean answer it does not have. ReplayDriver's
-	# `unbindable` is the real guard for a run in that state.
-	var touched: Variant = head.get("dev_touched", false)
-	if touched == null:
-		flags.append("swept -- whether a dev tool touched this is unknown")
-	elif bool(touched):
-		flags.append("DEV-TOUCHED -- a replay of this cannot be trusted")
+	var marks := flags(head, true)
 	_status.text = "%s -- %s, %d rounds%s" % [
 		str(head.get("scenario")), str(head.get("outcome")), int(head.get("rounds", 0)),
-		("  [%s]" % ", ".join(flags)) if not flags.is_empty() else ""]
+		("  [%s]" % ", ".join(marks)) if not marks.is_empty() else ""]
 	# Both lists: `problems` is why it cannot replay, `degraded` is why replaying it proves less than
 	# it looks like (#871). Neither is worth hiding behind the other.
 	var said: Array[String] = _run.problems.duplicate()
@@ -156,6 +151,48 @@ func _on_pick(index: int) -> void:
 		_status.text += "\n" + "\n".join(said)
 	_report.text = ""
 	_set_running(false)
+
+
+# WHAT ONE ROW SAYS (#939): when, which board, how it ended, how long, and its marks. The time is the
+# run id's UTC stamp moved by `bias_minutes` -- a parameter so a case can state one. The page passes
+# the machine's CURRENT offset, so a run recorded across a daylight-saving change reads an hour off.
+static func row_label(head: Dictionary, bias_minutes: int) -> String:
+	var run_id := str(head.get("run_id", ""))
+	var when := run_id
+	var unix := MissionLog.stamp_unix(run_id)
+	if unix >= 0:
+		var t := Time.get_datetime_dict_from_unix_time(unix + bias_minutes * 60)
+		when = "%02d-%02d %02d:%02d" % [t["month"], t["day"], t["hour"], t["minute"]]
+	var scenario := str(head.get("scenario", ""))
+	var rounds := int(head.get("rounds", 0))
+	var marks := flags(head)
+	return "%s  %s -- %s, %d %s%s" % [when, scenario if scenario != "" else NO_FILE,
+		str(head.get("outcome", "")), rounds, "round" if rounds == 1 else "rounds",
+		("  [%s]" % ", ".join(marks)) if not marks.is_empty() else ""]
+
+
+# WHICH MARKS A RUN CARRIES (#939) -- one decision, rendered short on a row and explained on the status
+# line. Marks are EXCEPTIONS: a sent run nobody touched with a dev tool carries none.
+static func flags(head: Dictionary, explain := false) -> Array[String]:
+	var out: Array[String] = []
+	if bool(head.get("sandbox", false)):
+		out.append("sandbox")
+	if bool(head.get("dev_mode", false)):
+		out.append("dev mode")
+	# THREE-VALUED (see ReplayRun.headline). Null is a swept run: nobody was there to clear the flag,
+	# so it says so rather than reporting the clean answer it does not have. ReplayDriver's
+	# `unbindable` is the real guard for a run in that state.
+	var touched: Variant = head.get("dev_touched", false)
+	if touched == null:
+		out.append("swept -- whether a dev tool touched this is unknown" if explain else "swept")
+	elif bool(touched):
+		out.append("DEV-TOUCHED -- a replay of this cannot be trusted" if explain else "DEV-TOUCHED")
+	# Where the folder is (#852), in the Info page's words. Sent is the ordinary state.
+	if bool(head.get("held", false)):
+		out.append("held back -- never sent: empty, or recorded before runs had an id" if explain else "held back")
+	elif not bool(head.get("sent", false)):
+		out.append("owed -- not uploaded yet" if explain else "owed")
+	return out
 
 
 func _on_load() -> void:

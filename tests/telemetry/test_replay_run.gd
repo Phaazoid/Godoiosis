@@ -153,3 +153,19 @@ func test_a_runs_board_is_not_left_in_the_repair_registry() -> void:
 	var run := ReplayRun.load_run(RUN_ID)
 	assert_array(run.degraded).is_not_empty()   # the repair DID happen, else this is vacuous
 	assert_array(ContentRepair.repaired_paths()).not_contains([_board_path()])
+
+
+# The Replay tab's row marks a held run (#939), and reads it off this. Owed first, so the case sees
+# the flag move rather than a value that was always true.
+func test_the_headline_says_when_a_run_is_held() -> void:
+	_stage_run([], [])
+	var owed := ReplayRun.load_events(RUN_ID).headline()
+	assert_bool(bool(owed.get("held", true))).override_failure_message(
+		"a run still in pending/ reads as held").is_false()
+
+	assert_bool(TelemetryStore.mark_held(RUN_ID)).is_true()
+
+	var held := ReplayRun.load_events(RUN_ID).headline()
+	assert_bool(bool(held.get("held", false))).override_failure_message(
+		"a run in held/ does not read as held").is_true()
+	assert_bool(bool(held.get("sent", true))).is_false()
