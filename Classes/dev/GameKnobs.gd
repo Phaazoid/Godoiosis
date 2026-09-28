@@ -431,6 +431,7 @@ const MOVEMENT_SCRIPT := "res://Classes/units/MovementComponent.gd"
 const ACTION_MENU_SCRIPT := "res://Classes/ui/ActionMenuController.gd"
 const PACING_SCRIPT := "res://Classes/core/Pacing.gd"
 const MISSION_STATUS_SCRIPT := "res://Classes/ui/MissionStatusPanel.gd"
+const PRE_MISSION_SCREEN_SCRIPT := "res://Classes/ui/PreMissionScreen.gd"
 const ELEMENT_PALETTE_SCRIPT := "res://Classes/ui/ElementPalette.gd"
 const QUEUE_STYLE_SCRIPT := "res://Classes/ui/queue/QueueStyle.gd"
 const BOARD_SPACE_SCRIPT := "res://Classes/presentation/BoardSpace.gd"
@@ -827,6 +828,12 @@ const CLASS_KNOBS: Array[Dictionary] = [
 	{"group": "Mission HUD", "label": "Clock urgency tint", "static": "URGENT_COLOR",
 		"script": MISSION_STATUS_SCRIPT,
 		"tip": "What the countdown turns once it is inside the threshold above. Reads against the plain white of an objective still pending, so it has to say urgent without reading as the red that means a mission cannot be won at all."},
+
+	# The roster grid's reorder (#1089). A static on PreMissionScreen, which is 2D UI on the card
+	# layer -- the Mission HUD case again, so a class row is the only form available.
+	{"group": "Pre-mission screen", "label": "Card slide", "static": "CARD_SLIDE_SECONDS",
+		"script": PRE_MISSION_SCREEN_SCRIPT, "min": 0.0, "max": 1.0, "step": 0.01,
+		"tip": "Seconds a card takes to glide to its new slot when a deploy toggle or Reset reorders the roster grid. Long enough to show which way a card went, short enough that a second click is not waiting on it. Zero snaps. Takes effect on the next reorder."},
 
 	# --- ELEMENT COLOURS (#685) ---------------------------------------------------------------
 	#
@@ -1674,6 +1681,7 @@ const GROUP_TABS: Dictionary[String, String] = {
 	# a line of separation from the knobs that simply are what they say.
 	"Player settings": "Unit HUD",
 	"Mission HUD": "Mission",
+	"Pre-mission screen": "Mission",
 	# Its own tab with one row in it, which is thin today and is where the lethality stings and any
 	# ducking land next -- a crossfade length has nothing to do with any other tab's subject.
 	"Music": "Audio",
@@ -2134,6 +2142,7 @@ static func read_static(name: String) -> Variant:
 		"CROSSFADE_SECONDS": return MusicDirector.CROSSFADE_SECONDS
 		"URGENT_ROUNDS": return MissionStatusPanel.URGENT_ROUNDS
 		"URGENT_COLOR": return MissionStatusPanel.URGENT_COLOR
+		"CARD_SLIDE_SECONDS": return PreMissionScreen.CARD_SLIDE_SECONDS
 		"ELEMENT_FIRE": return ElementPalette.ELEMENT_FIRE
 		"ELEMENT_WATER": return ElementPalette.ELEMENT_WATER
 		"ELEMENT_SHOCK": return ElementPalette.ELEMENT_SHOCK
@@ -2886,6 +2895,10 @@ static func write_static(host: Node3D, name: String, value: Variant) -> void:
 		"URGENT_COLOR":
 			MissionStatusPanel.URGENT_COLOR = value
 			_refresh_mission_status(host)
+			return
+		# Read at the start of each slide, so nothing needs re-applying.
+		"CARD_SLIDE_SECONDS":
+			PreMissionScreen.CARD_SLIDE_SECONDS = value
 			return
 		# The queue's rows read the palette when they are BUILT, so a dragged colour needs them
 		# rebuilt -- and through the panel's own UI-only re-render, never game.refresh_action_queue,
