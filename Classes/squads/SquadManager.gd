@@ -577,11 +577,18 @@ func last_gesture_actions(squad: Squad) -> Array[BaseAction]:
 	return gesture
 
 func squad_has_invalid_actions(squad: Squad) -> bool:
+	return not refused_orders(squad).is_empty()
+
+# The squad's refused orders, in queue order -- what Execute refuses over (#1121). Each carries its
+# own reasons in validation_errors; the queue panel's refusal box and the AI concede log both read
+# this list rather than walking the queue themselves.
+func refused_orders(squad: Squad) -> Array[BaseAction]:
+	var refused: Array[BaseAction] = []
 	for action in squad.action_queue:
 		if not action.is_valid:
-			return true
-	return false
-	
+			refused.append(action)
+	return refused
+
 # `target_cell` overrides where the ATTACKER is taken to be standing; null = wherever the plan
 # leaves them, which is every caller but one. The AI's target selection (#117) is that one: it asks
 # "would this enemy be able to answer me from the cell I would attack it from?" about a cell nobody

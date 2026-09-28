@@ -1151,6 +1151,10 @@ const CLASS_KNOBS: Array[Dictionary] = [
 	{"group": "Action queue", "label": "Parchment ink saturation", "static": "PARCHMENT_INK_SATURATION",
 		"script": QUEUE_STYLE_SCRIPT, "min": 1.0, "max": 3.0, "step": 0.05,
 		"tip": "How far the element colours are pushed toward pure hue before being inked onto parchment. The slate set is tuned to GLOW on a dark ground, so the palest of them (Ice, Air) go to mud at ink depth without this. A gain rather than a floor, so your relative choices stay in order -- it clamps at fully saturated, which is the one place they can flatten."},
+	# The refused-Execute shake (#1121). Read each time a shake starts, so it needs no sweep.
+	{"group": "Action queue", "label": "Refusal shake size", "static": "REFUSAL_SHAKE_PX",
+		"script": QUEUE_STYLE_SCRIPT, "min": 0.0, "max": 10.0, "step": 1.0,
+		"tip": "How far a red row swings side to side when you press Execute over it, in pixels of the dock. How long it rings and how many times it swings are the tether pluck's own (Squad lines: Shake length, Shake swings), so the two refusals wobble alike. Takes effect on the next refused press."},
 
 	# --- PLAYBACK, in six sections (dev, 2026-08-27) ------------------------------------------
 	#
@@ -2154,6 +2158,7 @@ static func read_static(name: String) -> Variant:
 		"EVENT_TINT": return QueueStyle.EVENT_TINT
 		"PARCHMENT_INK_DEPTH": return QueueStyle.PARCHMENT_INK_DEPTH
 		"PARCHMENT_INK_SATURATION": return QueueStyle.PARCHMENT_INK_SATURATION
+		"REFUSAL_SHAKE_PX": return QueueStyle.REFUSAL_SHAKE_PX
 	push_error("GameKnobs: unknown static '%s'" % name)
 	return null
 
@@ -2946,6 +2951,9 @@ static func write_static(host: Node3D, name: String, value: Variant) -> void:
 		"PARCHMENT_INK_SATURATION":
 			QueueStyle.PARCHMENT_INK_SATURATION = value
 			_restyle_action_queue(host)
+			return
+		"REFUSAL_SHAKE_PX":
+			QueueStyle.REFUSAL_SHAKE_PX = value
 			return
 		_:
 			push_error("GameKnobs: unknown static '%s'" % name)
