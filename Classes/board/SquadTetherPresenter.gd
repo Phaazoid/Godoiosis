@@ -242,8 +242,10 @@ func foretell_removal(attack: AttackAction) -> float:
 
 # The links a blow's forecast ends and begins, played now and put in the ledger. Strung from the
 # relink's OWN cells -- where the forecast has the two bodies at this blow, which are exactly the cells
-# the stage lifts (Z2), and for a removal the cell the victim was struck on. Returns how long they
-# need to be seen.
+# the stage lifts (Z2), and for a removal the cell the victim was struck on. DECLARED UNOBSERVABLE: at
+# every call today the live cells agree with them (a mutant swapping the two survives), so this is kept
+# for what it means -- and so a removal's end would stay on the struck cell even if its break ever
+# played after the slide. Returns how long they need to be seen.
 func _foretell_links(outcome: ResolvedOutcome, victim: Unit) -> float:
 	if not _live or outcome == null or outcome.relinks.is_empty():
 		return 0.0
