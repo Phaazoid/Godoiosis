@@ -282,9 +282,10 @@ static func shake_now(started_msec: int) -> float:
 # measured from the member end (empty when u1 <= u0), its tint, the cone -- how far it has grown out
 # of the shaft, its scale about its own tip, its tint -- and whether the moment is over. `hostile_side`
 # is whose squad it is (#1109): an enemy's moment wears the enemy colour, and a break still strains to
-# the one strain red, which means "breaking" for either side.
+# the one strain red, which means "breaking" for either side. `snap` is when a break snaps (#1104) --
+# snap_seconds' answer, negative for the strain's own end.
 static func moment_at(moment: int, tether_chord: PackedVector3Array, elapsed: float, standing: bool,
-		flash := true, hostile_side := false) -> Dictionary:
+		flash := true, hostile_side := false, snap := -1.0) -> Dictionary:
 	var m := measure(tether_chord)
 	var base := tether_color(hostile_side)
 	var drawn := {"u0": 0.0, "u1": 0.0, "tint": base, "cone_grow": 0.0, "cone_scale": 1.0,
@@ -328,15 +329,17 @@ static func moment_at(moment: int, tether_chord: PackedVector3Array, elapsed: fl
 				drawn["cone_scale"] = clampf((tip - pulled) / (tip - shaft_end), 0.0, 1.0)
 			drawn["done"] = elapsed >= maxf(REEL_IN_SECONDS, 0.0)
 		Moment.BREAK:
-			# Whole until it snaps, reddening; after the snap the tether is its pieces (moment_drawing).
+			# Whole until it snaps, reddening over the strain and holding red past it; after the snap the
+			# tether is its pieces (moment_drawing).
 			var strain := maxf(BREAK_STRAIN_SECONDS, 0.0)
-			if elapsed < strain:
+			var at := snap if snap >= 0.0 else strain
+			if elapsed < at:
 				var tint := base.lerp(TETHER_STRAIN_COLOR, _phase(maxf(elapsed, 0.0), strain))
 				drawn["u1"] = shaft_end
 				drawn["cone_grow"] = 1.0 if has_cone else 0.0
 				drawn["tint"] = tint
 				drawn["cone_tint"] = tint
-			drawn["done"] = elapsed >= moment_seconds(Moment.BREAK)
+			drawn["done"] = elapsed >= at + _break_tail()
 		Moment.DRAIN, Moment.SLACK, Moment.PULSE, Moment.MOTES:
 			# A death is its pieces from the first frame (moment_drawing): no shaft, no cone here.
 			drawn["done"] = elapsed >= moment_seconds(moment)
@@ -355,8 +358,7 @@ static func moment_seconds(moment: int) -> float:
 		Moment.REEL_IN:
 			return maxf(REEL_IN_SECONDS, 0.0)
 		Moment.BREAK:
-			return maxf(BREAK_STRAIN_SECONDS, 0.0) \
-					+ maxf(maxf(BREAK_SHATTER_SECONDS, 0.0), maxf(BREAK_SPARK_SECONDS, 0.0))
+			return maxf(BREAK_STRAIN_SECONDS, 0.0) + _break_tail()
 		Moment.DRAIN, Moment.SLACK, Moment.PULSE:
 			return _death_fade_start(moment) + maxf(DEATH_FADE_SECONDS, 0.0)
 		Moment.MOTES:
@@ -376,6 +378,18 @@ static func _death_fade_start(moment: int) -> float:
 		Moment.PULSE:
 			return maxf(maxf(PULSE_SECONDS, 0.0), maxf(DEATH_GREY_SECONDS, 0.0))
 	return 0.0
+
+
+# When a stored break SNAPS, in seconds after it starts (#1104): the strain's end, unless the entry
+# says otherwise -- a break at the ledge HOLDS (INF) until the body lets go, then snaps then. The one
+# answer both views and the moments' clock read.
+static func snap_seconds(entry: Dictionary) -> float:
+	return float(entry.get("snap", maxf(BREAK_STRAIN_SECONDS, 0.0)))
+
+
+# What a break plays after it snaps: the shatter, or the sparks if they outlast it.
+static func _break_tail() -> float:
+	return maxf(maxf(BREAK_SHATTER_SECONDS, 0.0), maxf(BREAK_SPARK_SECONDS, 0.0))
 
 
 # How long a moment takes to SAY what it says -- a draw-in once its cone has popped, the others at
@@ -426,8 +440,9 @@ static func moment_drawing(entry: Dictionary, now_msec: int, flash: bool) -> Dic
 	var tether_chord: PackedVector3Array = entry["chord"]
 	var elapsed := float(now_msec - int(entry["start_msec"])) / 1000.0
 	var hostile_side := bool(entry.get("hostile", false))
+	var snap := snap_seconds(entry)
 	var drawn := moment_at(int(entry["moment"]), tether_chord, elapsed, bool(entry.get("standing", false)),
-			flash, hostile_side)
+			flash, hostile_side, snap)
 	var no_pieces: Array[Dictionary] = []
 	var out := {"origin": tether_chord[0], "shaft": PackedVector3Array(), "tint": drawn["tint"],
 			"cone": {}, "done": drawn["done"], "bend": 0.0, "pieces": no_pieces, "glow": {}}
@@ -447,9 +462,9 @@ static func moment_drawing(entry: Dictionary, now_msec: int, flash: bool) -> Dic
 	if int(entry["moment"]) == Moment.BREAK:
 		# The dashes shatter where they stood at the snap, so the march is frozen at that instant.
 		var snap_shift := 0.0
-		if flash:
-			snap_shift = DASH_SPEED * (float(int(entry["start_msec"])) / 1000.0 + maxf(BREAK_STRAIN_SECONDS, 0.0))
-		_break_drawing(out, tether_chord, elapsed, snap_shift, flash, hostile_side)
+		if flash and elapsed >= snap:
+			snap_shift = DASH_SPEED * (float(int(entry["start_msec"])) / 1000.0 + snap)
+		_break_drawing(out, tether_chord, elapsed, snap_shift, flash, hostile_side, snap)
 	elif DEATH_LOOKS.has(int(entry["moment"])):
 		# ...and a death's stop where they stood at the death.
 		var death_shift := DASH_SPEED * float(int(entry["start_msec"])) / 1000.0 if flash else 0.0
@@ -463,20 +478,24 @@ static func moment_drawing(entry: Dictionary, now_msec: int, flash: bool) -> Dic
 # dash on screen at the snap, and the sparks -- as two-point strokes with their own tints, and the
 # arrowhead falling in `cone`. Every piece is kicked away from the snap along the chord, scattered
 # sideways, tumbled about the chord's side axis, and lands on the ground under the chord (its body-
-# middle height taken back off) exactly as its time runs out, eased in like a fall.
+# middle height taken back off) exactly as its time runs out, eased in like a fall. A break HELD past
+# its strain (#1104, the ledge) keeps shivering at the strain's full swing until `snap_at`.
 static func _break_drawing(out: Dictionary, tether_chord: PackedVector3Array, elapsed: float,
-		snap_shift: float, flash: bool, hostile_side := false) -> void:
+		snap_shift: float, flash: bool, hostile_side := false, snap_at := -1.0) -> void:
 	var m := measure(tether_chord)
 	if m.is_empty():
 		return
 	var strain := maxf(BREAK_STRAIN_SECONDS, 0.0)
-	if elapsed < strain:
+	var at := snap_at if snap_at >= 0.0 else strain
+	if elapsed < at:
 		# A shake is motion, so #217 stills it (the pluck's own rule); the red still says it.
-		if flash:
+		if flash and elapsed < strain:
 			var t := _phase(maxf(elapsed, 0.0), strain)
 			out["bend"] = SHAKE_AMPLITUDE * t * sin(TAU * SHAKE_SWINGS * t)
+		elif flash and strain > 0.0:
+			out["bend"] = SHAKE_AMPLITUDE * sin(TAU * SHAKE_SWINGS * elapsed / strain)
 		return
-	var after := elapsed - strain
+	var after := elapsed - at
 	var length: float = m["length"]
 	var shaft_end: float = m["shaft_end"]
 	var tip: float = m["tip"]

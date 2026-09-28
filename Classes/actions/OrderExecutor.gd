@@ -630,15 +630,13 @@ func _relay_the_blow(attack: AttackAction) -> void:
 	volley_struck.emit(attack)
 
 
-# A blow sending its victim over the edge (#1104): its tethers break NOW, at the ledge, and the body
-# hangs there until they snap -- the stamp is what AttackAction waits on before the plummet.
+# A blow sending its victim over the edge (#1104): its tethers start straining NOW, at the ledge, and
+# hold until the body lets go -- AttackAction hangs it over the hole when one did.
 func _break_at_the_ledge(attack: AttackAction) -> void:
 	var presenter: SquadTetherPresenter = game.squad_tether_presenter
 	if presenter == null:
 		return
-	var snap := presenter.foretell_removal(attack)
-	if snap > 0.0:
-		attack.tether_snap_msec = Time.get_ticks_msec() + roundi(snap * 1000.0)
+	attack.tether_held = presenter.foretell_removal(attack)
 
 
 # Which ground goes on stage (#521). BOARD stages nothing at all -- the tear-out is the cinematic's,

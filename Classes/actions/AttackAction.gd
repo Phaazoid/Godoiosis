@@ -103,10 +103,13 @@ signal impact(attack: AttackAction)
 
 # ...and the blow sending its victim OVER THE EDGE (#1104): a removal, emitted before the slide so the
 # victim's tethers break while the body is still on screen. Per VICTIM, where impact is per volley.
-# OrderExecutor answers it, and stamps tether_snap_msec when a tether broke.
+# OrderExecutor answers it, and sets tether_held when a tether broke.
 signal going_over(attack: AttackAction)
-# When the tether that removal broke snaps (Time.get_ticks_msec). The body hangs over the hole until
-# then, so the snap is seen before the camera follows it down. 0 when nothing broke.
+# A tether that removal broke is holding the body up (#1104): it hangs over the hole for
+# Pacing.VOID_HANG once it arrives, wile e coyote style, and falls when the tether snaps.
+var tether_held := false
+# When that tether snapped (Time.get_ticks_msec): the instant the body let go, stamped as the hang
+# ENDS so a pause mid-hang holds the tether too. 0 until then. The held break reads it every frame.
 var tether_snap_msec := 0
 
 const ATTACK_ICON := preload("res://Art/Icons/ActionIcons/FightActionIcon.png")
@@ -205,12 +208,12 @@ func execute():
 		# MIRRORED in play_session._apply_attack (the hand-copied twin, per the went_downed trap) --
 		# except for the plummet, which is pure spectacle: the sprite falls a long way past the lip
 		# before it goes (#431, dev: it used to vanish in mid-air), and the headless twin has no
-		# sprite to drop. Awaited so the removal lands after the fall, not during it. The body first
-		# HANGS over the hole until the tether it broke snaps (#1104, the dev's "before following it").
+		# sprite to drop. Awaited so the removal lands after the fall, not during it. A body a tether is
+		# holding first HANGS over the hole from its arrival, and the tether snaps as it lets go (#1104).
 		if resolved.removed and is_instance_valid(target):
-			var hang := float(tether_snap_msec - Time.get_ticks_msec()) / 1000.0
-			if tether_snap_msec > 0 and hang > 0.0:
-				await Pacing.beat(target, hang)
+			if tether_held:
+				await Pacing.beat(target, Pacing.VOID_HANG)
+				tether_snap_msec = Time.get_ticks_msec()
 			if is_instance_valid(target):   # each await spans frames; the board can go in them
 				await target.movement.plummet()
 				if is_instance_valid(target):

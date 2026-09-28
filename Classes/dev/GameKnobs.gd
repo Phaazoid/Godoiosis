@@ -1473,6 +1473,9 @@ const CLASS_KNOBS: Array[Dictionary] = [
 	{"group": "The cliff follow", "label": "Hold: the bottom of a void fall", "static": "PLUMMET_HOLD",
 		"script": PACING_SCRIPT, "min": 0.0, "max": 6.0, "step": 0.05,
 		"tip": "A beat down in the dark after a body stops falling, before it is removed -- which is the moment its health bricks burst up from under the frame, so this is also the wait before that show. The bricks themselves always land in shot; there is no slider that can lose them."},
+	{"group": "The cliff follow", "label": "Hang: over the edge before the fall", "static": "VOID_HANG",
+		"script": PACING_SCRIPT, "min": 0.0, "max": 4.0, "step": 0.05,
+		"tip": "How long a body shoved over a hole hangs in the air before it drops, counted from when it arrives over the hole. Only while a squad tether it broke is holding it: the tether strains red the whole time and snaps as the hang ends. A unit with no tether falls at once. At 0 it drops the moment it arrives."},
 	{"group": "The cliff follow", "label": "Shot sits above the units' feet", "static": "STAGE_AIM_LIFT",
 		"script": PACING_SCRIPT, "min": -2.0, "max": 4.0, "step": 0.05,
 		"tip": "How high above their feet the shot frames the people it is about, in cells -- the fighters on the torn-out diorama, and equally the one unit a trained shot is following. At 0 the shot is level with their feet, which leaves the sprites sitting high; raise it to bring them to the middle of the screen."},
@@ -2035,6 +2038,7 @@ static func read_static(name: String) -> Variant:
 		"CLIFF_FOLLOW_MAX": return Pacing.CLIFF_FOLLOW_MAX
 		"CLIFF_RECOVER": return Pacing.CLIFF_RECOVER
 		"PLUMMET_HOLD": return Pacing.PLUMMET_HOLD
+		"VOID_HANG": return Pacing.VOID_HANG
 		"STAGE_AIM_LIFT": return Pacing.STAGE_AIM_LIFT
 		"TRAINED_DISTANCE": return Pacing.TRAINED_DISTANCE
 		"TEAR_OUT_FLIGHT": return Pacing.TEAR_OUT_FLIGHT
@@ -2595,6 +2599,8 @@ static func write_static(host: Node3D, name: String, value: Variant) -> void:
 			Pacing.CLIFF_RECOVER = value
 		"PLUMMET_HOLD":
 			Pacing.PLUMMET_HOLD = value
+		"VOID_HANG":
+			Pacing.VOID_HANG = value
 		"STAGE_AIM_LIFT":
 			Pacing.STAGE_AIM_LIFT = value
 		"TRAINED_DISTANCE":

@@ -227,17 +227,18 @@ func foretell(outcome: ResolvedOutcome, victim: Unit) -> float:
 # At the LEDGE (#1104): a blow shoving its victim into a hole breaks the victim's links NOW, at the
 # blow, before the body slides -- broken by the distance as much as by the death -- so the snap plays
 # while the camera is still on the fight, before it follows the body down (the dev's ruling). Each
-# break's dead end rides the body to the ledge (OverlayManager._follow). The victim's moment is decided
-# here, so the death that follows plays nothing more and owes the blow nothing. Returns how long until
-# the snap, which is what the body hangs over the hole for; 0 when nothing broke.
-func foretell_removal(attack: AttackAction) -> float:
+# break's dead end rides the body to the ledge (OverlayManager._follow), and it is HELD: it strains and
+# stays whole until the attack stamps the instant the body lets go (the dev's wile e coyote hang). The
+# victim's moment is decided here, so the death that follows plays nothing more and owes the blow
+# nothing. Returns whether a tether broke, which is what makes the body hang.
+func foretell_removal(attack: AttackAction) -> bool:
 	if not is_instance_valid(attack.target):
-		return 0.0
+		return false
 	var victim: Unit = attack.target
-	if _foretell_links(attack.resolved_outcome(), victim) <= 0.0:
-		return 0.0
+	if _foretell_links(attack.resolved_outcome(), victim, attack.get_instance_id()) <= 0.0:
+		return false
 	_looks[victim.get_instance_id()] = SquadLines2D.Moment.BREAK
-	return maxf(SquadLines2D.BREAK_STRAIN_SECONDS, 0.0)
+	return true
 
 
 # The links a blow's forecast ends and begins, played now and put in the ledger. Strung from the
@@ -245,8 +246,9 @@ func foretell_removal(attack: AttackAction) -> float:
 # the stage lifts (Z2), and for a removal the cell the victim was struck on. DECLARED UNOBSERVABLE: at
 # every call today the live cells agree with them (a mutant swapping the two survives), so this is kept
 # for what it means -- and so a removal's end would stay on the struck cell even if its break ever
-# played after the slide. Returns how long they need to be seen.
-func _foretell_links(outcome: ResolvedOutcome, victim: Unit) -> float:
+# played after the slide. `held_by` is a removal's attack, whose snap its breaks wait for. Returns how
+# long they need to be seen.
+func _foretell_links(outcome: ResolvedOutcome, victim: Unit, held_by := 0) -> float:
 	if not _live or outcome == null or outcome.relinks.is_empty():
 		return 0.0
 	var live := _current_links()
@@ -286,6 +288,8 @@ func _foretell_links(outcome: ResolvedOutcome, victim: Unit) -> float:
 		if removal:
 			link["follow"] = victim_id
 			link["follow_end"] = 0 if member_id == victim_id else 1
+			if held_by != 0:
+				link["held_by"] = held_by
 		links.append(link)
 		exit_seconds = maxf(exit_seconds, SquadLines2D.moment_seconds(moment))
 		shown = maxf(shown, SquadLines2D.shown_seconds(moment))

@@ -544,6 +544,61 @@ func _snap_time() -> float:
 	return -1.0
 
 
+# The drawing a break whose entry says when it snaps (#1104, the ledge) makes `seconds` in.
+func _held_break(seconds: float, snap: float, flash := false) -> Dictionary:
+	var entry := {"chord": _chord(), "moment": SquadLines2D.Moment.BREAK, "start_msec": 0, "standing": false,
+			"snap": snap}
+	return SquadLines2D.moment_drawing(entry, roundi(seconds * 1000.0), flash)
+
+
+# At the LEDGE (#1104, the dev's wile e coyote hang) a break snaps when the body lets go, which can be
+# long after its strain: until then it is WHOLE, full strain red, and still shivering (stilled by #217
+# like the strain's own shake); then it snaps and falls exactly as an ordinary break does, only later.
+func test_a_break_that_snaps_late_holds_whole_and_red_until_its_snap() -> void:
+	_break_times(0.4, 0.6, 0, 0.3)
+	var red := SquadLines2D.TETHER_STRAIN_COLOR
+	var snap := 1.2
+	var shivered := false
+	var still := 0.0
+	for i in 10:
+		var t := 0.4 + (snap - 0.4) * float(i) / 10.0
+		var drawing := _held_break(t, snap, true)
+		assert_int((drawing["shaft"] as PackedVector3Array).size()).override_failure_message(
+				"a break still holding was not whole").is_greater_equal(2)
+		assert_bool((drawing["pieces"] as Array).is_empty()).override_failure_message(
+				"a break shattered while it was still holding").is_true()
+		assert_bool((drawing["tint"] as Color).is_equal_approx(red)).override_failure_message(
+				"a holding break was not at full strain red").is_true()
+		assert_bool(bool(drawing["done"])).override_failure_message("a holding break ended").is_false()
+		shivered = shivered or not is_zero_approx(float(drawing["bend"]))
+		still = maxf(still, absf(float(_held_break(t, snap, false)["bend"])))
+	assert_bool(shivered).override_failure_message("the held tether stopped shivering").is_true()
+	assert_float(still).override_failure_message("the held tether shivered with the setting on") \
+			.is_equal_approx(0.0, 0.0001)
+	var snapped := _held_break(snap, snap)
+	assert_bool((snapped["shaft"] as PackedVector3Array).is_empty()).override_failure_message(
+			"the held break did not snap at its snap").is_true()
+	var late: Array = _held_break(snap + 0.3, snap)["pieces"]
+	var ordinary: Array = _break(0.4 + 0.3)["pieces"]
+	assert_int(late.size()).override_failure_message("the late snap shattered differently").is_equal(ordinary.size())
+	for i in mini(late.size(), ordinary.size()):
+		assert_vector(_middle(late[i])).override_failure_message("a late piece fell differently") \
+				.is_equal_approx(_middle(ordinary[i]), Vector3(0.001, 0.001, 0.001))
+	assert_bool(bool(_held_break(snap + 0.59, snap)["done"])).override_failure_message(
+			"the late break ended before its shatter did").is_false()
+	assert_bool(bool(_held_break(snap + 0.6, snap)["done"])).override_failure_message(
+			"the late break outlived its shatter").is_true()
+
+
+# A break held with no snap yet (INF) never snaps or ends on its own: only the body letting go does.
+func test_a_held_break_never_snaps_on_its_own() -> void:
+	_break_times(0.4, 0.6, 0, 0.3)
+	var drawing := _held_break(60.0, INF)
+	assert_bool((drawing["pieces"] as Array).is_empty()).override_failure_message(
+			"a held break snapped on its own").is_true()
+	assert_bool(bool(drawing["done"])).override_failure_message("a held break ended on its own").is_false()
+
+
 # --- A death's own moment (#1104) ---------------------------------------------------------------
 
 func _death_times() -> void:

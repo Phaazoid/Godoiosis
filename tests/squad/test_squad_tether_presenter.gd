@@ -417,8 +417,9 @@ func _removal(attacker: Unit, victim: Unit, changes: Array) -> AttackAction:
 
 
 # At the LEDGE (#1104, the dev's ruling): a blow shoving its victim into a hole breaks the victim's links
-# at the blow -- a BREAK, the distance's snap, strung from the cell it was struck on and riding the body
-# -- and the death that follows plays nothing more and holds the blow for nothing.
+# at the blow -- a BREAK, the distance's snap, strung from the cell it was struck on, riding the body and
+# HELD until the attack says the body let go -- and the death that follows plays nothing more and holds
+# the blow for nothing.
 func test_a_removal_breaks_at_the_ledge_and_its_death_plays_nothing_more() -> void:
 	var leader := _solo(Vector2i(0, 0))
 	var member := _solo(Vector2i(1, 0))
@@ -429,17 +430,20 @@ func test_a_removal_breaks_at_the_ledge_and_its_death_plays_nothing_more() -> vo
 	var struck := member.movement.cell
 	var attack := _removal(shover, member, [{"member": member, "leader": leader, "ends": true,
 			"cause": SquadManager.LeaveCause.DEATH}])
-	var snap := _presenter.foretell_removal(attack)
+	var held := _presenter.foretell_removal(attack)
 	var breaks := _moments(Moment.BREAK, member, leader)
 	assert_int(breaks.size()).override_failure_message("the removal did not break at the ledge").is_equal(1)
-	assert_float(snap).override_failure_message("the body was not told to hang until the snap") \
-			.is_equal_approx(maxf(SquadLines2D.BREAK_STRAIN_SECONDS, 0.0), 0.0001)
+	assert_bool(held).override_failure_message("the body was not told a tether is holding it").is_true()
 	if breaks.is_empty():
 		return
 	assert_that(breaks[0]["from"]).override_failure_message(
 			"the break was not strung from where the body was struck").is_equal(struck)
 	assert_int(int(breaks[0].get("follow", 0))).override_failure_message(
 			"the break does not ride the body to the ledge").is_equal(member.get_instance_id())
+	assert_int(int(breaks[0].get("held_by", 0))).override_failure_message(
+			"the break does not wait for its attack to let go").is_equal(attack.get_instance_id())
+	assert_bool(is_inf(SquadLines2D.snap_seconds(breaks[0]))).override_failure_message(
+			"the break has a snap before the body has even arrived").is_true()
 	_sm.handle_unit_death(member)
 	_presenter.flush()
 	assert_int(_om.squad_tether_moments.size()).override_failure_message(
@@ -448,10 +452,11 @@ func test_a_removal_breaks_at_the_ledge_and_its_death_plays_nothing_more() -> vo
 			"the killing blow waited for a look that never played").is_equal_approx(0.0, 0.0001)
 
 
-# The ledge break RIDES THE BODY (#1104, the dev off the mockup): while it strains, the victim's end of
-# the chord is wherever the body is and the other end stays put; past the snap it lets go, and moving
-# the body moves nothing. Driven through the moments' own clock, aged by hand.
-func test_a_ledge_break_rides_the_body_until_it_snaps() -> void:
+# The ledge break RIDES THE BODY and HOLDS (#1104, the dev's mockup and his wile e coyote hang): past its
+# strain it is still whole and still riding, because the body has not let go; the attack's stamp snaps
+# it on the next frame, and from then moving the body moves nothing. The other end stays put throughout.
+# Driven through the moments' own clock, aged by hand.
+func test_a_ledge_break_holds_and_rides_the_body_until_its_attack_lets_go() -> void:
 	var saved := [SquadLines2D.BREAK_STRAIN_SECONDS, SquadLines2D.BREAK_SHATTER_SECONDS]
 	SquadLines2D.BREAK_STRAIN_SECONDS = 0.5
 	SquadLines2D.BREAK_SHATTER_SECONDS = 5.0
@@ -460,41 +465,80 @@ func test_a_ledge_break_rides_the_body_until_it_snaps() -> void:
 	var shover: Unit = H.spawn_solo(self, _sm, Team.Faction.ENEMY, Vector2i(1, 1))
 	_sm.join_squad(member, leader.squad)
 	_presenter.arm()
-	_presenter.foretell_removal(_removal(shover, member, [{"member": member, "leader": leader,
-			"ends": true, "cause": SquadManager.LeaveCause.DEATH}]))
+	var attack := _removal(shover, member, [{"member": member, "leader": leader,
+			"ends": true, "cause": SquadManager.LeaveCause.DEATH}])
+	_presenter.foretell_removal(attack)
 	var breaks := _moments(Moment.BREAK, member, leader)
-	var riding := Vector3.ZERO
 	var leader_before := Vector3.ZERO
 	var leader_after := Vector3.ZERO
+	var riding := Vector3.ZERO
 	var at := Vector2.ZERO
+	var whole_past_strain := false
+	var snapped_on_stamp := false
 	var snapped := Vector3.ZERO
 	var after_snap := Vector3.ZERO
+	var shattered := false
 	if not breaks.is_empty():
 		var entry: Dictionary = breaks[0]
 		leader_before = (entry["chord"] as PackedVector3Array)[1]
+		entry["start_msec"] = Time.get_ticks_msec() - roundi(SquadLines2D.BREAK_STRAIN_SECONDS * 1000.0) - 200
+		_om._process(0.0)
+		var held := SquadLines2D.moment_drawing(entry, Time.get_ticks_msec(), true)
+		whole_past_strain = (held["pieces"] as Array).is_empty() and not (held["shaft"] as PackedVector3Array).is_empty()
 		member.position += Vector2(GridUtils.TILE_SIZE, GridUtils.TILE_SIZE)
 		_om._process(0.0)
 		riding = (entry["chord"] as PackedVector3Array)[0]
 		leader_after = (entry["chord"] as PackedVector3Array)[1]
 		at = UnitMirror.board_xz(member)
-		entry["start_msec"] = Time.get_ticks_msec() - roundi(SquadLines2D.BREAK_STRAIN_SECONDS * 1000.0) - 1
+		attack.tether_snap_msec = Time.get_ticks_msec() - 1
 		_om._process(0.0)
+		snapped_on_stamp = not entry.has("held_by") and not is_inf(SquadLines2D.snap_seconds(entry))
 		snapped = (entry["chord"] as PackedVector3Array)[0]
 		member.position += Vector2(GridUtils.TILE_SIZE, 0)
 		_om._process(0.0)
 		after_snap = (entry["chord"] as PackedVector3Array)[0]
+		var shatter := SquadLines2D.moment_drawing(entry, Time.get_ticks_msec() + 50, true)
+		shattered = not (shatter["pieces"] as Array).is_empty()
 	SquadLines2D.BREAK_STRAIN_SECONDS = saved[0]
 	SquadLines2D.BREAK_SHATTER_SECONDS = saved[1]
 
 	assert_int(breaks.size()).override_failure_message("fixture: the removal did not break").is_equal(1)
-	assert_float(riding.x).override_failure_message("the break's end did not ride the body") \
+	assert_bool(whole_past_strain).override_failure_message(
+			"the break snapped at its strain's end while the body still hung").is_true()
+	assert_float(riding.x).override_failure_message("the held break's end did not ride the body") \
 			.is_equal_approx(at.x, 0.0001)
-	assert_float(riding.z).override_failure_message("the break's end did not ride the body") \
+	assert_float(riding.z).override_failure_message("the held break's end did not ride the body") \
 			.is_equal_approx(at.y, 0.0001)
 	assert_vector(leader_after).override_failure_message("the living end moved with the body") \
 			.is_equal_approx(leader_before, Vector3(0.0001, 0.0001, 0.0001))
+	assert_bool(snapped_on_stamp).override_failure_message(
+			"the attack's let-go never reached the break").is_true()
+	assert_bool(shattered).override_failure_message("the break did not shatter after its snap").is_true()
 	assert_vector(after_snap).override_failure_message("the break kept riding the body past the snap") \
 			.is_equal_approx(snapped, Vector3(0.0001, 0.0001, 0.0001))
+
+
+# A held break whose attack is gone snaps at once (#1104): whatever freed it, nothing is left to let go,
+# and a break must never hold the moments' clock open for ever.
+func test_a_break_held_by_a_freed_attack_snaps_at_once() -> void:
+	var leader := _solo(Vector2i(0, 0))
+	var member := _solo(Vector2i(1, 0))
+	var shover: Unit = H.spawn_solo(self, _sm, Team.Faction.ENEMY, Vector2i(1, 1))
+	_sm.join_squad(member, leader.squad)
+	_presenter.arm()
+	var attack := _removal(shover, member, [{"member": member, "leader": leader,
+			"ends": true, "cause": SquadManager.LeaveCause.DEATH}])
+	_presenter.foretell_removal(attack)
+	var breaks := _moments(Moment.BREAK, member, leader)
+	attack = null
+	_om._process(0.0)
+	assert_int(breaks.size()).override_failure_message("fixture: the removal did not break").is_equal(1)
+	if breaks.is_empty():
+		return
+	assert_bool(breaks[0].has("held_by")).override_failure_message(
+			"a break held by a freed attack is still holding").is_false()
+	assert_bool(is_inf(SquadLines2D.snap_seconds(breaks[0]))).override_failure_message(
+			"a break held by a freed attack never snaps").is_false()
 
 
 func test_an_undeploy_plays_nothing() -> void:

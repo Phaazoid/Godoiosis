@@ -298,6 +298,14 @@ func _on_struck(attack: AttackAction) -> void:
 	_executed = attack
 
 
+# When the shoved body ARRIVED over the hole (its slide's end, in Time.get_ticks_msec); 0 until then.
+var _arrived_msec := 0
+
+
+func _on_arrived() -> void:
+	_arrived_msec = Time.get_ticks_msec()
+
+
 # A two-strong enemy squad whose member stands on the edge of a hole, and a hero whose queued shove
 # puts it in. Armed after, like the others.
 func _shove_into_a_hole() -> Unit:
@@ -305,6 +313,7 @@ func _shove_into_a_hole() -> Unit:
 	_leader = _spawn(ENEMY, Vector2i(1, 2), {Stats.Stat.LDR: 10})
 	_watched = _spawn(ENEMY, Vector2i(4, 2))
 	game.squad_manager.join_squad(_watched, _leader.squad)
+	_watched.movement.movement_finished.connect(_on_arrived, CONNECT_ONE_SHOT)
 	var hero := _spawn(PLAYER, Vector2i(3, 2), {}, 3, 1)
 	game.squad_manager.active_squad = hero.squad
 	var aim := AttackAction.declare(hero, hero.movement.cell, _watched.movement.cell)
@@ -320,7 +329,9 @@ func _shove_into_a_hole() -> Unit:
 
 # The dev's ruling: a body shoved into a hole is broken off by the DISTANCE as much as by the death, so
 # its tether SNAPS -- one break, at the blow, strung from where it was struck -- and plays no death look
-# after it; and the blow tells the body to hang over the hole until that snap.
+# after it; and the body HANGS there (the dev's wile e coyote hang): the tether holds from the blow and
+# snaps when the body lets go, which is after it ARRIVES -- never on a clock started at the blow, which
+# the slide itself would use up. The hang's LENGTH collapses headless (Pacing.beat); its order does not.
 func test_a_shove_into_a_hole_breaks_its_tether_at_the_ledge() -> void:
 	var hero := _shove_into_a_hole()
 	var blow := _the_shove(hero)
@@ -344,8 +355,15 @@ func test_a_shove_into_a_hole_breaks_its_tether_at_the_ledge() -> void:
 			"the fall into the hole played a death look as well as the snap").is_equal(0)
 	assert_object(_executed).override_failure_message("fixture: no blow was relayed").is_not_null()
 	if _executed != null:
+		assert_bool(_executed.tether_held).override_failure_message(
+				"nothing told the body a tether was holding it").is_true()
+		assert_int(_arrived_msec).override_failure_message("fixture: the body never slid").is_greater(0)
 		assert_int(_executed.tether_snap_msec).override_failure_message(
-				"nothing told the body to hang over the hole until the snap").is_greater(0)
+				"the tether snapped %d ms before the body even arrived over the hole"
+				% (_arrived_msec - _executed.tether_snap_msec)).is_greater_equal(_arrived_msec)
+	if not breaks.is_empty():
+		var still_held := breaks[0].has("held_by") or is_inf(SquadLines2D.snap_seconds(breaks[0]))
+		assert_bool(still_held).override_failure_message("the body let go and the break never heard").is_false()
 
 
 # --- A down plays its look at the blow (#1104) ---------------------------------------------------
