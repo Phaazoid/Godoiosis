@@ -96,11 +96,26 @@ directly against `Classes/ui/queue/SquadActionQueueControl.gd` / `ActionQueueRow
    builds COUNTER as its own section, last, with skipped counters hidden.
 3. **Group a volley into one expandable row.** — **DONE** —
    `SquadActionQueueControl._collect_volley_group` / `_add_volley_group`, per-actor expand/collapse
-   state (`_expanded_actors`), `ActionQueueRow.setup_volley_summary`.
+   state (`_expanded_actors`), `ActionQueueRow.setup_volley_summary`. Since #1122 the toggle is the
+   header's `[+] xN` readout (`ActionQueueRow.expand_toggled`); a click on the header row requeues.
 4. **Outer scrollbox for the whole queue.** — **DONE** — `_section_scrolls: Array[ScrollContainer]`,
    one per section plus the outer list.
 5. **Click-drag to reorder attacks.** — **DONE** — full drag machinery (`_drag_row` / `_drag_section`,
    `reorder_attacks_requested` signal) in `SquadActionQueueControl`.
+
+**A click on a row REQUEUES its order ([#1122](https://github.com/Phaazoid/Godoiosis/issues/1122),
+2026-09-28).** Dev: *"jump to that unit in game, with the action menu brought up, to requeue that
+action."* The click SPENDS the order through the row's own X path (`game._on_queue_cancel_requested`,
+so a move takes its unit's main with it, move-before-main) and then opens the way back in: move
+planning for a move row (`begin_move_planning`, where right-click's re-plan goes), the unit's ring
+for anything else, at the view's centre because that is where the camera is taking the unit. The
+spend is not a design preference but a precondition: the ring hides every main action while one is
+queued (`MainActionMenu._can_take_main_action`), so a ring opened over the live order offers only
+Inspect, and the spend must come BEFORE the ring opens because `build_tree` snapshots at open. A row
+that is not an order (`is_reorderable()` false: a counter, a watch shot, a tile hit, a hold) only
+moves the camera. A click is a release that reordered nothing AND travelled no further than
+`GearDropZone.CLICK_SLOP`, since a click now costs an order and an abandoned drag must not. How the
+player is told any of this is [#1085](https://github.com/Phaazoid/Godoiosis/issues/1085)'s.
 
 ## Tooltip / popup legibility — open items (added 2026-07-29)
 
