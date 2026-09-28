@@ -322,6 +322,11 @@ func _wire_signals() -> void:
 	# every edge the panel can be open on.
 	unit_info_panel.loadout_changed.connect(func() -> void:
 		refresh_action_queue(squad_manager.active_squad))
+	# The dock's Inspect (#1152): the item's own card, READ-ONLY -- fitting a mod is a pre-mission act,
+	# and a battle has no mod pool to offer, hence the empty one.
+	unit_info_panel.detail_requested.connect(func(item: Item, owner: Unit) -> void:
+		var no_pool: Array[WeaponModData] = []
+		ItemDetail.open(self, item, owner, no_pool, Callable(), true))
 	# The info card's tile face reads the one tile-facts builder (#1105), handed over rather than
 	# looked up so the card never learns what a game is. It closes with the dock: a tile card beside
 	# the dock was opened with it.

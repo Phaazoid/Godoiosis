@@ -9,8 +9,10 @@ class_name ItemDetail
 # weapon, so the chip and the handler ask the same question of the same value; a per-kind signal would
 # put the fork back in the wiring, where nothing could see the two halves together.
 #
-# A NULL CHIP MEANS THIS KIND HAS NO CARD -- armour, a vial, a weapon whose template authors no mod
-# spaces. A rune always has one, blank included; RuneDetailCard.chip_for says why.
+# A NULL CHIP MEANS THIS ROW GETS NO CHIP -- armour, a vial, and a weapon whose template authors no mod
+# spaces, since a weapon's chip is the FITTING affordance and there is nothing to fit. A rune always
+# has one, blank included; RuneDetailCard.chip_for says why. Whether an item has a card to READ at all
+# is has_card below, which a spaceless weapon answers yes to (#1152).
 
 static func chip_for(item: Item) -> Button:
 	var weapon := item as WeaponInstance
@@ -52,14 +54,23 @@ static func chip(text: String, tip: String) -> Button:
 	return chip
 
 
+# Does this item have a card to read? The kinds open() forks on, and nothing else (#1152) -- the
+# battle inventory's Inspect asks this, where the pre-mission rows ask chip_for.
+static func has_card(item: Item) -> bool:
+	return item is WeaponInstance or item is RuneData
+
+
 # `mods` is the mission's own mod pool (#812) and `on_closed` what the host does afterwards. Both are
 # the WEAPON card's business and are carried past the rune branch rather than forked at the call site,
 # which is the whole point of one door -- see below for why the rune branch drops the second.
+# `read_only` is the battle's door (#1152): the weapon card shows its spaces and fits nothing.
 static func open(game_node: Node, item: Item, owner_unit: Unit,
-		mods: Array[WeaponModData], on_closed: Callable) -> void:
+		mods: Array[WeaponModData], on_closed: Callable = Callable(), read_only := false) -> void:
 	var weapon := item as WeaponInstance
 	if weapon != null:
-		ModFittingCard.open(game_node, weapon, owner_unit, mods).closed.connect(on_closed)
+		var card := ModFittingCard.open(game_node, weapon, owner_unit, mods, read_only)
+		if on_closed.is_valid():
+			card.closed.connect(on_closed)
 		return
 	var rune := item as RuneData
 	if rune != null:
