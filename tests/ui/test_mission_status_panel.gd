@@ -57,17 +57,26 @@ func _objectives(list: Array) -> void:
 	mc.set_objectives(typed)
 
 
+# Each row's label. A zone row (#955 part 3) holds its label beside its emblem.
+func _row_labels() -> Array[Label]:
+	var labels: Array[Label] = []
+	for child in panel._rows.get_children():
+		var label := child as Label
+		if label == null:
+			label = child.find_children("*", "Label", true, false)[0] as Label
+		labels.append(label)
+	return labels
+
+
 func _row_texts() -> Array[String]:
 	var texts: Array[String] = []
-	for child in panel._rows.get_children():
-		var label: Label = child as Label
+	for label in _row_labels():
 		texts.append(label.text)
 	return texts
 
 
 func _row_color(text: String) -> Color:
-	for child in panel._rows.get_children():
-		var label: Label = child as Label
+	for label in _row_labels():
 		if label.text == text:
 			return label.modulate
 	fail("No row reading '%s' -- rows are %s" % [text, _row_texts()])

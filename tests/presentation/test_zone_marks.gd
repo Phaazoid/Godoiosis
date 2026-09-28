@@ -73,6 +73,18 @@ func test_the_rim_fades_inward_to_the_fill() -> void:
 	assert_float(middle).is_equal_approx(ZoneMarks.ZONE_FILL_ALPHA, 0.01)
 
 
+# A LIT zone's art (#955 part 3) is the same rim over the lit wash: the edge is untouched, the middle
+# reads the lit knob, and it is its own texture, so the unlit art stays what it was.
+func test_lit_art_is_the_same_rim_over_the_lit_wash() -> void:
+	var plain := ZoneMarks.image(W)
+	var lit := ZoneMarks.image(W, ZoneMarks.TEXELS, true)
+	var size := plain.get_width()
+	assert_that(lit.get_pixel(0, size / 2)).override_failure_message("lighting moved the outline") \
+			.is_equal(plain.get_pixel(0, size / 2))
+	assert_float(lit.get_pixel(size - 2, size / 2).a).is_equal_approx(ZoneMarks.ZONE_LIT_FILL_ALPHA, 0.01)
+	assert_object(ZoneMarks.texture(W, true)).is_not_same(ZoneMarks.texture(W))
+
+
 
 # A hair off the point in every direction is still one of the zone's cells: inside, and off the border.
 func _strictly_inside(point: Vector3, cells: Array[Vector2i]) -> bool:

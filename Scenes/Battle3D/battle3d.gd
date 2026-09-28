@@ -1391,9 +1391,10 @@ func _center_on_pointer() -> void:
 #
 # surface_point carries the STAGED offset while _aim_over does not, so a call here while the board
 # is torn out would lift the rig twice -- once through the point and once through the rig's own lift
-# channel. Structurally unreachable rather than guarded: both callers are refused while playback
-# owns the board (SPACE by _unhandled_input's lock check, an order commit by there being no pass
-# running to commit during), and playback is the only thing that stages anything.
+# channel. Unreachable rather than guarded here: every caller is refused while playback owns the
+# board (SPACE by _unhandled_input's lock check, an order commit by there being no pass running to
+# commit during, an objectives-panel row by game.look_at_next_zone asking the lock itself -- that
+# panel stays up through the pass, #955 part 3), and playback is the only thing that stages anything.
 func _center_rig_on(cell: Vector2i) -> void:
 	_rig.glide_to(BoardSpace.surface_point(cell, game.board_heights))
 

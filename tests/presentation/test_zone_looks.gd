@@ -209,6 +209,59 @@ func test_the_flat_view_wears_the_same_rim_on_every_zone_cell() -> void:
 
 # A zone knob moves BOTH views: the diorama re-reads ZoneMarks every frame, and the flat sprites have to
 # be rebuilt with the new art -- the half a knob written for one view forgets.
+# A LIT zone (#955 part 3) stands its wall at the lit knobs and every other zone at the plain ones, in
+# the one mesh: each strip's height and its strength (the vertex alpha) are its own. Asked in the knobs'
+# own units, so tuning either pair cannot red it.
+func test_a_lit_zones_wall_stands_at_the_lit_knobs_and_the_rest_do_not() -> void:
+	_om().set_lit_zone_kind(ZoneManager.Kind.CAPTURE)
+	await _settle()
+	var walls := _mirror.get_node_or_null("ZoneWalls") as ZoneWalls
+	var arrays := walls.mesh.surface_get_arrays(0)
+	var vertices: PackedVector3Array = arrays[Mesh.ARRAY_VERTEX]
+	var colours: PackedColorArray = arrays[Mesh.ARRAY_COLOR]
+	var capture := _full(BoardOverlays.Layer.ZONE_CAPTURE)
+	var seen := {true: 0, false: 0}
+	for strip in vertices.size() / 6:
+		var lowest := INF
+		var highest := -INF
+		for i in range(strip * 6, strip * 6 + 6):
+			lowest = minf(lowest, vertices[i].y)
+			highest = maxf(highest, vertices[i].y)
+		var colour := colours[strip * 6]
+		var lit := absf(colour.r - capture.r) < 0.01 and absf(colour.g - capture.g) < 0.01 and absf(colour.b - capture.b) < 0.01   # 8-bit vertex colour
+		seen[lit] = int(seen[lit]) + 1
+		var height := ZoneMarks.ZONE_LIT_WALL_HEIGHT if lit else ZoneMarks.ZONE_WALL_HEIGHT
+		var strength := ZoneMarks.ZONE_LIT_WALL_ALPHA if lit else ZoneMarks.ZONE_WALL_ALPHA
+		assert_float(highest - lowest).override_failure_message("a %s strip stands %.3f tall" % [
+				"lit" if lit else "plain", highest - lowest]).is_equal_approx(height * BoardSpace.CELL_SIZE, 0.001)
+		assert_float(colour.a).is_equal_approx(strength, 0.01)
+	_om().set_lit_zone_kind(MissionRules.NO_ZONE)
+	assert_int(seen[true]).override_failure_message("no strip wore the lit zone's colour").is_equal(6)
+	assert_int(seen[false]).is_equal(4)
+
+
+# The lit knobs reach both views through the same door as the rest (a dispatch that misses a name
+# is a slider that moves nothing).
+func test_a_lit_knob_moves_both_views() -> void:
+	_om().set_lit_zone_kind(ZoneManager.Kind.CAPTURE)
+	await _settle()
+	var flat_before: Array = _flat_rims().map(func(rim: Sprite2D) -> Texture2D: return rim.texture)
+	var deep_before: Array = _overlays.markers_of(BoardOverlays.Layer.ZONE_MARKS).map(
+			func(mark: Dictionary) -> Texture2D: return mark["texture"])
+	var old := ZoneMarks.ZONE_LIT_FILL_ALPHA
+	GameKnobs.write_static(_scene, "ZONE_LIT_FILL_ALPHA", old * 0.5 + 0.05)
+	await _settle()
+	var flat_after: Array = _flat_rims().map(func(rim: Sprite2D) -> Texture2D: return rim.texture)
+	var deep_after: Array = _overlays.markers_of(BoardOverlays.Layer.ZONE_MARKS).map(
+			func(mark: Dictionary) -> Texture2D: return mark["texture"])
+	GameKnobs.write_static(_scene, "ZONE_LIT_FILL_ALPHA", old)
+	_om().set_lit_zone_kind(MissionRules.NO_ZONE)
+	assert_bool(flat_after == flat_before).override_failure_message(
+			"the lit fill knob left the flat view's art as it was").is_false()
+	assert_bool(deep_after == deep_before).override_failure_message(
+			"the lit fill knob left the diorama's art as it was").is_false()
+
+
 func test_a_zone_knob_moves_the_flat_view_too() -> void:
 	await _settle()
 	var before: Array = []

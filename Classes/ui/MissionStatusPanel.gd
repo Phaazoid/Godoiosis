@@ -10,15 +10,22 @@ class_name MissionStatusPanel
 # it. Neither of those is mission status; both are always-on corner furniture, and one owner of
 # that band is what stops a second node restating where the first one ends.
 #
-# A declared second REPRESENTATION of what the board's zone tint already shows (Law #4):
+# A declared second REPRESENTATION of what the board's zone marks already show (Law #4):
 # MissionController stays authoritative, this panel only draws what it is handed on refresh, and
 # game.refresh_mission_status() is the one caller. Rules and counts are read off the controller,
 # never re-derived here.
 #
 # THE ROWS THEMSELVES HAVE A SECOND READER since #740: the pre-mission contract shows the same
-# briefing before the battle that this shows during it. `briefing_rows` is that one builder -- a
-# static, so the screen needs no panel instance -- and this file is the only place the wording,
-# the ordering and the two headers live.
+# briefing before the battle that this shows during it. `briefing` is that one builder -- a static,
+# so the screen needs no panel instance -- and this file is the only place the wording, the ordering
+# and the two headers live.
+#
+# A ROW ABOUT A PLACE ANSWERS THE POINTER since #955 part 3, here and not in the briefing: Capture,
+# Extract and Defend wear their zone's emblem, hovering one lights its zones on the board and a click
+# glides the camera to the next of them. The panel and its containers still let clicks through; only
+# those rows stop the mouse. Which control is under the pointer is RECONCILED every frame rather than
+# followed by mouse_entered/exited, because every refresh rebuilds the rows and a freed row never says
+# the pointer left it.
 
 const CORNER_MARGIN := 8
 const BUTTON_CLEARANCE := 44   # the End Turn button's reserved corner slot below us: 36 high + its 8 margin (#189)
@@ -44,6 +51,38 @@ const INSTRUCTION_COLOR := Color(1, 0.87, 0.5)   # guidance, not a win condition
 # this panel is 2D UI so the node-property table cannot reach it.
 static var URGENT_ROUNDS := 2               # rounds left at or below which the clock goes urgent
 static var URGENT_COLOR := Color(1, 0.55, 0.3)
+
+# A zone row's emblem and the box it shows while under the pointer (#955 part 3).
+const EMBLEM_SIZE := 16
+const EMBLEM_GAP := 4
+const ROW_PAD := 3
+const HOVER_BG := Color(1, 1, 1, 0.13)
+const HOVER_BORDER := Color(1, 1, 1, 0.45)
+
+# The pointer is on a zone row (MissionRules.NO_ZONE when it leaves), and a zone row was clicked.
+signal zone_row_hovered(kind: int)
+signal zone_row_clicked(kind: int)
+
+# Which zone kinds the board is drawing, pushed in by the game (OverlayManager.drawn_zone_kinds): a
+# row answers only while there is something of its kind to light or visit.
+var drawn_zone_kinds: Callable
+
+var _hovered_kind := MissionRules.NO_ZONE
+
+
+# One briefing row: its label, and the zone kind it is about (MissionRules.NO_ZONE for none).
+class Row:
+	var label: Label
+	var zone_kind: int
+
+	func _init(row_label: Label, kind: int) -> void:
+		label = row_label
+		zone_kind = kind
+
+
+# A zone row as the HUD draws it: the emblem, then the label, in a box that shows the hover.
+class ZoneRow extends PanelContainer:
+	var zone_kind := MissionRules.NO_ZONE
 
 @onready var _panel: PanelContainer = $ObjectivePanel
 @onready var _rows: VBoxContainer = $ObjectivePanel/Rows
@@ -92,26 +131,38 @@ func _build_report_hint() -> void:
 # stamp and the report sign are not mission status and never go down with the objective list.
 func clear() -> void:
 	_panel.visible = false
+	_set_hovered(MissionRules.NO_ZONE)
 
 # THE briefing, as a list of rows -- what the corner HUD draws during the battle and what the
 # pre-mission contract draws before it (#740). ONE builder, because the two surfaces answer the
 # same question and a second implementation would drift the moment a lose condition gains a
-# readout: the SquadManager.contact_breaks split, one domain over.
+# readout: the SquadManager.contact_breaks split, one domain over. Each row names the zone kind it is
+# about, off MissionRules' one pairing, so the HUD can make it answer the pointer (#955 part 3).
 #
 # Static, and every fact still comes off the controller -- this re-derives nothing.
-static func briefing_rows(controller: MissionController, board: BoardContext) -> Array[Label]:
-	var rows: Array[Label] = []
+static func briefing(controller: MissionController, board: BoardContext) -> Array[Row]:
+	var rows: Array[Row] = []
 	if not controller.objectives.is_empty():   # a lesson-only board has no OBJECTIVES header to earn
-		rows.append(_build_header("OBJECTIVES"))
+		rows.append(Row.new(_build_header("OBJECTIVES"), MissionRules.NO_ZONE))
 	for objective in controller.objectives:
-		rows.append(_build_row(objective, controller, board))
+		rows.append(Row.new(_build_row(objective, controller, board),
+				MissionRules.zone_kind_of_objective(objective)))
 	# What LOSES it (#101), under its own header: a countdown listed among the objectives reads as
 	# something to achieve. Driven off the declared list, so the next condition needs no edit here.
 	if not controller.lose_conditions.is_empty():
-		rows.append(_build_header("FAIL IF"))
+		rows.append(Row.new(_build_header("FAIL IF"), MissionRules.NO_ZONE))
 	for condition in controller.lose_conditions:
-		rows.append(_build_lose_row(condition, controller, board))
+		rows.append(Row.new(_build_lose_row(condition, controller, board),
+				MissionRules.zone_kind_of_lose(condition)))
 	return rows
+
+# The briefing as plain labels -- what the pre-mission contract draws, where nothing answers the
+# pointer (the board is behind an opaque screen there; its Tab preview has this panel).
+static func briefing_rows(controller: MissionController, board: BoardContext) -> Array[Label]:
+	var labels: Array[Label] = []
+	for row in briefing(controller, board):
+		labels.append(row.label)
+	return labels
 
 func show_status(controller: MissionController, board: BoardContext, instruction := "") -> void:
 	# Immediate free, not queue_free: the panel re-lays out from minimum size below, and a dying
@@ -119,8 +170,12 @@ func show_status(controller: MissionController, board: BoardContext, instruction
 	for child in _rows.get_children():
 		_rows.remove_child(child)
 		child.free()
-	for row: Label in briefing_rows(controller, board):
-		_rows.add_child(row)
+	for row in briefing(controller, board):
+		if row.zone_kind == MissionRules.NO_ZONE:
+			_rows.add_child(row.label)
+		else:
+			_rows.add_child(_zone_row(row))
+	_paint_hover()
 	# The tutorial's instruction row (#182): what to do NOW. Drawn last, below the win conditions,
 	# and only handed to us -- ScenarioDirector owns the text, game.refresh_mission_status() the read.
 	if instruction != "":
@@ -138,6 +193,102 @@ func show_status(controller: MissionController, board: BoardContext, instruction
 	# hidden, so the HUD never reflows when it appears.
 	_panel.offset_top -= BUTTON_CLEARANCE
 	_panel.offset_bottom -= BUTTON_CLEARANCE
+
+# A row about a place (#955 part 3): its zone's emblem in the kind's colour, then the label. The row
+# itself stops the mouse; its children ignore it, so the viewport reports the row as the control under
+# the pointer.
+func _zone_row(row: Row) -> ZoneRow:
+	var box := ZoneRow.new()
+	box.zone_kind = row.zone_kind
+	box.mouse_filter = Control.MOUSE_FILTER_STOP
+	box.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
+	var line := HBoxContainer.new()
+	line.add_theme_constant_override("separation", EMBLEM_GAP)
+	line.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var emblem := TextureRect.new()
+	emblem.texture = ZoneMarks.emblem_of(row.zone_kind as ZoneManager.Kind)
+	emblem.modulate = ZoneMarks.colour_of(row.zone_kind as ZoneManager.Kind)
+	emblem.custom_minimum_size = Vector2(EMBLEM_SIZE, EMBLEM_SIZE)
+	emblem.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	emblem.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	emblem.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	emblem.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	row.label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	line.add_child(emblem)
+	line.add_child(row.label)
+	box.add_child(line)
+	box.gui_input.connect(_on_zone_row_input.bind(box))
+	return box
+
+
+func _on_zone_row_input(event: InputEvent, box: ZoneRow) -> void:
+	var press := event as InputEventMouseButton
+	if press == null or not press.pressed or press.button_index != MOUSE_BUTTON_LEFT:
+		return
+	box.accept_event()
+	if _is_live(box.zone_kind):
+		zone_row_clicked.emit(box.zone_kind)
+
+
+# Whether the board is drawing any zone of this kind -- a claimed or unpainted objective keeps its
+# emblem as a key but has nothing to light or visit.
+func _is_live(kind: int) -> bool:
+	if not drawn_zone_kinds.is_valid():
+		return false
+	var kinds: Array[int] = drawn_zone_kinds.call()
+	return kinds.has(kind)
+
+
+# The reconcile (see the header): which live zone row the pointer is on, asked of the viewport, so
+# anything covering the panel covers the rows too. Right after a refresh the viewport holds no control
+# until the pointer moves; the row under the pointer by position stands in until then, or every
+# refresh during a pass would flicker the lit zones off.
+func _process(_delta: float) -> void:
+	var kind := MissionRules.NO_ZONE
+	var over := get_viewport().gui_get_hovered_control()
+	if over is ZoneRow and over.get_parent() == _rows:
+		kind = (over as ZoneRow).zone_kind
+	elif over == null:
+		kind = _row_under_pointer()
+	if not _is_live(kind):
+		kind = MissionRules.NO_ZONE
+	_set_hovered(kind)
+
+
+func _row_under_pointer() -> int:
+	if not _panel.visible:
+		return MissionRules.NO_ZONE
+	var at := get_global_mouse_position()
+	for child in _rows.get_children():
+		var box := child as ZoneRow
+		if box != null and box.zone_kind == _hovered_kind and box.get_global_rect().has_point(at):
+			return box.zone_kind
+	return MissionRules.NO_ZONE
+
+
+func _set_hovered(kind: int) -> void:
+	if kind == _hovered_kind:
+		return
+	_hovered_kind = kind
+	_paint_hover()
+	zone_row_hovered.emit(kind)
+
+
+func _paint_hover() -> void:
+	for child in _rows.get_children():
+		var box := child as ZoneRow
+		if box != null:
+			box.add_theme_stylebox_override("panel", _row_box(box.zone_kind == _hovered_kind))
+
+
+static func _row_box(hovered: bool) -> StyleBox:
+	var box := StyleBoxFlat.new()
+	box.bg_color = HOVER_BG if hovered else Color(0, 0, 0, 0)
+	box.border_color = HOVER_BORDER
+	box.set_border_width_all(1 if hovered else 0)
+	box.set_content_margin_all(ROW_PAD)
+	return box
+
 
 static func _build_header(text: String) -> Label:
 	var header := Label.new()

@@ -159,7 +159,7 @@ camera, and on what occasion — because an ungated mover is the bug class the w
 |---|---|---|
 | `battle3d._mirror_camera()` | every frame under playback, polling `cam.*` causes | `hold_at`, `drop_to`, `lift_to`, `set_zoom`, `aim_along`, `dolly_to` |
 | `battle3d._on_impact()` | a blow lands — an EVENT | `shake` |
-| `battle3d._center_rig_on()` | recentre / the return pan — an EVENT | `glide_to` |
+| `battle3d._center_rig_on()` | recentre / the return pan / an objective row's click — an EVENT | `glide_to` |
 | `battle3d.fit_camera()` | a board loads | `frame` / `pose` |
 | `CameraRig3D._unhandled_input` / `_process` | the player's own hand | orbit, tilt, wheel, WASD |
 
@@ -169,6 +169,13 @@ The **causes** the 2D `CameraController` publishes: `shot_cells`, `follow_unit`,
 teardown can wait for the climb.
 
 Adding a sixth door is a decision worth stating out loud.
+
+**The recentre door has no lock of its own**, and that is why a new caller is not a new door. SPACE
+and an order's return pan cannot fire while playback owns the board, so the door never needed one.
+Clicking a zone row in the objectives panel ([#955](https://github.com/Phaazoid/Godoiosis/issues/955)
+part 3, `game.look_at_next_zone` → `focus_view_on_cell`) CAN fire then, since that panel stays up
+through enemy turns, the pass and the mission's end, so it asks `_board_locked_for_player()` itself
+before it glides. A caller that can fire while the board is locked asks first.
 
 **#672 narrowed the FIRST door rather than adding one.** `_mirror_camera` still polls every frame,
 but every distance and framing it writes now goes through `battle3d._apply_shot`, one `match` with
