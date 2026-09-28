@@ -181,6 +181,8 @@ func test_a_unit_attack_pulses_the_unit_and_flashes_the_tiles() -> void:
 	assert_bool(_tiles_flashing()).is_true()
 
 
+# The hover asks no targets question of its own since #1135: nobody pulses because the sweep finds
+# nobody, RulesService.is_attack_victim refusing every unit a map-only attack reaches.
 func test_a_map_attack_flashes_the_tiles_and_does_not_pulse_the_unit() -> void:
 	var attacker := _armed_attacker(EquippableData.TargetMode.MAP)
 
@@ -188,6 +190,19 @@ func test_a_map_attack_flashes_the_tiles_and_does_not_pulse_the_unit() -> void:
 
 	assert_bool(_tiles_flashing()).is_true()
 	assert_bool(_unit_pulsing(_foe())).is_false()
+
+
+# ...but the CURRENT still catches (dev, 2026-09-28), and a soaked body on the aimed cell conducts,
+# so a map-only shock pulses the unit it will really hit. A hover that kept its own targets gate
+# would hide exactly this unit -- the second answer to "who is hit" #1135 deleted.
+func test_a_map_only_shock_pulses_the_wet_unit_its_current_catches() -> void:
+	var attacker := _armed_attacker(EquippableData.TargetMode.MAP)
+	(attacker.equipped_weapon as WeaponInstance).template.main_attack.elemental_damage_type = Elemental.Element.SHOCK
+	_foe().add_element_state(Elemental.State.WET)
+
+	_aim_at(attacker, FOE_CELL)
+
+	assert_bool(_unit_pulsing(_foe())).is_true()
 
 
 func test_a_both_attack_flashes_the_tiles_and_pulses_the_unit_together() -> void:

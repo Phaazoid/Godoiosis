@@ -807,7 +807,7 @@ func lapse_watch() -> void:
 	watch = null
 
 # A STANDING WATCH IS YOUR REACTION, SPENT (#810, dev 2026-09-09): a unit that took Overwatch does
-# not counter and does not reactively heal. SquadManager's two reaction gates are the readers.
+# not counter. SquadManager.can_counter is the reader.
 #
 # THE BARE OBJECT, deliberately. Not is_intact() — arm_watch refuses a null attack and an empty
 # footprint, so for the owner asking about its OWN watch that clause cannot fail. Not spent, not
@@ -1369,10 +1369,11 @@ func attack_can_overwatch(attack: AttackData) -> bool:
 # never the live selection — see that method's header for why. Since #84 the counter attack must
 # also be FIREABLE: an empty Carbine magazine (and, latently since #73, a sprung Springspear whose
 # Stab requires_readiness) can't counter with an attack the menu already refuses. A counter that
-# DOES land spends whatever its main consumes — AttackAction.execute()'s post-fire hook.
+# DOES land spends whatever its main consumes — AttackAction.execute()'s post-fire hook. A heal or a
+# map-only attack never counters (AttackData.can_ever_counter, #1135).
 func attack_source_can_counter() -> bool:
 	var atk := get_counter_attack()
-	return atk != null and atk.can_counter and is_attack_fireable(atk)
+	return atk != null and atk.can_ever_counter() and is_attack_fireable(atk)
 
 # Why this unit can't fire this attack right now, in the equipped source's own words — "" when it
 # can. Asked of the EQUIPPABLE, which owns its economy: a weapon answers readiness, a rune answers

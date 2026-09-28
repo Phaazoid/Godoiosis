@@ -63,8 +63,8 @@ static func build_for(squad: Squad, plan: ResolvedPlan) -> Array[ActionQueueDisp
 		_add_section(entries, BaseAction.ActionType.keys()[type], side_channel.get(type, []), plan)
 
 	# Reactions last, in their own section — derived, not stored (Law #2). A skipped one (the
-	# reactor went down/dead this pass) is hidden. Headed REACTION rather than COUNTER since #148:
-	# the section holds both kinds, and a heal row reading "Alia heals Bern" under COUNTER lies.
+	# reactor went down/dead this pass) is hidden. Headed REACTION since #148 gave it a heal kind; that
+	# kind is repealed (2026-09-28) and only counters land here now, but the header is player-facing.
 	var live_reactions: Array[BaseAction] = []
 	for reaction in plan.counters:
 		if not reaction.resolved.skipped:

@@ -55,8 +55,9 @@ static func lines(attack: AttackData, knockback: int, elements: Array[Elemental.
 	if attack.pierces_guard:
 		out.append("Pierces guard")
 	# can_counter defaults TRUE, so the line is the EXCEPTION -- saying "can counter" on nearly every
-	# attack in the game would be noise wearing the shape of information.
-	if not attack.can_counter:
+	# attack in the game would be noise wearing the shape of information. Asked through the rule, so a
+	# heal or a map-only attack says so whatever its box holds (#1135).
+	if not attack.can_ever_counter():
 		out.append("Never counters")
 
 	out.append_array(_height_lines(attack))

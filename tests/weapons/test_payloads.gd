@@ -112,7 +112,8 @@ func _origins(actions: Array[AttackAction]) -> Array[Vector2i]:
 func test_a_payload_goes_off_where_the_victim_lands() -> void:
 	var carrier := _attack("Shove")
 	carrier.knockback = 2
-	carrier.payload = _attack("Bomb", MAP)
+	# BOTH, not MAP: the case reads the bomb's victim, and a map-only bomb hits nobody (#1135).
+	carrier.payload = _attack("Bomb", BOTH)
 	var thrower := _thrower(carrier)
 	var victim := _foe(Vector2i(0, -1))
 	var dropped := _dropped(_resolve(thrower, Vector2i(0, -1)).attacks)
@@ -409,7 +410,7 @@ func test_a_counters_payload_sticks_to_the_unit_its_counter_shoved() -> void:
 	var foe := _foe(Vector2i(0, -1))
 	var counter := _attack("Riposte")
 	counter.knockback = 2
-	counter.payload = _attack("Bomb", MAP)
+	counter.payload = _attack("Bomb", BOTH)   # it must be able to hit the thrower it finds (#1135)
 	(foe.get_equipped_weapon() as WeaponInstance).template.main_attack = counter
 	var plan := _resolve(thrower, Vector2i(0, -1))
 	assert_int(plan.counters.size()).is_equal(2)
@@ -474,7 +475,8 @@ func test_a_watch_shots_payload_plays_right_behind_the_shot() -> void:
 func test_a_thrower_the_pass_fells_still_has_the_payload_go_off() -> void:
 	var carrier := WeaponAttackData.new()
 	carrier.display_name = "Self Blast"
-	carrier.targets = MAP
+	# BOTH: it has to fell its own thrower, and a map-only blast hits nobody, itself included (#1135).
+	carrier.targets = BOTH
 	carrier.hits_self = true
 	carrier.power = 200
 	var square: Array[Vector2i] = []
@@ -640,7 +642,7 @@ func test_a_carving_payload_scales_off_the_throwers_aura() -> void:
 	carving.display_name = "Spark"
 	carving.power = 2
 	carving.sigils.assign([Elemental.Element.FIRE])
-	carving.targets = MAP
+	carving.targets = BOTH   # it has to hit the foe to resolve any damage; a map-only carving cannot
 	P.point(carving, 1)
 	var carrier := _attack("Lob", MAP)
 	carrier.payload = carving
@@ -783,13 +785,14 @@ func test_a_payload_level_that_hits_nobody_has_no_subject() -> void:
 
 
 # ==============================================================================
-#  Three edges, kept as D1 built them (rulings 47-49)
+#  Two edges, kept as D1 built them (rulings 47-48; 49 was the reactive heal's, repealed with it)
 # ==============================================================================
 
 # 47: a knockback payload never shoves the unit it is stuck to -- a shove runs from where its attack
 # started, and a payload starts on its victim's own tile -- while everyone else in it goes outward.
 func test_a_knockback_payload_leaves_its_own_victim_and_shoves_the_rest_outward() -> void:
 	var blast := _blast("Blowback")
+	blast.targets = BOTH   # a shove needs a victim, and a map-only blast has none (#1135)
 	blast.knockback = 2
 	var carrier := _attack("Tap", UNIT, 2)
 	carrier.payload = blast
@@ -810,7 +813,7 @@ func test_a_knockback_payload_leaves_its_own_victim_and_shoves_the_rest_outward(
 # 48: a Guard that takes the carrier's hit carries the bomb -- it goes off where the BLOCKER lands.
 func test_a_guard_that_takes_the_hit_carries_the_bomb() -> void:
 	var carrier := _attack("Tap")
-	carrier.payload = _attack("Bomb", MAP)
+	carrier.payload = _attack("Bomb", BOTH)   # the case reads who the bomb hit (#1135)
 	var thrower := _thrower(carrier)
 	var ward := _foe(Vector2i(0, -1))
 	var blocker := _foe(Vector2i(1, -1))
@@ -823,26 +826,3 @@ func test_a_guard_that_takes_the_hit_carries_the_bomb() -> void:
 	assert_int(dropped.size()).is_equal(1)
 	assert_that(dropped[0].origin_cell).is_equal(Vector2i(1, -1))
 	assert_object(dropped[0].target).is_same(blocker)
-
-
-# 49: a reaction heal's own gather is ally-only; the payload it drops is a whole attack of its own.
-func test_a_reaction_heals_payload_can_hit_an_enemy() -> void:
-	var attacker := H.spawn_solo(self, _sm, ENEMY, Vector2i(0, 0), TOUGH)
-	var defender := H.spawn_solo(self, _sm, PLAYER, Vector2i(1, 0), {Stats.Stat.LDR: 9, Stats.Stat.MHP: 60})
-	var healer := H.spawn_solo(self, _sm, PLAYER, Vector2i(2, 0), TOUGH)
-	_sm.join_squad(healer, defender.squad)
-	var weapon := H.make_weapon(4)
-	weapon.template.main_attack.heals = true
-	weapon.template.main_attack.hits_allies = true
-	weapon.template.main_attack.payload = _blast("Scald")
-	healer.equipped_weapon = weapon
-	defender.set_current_hp(30)
-	attacker.squad._queue_action(H.stamped_attack(attacker, defender))
-	var plan := _sm.resolve_plan(attacker.squad, _board(), [] as Array[ElementalReaction], [] as Array[TerrainReaction])
-	_plans.append(plan)
-	var scalded := false
-	for ctr in plan.counters:
-		if ctr.dropped_by != null and ctr.target == attacker and ctr.resolved.damage > 0:
-			scalded = true
-	assert_bool(scalded).override_failure_message(
-			"the heal's payload never reached the attacker in its blast").is_true()

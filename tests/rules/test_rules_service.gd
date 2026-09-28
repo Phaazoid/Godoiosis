@@ -82,3 +82,27 @@ func test_hits_self_and_hits_allies_are_independent() -> void:
 	attack.hits_allies = true
 	assert_bool(RulesService.is_attack_victim(attacker, attacker, attack)).is_false()
 	assert_bool(RulesService.is_attack_victim(attacker, ally, attack)).is_true()
+
+# --- targets (#1135): a map-only attack has NO unit victims -----------------------------------
+#
+# The gather every unit hit goes through, so this table is the whole rule. Every flag that would
+# otherwise make a unit a victim is switched ON, so a MAP answer of false is the targets gate and
+# nothing else. A null attack is bare fists, which hit units.
+func test_a_map_only_attack_is_nobody_s_victim_and_both_still_is() -> void:
+	var attacker := H.spawn_solo(self, _sm, PLAYER, Vector2i(0, 0))
+	var enemy := H.spawn_solo(self, _sm, ENEMY, Vector2i(1, 0))
+	var ally := H.spawn_solo(self, _sm, PLAYER, Vector2i(0, 1))
+	var attack := attacker.get_fired_attack()
+	attack.hits_self = true
+	attack.hits_allies = true
+
+	attack.targets = EquippableData.TargetMode.MAP
+	for unit: Unit in [enemy, ally, attacker]:
+		assert_bool(RulesService.is_attack_victim(attacker, unit, attack)) \
+			.override_failure_message("a MAP-only attack took %s as a victim" % unit.name).is_false()
+
+	attack.targets = EquippableData.TargetMode.BOTH
+	for unit: Unit in [enemy, ally, attacker]:
+		assert_bool(RulesService.is_attack_victim(attacker, unit, attack)).is_true()
+
+	assert_bool(RulesService.is_attack_victim(attacker, enemy, null)).is_true()

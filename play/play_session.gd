@@ -170,10 +170,11 @@ func legal_targets(handle: String) -> Dictionary:
 		if not Reach.can_hit_cell_from(unit, origin, aim, aiming, board):
 			continue
 		# Through Conduction, so a shock aim whose casualties arrive by the arc is OFFERED here and
-		# ACCEPTED by queue_attack below -- the two gates are the same gate, stated twice.
+		# ACCEPTED by queue_attack below -- the two gates are the same gate, stated twice. Whether
+		# hitting nobody is a whiff is the game's own policy (aim_whiffs): a map-hitting aim never is.
 		var victims := Conduction.sweep(unit, origin, aim, aiming, board).victims
-		if victims.is_empty():
-			continue   # queue_attack refuses an aim that hits nobody; so does this
+		if SquadPlanValidator.aim_whiffs(AttackAction.declare(unit, origin, aim), not victims.is_empty()):
+			continue
 		var names: Array[String] = []
 		for v: Unit in victims:
 			names.append(handle_for(v))
@@ -253,22 +254,25 @@ func queue_attack(handle: String, aim: Vector2i) -> Dictionary:
 	# mirroring the player's click exactly.
 	if not Reach.can_hit_cell_from(unit, origin, aim, aiming, _board()):
 		return {"ok": false, "error": "%s cannot hit %s from %s" % [handle, str(aim), str(origin)]}
-	# The current is reach here too, matching legal_targets and the game's own queue gate.
+	# The current is reach here too, matching legal_targets and the game's own queue gate, and the
+	# whiff is the game's own policy: a map-hitting aim at nobody still lands on the ground (#47).
+	# declare() stamps fired_attack (#78) -- Play aims fire what the unit would (rune carvings
+	# included), same as the player's click and the AI.
+	var order := AttackAction.declare(unit, origin, aim)
 	var victims := Conduction.sweep(unit, origin, aim, aiming, _board()).victims
-	if victims.is_empty():
+	if SquadPlanValidator.aim_whiffs(order, not victims.is_empty()):
 		return {"ok": false, "error": "no valid targets at %s" % str(aim)}
 	# Store ONE aim order (target=null); resolve_plan derives the volley/victims at resolve time
 	# (#15), mirroring game.gd. Pre-expanding a volley here made resolve_plan re-expand each member
 	# -> N^2 hits for AoE weapons. `victims` above is used only to validate + describe the aim.
-	# declare() stamps fired_attack (#78) -- Play aims fire what the unit would (rune carvings
-	# included), same as the player's click and the AI.
-	var any_ok := squad_manager.queue_action(unit.squad, AttackAction.declare(unit, origin, aim))
+	var any_ok := squad_manager.queue_action(unit.squad, order)
 	if not any_ok:
 		return {"ok": false, "error": "another squad is already active this turn"}
 	var names: Array[String] = []
 	for v in victims:
 		names.append(handle_for(v))
-	return {"ok": true, "summary": "%s -> attack %s (hits %s)" % [handle, str(aim), ", ".join(names)]}
+	var hits: String = ", ".join(names) if not names.is_empty() else "nobody"
+	return {"ok": true, "summary": "%s -> attack %s (hits %s)" % [handle, str(aim), hits]}
 
 func cancel(handle: String) -> Dictionary:
 	var unit := unit_by_handle(handle)

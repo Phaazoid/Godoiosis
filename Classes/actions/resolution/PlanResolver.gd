@@ -453,7 +453,7 @@ static func _break_watch_on(target: Unit, plan: ResolvedPlan, outcome: ResolvedO
 static func _derive_watch_shot(watch: Watch, entrant: Unit, board: BoardContext, hypo: Dictionary) -> Array[AttackAction]:
 	var paths := watch.paths()
 	var arrival := Reach.travel_facings(watch.anchor_cell, watch.aim_cell, watch.attack, Conduction._tiles_of(paths))
-	var reach := Conduction.sweep_paths(watch.watcher, watch.attack, paths, board, hypo, false,
+	var reach := Conduction.sweep_paths(watch.watcher, watch.attack, paths, board, hypo,
 			PlanResolver._unit_threaded_at.bind(board, hypo), arrival)
 	var group: Array[AttackAction] = []
 	if reach.victims.is_empty():

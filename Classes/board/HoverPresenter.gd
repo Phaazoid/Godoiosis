@@ -324,10 +324,10 @@ func _hover_attack_targeting(cell: Vector2i) -> void:
 			# Every footprint flashes in the order the attack travels (#1057 part 2), whatever it
 			# targets -- the tiles say HOW it lands, the victims' own pulse says WHO.
 			travel = reach.steps
-			# A null pick is bare fists -- unit-only by definition, so it has no hits_units to ask and
-			# answers as UNIT.
-			if aiming == null or aiming.hits_units():
-				victims = reach.victims
+			# Whoever the sweep hits, with no targets gate of this hover's own: a map-only attack's own
+			# victims are already none (RulesService.is_attack_victim, #1135), and the ones its current
+			# catches are hit for real, so hiding them here would be a second answer to "who is hit".
+			victims = reach.victims
 			# ...and what it DROPS (#1058 D2b). A watch declares nothing here: its shot fires later, from
 			# wherever the crosser is, so there is no landing to show yet.
 			if aiming != null and aiming.payload != null and game.aim_intent != game.AimIntent.WATCH:
@@ -361,7 +361,7 @@ func _add_payloads(rows: Array[AttackAction], aim_cells: Array[Vector2i],
 			if not aim_cells.has(tile) and not insets.has(tile):
 				insets.append(tile)
 		var hit := row.target
-		if hit != null and is_instance_valid(hit) and row.fired_attack.hits_units() and not victims.has(hit):
+		if hit != null and is_instance_valid(hit) and not victims.has(hit):
 			victims.append(hit)
 	insets.sort()
 

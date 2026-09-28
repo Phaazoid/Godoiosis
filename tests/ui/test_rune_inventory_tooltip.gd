@@ -76,7 +76,7 @@ func _rendered_rune_tooltip(alch: Unit, rune: RuneData) -> String:
 	var idx := alch.inventory.find(rune)
 	assert_int(idx).override_failure_message("the rune is not in the unit's inventory").is_greater_equal(0)
 	var inv = game.unit_info_panel.inventory_panel
-	var slot: Panel = inv.slots_container.get_child(idx)
+	var slot: PanelContainer = inv.slots_container.get_child(idx)
 	return slot.tooltip_text
 
 
