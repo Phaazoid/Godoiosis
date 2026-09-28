@@ -334,6 +334,7 @@ func _wire_signals() -> void:
 	squad_action_queue_control.execute_requested.connect(_on_queue_execute_requested)
 	squad_action_queue_control.cancel_requested.connect(_on_queue_cancel_requested)
 	squad_action_queue_control.reorder_requested.connect(_on_queue_reorder)
+	squad_action_queue_control.row_clicked.connect(_on_queue_row_clicked)
 	squad_action_queue_control.row_hover_changed.connect(hover_presenter.on_queue_row_hover_changed)
 	mission_status_panel.drawn_zone_kinds = overlay_manager.drawn_zone_kinds
 	mission_status_panel.zone_row_hovered.connect(hover_presenter.on_objective_row_hover_changed)
@@ -592,14 +593,18 @@ func _on_right_click() -> void:
 		hover_info_panel.clear()
 		unit_info_panel.clear()
 		return
-	if game_state == GameState.CHOOSING_MOVE:
-		overlay_manager.clear_planned_path(selected_unit)
-	# Read BEFORE exiting, since exit_current_mode is what returns the board to rest.
+	# Read BEFORE leaving, since exit_current_mode is what returns the board to rest.
 	var was_at_rest := game_state == _base_state()
-	exit_current_mode()
+	_leave_mode()
 	unit_info_panel.clear()   #TODO Add close button to this panel
 	if was_at_rest:
 		_pop_last_gesture()
+
+# Leave whatever mode is open, as a right-click does. A queue-row click (#1122) leaves one the same way.
+func _leave_mode() -> void:
+	if game_state == GameState.CHOOSING_MOVE:
+		overlay_manager.clear_planned_path(selected_unit)
+	exit_current_mode()
 
 # The LIFO undo. Thin caller by design (Law #4): every removal goes through the queue panel's own
 # cancel, so the move-before-main cascade, the plan revalidate and the hold-only deactivation are
@@ -662,10 +667,16 @@ func _click_idle(cell: Vector2i) -> void:
 	if target == null:
 		show_tile_card(cell)
 		return
-	select_unit(target, cell)
+	open_unit_ring(target, cell, get_viewport().get_mouse_position())
+
+# Select a unit and open its ring at `at`. Two doors: a board click, and a queue-row click (#1122).
+# `cell` is where the cursor sits in TILE_SELECTED -- the unit's projected cell, which is what a
+# board click resolved it from.
+func open_unit_ring(unit: Unit, cell: Vector2i, at: Vector2i) -> void:
+	select_unit(unit, cell)
 	game_state = GameState.TILE_SELECTED
-	show_selected_reach(target)
-	main_action_menu.show_main_menu(target, get_viewport().get_mouse_position())
+	show_selected_reach(unit)
+	main_action_menu.show_main_menu(unit, at)
 
 # THE INFO CARD (#1105, dev: "Nothing on hover, at all... Clicking a tile brings up the full tile for
 # it"). One card, the last request wins; these are its three openers.
@@ -1313,6 +1324,32 @@ func _on_queue_cancel_requested(display_action: BaseAction):
 	# activation, exactly like the other cancel paths. Without this the X button left hold-only
 	# squads "active", keeping the queue open and blocking selection of another squad.
 	squad_manager.revert_if_only_hold(squad)
+
+# A click on a queue row (#1122, dev: "jump to that unit in game, with the action menu brought up,
+# to requeue that action"). It SPENDS the order through the X's own path, the #417 rule -- the ring
+# hides every main action while one is queued, so a ring opened over the order could offer nothing
+# to requeue it with. Then the view goes to the unit and its way back in opens: move planning for a
+# move (dev: straight there, as right-click's re-plan does), the ring for anything else, at the
+# view's centre because that is where the camera is taking the unit. A row that is not an order has
+# nothing to spend, so the click only looks.
+func _on_queue_row_clicked(action: BaseAction) -> void:
+	if _board_locked_for_player():
+		return
+	if action == null or not is_instance_valid(action.actor):
+		return
+	var unit: Unit = action.actor
+	_leave_mode()
+	if not action.is_reorderable() or not can_control(unit):
+		focus_view_on(unit)
+		return
+	# BEFORE the ring: build_tree snapshots the options at open.
+	_on_queue_cancel_requested(action)
+	focus_view_on(unit)
+	if action.action_type == BaseAction.ActionType.MOVE:
+		select_unit(unit, unit.movement.cell)
+		begin_move_planning(unit)
+		return
+	open_unit_ring(unit, unit.get_projected_destination(), Vector2i(get_viewport().get_visible_rect().size / 2.0))
 
 func _cancel_stored_main_action(unit: Unit, squad: Squad) -> void:
 	for action in squad.action_queue.duplicate():
