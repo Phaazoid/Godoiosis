@@ -77,8 +77,9 @@ plus the running order of the queue-UX checklist. Update it as items land.
    by mouse). Right-click closes a card before it undoes an order, since a card now comes up on every
    empty-tile click. `TileReadout` (`Classes/board/`) is the ONE builder and `TileInfoSections` the
    one renderer and the one redraw diff — whose old `""` sentinel, doubling as an empty readout's
-   signature, is what showed a rock the grass tile's fire (dev report, 2026-09-26). A hover setting
-   (Verbose / Minimal / Off) is slice 2's, default Off.
+   signature, is what showed a rock the grass tile's fire (dev report, 2026-09-26). The hover setting
+   slice 2 was to add (Verbose / Minimal / Off) was dropped when #1105 closed (dev, 2026-09-27): with
+   no hover card left, there is nothing for it to set.
 
 
 ## #49 Action Queue UX — CLOSED, all items shipped
@@ -1637,9 +1638,10 @@ stretch, so a poll below the gate would never see a frame with the tiles home an
 stay in the sky for ever.
 
 **`_center_rig_on` must never be reached while the board is staged** — `BoardSpace.surface_point`
-carries the staged offset and `_aim_over` does not, so a call there would lift twice. Structural
-rather than guarded: both its callers are refused while playback owns the board, and playback is
-the only thing that stages anything.
+carries the staged offset and `_aim_over` does not, so a call there would lift twice. Unreachable
+rather than guarded there: every caller is refused while playback owns the board, and playback is
+the only thing that stages anything. The objectives panel's zone rows (#955 part 3) are the one
+caller that asks for itself, since that panel stays up through the pass.
 
 **An AI move is framed across BOTH ENDS** (dev: *"instead of just centering on the unit, it should
 try to show both their start and end position in the initial shot (should be doable unless super
@@ -3403,6 +3405,8 @@ The problem and the rulings are `missions.md`'s; this is how it draws. **`ZoneMa
 - **The emblem**, one per zone on the cell `emblem_cell` picks, on **`Layer.ZONE_EMBLEMS` (-3)** in the diorama and as a sprite in the flat view.
 
 A zone knob restyles both views through one door (`GameKnobs._restyle_zone_marks`, `_restyle_move_grid`'s shape): the diorama re-reads `ZoneMarks` every frame, and the flat sprites are rebuilt.
+
+**LIT, from the objectives panel ([#955](https://github.com/Phaazoid/Godoiosis/issues/955) part 3, 2026-09-27).** Hovering a zone row in the objectives panel lights every drawn zone of its kind: a fuller wash in both views (`ZoneMarks.texture(mask, lit)`, the same rim over `ZONE_LIT_FILL_ALPHA`) and, in the diorama, a taller and stronger wall. Each wall strip now carries its own height, and its strength rides the vertex alpha, so the wall is still one mesh and one draw. `OverlayManager.lit_zone_kind` is the one store; `set_lit_zone_kind` bumps `drawn_zones_version`, so both views rebuild on the hover's edge and never per frame. Three knobs sit beside the rest (*Lit fill*, *Lit wall height*, *Lit wall strength*). The dev picked this from a drawn mockup over two alternatives: the pale wash a sentry's patrol area gets, and fading every other zone. The fade had a hole, since a board with one kind of zone has nothing else to fade. What the row itself does is `missions.md`'s.
 
 **Why -5 and -3**: above the picked-zone highlight, UNDER every range tone -- a zone is ground, and the interaction reads over it (#346); the emblem a slot above the rim it shares a cell with. Pinned as a relationship in `test_board_overlays`. Declared: **the wall hides while a tear-out is up**, its strips standing where the ground rests (the rim follows the flight; [#1118](https://github.com/Phaazoid/Godoiosis/issues/1118)); **the flat view has no wall**, a flat view having nothing to stand one in; and **two kinds on one cell share `ZONE_MARKS`' plane** -- #955's own shared-plane finding (Level_1's extraction and deployment cells are identical before turn 1), per-kind layers being the fix if it ever shows.
 

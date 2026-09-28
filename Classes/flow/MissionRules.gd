@@ -46,6 +46,30 @@ enum LoseCondition {
 const AUTHORABLE: Array[LoseCondition] = [LoseCondition.ROUND_LIMIT, LoseCondition.POINT_LOST,
 		LoseCondition.PROTECTED_UNIT_LOST]
 
+# Which painted zone kind a briefing row is ABOUT -- the one spelling of the pairing, read by the
+# missing-geometry check and by the objectives panel that lights and visits those zones (#955 part 3).
+# NO_ZONE for a row that names no place (a rout, a clock, a protected unit).
+const NO_ZONE := -1
+const OBJECTIVE_ZONE_KIND: Dictionary[Objective, ZoneManager.Kind] = {
+	Objective.CAPTURE: ZoneManager.Kind.CAPTURE,
+	Objective.EXTRACT: ZoneManager.Kind.EXTRACTION,
+}
+const LOSE_ZONE_KIND: Dictionary[LoseCondition, ZoneManager.Kind] = {
+	LoseCondition.POINT_LOST: ZoneManager.Kind.DEFEND,
+}
+
+
+static func zone_kind_of_objective(objective: Objective) -> int:
+	if OBJECTIVE_ZONE_KIND.has(objective):
+		return OBJECTIVE_ZONE_KIND[objective]
+	return NO_ZONE
+
+
+static func zone_kind_of_lose(condition: LoseCondition) -> int:
+	if LOSE_ZONE_KIND.has(condition):
+		return LOSE_ZONE_KIND[condition]
+	return NO_ZONE
+
 # The banner's body text for a defeat. One answer, one reader (MissionEndBanner).
 static func defeat_reason(condition: LoseCondition) -> String:
 	match condition:

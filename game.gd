@@ -322,6 +322,9 @@ func _wire_signals() -> void:
 	squad_action_queue_control.cancel_requested.connect(_on_queue_cancel_requested)
 	squad_action_queue_control.reorder_requested.connect(_on_queue_reorder)
 	squad_action_queue_control.row_hover_changed.connect(hover_presenter.on_queue_row_hover_changed)
+	mission_status_panel.drawn_zone_kinds = overlay_manager.drawn_zone_kinds
+	mission_status_panel.zone_row_hovered.connect(hover_presenter.on_objective_row_hover_changed)
+	mission_status_panel.zone_row_clicked.connect(look_at_next_zone)
 	end_turn_button.end_turn_requested.connect(_on_end_turn_button_pressed)
 
 	# HoverPresenter connects its own handlers in its _ready, so this one runs after them.
@@ -946,7 +949,11 @@ func can_control(unit: Unit) -> bool:
 func focus_view_on(unit: Unit) -> void:
 	if unit == null or not is_instance_valid(unit):
 		return
-	var cell := unit.get_projected_destination()
+	focus_view_on_cell(unit.get_projected_destination())
+
+# The door above with the cell already in hand (#955 part 3). Neither half asks whether the board is
+# locked -- a caller that can fire while it is must ask first (look_at_next_zone does).
+func focus_view_on_cell(cell: Vector2i) -> void:
 	# A 3D host owns the visible camera and answers the signal below for it; THIS camera is hidden
 	# there, and battle3d._update_pointer snaps it per motion to park the info card, so writing it
 	# here would only mis-anchor that card. Same flag and the same reason CameraController's WASD
@@ -954,6 +961,26 @@ func focus_view_on(unit: Unit) -> void:
 	if not board_input_delegated:
 		camera_controller.snap_to_position(GridUtils.cell_world(grid, cell))
 	view_focus_requested.emit(cell)
+
+# An objectives-panel zone row was clicked (#955 part 3): the camera goes to the next drawn zone of
+# that kind, in drawn order and wrapping, aimed at the cell its emblem stands on. Refused while the
+# board is locked, since that panel stays up through enemy turns, the pass and the mission's end.
+var _zone_look_turn: Dictionary[int, int] = {}
+
+func look_at_next_zone(kind: int) -> void:
+	if _board_locked_for_player():
+		return
+	var zones: Array[Dictionary] = []
+	for zone in overlay_manager.drawn_zones:
+		if int(zone["kind"]) == kind:
+			zones.append(zone)
+	if zones.is_empty():
+		return
+	var turn: int = _zone_look_turn.get(kind, 0) % zones.size()
+	_zone_look_turn[kind] = turn + 1
+	var cells: Array[Vector2i] = []
+	cells.assign(zones[turn]["cells"])
+	focus_view_on_cell(ZoneMarks.emblem_cell(cells))
 
 # ==============================================================================
 #  Modes — entering and leaving

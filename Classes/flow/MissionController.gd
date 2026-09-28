@@ -922,10 +922,9 @@ func set_objectives(list: Array[MissionRules.Objective]) -> void:
 # here. The Scenario tab shows this live while authoring; set_objectives shouts it once on load.
 func objectives_missing_geometry() -> Array[MissionRules.Objective]:
 	var missing: Array[MissionRules.Objective] = []
-	if objectives.has(MissionRules.Objective.CAPTURE) and game.zone_manager.zone_names_of(ZoneManager.Kind.CAPTURE).is_empty():
-		missing.append(MissionRules.Objective.CAPTURE)
-	if objectives.has(MissionRules.Objective.EXTRACT) and game.zone_manager.zone_names_of(ZoneManager.Kind.EXTRACTION).is_empty():
-		missing.append(MissionRules.Objective.EXTRACT)
+	for objective: MissionRules.Objective in MissionRules.OBJECTIVE_ZONE_KIND:
+		if objectives.has(objective) and game.zone_manager.zone_names_of(MissionRules.OBJECTIVE_ZONE_KIND[objective]).is_empty():
+			missing.append(objective)
 	return missing
 
 # Every declared objective must be met -- they compose by AND. An empty list is NONE, which sends
@@ -1030,7 +1029,7 @@ func protected_units(board: BoardContext) -> Array[Unit]:
 
 
 func defend_zone_names() -> Array[String]:
-	return game.zone_manager.zone_names_of(ZoneManager.Kind.DEFEND)
+	return game.zone_manager.zone_names_of(MissionRules.LOSE_ZONE_KIND[MissionRules.LoseCondition.POINT_LOST])
 
 # Who is standing on the cargo right now, null while it holds. The HUD's readout and the predicate
 # both come off MissionRules, so the row and the rule cannot disagree.

@@ -162,7 +162,7 @@ A briefing is written on the **Dialog & Tutorial** page now, not in Dialogic's e
 
 **What let it ship was a case made MORE TRUE by the bug.** `test_the_cost_bars_sit_beside_the_name_rather_than_at_the_far_edge` exists to pin #1022's own fix, and it measures the gap from the name's right edge — which at one pixel wide is the separator's own 8px, so it passed, more comfortably than before. The two requirements are in **tension** (the bars sit beside the name; the name is there), and pinning one of a tensioned pair is pinning neither: the case asserts both now, and a mutant putting `SIZE_EXPAND` back reds it.
 
-**Two extractions rather than second implementations.** `MissionStatusPanel.briefing_rows` is now the one builder for the objective and FAIL-IF rows, so the briefing *before* the battle and the status *during* it cannot word a condition differently. `UnitInstance.LIMB_SHORT`/`LIMB_FULL` moved beside the enum they name, `info_panel` being a scene script with no `class_name` whose vocabulary had gained a second reader.
+**Two extractions rather than second implementations.** `MissionStatusPanel.briefing` is now the one builder for the objective and FAIL-IF rows (`briefing_rows` its plain-label projection since #955 part 3), so the briefing *before* the battle and the status *during* it cannot word a condition differently. `UnitInstance.LIMB_SHORT`/`LIMB_FULL` moved beside the enum they name, `info_panel` being a scene script with no `class_name` whose vocabulary had gained a second reader.
 
 **Begin carries its own refusal.** `commit_deployment`'s "Deploy someone first" speaks through `TurnBanner`, a plain child of Game, while this screen sits on a `CanvasLayer` — so under the menu that banner cannot be seen at all, and a dead Begin button would be silent. It disables at zero with the reason on hover; the banner still covers the Enter-on-the-board path.
 
@@ -376,6 +376,27 @@ A zone used to be a half-strength tint of its kind's colour under every other la
 
 **The emblem** (dev: "yes, both places"): one mark per zone on the board, on the zone cell nearest its middle, and the same mark heading that kind's section on the tile card -- the watch reticle's one-texture, one-colour shape. The four placeholder emblems (`Art/Icons/BoardIcons/Zone*Icon.png`, a flag, a door with an arrow out, an arrow down onto a line, a crate) are the dev's to redraw. **What the marks read is what decides a zone is shown**: `OverlayManager.drawn_zones`, filled by `redraw_zones` after its hidden list and minus `AUTHORING_KINDS`, so a claimed point or a deployment zone after turn 1 loses its rim, wall and emblem together.
 
+
+### The objectives panel POINTS at its zones ([#955](https://github.com/Phaazoid/Godoiosis/issues/955) part 3, 2026-09-27)
+
+The dev's third ask: *"hovering over or clicking on the objective card mid match should highlight and/or jump the camera to the objective you click on."* His rulings (2026-09-27):
+
+1. **Hover lights, click glides.** Lighting a zone is hover PAINT, which #1105's "nothing on hover" ruling keeps. It is not a hover card.
+2. **A row covering several zones:** hover lights all of them. Each click glides to the next one in drawn order, wrapping, aimed at the cell the zone's emblem stands on.
+3. **Zone rows only:** Capture, Extract and Defend. Rout, Protect and Time stay text (unit rows were offered and not taken).
+4. **The pre-mission screen's briefing stays text.** The live panel on the Tab board preview answers there.
+5. **The look** (picked off a drawn mockup): the lit zones brighten (`visual-clarity.md`). Each zone row wears its zone's emblem, and the row under the pointer shows a hover box.
+
+How it holds together:
+
+- **Which zone kind a row means has one spelling:** `MissionRules.OBJECTIVE_ZONE_KIND` / `LOSE_ZONE_KIND`. `objectives_missing_geometry` and `defend_zone_names` used to spell it inline; they now read it.
+- **`MissionStatusPanel.briefing()` returns each row with its zone kind.** `briefing_rows()` is its plain-label projection, which the pre-mission contract keeps.
+- **Only the HUD's zone rows stop the mouse.** The panel and its containers still let clicks through.
+- **Which row the pointer is on is RECONCILED every frame** from `Viewport.gui_get_hovered_control()`, not followed by `mouse_entered`/`mouse_exited`. Every refresh rebuilds the rows (several a pass), and a freed row never reports the pointer leaving it.
+  - Right after a rebuild the viewport holds no control until the pointer moves. So the row under the pointer by position stands in, or the lit zones would flicker off at every refresh.
+  - Asking the viewport is also what makes a covering surface (the title screen, the pre-mission screen) cover the rows too.
+- **A row answers only while the board draws a zone of its kind** (`OverlayManager.drawn_zone_kinds`, pushed into the panel as a Callable). A claimed point or an unpainted objective keeps its emblem as a key, but has nothing to light or visit.
+- **The click goes through `game.look_at_next_zone` → `focus_view_on_cell`**, the cell-shaped half of the existing focus door, so there is no sixth camera door (`camera-language.md`). The click is refused while the board is locked (an enemy turn, a pass playing, the mission's end); lighting is not.
 
 ### `Kind.DEPLOYMENT` — where the player's force starts (#736)
 

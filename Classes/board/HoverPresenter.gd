@@ -460,6 +460,12 @@ func _highlight_unit(unit: Unit, on: bool) -> void:
 	else:
 		unit.visuals.set_highlighted(on)
 
+# The objectives panel's zone rows (#955 part 3), the queue row's precedent one surface along: the
+# row under the pointer lights every drawn zone of its kind, in both views. MissionRules.NO_ZONE when
+# the pointer leaves, which lights nothing. Hover PAINT, not a hover card (#1105's ruling).
+func on_objective_row_hover_changed(kind: int) -> void:
+	game.overlay_manager.set_lit_zone_kind(kind)
+
 func _on_hovered_unit_changed(previous_unit: Unit, new_unit: Unit) -> void:
 	if previous_unit != null and is_instance_valid(previous_unit):
 		previous_unit.visuals.set_hovered(false)

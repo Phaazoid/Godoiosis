@@ -27,19 +27,20 @@ func _init() -> void:
 	visible = false
 
 
-# `strips` is {"from": Vector3, "to": Vector3, "colour": Color} each, in world space at the ground.
-func build(strips: Array[Dictionary], height: float, strength: float, shimmer_speed: float) -> void:
+# `strips` is {"from": Vector3, "to": Vector3, "colour": Color, "height": float} each, in world space
+# at the ground. The colour's alpha is the strip's strength at its foot and the height its own, so a LIT
+# zone (#955 part 3) stands taller and brighter in the same one mesh.
+func build(strips: Array[Dictionary], shimmer_speed: float) -> void:
 	var material := material_override as ShaderMaterial
-	material.set_shader_parameter("strength", strength)
 	material.set_shader_parameter("shimmer_speed", shimmer_speed)
 	strip_count = strips.size()
 	if strips.is_empty():
 		mesh = null
 		return
-	var up := Vector3.UP * height
 	var st := SurfaceTool.new()
 	st.begin(Mesh.PRIMITIVE_TRIANGLES)
 	for strip in strips:
+		var up := Vector3.UP * float(strip["height"])
 		var a: Vector3 = strip["from"]
 		var b: Vector3 = strip["to"]
 		var colour: Color = strip["colour"]

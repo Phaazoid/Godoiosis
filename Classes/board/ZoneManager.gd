@@ -14,7 +14,9 @@ class_name ZoneManager
 # and -- if a player sees it -- a BoardOverlays.Layer + LAYERS row for its colour and a ZoneMarks
 # LAYER_OF_KIND row and emblem (test_zone_marks refuses a kind without them). Both views then draw it
 # as rim marks off OverlayManager.drawn_zones with no further edit (#955 retired the per-kind wash
-# layers #736 measured at ~10 places). An AUTHORING kind is still a wash: a .tscn TileMapLayer, an
+# layers #736 measured at ~10 places). An objective or lose condition that names the kind adds one
+# row to MissionRules' zone-kind pairing, and its objectives-panel row lights and visits it for free
+# (#955 part 3). An AUTHORING kind is still a wash: a .tscn TileMapLayer, an
 # @onready, a zone_layer_map row and an OverlayMirror fill, as PATROL has. Save/load, authoring and
 # persistence genuinely need no edit at all, which is the part that matters.
 #
