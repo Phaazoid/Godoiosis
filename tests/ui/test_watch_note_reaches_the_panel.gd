@@ -148,7 +148,8 @@ func test_the_note_appears_when_the_watch_was_armed_through_the_real_path() -> v
 			"the real declare->execute path armed no watch").is_not_null()
 
 	# The player's turn begins. The enemy's watch must survive this (it lapses on the OWNER's turn).
-	game._run_turn_start_ticks(Team.Faction.PLAYER)
+	var units: Array[Unit] = game._all_units()
+	TurnBoundary.turn_start_ticks(units, Team.Faction.PLAYER)
 	assert_object(watcher.watch).override_failure_message(
 			"the watch lapsed on the wrong faction's turn start").is_not_null()
 

@@ -378,7 +378,7 @@ func has_stat_effect_from(source: String) -> bool:
 			return true
 	return false
 
-# One turn of decay, at the OWNING FACTION's turn start (game._run_turn_start_ticks), so a 3-turn
+# One turn of decay, at the OWNING FACTION's turn start (TurnBoundary.turn_start_ticks), so a 3-turn
 # effect covers three of THIS unit's turns rather than three passes of everyone.
 func tick_stat_effects() -> void:
 	var kept: Array[StatEffect] = []

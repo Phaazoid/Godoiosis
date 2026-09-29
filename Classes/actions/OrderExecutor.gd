@@ -941,7 +941,9 @@ func _apply_cell_effects(cell_effects: Array[ResolvedCellEffect]) -> void:
 # neither, so using it would mean faking a plan. It reuses #520's camera seam at a shorter
 # duration rather than growing one of its own.
 func apply_burning_tile_damage(faction: Team.Faction) -> void:
-	var hits := _tile_hits_for(faction)
+	var units: Array[Unit] = game._all_units()
+	var states_store: TerrainStateManager = game.terrain_states
+	var hits := TurnBoundary.tile_hits(units, states_store, faction)
 	# Claim NOTHING for a phase with nothing to show: the release is what hands the player their
 	# view back (#520 follow-up), so claiming here would fire a camera return at the end of every
 	# turn, burning or not.
@@ -968,30 +970,6 @@ func apply_burning_tile_damage(faction: Team.Faction) -> void:
 	effect_pass_subjects.clear()
 	game.camera_controller.set_playback_locked(camera_was_locked)
 	_process_downed_pending()
-
-# Who this phase is about, answered ONCE before any of it plays -- the same TileHitAction the queue
-# forecasts (#419), derived here from LIVE positions and tile state instead of the plan's projected
-# ones. Two derivations of one rule: a plan is per-SQUAD and this phase is per-FACTION, so neither
-# can consume the other's list -- what they share is RulesService.occupant_damage_for and the maker
-# below it. That rule is TWO layers since #892: what the ground charges (Terrain.occupant_damage)
-# and whether this unit pays it (fire insulation), and BOTH callers must ask the outer one or an
-# immune unit gets a forecast that lies about it.
-#
-# Walks UNITS rather than burning cells, which is what keeps it symmetric with the forecast: both
-# ask "what is under this unit", so a hazard family the forecast can see cannot be one this misses.
-func _tile_hits_for(faction: Team.Faction) -> Array[TileHitAction]:
-	var hits: Array[TileHitAction] = []
-	var states_store: TerrainStateManager = game.terrain_states
-	var units: Array[Unit] = game._all_units()
-	for unit in units:
-		if unit == null or not is_instance_valid(unit) or unit.get_faction() != faction:
-			continue
-		var states := states_store.states_at(unit.movement.cell)
-		var damage := RulesService.occupant_damage_for(unit, states)
-		if damage > 0:
-			hits.append(TileHitAction.make(unit, Terrain.burning_state(states), damage,
-					LethalityRules.situation_for(unit)))
-	return hits
 
 # ==============================================================================
 #  Downed units

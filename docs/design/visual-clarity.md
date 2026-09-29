@@ -4206,7 +4206,7 @@ With zooms off nothing stages: the break plays on the board, at the blow, with t
 | **The collapsed volley row** | A collapsed volley shows no chips; expanding it shows the Split. | **Ruled as-is (dev, 2026-09-27)**, the same as every other consequence. |
 
 **Declared residuals:**
-- **A burn's break plays as the burn phase settles, on the board**, not at each burn: the live burn list is rebuilt at end of turn (`_tile_hits_for`), so there is no forecast outcome at a burn to play it from.
+- **A burn's break plays as the burn phase settles, on the board**, not at each burn: the live burn list is rebuilt at end of turn (`TurnBoundary.tile_hits`), so there is no forecast outcome at a burn to play it from.
 - **A burn is forecast against this squad's pass.** Another squad's pass later in the turn can change it, as with any forecast.
 - **A mid-walk kill and a later mid-walk shove that both matter**: the kill's row wears the chip.
 
