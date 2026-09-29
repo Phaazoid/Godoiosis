@@ -64,6 +64,9 @@ const BLOCKED_ATLAS_COORDS = Vector2i(2, 0)
 
 const PROJECTED_MODULATE := Color(0.7, 0.9, 1, 0.75)        # the planning-ghost tint
 const PROJECTED_HIGHLIGHT := Color(1.4, 1.4, 1.0, 1.0)      # brightened + opaque on hover
+# A ghost's running refusal flash and the position it shakes about (#1150), held on the ghost itself.
+const GHOST_FLASH_META := &"invalid_flash"
+const GHOST_REST_META := &"invalid_flash_rest"
 # static var since #422, joining the reach pair below: the footprint is one of the three channels a
 # player's palette repaints, so its authored value has to be tunable like the two it sits with.
 static var HOVER_MODULATE := Color(1, 1, 0)             # the aim-footprint fill
@@ -2193,6 +2196,25 @@ func set_projected_unit_highlighted(unit: Unit, value: bool) -> void:
 	if sprite == null:
 		return
 	sprite.modulate = PROJECTED_HIGHLIGHT if value else PROJECTED_MODULATE
+
+# The refusal flash on the ghost standing in for a unit, whose real sprite is hidden (#1150). The
+# tween is bound to the ghost, so a redraw that frees the ghost ends the flash with it.
+func play_projected_unit_invalid_flash(unit: Unit) -> void:
+	var ghost := _ghost_for(unit)
+	if ghost == null:
+		return
+	if ghost.has_meta(GHOST_FLASH_META):
+		var previous: Tween = ghost.get_meta(GHOST_FLASH_META)
+		if previous != null and previous.is_valid():
+			previous.kill()
+		ghost.position = ghost.get_meta(GHOST_REST_META)
+	else:
+		ghost.set_meta(GHOST_REST_META, ghost.position)
+	ghost.modulate = PROJECTED_MODULATE
+	var tween := ghost.create_tween()
+	tween.set_parallel(true)
+	UnitVisuals.tween_invalid_flash(tween, ghost, PROJECTED_MODULATE, ghost.get_meta(GHOST_REST_META))
+	ghost.set_meta(GHOST_FLASH_META, tween)
 
 func clear_projected_unit(unit: Unit):
 	if not projected_unit_sprites.has(unit):

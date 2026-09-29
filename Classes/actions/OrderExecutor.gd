@@ -75,8 +75,13 @@ func execute_orders(unit):
 			_end_squad_turn(squad)
 			return
 		var refused: Array[BaseAction] = game.squad_manager.refused_orders(squad)
+		var overlays: OverlayManager = game.overlay_manager
 		for action in refused:
-			action.actor.visuals.play_invalid_flash()
+			# Whichever sprite stands for the unit: a planning ghost hides the real one (#1150).
+			if overlays.has_projected_unit(action.actor):
+				overlays.play_projected_unit_invalid_flash(action.actor)
+			else:
+				action.actor.visuals.play_invalid_flash()
 		# AFTER the refresh above, which rebuilt every row: a shake started before it would play on
 		# rows that are already freed.
 		game.squad_action_queue_control.play_refusal()

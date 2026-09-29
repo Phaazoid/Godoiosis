@@ -74,11 +74,15 @@ func _queue_move(unit: Unit, destination: Vector2i) -> void:
 		.override_failure_message("fixture: the move to %s was refused" % destination).is_true()
 
 
-func _move_of(unit: Unit) -> BaseAction:
+func _order_of(unit: Unit, type: BaseAction.ActionType) -> BaseAction:
 	for action in unit.squad.action_queue:
-		if action.actor == unit and action.action_type == BaseAction.ActionType.MOVE:
+		if action.actor == unit and action.action_type == type:
 			return action
 	return null
+
+
+func _move_of(unit: Unit) -> BaseAction:
+	return _order_of(unit, BaseAction.ActionType.MOVE)
 
 
 # A leader at (5,0) with members at the given cells, each stepping one cell right while that is
@@ -217,6 +221,9 @@ func test_a_refused_press_says_why_and_runs_nothing() -> void:
 	var leader: Unit = board.leader
 	var queued := squad.action_queue.size()
 	var flash_before: Tween = member.visuals.visual_tween
+	# No ghost stands in for the refused mover, so its flash takes the real-sprite branch (#1150).
+	assert_bool(game.overlay_manager.has_projected_unit(member)) \
+		.override_failure_message("fixture: a ghost stands in for the refused mover").is_false()
 
 	await _press_execute()
 
@@ -350,3 +357,152 @@ func test_photosensitivity_stills_the_shake_and_keeps_the_box() -> void:
 	assert_int(panel._shaking.size()).override_failure_message("a row shook with photosensitivity on") \
 		.is_equal(0)
 	assert_bool(panel._refusal_box.visible).is_true()
+
+
+# ==================================================================================================
+#  The flash lands on whatever stands for the unit (#1150)
+# ==================================================================================================
+
+# A move ordered the way a player orders one (test_move_markup_lifetime's shape): the click is what
+# draws the path and the ghost, which _queue_move's bare queue_action does not.
+func _click_move(unit: Unit, cell: Vector2i) -> void:
+	game.selected_unit = unit
+	game.enter_move_mode(unit)
+	game._on_left_click(cell)
+	assert_bool(game.overlay_manager.has_projected_unit(unit)) \
+		.override_failure_message("fixture: the move to %s drew no ghost" % [cell]).is_true()
+
+
+# A unit with a VALID move is drawn by its planning ghost and its real sprite is hidden, so when its
+# OTHER order is the refused one the flash has to play on the ghost. Built through the real queue: the
+# member steps in beside its leader and Guards it, then the leader walks off and only the Guard reds.
+func _guard_left_behind() -> Dictionary:
+	var leader := _spawn(Vector2i(5, 0))
+	var member := _spawn(Vector2i(7, 0))
+	await await_idle_frame()
+	game.squad_manager.join_squad(member, leader.squad)
+	assert_object(member.squad).override_failure_message("fixture: the member did not join").is_same(leader.squad)
+	var step := Vector2i(6, 0)
+	_click_move(member, step)
+	assert_bool(RulesService.guard_candidates(member, game._board()).has(leader)) \
+		.override_failure_message("fixture: the leader is not a Guard candidate from the step").is_true()
+	game.queue_guard(member, leader)
+	var guard := _order_of(member, BaseAction.ActionType.GUARD)
+	assert_object(guard).override_failure_message("fixture: the Guard was refused at queue time").is_not_null()
+	var away := step + Vector2i.LEFT * (member.get_guard_range() + 1)
+	leader.unit_instance.stats[Stats.Stat.COH] = GridUtils.manhattan_distance(away, step)
+	_click_move(leader, away)
+	var refused: Array[BaseAction] = game.squad_manager.refused_orders(leader.squad)
+	assert_int(refused.size()).override_failure_message("fixture: want the Guard alone refused, got %d" % refused.size()) \
+		.is_equal(1)
+	assert_object(refused[0]).override_failure_message("fixture: the refused order is not the Guard").is_same(guard)
+	assert_bool(game.overlay_manager.has_projected_unit(member)) \
+		.override_failure_message("fixture: the leader's walk took the member's ghost down").is_true()
+	return {"member": member, "step": step}
+
+
+# Frames until the flash is over or its ghost is gone; whether the ghost left its planning tint on the way.
+func _wait_out(ghost: Sprite2D, flash: Tween) -> bool:
+	var tinted := false
+	var deadline := Time.get_ticks_msec() + 10000
+	while flash.is_running() and Time.get_ticks_msec() < deadline:
+		if not is_instance_valid(ghost):
+			break
+		if not ghost.modulate.is_equal_approx(OverlayManager.PROJECTED_MODULATE):
+			tinted = true
+		await await_idle_frame()
+	return tinted
+
+
+# The flash hands the ghost back as the plan drew it: on its cell, in its planning tint, with the real
+# sprite still hidden. Untyped: a ghost freed mid-flash cannot pass a typed parameter.
+func _assert_ghost_at_rest(ghost, flash: Tween, member: Unit, step: Vector2i) -> void:
+	assert_bool(is_instance_valid(ghost)).override_failure_message("the ghost was freed mid-flash").is_true()
+	if not is_instance_valid(ghost):
+		return
+	var sprite: Sprite2D = ghost
+	assert_bool(flash.is_running()).override_failure_message("the flash never finished").is_false()
+	assert_bool(sprite.modulate.is_equal_approx(OverlayManager.PROJECTED_MODULATE)) \
+		.override_failure_message("the flash left the ghost at %s, off its planning tint" % [sprite.modulate]) \
+		.is_true()
+	var cell_centre := GridUtils.cell_world(game.grid, step)
+	assert_bool(sprite.global_position.is_equal_approx(cell_centre)) \
+		.override_failure_message("the shake left the ghost at %s, off its cell %s" % [sprite.global_position, cell_centre]) \
+		.is_true()
+	assert_bool(member.visuals.sprite.visible) \
+		.override_failure_message("the flash brought the hidden sprite back beside its ghost").is_false()
+
+
+func test_a_refused_order_flashes_the_ghost_standing_in_for_its_unit() -> void:
+	var board: Dictionary = await _guard_left_behind()
+	var member: Unit = board.member
+	var step: Vector2i = board.step
+	var om: OverlayManager = game.overlay_manager
+
+	await _press_execute()
+
+	assert_object(game.order_executor.executing_plan).override_failure_message("a pass started").is_null()
+	assert_bool(member.visuals.sprite.visible) \
+		.override_failure_message("fixture: the member's real sprite is showing, so this is not the ghost case") \
+		.is_false()
+	var ghost: Sprite2D = om._ghost_for(member)
+	assert_object(ghost).override_failure_message("the refusal took the member's ghost down").is_not_null()
+	if ghost == null:
+		return
+	var flashed := ghost.has_meta(OverlayManager.GHOST_FLASH_META)
+	assert_bool(flashed) \
+		.override_failure_message("the refused unit's ghost never flashed -- the flash went to its hidden sprite") \
+		.is_true()
+	if not flashed:
+		return
+	var flash: Tween = ghost.get_meta(OverlayManager.GHOST_FLASH_META)
+	var tinted: bool = await _wait_out(ghost, flash)
+	assert_bool(tinted).override_failure_message("the ghost never changed colour while it flashed").is_true()
+	_assert_ghost_at_rest(ghost, flash, member, step)
+
+
+# Execute pressed again while the first flash still has the ghost shaken off its cell: the second flash
+# takes over from the first, and still ends on the cell -- not wherever the first had shaken it to.
+func test_a_second_refused_press_mid_shake_still_settles_the_ghost_on_its_cell() -> void:
+	var board: Dictionary = await _guard_left_behind()
+	var member: Unit = board.member
+	var step: Vector2i = board.step
+	var om: OverlayManager = game.overlay_manager
+	var cell_centre := GridUtils.cell_world(game.grid, step)
+
+	await _press_execute()
+
+	var ghost: Sprite2D = om._ghost_for(member)
+	var flashed := ghost != null and ghost.has_meta(OverlayManager.GHOST_FLASH_META)
+	assert_bool(flashed).override_failure_message("fixture: the first press flashed no ghost").is_true()
+	if not flashed:
+		return
+	var first: Tween = ghost.get_meta(OverlayManager.GHOST_FLASH_META)
+	var deadline := Time.get_ticks_msec() + 10000
+	while first.is_running() and ghost.global_position.is_equal_approx(cell_centre) \
+			and Time.get_ticks_msec() < deadline:
+		await await_idle_frame()
+		if not is_instance_valid(ghost):
+			break
+	assert_bool(is_instance_valid(ghost)).override_failure_message("the ghost was freed mid-flash").is_true()
+	if not is_instance_valid(ghost):
+		return
+	var mid_shake := first.is_running() and not ghost.global_position.is_equal_approx(cell_centre)
+	assert_bool(mid_shake) \
+		.override_failure_message("fixture: the first flash never had the ghost off its cell to press over") \
+		.is_true()
+	if not mid_shake:
+		return
+
+	await _press_execute()
+
+	var still: Sprite2D = om._ghost_for(member)
+	assert_bool(still == ghost).override_failure_message("the second press swapped the member's ghost").is_true()
+	if still != ghost:
+		return
+	var second: Tween = ghost.get_meta(OverlayManager.GHOST_FLASH_META)
+	assert_bool(second != first).override_failure_message("the second press started no flash of its own").is_true()
+	assert_bool(first.is_running()).override_failure_message("the first flash kept running under the second") \
+		.is_false()
+	await _wait_out(ghost, second)
+	_assert_ghost_at_rest(ghost, second, member, step)

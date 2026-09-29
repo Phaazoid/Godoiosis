@@ -175,18 +175,22 @@ func play_invalid_flash():
 	
 	visual_tween = create_tween()
 	visual_tween.set_parallel(true)
-	
+	tween_invalid_flash(visual_tween, sprite, base_modulate, base_position)
+
+# What the refusal flash IS -- a red flash and a small shake, back to the sprite's rest -- as steps on
+# a parallel tween, so the planning ghost standing in for a unit plays the same one (#1150).
+static func tween_invalid_flash(tween: Tween, target: CanvasItem, rest_modulate: Color, rest_position: Vector2) -> void:
 	#Color Flash
-	visual_tween.tween_property(sprite, "modulate", Color(1, .25, .25), .08).set_delay(.06)
-	visual_tween.tween_property(sprite, "modulate", Color.WHITE, .06).set_delay(.14)
-	visual_tween.tween_property(sprite, "modulate", base_modulate, .12).set_delay(.22)
+	tween.tween_property(target, "modulate", Color(1, .25, .25), .08).set_delay(.06)
+	tween.tween_property(target, "modulate", Color.WHITE, .06).set_delay(.14)
+	tween.tween_property(target, "modulate", rest_modulate, .12).set_delay(.22)
 	
 	#Shake
-	visual_tween.tween_property(sprite, "position", base_position + Vector2(-3, 0), 0.04)
-	visual_tween.tween_property(sprite, "position", base_position + Vector2(3, 0), 0.04).set_delay(0.04)
-	visual_tween.tween_property(sprite, "position", base_position + Vector2(-2, 0), 0.04).set_delay(0.08)
-	visual_tween.tween_property(sprite, "position", base_position + Vector2(2, 0),0.04).set_delay(0.12)
-	visual_tween.tween_property(sprite, "position", base_position,0.04).set_delay(0.16)
+	tween.tween_property(target, "position", rest_position + Vector2(-3, 0), 0.04)
+	tween.tween_property(target, "position", rest_position + Vector2(3, 0), 0.04).set_delay(0.04)
+	tween.tween_property(target, "position", rest_position + Vector2(-2, 0), 0.04).set_delay(0.08)
+	tween.tween_property(target, "position", rest_position + Vector2(2, 0),0.04).set_delay(0.12)
+	tween.tween_property(target, "position", rest_position,0.04).set_delay(0.16)
 	
 func set_hovered(value: bool):
 	if sprite == null:
