@@ -7,7 +7,7 @@ its child [#49 Action Queue UX](https://github.com/Phaazoid/Godoiosis/issues/49)
 This is a *guidelines* doc, not a spec — it captures the principles we're holding the work to,
 plus the running order of the queue-UX checklist. Update it as items land.
 
-**Canon checked through #1152 (2026-09-28).**
+**Canon checked through #1158 (2026-09-29).**
 
 ## Principles
 
@@ -112,8 +112,13 @@ for anything else, at the view's centre because that is where the camera is taki
 spend is not a design preference but a precondition: the ring hides every main action while one is
 queued (`MainActionMenu._can_take_main_action`), so a ring opened over the live order offers only
 Inspect, and the spend must come BEFORE the ring opens because `build_tree` snapshots at open. A row
-that is not an order (`is_reorderable()` false: a counter, a watch shot, a tile hit, a hold) only
-moves the camera. A click is a release that reordered nothing AND travelled no further than
+that is not an order (`is_reorderable()` false: a counter, a watch shot, a tile hit, a sink) only
+moves the camera. **A HOLD is the exception ([#1158](https://github.com/Phaazoid/Godoiosis/issues/1158),
+2026-09-29)** — dev: *"clicking on someone with an empty move... nothing happens."* It is not an order
+(no drag, no X), but it IS the unit's move slot, empty, so its row re-plans like a move row, main
+action included. `is_reorderable()` answers the DRAG's question and the click asks whether a row leads
+back to an order, so the click's gate adds `action_type == MOVE` rather than widening
+`is_reorderable()`. A click is a release that reordered nothing AND travelled no further than
 `GearDropZone.CLICK_SLOP`, since a click now costs an order and an abandoned drag must not. How the
 player is told any of this is [#1085](https://github.com/Phaazoid/Godoiosis/issues/1085)'s.
 

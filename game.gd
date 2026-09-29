@@ -1336,7 +1336,8 @@ func _on_queue_cancel_requested(display_action: BaseAction):
 # to requeue it with. Then the view goes to the unit and its way back in opens: move planning for a
 # move (dev: straight there, as right-click's re-plan does), the ring for anything else, at the
 # view's centre because that is where the camera is taking the unit. A row that is not an order has
-# nothing to spend, so the click only looks.
+# nothing to spend, so the click only looks -- except a HOLD (#1158): no order, but the unit's move
+# slot, empty, so it re-plans like any move row, main action included.
 func _on_queue_row_clicked(action: BaseAction) -> void:
 	if _board_locked_for_player():
 		return
@@ -1344,7 +1345,8 @@ func _on_queue_row_clicked(action: BaseAction) -> void:
 		return
 	var unit: Unit = action.actor
 	_leave_mode()
-	if not action.is_reorderable() or not can_control(unit):
+	var leads_back := action.is_reorderable() or action.action_type == BaseAction.ActionType.MOVE
+	if not leads_back or not can_control(unit):
 		focus_view_on(unit)
 		return
 	# BEFORE the ring: build_tree snapshots the options at open.
