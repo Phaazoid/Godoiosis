@@ -7,7 +7,7 @@ its child [#49 Action Queue UX](https://github.com/Phaazoid/Godoiosis/issues/49)
 This is a *guidelines* doc, not a spec — it captures the principles we're holding the work to,
 plus the running order of the queue-UX checklist. Update it as items land.
 
-**Canon checked through #1152 (2026-09-28).**
+**Canon checked through #1160 (2026-09-29).**
 
 ## Principles
 
@@ -4248,7 +4248,7 @@ The dev's playtest note:
 
 ### Declared residuals
 
-- **A unit hidden behind its move ghost flashes invisibly** (a unit with a valid move and a refused rescue, say): the flash plays on the real sprite, which the ghost has hidden. Filed as [#1150](https://github.com/Phaazoid/Godoiosis/issues/1150).
+- ~~**A unit hidden behind its move ghost flashes invisibly**~~ — **FIXED by [#1150](https://github.com/Phaazoid/Godoiosis/issues/1150) (2026-09-29).** The refusal loop forks the way the queue-row hover does (`HoverPresenter._highlight_unit`): a unit with a ghost standing in for it (`OverlayManager.has_projected_unit`, a move ghost or a knockback ghost) flashes that ghost through `play_projected_unit_invalid_flash`, and only a unit on its own sprite plays `UnitVisuals.play_invalid_flash`. Both play one flash, `UnitVisuals.tween_invalid_flash`, back to their own rest (the ghost to `PROJECTED_MODULATE`). No 3D code: `OverlayMirror` already copies each 2D ghost's modulate and position into its diorama ghost every frame. The flash still ignores the photosensitivity setting, as it did before.
 - **The validator's strings become player-visible for the first time.** Several were written as internal messages; their wording is the dev's to change.
 - **Many refusals make a tall box.** It takes its height from the list, which scrolls; nothing caps it.
 - **What only the dev can judge:** the shake's size and feel, and whether the box reads as the reasons for the red rows.
