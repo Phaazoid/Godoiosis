@@ -225,8 +225,82 @@ func test_where_a_run_sits_reaches_its_row() -> void:
 func test_a_row_shows_the_time_on_the_local_clock() -> void:
 	var head := {"run_id": "2026-09-12_02-00-00_played00", "scenario": "Fixture",
 		"outcome": "ABANDONED", "rounds": 3, "sent": true}
-	assert_str(ReplayTool.row_label(head, -240)).override_failure_message(
+	assert_str(ReplayTool.row_label(head, -240, "")).override_failure_message(
 		"the row did not move the UTC stamp onto the local clock").contains("09-11 22:00")
+
+
+# ==============================================================================
+#  Who played it (#1155)
+# ==============================================================================
+#
+# THE NAME LEADS THE ROW -- the dev's ruling, so it is the one shape pinned here. Everything else is
+# a fact the row must carry, never the words around it.
+
+const OTHER_INSTALL := "feedc0de12345678"
+const PLAYER := "Fixture Player"
+
+
+func test_someone_elses_named_run_leads_with_their_name() -> void:
+	_stage_run(LONG_RUN, 3, false, {"install_id": OTHER_INSTALL, "player_name": PLAYER})
+	var tool := overlay.replay_tool
+
+	tool.refresh_on_show()
+
+	var labels := _labels(tool)
+	assert_int(labels.size()).is_equal(1)
+	assert_bool(labels[0].begins_with(PLAYER)).override_failure_message(
+		"a stranger's run does not lead with their name: '%s'" % labels[0]).is_true()
+
+
+func test_an_unnamed_player_is_named_by_their_install() -> void:
+	_stage_run(LONG_RUN, 3, false, {"install_id": OTHER_INSTALL})
+	var tool := overlay.replay_tool
+
+	tool.refresh_on_show()
+
+	var labels := _labels(tool)
+	var short := OTHER_INSTALL.left(ReplayTool.SHORT_INSTALL)
+	assert_bool(labels[0].begins_with(short)).override_failure_message(
+		"a run from a player with no name does not lead with their install: '%s'" % labels[0]).is_true()
+
+
+# The same name on two installs: only the one that is THIS install is not named by it. Asserts the
+# fact, not the word -- your own row carries neither the name nor the id.
+func test_your_own_run_is_not_named_like_a_strangers() -> void:
+	var me := TelemetryStore.install_id()
+	_stage_run(LONG_RUN, 3, false, {"install_id": me, "player_name": PLAYER})
+	_stage_run(NEWER_RUN, 3, false, {"install_id": OTHER_INSTALL, "player_name": PLAYER})
+	var tool := overlay.replay_tool
+
+	tool.refresh_on_show()
+
+	var labels := _labels(tool)
+	assert_array(_listed(tool)).override_failure_message(
+		"fixture: newest first, so the stranger's run is on top").is_equal([NEWER_RUN, LONG_RUN])
+	var mine := labels[1]
+	assert_str(mine).override_failure_message(
+		"your own run is named by your player name: '%s'" % mine).not_contains(PLAYER)
+	assert_str(mine).override_failure_message(
+		"your own run is named by your install: '%s'" % mine).not_contains(me.left(ReplayTool.SHORT_INSTALL))
+	assert_bool(labels[0].begins_with(PLAYER)).override_failure_message(
+		"fixture: the stranger's row does not lead with their name, so this case sees nothing").is_true()
+
+
+# Two players can pick the same name, so the status line carries the install beside it. Picked
+# through the dropdown's own signal: a rebuild does not fill the status line by itself (#1156).
+func test_the_status_line_names_a_stranger_with_their_install() -> void:
+	_stage_run(LONG_RUN, 3, false, {"install_id": OTHER_INSTALL, "player_name": PLAYER})
+	var tool := overlay.replay_tool
+	tool.refresh_on_show()
+	var list := _list(tool)
+
+	list.select(0)
+	list.item_selected.emit(0)
+
+	var said := _status_text(tool)
+	assert_str(said).override_failure_message("the status line does not name the player").contains(PLAYER)
+	assert_str(said).override_failure_message(
+		"the status line does not carry the player's install").contains(OTHER_INSTALL.left(ReplayTool.SHORT_INSTALL))
 
 
 # ==============================================================================
@@ -235,13 +309,15 @@ func test_a_row_shows_the_time_on_the_local_clock() -> void:
 
 # A sealed run whose events reach `rounds`. One line per round plus the ending, which is the
 # shape MissionLog leaves: every line carries the round it happened in.
-func _stage_run(run_id: String, rounds: int, dev_touched: Variant = false) -> void:
+func _stage_run(run_id: String, rounds: int, dev_touched: Variant = false,
+		start_extra: Dictionary = {}) -> void:
 	var dir := TelemetryStore.run_dir(run_id)
 	DirAccess.make_dir_recursive_absolute(dir)
 	var f := FileAccess.open(dir + ReplayRun.EVENTS_FILE, FileAccess.WRITE)
-	f.store_line(JSON.stringify({
-		"seq": 0, "t_ms": 0, "round": 1, "event": "mission_start",
-		"scenario_name": "Fixture", "roster": []}))
+	var start := {"seq": 0, "t_ms": 0, "round": 1, "event": "mission_start",
+		"scenario_name": "Fixture", "roster": []}
+	start.merge(start_extra, true)
+	f.store_line(JSON.stringify(start))
 	var seq := 1
 	for r in range(1, rounds + 1):
 		f.store_line(JSON.stringify({
