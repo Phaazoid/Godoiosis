@@ -22,6 +22,7 @@ class_name CameraRig3D
 # a gesture travelled so its host can tell a click from a drag either way. Rebinding it --
 # or losing manual input -- mid-drag RELEASES the orbit, because the matching release event
 # would otherwise never arrive and a stranded gesture kills pointing permanently (#231).
+# pan_button (#1037) is the grab-the-world pan, read after orbit and released the same ways.
 #
 # frame() is the framing authority: only this node knows fov/aspect/pitch, so callers
 # pass the volume they want seen and this solves the distance (Law #4 -- pass, don't
@@ -88,6 +89,8 @@ class_name CameraRig3D
 # with them; the day the transition wants its own rate, this is the line that forks.
 @export var glide_smoothing := 6.0
 @export var orbit_button: MouseButton = MOUSE_BUTTON_RIGHT: set = _set_orbit_button
+# Orbit is read first, so a button both name orbits -- which is how the tile brush borrows MIDDLE.
+@export var pan_button: MouseButton = MOUSE_BUTTON_MIDDLE: set = _set_pan_button
 # Stood down by a host that needs the wheel for something else (#285: the elevation brush paints
 # at the wheel's level). Declarative, exactly like orbit_button above -- and it has to be a knob
 # rather than the host consuming the event, because this rig is a CHILD of the host and therefore
@@ -307,6 +310,8 @@ var _orbit_travel_px := 0.0
 # This gesture's press reached the rig and its release has not. Separate from _orbiting, which
 # release_orbit() clears while the physical press is still down.
 var _press_held := false
+# A pan_button press reached the rig and its release has not.
+var _drag_panning := false
 
 # The camera's black box (#669), dumped into report.md beside the View line. It lives HERE rather
 # than on the host because the rig is the one place every channel is readable at once -- so a trace
@@ -383,6 +388,17 @@ func _unhandled_input(event: InputEvent) -> void:
 					min_pitch_degrees, max_pitch_degrees)
 			return
 
+	# Below the orbit branch on purpose: when both knobs name one button, that button orbits.
+	if button != null and button.button_index == pan_button:
+		_drag_panning = button.pressed
+		return
+
+	if _drag_panning:
+		var slide := event as InputEventMouseMotion
+		if slide != null:
+			hold_at(_target_aim + _grab_offset(slide.relative))
+			return
+
 	var key := event as InputEventKey
 	if key != null and key.pressed and not key.echo:
 		match key.physical_keycode:
@@ -420,6 +436,20 @@ func _next_detent(direction: int) -> float:
 	return (ceilf(steps) - 1.0) * yaw_step
 
 
+# The aim's move for a pan drag of `relative` pixels, sized so the ground under the pointer follows
+# the hand -- 1:1 by construction, so the player's CAMERA_PAN_SPEED step deliberately does not apply.
+func _grab_offset(relative: Vector2) -> Vector3:
+	var height := _camera.get_viewport().get_visible_rect().size.y
+	var proj := _camera.get_camera_projection()
+	if height <= 0.0 or proj.y.y <= 0.0:
+		return Vector3.ZERO
+	var per_pixel := 2.0 * _camera.position.z / (proj.y.y * height)
+	# A pitched camera sees ground recede as well as rise, so a forward drag spans 1/sin(pitch) more.
+	var along := per_pixel / maxf(absf(sin(deg_to_rad(_pitch_degrees))), 0.05)
+	return Vector3(-relative.x * per_pixel, 0.0, -relative.y * along) \
+			.rotated(Vector3.UP, deg_to_rad(rotation_degrees.y))
+
+
 func is_orbiting() -> bool:
 	return _orbiting
 
@@ -450,6 +480,17 @@ func _set_orbit_button(value: MouseButton) -> void:
 		return
 	orbit_button = value
 	release_orbit()
+	# ...and a live pan on that button, whose release the orbit branch would now eat.
+	if value == pan_button:
+		_drag_panning = false
+
+
+# The pan's twin of the strand above: its release would arrive on the old button.
+func _set_pan_button(value: MouseButton) -> void:
+	if value == pan_button:
+		return
+	pan_button = value
+	_drag_panning = false
 
 
 # Same strand, second trigger: something else taking the camera (an AI turn, a menu) while
@@ -461,6 +502,7 @@ func _set_manual_input_enabled(value: bool) -> void:
 	manual_input_enabled = value
 	if not value:
 		release_orbit()
+		_drag_panning = false
 
 
 # Re-seeds the live tilt, which is the whole reason this is a setter (#586). A mood applying its

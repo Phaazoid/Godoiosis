@@ -161,7 +161,7 @@ camera, and on what occasion — because an ungated mover is the bug class the w
 | `battle3d._on_impact()` | a blow lands — an EVENT | `shake` |
 | `battle3d._center_rig_on()` | recentre / the return pan / an objective row's click — an EVENT | `glide_to` |
 | `battle3d.fit_camera()` | a board loads | `frame` / `pose` |
-| `CameraRig3D._unhandled_input` / `_process` | the player's own hand | orbit, tilt, wheel, WASD |
+| `CameraRig3D._unhandled_input` / `_process` | the player's own hand | orbit, tilt, wheel, WASD, the middle-drag pan (`hold_at`, #1037) |
 
 The **causes** the 2D `CameraController` publishes: `shot_cells`, `follow_unit`, `directed_line`,
 `beat_emphasis`, `beat_profile`, plus its own position. **One fact travels the other way** —
