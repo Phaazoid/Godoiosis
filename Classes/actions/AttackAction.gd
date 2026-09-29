@@ -106,10 +106,11 @@ signal impact(attack: AttackAction)
 # OrderExecutor answers it, and sets tether_held when a tether broke.
 signal going_over(attack: AttackAction)
 # A tether that removal broke is holding the body up (#1104): it hangs over the hole for
-# Pacing.VOID_HANG once it arrives, wile e coyote style, and falls when the tether snaps.
+# Pacing.VOID_HANG once it arrives, wile e coyote style, the tether snaps, and it falls
+# Pacing.VOID_SNAP_HOLD later (#1171).
 var tether_held := false
-# When that tether snapped (Time.get_ticks_msec): the instant the body let go, stamped as the hang
-# ENDS so a pause mid-hang holds the tether too. 0 until then. The held break reads it every frame.
+# When that tether snapped (Time.get_ticks_msec), stamped as the hang ENDS so a pause mid-hang holds
+# the tether too. 0 until then. The held break reads it every frame.
 var tether_snap_msec := 0
 
 const ATTACK_ICON := preload("res://Art/Icons/ActionIcons/FightActionIcon.png")
@@ -211,11 +212,16 @@ func execute():
 		# except for the plummet, which is pure spectacle: the sprite falls a long way past the lip
 		# before it goes (#431, dev: it used to vanish in mid-air), and the headless twin has no
 		# sprite to drop. Awaited so the removal lands after the fall, not during it. A body a tether is
-		# holding first HANGS over the hole from its arrival, and the tether snaps as it lets go (#1104).
+		# holding first HANGS over the hole from its arrival and the tether snaps as the hang ends (#1104),
+		# then it stays up while the snap plays (#1171): the plummet is what the camera rides, so falling
+		# on the snap took the camera down before the break could be seen. Both beats are play-checks --
+		# Pacing.beat spends nothing headless, so no suite can see either length.
 		if resolved.removed and is_instance_valid(target):
 			if tether_held:
 				await Pacing.beat(target, Pacing.VOID_HANG)
 				tether_snap_msec = Time.get_ticks_msec()
+				if is_instance_valid(target):
+					await Pacing.beat(target, Pacing.VOID_SNAP_HOLD)
 			if is_instance_valid(target):   # each await spans frames; the board can go in them
 				await target.movement.plummet()
 				if is_instance_valid(target):

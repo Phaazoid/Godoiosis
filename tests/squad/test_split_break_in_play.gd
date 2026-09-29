@@ -330,8 +330,9 @@ func _shove_into_a_hole() -> Unit:
 # The dev's ruling: a body shoved into a hole is broken off by the DISTANCE as much as by the death, so
 # its tether SNAPS -- one break, at the blow, strung from where it was struck -- and plays no death look
 # after it; and the body HANGS there (the dev's wile e coyote hang): the tether holds from the blow and
-# snaps when the body lets go, which is after it ARRIVES -- never on a clock started at the blow, which
-# the slide itself would use up. The hang's LENGTH collapses headless (Pacing.beat); its order does not.
+# snaps as the hang ends, which is after it ARRIVES -- never on a clock started at the blow, which the
+# slide itself would use up. The hang's LENGTH collapses headless (Pacing.beat), and so does the hold
+# between the snap and the fall (#1171); their order does not.
 func test_a_shove_into_a_hole_breaks_its_tether_at_the_ledge() -> void:
 	var hero := _shove_into_a_hole()
 	var blow := _the_shove(hero)
@@ -363,7 +364,7 @@ func test_a_shove_into_a_hole_breaks_its_tether_at_the_ledge() -> void:
 				% (_arrived_msec - _executed.tether_snap_msec)).is_greater_equal(_arrived_msec)
 	if not breaks.is_empty():
 		var still_held := breaks[0].has("held_by") or is_inf(SquadLines2D.snap_seconds(breaks[0]))
-		assert_bool(still_held).override_failure_message("the body let go and the break never heard").is_false()
+		assert_bool(still_held).override_failure_message("the tether snapped and the break never heard").is_false()
 
 
 # --- A down plays its look at the blow (#1104) ---------------------------------------------------

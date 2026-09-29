@@ -387,7 +387,7 @@ static func _death_fade_start(moment: int) -> float:
 
 
 # When a stored break SNAPS, in seconds after it starts (#1104): the strain's end, unless the entry
-# says otherwise -- a break at the ledge HOLDS (INF) until the body lets go, then snaps then. The one
+# says otherwise -- a break at the ledge HOLDS (INF) until the hang ends, then snaps then. The one
 # answer both views and the moments' clock read.
 static func snap_seconds(entry: Dictionary) -> float:
 	return float(entry.get("snap", maxf(BREAK_STRAIN_SECONDS, 0.0)))

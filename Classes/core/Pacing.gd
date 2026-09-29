@@ -294,6 +294,11 @@ static var PLUMMET_HOLD := 0.9
 # Counted from its ARRIVAL, not the blow, and only while a tether it broke is holding it -- the tether
 # snaps as the hang ends. A unit with no tether falls at once, as it always did.
 static var VOID_HANG := 0.6
+# ...and the beat AFTER the snap (#1171, dev: the fall and the camera went "before snapping animation
+# from the tethers has a chance to play and be seen"): how long the body stays up once its tether has
+# snapped, before it drops. Its own knob so the shiver and this gap tune apart -- the hang alone moved
+# both. Not tied to the break's own length on purpose, which would couple them again one knob over.
+static var VOID_SNAP_HOLD := 0.7
 # How far ABOVE the ground the units stand on the tear-out's shot sits, in cells (dev, 2026-08-29:
 # "the units need to be at the center"). Aiming at their feet is what the board's own recentre does
 # and it leaves a sprite sitting high in frame; this is the half-body lift that centres them, and it

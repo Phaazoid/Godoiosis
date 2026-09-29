@@ -640,7 +640,7 @@ func _relay_the_blow(attack: AttackAction) -> void:
 
 
 # A blow sending its victim over the edge (#1104): its tethers start straining NOW, at the ledge, and
-# hold until the body lets go -- AttackAction hangs it over the hole when one did.
+# hold until the hang ends -- AttackAction hangs it over the hole when one did.
 func _break_at_the_ledge(attack: AttackAction) -> void:
 	var presenter: SquadTetherPresenter = game.squad_tether_presenter
 	if presenter == null:
