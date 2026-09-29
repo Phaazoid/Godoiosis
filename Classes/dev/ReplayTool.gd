@@ -11,6 +11,11 @@ class_name ReplayTool
 # one-turn filter is applied, since the filter is a property of the LIST rather than of a run. A row
 # reads as the run it is (row_label, #939); the run id travels as the item's metadata.
 #
+# ONLY A HAND PICK STICKS (#1156, dev ruling). A run the dev chose from the dropdown, or pressed Load
+# on, survives a rebuild while it is still listed; otherwise the page follows the newest run. The
+# page's own pick must never stick: the list is rebuilt after a mission records a new run, and a
+# sticky automatic pick is how Load came to seed the run that was newest an hour ago.
+#
 # A REPLAY REPLACES WHAT IS ON THE BOARD, because seeding is apply_scenario. That is stated on the
 # page rather than guarded against -- this is the dev tools, and refusing to load over a live battle
 # would be the wrong trade for the one surface whose job is to load boards.
@@ -28,6 +33,7 @@ const SHORT_INSTALL := 8
 var _game
 var _driver: ReplayDriver = null
 var _run: ReplayRun = null
+var _hand_picked := ""   # the run id the dev chose; "" = the page follows the newest run
 
 var _rows: VBoxContainer
 var _list: OptionButton
@@ -51,18 +57,16 @@ func init(game) -> void:
 	add_child(_driver)
 	_build()
 	_driver.progressed.connect(func(_finished: bool) -> void: _render())
-	refresh_on_show()
+	# No refresh here: DevOverlay rebuilds this page whenever it is SHOWN (a tree pick, or the window
+	# coming back), and a build at boot would load a board for a tab that may never open (#1156).
 
 
 func refresh_on_show() -> void:
 	if _list == null:
 		return
-	# THE ID RIDES THE METADATA, never the text (#939): the text is a label for a person, and reading
-	# it back as the id is how a relabel silently breaks the pick and the selection both.
-	var selected := str(_list.get_item_metadata(_list.selected)) if _list.selected >= 0 else ""
 	_list.clear()
-	_list.select(-1)   # add_item auto-selects the first entry, so a vanished run would silently point at another
 	_hidden_count = 0
+	var kept := false
 	var bias := int(Time.get_time_zone_from_system().get("bias", 0))
 	var me := TelemetryStore.install_id()
 	for run_id: String in ReplayRun.list_runs():
@@ -74,16 +78,30 @@ func refresh_on_show() -> void:
 			_hidden_count += 1
 			continue
 		_list.add_item(row_label(run.headline(), bias, me))
+		# THE ID RIDES THE METADATA, never the text (#939): the text is a label for a person, and reading
+		# it back as the id is how a relabel silently breaks the pick and the selection both.
 		_list.set_item_metadata(_list.item_count - 1, run_id)
-		if run_id == selected:
+		if _hand_picked != "" and run_id == _hand_picked:
 			_list.select(_list.item_count - 1)
+			kept = true
 	if _list.item_count == 0:
+		_hand_picked = ""
+		_run = null   # or Load seeds a run the list no longer offers
+		_report.text = ""
+		_set_running(false)
 		# TWO DIFFERENT EMPTINESSES. "No recorded runs yet" in front of thirty hidden ones sends the
 		# dev looking for a recorder that is working perfectly.
 		_status.text = ("Every recorded run is one turn long (%d hidden). Untick the box to see them."
 			% _hidden_count) if _hidden_count > 0 else "No recorded runs yet. Play a mission, then come back."
-	elif _list.selected < 0:
-		_list.select(0)
+		return
+	if kept:
+		return
+	# Follow the newest. add_item already SHOWS row 0 as selected (CLAUDE.md's OptionButton edge), so the
+	# select is not what matters -- the pick is. Only when the top row changed: re-picking an unchanged
+	# run would stop a replay in progress for nothing.
+	_hand_picked = ""
+	_list.select(0)
+	if _run == null or _run.run_id != str(_list.get_item_metadata(0)):
 		_on_pick(0)
 
 
@@ -93,7 +111,7 @@ func _build() -> void:
 	_rows.add_child(pick_row)
 	_list = OptionButton.new()
 	_list.custom_minimum_size.x = 320
-	_list.item_selected.connect(_on_pick)
+	_list.item_selected.connect(_on_hand_pick)
 	pick_row.add_child(_list)
 	var copy := Button.new()
 	copy.text = COPY
@@ -146,6 +164,14 @@ func _build() -> void:
 	notice.pressed.connect(_on_reset_notice)
 	_rows.add_child(notice)
 	_set_running(false)
+
+
+# The dropdown's own signal is the only way a pick becomes the dev's (#1156).
+func _on_hand_pick(index: int) -> void:
+	if index < 0 or index >= _list.item_count:
+		return
+	_hand_picked = str(_list.get_item_metadata(index))
+	_on_pick(index)
 
 
 func _on_pick(index: int) -> void:
@@ -231,9 +257,15 @@ static func flags(head: Dictionary, explain := false) -> Array[String]:
 	return out
 
 
+# With nothing hand-picked, Load re-checks first so it seeds the NEWEST run: a page left open while a
+# mission was played has never been shown again, so nothing else would have rebuilt it (#1156). Load
+# then makes the run the dev's -- a replay in progress must not be swapped out by the next rebuild.
 func _on_load() -> void:
+	if _hand_picked == "":
+		refresh_on_show()
 	if _run == null:
 		return
+	_hand_picked = _run.run_id
 	if not _driver.seed(_run):
 		_render()
 		return
