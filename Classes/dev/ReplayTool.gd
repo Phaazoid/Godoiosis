@@ -19,6 +19,9 @@ const COPY := "Copy"
 const COPIED := "Copied"
 const COPIED_SECONDS := 1.0
 const NO_FILE := "(no file)"   # a board that was never saved records an empty scenario name
+const YOU := "You"
+const UNKNOWN_PLAYER := "(unknown)"   # a run that recorded no install at all
+const SHORT_INSTALL := 8
 
 var _game
 var _driver: ReplayDriver = null
@@ -57,6 +60,7 @@ func refresh_on_show() -> void:
 	_list.select(-1)   # add_item auto-selects the first entry, so a vanished run would silently point at another
 	_hidden_count = 0
 	var bias := int(Time.get_time_zone_from_system().get("bias", 0))
+	var me := TelemetryStore.install_id()
 	for run_id: String in ReplayRun.list_runs():
 		# load_events, never load_run: the board is the expensive half, and neither the filter nor the
 		# label has a use for it (#53 slice 5 split them for exactly this). ONE parse serves both; a run
@@ -65,7 +69,7 @@ func refresh_on_show() -> void:
 		if _hide_one_turn and run.is_one_turn():
 			_hidden_count += 1
 			continue
-		_list.add_item(row_label(run.headline(), bias))
+		_list.add_item(row_label(run.headline(), bias, me))
 		_list.set_item_metadata(_list.item_count - 1, run_id)
 		if run_id == selected:
 			_list.select(_list.item_count - 1)
@@ -140,7 +144,8 @@ func _on_pick(index: int) -> void:
 	_run = ReplayRun.load_run(str(_list.get_item_metadata(index)))
 	var head := _run.headline()
 	var marks := flags(head, true)
-	_status.text = "%s -- %s, %d rounds%s" % [
+	_status.text = "%s -- %s -- %s, %d rounds%s" % [
+		who(head, TelemetryStore.install_id(), true),
 		str(head.get("scenario")), str(head.get("outcome")), int(head.get("rounds", 0)),
 		("  [%s]" % ", ".join(marks)) if not marks.is_empty() else ""]
 	# Both lists: `problems` is why it cannot replay, `degraded` is why replaying it proves less than
@@ -153,10 +158,11 @@ func _on_pick(index: int) -> void:
 	_set_running(false)
 
 
-# WHAT ONE ROW SAYS (#939): when, which board, how it ended, how long, and its marks. The time is the
-# run id's UTC stamp moved by `bias_minutes` -- a parameter so a case can state one. The page passes
-# the machine's CURRENT offset, so a run recorded across a daylight-saving change reads an hour off.
-static func row_label(head: Dictionary, bias_minutes: int) -> String:
+# WHAT ONE ROW SAYS (#939): who, when, which board, how it ended, how long, and its marks. WHO LEADS
+# (#1155, dev ruling). The time is the run id's UTC stamp moved by `bias_minutes`, and this install
+# is `my_install` -- both parameters so a case can state them. The page passes the machine's CURRENT
+# offset, so a run recorded across a daylight-saving change reads an hour off.
+static func row_label(head: Dictionary, bias_minutes: int, my_install: String) -> String:
 	var run_id := str(head.get("run_id", ""))
 	var when := run_id
 	var unix := MissionLog.stamp_unix(run_id)
@@ -166,9 +172,29 @@ static func row_label(head: Dictionary, bias_minutes: int) -> String:
 	var scenario := str(head.get("scenario", ""))
 	var rounds := int(head.get("rounds", 0))
 	var marks := flags(head)
-	return "%s  %s -- %s, %d %s%s" % [when, scenario if scenario != "" else NO_FILE,
+	return "%s  %s  %s -- %s, %d %s%s" % [who(head, my_install), when,
+		scenario if scenario != "" else NO_FILE,
 		str(head.get("outcome", "")), rounds, "round" if rounds == 1 else "rounds",
 		("  [%s]" % ", ".join(marks)) if not marks.is_empty() else ""]
+
+
+# WHO PLAYED A RUN (#1155) -- the one answer, leading every row. This install is You; anyone else is
+# their opt-in name, or their install id's first eight characters when they never set one. The name
+# was typed on SOMEONE ELSE's machine and reached the intake unchecked, so it goes through the
+# store's own rule for what a name may hold. `explain` puts the install beside a name, so two players
+# who picked the same one stay apart on the status line.
+static func who(head: Dictionary, my_install: String, explain := false) -> String:
+	var install := str(head.get("install_id", ""))
+	if install == "":
+		return UNKNOWN_PLAYER
+	if install == my_install:
+		return YOU
+	var short := install.left(SHORT_INSTALL)
+	var player := PlayerSettings._clean_text(str(head.get("player_name", "")),
+		PlayerSettings.max_length_of(PlayerSettings.Setting.PLAYER_NAME))
+	if player == "":
+		return ("install " + short) if explain else short
+	return ("%s (install %s)" % [player, short]) if explain else player
 
 
 # WHICH MARKS A RUN CARRIES (#939) -- one decision, rendered short on a row and explained on the status

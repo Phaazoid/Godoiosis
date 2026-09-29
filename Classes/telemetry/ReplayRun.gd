@@ -173,6 +173,9 @@ func headline() -> Dictionary:
 	return {
 		"run_id": run_id,
 		"scenario": str(start.get("scenario_name", start.get("scenario", "(unknown)"))),
+		# WHO played it (#1155) -- recorded on every run's first line; "" on a run older than either.
+		"install_id": str(start.get("install_id", "")),
+		"player_name": str(start.get("player_name", "")),
 		"outcome": str(end.get("outcome", "UNSEALED")),
 		"rounds": rounds(),
 		"sandbox": bool(start.get("sandbox", false)),
