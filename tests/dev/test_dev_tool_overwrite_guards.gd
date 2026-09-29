@@ -9,8 +9,9 @@
 # scenario), and the Delete cases never emit `confirmed` at a tool (only cancel, or the helper
 # wired to a flag).
 #
-# The allowed direction is read after a BARE load, nothing between it and the assertion: the
-# header learns of a board only through board_loaded, as every door but its own Load does (#967).
+# The load gate's allowed direction is read after a BARE load, nothing between it and the
+# assertion: the header learns of a board only through board_loaded, as every door but its own
+# Load does (#967). The show-hook case refreshes on purpose; that refresh is what it tests.
 extends GdUnitTestSuite
 
 const MAIN_SCENE := "res://Scenes/Main.tscn"
