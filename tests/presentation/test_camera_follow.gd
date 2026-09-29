@@ -124,10 +124,8 @@ func test_a_menu_takes_the_zoom_wheel_back() -> void:
 # player's own scroll away for the length of a pass -- so the move phase went from unframed-but-
 # scrollable to unframed-and-frozen.
 #
-# Asserted on follow_unit rather than a position: pan_to ends by handing over to follow(), and a
-# position would depend on the 2D camera's clamp against the board's own extent, i.e. on authored
-# content. Run inside a claimed camera (what an AI turn does) because the restore at the end of a
-# PLAYER pass clears follow_unit -- here the claim is put back, so the last pan survives to be read.
+# Run inside a claimed camera (what an AI turn does) because the restore at the end of a PLAYER pass
+# clears follow_unit -- here the claim is put back, so the last pan survives to be read.
 #
 # LIMIT, stated rather than implied: pan_to snaps headless, so this pins the WIRE, not the ordering.
 # That the pan precedes the walk is structural -- the await sits above the phase.

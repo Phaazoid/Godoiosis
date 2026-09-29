@@ -7,7 +7,8 @@
 # playback_locked (an AI turn or a resolution pass does), and game.board_input_delegated (a 3D host does -- #176
 # stage 4d, where WASD would otherwise pan this camera AND the 3D rig off one press).
 # Only the keyboard branch is gated: pan_to/follow/snap_to_position must keep working,
-# and follow needs this _process to track its unit.
+# and follow needs this _process to track its unit. The same flag also stands the pan wall
+# down (clamp_target_position, #974).
 extends Node2D
 class_name CameraController
 
