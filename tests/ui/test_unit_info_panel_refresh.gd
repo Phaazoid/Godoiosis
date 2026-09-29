@@ -212,9 +212,9 @@ func test_the_inspect_panels_content_fits_the_column_it_is_anchored_to() -> void
 
 # --- a rescue stands the body up on every open readout (#1009) ---
 
-# Both surfaces that draw the downed clock redraw it only on downed_countdown_changed, and nothing
-# else a revive touches reaches them. Driven through the real revive() and asserted on what is
-# drawn, never on the signal: the issue's own ask.
+# The two panels that draw the downed clock off downed_countdown_changed (the 3D bar polls instead)
+# redraw it only on that signal, and nothing else a revive touches reaches them. Driven through the
+# real revive() and asserted on what is drawn, never on the signal: the issue's own ask.
 
 func test_a_revive_takes_the_down_badge_off_the_open_inspect_panel() -> void:
 	var unit := _standing_unit()
