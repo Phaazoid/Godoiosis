@@ -1,9 +1,10 @@
 extends PanelContainer
 
 # Inventory section of the inspect panel (UnitInfoPanel.tscn): one column of full-width item slots
-# (code-generated, #966), with an equip/unequip/toss action popup when the inspected unit is
-# controllable (can_act). Slot rows show the computed weapon view (elements incl. mods). The slots
-# are the action queue's rows, in the player's palette (#1105).
+# (code-generated, #966), with an action popup -- equip/unequip/toss when the inspected unit is
+# controllable (can_act), and Inspect for any item with a detail card, whoever holds it (#1152: the
+# card is a read, so an enemy's weapon opens too). Slot rows show the computed weapon view (elements
+# incl. mods). The slots are the action queue's rows, in the player's palette (#1105).
 #
 # A slot is a PanelContainer, never a Panel: a Panel lays out nothing, so its row sat at the top
 # edge at its own minimum width and ran past the border (#966).
@@ -15,6 +16,10 @@ signal loadout_changed
 # stale* and every listener is a staleness handler that would have to accept arguments it ignores.
 # Two questions, two answers -- and both leave from the ONE funnel below, so no door is missed.
 signal loadout_acted(unit: Unit, verb: String, index: int)
+# The player asked to READ an item (#1152) -- PreMissionCard's signal, and for its reason: the panel
+# knows nothing of cards, and ItemDetail decides which one opens. Not a loadout act, so no
+# loadout_acted beside it.
+signal detail_requested(item: Item, owner: Unit)
 
 var unit: Unit = null
 var can_act := false
@@ -97,19 +102,23 @@ func _select_slot(index: int):
 		return
 	selected_index = index
 	_refresh()
-	if can_act:
+	if _offers_anything(unit.inventory[index]):
 		_show_action_popup(index)
 	else:
 		_close_action_popup()
 
+# A popup opens for a slot that has any verb in it: the loadout verbs need a controllable unit, and
+# Inspect needs only a card (#1152).
+func _offers_anything(item: Item) -> bool:
+	return can_act or ItemDetail.has_card(item)
+
 func _show_action_popup(index: int):
 	_close_action_popup()
-	if unit == null or not can_act:
+	if unit == null:
 		return
 	var item = unit.inventory[index]
-	if item == null:
+	if item == null or not _offers_anything(item):
 		return
-		
 
 	var popup := PanelContainer.new()
 	popup.add_theme_stylebox_override("panel", QueueStyle.panel_box())
@@ -117,6 +126,27 @@ func _show_action_popup(index: int):
 	var vbox := VBoxContainer.new()
 	popup.add_child(vbox)
 
+	if ItemDetail.has_card(item):
+		var inspect_btn := Button.new()
+		inspect_btn.text = "Inspect"
+		inspect_btn.pressed.connect(_do_inspect.bind(index))
+		vbox.add_child(inspect_btn)
+
+	if can_act:
+		_add_loadout_rows(vbox, item, index)
+
+	var cancel_btn := Button.new()
+	cancel_btn.text = "Cancel"
+	cancel_btn.pressed.connect(_do_cancel)
+	vbox.add_child(cancel_btn)
+
+	add_child(popup)
+	var slot = slots_container.get_child(index)
+	popup.global_position = slot.global_position + Vector2(slot.size.x + 4, 0)
+	action_popup = popup
+
+# The verbs that CHANGE what the unit carries -- only ever built for a controllable unit.
+func _add_loadout_rows(vbox: VBoxContainer, item, index: int) -> void:
 	if item is ArmorData:
 		var wear_btn := Button.new()
 		if item == unit.worn_armor:
@@ -181,16 +211,6 @@ func _show_action_popup(index: int):
 		toss_btn.pressed.connect(_do_toss.bind(index))
 	vbox.add_child(toss_btn)
 
-	var cancel_btn := Button.new()
-	cancel_btn.text = "Cancel"
-	cancel_btn.pressed.connect(_do_cancel)
-	vbox.add_child(cancel_btn)
-
-	add_child(popup)
-	var slot = slots_container.get_child(index)
-	popup.global_position = slot.global_position + Vector2(slot.size.x + 4, 0)
-	action_popup = popup
-
 func _close_action_popup():
 	if action_popup != null and is_instance_valid(action_popup):
 		action_popup.queue_free()
@@ -237,6 +257,12 @@ func _do_toss(index: int):
 		unit.remove_item(index)
 	selected_index = -1
 	_apply_change("toss", index)
+
+func _do_inspect(index: int):
+	var item: Item = unit.inventory[index] if unit != null else null
+	_do_cancel()   # the card goes over the dock; the slot it was asked from lets go
+	if item != null:
+		detail_requested.emit(item, unit)
 
 func _do_cancel():
 	selected_index = -1

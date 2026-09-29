@@ -19,6 +19,7 @@ class_name UnitInfoPanelControl
 # panel knows nothing about the queue, and the plan's numbers are the game's to re-resolve (#697).
 signal loadout_changed
 signal loadout_acted(unit: Unit, verb: String, index: int)   # #53: what the player DID, not that it is stale
+signal detail_requested(item: Item, owner: Unit)   # #1152: read an item's card; the game opens it
 # The panel let go of its unit; the tile card beside it goes with it (#1105).
 signal closed
 
@@ -38,6 +39,7 @@ func _ready() -> void:
 	inventory_panel.loadout_changed.connect(_refresh_derived_rows)
 	inventory_panel.loadout_changed.connect(loadout_changed.emit)
 	inventory_panel.loadout_acted.connect(loadout_acted.emit)   # #53: forwarded on the line above's idiom
+	inventory_panel.detail_requested.connect(detail_requested.emit)
 	restyle()
 
 # The player's palette (#1105): the frame, the two paper boxes and the header's inks, asked of

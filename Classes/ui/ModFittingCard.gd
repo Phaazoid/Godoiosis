@@ -25,6 +25,11 @@ extends ModalCard
 # the dark frame its paper lies on -- so everything directly on it takes the FRAME roles, while the
 # zones inside are section_box()/row_box(), i.e. paper under parchment, and take HEADER_TEXT and
 # BODY_TEXT. Ask which ground a label lands on.
+#
+# IT OPENS READ-ONLY IN BATTLE (#1152, dev 2026-09-28): the readout and the spaces with what is in them,
+# and no library, no hint, and nothing wired -- an unwired zone refuses every drop and an uncarried row
+# cannot be picked up, so the card fits nothing without a branch of its own in the drag code. Fitting
+# stays a pre-mission act.
 
 signal closed
 
@@ -39,6 +44,7 @@ var _pool: Array[WeaponModData] = []
 # Null for a weapon nobody is holding -- one sitting in the stash. active_space_count answers
 # UNREDUCED for that, so the card shows the BUILD rather than a weapon whose every mod reads inert.
 var _wielder: Unit
+var _read_only := false
 var _attack: AttackData
 var _selected: WeaponModData
 var _selected_from: Object
@@ -63,11 +69,12 @@ var _hint: Label
 
 
 static func open(game_node: Node, weapon: WeaponInstance, wielder: Unit,
-		pool: Array[WeaponModData] = []) -> ModFittingCard:
+		pool: Array[WeaponModData] = [], read_only := false) -> ModFittingCard:
 	var card := ModFittingCard.new()
 	card._weapon = weapon
 	card._pool = pool
 	card._wielder = wielder
+	card._read_only = read_only
 	game_node.card_layer.add_child(card)
 	card._build(game_node)
 	return card
@@ -86,6 +93,7 @@ func _build(game_node: Node) -> void:
 	_hint = Label.new()
 	_hint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	_hint.add_theme_font_size_override("font_size", 10)
+	_hint.visible = not _read_only   # it only ever explains fitting
 	content.add_child(_hint)
 	refresh()
 
@@ -208,6 +216,8 @@ func _build_lists(parent: Container) -> void:
 	_spaces_box = VBoxContainer.new()
 	_spaces_box.add_theme_constant_override("separation", 6)
 	_scroller(left, _spaces_box)
+	if _read_only:
+		return   # no library: the spaces take the whole width
 
 	var right := _column(columns, "MODS THAT FIT", 2)
 	# The whole list is one drop zone, not just its rows: dropping into the gap under the last row is
@@ -406,8 +416,9 @@ func _refresh_spaces() -> void:
 func _space_block(index: int) -> Control:
 	var zone := GearDropZone.new()
 	zone.add_theme_stylebox_override("panel", QueueStyle.section_box())
-	zone.wire(_weapon, _judge_fit.bind(index), _perform_fit.bind(index))
-	zone.clicked.connect(_on_space_clicked.bind(index))
+	if not _read_only:
+		zone.wire(_weapon, _judge_fit.bind(index), _perform_fit.bind(index))
+		zone.clicked.connect(_on_space_clicked.bind(index))
 
 	# Nothing here sets mouse_filter, and that is MEASURED rather than assumed: a Container defaults to
 	# PASS (1), so the press reaches the ZONE through it, which is what makes "click a space to put it
@@ -456,6 +467,8 @@ func _space_block(index: int) -> Control:
 
 
 func _refresh_offers() -> void:
+	if _read_only:
+		return   # the library was never built
 	_clear(_offer_box)
 	var offerable := WeaponModCatalog.offerable_for(_weapon.template.weapon_type, _pool)
 	if offerable.is_empty():
@@ -499,9 +512,10 @@ func _mod_row(mod: WeaponModData, holder: Object, judge: Callable, perform: Call
 		on_click: Callable, key: String, refusal: String = "") -> Control:
 	var row := GearRow.new()
 	row.custom_minimum_size.y = ROW_H
-	row.carry(mod)
-	row.wire(holder, judge, perform)
-	row.clicked.connect(on_click)
+	if not _read_only:
+		row.carry(mod)
+		row.wire(holder, judge, perform)
+		row.clicked.connect(on_click)
 	row.add_theme_stylebox_override("panel", QueueStyle.row_box(refusal != "", mod == _selected))
 
 	var pad := MarginContainer.new()
@@ -638,6 +652,8 @@ func _clear_selection() -> void:
 
 
 func _refresh_hint() -> void:
+	if _read_only:
+		return
 	if _last_refusal != "":
 		_hint.text = _last_refusal
 		_hint.add_theme_color_override("font_color", QueueStyle.ink(QueueStyle.Role.FRAME_REFUSED_TEXT))
