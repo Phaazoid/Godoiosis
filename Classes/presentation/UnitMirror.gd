@@ -23,9 +23,10 @@ class_name UnitMirror
 # needs to, that is the bug.
 #
 # #354 split that second reason in two. WHO wears one is PlanResolver.plan_changes, asked of the
-# plan's own hypothetical; WHAT it draws is the live HP under a frozen prediction. Only the fill
-# tracks the board, so a bar drains down to its notch as the hit lands instead of vanishing at the
-# moment of impact — and the readout leaves when the PASS does, because the plan does.
+# plan's own hypothetical; WHAT it draws is the live HP (plus a shove's fall, held until it lands,
+# #480) under a frozen prediction. Only the fill tracks the board, so a bar drains down to its notch
+# as the hit lands instead of vanishing at the moment of impact — and the readout leaves when the
+# PASS does, because the plan does.
 #
 # #350 adds the THIRD and last reason: a player who has asked for every bar, always. That one is a
 # PREFERENCE rather than a derivation, so it comes off PlayerSettings rather than off anything on
@@ -934,9 +935,8 @@ func _settle_health_change(unit: Unit, id: int, bar: UnitHealthBar, held_before:
 	# 2b). The cubes are a health READOUT and rightly go when the readout is hidden; a camera jolt is
 	# not a readout, and HEALTH_BARS ships HOVERED -- so reporting it below would make the
 	# DEFAULT settings the ones with no impact in them at all, which is exactly the hole #534 shipped
-	# and the dev found in play. Sharing the diff with the burst is also what keeps the two in step:
-	# one observation, so the jolt and the cubes can never disagree about when the blow landed.
-	# The landing releases no jolt of its own (#480): the blow was reported at the hit.
+	# and the dev found in play. The jolt and the HIT's cubes share this one observation; a shove's
+	# fall cubes wait for the touchdown (#480), which reports no jolt of its own.
 	if current < previous and report_impact.is_valid():
 		report_impact.call(Impact.HIT)
 	var was_shown := previous + held_before

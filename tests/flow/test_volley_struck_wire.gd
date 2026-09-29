@@ -4,7 +4,7 @@
 # until now came from UnitMirror watching HP fall, which knows that a number moved and nothing about
 # what moved it -- so an effect that draws the ATTACK needed a channel of its own, and this file is
 # the only place that channel can be seen end to end: AttackAction emits it from inside execute(),
-# after the lunge, and OrderExecutor re-publishes it.
+# at the lunge's peak (#480), and OrderExecutor re-publishes it.
 #
 # WHAT A GREEN SUITE WOULD MISS WITHOUT THIS. A signal with no listener is legal GDScript and a
 # listener nobody connects is a silent no-op; both ends of this wire can be perfectly written while

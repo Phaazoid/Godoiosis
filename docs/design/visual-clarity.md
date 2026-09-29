@@ -7,7 +7,7 @@ its child [#49 Action Queue UX](https://github.com/Phaazoid/Godoiosis/issues/49)
 This is a *guidelines* doc, not a spec — it captures the principles we're holding the work to,
 plus the running order of the queue-UX checklist. Update it as items land.
 
-**Canon checked through #1160 (2026-09-29).**
+**Canon checked through #1158 (2026-09-29).**
 
 ## Principles
 
@@ -854,9 +854,15 @@ on the first frame HP moves — so this is two retimings, and only one of them t
   hold ends on `movement.landing_falling`'s true→false edge (the touchdown), with the shove being over
   as the fail-safe. The readout draws HP plus the hold, and the cubes thrown are the difference in THAT
   between frames — so the hit's share leaves at the hit and the fall's at the landing, with one rule.
+  The NUMBER is part of the readout and waits too: a hovered falling unit reads HP plus the fall until
+  it touches down, while the 2D unit card reads live HP throughout.
 - **The baseline and the hold are both written above the visibility gate** (#314's rule, unreopened):
   a hidden readout holds and lets go like a shown one, and simply throws nothing.
-- **A death still detonates the whole grid** — held cubes are drawn filled, so they go with it.
+- **A LETHAL fall never holds.** The fall is folded into the one `take_damage`, so the unit dies AT
+  THE HIT, before any hold exists, and `_on_unit_died` detonates the whole pre-hit grid there — the
+  fall's cubes do not wait for the ground. A death while a hold stands (something else killing the
+  unit mid-fall) would detonate the whole grid as well, held cubes included, since they are drawn
+  filled.
 - **The camera jolt stays at the hit.** It rides the live HP diff; the landing reports nothing of its
   own, since the blow was already reported once.
 - **Declared edges.** A shove that falls at TWO breaks releases the whole fall at the FIRST touchdown
@@ -864,6 +870,14 @@ on the first frame HP moves — so this is two retimings, and only one of them t
   drowning's `drown_damage` is not held. A triggered shot landing on a volley member between the lead's
   blow and that member's own would spend the member's arm. The cube grid is 3D-only, so this is a
   declared [#292](https://github.com/Phaazoid/Godoiosis/issues/292) asymmetry.
+- **Declared edge: a fall that DOWNS.** When hit plus fall reaches the unit's HP within the overkill
+  ceiling, `take_damage` downs it AT THE HIT: the downed art and the DOWNED glyph arrive there, while
+  the hold keeps up to `fall_damage` cubes (and the number) standing over the body until touchdown —
+  the transient contradiction #322's glyph exists to prevent, for the length of the fall. The down
+  also clamps the loss at HP−1, and `min(armed, loss)` then splits it FALL-FIRST: HP 8, a hit of 5 and
+  a fall of 5 throw 2 cubes at the hit and 5 at the landing, although the hit alone took 5. Iron Will's
+  cap skews the split the same way. Kept as built (the approved plan's `loss − held` read literally);
+  skipping the hold when the hit downs the unit is an open fork for the dev.
 - **What a headless suite can and cannot see.** The fall beat is instant headless and never raises
   `landing_falling`, so the real slide ends the hold at the fail-safe there; the touchdown case raises
   and lowers the flag itself inside a real slide and says so. The peak IS observable headless — the
@@ -1942,7 +1956,11 @@ computes its diff and then returns early on `previous == current or not bar.visi
 `HEALTH_BARS` ships **HOVERED** — so reporting below that line would leave the default settings
 with no impact in them anywhere, which is [#534](https://github.com/Phaazoid/Godoiosis/issues/534)'s
 bug verbatim. Sharing one observation with the burst is also what keeps them in step: the jolt and
-the cubes cannot disagree about when the hit landed.
+the cubes cannot disagree about when the hit landed. *(Amended by
+[#480](https://github.com/Phaazoid/Godoiosis/issues/480): the early return now compares what the
+readout SHOWS, `was_shown == shown or not bar.visible`, HP plus a held fall; the jolt still rides the
+live HP diff above it. The jolt and the HIT's cubes share that one observation, while a shove's fall
+cubes deliberately wait for the touchdown — see "When the cubes fly".)*
 
 **A death fires the down rung ALONE.** `die()` emits and `queue_free`s in one frame and the reconcile
 skips a unit already queued for deletion, so the poll **never** observes a unit at 0 HP. Without a

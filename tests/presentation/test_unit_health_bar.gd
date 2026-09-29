@@ -978,7 +978,8 @@ func _ledge_shove() -> Dictionary:
 
 
 # Cubes an earlier case knocked off can still be in the air on the shared board, and a count taken
-# over them would include theirs. Bounded by wall clock -- a cube's life is real time, not frames.
+# over them would include theirs. Bounded by wall clock -- a cube's life is real time, not frames, and
+# a block_lifetime tuned past this ceiling would red it.
 func _drain_debris() -> void:
 	var debris := _unit_mirror.debris()
 	var until := Time.get_ticks_msec() + 10000
@@ -998,7 +999,8 @@ func _shares(target: Unit, outcome: ResolvedOutcome, hp_before: int) -> Vector2i
 			"the loss did not split into a hit share and a fall share (lost %d, fall %d), so the two "
 			% [lost, outcome.fall_damage] + "moments cannot be told apart").is_true()
 	assert_bool(target.is_downed()).override_failure_message(
-			"the victim went down, which reads the whole grid rather than a hold").is_false()
+			"the victim went down, which clamps its loss at 1 HP and makes the split the declared "
+			+ "fall-first edge -- not the ordinary shove this board is built for").is_false()
 	return Vector2i(lost - fall, fall)
 
 
@@ -1045,6 +1047,8 @@ func test_a_fall_knocks_out_its_own_cubes_at_the_landing_and_not_at_the_hit() ->
 	assert_int(standing_in_flight).override_failure_message(
 			"the readout did not keep the fall's cubes standing while the victim fell").is_equal(
 			hp_in_flight + shares.y)
+	# Leans on UnitMirror.block_lifetime (a Game-tab knob) outlasting the headless slide: a cube retires
+	# at the end of its life, so a lifetime shorter than the shove would read the hit's cubes as gone.
 	assert_int(debris.live_count()).override_failure_message(
 			"once the victim landed, the fall's cubes never followed the hit's").is_equal(shares.x + shares.y)
 	assert_int(_unit_mirror.bar_for(target).filled_block_count()).override_failure_message(
