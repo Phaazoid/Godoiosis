@@ -551,7 +551,7 @@ func _held_break(seconds: float, snap: float, flash := false) -> Dictionary:
 	return SquadLines2D.moment_drawing(entry, roundi(seconds * 1000.0), flash)
 
 
-# At the LEDGE (#1104, the dev's wile e coyote hang) a break snaps when the body lets go, which can be
+# At the LEDGE (#1104, the dev's wile e coyote hang) a break snaps when the hang ends, which can be
 # long after its strain: until then it is WHOLE, full strain red, and still shivering (stilled by #217
 # like the strain's own shake); then it snaps and falls exactly as an ordinary break does, only later.
 func test_a_break_that_snaps_late_holds_whole_and_red_until_its_snap() -> void:
@@ -590,7 +590,7 @@ func test_a_break_that_snaps_late_holds_whole_and_red_until_its_snap() -> void:
 			"the late break outlived its shatter").is_true()
 
 
-# A break held with no snap yet (INF) never snaps or ends on its own: only the body letting go does.
+# A break held with no snap yet (INF) never snaps or ends on its own: only the hang's end does.
 func test_a_held_break_never_snaps_on_its_own() -> void:
 	_break_times(0.4, 0.6, 0, 0.3)
 	var drawing := _held_break(60.0, INF)

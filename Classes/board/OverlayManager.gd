@@ -960,7 +960,7 @@ func _process(_delta: float) -> void:
 		set_process(false)
 
 
-# A held break (#1104, the dev's wile e coyote hang) snaps when its attack says the body let go: the
+# A held break (#1104, the dev's wile e coyote hang) snaps when its attack stamps the hang's end: the
 # stamp is the attack's, read here rather than copied at the blow, because the hang starts only when
 # the body ARRIVES. An attack that is gone snaps it at once, so a break can never hold for ever.
 func _await_the_snap(moment: Dictionary, now: int) -> void:

@@ -228,7 +228,7 @@ func foretell(outcome: ResolvedOutcome, victim: Unit) -> float:
 # blow, before the body slides -- broken by the distance as much as by the death -- so the snap plays
 # while the camera is still on the fight, before it follows the body down (the dev's ruling). Each
 # break's dead end rides the body to the ledge (OverlayManager._follow), and it is HELD: it strains and
-# stays whole until the attack stamps the instant the body lets go (the dev's wile e coyote hang). The
+# stays whole until the attack stamps the end of the hang (the dev's wile e coyote hang). The
 # victim's moment is decided here, so the death that follows plays nothing more and owes the blow
 # nothing. Returns whether a tether broke, which is what makes the body hang.
 func foretell_removal(attack: AttackAction) -> bool:

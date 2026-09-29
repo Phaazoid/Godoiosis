@@ -418,7 +418,7 @@ func _removal(attacker: Unit, victim: Unit, changes: Array) -> AttackAction:
 
 # At the LEDGE (#1104, the dev's ruling): a blow shoving its victim into a hole breaks the victim's links
 # at the blow -- a BREAK, the distance's snap, strung from the cell it was struck on, riding the body and
-# HELD until the attack says the body let go -- and the death that follows plays nothing more and holds
+# HELD until the attack stamps the hang's end -- and the death that follows plays nothing more and holds
 # the blow for nothing.
 func test_a_removal_breaks_at_the_ledge_and_its_death_plays_nothing_more() -> void:
 	var leader := _solo(Vector2i(0, 0))
@@ -441,7 +441,7 @@ func test_a_removal_breaks_at_the_ledge_and_its_death_plays_nothing_more() -> vo
 	assert_int(int(breaks[0].get("follow", 0))).override_failure_message(
 			"the break does not ride the body to the ledge").is_equal(member.get_instance_id())
 	assert_int(int(breaks[0].get("held_by", 0))).override_failure_message(
-			"the break does not wait for its attack to let go").is_equal(attack.get_instance_id())
+			"the break does not wait for its attack's snap").is_equal(attack.get_instance_id())
 	assert_bool(is_inf(SquadLines2D.snap_seconds(breaks[0]))).override_failure_message(
 			"the break has a snap before the body has even arrived").is_true()
 	_sm.handle_unit_death(member)
@@ -453,7 +453,7 @@ func test_a_removal_breaks_at_the_ledge_and_its_death_plays_nothing_more() -> vo
 
 
 # The ledge break RIDES THE BODY and HOLDS (#1104, the dev's mockup and his wile e coyote hang): past its
-# strain it is still whole and still riding, because the body has not let go; the attack's stamp snaps
+# strain it is still whole and still riding, because the hang has not ended; the attack's stamp snaps
 # it on the next frame, and from then moving the body moves nothing. The other end stays put throughout.
 # Driven through the moments' own clock, aged by hand.
 func test_a_ledge_break_holds_and_rides_the_body_until_its_attack_lets_go() -> void:
@@ -518,7 +518,7 @@ func test_a_ledge_break_holds_and_rides_the_body_until_its_attack_lets_go() -> v
 			.is_equal_approx(snapped, Vector3(0.0001, 0.0001, 0.0001))
 
 
-# A held break whose attack is gone snaps at once (#1104): whatever freed it, nothing is left to let go,
+# A held break whose attack is gone snaps at once (#1104): whatever freed it, nothing is left to stamp it,
 # and a break must never hold the moments' clock open for ever.
 func test_a_break_held_by_a_freed_attack_snaps_at_once() -> void:
 	var leader := _solo(Vector2i(0, 0))
