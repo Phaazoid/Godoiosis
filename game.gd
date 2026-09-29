@@ -180,7 +180,7 @@ func _ready() -> void:
 	RenderingServer.viewport_set_default_canvas_item_texture_filter(get_viewport().get_viewport_rid(), RenderingServer.CANVAS_ITEM_TEXTURE_FILTER_NEAREST)
 
 	_wire_signals()
-	camera_controller.game = self   # so its WASD poll can see board_input_delegated (#176 4d)
+	camera_controller.game = self   # so its WASD poll and pan wall can see board_input_delegated (#176 4d, #974)
 	camera_controller.refresh_bounds(grid)
 	# The front door (#96 slice 2). TestBoard is no longer spawned at boot — it is a row on the
 	# menu now. Lock the board synchronously, but DEFER opening the screen by a frame: during
@@ -301,6 +301,7 @@ func _wire_signals() -> void:
 	squad_manager.squad_action_cancelled.connect(_on_unit_action_cancelled)
 	squad_manager.squad_action_queued.connect(_on_unit_action_queued)
 	scenario_manager.board_loaded.connect(drop_threat_field)   # a new board is a new field (#710)
+	scenario_manager.board_loaded.connect(camera_controller.refresh_bounds.bind(grid))   # ...and new pan bounds (#974)
 	squad_manager.squad_became_active.connect(_on_squad_became_active)
 	squad_manager.squad_became_empty.connect(_on_squad_has_no_actions)
 	squad_manager.active_squad_changed.connect(_on_active_squad_changed)   # End Turn hides mid-queue (#541)
