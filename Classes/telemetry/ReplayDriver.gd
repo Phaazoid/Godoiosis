@@ -41,6 +41,10 @@ var _live_id_of: Dictionary = {}       # int (recorded instance id) -> int (live
 var _cursor := 0
 var _seen_first_turn := false
 var _seeded := false
+var _compared := 0                     # outcome records already diffed, the same index on both sides
+var _logged := 0                       # the replay log's length at the last diff
+var _playing := false
+var _pause_requested := false
 
 
 func is_seeded() -> bool:
@@ -49,6 +53,10 @@ func is_seeded() -> bool:
 
 func is_finished() -> bool:
 	return _seeded and _cursor >= run.events.size()
+
+
+func is_playing() -> bool:
+	return _playing
 
 
 # ==============================================================================
@@ -67,6 +75,8 @@ func seed(replay_run: ReplayRun) -> bool:
 	_cursor = 0
 	_seen_first_turn = false
 	_seeded = false
+	_compared = 0
+	_logged = 0
 
 	if not run.can_replay():
 		for problem: String in run.problems:
@@ -142,7 +152,8 @@ static func _cell_of(raw: Variant) -> Vector2i:
 # ==============================================================================
 
 # One recorded event's worth of work. Returns false when the run is finished. Awaits, because a pass
-# and a turn hand-over both do.
+# and a turn hand-over both do. Every step diffs what it produced (#853), so a divergence shows at the
+# event that caused it rather than only at the end.
 func step() -> bool:
 	if not _seeded or is_finished():
 		progressed.emit(true)
@@ -153,14 +164,35 @@ func step() -> bool:
 	var done := is_finished()
 	if done:
 		_seal_like_the_run()
-		_compare()
+	_compare(done)
 	progressed.emit(done)
 	return not done
 
 
 func play() -> void:
-	while await step():
-		pass
+	await _run_until(func() -> bool: return false)
+
+
+# Steps until the divergence list grows or the run ends. Honours pause() like play().
+func run_to_next_divergence() -> void:
+	var before := divergences.size()
+	await _run_until(func() -> bool: return divergences.size() > before)
+
+
+# Lands at the next EVENT boundary: the event in flight -- a whole pass -- always finishes first.
+func pause() -> void:
+	_pause_requested = true
+
+
+func _run_until(stop: Callable) -> void:
+	if _playing:
+		return
+	_playing = true
+	_pause_requested = false
+	while not _pause_requested and await step():
+		if bool(stop.call()):
+			break
+	_playing = false
 
 
 func _apply(event: Dictionary) -> void:
@@ -392,17 +424,24 @@ func _seal_like_the_run() -> void:
 	game.mission_log.seal(ending, failed_by)
 
 
-func _compare() -> void:
-
+# Diffs the records not yet compared, index for index. The count check waits for `final`: until the
+# run ends the replay is expected to be behind.
+func _compare(final: bool) -> void:
 	var mine: Array[Dictionary] = game.mission_log.events()
+	# Most steps replay an input and record nothing; each diff re-projects both logs.
+	if mine.size() == _logged and not final:
+		return
+	_logged = mine.size()
 	var theirs: Array[Dictionary] = run.events
 	var a := _outcomes(theirs, true)    # recorded: ids mapped onto live units
 	var b := _outcomes(mine, false)     # the replay: already live ids
 
-	if a.size() != b.size():
-		divergences.append("the replay produced %d outcome records where the run had %d" % [b.size(), a.size()])
-	for i in mini(a.size(), b.size()):
+	var upto := mini(a.size(), b.size())
+	for i in range(_compared, upto):
 		_diff_record(a[i], b[i], i)
+	_compared = maxi(_compared, upto)
+	if final and a.size() != b.size():
+		divergences.append("the replay produced %d outcome records where the run had %d" % [b.size(), a.size()])
 
 
 # The comparable projection: outcome records only, volatile envelope dropped, every recorded id
@@ -531,11 +570,17 @@ func report() -> Dictionary:
 	var degraded: Array[String] = []
 	if run != null:
 		degraded = run.degraded.duplicate()
+	# The event the next step applies; empty when there is none.
+	var next := {}
+	if _seeded and not is_finished():
+		var upcoming: Dictionary = run.events[_cursor]
+		next = {"event": str(upcoming.get("event", "")), "round": int(upcoming.get("round", 0))}
 	return {
 		"seeded": _seeded,
 		"finished": is_finished(),
 		"at": _cursor,
 		"of": run.events.size() if run != null else 0,
+		"next": next,
 		"degraded": degraded,
 		"divergences": divergences.duplicate(),
 		"unbindable": unbindable.duplicate(),

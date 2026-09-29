@@ -17,6 +17,8 @@ class_name ReplayTool
 
 const COPY := "Copy"
 const COPIED := "Copied"
+const PLAY := "Play"
+const PAUSE := "Pause"
 const COPIED_SECONDS := 1.0
 const NO_FILE := "(no file)"   # a board that was never saved records an empty scenario name
 const YOU := "You"
@@ -38,6 +40,7 @@ var _status: Label
 var _report: RichTextLabel
 var _step_button: Button
 var _play_button: Button
+var _next_divergence_button: Button
 
 
 func init(game) -> void:
@@ -47,6 +50,7 @@ func init(game) -> void:
 	_driver.game = game
 	add_child(_driver)
 	_build()
+	_driver.progressed.connect(func(_finished: bool) -> void: _render())
 	refresh_on_show()
 
 
@@ -119,9 +123,15 @@ func _build() -> void:
 	_step_button.pressed.connect(_on_step)
 	buttons.add_child(_step_button)
 	_play_button = Button.new()
-	_play_button.text = "Play to end"
+	_play_button.text = PLAY
+	_play_button.tooltip_text = "Replay the remaining events. While playing, pauses at the next event -- a pass in flight finishes first."
 	_play_button.pressed.connect(_on_play)
 	buttons.add_child(_play_button)
+	_next_divergence_button = Button.new()
+	_next_divergence_button.text = "Run to next divergence"
+	_next_divergence_button.tooltip_text = "Step until the replay disagrees with the run, or the run ends."
+	_next_divergence_button.pressed.connect(_on_next_divergence)
+	buttons.add_child(_next_divergence_button)
 
 	DevWidgets.add_heading(_rows, "Report")
 	_report = RichTextLabel.new()
@@ -236,8 +246,20 @@ func _on_step() -> void:
 	_render()
 
 
+# One button, two verbs: Pause while anything is playing -- a run to the next divergence included.
 func _on_play() -> void:
+	if _driver.is_playing():
+		_driver.pause()
+		_play_button.disabled = true   # until the event in flight lands
+		return
+	_show_playing()
 	await _driver.play()
+	_render()
+
+
+func _on_next_divergence() -> void:
+	_show_playing()
+	await _driver.run_to_next_divergence()
 	_render()
 
 
@@ -246,9 +268,19 @@ func _on_reset_notice() -> void:
 	_status.text = "The notice is due again on the next launch."
 
 
+# _render runs only when a step lands, so without this a long first pass would still read Play.
+func _show_playing() -> void:
+	_play_button.text = PAUSE
+	_step_button.disabled = true
+	_next_divergence_button.disabled = true
+
+
 func _set_running(on: bool) -> void:
-	_step_button.disabled = not on
+	var playing := _driver.is_playing()
+	_step_button.disabled = not on or playing
+	_next_divergence_button.disabled = not on or playing
 	_play_button.disabled = not on
+	_play_button.text = PAUSE if playing else PLAY
 
 
 # The report is the point of the page, so it leads with the verdict rather than burying it under a
@@ -263,7 +295,9 @@ func _render() -> void:
 		out.append("[b]Clean -- the replay matched the run.[/b]" if divs.is_empty()
 			else "[b]%d divergences.[/b]" % divs.size())
 	else:
-		out.append("At event %d of %d." % [int(r.get("at", 0)), int(r.get("of", 0))])
+		var next: Dictionary = r.get("next", {})
+		out.append("At event %d of %d -- next: %s (round %d)." % [int(r.get("at", 0)), int(r.get("of", 0)),
+			str(next.get("event", "?")), int(next.get("round", 0))])
 	# DIRECTLY UNDER THE VERDICT, AND BOLD (#871). A degraded board makes the verdict itself unsafe --
 	# "Clean" over a board that lost a weapon is the same silence this ticket removed, arriving one
 	# click later -- so it cannot sit below the divergences as a footnote the way `notes` does.
