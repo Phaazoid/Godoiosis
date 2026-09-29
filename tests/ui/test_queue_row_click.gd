@@ -2,7 +2,8 @@
 #
 # The dev's ruling: the click SPENDS the order through the X's own path, then opens the way back in
 # -- move planning for a move, the unit's ring for anything else -- with the camera on the unit. A
-# row that is not an order only moves the camera. The premise this exists to keep honest: the ring
+# row that is not an order only moves the camera, except a HOLD (#1158): the unit's move slot, empty,
+# which opens move planning like a move row. The premise this exists to keep honest: the ring
 # hides every main action while one is queued, so a ring opened BEFORE the order is spent offers
 # nothing to requeue it with. The first case reads the ring's own tree for exactly that.
 #
@@ -207,35 +208,81 @@ func test_clicking_a_move_row_spends_it_and_its_main_and_opens_move_planning() -
 	assert_int(_open_rings().size()).is_equal(0)
 
 
-# A row that is not an order has nothing to spend: the click only looks. A real click, because a
-# hold row is NOT draggable and such rows ignored the press entirely before #1122.
+# A row that is not an order has nothing to spend: the click only looks. The row is the attacker's
+# own END OF TURN burn, so the unit IS controllable and only the order question refuses it -- an
+# enemy's counter row is refused by can_control first and could never see that gate. A real click,
+# because a derived row is not draggable and such rows ignored the press entirely before #1122.
 func test_clicking_a_row_that_is_not_an_order_only_moves_the_camera() -> void:
-	var lead := _spawn(Team.Faction.PLAYER, Vector2i(0, 0), {Stats.Stat.LDR: Squad.MEMBER_LDR_COST * 2})
-	var idler := _spawn(Team.Faction.PLAYER, Vector2i(0, 1))
-	game.squad_manager.join_squad(idler, lead.squad)
-	assert_object(idler.squad).is_same(lead.squad)
-	var hold := MoveAction.new()
-	hold.init_hold_position(idler, null)
-	var path: Array[Vector2i] = [Vector2i(0, 0), Vector2i(1, 0)]
-	var move := MoveAction.new()
-	move.init(lead, path, null)
-	lead.squad._queue_action(hold)
-	lead.squad._queue_action(move)
-	game.squad_manager.active_squad = lead.squad
-	game.refresh_action_queue(lead.squad)
+	var attacker := await _queue_attack()
+	var fire := ResolvedCellEffect.new()
+	fire.cell = attacker.movement.cell
+	fire.states_added.assign([Terrain.TileState.BURNING])
+	game.terrain_states.apply(fire)
+	game.refresh_action_queue(attacker.squad)
 	await await_idle_frame()
-	var row := _row_of(BaseAction.ActionType.MOVE, idler)
-	assert_object(row).is_not_null()
+	var row := _row_of(BaseAction.ActionType.TILE_HIT, attacker)
+	assert_object(row).override_failure_message("fixture: the burn drew no row").is_not_null()
 	assert_bool(row.draggable).is_false()
-	var queued := lead.squad.action_queue.size()
 	var focused := _focused_cells()
 
 	await _real_click(row.actor_texture)
 
-	assert_int(lead.squad.action_queue.size()).is_equal(queued)
-	assert_int(_open_rings().size()).is_equal(0)
+	assert_bool(attacker.has_main_action_queued()) \
+		.override_failure_message("a click on a derived row spent the unit's order").is_true()
+	assert_int(_open_rings().size()).override_failure_message("a click on a derived row opened a ring") \
+		.is_equal(0)
+	assert_int(game.game_state).is_not_equal(game.GameState.CHOOSING_MOVE)
 	assert_array(focused).override_failure_message("a click on a non-order row did not reach the camera") \
-		.contains([idler.get_projected_destination()])
+		.contains([attacker.get_projected_destination()])
+
+
+# A hold is no order (no drag, no X), but it is the unit's move slot, empty (#1158, dev: "clicking on
+# someone with an empty move... nothing happens"), so its row opens move planning like a move row.
+# The hold arrives through the real door: queueing the leader's move activates the squad, and the
+# activation files a hold for every member not moving. Nobody else's order may be spent by it.
+func test_clicking_a_hold_row_opens_move_planning_for_that_unit() -> void:
+	var lead := _spawn(Team.Faction.PLAYER, Vector2i(0, 0), {Stats.Stat.LDR: Squad.MEMBER_LDR_COST * 2})
+	var idler := _spawn(Team.Faction.PLAYER, Vector2i(0, 1))
+	game.squad_manager.join_squad(idler, lead.squad)
+	assert_object(idler.squad).is_same(lead.squad)
+	var path: Array[Vector2i] = [Vector2i(0, 0), Vector2i(1, 0)]
+	var move := MoveAction.new()
+	move.init(lead, path, null)
+	assert_bool(game.squad_manager.queue_action(lead.squad, move)) \
+		.override_failure_message("fixture: the leader's move was refused").is_true()
+	await await_idle_frame()
+	var row := _row_of(BaseAction.ActionType.MOVE, idler)
+	assert_object(row).override_failure_message("fixture: the activation filed no hold for the idler") \
+		.is_not_null()
+	assert_bool((row.action as MoveAction).is_hold_position).is_true()
+
+	await _real_click(row.actor_texture)
+
+	assert_int(game.game_state).override_failure_message("a click on a hold row did not open move planning") \
+		.is_equal(game.GameState.CHOOSING_MOVE)
+	assert_object(game.selected_unit).is_same(idler)
+	assert_int(_open_rings().size()).is_equal(0)
+	assert_bool(lead.squad.action_queue.has(move)) \
+		.override_failure_message("clicking the idler's hold spent the leader's move").is_true()
+
+
+# A hold on a unit holding a main (it attacks from where it stands) spends that main too, as a move
+# row's click does: move-before-main would refuse whatever move planning picked while it stood.
+func test_clicking_the_hold_of_a_unit_with_a_main_queued_spends_the_main_and_plans_a_move() -> void:
+	var attacker := await _queue_attack()
+	var row := _row_of(BaseAction.ActionType.MOVE, attacker)
+	assert_object(row).override_failure_message("fixture: the activation filed no hold for the attacker") \
+		.is_not_null()
+	assert_bool((row.action as MoveAction).is_hold_position).is_true()
+
+	await _click_through_panel(row)
+
+	assert_bool(attacker.has_main_action_queued()) \
+		.override_failure_message("the main survived the hold's click, so the re-planned move will be refused") \
+		.is_false()
+	assert_int(game.game_state).is_equal(game.GameState.CHOOSING_MOVE)
+	assert_object(game.selected_unit).is_same(attacker)
+	assert_int(_open_rings().size()).is_equal(0)
 
 
 # A press that wanders and reorders nothing is an abandoned drag, not a click -- and a click now
