@@ -931,10 +931,11 @@ func _process(_delta: float) -> void:
 	_sync_terrain_while_authoring()
 	_drive_transition(_delta)
 	_sync_staging()
-	# Separate from `live`, and deliberately so: while the AI acts or a menu is up the
+	# Narrower than `live`, and deliberately so: while the AI acts or a menu is up the
 	# rig must keep SMOOTHING (the mirror below drives it) while refusing the player.
-	# Same predicate that refuses their clicks — one question, one answer.
-	_rig.manual_input_enabled = demo_mode or not game._board_locked_for_player()
+	# Same predicate that refuses their clicks — one question, one answer. `live` joins it because
+	# a rig whose input is off cannot hear a release, so a drag held into a freeze is let go here.
+	_rig.manual_input_enabled = live and (demo_mode or not game._board_locked_for_player())
 	# The ZOOM half rejoined the same gate in #602 round 4 (dev, 2026-08-29: "we control the camera,
 	# fully. Their zoom gets overridden, period" -- restoring #520's own Done-when after the
 	# 2026-08-26 carve-out left the wheel live under playback). One predicate, both halves: whoever
