@@ -3,6 +3,7 @@
 #
 # Since #350 it also covers the third reason a bar is up — the player asked for all of them — and
 # the crowding rule that rides with it. Those cases live at the bottom, driven through the store.
+# Since #480 it also covers WHEN the cubes fly -- the lunge's peak, and a fall's landing -- at the end.
 #
 # This is a WIRE, which is why every case drives the real chain rather than calling the bar:
 # battle3d's picked cell -> HoverPresenter.pointer_source -> last_hovered_cell -> unit_at_pointer
@@ -908,3 +909,192 @@ func test_a_body_healed_to_full_still_wears_a_bar_in_the_damaged_mode() -> void:
 	assert_array(_shown_bars()).override_failure_message(
 			"the full-HP body's readout went away, and its DOWNED glyph with it") \
 			.contains([body])
+
+
+# --- WHEN the cubes fly (#480) --------------------------------------------------------------------
+# Two moments, and neither is the one they used to fly at. A melee blow lands at the lunge's PEAK, not
+# with the attacker back at rest; and a shove off a ledge knocks out the HIT's cubes at the hit while
+# the FALL's wait for the landing. The rules never moved -- HP falls once, at the hit, with the fall
+# folded in -- so everything below asks the READOUT, and every count is derived from the outcome.
+
+func test_a_melee_blow_lands_while_the_attackers_lunge_is_still_out() -> void:
+	var attacker := _spawn(PLAYER, Vector2i(2, 2))
+	attacker.equipped_weapon = H.make_weapon()   # pattern-less: Reach falls back to adjacency
+	var target := _spawn(Team.Faction.ENEMY, Vector2i(3, 2))
+	_aim_at(attacker, target.movement.cell)
+	_point_at(Vector2i(20, 20))
+	await _settle()
+
+	# Recorded AT the instant the HP moves rather than sampled a frame later, so no frame timing can
+	# decide it: where is the attacker's art when its blow lands?
+	var offsets: Array[Vector2] = []
+	var record := func(_current: Variant, _max: Variant) -> void:
+		offsets.append(attacker.visuals.animation_offset())
+	target.unit_instance.hp_changed.connect(record)
+	await game.order_executor.execute_orders(attacker)
+	target.unit_instance.hp_changed.disconnect(record)
+
+	assert_int(offsets.size()).override_failure_message(
+			"the blow never moved the target's HP, so this case saw no landing at all").is_greater(0)
+	if offsets.is_empty():
+		return
+	assert_float(offsets[0].length()).override_failure_message(
+			"the target's HP moved with the attacker's art back at rest -- the blow waited out the whole "
+			+ "lunge instead of landing at its peak").is_greater(0.0)
+
+
+# A shove off a ledge (#480): the attacker and its victim stand two levels above the cell the blow
+# throws the victim onto. Painted onto the live store, which the fixture's reset puts back. The victim
+# is sturdy enough that neither half of the loss can fell it -- a death detonates the whole grid.
+func _ledge_shove() -> Dictionary:
+	var heights: BoardHeights = game.board_heights
+	var below := Vector2i(4, 2)
+	var high := heights.elevation_at(below) + 2 * Terrain.UNITS_PER_LEVEL
+	heights.set_cell(Vector2i(2, 2), high)
+	heights.set_cell(Vector2i(3, 2), high)
+	var attacker := _spawn(PLAYER, Vector2i(2, 2))
+	var weapon: WeaponInstance = H.make_weapon()
+	weapon.template.main_attack.knockback = 1
+	attacker.equipped_weapon = weapon
+	var target: Unit = game.spawn_unit(H.make_unit_data({Stats.Stat.MHP: 40}, Team.Faction.ENEMY),
+			Vector2i(3, 2))
+	assert_object(target).is_not_null()   # fixture setup, not the claim under test
+	_set_bars(PlayerSettings.HealthBars.EVERY)   # cubes are thrown only off a readout that is up
+	_aim_at(attacker, target.movement.cell)
+	_point_at(Vector2i(20, 20))
+	await _settle()
+	var outcome: ResolvedOutcome = null
+	var plan: ResolvedPlan = game.squad_manager.resolved_plan_for(attacker.squad)
+	if plan != null:
+		for attack in plan.attacks:
+			if attack.target == target:
+				outcome = attack.resolved
+	assert_object(outcome).override_failure_message(
+			"the plan resolved no blow on the victim, so there is nothing to time").is_not_null()
+	if outcome != null:
+		assert_int(outcome.fall_damage).override_failure_message(
+				"the shove did not fall, so this board is not the one the case is about").is_greater(0)
+	return {"attacker": attacker, "target": target, "outcome": outcome}
+
+
+# Cubes an earlier case knocked off can still be in the air on the shared board, and a count taken
+# over them would include theirs. Bounded by wall clock -- a cube's life is real time, not frames.
+func _drain_debris() -> void:
+	var debris := _unit_mirror.debris()
+	var until := Time.get_ticks_msec() + 10000
+	while debris.live_count() > 0 and Time.get_ticks_msec() < until:
+		await await_idle_frame()
+	assert_int(debris.live_count()).override_failure_message(
+			"cubes from an earlier blow never landed, so the counts below would include them").is_equal(0)
+
+
+# The fall's share of what the victim lost, and the hit's -- off the resolved outcome and the HP the
+# pass actually took, never a number of this suite's. Both must be non-zero or the case cannot tell
+# one moment from the other.
+func _shares(target: Unit, outcome: ResolvedOutcome, hp_before: int) -> Vector2i:
+	var lost := hp_before - target.get_current_hp()
+	var fall := mini(outcome.fall_damage, lost)
+	assert_bool(lost - fall > 0 and fall > 0).override_failure_message(
+			"the loss did not split into a hit share and a fall share (lost %d, fall %d), so the two "
+			% [lost, outcome.fall_damage] + "moments cannot be told apart").is_true()
+	assert_bool(target.is_downed()).override_failure_message(
+			"the victim went down, which reads the whole grid rather than a hold").is_false()
+	return Vector2i(lost - fall, fall)
+
+
+func test_a_fall_knocks_out_its_own_cubes_at_the_landing_and_not_at_the_hit() -> void:
+	var s: Dictionary = await _ledge_shove()
+	var attacker: Unit = s.attacker
+	var target: Unit = s.target
+	var outcome: ResolvedOutcome = s.outcome
+	if outcome == null:
+		return
+	await _drain_debris()
+	var debris := _unit_mirror.debris()
+	var hp_before := target.get_current_hp()
+
+	# The REAL pass and the REAL slide. Headless the fall itself is instant and never raises its flag,
+	# so what ends this hold here is the slide finishing -- the case below owns the touchdown edge.
+	var done := [false]
+	_run_pass(attacker, done)
+	var sampled := 0
+	var thrown_in_flight := 0
+	var standing_in_flight := -1
+	var hp_in_flight := -1
+	for _frame in 2000:
+		await await_idle_frame()
+		if target.movement.sliding and target.get_current_hp() < hp_before:
+			sampled += 1
+			thrown_in_flight = maxi(thrown_in_flight, debris.live_count())
+			standing_in_flight = _unit_mirror.bar_for(target).filled_block_count()
+			hp_in_flight = target.get_current_hp()
+		if done[0]:
+			break
+	while not done[0]:
+		await await_idle_frame()
+	await _settle()
+
+	var shares := _shares(target, outcome, hp_before)
+	assert_int(sampled).override_failure_message(
+			"no frame was sampled between the hit and the end of the shove, so the hold was never seen"
+			).is_greater(0)
+	assert_int(thrown_in_flight).override_failure_message(
+			"while the victim was still in the air %d cubes had flown -- the hit's share is %d, and the "
+			% [thrown_in_flight, shares.x] + "fall's %d should still be standing" % shares.y) \
+			.is_equal(shares.x)
+	assert_int(standing_in_flight).override_failure_message(
+			"the readout did not keep the fall's cubes standing while the victim fell").is_equal(
+			hp_in_flight + shares.y)
+	assert_int(debris.live_count()).override_failure_message(
+			"once the victim landed, the fall's cubes never followed the hit's").is_equal(shares.x + shares.y)
+	assert_int(_unit_mirror.bar_for(target).filled_block_count()).override_failure_message(
+			"the landed readout still stands cubes the victim has lost").is_equal(target.get_current_hp())
+
+
+func test_the_touchdown_lets_the_fall_go_before_the_shove_is_over() -> void:
+	# THE ONE STAND-IN, declared: headless, MovementComponent._step_off drops instantly and never raises
+	# landing_falling, so the case raises and lowers it the way the real fall beat does -- inside a
+	# REAL slide, slowed so there is room to. Everything downstream of the flag is the wire under test.
+	# Read off the READOUT rather than the debris: the throw is the case above's, and a standing count
+	# needs no drain of an earlier case's cubes.
+	var s: Dictionary = await _ledge_shove()
+	var attacker: Unit = s.attacker
+	var target: Unit = s.target
+	var outcome: ResolvedOutcome = s.outcome
+	if outcome == null:
+		return
+	var bar := _unit_mirror.bar_for(target)
+	var hp_before := target.get_current_hp()
+	var slide_speed := MovementComponent.SHOVE_SLIDE_SPEED
+	MovementComponent.SHOVE_SLIDE_SPEED = 40.0
+
+	var done := [false]
+	_run_pass(attacker, done)
+	var hit := false
+	for _frame in 2000:
+		await await_idle_frame()
+		if target.get_current_hp() < hp_before or done[0]:
+			hit = target.get_current_hp() < hp_before
+			break
+	target.movement.landing_falling = true
+	await _settle()
+	var standing_falling := bar.filled_block_count()
+	target.movement.landing_falling = false
+	await _settle()
+	var standing_landed := bar.filled_block_count()
+	var still_sliding := target.movement.sliding
+	while not done[0]:
+		await await_idle_frame()
+	MovementComponent.SHOVE_SLIDE_SPEED = slide_speed
+	await _settle()
+
+	assert_bool(hit).override_failure_message("the blow never landed").is_true()
+	var shares := _shares(target, outcome, hp_before)
+	assert_bool(still_sliding).override_failure_message(
+			"the shove was over before the touchdown, so this case cannot tell the two apart").is_true()
+	assert_int(standing_falling).override_failure_message(
+			"the fall's cubes did not stand while the victim was still falling").is_equal(
+			target.get_current_hp() + shares.y)
+	assert_int(standing_landed).override_failure_message(
+			"the victim touched down and the fall's cubes waited for the shove to end instead") \
+			.is_equal(target.get_current_hp())

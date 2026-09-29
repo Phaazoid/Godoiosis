@@ -7,7 +7,7 @@ its child [#49 Action Queue UX](https://github.com/Phaazoid/Godoiosis/issues/49)
 This is a *guidelines* doc, not a spec — it captures the principles we're holding the work to,
 plus the running order of the queue-UX checklist. Update it as items land.
 
-**Canon checked through #1158 (2026-09-29).**
+**Canon checked through #1160 (2026-09-29).**
 
 ## Principles
 
@@ -686,7 +686,9 @@ Four things that generalise past this ticket:
    skips a unit already queued for deletion, so the mirror never observes HP at 0; and noticing the
    unit VANISH instead would fire on `clear_board`, which frees without dying. `unit_died` is
    therefore the one signal this deliberately poll-based node listens to, and the exception is
-   structural rather than a preference.
+   structural rather than a preference. *(Since #480 the host also HANDS it each blow — see "When the
+   cubes fly" below — for the same kind of reason: a poll sees one number fall and cannot say how much
+   of it was the fall.)*
 4. **A TEST'S PRECONDITION THAT IS NEVER ESTABLISHED IS NOT A PRECONDITION.** The baseline case
    (2 above) originally never let the readout be up *before* the damage, so `_last_hp` was never
    seeded and the `.get(id, current)` default silently stood in for it — the case passed against a
@@ -831,6 +833,41 @@ HP would, with no second convention to keep in step. **A cube comes back the way
   numbers and was left alone. Holding it red would couple the colour seam to the animation seam and
   soften `filled_block_count()`, round 3's non-collapsing answer to *which sockets are full*, in the
   middle of a pop.
+
+### When the cubes fly ([#480](https://github.com/Phaazoid/Godoiosis/issues/480), BUILT 2026-09-29)
+
+*"Let's make it so that the health bar drop only occurs when an attack hits, or when the unit actually
+hits the ground from falls, rather than mid swing."* The readout has no moment of its own — it bursts
+on the first frame HP moves — so this is two retimings, and only one of them touches the rules' clock.
+
+- **The payload lands at the lunge's PEAK.** `UnitVisuals.play_attack_lunge` returns when the OUT leg
+  completes (a `lunge_peaked` signal off a tween callback between the two legs) while the return leg
+  plays on; `AttackAction.execute` then emits `impact` and applies the payload there. The bodyguard's
+  block lunge is the same function, so a guarded hit lands at the BLOCK's peak — consistent, and
+  stated. Only *when* a resolved number lands moved (Law #2 intact). The headless twin
+  (`play_session._apply_attack`) has no animation and needed nothing.
+- **A fall's cubes wait for the landing — in the READOUT only.** `ResolvedOutcome.fall_damage` is
+  folded into `damage` and stays so: ONE `take_damage` at the hit, because splitting it would change
+  the lethality ladder's overkill arithmetic and break preview == execution. What moved is the burst.
+  `battle3d` hands `UnitMirror.hold_falls` every blow off `OrderExecutor.volley_struck`; it ARMS each
+  struck unit's `fall_damage`, the unit's next HP drop HOLDS `min(armed, loss)` of it standing, and the
+  hold ends on `movement.landing_falling`'s true→false edge (the touchdown), with the shove being over
+  as the fail-safe. The readout draws HP plus the hold, and the cubes thrown are the difference in THAT
+  between frames — so the hit's share leaves at the hit and the fall's at the landing, with one rule.
+- **The baseline and the hold are both written above the visibility gate** (#314's rule, unreopened):
+  a hidden readout holds and lets go like a shown one, and simply throws nothing.
+- **A death still detonates the whole grid** — held cubes are drawn filled, so they go with it.
+- **The camera jolt stays at the hit.** It rides the live HP diff; the landing reports nothing of its
+  own, since the blow was already reported once.
+- **Declared edges.** A shove that falls at TWO breaks releases the whole fall at the FIRST touchdown
+  (the outcome carries one fall number, and splitting it per edge would be a re-derivation). A
+  drowning's `drown_damage` is not held. A triggered shot landing on a volley member between the lead's
+  blow and that member's own would spend the member's arm. The cube grid is 3D-only, so this is a
+  declared [#292](https://github.com/Phaazoid/Godoiosis/issues/292) asymmetry.
+- **What a headless suite can and cannot see.** The fall beat is instant headless and never raises
+  `landing_falling`, so the real slide ends the hold at the fail-safe there; the touchdown case raises
+  and lowers the flag itself inside a real slide and says so. The peak IS observable headless — the
+  lunge is a real tween — so the payload case records the attacker's art offset at the instant HP moves.
 
 ## Two marker channels, one rule ([#346](https://github.com/Phaazoid/Godoiosis/issues/346))
 
@@ -2045,7 +2082,11 @@ what lets one observation drive two consequences.
 halves of its tween and is *awaited* before `take_damage` runs, so the sprite is back at rest by the
 instant the death signal fires — there is no swing to freeze mid-. What 2c ships is the **impact
 freeze**; the anticipation freeze needs frames to freeze between, which is
-[#603](https://github.com/Phaazoid/Godoiosis/issues/603).
+[#603](https://github.com/Phaazoid/Godoiosis/issues/603). *(Half of that premise moved with
+[#480](https://github.com/Phaazoid/Godoiosis/issues/480): the lunge now returns at its PEAK and the
+payload lands there, so the attacker is mid-swing when the death signal fires. Whether the impact
+freeze now reads as a swing held at its top is an eye check nobody has made; the anticipation
+freeze is still #603's.)*
 
 **Superseded, not forgotten:** #520's original scope named a *keyframe/segment layer over `pose()`*.
 It was never built and is not owed — the published-fact channels (`directed_line` / `framed_span` /
@@ -4111,7 +4152,7 @@ The RULES inside each step are shared, never copied: `SquadManager.successor_amo
 - **The link check.** `test_split_forecast` requires that the links before the pass, with every relink applied blow by blow, equal the links the real pass leaves.
 
 **It plays at the blow.**
-- **The hook.** `OrderExecutor.after_the_blow` runs in `_execute_action_sequence` once `execution_complete` says the lunge, the shove and the fall are done: the first moment a shoved member stands out of range. Every attack passes through that loop (aims, counters, coda shots and the walk's own watch shots), so there is one call site.
+- **The hook.** `OrderExecutor.after_the_blow` runs in `_execute_action_sequence` once `execution_complete` says the lunge's peak, the shove and the fall are done (the lunge's return leg may still be playing since #480): the first moment a shoved member stands out of range. Every attack passes through that loop (aims, counters, coda shots and the walk's own watch shots), so there is one call site.
   - It asks `SquadTetherPresenter.foretell(outcome)` to play the outcome's relinks now.
   - While a fight is staged (`shot_cells` non-empty), it releases the follow, so `ShotDirector` falls from TRAINED to STAGE.
   - It lingers `max(linger, shown)`. `shown` is the break's own length, plus a handover's draw-in up to its pop (`SquadLines2D.shown_seconds`), so tuning a break can never outrun the camera.

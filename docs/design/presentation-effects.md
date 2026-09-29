@@ -2,7 +2,7 @@
 
 **Status: an idea wall plus two locked decisions.** Solicited by the dev on 2026-08-12, the day Stage 0 (#203) passed its GO gate: *"a full thought experiment, all ideas on the wall."* Nothing below the Decisions section is a commitment — it is the candidate pool for #176's stage 5 and beyond, kept so it can't evaporate from chat. The look-dev scene (`Scenes/LookDev/LookDev.tscn`) is the standing playground where any of it gets prototyped before it's real — and since #212 (2026-08-15) the **Moods tab** in the dev-tools window tunes the *shipping* view live, so a value on this wall can be judged on a real board rather than in the diorama. **It is a playground, not a scratch scene ([#393](https://github.com/Phaazoid/Godoiosis/issues/393), 2026-08-19)** — seven presentation suites fixture on it, `Battle3D.tscn` loads its MeshLibrary, and `BoardMirror`/`BoardOverlays` read textures out of `Art/LookDev/`, so it is edited with the same care as shipping code. Its four moods stopped being a second copy at the same time: `look_dev.gd` held them as a hardcoded `PRESETS` table, seeded from the same values four of the twelve `LookPreset` files now carry, and it resolves them by NAME through `LookKnobs` instead.
 
-**Canon checked through #1024 (2026-09-18).**
+**Canon checked through #1160 (2026-09-29).**
 
 ---
 
@@ -749,8 +749,9 @@ into one volley — played on screen as three unrelated lunges.
 **`AttackAction.impact` is that channel, and `OrderExecutor.volley_struck` re-publishes it.** Three
 things about its shape are the reusable part:
 
-- **It fires at the PAYLOAD moment**, after the lunge, not at the top of `execute()` — a bolt has to
-  arrive when the blow does, and a lunge is a wind-up.
+- **It fires at the PAYLOAD moment**, not at the top of `execute()` — a bolt has to arrive when the
+  blow does, and a lunge is a wind-up. Since [#480](https://github.com/Phaazoid/Godoiosis/issues/480)
+  that moment is the lunge's PEAK: `play_attack_lunge` returns there and its return leg plays on.
 - **It is ABOVE the target block**, so a cell attack (#47, target null) publishes too. Every shock
   rune touches the MAP, so a shock aimed at open water is a legal order that hits nobody and lights
   a whole river; an emit guarded on having a victim would go silent exactly when there is most to

@@ -223,19 +223,24 @@ func animation_offset() -> Vector2:
 		return Vector2.ZERO
 	return sprite.position - base_position
 
+# The lunge's PEAK, where its blow lands (#480).
+signal lunge_peaked
+
+# Returns at the PEAK, not the end: the caller lands the blow there while the return leg keeps playing.
 func play_attack_lunge(direction: Vector2):
 	if sprite == null:
 		return
-		
+
 	if visual_tween:
 		visual_tween.kill()
-	
+
 	sprite.position = base_position
 	var lunge_distance := GridUtils.TILE_SIZE / 2
 	var lunge_pos = base_position + direction.normalized() * lunge_distance
 	visual_tween = create_tween()
-	
+
 	visual_tween.tween_property(sprite, "position", lunge_pos, 0.08)
+	visual_tween.tween_callback(lunge_peaked.emit)
 	visual_tween.tween_property(sprite, "position", base_position, 0.10)
-	
-	await visual_tween.finished
+
+	await lunge_peaked
