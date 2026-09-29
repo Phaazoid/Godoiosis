@@ -314,6 +314,10 @@ func show_beside():
 		DisplayServer.window_get_current_screen(DisplayServer.MAIN_WINDOW_ID))
 	position = clamp_to_screen(main_pos + Vector2i(main_size.x + 16, 0), size, usable)
 	scenario_header.refresh_on_show()   # aim the dropdown at the loaded scenario on every window show
+	# The X only hides the window and leaves the page current, so it comes back with no tab change to
+	# rebuild it -- and a mission played meanwhile recorded a newer run (#1156).
+	if showing(replay_tool):
+		replay_tool.refresh_on_show()
 	show()
 	_update_zone_visibility()
 
