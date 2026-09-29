@@ -130,7 +130,7 @@ const FLAME_FRAMES := 8
 # Frames per second, and how hard the light breathes (0 = a steady lamp). Both live: the animation
 # loop re-reads them every frame, so they need no rebuild.
 @export var flame_fps := 10.0
-@export var flame_flicker := 0.18
+@export var flame_flicker := 0.17
 
 # How far each flame is pushed TOWARD THE CAMERA, in cells (#298). A unit sprite and a flame on one
 # cell are both Y-billboards through the same point, i.e. the same plane, and Y is the one axis that
@@ -166,9 +166,9 @@ const FLAME_FRAMES := 8
 # Nothing blooms below the mood's Glow HDR threshold — turn these up under a high threshold and the
 # flame gets brighter without ever glowing.
 @export var flame_glow_color := Color(1, 0.55, 0.15): set = _set_flame_glow_color
-@export var flame_glow_energy := 2.5: set = _set_flame_glow_energy
+@export var flame_glow_energy := 2.45: set = _set_flame_glow_energy
 
-@export var flame_light_energy := 2.0
+@export var flame_light_energy := 1.95
 # Range and colour are baked into the OmniLight3D at build and _animate_flames refreshes ENERGY
 # alone, so both need the sweep or they move nothing on a board already alight — #264's born-dead
 # slider, which flame_light_range had shipped with. Energy deliberately keeps no setter: the
@@ -354,7 +354,7 @@ var _lip_mat: StandardMaterial3D = null
 # The same, for the mud bumps a Burrow's COVER state stands up (#326). A SECOND knob rather than
 # a shared one, on the lantern-vs-flame rule: cover and grass are different objects drawn at
 # different sizes, so one number would force whoever tunes the second to un-tune the first.
-@export var cover_scale := 0.98: set = _set_cover_scale
+@export var cover_scale := 0.97: set = _set_cover_scale
 
 var board: GridMap
 # The tear-out's second lattice (#521): same mesh library, same cell_size, same cell coordinates,
