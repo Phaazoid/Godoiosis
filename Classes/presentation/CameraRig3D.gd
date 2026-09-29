@@ -396,7 +396,8 @@ func _unhandled_input(event: InputEvent) -> void:
 	if _drag_panning:
 		var slide := event as InputEventMouseMotion
 		if slide != null:
-			hold_at(_target_aim + _grab_offset(slide.relative))
+			# From the live aim, not a glide's destination: the grab holds what is on screen.
+			hold_at(_aim + _grab_offset(slide.relative))
 			return
 
 	var key := event as InputEventKey
@@ -446,8 +447,13 @@ func _grab_offset(relative: Vector2) -> Vector3:
 	var per_pixel := 2.0 * _camera.position.z / (proj.y.y * height)
 	# A pitched camera sees ground recede as well as rise, so a forward drag spans 1/sin(pitch) more.
 	var along := per_pixel / maxf(absf(sin(deg_to_rad(_pitch_degrees))), 0.05)
-	return Vector3(-relative.x * per_pixel, 0.0, -relative.y * along) \
-			.rotated(Vector3.UP, deg_to_rad(rotation_degrees.y))
+	return _on_ground(Vector2(-relative.x * per_pixel, -relative.y * along))
+
+
+# A screen-plane pan (x = right, y = toward the camera) as a ground offset under the rig's yaw.
+# Both pans ask this, so they cannot disagree about which way is "right".
+func _on_ground(pan: Vector2) -> Vector3:
+	return Vector3(pan.x, 0.0, pan.y).rotated(Vector3.UP, deg_to_rad(rotation_degrees.y))
 
 
 func is_orbiting() -> bool:
@@ -493,8 +499,8 @@ func _set_pan_button(value: MouseButton) -> void:
 	_drag_panning = false
 
 
-# Same strand, second trigger: something else taking the camera (an AI turn, a menu) while
-# the player is mid-drag. MUST early-out on an unchanged write — battle3d._process assigns
+# Same strand, second trigger: something else taking the camera (an AI turn, a menu, a modal
+# freeze) while the player is mid-drag. MUST early-out on an unchanged write — battle3d._process assigns
 # this EVERY frame, and an unguarded release would cancel a live orbit sixty times a second.
 func _set_manual_input_enabled(value: bool) -> void:
 	if value == manual_input_enabled:
@@ -560,8 +566,9 @@ func widen_to_fit(volume: AABB) -> void:
 # Move the aim OUTRIGHT: the snap. Every writer that already has the camera where it wants it comes
 # through here -- WASD (a held key is already continuous, so easing it would only put lag between the
 # press and the board moving), frame()/pose() (a rig still lerping unprojects at one distance and
-# picks at another, desyncing every screen-space read on the way in), and the playback mirror, whose
-# 2D twin is already tweening the travel it reports.
+# picks at another, desyncing every screen-space read on the way in), the playback mirror, whose
+# 2D twin is already tweening the travel it reports, and the grab pan (#1037), which an ease would
+# slip out from under the hand.
 func hold_at(aim: Vector3) -> void:
 	_target_aim = aim
 	_aim = aim
@@ -1135,7 +1142,7 @@ func _process(delta: float):
 			pan.x += 1.0
 		if pan != Vector2.ZERO:
 			pan = pan.normalized() * effective_pan_speed() * delta
-			hold_at(_target_aim + Vector3(pan.x, 0.0, pan.y).rotated(Vector3.UP, deg_to_rad(rotation_degrees.y)))
+			hold_at(_target_aim + _on_ground(pan))
 
 	# The two eased channels (#520). Headless, land now: nobody is watching, the asymptotic lerp
 	# never settles, and a suite sampling the rig must read the DECISION rather than frame timing.

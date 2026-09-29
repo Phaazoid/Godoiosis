@@ -886,6 +886,25 @@ func test_the_ground_under_a_pan_drag_follows_the_hand() -> void:
 				% [drag, moved]).is_less_equal(drag.length() * 0.1)
 
 
+# A grab holds the view on screen, so a drag taken while a glide (a recentre, the pass-end return)
+# is still travelling must not first jump to where that glide was going.
+func test_a_pan_drag_mid_glide_grabs_the_view_on_screen() -> void:
+	var rig := _rig()
+	var camera := _camera()
+	_assert_pan_is_its_own_button(rig)
+	rig.glide_to(rig._target_aim + Vector3(20.0, 0.0, 0.0))   # no frame runs, so it stays in flight
+	assert_bool(rig._aim.is_equal_approx(rig._target_aim)).override_failure_message(
+			"precondition: nothing is gliding, so this proves nothing").is_false()
+	var grabbed: Vector3 = rig.position   # the point the camera is looking at now
+	var before: Vector2 = camera.unproject_position(grabbed)
+	var drag := Vector2(12.0, 0.0)
+	_drag(rig.pan_button, drag)
+	var moved: Vector2 = camera.unproject_position(grabbed) - before
+	assert_float(moved.distance_to(drag)).override_failure_message(
+			"a drag taken mid-glide carried the grabbed ground by %s on screen -- it jumped to the glide's end"
+			% [moved]).is_less_equal(drag.length() * 0.1)
+
+
 func test_a_pan_drag_does_nothing_while_manual_input_is_off() -> void:
 	var rig := _rig()
 	_assert_pan_is_its_own_button(rig)
@@ -936,9 +955,12 @@ func test_rebinding_the_pan_button_mid_pan_releases_it() -> void:
 	var rig := _rig()
 	_assert_pan_is_its_own_button(rig)
 	var original: MouseButton = rig.pan_button
+	var start: Vector3 = rig._target_aim
 	_press(original)
 	_move(Vector2(30.0, 0.0))
 	var mid: Vector3 = rig._target_aim
+	assert_bool(mid.is_equal_approx(start)).override_failure_message(
+			"precondition: the pan never started, so this proves nothing").is_false()
 	var other: MouseButton = MOUSE_BUTTON_XBUTTON1 if original != MOUSE_BUTTON_XBUTTON1 \
 			else MOUSE_BUTTON_XBUTTON2
 	rig.pan_button = other
@@ -952,9 +974,12 @@ func test_orbit_taking_the_pan_button_mid_pan_releases_it() -> void:
 	var rig := _rig()
 	_assert_pan_is_its_own_button(rig)
 	var orbit: MouseButton = rig.orbit_button
+	var start: Vector3 = rig._target_aim
 	_press(rig.pan_button)
 	_move(Vector2(30.0, 0.0))
 	var mid: Vector3 = rig._target_aim
+	assert_bool(mid.is_equal_approx(start)).override_failure_message(
+			"precondition: the pan never started, so this proves nothing").is_false()
 	# The brush arms mid-pan, the orbit branch eats the release, and the brush disarms.
 	rig.orbit_button = rig.pan_button
 	_release(rig.pan_button)

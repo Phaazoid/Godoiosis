@@ -882,6 +882,60 @@ func test_the_playable_rig_freezes_with_the_game() -> void:
 	_game.process_mode = Node.PROCESS_MODE_INHERIT
 
 
+# One half of a middle-button drag, with the mask Godot gives it.
+func _parse_middle(screen_pos: Vector2, pressed: bool) -> void:
+	var event := InputEventMouseButton.new()
+	event.position = screen_pos
+	event.global_position = screen_pos
+	event.button_index = MOUSE_BUTTON_MIDDLE
+	event.pressed = pressed
+	event.button_mask = MOUSE_BUTTON_MASK_MIDDLE if pressed else 0
+	Input.parse_input_event(event)
+
+
+func _parse_middle_drag(screen_pos: Vector2, pixels: Vector2) -> void:
+	var motion := InputEventMouseMotion.new()
+	motion.position = screen_pos + pixels
+	motion.global_position = screen_pos + pixels
+	motion.relative = pixels
+	motion.button_mask = MOUSE_BUTTON_MASK_MIDDLE
+	Input.parse_input_event(motion)
+
+
+# A pan held into a modal freeze (#1037). The frozen rig cannot hear the release, so the host has
+# to let the pan go, or every plain mouse move after the card closes drags the board.
+func test_a_pan_held_into_a_modal_freeze_is_let_go() -> void:
+	var rig := _rig() as CameraRig3D
+	assert_int(rig.pan_button).override_failure_message(
+			"precondition: the pan is not on middle, so these presses start nothing").is_equal(MOUSE_BUTTON_MIDDLE)
+	var at := _bare_board_point()
+	assert_bool(at.x >= 0.0).override_failure_message("no bare board point to press on").is_true()
+	_parse_middle(at, true)
+	await _pump()
+	var start: Vector3 = rig._target_aim
+	_parse_middle_drag(at, Vector2(30.0, 0.0))
+	await _pump()
+	assert_bool(rig._target_aim.is_equal_approx(start)).override_failure_message(
+			"precondition: the middle drag never panned, so this proves nothing").is_false()
+
+	_game.process_mode = Node.PROCESS_MODE_DISABLED   # the freeze, at ModalLock's own seam
+	await _pump()
+	_parse_middle(at, false)   # let go while the card is up
+	await _pump()
+	_game.process_mode = Node.PROCESS_MODE_INHERIT
+	await _pump()
+
+	var settled: Vector3 = rig._target_aim
+	var plain := InputEventMouseMotion.new()
+	plain.position = at
+	plain.global_position = at
+	plain.relative = Vector2(30.0, 0.0)
+	Input.parse_input_event(plain)
+	await _pump()
+	assert_that(rig._target_aim).override_failure_message(
+			"the pan outlived the freeze -- every mouse move now drags the board").is_equal(settled)
+
+
 func test_the_dev_overlay_resolves_while_the_game_is_hosted_in_3d() -> void:
 	# Boot-into-3D: Battle3D is the main_scene now, so Main is mounted at /root/Battle3D/Main
 	# and game.gd's old ABSOLUTE "/root/Main/DevOverlay" resolved to nothing — F1 silently did

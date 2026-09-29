@@ -1683,8 +1683,11 @@ place. (Diff 2b adds a third, the flourish -- see *The camera JOLTS, SWAYS and S
 the pass-end view return (`restore_view`), both recentres (SPACE and #471's return to the acting
 unit), and R. The snaps are `frame()`/`pose()` — a rig still lerping unprojects at one distance and
 picks at another, desyncing every screen-space read taken on the way in — WASD, because a held key
-is already continuous and easing it only adds lag, and the playback mirror, for the compounding
-reason above. All of them go through `hold_at`, so none leaves a stale target for the ease to fight.
+is already continuous and easing it only adds lag, the playback mirror, for the compounding
+reason above, and the middle-drag grab pan (#1037), which an ease would slip out from under the hand
+(it starts from the live aim, so a drag taken mid-glide cancels the glide where the camera is rather
+than jumping to its destination). All of them go through `hold_at`, so none leaves a stale target for
+the ease to fight.
 
 **THE GAP THIS CLOSED, and it was flagged at PR #568 and missed in its own build:** `_aim_over`
 answers the *board's* surface, so before this the fight lifted into the diorama and the camera
