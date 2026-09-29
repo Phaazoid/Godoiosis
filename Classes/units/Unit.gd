@@ -824,9 +824,12 @@ func is_standing_watch() -> bool:
 # restore paths (ScenarioUnitEntry.apply_unit_state, restore_stat_effects) bypass these doors on
 # purpose — a restore replays the RESULT, and both sides round-trip verbatim.
 # `turns` overrides the state's default clock (0 = default); only paired states read it.
+# An exclusive state (#1092) is refused while its winner is held, and strips its loser on arrival.
 func add_element_state(state: Elemental.State, turns: int = 0) -> void:
-	if state == Elemental.State.NONE:
+	if state == Elemental.State.NONE or Elemental.is_blocked(element_states, state):
 		return
+	for beaten in Elemental.overridden_by(state):
+		remove_element_state(beaten)
 	if not element_states.has(state):
 		element_states.append(state)
 	_apply_paired_effect(state, turns)

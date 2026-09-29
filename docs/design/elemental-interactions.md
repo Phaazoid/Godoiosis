@@ -8,7 +8,7 @@
 
 **Tags:** ★ strong candidate · ⚗ experimental · ⚗⚗ far-future / gate-hard · ◆ from the wiki (de-randomized) · 🔗 wants the tile-state or EoT layer first.
 
-**Canon checked through #199 (2026-08-12); #1135's map-only shock ruling folded in 2026-09-28.** *Thermal batch shipped 2026-08-12 (dev picks in chat): FIRE×WET QuickDry, ICE→CHILLED (−1 DEX, paired StatEffect clock), ICE×WET Deep Chill, FIRE×CHILLED Temperature Shock, the Blow Dry utility carving, WATER douses fire tiles (BURNING/BLAZE then; #890 retired BLAZE, and one douse now covers a fire on any ground), FIRE ignites GRASS (and TALL_GRASS since #891, which spreads to corners as well as sides), and `Terrain.Kind.DIRT` as the non-flammable ground. Rows below tagged **[BUILT]** where the shipped form differs, the note says how.*
+**Canon checked through #199 (2026-08-12); #1135's map-only shock ruling folded in 2026-09-28; #1092's Chilled-beats-Wet ruling folded in 2026-09-29.** *Thermal batch shipped 2026-08-12 (dev picks in chat): FIRE×WET QuickDry, ICE→CHILLED (−1 DEX, paired StatEffect clock), ICE×WET Deep Chill, FIRE×CHILLED Temperature Shock, the Blow Dry utility carving, WATER douses fire tiles (BURNING/BLAZE then; #890 retired BLAZE, and one douse now covers a fire on any ground), FIRE ignites GRASS (and TALL_GRASS since #891, which spreads to corners as well as sides), and `Terrain.Kind.DIRT` as the non-flammable ground. Rows below tagged **[BUILT]** where the shipped form differs, the note says how.*
 
 ---
 
@@ -105,11 +105,11 @@ Deterministic only. `S` setup · `P` payoff/control · `i` instant · `e` EoT �
 
 | State | Role | Does (deterministic) |
 |---|---|---|
-| ★ WET | S,i | **[BUILT — sources 2026-09-10, #884]** +SHOCK / −FIRE damage, and it CONDUCTS. Sourced by a WATER hit *and* by water itself: wading through it or being thrown into it (`RulesService.wets_in`; shallow and deep alike). ⚗ −1 move unbuilt |
+| ★ WET | S,i | **[BUILT — sources 2026-09-10, #884]** +SHOCK / −FIRE damage, and it CONDUCTS. Sourced by a WATER hit *and* by water itself: wading through it or being thrown into it (`RulesService.wets_in`; shallow and deep alike). **Never beside CHILLED, which wins in both orders ([#1092](https://github.com/Phaazoid/Godoiosis/issues/1092))** — see the CHILLED row. ⚗ −1 move unbuilt |
 | ~~★ CONDUCTIVE~~ | — | **FOLDED INTO WET, NOT BUILT ([#884](https://github.com/Phaazoid/Godoiosis/issues/884), 2026-09-10).** The conductor set is *a water tile (unless FROZEN) or a WET unit*, so a second state with its own source to author would be a duplicate seam for a fact WET already carries (Law #4). It comes back only if something must conduct while dry — FERROUS armour is the candidate, and it would join `Conduction.conducts` as a clause rather than as a state |
 | ★ OILED | S,e | FIRE → big bonus + BURNING; ⚗ knockback travels +1 |
 | ★ BURNING | P,e🔗 | loses fixed HP each activation; spreads to flammable; doused by WATER/ICE |
-| ★ CHILLED | P,i | **[BUILT 2026-08-12]** shipped as **−1 DEX for the victim's next activation** (a paired `StatEffect` is the clock; ice on a WET target doubles it — see the ICE table). The −move-and-2nd-cold-hit→FROZEN escalation stays on the bench: unit-side FROZEN isn't built |
+| ★ CHILLED | P,i | **[BUILT 2026-08-12]** shipped as **−1 DEX for the victim's next activation** (a paired `StatEffect` is the clock; ice on a WET target doubles it — see the ICE table). The −move-and-2nd-cold-hit→FROZEN escalation stays on the bench: unit-side FROZEN isn't built. **EXCLUDES WET, and wins in both orders ([#1092](https://github.com/Phaazoid/Godoiosis/issues/1092), dev 2026-09-22):** a Chilled unit is not wetted by a WATER hit, a ford, a shove into water or a melt's sinking, and CHILLED arriving on a Wet unit strips the WET whether or not a reaction consumes it. One declared rule, `Elemental.OVERRIDES`, asked wherever a unit gains a state — the reaction fold judges it on what the hit LEAVES, so WATER+FIRE on a Chilled unit (Temperature Shock ending the chill) still wets it. Shock needs no special case: live water under a Chilled unit still carries the current to it, while on dry ground it relays nothing and Electrocuted! (which needs WET) cannot fire. Pre-rule saves holding both load as-is |
 | ★ FROZEN | P,i | can't move **or counter** next activation; +EARTH/SOUND (shatter); FIRE → WET. *Gate behind CHILLED→FROZEN*. **Its look is pre-ruled (dev, 2026-09-23): a block of ice AROUND the unit** — Chilled already wears the frost sheen (#358), so encasement is what reads as the next step |
 | ★ SHOCKED | S/P,i | +next SHOCK; relays chains while adjacent |
 | ★ AIRBORNE | P,i | launched — can't counter, +EARTH (slam); AIR/EARTH **reposition** it. *Also from the kinetic mace (weapon-applied)* |
@@ -152,7 +152,7 @@ Grouped by incoming element. Reactions **stack** (E8): one hit can fire several.
 | BURNING | Douse | −dmg, BURNING → WET |
 | ⚗ OILED | Slick Spread | spread OILED to adjacent (water carries oil) 🔗 |
 | SHOCKED | Conduct | +dmg, arc to adjacent (live water) |
-| *(applies WET / CONDUCTIVE)* | | |
+| *(applies WET / CONDUCTIVE)* | | never to a CHILLED unit ([#1092](https://github.com/Phaazoid/Godoiosis/issues/1092)) |
 
 ### SHOCK
 | × state | reaction | effect |

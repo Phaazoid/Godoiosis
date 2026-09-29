@@ -22,7 +22,7 @@ var resolved: ResolvedOutcome = null
 
 
 # `situation` is the unit as the pass has it at `moment`. `wets` is RulesService.wets_in on the ground
-# the deposits leave, asked by the caller because only it holds that board.
+# the deposits leave, less #1092's Chilled exclusion -- asked by the caller, which holds that board.
 static func make(unit: Unit, situation: LethalityRules.Situation, at: Vector2i, melted_by: AttackAction,
 		when: Moment, wets: bool) -> SinkAction:
 	var sink := SinkAction.new()
