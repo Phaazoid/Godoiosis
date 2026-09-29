@@ -108,9 +108,9 @@ static var HOLD_ATTACK := 0.25     # a hit that just does damage -- the floor th
 static var HOLD_DOWN := 0.9        # a unit goes down, is killed, maimed, or removed from the board
 static var HOLD_CRISIS := 0.8      # someone stands up surged instead of falling
 static var HOLD_IRON_WILL := 0.45  # the cap BIT: that should have killed them and did not
-static var HOLD_KNOCKBACK := 0.75   # the hit shoved its target
+static var HOLD_KNOCKBACK := 0.7   # the hit shoved its target
 static var HOLD_TURNOVER := 0.8    # the act break: the defending line raises weapons
-static var HOLD_HEAL := 0.8       # HP came back -- the quiet beat this table had no row for
+static var HOLD_HEAL := 0.75       # HP came back -- the quiet beat this table had no row for
 
 # The side-channel tail (dev, 2026-08-26: "the side channel actions are going to need emphasis as
 # well"). PER VERB rather than one shared number, because a rescue and a reload are not the same
@@ -293,12 +293,12 @@ static var PLUMMET_HOLD := 0.9
 # tether snaps, then the unit falls"): how long a body shoved over a hole hangs there before it drops.
 # Counted from its ARRIVAL, not the blow, and only while a tether it broke is holding it -- the tether
 # snaps as the hang ends. A unit with no tether falls at once, as it always did.
-static var VOID_HANG := 0.6
+static var VOID_HANG := 0.5
 # ...and the beat AFTER the snap (#1171, dev: the fall and the camera went "before snapping animation
 # from the tethers has a chance to play and be seen"): how long the body stays up once its tether has
 # snapped, before it drops. Its own knob so the shiver and this gap tune apart -- the hang alone moved
 # both. Not tied to the break's own length on purpose, which would couple them again one knob over.
-static var VOID_SNAP_HOLD := 0.7
+static var VOID_SNAP_HOLD := 1.0
 # How far ABOVE the ground the units stand on the tear-out's shot sits, in cells (dev, 2026-08-29:
 # "the units need to be at the center"). Aiming at their feet is what the board's own recentre does
 # and it leaves a sprite sitting high in frame; this is the half-body lift that centres them, and it
