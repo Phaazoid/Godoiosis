@@ -749,8 +749,9 @@ into one volley — played on screen as three unrelated lunges.
 **`AttackAction.impact` is that channel, and `OrderExecutor.volley_struck` re-publishes it.** Three
 things about its shape are the reusable part:
 
-- **It fires at the PAYLOAD moment**, after the lunge, not at the top of `execute()` — a bolt has to
-  arrive when the blow does, and a lunge is a wind-up.
+- **It fires at the PAYLOAD moment**, not at the top of `execute()` — a bolt has to arrive when the
+  blow does, and a lunge is a wind-up. Since [#480](https://github.com/Phaazoid/Godoiosis/issues/480)
+  that moment is the lunge's PEAK: `play_attack_lunge` returns there and its return leg plays on.
 - **It is ABOVE the target block**, so a cell attack (#47, target null) publishes too. Every shock
   rune touches the MAP, so a shock aimed at open water is a legal order that hits nobody and lights
   a whole river; an emit guarded on having a victim would go silent exactly when there is most to

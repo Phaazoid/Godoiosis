@@ -373,9 +373,12 @@ func _puff_landings(cells: Array[Vector2i]) -> void:
 				StagingDust.burst_key(cell, BoardSpace.staging_version))
 
 
-# A shock landed (#887). The effect owns everything about what a bolt looks like; this owns the two
-# facts only the host has -- where a cell IS right now, and the shot's trajectory in world space.
+# A blow landed. A shock's (#887): the effect owns everything about what a bolt looks like; this owns
+# the two facts only the host has -- where a cell IS right now, and the shot's trajectory in world space.
 func _on_volley_struck(attack: AttackAction) -> void:
+	# Any blow's (#480): a shove's fall keeps its cubes standing until the body lands. Above the arc's
+	# early return, so every blow is asked, shock or not.
+	_unit_mirror.hold_falls(attack)
 	if _arc == null or not ArcLightning.draws(attack):
 		return
 	_arc.strike(attack, _shot_arc(attack))

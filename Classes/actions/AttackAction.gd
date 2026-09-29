@@ -93,8 +93,8 @@ var preview_sprites: Array[Node2D] = []
 # that draws the attack itself needs the attack, and a cell-targeted shot into empty water has no
 # HP anywhere to poll.
 #
-# EMITTED FROM THE PAYLOAD MOMENT, after the lunge rather than at the top of execute(): the bolt has
-# to arrive when the blow does, and a lunge is a wind-up. Lead volley member only -- one blast is
+# EMITTED FROM THE PAYLOAD MOMENT, the lunge's PEAK (#480) rather than the top of execute(): the bolt
+# has to arrive when the blow does, and a lunge is a wind-up. Lead volley member only -- one blast is
 # one moment however many it hits, the same gate the readiness, vial and watch spends below use.
 #
 # OrderExecutor is the only subscriber (it re-publishes as volley_struck); nothing here knows what
@@ -158,14 +158,16 @@ func execute():
 	var direction = GridUtils.cardinal_direction_between(actor.get_projected_destination(), target_cell)
 
 	# A payload's thrower does not lunge at it (#1058): the throw was the lunge of the hit that
-	# dropped it, and this one may be going off across the board.
+	# dropped it, and this one may be going off across the board. The lunge returns at its PEAK
+	# (#480), so the blow below lands mid-swing while the return leg plays on.
 	if not is_secondary_hit and dropped_by == null:
 		await actor.visuals.play_attack_lunge(direction)
 
 	# The block moment (#414), slice one: the bodyguard lunges toward the unit it is covering, the
 	# same lunge an attack plays. The loud jump-in-front the design wants is ANIMATION and waits on
 	# the battle zoom (#603, on #629's SpriteAnimator) -- no bespoke machinery ahead of it. Secondary volley members
-	# skip it for the reason they skip the attacker's lunge: one gesture per blast.
+	# skip it for the reason they skip the attacker's lunge: one gesture per blast. The payload lands at
+	# THIS lunge's peak when there is one (#480).
 	if blocked_for != null and not is_secondary_hit and is_instance_valid(blocked_for):
 		var block_dir = GridUtils.cardinal_direction_between(target.get_projected_destination(), blocked_for.get_projected_destination())
 		await target.visuals.play_attack_lunge(block_dir)
