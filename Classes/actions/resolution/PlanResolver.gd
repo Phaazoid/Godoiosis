@@ -776,11 +776,7 @@ static func _resolve_one(action: AttackAction, plan: ResolvedPlan, reactions: Ar
 		outcome.states_added.append(Elemental.State.WET)
 
 	# --- thread the hypothetical forward (R4) ---
-	for s in outcome.states_removed:
-		target_hypo.states.erase(s)
-	for s in outcome.states_added:
-		if not target_hypo.states.has(s):
-			target_hypo.states.append(s)
+	target_hypo.states = _states_after(target_hypo.states, outcome.states_removed, outcome.states_added)
 
 	# Will/death stage (R7): pick the rung from the now-final damage (fall included) so the queue
 	# previews it (Law #2). Reads pre-hit HP + Will, so it runs BEFORE the subtraction below. Same
@@ -808,7 +804,8 @@ static func _resolve_one(action: AttackAction, plan: ResolvedPlan, reactions: Ar
 
 	action.resolved = outcome
 
-# The states a unit holds once a hit's removes and then its adds have landed (#1092's judge).
+# The states a unit holds once a hit's removes and then its adds have landed: the thread (R4) and
+# #1092's judge both read it.
 static func _states_after(held: Array[Elemental.State], removed: Array[Elemental.State],
 		added: Array[Elemental.State]) -> Array[Elemental.State]:
 	var after: Array[Elemental.State] = []

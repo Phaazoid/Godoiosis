@@ -80,3 +80,44 @@ func test_the_panel_reflects_a_state_set_elsewhere() -> void:
 	var box := _checkbox("Wet")
 	assert_object(box).is_not_null()
 	assert_bool(box.button_pressed).is_true()
+
+# Exclusive states (#1092): the door can refuse a tick or strip another state, and every box must
+# read what the unit holds after the write. The pair is read off Elemental.OVERRIDES, not restated.
+func _exclusive_pair() -> Array[Elemental.State]:
+	assert_bool(Elemental.OVERRIDES.is_empty()).override_failure_message("no exclusive pair declared").is_false()
+	var winner: Elemental.State = Elemental.OVERRIDES.keys()[0]
+	var pair: Array[Elemental.State] = [winner, Elemental.OVERRIDES[winner]]
+	return pair
+
+func _label_of(state: Elemental.State) -> String:
+	return (Elemental.State.find_key(state) as String).capitalize()
+
+func test_a_refused_tick_leaves_its_box_unticked() -> void:
+	var pair := _exclusive_pair()
+	var unit := _spawn(Vector2i(1, 0))
+	unit.add_element_state(pair[0])
+	_editor.edit_unit(unit)
+	var box := _checkbox(_label_of(pair[1]))
+	assert_object(box).is_not_null()
+
+	box.button_pressed = true
+
+	assert_bool(unit.element_states.has(pair[1])).is_false()
+	assert_bool(box.button_pressed).is_false()
+
+func test_a_tick_that_strips_another_state_clears_that_box() -> void:
+	var pair := _exclusive_pair()
+	var unit := _spawn(Vector2i(1, 0))
+	unit.add_element_state(pair[1])
+	_editor.edit_unit(unit)
+	var winner_box := _checkbox(_label_of(pair[0]))
+	var loser_box := _checkbox(_label_of(pair[1]))
+	assert_object(winner_box).is_not_null()
+	assert_object(loser_box).is_not_null()
+	assert_bool(loser_box.button_pressed).is_true()
+
+	winner_box.button_pressed = true
+
+	assert_bool(unit.element_states.has(pair[1])).is_false()
+	assert_bool(loser_box.button_pressed).is_false()
+	assert_bool(winner_box.button_pressed).is_true()

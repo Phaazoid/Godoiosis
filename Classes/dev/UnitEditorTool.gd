@@ -724,14 +724,16 @@ func _stage_aura(element: Elemental.Element, value: int) -> void:
 # not the staged buffer above. Battle-scoped test setup (soak, then fire SHOCK); never saved here.
 func _add_element_state_section(into: VBoxContainer, unit: Unit) -> void:
 	DevWidgets.add_label(into, "Element States (live)")
+	var boxes: Dictionary[Elemental.State, CheckBox] = {}
 	for i in Elemental.State.size():
 		var state: Elemental.State = Elemental.State.values()[i]
 		if state == Elemental.State.NONE:
 			continue
 		var state_name: String = Elemental.State.keys()[i]
 		DevWidgets.add_checkbox(into, state_name.capitalize(), unit.element_states.has(state),
-			func(pressed: bool): _on_element_state_toggled(unit, state, pressed),
+			func(pressed: bool): _on_element_state_toggled(unit, state, pressed, boxes),
 			"Applies to the live unit immediately -- no Save needed; a reaction can still consume it")
+		boxes[state] = into.get_child(into.get_child_count() - 1) as CheckBox
 
 # A LIVE write skips the staged Save entirely, so it marks here (#259 rework round 2 -- the edit
 # sweep): the header lights, and the unit diverges (dev_edited) when the write is unit state a
@@ -742,13 +744,18 @@ func _mark_live_edit(unit: Unit, diverges: bool) -> void:
 	if _header != null:
 		_header.mark_modified()
 
-func _on_element_state_toggled(unit: Unit, state: Elemental.State, pressed: bool) -> void:
+# The door may refuse a tick or strip another state (#1092), so every box re-reads the unit.
+# No repaint: this runs inside the emitting box's own signal.
+func _on_element_state_toggled(unit: Unit, state: Elemental.State, pressed: bool,
+		boxes: Dictionary[Elemental.State, CheckBox]) -> void:
 	if not is_instance_valid(unit):
 		return
 	if pressed:
 		unit.add_element_state(state)
 	else:
 		unit.remove_element_state(state)
+	for s: Elemental.State in boxes:
+		boxes[s].set_pressed_no_signal(unit.element_states.has(s))
 	_mark_live_edit(unit, true)
 
 func _delete_unit(unit: Unit):
