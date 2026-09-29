@@ -56,7 +56,7 @@
 >
 > **The dial's floor is ONE** (dev, 2026-09-12). An absent clock is legal `.tres` and means *burns forever* — but `tests/terrain/test_fire_clock.gd` refuses one on a shipped fuel, because a grass field that never goes out would ship silently. Forever is already spelled, and better: **ground that is not fuel never runs out**, which is what Prolog's braziers on flagstone have always been. So the TICK is how you say forever, and the dial cannot author a file CI reds.
 
-**Canon checked through #902 (2026-09-12); #1135's map-only rule folded in 2026-09-28; #922's melt-sinking folded in 2026-09-27; the burn-rule surface folded in 2026-09-12; the #895 firebreak measurement and fireproofing #892 folded in 2026-09-11; shallow water re-costed 2026-09-10.**
+**Canon checked through #902 (2026-09-12); #1092's Chilled-beats-Wet rule folded in 2026-09-29; #1135's map-only rule folded in 2026-09-28; #922's melt-sinking folded in 2026-09-27; the burn-rule surface folded in 2026-09-12; the #895 firebreak measurement and fireproofing #892 folded in 2026-09-11; shallow water re-costed 2026-09-10.**
 
 ## The tile model (implemented — [LOCKED shape])
 
@@ -160,7 +160,7 @@ shore.
 
 **The floor can leave instead ([#922](https://github.com/Phaazoid/Godoiosis/issues/922), 2026-09-27).**
 Ice melting under a standing unit is the same event from the other side, so it reaches the same rung:
-the water takes everything the unit has left, it comes up WET, and a rescue from the bank is the
+the water takes everything the unit has left, it comes up WET (unless CHILLED, #1092), and a rescue from the bank is the
 answer. That is what makes the Toll Road move (*"freeze it into an ice bridge, cross, then melt it
 behind you"*, `level-concepts.md`) drown rather than merely strand. `PlanResolver.settle_sinks` is
 the one rule and it names no state: *the ground this pass's deposits leave drowns you, and the live
@@ -214,7 +214,9 @@ bottom is what separates shallow water from ICE, which is what the first pass at
   **`RulesService.wets_in` — WATER kind, not FROZEN, no Waterwalk** — asked at the two places a unit
   comes to occupy a water cell, `PlanResolver.resolve_move`'s per-cell walk and a shove's LANDING.
   **Shallow and deep soak identically**, because depth is walkability and being wet does not read it,
-  so a drowning body comes up wet. Kept as a correction rather than deleted: the mistake was
+  so a drowning body comes up wet -- unless it is CHILLED, which beats WET since
+  [#1092](https://github.com/Phaazoid/Godoiosis/issues/1092) (each caller asks `Elemental.is_blocked`
+  against the pass's own states; `wets_in` reads the live unit). Kept as a correction rather than deleted: the mistake was
   *asserting a code fact from memory in a doc*, and the record of that is worth more than the tidy
   version. Standing rule it leaves behind: **grep before writing "nothing references X" into canon.**
 - **Weight ties in** — *"maybe the weight they carry affects whether they can swim"* — the same

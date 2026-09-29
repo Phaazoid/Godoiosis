@@ -514,17 +514,29 @@ func _wet(cell: Vector2i) -> Unit:
 	return unit
 
 
+# A unit holding TWO states. The door refuses this pair since #1092 (Chilled beats Wet), so the second
+# is written past it -- the shape a pre-rule save restores, and the only two states there are.
+func _chilled(cell: Vector2i) -> Unit:
+	var unit := _spawn(PLAYER, cell)
+	unit.add_element_state(Elemental.State.CHILLED)
+	return unit
+
+
+func _also_wet(unit: Unit) -> void:
+	unit.element_states.append(Elemental.State.WET)
+
+
 func test_a_hovered_units_row_shows_one_icon_per_held_state() -> void:
-	var unit := _wet(Vector2i(2, 2))
+	# CHILLED reaches the row through StateIcons like any other state — it holds a placeholder
+	# texture rather than its own art, and the row cannot tell the difference.
+	var unit := _chilled(Vector2i(2, 2))
 	_point_at(Vector2i(2, 2))
 	await _settle()
 	var bar: UnitHealthBar = _unit_mirror.bar_for(unit)
 	assert_bool(bar.visible).is_true()
 	assert_int(bar.state_icon_count()).is_equal(1)
 
-	# CHILLED reaches the row through StateIcons like any other state — it holds a placeholder
-	# texture rather than its own art, and the row cannot tell the difference.
-	unit.add_element_state(Elemental.State.CHILLED)
+	_also_wet(unit)
 	await _settle()
 	assert_int(bar.state_icon_count()).is_equal(2)
 
@@ -569,13 +581,13 @@ func test_the_row_sits_clear_above_the_bar_and_flush_with_its_left_edge() -> voi
 
 
 func test_the_row_grows_rightward_without_moving_the_first_icon() -> void:
-	var unit := _wet(Vector2i(2, 2))
+	var unit := _chilled(Vector2i(2, 2))
 	_point_at(Vector2i(2, 2))
 	await _settle()
 	var bar: UnitHealthBar = _unit_mirror.bar_for(unit)
 	var alone := bar.state_icon_offset(0).x
 
-	unit.add_element_state(Elemental.State.CHILLED)
+	_also_wet(unit)
 	await _settle()
 
 	# LEFT-aligned, not centred: a second state must push rightward off a fixed left edge. A row
@@ -588,8 +600,8 @@ func test_the_row_grows_rightward_without_moving_the_first_icon() -> void:
 
 
 func test_a_state_leaving_takes_its_icon_away() -> void:
-	var unit := _wet(Vector2i(2, 2))
-	unit.add_element_state(Elemental.State.CHILLED)
+	var unit := _chilled(Vector2i(2, 2))
+	_also_wet(unit)
 	_point_at(Vector2i(2, 2))
 	await _settle()
 	var bar: UnitHealthBar = _unit_mirror.bar_for(unit)

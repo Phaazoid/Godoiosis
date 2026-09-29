@@ -80,3 +80,22 @@ static func paired_stat_mods(s: State) -> Dictionary[Stats.Stat, int]:
 # Provenance tag for the paired StatEffect ("Chilled") — what Unit.remove_stat_effects_from keys on.
 static func state_effect_source(s: State) -> String:
 	return state_display_name(s)
+
+# --- Exclusive states (#1092) -------------------------------------------------------------------
+# Winner -> loser: a unit never holds both, and the winner wins in both orders (dev ruling). Every
+# place a unit gains a state asks the two functions below; none restates the pair.
+const OVERRIDES: Dictionary[State, State] = { State.CHILLED: State.WET }
+
+# Does a state in `held` keep `s` off the unit?
+static func is_blocked(held: Array[State], s: State) -> bool:
+	for h in held:
+		if OVERRIDES.has(h) and OVERRIDES[h] == s:
+			return true
+	return false
+
+# What `s` strips from a unit when it lands.
+static func overridden_by(s: State) -> Array[State]:
+	var beaten: Array[State] = []
+	if OVERRIDES.has(s):
+		beaten.append(OVERRIDES[s])
+	return beaten

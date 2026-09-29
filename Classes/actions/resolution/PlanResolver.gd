@@ -296,9 +296,11 @@ static func resolve_move(action: MoveAction, plan: ResolvedPlan, hypo: Dictionar
 #
 # Idempotent, and that is the row's rule rather than an optimisation: a four-cell ford is one
 # soaking, and a mover who was ALREADY wet grows no chip at all, because the row says what CHANGED.
+# A Chilled mover is never soaked (#1092).
 static func _soak(mover: Unit, hypo: Dictionary, action: MoveAction) -> void:
 	var mover_hypo := _hypo_for(mover, hypo)
-	if mover_hypo.states.has(Elemental.State.WET):
+	if mover_hypo.states.has(Elemental.State.WET) \
+			or Elemental.is_blocked(mover_hypo.states, Elemental.State.WET):
 		return
 	mover_hypo.states.append(Elemental.State.WET)
 	if action.resolved == null:
@@ -685,9 +687,20 @@ static func _resolve_one(action: AttackAction, plan: ResolvedPlan, reactions: Ar
 	for s in adds:
 		if not removes.has(s):
 			net_added.append(s)
-	outcome.states_added = net_added
-	outcome.states_removed = removes
+	# Exclusive states (#1092), judged on what the hit LEAVES so the fold stays order-free (E8): an
+	# add the result would block is dropped, and an admitted add strips what it overrides.
+	var leaves := _states_after(target_hypo.states, removes, net_added)
+	var admitted: Array[Elemental.State] = []
 	for s in net_added:
+		if Elemental.is_blocked(leaves, s):
+			continue
+		admitted.append(s)
+		for beaten in Elemental.overridden_by(s):
+			if target_hypo.states.has(beaten) and not removes.has(beaten):
+				removes.append(beaten)
+	outcome.states_added = admitted
+	outcome.states_removed = removes
+	for s in admitted:
 		if add_turns.get(s, 0) > 0:
 			outcome.state_turns[s] = add_turns[s]
 
@@ -754,17 +767,16 @@ static func _resolve_one(action: AttackAction, plan: ResolvedPlan, reactions: Ar
 	# the flight is airborne and passes over water the way it passes over a void.
 	#
 	# Deep water included, so a drowning body comes up wet and goes on conducting for whatever shock
-	# touches the lake it went under in. That is the intended reading, not an oversight.
+	# touches the lake it went under in. That is the intended reading, not an oversight. A body the
+	# hit leaves Chilled stays dry (#1092).
 	if landing != null and board != null and RulesService.wets_in(landing.cell, target, board) \
-			and not outcome.states_added.has(Elemental.State.WET):
+			and not outcome.states_added.has(Elemental.State.WET) \
+			and not Elemental.is_blocked(_states_after(target_hypo.states, outcome.states_removed,
+				outcome.states_added), Elemental.State.WET):
 		outcome.states_added.append(Elemental.State.WET)
 
 	# --- thread the hypothetical forward (R4) ---
-	for s in outcome.states_removed:
-		target_hypo.states.erase(s)
-	for s in outcome.states_added:
-		if not target_hypo.states.has(s):
-			target_hypo.states.append(s)
+	target_hypo.states = _states_after(target_hypo.states, outcome.states_removed, outcome.states_added)
 
 	# Will/death stage (R7): pick the rung from the now-final damage (fall included) so the queue
 	# previews it (Law #2). Reads pre-hit HP + Will, so it runs BEFORE the subtraction below. Same
@@ -791,6 +803,19 @@ static func _resolve_one(action: AttackAction, plan: ResolvedPlan, reactions: Ar
 		target_hypo.position = landing.cell
 
 	action.resolved = outcome
+
+# The states a unit holds once a hit's removes and then its adds have landed: the thread (R4) and
+# #1092's judge both read it.
+static func _states_after(held: Array[Elemental.State], removed: Array[Elemental.State],
+		added: Array[Elemental.State]) -> Array[Elemental.State]:
+	var after: Array[Elemental.State] = []
+	for s in held:
+		if not removed.has(s):
+			after.append(s)
+	for s in added:
+		if not after.has(s):
+			after.append(s)
+	return after
 
 # Thread a named rung onto the hypo: the lifecycle it leaves, what it SPENDS, the HP it leaves. The
 # lifecycle a rung leaves behind is ONE map (#313) -- a preview holding only an outcome reads the same
@@ -834,8 +859,10 @@ static func settle_sinks(plan: ResolvedPlan, hypo: Dictionary, board: BoardConte
 		if not RulesService.drowns_in(cell, unit, landed) or RulesService.drowns_in(cell, unit, board):
 			continue
 		var h := _hypo_for(unit, hypo)
+		var wets := RulesService.wets_in(cell, unit, landed) \
+				and not Elemental.is_blocked(h.states, Elemental.State.WET)
 		var sink := SinkAction.make(unit, h, cell, _floor_taken_by(cell, unit, board, plan.cell_effects),
-				moment, RulesService.wets_in(cell, unit, landed))
+				moment, wets)
 		_land_rung(h, sink.resolved.lethality, sink.resolved.damage)
 		for s in sink.resolved.states_added:
 			if not h.states.has(s):
