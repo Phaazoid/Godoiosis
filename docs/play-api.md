@@ -67,7 +67,7 @@ view**, not raw JSON — see *State representation*. Command vocabulary:
 | `cancel(unit_id)` / `wait(unit_id)` | updated plan |
 | `preview()` | `resolve_plan(active_squad)` outcomes **without applying** (damage, state deltas, deaths, counters) |
 | `execute()` | apply the resolved plan headlessly; return the event log — plus a `mission` key the pass that ends the mission (#96) |
-| `end_turn()` | new turn/faction; refuses once the mission is over |
+| `end_turn()` | new turn/faction, through the whole turn boundary the game runs (the burn, the round's tile tick, the turn-start ticks — see *The turn boundary* below); refuses once the mission is over |
 | `mission_outcome()` / `mission_tag()` | won / lost / ongoing — the same `MissionRules` call the game makes (#96) |
 
 `preview()` is the playtesting superpower: deterministic look-ahead at exact damage/deaths before I
@@ -182,6 +182,17 @@ Turn -> PLAYER
 Before this, `end_turn` advanced the faction and nothing else: the enemy stood still for the whole
 match. Playtest reports read like real engagements because the counters in them are derived from the
 driver's *own* attacks during resolution, never an enemy taking a turn.
+
+**The turn boundary (#898).** `endturn` runs what the game runs between two turns, through the same
+`TurnBoundary` statics `game.gd` calls, in the game's order: the side that just played burns if it
+is standing in fire (your own units first in the log, each AI faction's after its turn); when the
+round completes the tile clocks tick, so fires spread, burn out and scorch; then the incoming
+faction's turn-start ticks run (downed clocks, stat effects, Crisis surge, weapon rev, Guard and
+watch lapse) and the cohesion sweep ejects anyone out of contact. Until #898 none of it ran
+headlessly: a fire never went out or hurt anybody, a downed body never bled out, a Guard never
+lapsed. A mission the boundary ends (a burn, an expiring downed clock) stops the turn there, and the
+result then carries a `mission` key and a `MISSION` line, as `execute` does. The log is still
+returned as `ai_events`, though it now carries the burns as well.
 
 **Targeting.** Commands use **game coordinates** (no rebasing — one coordinate system kills a whole bug
 class). The board carries x / y rulers; exact targets are confirmed by the affordance overlay plus a
