@@ -346,6 +346,41 @@ func test_run_to_next_divergence_stops_just_past_the_divergent_record() -> void:
 	assert_bool(driver.is_finished()).is_true()
 
 
+# THE LIST STOPS AT LIST_CAP AND THE STOP MUST NOT, or a heavily diverged run -- the one the button is
+# reached for -- turns it into Play. The list is filled by hand: this mission cannot diverge forty
+# times before its doctored pass.
+func test_run_to_next_divergence_still_stops_once_the_list_is_full() -> void:
+	var run_id := await _record_a_mission()
+	var run := ReplayRun.load_run(run_id)
+	var doctored := _doctor_first_hit(run)
+	assert_int(doctored).override_failure_message("fixture: the run recorded no hit to doctor").is_greater_equal(0)
+	assert_int(doctored + 1).override_failure_message(
+		"fixture: the doctored pass is the last event, so stopping there reads the same as running out"
+		).is_less(run.events.size())
+	assert_bool(driver.seed(run)).is_true()
+	for i in ReplayDriver.LIST_CAP:
+		driver.divergences.append("filler %d" % [i])
+
+	await driver.run_to_next_divergence()
+	assert_int(driver.divergences.size()).override_failure_message(
+		"fixture: the doctored line was listed, so the list was never full").is_equal(ReplayDriver.LIST_CAP)
+	assert_int(int(driver.report()["at"])).override_failure_message(
+		"a full list hid the divergence: it did not stop just past the doctored pass (%d)" % [doctored]
+		).is_equal(doctored + 1)
+
+
+# THE PAGE'S STEP: one event under the play guard, and the guard let go once it lands.
+func test_step_once_lands_one_event_and_lets_go_of_the_play_guard() -> void:
+	var run_id := await _record_a_mission()
+	var run := ReplayRun.load_run(run_id)
+	assert_int(run.events.size()).override_failure_message("fixture: a one-event run cannot tell one step from all").is_greater(1)
+	assert_bool(driver.seed(run)).is_true()
+
+	await driver.step_once()
+	assert_int(int(driver.report()["at"])).is_equal(1)
+	assert_bool(driver.is_playing()).is_false()
+
+
 # THE COUNT IS KNOWN ONLY AT THE END, so it is the one check the per-step diff cannot make on the way.
 # One extra recorded outcome past the last one the replay produces: every record that exists on both
 # sides matches, and only the count can say anything.
@@ -362,6 +397,24 @@ func test_a_replay_one_record_short_of_the_run_says_so_at_the_end() -> void:
 	await driver.play()
 	assert_int(driver.divergences.size()).override_failure_message(
 		"expected the count line and nothing else: %s" % [str(driver.divergences)]).is_equal(1)
+
+
+# THE FINISH IS ALWAYS DIFFED, even when its seal writes nothing -- here, a recorded ending this build
+# does not know. The skip gate would otherwise pass it over and the page would read Clean.
+func test_a_finish_whose_seal_writes_nothing_is_still_compared() -> void:
+	var run_id := await _record_a_mission()
+	var run := ReplayRun.load_run(run_id)
+	var end := run.first("mission_end")
+	assert_bool(end.is_empty()).override_failure_message("fixture: the run was never sealed").is_false()
+	end["outcome"] = "NO_SUCH_ENDING"
+	assert_bool(driver.seed(run)).is_true()
+
+	await driver.play()
+	assert_str(" | ".join(driver.notes)).override_failure_message(
+		"fixture: the seal did not refuse the ending, so it wrote a record: %s" % [str(driver.notes)]
+		).contains("NO_SUCH_ENDING")
+	assert_int(driver.divergences.size()).override_failure_message(
+		"the recorded mission_end was never compared -- the finish was skipped").is_greater(0)
 
 
 # ==============================================================================

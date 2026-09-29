@@ -242,23 +242,25 @@ func _on_load() -> void:
 
 
 func _on_step() -> void:
-	await _driver.step()
+	_set_running(true, true)
+	await _driver.step_once()
 	_render()
 
 
-# One button, two verbs: Pause while anything is playing -- a run to the next divergence included.
+# One button, two verbs: Pause while anything is playing -- a single Step or a run to the next
+# divergence included.
 func _on_play() -> void:
 	if _driver.is_playing():
 		_driver.pause()
 		_play_button.disabled = true   # until the event in flight lands
 		return
-	_show_playing()
+	_set_running(true, true)
 	await _driver.play()
 	_render()
 
 
 func _on_next_divergence() -> void:
-	_show_playing()
+	_set_running(true, true)
 	await _driver.run_to_next_divergence()
 	_render()
 
@@ -268,15 +270,9 @@ func _on_reset_notice() -> void:
 	_status.text = "The notice is due again on the next launch."
 
 
-# _render runs only when a step lands, so without this a long first pass would still read Play.
-func _show_playing() -> void:
-	_play_button.text = PAUSE
-	_step_button.disabled = true
-	_next_divergence_button.disabled = true
-
-
-func _set_running(on: bool) -> void:
-	var playing := _driver.is_playing()
+# A transport button passes `playing` before its first step lands: _render runs only when one does,
+# so a long first pass would otherwise still read Play.
+func _set_running(on: bool, playing := _driver.is_playing()) -> void:
 	_step_button.disabled = not on or playing
 	_next_divergence_button.disabled = not on or playing
 	_play_button.disabled = not on
