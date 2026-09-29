@@ -2,7 +2,7 @@
 
 **Status: ALL FOUR SLICES BUILT 2026-07-28 ([#96](https://github.com/Phaazoid/Godoiosis/issues/96)).** Filed 2026-07-27, when the project acquired a win condition for the first time. Before this, Iosis had ten interlocking systems and no way to finish a battle — which meant a design question could be answered *"is this coherent?"* but never *"does this improve play?"*
 
-**Canon checked through #1152 (2026-09-28).**
+**Canon checked through #1160 (2026-09-29).**
 
 ## What a mission is
 
@@ -639,7 +639,7 @@ Two questions answer this now, and keeping them apart is the point:
 The [#87](https://github.com/Phaazoid/Godoiosis/issues/87) snapshot got its player doors on 2026-08-11: **Save Game** / **Load Game** rows on the pause menu, and a **Load Game** row on the title screen (shown only when a slot is filled). Three fixed slots at `user://saves/slot_N.tres` — `user://` because `res://` is read-only once exported, and anything under `Scenarios/` becomes a selectable board via the folder scan and #9's suite (the `BugReporter` precedent, and the same pin shape guards it in `tests/flow/test_save_slots.gd`).
 
 - A slot is a `SaveGame` resource: the full `ScenarioData` snapshot (**`authored = false`** — the #177 reference mode records nothing for cast units, which is exactly wrong for resume) plus `mission_path`, `saved_at`, and `Build.version()`.
-- **Resume aims `last_loaded_path` at the ORIGIN mission**, so Restart and F2 return to the mission start and no dev tool can ever point Update at a slot.
+- **Resume aims `last_loaded_path` at the ORIGIN mission**, so Restart and F2 return to the mission start and no dev tool can ever point Update at a slot. The path is handed to `apply_scenario` rather than assigned after it returns, so it is settled before `board_loaded` fires ([#967](https://github.com/Phaazoid/Godoiosis/issues/967)) -- which makes Update LIVE against the origin mission's file after a resume, exactly as on any board loaded and then played (dev-accepted, 2026-09-29).
 - Save rides Restart's gate (missions only -- a sandbox save would have no origin), and since #739 it is REFUSED during the pre-mission phase as well: `capture_scenario` walks `units_root`, so the reserve is invisible to it and a save taken while placing would come back with the rest of the roster gone. The gate is in `save_to_slot` rather than on the pause-menu row; the row greys itself off the same question. Whole-campaign saving (mission-to-mission carryover) is deliberately out of scope here; it needs [#70](https://github.com/Phaazoid/Godoiosis/issues/70)'s mission boundary and is filed separately.
 - The queued action plan is still deliberately unsaved (#87's exclusion); the save screen says so to the player.
 - The UI is `SaveLoadScreen` (one card, SAVE/LOAD modes) + `ConfirmCard` (the player-facing, in-viewport twin of `DevWidgets.confirm_delete`) for overwrite and lost-progress confirms.
