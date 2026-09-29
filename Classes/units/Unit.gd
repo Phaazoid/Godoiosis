@@ -1162,6 +1162,7 @@ func revive():
 	lifecycle_state = LifecycleState.ACTIVE
 	downed_turns_remaining = -1
 	_show_downed_sprite(false)
+	downed_countdown_changed.emit(downed_turns_remaining)
 
 func next_rally_amount() -> int:
 	return RALLY_BASE - RALLY_FALLOFF * rally_count
