@@ -1,4 +1,4 @@
-# The 2D board camera: WASD-scrolled with grid snapping, clamped to the board,
+# The 2D board camera: WASD-scrolled with grid snapping, clamped to the board while it is the view,
 # with playback locks (set_playback_locked/follow) and the fixed-duration pan_to beat.
 # center_on_position glides via the _process lerp; snap_to_position is the instant
 # form (the 3D input bridge maps clicks through the live transform, #220).
@@ -15,13 +15,10 @@ var game   # the Game coordinator (Node2D); set by game._ready()
 
 @onready var camera: Camera2D = $Camera2D
 const TILE_SIZE := GridUtils.TILE_SIZE
-const CELL_WORLD := TILE_SIZE * 2   # 32px/cell — matches your existing min/max_world math
-# The FLAT view's own pan margin, and a DECLARED asymmetry with the 3D rig as of 2026-09-09: that
-# one stopped measuring its stray in cells and now derives it from a screenful at the zoom ceiling,
-# because a cell count is useless at a close zoom. This stays a cell count on purpose -- F4's flat
-# view is dev-only (DevTools.enabled()), so no player can meet this wall, and giving it the same
-# derivation would mean teaching a 2D camera about a 3D frustum for nobody's benefit. Filed as an
-# asymmetry on #292 rather than left to be found.
+# The FLAT view's own pan margin, and a DECLARED asymmetry with the 3D rig (#292): that one derives
+# its stray from a screenful at the zoom ceiling, this stays a cell count. The wall binds only while
+# this camera IS the view (F4's dev-only flat view, a bare Main.tscn); a 3D host's playback aim reads
+# it unclamped (#974), so no player meets it.
 const EDIT_MARGIN_CELLS := 8
 
 var map_width = 32
@@ -121,13 +118,13 @@ var _panning := false         # true while pan_to's tween owns global_position -
 var target_position: Vector2 = global_position
 
 var min_world := Vector2(
-	-map_width / 2.0 * CELL_WORLD,
-	-map_height / 2.0 * CELL_WORLD
+	-map_width / 2.0 * TILE_SIZE,
+	-map_height / 2.0 * TILE_SIZE
 )
 
 var max_world := Vector2(
-	map_width / 2.0 * CELL_WORLD,
-	map_height / 2.0 * CELL_WORLD
+	map_width / 2.0 * TILE_SIZE,
+	map_height / 2.0 * TILE_SIZE
 )
 
 # Called when the node enters the scene tree for the first time.
@@ -139,9 +136,9 @@ func center_on_position(world_pos: Vector2):
 	target_position = world_pos
 	clamp_target_position()
 
-# Instant, clamped reposition. The 3D input bridge (#220) maps a click's viewport
-# position through the LIVE canvas transform, so the camera must already be showing
-# the clicked cell when the synthetic event lands — a lerp target isn't enough.
+# Instant reposition, clamped only while this camera is the view. The 3D input bridge (#220)
+# maps a click's viewport position through the LIVE canvas transform, so the camera must already
+# be showing the clicked cell when the synthetic event lands — a lerp target isn't enough.
 func snap_to_position(world_pos: Vector2) -> void:
 	target_position = world_pos
 	clamp_target_position()
@@ -149,6 +146,9 @@ func snap_to_position(world_pos: Vector2) -> void:
 	camera.force_update_scroll()
 
 func clamp_target_position():
+	# Under a 3D host this camera only publishes where playback looks; the rig's pan_limit bounds that (#974).
+	if _input_delegated():
+		return
 	var viewport_size = get_viewport_rect().size
 	var visible_size = viewport_size / camera.zoom
 	var half_view = visible_size / 2
@@ -164,9 +164,9 @@ func _clamp_axis(value: float, lo: float, hi: float, half: float) -> float:
 
 func refresh_bounds(grid: TileMapLayer):
 	var used := grid.get_used_rect()
-	var margin := Vector2(EDIT_MARGIN_CELLS, EDIT_MARGIN_CELLS) * CELL_WORLD
-	min_world = Vector2(used.position) * CELL_WORLD - margin
-	max_world = Vector2(used.position + used.size) * CELL_WORLD + margin
+	var margin := Vector2(EDIT_MARGIN_CELLS, EDIT_MARGIN_CELLS) * TILE_SIZE
+	min_world = Vector2(used.position) * TILE_SIZE - margin
+	max_world = Vector2(used.position + used.size) * TILE_SIZE + margin
 	clamp_target_position()
 	
 func _process(delta: float):

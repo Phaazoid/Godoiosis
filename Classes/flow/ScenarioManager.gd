@@ -167,8 +167,8 @@ func capture_board() -> BoardSnapshot:
 
 # Two things a load does are deliberately NOT here, so that routing apply_scenario through this
 # could not move the load path:
-#   - CameraController.refresh_bounds, which a scenario load has never done. The dev brush does, at
-#     its own three sites, and undo joins them there.
+#   - CameraController.refresh_bounds. A load gets it from board_loaded (game.gd, #974); the dev
+#     brush does it at its own three sites, and undo joins them there.
 #   - the CAPTURED-zone redraw. MissionController.restore_progress runs one immediately after a
 #     load and is the last writer either way; the plain redraw here is what an undo needs, since
 #     nothing else follows it.

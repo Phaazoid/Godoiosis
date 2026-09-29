@@ -301,6 +301,7 @@ func _wire_signals() -> void:
 	squad_manager.squad_action_cancelled.connect(_on_unit_action_cancelled)
 	squad_manager.squad_action_queued.connect(_on_unit_action_queued)
 	scenario_manager.board_loaded.connect(drop_threat_field)   # a new board is a new field (#710)
+	scenario_manager.board_loaded.connect(camera_controller.refresh_bounds.bind(grid))   # ...and new pan bounds (#974)
 	squad_manager.squad_became_active.connect(_on_squad_became_active)
 	squad_manager.squad_became_empty.connect(_on_squad_has_no_actions)
 	squad_manager.active_squad_changed.connect(_on_active_squad_changed)   # End Turn hides mid-queue (#541)

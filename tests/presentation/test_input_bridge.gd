@@ -341,7 +341,7 @@ func test_pointing_snaps_the_hidden_camera_to_the_hovered_cell() -> void:
 	var unit := _pickable_player_unit()
 	var cam: CameraController = _game.camera_controller
 	var world: Vector2 = GridUtils.cell_world(_game.grid, unit.movement.cell)
-	# Derive the clamped truth through the same seam, then park the camera far away.
+	# Derive the expected position through the same seam, then park the camera far away.
 	cam.snap_to_position(world)
 	var expected: Vector2 = cam.global_position
 	cam.snap_to_position(Vector2(-100000.0, -100000.0))

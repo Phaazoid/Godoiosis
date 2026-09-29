@@ -5,9 +5,8 @@ class_name GridUtils
 # overlays, dev tools): Manhattan/blended ranges, cardinal facings, and the tileset's
 # terrain_type custom-data -> Terrain.Kind / icon lookups.
 
-# The tileset's tile size in pixels — the single definition (CameraController and UnitVisuals
-# each used to declare their own `TILE_SIZE = 16`). NB: a board CELL is two tiles wide; see
-# CameraController.CELL_WORLD.
+# The tileset's tile size in pixels, and so a board cell's pitch: one tile per cell (#974) — the
+# single definition (CameraController and UnitVisuals each used to declare their own `TILE_SIZE = 16`).
 const TILE_SIZE := 16
 
 # "No cell" sentinel — far outside any real board, so it can never collide with a live cell.

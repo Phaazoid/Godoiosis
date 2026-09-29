@@ -682,6 +682,38 @@ func test_the_3d_camera_follows_the_ai_camera() -> void:
 	_game.game_state = _game.GameState.IDLE
 
 
+# #974: the playback aim sat four cells off the fight because the hidden 2D camera it mirrors was
+# pinned against a pan wall built for another board. Under a 3D host that camera only publishes where
+# playback looks, so no wall of its own may move it -- the rig's pan_limit is the one bound.
+#
+# The stale wall is set by hand and lies wholly off the board, BEYOND the unit on both axes, so any
+# clamp at all -- a wall or the narrow-board centring -- moves the camera off the unit. The reset door
+# (apply_scenario -> board_loaded) refreshes the bounds, so nothing here leaks to the next case.
+func test_a_stale_2d_pan_wall_never_moves_the_playback_aim() -> void:
+	assert_bool(_game.board_input_delegated).override_failure_message(
+			"precondition: the 3D host should own board input in this fixture").is_true()
+	var unit := _player_unit()
+	assert_object(unit).is_not_null()
+	var at: Vector2 = unit.global_position
+	_cam().min_world = at + Vector2(10000.0, 10000.0)
+	_cam().max_world = _cam().min_world + Vector2(4000.0, 4000.0)
+
+	_game.game_state = _game.GameState.AI_TURN
+	_cam().set_playback_locked(true)
+	await _cam().pan_to(unit)   # headless: lands on the unit, then follows it through _process
+	await _settle()
+	assert_vector(_cam().global_position).override_failure_message(
+			"the 2D camera's pan wall moved playback off the unit it panned to").is_equal(at)
+
+	_scene._mirror_camera()
+	var flat := BoardSpace.of_pixels(at, 0.0)
+	assert_vector(Vector2(_rig._aim.x, _rig._aim.z)).override_failure_message(
+			"the playback aim is not over the unit the 2D camera panned to").is_equal_approx(
+			Vector2(flat.x, flat.z), Vector2.ONE * 0.001)
+	_cam().set_playback_locked(false)
+	_game.game_state = _game.GameState.IDLE
+
+
 func test_hovering_does_not_drag_the_3d_camera() -> void:
 	# The naive-mirror hazard. Pointing snaps the hidden 2D camera every time (it is what
 	# parks the hover card), so a mirror that ran outside an AI turn would jerk the whole
@@ -1713,9 +1745,7 @@ func test_the_return_pan_waits_out_the_held_depth_before_it_moves_the_aim() -> v
 	var unit := _player_unit()
 	assert_object(unit).is_not_null()
 	BoardSpace.stage([unit.movement.cell], BoardSpace.lift_offset())
-	# Parked through the camera's own door, then measured by DISTANCE to the pan's destination:
-	# the 2D camera clamps and glides its position per frame, so an exact-position assert fights
-	# the camera's own housekeeping rather than the teardown's pan.
+	# Parked through the camera's own door, then measured by DISTANCE to the pan's destination.
 	var staged: Array[Vector2i] = [unit.movement.cell]
 	var centre: Vector2 = _game.order_executor._stage_centre(staged)
 	await _cam().pan_to_position(centre + Vector2(300.0, 0.0), 0.05)
