@@ -864,8 +864,7 @@ func resume_from_slot(slot: int) -> void:
 	var save: SaveGame = game.scenario_manager.load_slot(slot)
 	if save == null:
 		return
-	game.scenario_manager.apply_scenario(save.scenario)
-	game.scenario_manager.last_loaded_path = save.mission_path
+	game.scenario_manager.apply_scenario(save.scenario, save.mission_path)
 	_begin_turn()
 	game.scenario_director.disarm()   # a resume is not a fresh start; dialog beats are fresh-start content (#182)
 

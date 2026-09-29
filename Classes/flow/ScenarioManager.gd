@@ -266,12 +266,13 @@ func load_scenario(path: String):
 		push_error("Could not load scenario at %s" % path)
 		return
 
-	apply_scenario(scenario)
-	last_loaded_path = path
+	apply_scenario(scenario, path)
 
-# Rebuild the board from a snapshot; path bookkeeping stays in load_scenario.
-func apply_scenario(scenario: ScenarioData) -> void:
+# Rebuild the board from a snapshot. path is the file this board answers to ("" = none).
+func apply_scenario(scenario: ScenarioData, path := "") -> void:
 	clear_board()
+	# Board identity, settled before board_loaded like the fields below: the header reads it (#967).
+	last_loaded_path = path
 
 	restore_board(BoardSnapshot.from_scenario(scenario))
 	game.mission_controller.set_objectives(scenario.objectives)
@@ -411,8 +412,8 @@ func clear_board():
 	game.mission_controller.reset()   # mission START resets battle-scoped state (#96/#87 seam)
 	game.squad_tether_presenter.reset()   # no tether moment outlives its board (#367)
 	# A cleared board has NO loaded scenario. Update's load-gate reads this; a stale path would let
-	# a sandbox board overwrite the last-loaded mission (the Prolog accident, 2026-08-11). Safe for
-	# load paths: load_scenario re-sets it AFTER apply_scenario's internal clear_board.
+	# a sandbox board overwrite the last-loaded mission (the Prolog accident, 2026-08-11). A load
+	# re-sets it: apply_scenario writes its path straight after this, before board_loaded (#967).
 	last_loaded_path = ""
 	# Same reasoning for the look (#253 part 2): spawn_sandbox() lands here with no ScenarioData,
 	# so without this it would keep wearing the last mission's preset. Empty = the default.
