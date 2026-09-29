@@ -38,6 +38,11 @@ func _init(board: Dictionary) -> void:
 		_mission_contested = true
 	for unit in live_units():
 		_register(unit)
+	# The turn boundary's signal-driven halves (#898), heard in the order game.gd hears them.
+	if not turn_manager.round_completed.is_connected(_on_round_completed):
+		turn_manager.round_completed.connect(_on_round_completed)
+	if not turn_manager.turn_started.is_connected(_on_turn_started):
+		turn_manager.turn_started.connect(_on_turn_started)
 
 func _register(unit: Unit) -> void:
 	if _handle_by_unit.has(unit):
@@ -799,14 +804,24 @@ func end_turn() -> Dictionary:
 	if already != "":
 		return {"ok": false, "error": "mission is over (%s)" % already, "mission": already}
 
-	var board := _board()
-	turn_manager.end_turn(board.present_factions())
+	# The side that just played burns BEFORE it hands off, and a burn that ends the mission does not
+	# hand off at all -- both mirror game.end_turn (#898).
+	var log: Array[String] = _burn(turn_manager.active_faction())
+	if mission_tag() != "":
+		return _turn_result(log)
+
+	# The hand-off runs the round tick and the turn-start ticks through the handlers wired in _init.
+	turn_manager.end_turn(_board().present_factions())
 	# Mirror the game's auto-skip: pass over factions with no commandable units (e.g. only
 	# downed), guarding against an all-downed board where this would loop with nothing to stop on.
-	while not board.faction_has_active_units(turn_manager.active_faction()) and board.has_active_units():
+	# The board is re-read per pass and a mission the ticks just ended stops it, as
+	# game._on_turn_started checks the mission before it skips.
+	while mission_tag() == "":
+		var board := _board()
+		if board.faction_has_active_units(turn_manager.active_faction()) or not board.has_active_units():
+			break
 		turn_manager.end_turn(board.present_factions())
-	var faction := turn_manager.active_faction()
-	squad_manager.reset_faction_actions(faction)
+	squad_manager.reset_faction_actions(turn_manager.active_faction())
 
 	# THE OPPONENT ACTS (#665). Until this existed, a headless "playthrough" was played against a
 	# stationary board: end_turn advanced the faction and nothing else, so every enemy sat still
@@ -819,10 +834,13 @@ func end_turn() -> Dictionary:
 	#
 	# Loops, because several AI factions can follow one another, and re-reads the faction each pass
 	# rather than assuming one hand-off.
-	var log: Array[String] = []
 	while _is_ai_faction(turn_manager.active_faction()):
 		var acting := turn_manager.active_faction()
 		log.append_array(_take_ai_turn(acting))
+		if mission_tag() != "":
+			break
+		# The AI's own end of turn burns too -- AIController.take_faction_turn ends on game.end_turn.
+		log.append_array(_burn(acting))
 		if mission_tag() != "":
 			break
 		turn_manager.end_turn(_board().present_factions())
@@ -830,8 +848,45 @@ func end_turn() -> Dictionary:
 		if next == acting:
 			break   # nobody else to hand to; do not spin
 		squad_manager.reset_faction_actions(next)
-	faction = turn_manager.active_faction()
-	return {"ok": true, "faction": _faction_name(faction), "ai_events": log}
+	return _turn_result(log)
+
+
+# What end_turn hands back. A mission the boundary ended (a burn, an expiring downed clock) is
+# reported the way execute() reports one; an AI pass that ended it has already logged the line.
+func _turn_result(events: Array[String]) -> Dictionary:
+	var mission := mission_tag()
+	if mission != "" and not events.has("MISSION %s" % mission):
+		events.append("MISSION %s" % mission)
+	var result := {"ok": true, "faction": _faction_name(turn_manager.active_faction()), "ai_events": events}
+	if mission != "":
+		result["mission"] = mission
+	return result
+
+
+# One faction's end-of-turn burn (#898): the hits OrderExecutor.apply_burning_tile_damage plays, minus
+# the camera. TileHitAction.execute is synchronous, so the real one runs.
+func _burn(faction: Team.Faction) -> Array[String]:
+	var events: Array[String] = []
+	if terrain_states == null:
+		return events
+	for hit in TurnBoundary.tile_hits(live_units(), terrain_states, faction):
+		hit.execute()
+		events.append("%s takes %d from %s%s" % [handle_for(hit.actor), hit.resolved.damage,
+				Terrain.tile_state_display_name(hit.state), _lethality_tag(hit.resolved.lethality)])
+	_process_downed_pending()
+	return events
+
+
+# The two signal-driven halves of the boundary, connected in _init. round_completed fires before
+# turn_started, so a round's tile tick lands before the incoming faction's own ticks.
+func _on_round_completed() -> void:
+	if terrain_states != null:
+		terrain_states.tick_states()
+
+
+func _on_turn_started(faction: Team.Faction) -> void:
+	TurnBoundary.turn_start_ticks(live_units(), faction)
+	squad_manager.enforce_contact()   # AFTER the ticks, as game._on_turn_started orders them
 
 
 func _is_ai_faction(faction: Team.Faction) -> bool:

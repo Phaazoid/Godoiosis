@@ -834,7 +834,7 @@ func _click_picking_target(cell: Vector2i) -> void:
 
 func _on_turn_started(faction: Team.Faction):
 	drop_threat_field()   # the other side moved (#710)
-	_run_turn_start_ticks(faction)
+	TurnBoundary.turn_start_ticks(_all_units(), faction)
 	refresh_guard_markers()   # the ticks lapsed this faction's Guards -- pull their markers with them
 	refresh_watch_markers()   # ...and its untriggered watches (#413)
 	# AFTER the ticks: melting ice can strand a squadmate across water it walked over while frozen
@@ -910,20 +910,6 @@ func _on_round_completed() -> void:
 	terrain_states.tick_states()
 	overlay_manager.redraw_terrain_live(terrain_states)
 	mission_controller.advance_round()   # the mission clock's ONE tick (#101); the turn-start check() sees it
-
-# Per-unit state that decays at the owning faction's turn start (downed clocks, crisis surge,
-# weapon rev, …). One pass; each tick self-guards, so no per-effect pre-filter. Add a new
-# turn-start tick as one line here — no wrapper, no _on_turn_started edit.
-func _run_turn_start_ticks(faction: Team.Faction) -> void:
-	for unit in _all_units():
-		if unit.get_faction() != faction:
-			continue
-		unit.tick_downed_countdown()
-		unit.tick_stat_effects()      # BEFORE the surge below: an effect applied this turn must not tick this turn
-		unit.advance_crisis_surge()
-		unit.tick_weapon_rev()
-		unit.lapse_guard()            # #414: last turn's Guard is gone BEFORE this turn's move phase
-		unit.lapse_watch()            # #413: and so is last turn's untriggered watch
 
 # The board is fully hands-off for the player while an AI faction resolves its turn, while the
 # end-of-mission card is up, and while Mission Select is up.

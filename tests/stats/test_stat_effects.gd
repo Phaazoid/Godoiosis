@@ -288,7 +288,7 @@ func test_crisis_surge_applies_on_the_next_turn_start() -> void:
 
 func test_crisis_surge_runs_for_three_turns() -> void:
 	# Raised from 1 turn to 3 on 2026-07-28 (dev): a gambit this costly should feel powerful.
-	# Ticks in the same order game._run_turn_start_ticks uses â€” tick FIRST, then advance, so the
+	# Ticks in the same order TurnBoundary.turn_start_ticks uses â€” tick FIRST, then advance, so the
 	# turn the surge lands on is not immediately spent.
 	var unit: Unit = H.spawn_unit(self, Team.Faction.PLAYER, Vector2i.ZERO, {Stats.Stat.STR: 5}, false)
 	unit.enter_crisis()

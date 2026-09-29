@@ -60,7 +60,7 @@ static func state_display_name(s: State) -> String:
 # the state's clock. Unit's element-state doors own the pairing — nothing else creates or retires
 # these effects, and the effect's countdown expiring ends the state itself.
 #
-# Turn math: StatEffect ticks at the OWNER's turn start (game._run_turn_start_ticks), before the
+# Turn math: StatEffect ticks at the OWNER's turn start (TurnBoundary.turn_start_ticks), before the
 # unit acts — so 2 turns = debuffed for exactly its next activation, 3 covers two.
 
 const CHILL_STAT_MODS: Dictionary[Stats.Stat, int] = { Stats.Stat.DEX: -1 }
