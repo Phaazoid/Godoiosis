@@ -41,6 +41,11 @@ var _live_id_of: Dictionary = {}       # int (recorded instance id) -> int (live
 var _cursor := 0
 var _seen_first_turn := false
 var _seeded := false
+var _compared := 0                     # outcome records already diffed, the same index on both sides
+var _logged := 0                       # the replay log's length at the last diff
+var _disagreements := 0                # every divergence found, including the ones LIST_CAP kept off the list
+var _playing := false
+var _pause_requested := false
 
 
 func is_seeded() -> bool:
@@ -49,6 +54,10 @@ func is_seeded() -> bool:
 
 func is_finished() -> bool:
 	return _seeded and _cursor >= run.events.size()
+
+
+func is_playing() -> bool:
+	return _playing
 
 
 # ==============================================================================
@@ -67,6 +76,9 @@ func seed(replay_run: ReplayRun) -> bool:
 	_cursor = 0
 	_seen_first_turn = false
 	_seeded = false
+	_compared = 0
+	_logged = 0
+	_disagreements = 0
 
 	if not run.can_replay():
 		for problem: String in run.problems:
@@ -142,7 +154,8 @@ static func _cell_of(raw: Variant) -> Vector2i:
 # ==============================================================================
 
 # One recorded event's worth of work. Returns false when the run is finished. Awaits, because a pass
-# and a turn hand-over both do.
+# and a turn hand-over both do. Every step diffs what it produced (#853), so a divergence shows at the
+# event that caused it rather than only at the end.
 func step() -> bool:
 	if not _seeded or is_finished():
 		progressed.emit(true)
@@ -153,14 +166,41 @@ func step() -> bool:
 	var done := is_finished()
 	if done:
 		_seal_like_the_run()
-		_compare()
+	_compare(done)
 	progressed.emit(done)
 	return not done
 
 
 func play() -> void:
-	while await step():
-		pass
+	await _run_until(func() -> bool: return false)
+
+
+# One step under the play guard, so nothing else can start while its pass is in flight.
+func step_once() -> void:
+	await _run_until(func() -> bool: return true)
+
+
+# Steps until a new divergence is found or the run ends; counted uncapped, since the list stops at
+# LIST_CAP. Honours pause() like play().
+func run_to_next_divergence() -> void:
+	var before := _disagreements
+	await _run_until(func() -> bool: return _disagreements > before)
+
+
+# Lands at the next EVENT boundary: the event in flight -- a whole pass -- always finishes first.
+func pause() -> void:
+	_pause_requested = true
+
+
+func _run_until(stop: Callable) -> void:
+	if _playing:
+		return
+	_playing = true
+	_pause_requested = false
+	while not _pause_requested and await step():
+		if bool(stop.call()):
+			break
+	_playing = false
 
 
 func _apply(event: Dictionary) -> void:
@@ -192,7 +232,7 @@ func _replay_pass(event: Dictionary) -> void:
 	if squad_ref is Dictionary:
 		leader = _unit_for({"id": (squad_ref as Dictionary).get("leader", 0)})
 	if leader == null:
-		divergences.append("round %d: a pass names a squad whose leader could not be bound" % int(event.get("round", 0)))
+		_diverge("round %d: a pass names a squad whose leader could not be bound" % int(event.get("round", 0)))
 		return
 
 	# Grouped by batch id and issued in recorded order. A batch of more than one goes through
@@ -228,17 +268,17 @@ func _replay_batch(group: Array, event: Dictionary) -> void:
 	for order: Dictionary in group:
 		var unit := _unit_for(order.get("unit"))
 		if unit == null:
-			divergences.append("round %d: a batched move names a unit that could not be bound" % int(event.get("round", 0)))
+			_diverge("round %d: a batched move names a unit that could not be bound" % int(event.get("round", 0)))
 			return
 		var move := _build_move(unit, _cell_of(order.get("to")))
 		if move == null:
-			divergences.append("round %d: %s cannot reach %s any more" % [
+			_diverge("round %d: %s cannot reach %s any more" % [
 				int(event.get("round", 0)), unit.get_unit_name(), str(_cell_of(order.get("to")))])
 			return
 		moves.append(move)
 		squad = unit.squad
 	if squad != null and not game.squad_manager.queue_batch(squad, moves):
-		divergences.append("round %d: a recorded formation of %d was refused" % [
+		_diverge("round %d: a recorded formation of %d was refused" % [
 			int(event.get("round", 0)), moves.size()])
 
 
@@ -261,14 +301,14 @@ func _replay_order(order: Dictionary, event: Dictionary) -> void:
 	var unit := _unit_for(order.get("unit"))
 	var round_no := int(event.get("round", 0))
 	if unit == null:
-		divergences.append("round %d: an order names a unit that could not be bound" % round_no)
+		_diverge("round %d: an order names a unit that could not be bound" % round_no)
 		return
 	var refused := false
 	match str(order.get("type", "")):
 		"MOVE":
 			var move := _build_move(unit, _cell_of(order.get("to")))
 			if move == null:
-				divergences.append("round %d: %s cannot reach %s any more" % [
+				_diverge("round %d: %s cannot reach %s any more" % [
 					round_no, unit.get_unit_name(), str(_cell_of(order.get("to")))])
 				return
 			refused = not game.squad_manager.queue_action(unit.squad, move)
@@ -282,7 +322,7 @@ func _replay_order(order: Dictionary, event: Dictionary) -> void:
 		"RESCUE":
 			var body := _unit_for(order.get("target"))
 			if body == null:
-				divergences.append("round %d: a rescue names a body that could not be bound" % round_no)
+				_diverge("round %d: a rescue names a body that could not be bound" % round_no)
 				return
 			# The haul is the cell the PLAYER picked (#116). PlaySession.rescue would re-pick it,
 			# which is why this takes the game door: replaying a decision, not re-deriving one.
@@ -304,7 +344,7 @@ func _replay_order(order: Dictionary, event: Dictionary) -> void:
 		_:
 			notes.append("round %d: no replay door for a %s order" % [round_no, str(order.get("type", ""))])
 	if refused:
-		divergences.append("round %d: %s's recorded %s was refused" % [
+		_diverge("round %d: %s's recorded %s was refused" % [
 			round_no, unit.get_unit_name(), str(order.get("type", ""))])
 
 
@@ -371,6 +411,8 @@ func _replay_squad_verb(event: Dictionary) -> void:
 const COMPARED := ["turn_start", "pass", "turn_effects", "unit_downed", "unit_died",
 	"zone_captured", "mission_end"]
 
+const LIST_CAP := 40   # record diffs listed; the first 40 are the ones anyone reads
+
 
 # The run's LAST outcome record is its mission_end, and the replay has to produce one too or the
 # final vitals -- the frame that says who was left standing -- are compared against nothing. Sealed
@@ -392,17 +434,24 @@ func _seal_like_the_run() -> void:
 	game.mission_log.seal(ending, failed_by)
 
 
-func _compare() -> void:
-
+# Diffs the records not yet compared, index for index. The count check waits for `final`: until the
+# run ends the replay is expected to be behind.
+func _compare(final: bool) -> void:
 	var mine: Array[Dictionary] = game.mission_log.events()
+	# Most steps replay an input and record nothing; each diff re-projects both logs.
+	if mine.size() == _logged and not final:
+		return
+	_logged = mine.size()
 	var theirs: Array[Dictionary] = run.events
 	var a := _outcomes(theirs, true)    # recorded: ids mapped onto live units
 	var b := _outcomes(mine, false)     # the replay: already live ids
 
-	if a.size() != b.size():
-		divergences.append("the replay produced %d outcome records where the run had %d" % [b.size(), a.size()])
-	for i in mini(a.size(), b.size()):
+	var upto := mini(a.size(), b.size())
+	for i in range(_compared, upto):
 		_diff_record(a[i], b[i], i)
+	_compared = maxi(_compared, upto)
+	if final and a.size() != b.size():
+		_diverge("the replay produced %d outcome records where the run had %d" % [b.size(), a.size()])
 
 
 # The comparable projection: outcome records only, volatile envelope dropped, every recorded id
@@ -482,20 +531,18 @@ func _diff_record(a: Dictionary, b: Dictionary, index: int) -> void:
 	var kind_b := str(b.get("event", "?"))
 	var where := "record %d (round %s)" % [index, str(a.get("round", "?"))]
 	if kind_a != kind_b:
-		divergences.append("%s: the run has %s where the replay has %s" % [where, kind_a, kind_b])
+		_diverge("%s: the run has %s where the replay has %s" % [where, kind_a, kind_b])
 		return
 	_diff_value(where + " %s" % kind_a, a, b)
 
 
 func _diff_value(path: String, a: Variant, b: Variant) -> void:
-	if divergences.size() >= 40:
-		return   # a diverged replay can produce thousands; the first 40 are the ones anyone reads
 	if a is Dictionary and b is Dictionary:
 		var da := a as Dictionary
 		var db := b as Dictionary
 		for key in da:
 			if not db.has(key):
-				divergences.append("%s.%s: missing from the replay" % [path, str(key)])
+				_diverge("%s.%s: missing from the replay" % [path, str(key)], true)
 			else:
 				_diff_value("%s.%s" % [path, str(key)], da[key], db[key])
 		return
@@ -503,7 +550,7 @@ func _diff_value(path: String, a: Variant, b: Variant) -> void:
 		var la := a as Array
 		var lb := b as Array
 		if la.size() != lb.size():
-			divergences.append("%s: %d entries in the run, %d in the replay" % [path, la.size(), lb.size()])
+			_diverge("%s: %d entries in the run, %d in the replay" % [path, la.size(), lb.size()], true)
 			return
 		for i in la.size():
 			_diff_value("%s[%d]" % [path, i], la[i], lb[i])
@@ -514,10 +561,19 @@ func _diff_value(path: String, a: Variant, b: Variant) -> void:
 	# are numbers; everything else compares as text.
 	if _is_number(a) and _is_number(b):
 		if absf(float(a) - float(b)) > 0.00001:
-			divergences.append("%s: run says %s, replay says %s" % [path, str(a), str(b)])
+			_diverge("%s: run says %s, replay says %s" % [path, str(a), str(b)], true)
 		return
 	if str(a) != str(b):
-		divergences.append("%s: run says %s, replay says %s" % [path, str(a), str(b)])
+		_diverge("%s: run says %s, replay says %s" % [path, str(a), str(b)], true)
+
+
+# The one door a divergence goes through. A record diff (`capped`) is listed only while the list is
+# under LIST_CAP -- a diverged replay can produce thousands -- but every one is counted.
+func _diverge(line: String, capped := false) -> void:
+	_disagreements += 1
+	if capped and divergences.size() >= LIST_CAP:
+		return
+	divergences.append(line)
 
 
 static func _is_number(v: Variant) -> bool:
@@ -531,11 +587,17 @@ func report() -> Dictionary:
 	var degraded: Array[String] = []
 	if run != null:
 		degraded = run.degraded.duplicate()
+	# The event the next step applies; empty when there is none.
+	var next := {}
+	if _seeded and not is_finished():
+		var upcoming: Dictionary = run.events[_cursor]
+		next = {"event": str(upcoming.get("event", "")), "round": int(upcoming.get("round", 0))}
 	return {
 		"seeded": _seeded,
 		"finished": is_finished(),
 		"at": _cursor,
 		"of": run.events.size() if run != null else 0,
+		"next": next,
 		"degraded": degraded,
 		"divergences": divergences.duplicate(),
 		"unbindable": unbindable.duplicate(),
