@@ -637,8 +637,12 @@ func execute() -> Dictionary:
 	var mission := mission_tag()
 	if mission == "":
 		return {"ok": true, "events": events}
-	events.append("MISSION %s" % mission)
+	events.append(_mission_line(mission))
 	return {"ok": true, "events": events, "mission": mission}
+
+# The event line a finished mission logs, shared by execute() and end_turn so the dedupe matches.
+func _mission_line(tag: String) -> String:
+	return "MISSION %s" % tag
 
 # Play the resolved terrain deposits into the live store (twin of OrderExecutor._apply_cell_effects, minus
 # the redraw). Preview and execution consume the SAME ResolvedCellEffect objects (R3).
@@ -814,8 +818,9 @@ func end_turn() -> Dictionary:
 	turn_manager.end_turn(_board().present_factions())
 	# Mirror the game's auto-skip: pass over factions with no commandable units (e.g. only
 	# downed), guarding against an all-downed board where this would loop with nothing to stop on.
-	# The board is re-read per pass and a mission the ticks just ended stops it, as
-	# game._on_turn_started checks the mission before it skips.
+	# The board is re-read per pass, and the mission check mirrors game._on_turn_started's before it
+	# skips. No turn-start tick can change a headless outcome yet: a downed unit already counts as
+	# lost, and authored lose conditions are not headless (#46).
 	while mission_tag() == "":
 		var board := _board()
 		if board.faction_has_active_units(turn_manager.active_faction()) or not board.has_active_units():
@@ -851,12 +856,12 @@ func end_turn() -> Dictionary:
 	return _turn_result(log)
 
 
-# What end_turn hands back. A mission the boundary ended (a burn, an expiring downed clock) is
-# reported the way execute() reports one; an AI pass that ended it has already logged the line.
+# What end_turn hands back. A mission the boundary ended (headlessly, only a burn can) is reported
+# the way execute() reports one; an AI pass that ended it has already logged the line.
 func _turn_result(events: Array[String]) -> Dictionary:
 	var mission := mission_tag()
-	if mission != "" and not events.has("MISSION %s" % mission):
-		events.append("MISSION %s" % mission)
+	if mission != "" and not events.has(_mission_line(mission)):
+		events.append(_mission_line(mission))
 	var result := {"ok": true, "faction": _faction_name(turn_manager.active_faction()), "ai_events": events}
 	if mission != "":
 		result["mission"] = mission

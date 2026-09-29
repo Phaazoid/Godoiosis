@@ -184,15 +184,17 @@ match. Playtest reports read like real engagements because the counters in them 
 driver's *own* attacks during resolution, never an enemy taking a turn.
 
 **The turn boundary (#898).** `endturn` runs what the game runs between two turns, through the same
-`TurnBoundary` statics `game.gd` calls, in the game's order: the side that just played burns if it
+`TurnBoundary` statics the game calls, in the game's order: the side that just played burns if it
 is standing in fire (your own units first in the log, each AI faction's after its turn); when the
 round completes the tile clocks tick, so fires spread, burn out and scorch; then the incoming
 faction's turn-start ticks run (downed clocks, stat effects, Crisis surge, weapon rev, Guard and
 watch lapse) and the cohesion sweep ejects anyone out of contact. Until #898 none of it ran
 headlessly: a fire never went out or hurt anybody, a downed body never bled out, a Guard never
-lapsed. A mission the boundary ends (a burn, an expiring downed clock) stops the turn there, and the
-result then carries a `mission` key and a `MISSION` line, as `execute` does. The log is still
-returned as `ai_events`, though it now carries the burns as well.
+lapsed. A burn that ends the mission stops the turn there, and the result then carries a `mission`
+key and a `MISSION` line, as `execute` does. A burn is the only thing at the boundary that can end a
+headless mission today: a downed unit already counts as lost, so its clock running out changes
+nothing until #46 brings authored lose conditions (a protected unit's death) headless. The log is
+still returned as `ai_events`, though it now carries the burns as well.
 
 **Targeting.** Commands use **game coordinates** (no rebasing — one coordinate system kills a whole bug
 class). The board carries x / y rulers; exact targets are confirmed by the affordance overlay plus a

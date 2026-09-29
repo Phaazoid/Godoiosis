@@ -2,8 +2,9 @@ extends Object
 class_name TurnBoundary
 
 # The RULE half of a turn boundary (#898, first found by #110): who burns at a faction's end of turn
-# and what ticks at its start. Static, and called by both game.gd and the headless Play API, so a new
-# tick cannot land in one stack only. The round tick is one call and stays in each stack's handler.
+# and what ticks at its start. Static, and called by the game stack (game._on_turn_started,
+# OrderExecutor.apply_burning_tile_damage) and the headless Play API, so a new tick cannot land in
+# one stack only. The round tick is one call and stays in each stack's handler.
 
 
 # Who the end-of-turn burn is about, answered ONCE before any of it plays -- the same TileHitAction
