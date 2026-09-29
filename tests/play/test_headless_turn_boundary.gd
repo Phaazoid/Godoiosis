@@ -97,6 +97,35 @@ func test_a_unit_standing_in_fire_burns_at_its_own_factions_end_of_turn() -> voi
 			.is_equal(foe_hp - foe_damage)
 
 
+func test_a_burn_that_ends_the_mission_does_not_hand_off() -> void:
+	# game.end_turn checks the mission after its burn and bails; so must the headless one.
+	var s := _field("LastBurnRoot", [])
+	var sess = s.sess
+	var hero: Unit = s.hero
+	var states: TerrainStateManager = s.board.terrain_states
+	_light(states, hero.movement.cell)
+	var damage := RulesService.occupant_damage_for(hero, states.states_at(hero.movement.cell))
+	assert_int(damage).override_failure_message("fixture: fire on this ground charges nothing").is_greater(0)
+	hero.take_damage(hero.get_current_hp() - damage)   # one burn's worth left
+	assert_bool(hero.is_active()).override_failure_message("fixture: the hero is already down").is_true()
+
+	var res: Dictionary = sess.end_turn()
+
+	assert_bool(hero.is_downed()).override_failure_message(
+			"fixture: the burn did not down the player's last unit") \
+			.is_true()
+	var mission: String = sess.mission_tag()
+	assert_str(mission).override_failure_message("fixture: downing the last unit ended nothing") \
+			.is_not_empty()
+	var reported: String = str(res.get("mission", ""))
+	assert_str(reported).override_failure_message("end_turn did not report the mission its burn ended") \
+			.is_equal(mission)
+	var faction: String = str(sess.status().faction)
+	assert_str(faction).override_failure_message(
+			"a burn ended the mission and the turn was handed over anyway") \
+			.is_equal("PLAYER")
+
+
 func test_an_ai_faction_burns_at_the_end_of_its_own_turn() -> void:
 	# The AI loop is the burn's second door: an AI faction's turn ends inside end_turn, the way
 	# AIController.take_faction_turn ends on game.end_turn.
