@@ -43,9 +43,9 @@ func test_every_board_load_rebuilds_the_pan_wall_around_that_board() -> void:
 		doors[door].call()
 		var expected := _board_rect_plus_margin()
 		assert_vector(cam.min_world).override_failure_message(
-				"%s left a pan wall built for some other board" % [door]).is_equal(expected.position)
+				"after %s the pan wall is not this board's extent plus its margin" % [door]).is_equal(expected.position)
 		assert_vector(cam.max_world).override_failure_message(
-				"%s left a pan wall built for some other board" % [door]).is_equal(expected.end)
+				"after %s the pan wall is not this board's extent plus its margin" % [door]).is_equal(expected.end)
 
 
 # The board's pixel extent off the grid itself, plus the flat view's margin in the grid's own cells.
