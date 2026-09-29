@@ -411,9 +411,14 @@ func test_a_refused_order_flashes_the_ghost_standing_in_for_its_unit() -> void:
 		.is_false()
 	var ghost: Sprite2D = om._ghost_for(member)
 	assert_object(ghost).override_failure_message("the refusal took the member's ghost down").is_not_null()
-	assert_bool(ghost.has_meta(OverlayManager.GHOST_FLASH_META)) \
+	if ghost == null:
+		return
+	var flashed := ghost.has_meta(OverlayManager.GHOST_FLASH_META)
+	assert_bool(flashed) \
 		.override_failure_message("the refused unit's ghost never flashed -- the flash went to its hidden sprite") \
 		.is_true()
+	if not flashed:
+		return
 	var flash: Tween = ghost.get_meta(OverlayManager.GHOST_FLASH_META)
 	var tinted := false
 	var deadline := Time.get_ticks_msec() + 10000
