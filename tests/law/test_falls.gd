@@ -196,19 +196,30 @@ func test_a_drop_can_change_the_rung() -> void:
 	assert_bool(_resolve(s).lethality != ResolvedOutcome.Lethality.NONE).is_true()   # the fall tips it
 
 
-func test_the_weight_hook_raises_fall_damage() -> void:
+func test_a_heavier_band_raises_fall_damage() -> void:
 	var heights := BoardHeights.new()
 	heights.set_cell(Vector2i(1, 0), 4)
 	heights.set_cell(Vector2i(2, 0), 4)
 	var s := _setup(heights, 1, Vector2i(1, 0), Vector2i(2, 0))
+	var unladen := _resolve(s).fall_damage
 	var ballast := H.make_weapon()
-	ballast.weight = 2 * FallRules.WEIGHT_PER_BONUS_DAMAGE
+	ballast.weight = Stats.WEIGHT_BAND_2
 	(s.d as Unit).add_item(ballast)
-	# The scaling property, never the numbers: carried mass raises the same drop's cost, and the
-	# resolver reads the loaded unit. Inert at weight 0 -- the #120 interlock's fall-damage wire.
+	# The scaling property, never the numbers: loading the faller into a heavier band raises the
+	# same drop's cost, and the resolver reads the loaded unit.
 	var laden := _resolve(s).fall_damage
 	assert_int(laden).is_equal(FallRules.damage_for(4, s.d))
-	assert_bool(laden > FallRules.damage_for(4, null)).is_true()
+	assert_bool(laden > unladen).is_true()
+
+
+# The BAND is FallRules' unit of weight (#120), not the raw number: every unit carries a body
+# weight, so a raw term would raise every fall in the game. Mass short of the next band is free.
+func test_mass_within_a_band_costs_nothing_extra() -> void:
+	var empty := H.spawn_unit(self, ENEMY, Vector2i(0, 0), {Stats.Stat.BLD: 0}, false)
+	var near := H.spawn_unit(self, ENEMY, Vector2i(1, 0), {Stats.Stat.BLD: Stats.WEIGHT_BAND_1 - 1}, false)
+	assert_int(Stats.weight_band(near.get_weight())).override_failure_message(
+		"the near-band unit is already in band 1, so this case measures nothing").is_equal(0)
+	assert_int(FallRules.damage_for(4, near)).is_equal(FallRules.damage_for(4, empty))
 
 
 # A HALF level is free (#427 ruling, dev 2026-08-23: "no fall damage for a half level fall") --

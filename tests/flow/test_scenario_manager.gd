@@ -99,6 +99,21 @@ func test_capture_apply_round_trips_stats_hp_will_jobs() -> void:
 	assert_int(b.unit_instance.current_will).is_equal(2)
 	assert_array(b.unit_instance.jobs).contains_exactly(["test_job_83"])
 
+# #120: the body weight is a stat, so it rides the stat snapshot -- and a save written before BLD
+# existed simply lacks the key, which must leave the body the unit was built with rather than wipe it.
+func test_body_weight_round_trips_and_an_older_save_keeps_the_built_body() -> void:
+	var a: Unit = H.spawn_unit(self, Team.Faction.PLAYER, Vector2i.ZERO, {Stats.Stat.BLD: 13}, false)
+	var entry := ScenarioUnitEntry.new()
+	entry.capture_unit_state(a)
+	var b: Unit = H.spawn_unit(self, Team.Faction.PLAYER, Vector2i(1, 0), {}, false)
+	entry.apply_unit_state(b)
+	assert_int(b.get_weight()).is_equal(13)
+
+	entry.stats.erase(Stats.Stat.BLD)   # what a pre-#120 snapshot looks like
+	var c: Unit = H.spawn_unit(self, Team.Faction.PLAYER, Vector2i(2, 0), {Stats.Stat.BLD: 7}, false)
+	entry.apply_unit_state(c)
+	assert_int(c.unit_instance.get_base_stat(Stats.Stat.BLD)).is_equal(7)
+
 func test_apply_clamps_hp_and_will_to_edited_maxes() -> void:
 	# Saved HP/Will can exceed the maxes the (possibly edited) saved stats produce — the
 	# setters clamp. And HP floors at 1 on apply: a load must never fire died().
