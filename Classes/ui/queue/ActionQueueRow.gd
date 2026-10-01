@@ -33,6 +33,7 @@ class_name ActionQueueRow
 const BADGE_FELL := "Fell %d"
 const BADGE_DROWNED := "Drown"
 const BADGE_VOID := "Void"
+const BADGE_HELD := "Held %d"       # #120: tiles of a shove the target's weight absorbed
 const BADGE_INSULATED := "Shrug"
 const BADGE_VIAL := "Vial"
 const BADGE_TANK := "Tank"
@@ -167,6 +168,9 @@ func _build_consequence(outcome: ResolvedOutcome) -> void:
 	# out which popup belonged to which reaction, because the two channels no longer share one list.
 	if outcome.insulated:
 		_add_event(BADGE_INSULATED, PlanResolver.INSULATED_POPUP)
+	# A fully held shove draws no trail, so this badge is the queue's whole account of it (Law #2).
+	if outcome.knockback_held > 0:
+		_add_event(BADGE_HELD % outcome.knockback_held, PlanResolver.HELD_POPUP % outcome.knockback_held)
 	if outcome.fall_levels > 0:
 		_add_event(BADGE_FELL % outcome.fall_levels, PlanResolver.FELL_POPUP % outcome.fall_levels)
 	if outcome.drown_damage > 0:

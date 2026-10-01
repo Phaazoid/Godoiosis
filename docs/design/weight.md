@@ -17,7 +17,14 @@
 | Reader | Rule | State |
 |---|---|---|
 | **Fall damage** (`FallRules.damage_for`) | Per level: `FALL_DAMAGE_PER_LEVEL` (2) + the faller's band. A heavy unit thrown off a ledge hits harder. | **BUILT** (#120 PR 1). It replaced #259's raw term (+1 per 10 weight), which every unit would have tripped once bodies had mass. |
-| **Shove distance** | Distance = the attack's knockback (mods included) − the TARGET's band, floored at 0. A band that reduces a shove to 0 holds the unit in place. | **Ruled, not built yet** (#120 PR 2). |
+| **Shove distance** | Distance = the attack's knockback (mods included) − the TARGET's band, floored at 0. A band that reduces a shove to 0 holds the unit in place. | **BUILT** (#120 PR 2). `PlanResolver._shove_against` is the one place weight meets a shove, and it reads the TARGET. |
+
+**What a held shove looks like.** `ResolvedOutcome.knockback_held` records how many tiles the target's weight absorbed, whether the shove was shortened or stopped outright. It shows in the two channels Fell and Void already use: a popup on the hit and a badge on the queue row. A partly held shove's trail is already honest, because it draws the shorter path. A fully held one draws no trail at all, so the queue badge is the whole Law #2 preview for it. A board-level mark for a held shove is a look question, deferred until it has been played. Telemetry's hit record carries `"held"`.
+
+**Whose weight answers.** Always the unit being shoved:
+- **A Guard** resolves the whole hit as the victim, so the BLOCKER's weight answers. A heavy Vanguard holds a shove that would have thrown its ward.
+- **Each victim of a volley** reads its own weight. Under today's near-first, one-after-another order, a heavy victim holding never changes where another victim in the same line lands, because a light unit in front was always stopped by the heavy one's body anyway. Weight would gain that second effect only if shoves within one payload level slid together, which is the dev's pending ruling from the #802 arc.
+- **A payload stuck to its victim** shoves nobody, so it reports no hold either.
 
 Under the Will retirement ([#1174](https://github.com/Phaazoid/Godoiosis/issues/1174)) a fall's damage counts toward the BLOW that takes a limb (10, or 8 once Wounded), so the band also decides how readily a fall maims. Tune the two together.
 

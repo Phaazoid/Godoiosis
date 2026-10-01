@@ -667,6 +667,7 @@ func _hit(kind: String, atk: AttackAction) -> Dictionary:
 		"hp_before": r.hp_before,
 		"hp_after": r.target_hp_after,
 		"knockback": r.knockback_applied,
+		"held": r.knockback_held,
 		"removed": r.removed,
 		"fall": r.fall_damage,
 		"skipped": r.skipped,

@@ -36,6 +36,9 @@ var knockback_path: Array[Vector2i] = []
 # void removal) happens on; cells after it are the landing tumble. The resolver's own split — the
 # shove animation and the 3D trail read it here rather than re-deriving (Law #2).
 var knockback_landing_index: int = 0
+# Tiles of this hit's shove the target's weight band absorbed (#120). Non-zero whether the shove was
+# shortened or stopped outright -- the one fact a fully held shove leaves behind, since it draws no trail.
+var knockback_held: int = 0
 # The brace bonus actually subtracted from this hit (#414) — non-zero only when a Guard substituted
 # and the attack did not pierce DEF. Already folded into the mitigation; recorded so the queue row
 # can name it without re-deriving (Law #2's spirit applied to a readout).

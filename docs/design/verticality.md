@@ -708,7 +708,7 @@ untouched, because the level designer decides which edges exist.
 
 So a shove is **one flight, one landing** (`PlanResolver._knockback_landing`):
 
-- **The flight** travels the knockback distance at the unit's STARTING elevation. A cell higher
+- **The flight** travels the knockback distance, less the target's weight band ([#120](https://github.com/Phaazoid/Godoiosis/issues/120), [weight.md](weight.md)), at the unit's STARTING elevation. A cell higher
   than that **braces** it ("you cannot be pushed uphill" — the flight stops before it); a **VOID
   cell is flown over**; walls, bodies and off-board stop it exactly as before. **WATER CATCHES it**
   ([#116](https://github.com/Phaazoid/Godoiosis/issues/116), 2026-08-26): the flight ENTERS the

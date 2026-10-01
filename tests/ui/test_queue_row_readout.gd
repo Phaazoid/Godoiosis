@@ -439,6 +439,31 @@ func _luma(c: Color) -> float:
 	return 0.2126 * c.r + 0.7152 * c.g + 0.0722 * c.b
 
 
+# #120: a shove the target's weight holds outright draws no trail, so the row's badge is the queue's
+# WHOLE account of it (Law #2) -- a held shove that said nothing would read as a shove that never existed.
+func test_a_shove_the_targets_weight_holds_says_so_on_the_row() -> void:
+	var heavy := _spawn(Team.Faction.ENEMY, Vector2i(2, 1))
+	var ballast := Item.new()
+	ballast.weight = Stats.WEIGHT_BAND_2
+	assert_bool(heavy.add_item(ballast)).is_true()
+	var attacker := _spawn(Team.Faction.PLAYER, Vector2i(1, 1))
+	var weapon := H.make_weapon(4)
+	(weapon.template.main_attack as WeaponAttackData).knockback = 2
+	attacker.equipped_weapon = weapon
+	game.squad_manager.active_squad = attacker.squad
+	game.squad_manager.queue_action(attacker.squad, H.stamped_attack(attacker, heavy))
+	game.refresh_action_queue(attacker.squad)
+	await await_idle_frame()
+
+	var badge := ActionQueueRow.BADGE_HELD % 2
+	var entry := _entry(_attack_row(), badge)
+	assert_bool(entry.is_empty()).override_failure_message(
+		"the shove was held and the row said nothing about it -- got %s"
+		% [_texts(_consequence_entries(_attack_row()))]).is_false()
+	if not entry.is_empty():
+		assert_str(String(entry["tip"])).contains(PlanResolver.HELD_POPUP % 2)
+
+
 # A unit that shrugs off `element` entirely, so the resolver records its INSULATED popup — the one
 # world-event pill reachable without a shove, a cliff or deep water.
 func _spawn_insulated_to(element: Elemental.Element, cell: Vector2i) -> Unit:

@@ -200,7 +200,8 @@ func test_a_heavier_band_raises_fall_damage() -> void:
 	var heights := BoardHeights.new()
 	heights.set_cell(Vector2i(1, 0), 4)
 	heights.set_cell(Vector2i(2, 0), 4)
-	var s := _setup(heights, 1, Vector2i(1, 0), Vector2i(2, 0))
+	# A shove strong enough to still reach the drop once the ballast's band holds part of it (#120).
+	var s := _setup(heights, 1 + Stats.weight_band(Stats.WEIGHT_BAND_2), Vector2i(1, 0), Vector2i(2, 0))
 	var unladen := _resolve(s).fall_damage
 	var ballast := H.make_weapon()
 	ballast.weight = Stats.WEIGHT_BAND_2
