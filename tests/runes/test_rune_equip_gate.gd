@@ -7,7 +7,7 @@
 # (a save is authoritative, the #89 armor precedent).
 #
 # The maim case is driven end to end through take_damage, not by calling the settle directly —
-# a direct settle call could not see whether _go_downed actually reaches it (the issue's own ask).
+# a direct settle call could not see whether the limb loss actually reaches it (the issue's own ask).
 extends GdUnitTestSuite
 
 const H := preload("res://tests/support/squad_fixtures.gd")
@@ -124,19 +124,22 @@ func test_a_weapon_is_untouched_by_the_gate() -> void:
 	assert_bool(u.add_item(weapon)).is_true()
 	assert_object(u.get_equipped_weapon()).is_same(weapon)
 
-# The force-unequip, end to end: a legally-equipped wielder goes down unable to afford the Will
-# cost, the maim's aura tax (-1 off the highest pool) kills the rune's temper depth, and the
-# settle _go_downed already runs strips the rune — off the slot, still in inventory.
+# The force-unequip, end to end: a legally-equipped wielder takes a limb-sized blow and stays
+# standing (#1174), the lost limb's aura tax (-1 off the highest pool) kills the rune's temper depth,
+# and the settle take_damage runs for the limb strips the rune — off the slot, still in inventory.
 func test_a_maim_that_kills_the_rune_strips_it_to_inventory() -> void:
 	var u: Unit = _alchemist({ FIRE: 1 }, [FIRE])
 	var rune: RuneData = _single_carving_rune()
 	assert_bool(u.add_item(rune)).is_true()
 	assert_object(u.get_equipped_weapon()).is_same(rune)   # equipped legally
 
-	u.unit_instance.set_current_will(0)                    # can't afford the down -> the rotation maims
-	u.take_damage(u.get_current_hp())                      # overkill 0 -> a would-be-down rung, never KILLED
+	u.unit_instance.stats[Stats.Stat.MHP] = LethalityRules.LIMB_LOSS_DAMAGE * 4   # headroom: the blow must not down
+	u.set_current_hp(u.get_max_hp())
+	assert_int(u.get_current_hp()).override_failure_message("fixture: the blow would down the wielder") \
+			.is_greater(LethalityRules.LIMB_LOSS_DAMAGE)
+	u.take_damage(LethalityRules.LIMB_LOSS_DAMAGE)
 
-	assert_bool(u.is_downed()).override_failure_message("fixture failed to DOWN the unit").is_true()
+	assert_bool(u.unit_instance.is_maimed()).override_failure_message("fixture: the blow took no limb").is_true()
 	assert_int(u.get_element_aura(FIRE)).override_failure_message("the maim aura tax did not land").is_equal(0)
 	assert_object(u.get_equipped_weapon()).override_failure_message("the dead rune was not stripped").is_null()
 	assert_bool(u.inventory.has(rune)).override_failure_message("the stripped rune left inventory").is_true()

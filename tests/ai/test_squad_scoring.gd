@@ -697,10 +697,10 @@ func test_a_crisis_armed_target_is_priced_like_any_other_kill() -> void:
 	var board: Dictionary = _build_board()
 	var attacker: Unit = _spawn(board, PLAYER, M1_CELL)
 	attacker.equipped_weapon = H.make_weapon(5)   # power 5 + fixture STR 5 = MHP 10: fells exactly, no overkill
-	# WIL is NOT in squad_fixtures' TEST_TUNING, so a baseline unit sits below CRISIS_WILL_GATE and
-	# the ability alone arms nothing -- the rung comes back DOWNED and this case measures an ordinary
-	# kill that passes whatever the scorer does. It did, before the override and the pin below.
-	var armed: Unit = BB.spawn(board, H.make_unit_data({Stats.Stat.WIL: UnitInstance.MAX_WILL}, ENEMY), A_CELL)
+	# A fresh unit is unwounded, so the ability alone arms the gambit (#1174) and the rung comes back
+	# CRISIS. Under the Will gate a baseline unit armed nothing, the rung came back DOWNED, and this case
+	# measured an ordinary kill that passed whatever the scorer did -- hence the pin below.
+	var armed: Unit = BB.spawn(board, H.make_unit_data({}, ENEMY), A_CELL)
 	_arm_crisis(armed)
 	var plain: Unit = _spawn(board, ENEMY, B_CELL, false)
 
