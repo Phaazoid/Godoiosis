@@ -1922,11 +1922,10 @@ places rather than everywhere makes them have more effect."*
   *yes* so a forgotten verb keeps playing exactly as it does today, and
   `tests/law/test_action_registry.gd` is what refuses the omission — degrade in play, red in the
   suite, the same bargain `hold_for` makes when it floors `coda_hold`'s sentinel.
-- **Deliberately NOT extended to the other silent verbs.** RELOAD is the same shape, and RALLY and
-  INTIMIDATE move Will, which [#965](https://github.com/Phaazoid/Godoiosis/issues/965) says has no
-  board channel at all — so all three are also spending camera on something invisible. Left alone
-  on purpose: pulling the camera off Rally and Intimidate would make Will *more* invisible while
-  #965 is open and unruled. The table asks the question out loud instead of answering it for him.
+- **Deliberately NOT extended to the other silent verbs.** RELOAD is the same shape and is left alone
+  on purpose; the table asks the question out loud instead of answering it for him. (RALLY and
+  INTIMIDATE were the other two, left alone because they moved Will, which
+  [#965](https://github.com/Phaazoid/Godoiosis/issues/965) said had no board channel; #1174 retired both.)
 - **What was NOT built, and why:** a persistent *revved* board marker. It fails #322's licensing
   test — a marker answering *what is this unit* may ride the health readout's gate only where an
   unconditional carrier already exists, and Rev has no art at all. That is the same ground #965
@@ -3964,7 +3963,7 @@ This repeals #1069's "the reach still moves onto a refused cell", above.
 
 - **A grey tile** draws the unit's ghost and the red tether, and nothing else. That covers a member past its leader's range, a leader's stranding tile, and Group Move's stranding tile. The red reach, the reach lines, the path arrow and the plan re-validation are withheld. The red the last legal tile drew is cleared, not left standing.
 - **Outside the whole range**, the red goes back to the unit's own tile, which is what Move paints when it opens. Before this it stood wherever the last legal tile had left it.
-- **The Squad Up marker has a black border.** It is the white corner-bracket tile (`OverlayManager.TARGET_ATLAS_COORDS`), which vanished on white stone. The border is a 1px ring baked into the art, so every unit pick carries it: Rescue, Intimidate, Join Squad and Squad Up. Both views read the one tile.
+- **The Squad Up marker has a black border.** It is the white corner-bracket tile (`OverlayManager.TARGET_ATLAS_COORDS`), which vanished on white stone. The border is a 1px ring baked into the art, so every unit pick carries it: Rescue, Guard, Join Squad and Squad Up. Both views read the one tile.
 - **The range's outline has its own width** (`BoardOverlays.cohesion_line_width`, *Range outline width (3D)*), starting at double the tethers'. It is its own beam set, `"cohesion"`, and `DASHED_BEAMS` keeps it on the tethers' one dash pattern. The flat view keeps its single stroke width.
 - **The grid's colour is the dev's.** He tuned the out-of-range grid to navy. "Grey" in this section names the role (MoveGrid's lattice switched off), not a hue.
 

@@ -8,6 +8,8 @@
 
 **Canon checked through #699 (2026-09-02).**
 
+**Will, Rally and Intimidation were retired by [#1174](https://github.com/Phaazoid/Godoiosis/issues/1174) (2026-10-01).** Every idea below that spends, restores or drains Will (the Banneret, the Agitator, the Counselor) needs re-homing before it is built; they stay as ideas, not deleted.
+
 ---
 
 ## A. World-grown jobs (fiction-first)
