@@ -533,11 +533,7 @@ func get_weight() -> int:
 
 # The gear half of get_weight, for a readout that shows the two apart. A rule asks get_weight.
 func get_carried_weight() -> int:
-	var total := 0
-	for item in inventory:
-		if item != null:
-			total += item.get_effective_weight()
-	return total
+	return Item.total_weight(inventory)
 
 # --- preview-at-decision (#745) ---------------------------------------------------------------
 #
