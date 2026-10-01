@@ -26,7 +26,7 @@ enum Term {
 	# Squads
 	SQUAD, LEADER, COHESION, SQUAD_SIZE,
 	# Stats (one per Stats.Stat, plus the derived readout rows)
-	MHP, STR, LDR, WIL, DEX, PER, CON, COH, BLD, MOV, WEIGHT, DEF, DAMAGE_KIND,
+	MHP, STR, LDR, DEX, PER, CON, COH, BLD, MOV, WEIGHT, DEF, DAMAGE_KIND,
 	# Actions (one per MainActionMenu.ACTION_DATA row, one per MainActionMenu.CATEGORIES row --
 	# a radial category is a row the player hovers and so owes a readout like any other (#467) --
 	# plus ATTACK_TARGETING, the channel axis)
@@ -94,9 +94,10 @@ static func terms_in(category: Category) -> Array[Term]:
 static func term_for_stat(stat: Stats.Stat) -> Term:
 	const MAP: Dictionary[Stats.Stat, Term] = {
 		Stats.Stat.MHP: Term.MHP, Stats.Stat.STR: Term.STR, Stats.Stat.LDR: Term.LDR,
-		Stats.Stat.WIL: Term.WIL, Stats.Stat.DEX: Term.DEX, Stats.Stat.PER: Term.PER,
+		Stats.Stat.DEX: Term.DEX, Stats.Stat.PER: Term.PER,
 		Stats.Stat.CON: Term.CON, Stats.Stat.COH: Term.COH, Stats.Stat.BLD: Term.BLD,
 	}
+	# Stats.RETIRED have no row, and test_glossary_coverage skips exactly those (#1174).
 	return MAP[stat]
 
 static func term_for_tile_state(state: Terrain.TileState) -> Term:
@@ -253,10 +254,6 @@ static func _build_entries() -> Dictionary:
 		"long": "A leader's effective LDR sets how many units their squad can hold (%d per member "
 			% Squad.MEMBER_LDR_COST
 			+ "beyond the leader). PER's band nudges effective LDR up or down."}
-	# PLACEHOLDER (#1174): Will is retired and nothing reads WIL; the stat itself goes in the next PR.
-	e[Term.WIL] = {"category": Category.STATS, "title": "Will (WIL)",
-		"short": "Retired. Nothing reads it.",
-		"long": "Retired. Nothing reads it."}
 	e[Term.DEX] = {"category": Category.STATS, "title": "Dexterity (DEX)",
 		"short": "Agility. Its band adds or removes MOV, and weapon blends draw on it.",
 		"long": "Feeds weapon scaling blends, and its band shifts movement range. A point or two "

@@ -528,7 +528,7 @@ func _mission_start_fields() -> Dictionary:
 # Everything a unit brought: the denominator every usage metric needs.
 func _roster_entry(unit: Unit, deployed: bool) -> Dictionary:
 	var stats := {}
-	for stat: Stats.Stat in Stats.Stat.values():
+	for stat: Stats.Stat in Stats.STAT_DEFAULTS:   # the live roster, so a retired stat is not recorded
 		stats[Stats.Stat.keys()[stat]] = unit.get_effective_stat(stat)
 	# A NULL IS AN EMPTY SLOT, not a hole: `inventory` is fixed-size and add_item fills the first
 	# null it finds, so skipping them is reading the store's own vocabulary.

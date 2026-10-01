@@ -80,6 +80,8 @@ func initialize():
 		return
 	#base current stats off of the data without editing the values in UnitData that we're pulling from
 	stats = data.base_stats.duplicate(true)
+	for stat in Stats.RETIRED:
+		stats.erase(stat)   # a character file written before the stat retired (#1174)
 	for stat in Stats.STAT_DEFAULTS:
 		if not stats.has(stat):
 			stats[stat] = Stats.STAT_DEFAULTS[stat]
