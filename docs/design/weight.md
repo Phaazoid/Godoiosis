@@ -1,8 +1,8 @@
 # Weight — How Heavy a Unit Is, and What Reads It
 
-**Status: RULED (dev, 2026-10-01), being built in slices on [#120](https://github.com/Phaazoid/Godoiosis/issues/120).** This is the owner doc for weight. [stats.md](stats.md) keeps the roster entry and points here.
+**Status: RULED and BUILT (dev, 2026-10-01) on [#120](https://github.com/Phaazoid/Godoiosis/issues/120), in three PRs: the body and the falls, the shove, then the Weights page and the numbers. Weight slowing movement is [#1176](https://github.com/Phaazoid/Godoiosis/issues/1176).** This is the owner doc for weight. [stats.md](stats.md) keeps the roster entry and points here.
 
-**Canon checked through #1176 (2026-10-01).**
+**Canon checked through #1180 (2026-10-01).**
 
 ## The model
 
@@ -28,6 +28,30 @@
 
 Under the Will retirement ([#1174](https://github.com/Phaazoid/Godoiosis/issues/1174)) a fall's damage counts toward the BLOW that takes a limb (10, or 8 once Wounded), so the band also decides how readily a fall maims. Tune the two together.
 
+## Authoring the numbers: the Weights page
+
+**Project ▸ Weights** (`Classes/dev/WeightsTool.gd`) shows every body's BLD and every item's weight on one page, because weight is a scale: whether Torv in Bulwark Plate shrugs off Gust is a fact about three files at once. Before it, armour, runes, vials and the weapon families had no weight field in any dev tool.
+
+- **Characters** get a BLD spinbox and a readout of what their starting kit weighs, their total, and the band it lands in. The readout sums the kit through `Item.total_weight`, the same sum `Unit.get_carried_weight` uses, so the band shown is the band a spawned unit will have.
+- **Items** get a weight spinbox each, in `ItemCatalog.SOURCES`' own order, plus the weapon mods. A **saved weapon variant** is read-only, shown as family + mods (+ its own, if any): its weight is composed, so the family row is where it moves.
+- **It edits the live catalog resource.** A character's kit references its gear files, so dialling an item moves the readout of everyone carrying it. What reaches the board follows the grant rule (`Item.copy_for_grant`): armour, runes and vials are copied when a unit receives them and a body's stats are copied at spawn, so those reach the next unit spawned. Weapon families and mods are shared, so a weapon already on the board follows at once.
+- **Save** writes only the files touched since the last save or Reset, and asks first, listing them (#380). **Reset** puts every unsaved edit back, including a character whose BLD was unauthored, which goes back to unauthored rather than to a written-out 10.
+- **The page re-reads on every show**, because the Character and Item pages write the same live resources.
+- **Saving a weapon family writes its `mod_spaces` out.** The runtime writer materializes that defaulted array (the trap `CLAUDE.md` records for headless saves), which pins the family's spaces to today's default. Every template save does this, the Item and Attack editors' included; it is not specific to this page.
+
+### The starting table (#120 PR 3, Claude's proposal for the dev to tune)
+
+- **BLD:** Dorian 6, Aldin 7, Celest 7, Sara 8, Aster 9, Isaac 9, Sophia 9, Noemie 10, Rebecca 11, Bram 12, Marco 13, Ross 13, Torv 14.
+- **Weapon families:** Carbine 3, Prosthetic 3, Chainsword 4, Springspear 4, Kinetic Mace 5, Chemical Spitter 6, Drill 6. **Prototypes:** Bow 2, Shock Rod 3, Water Staff 3, POINT 4, Firespitter 5, Sweeper 5, The Jaw 5.
+- **Armour:** Insulated Weave 1, Asbestos Shroud 2, Riveted Mail 5, Bulwark Plate 8, Ballast Harness 10 (low DEF, heaviest: the anti-shove choice).
+- **Runes** 1 (Lightning Tome 2), **mods** 1, **vials** 1 (the dev's, unchanged).
+
+**What that gives, measured over every board under `Scenarios/`:** every one of the 78 placed enemies is band 0 (the heaviest is 16), so today's Gust-into-a-hole play is unchanged until an enemy is made heavy on purpose. Torv's starting kit puts him at 25, band 1. Band 2 is reachable by loadout: Torv in Bulwark Plate is 33, Ross in Ballast Harness 29.
+
+**Bandit is an ENEMY file** (`Resources/Units/Bandit.tres`, placed six times in mission 2), so it was left at the default rather than given the 14 the first draft of this table listed. Giving it 14 would have made those six band 1 and changed mission 2's shoves without anyone asking for it.
+
+**Embedded copies were swept in the same diff:** 26 armour and rune copies saved inside seven scenarios, and 13 embedded copies of cast characters (mission 2, Prolog, the verticality fixture), each brought to its file's value. A weight changed on the page later does NOT reach a copy embedded in a mission file. That copy keeps the weight it was saved with: the #596 staleness class.
+
 ## The rulings (dev, 2026-10-01)
 
 1. **Weight alone resists a shove; STR does not.** *"Definitely weight alone. I think that line was a mistaken recording"*, about stats.md's old note that STR "helps anchor against shoves". STR's only weight-adjacent role is the parked carry ceiling ([#1176](https://github.com/Phaazoid/Godoiosis/issues/1176)).
@@ -47,4 +71,3 @@ The dev's local telemetry, 104 sent runs through 2026-09-29: **28 recorded shove
 
 - **Losing a limb does not change BLD.** An installed prosthetic weighs what its item weighs, which is already true because a prosthetic is carried in the inventory.
 - **Weight × MOV and STR as a carry ceiling** are [#1176](https://github.com/Phaazoid/Godoiosis/issues/1176). The inventory is 6 slots and has no weight limit.
-- **Item weights are still mostly 0.** The seven vials weigh 1 (the dev's, 2026-09-06). The authoring pass and the dev-tools Weights tab are #120 PR 3.

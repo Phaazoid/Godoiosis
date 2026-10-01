@@ -6,7 +6,7 @@ grill-style. Every ruling below is his; the rationale is recorded because almost
 re-derivable from the code. Numbers (tolerances, drop damage, the 2D offset) are deliberately absent —
 they are feel values and get knobs, not guesses (`CLAUDE.md` → the tuning rule).
 
-**Canon checked through #969 (2026-09-15); #120's weight bands folded in 2026-10-01.**
+**Canon checked through #969 (2026-09-15); #120's weight bands and authored table folded in 2026-10-01.**
 
 The one-line version: **a cell has a height, height changes only via ramps, ramps are chokepoints
 rather than tolls, and what height buys you is REACH — not damage, not to-hit.**
@@ -1121,8 +1121,8 @@ Split so each is one reviewable diff and one feel-check, per the bite-sized-part
    AIRBORNE revision — see *Falls, shoves and tumbles* above, and the tumble-then-plummet reversal
    plus [#431](https://github.com/Phaazoid/Godoiosis/issues/431)'s drop pointer that followed it.
    The interlock closed as far as it can before content: the fall-damage **weight term is wired**
-   (`FallRules`), read through weight BANDS since #120 PR 1 (2026-10-01); #120's shove-distance bands +
-   the weight-authoring pass stay on #120 — and **#116's water fork CLOSED 2026-08-26** (terrain.md → *Water — shallow vs deep*), so
+   (`FallRules`), read through weight BANDS since #120 PR 1 (2026-10-01); #120 then built the shove-distance
+   bands and the weight-authoring pass (2026-10-01) — and **#116's water fork CLOSED 2026-08-26** (terrain.md → *Water — shallow vs deep*), so
    the interlock is complete.
 
 The dev-tools painting ticket (below) **landed out of order, as #260** — slice 1's store shipped with
