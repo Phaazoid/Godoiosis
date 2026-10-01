@@ -473,7 +473,7 @@ func test_a_body_keeps_its_readout_under_damaged_only() -> void:
 	# _go_downed clings at 1 HP, so a body is damaged by the ordinary rule rather than by a clause
 	# of its own — which is what keeps #322's glyph and rescue clock up in this mode.
 	var body := _spawn(PLAYER, Vector2i(2, 2))
-	body._go_downed(false)   # the dev-bypass form: down it without the Will spend or a maim
+	body.force_down()   # the dev-bypass form: down it without a limb or Crisis
 	assert_bool(body.is_downed()).is_true()   # fixture setup, not the claim
 	_point_at(Vector2i(20, 20))
 	_set_bars(PlayerSettings.HealthBars.DAMAGED)
@@ -640,7 +640,7 @@ func test_the_row_rides_the_bars_own_visibility_and_not_a_rule_of_its_own() -> v
 
 func _downed(cell: Vector2i) -> Unit:
 	var unit := _spawn(PLAYER, cell)
-	unit.force_down()   # the dev bypass: straight into DOWNED, no Will spend, no maim
+	unit.force_down()   # the dev bypass: straight into DOWNED, no limb, no Crisis
 	return unit
 
 

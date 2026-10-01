@@ -105,7 +105,7 @@ static var CINEMATIC_ACTION := 0.4
 # hold_for seeds from it rather than from 0.0; it is not in coda_hold, which answers for side-channel
 # VERBS and must go on reporting ATTACK as undeclared.
 static var HOLD_ATTACK := 0.25     # a hit that just does damage -- the floor the rest are read against
-static var HOLD_DOWN := 0.9        # a unit goes down, is killed, maimed, or removed from the board
+static var HOLD_DOWN := 0.9        # a unit goes down, is killed, loses a limb, or is removed from the board
 static var HOLD_CRISIS := 0.8      # someone stands up surged instead of falling
 static var HOLD_IRON_WILL := 0.45  # the cap BIT: that should have killed them and did not
 static var HOLD_KNOCKBACK := 0.7   # the hit shoved its target
@@ -389,7 +389,7 @@ static func emphasis_for(beat: BeatSheet.Beat) -> float:
 	if beat.has_removal \
 			or beat.has_lethality(ResolvedOutcome.Lethality.DOWNED) \
 			or beat.has_lethality(ResolvedOutcome.Lethality.KILLED) \
-			or beat.has_lethality(ResolvedOutcome.Lethality.MAIMED):
+			or beat.has_severed:
 		emphasis = maxf(emphasis, EMPHASIS_DOWN)
 	if beat.has_lethality(ResolvedOutcome.Lethality.CRISIS):
 		emphasis = maxf(emphasis, EMPHASIS_CRISIS)
@@ -444,7 +444,7 @@ static func hold_for(beat: BeatSheet.Beat) -> float:
 	if beat.has_removal \
 			or beat.has_lethality(ResolvedOutcome.Lethality.DOWNED) \
 			or beat.has_lethality(ResolvedOutcome.Lethality.KILLED) \
-			or beat.has_lethality(ResolvedOutcome.Lethality.MAIMED):
+			or beat.has_severed:
 		hold = maxf(hold, HOLD_DOWN)
 	if beat.has_lethality(ResolvedOutcome.Lethality.CRISIS):
 		hold = maxf(hold, HOLD_CRISIS)
@@ -495,7 +495,7 @@ static func linger_for(beat: BeatSheet.Beat) -> float:
 	if beat.has_removal \
 			or beat.has_lethality(ResolvedOutcome.Lethality.DOWNED) \
 			or beat.has_lethality(ResolvedOutcome.Lethality.KILLED) \
-			or beat.has_lethality(ResolvedOutcome.Lethality.MAIMED):
+			or beat.has_severed:
 		linger = maxf(linger, LINGER_DOWN)
 	return linger
 

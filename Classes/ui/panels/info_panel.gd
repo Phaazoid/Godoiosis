@@ -1,6 +1,6 @@
 extends VBoxContainer
 
-# The stats body of the inspect panel ("StatsSection" in UnitInfoPanel.tscn): HP/Will bars,
+# The stats body of the inspect panel ("StatsSection" in UnitInfoPanel.tscn): the HP bar,
 # limb readout, derived-stat grid (effective stats, MOV/WT/DEF/LDR/squad) and the live-ability
 # list, all with breakdown tooltips (#68, absorbing #66's display scope). Skeleton rows live
 # in the scene; per-unit rows are generated here. Tooltip text builders are static, which lets
@@ -23,12 +23,10 @@ const NO_TINT := Color(0, 0, 0, 0)                   # alpha 0 = leave the theme
 
 @onready var hp_bar: ProgressBar = $HPRow/HPBar
 @onready var hp_value: Label = $HPRow/HPValue
-@onready var will_bar: ProgressBar = $WillRow/WillBar
-@onready var will_value: Label = $WillRow/WillValue
 @onready var limbs_row: HBoxContainer = $LimbsRow
 @onready var stats_grid: GridContainer = $StatsGrid
 @onready var abilities_list: VBoxContainer = $AbilitiesList
-@onready var _muted_labels: Array[Label] = [$HPRow/HPTag, $WillRow/WillTag, $AbilitiesHeader]
+@onready var _muted_labels: Array[Label] = [$HPRow/HPTag, $AbilitiesHeader]
 
 var unit: Unit
 var board: BoardContext   # for board-dependent readouts (terrain Cover DEF); null = armor only
@@ -48,7 +46,6 @@ func set_unit(target: Unit, context: BoardContext = null):
 	board = context
 	if unit != null and is_instance_valid(unit):
 		unit.unit_instance.hp_changed.disconnect(_on_hp_changed)
-		unit.unit_instance.will_changed.disconnect(_on_will_changed)
 		unit.unit_instance.died.disconnect(_on_unit_died)
 		unit.downed_countdown_changed.disconnect(_on_countdown_changed)
 		unit.stats_changed.disconnect(_on_stats_changed)
@@ -56,10 +53,8 @@ func set_unit(target: Unit, context: BoardContext = null):
 	if unit == null:
 		_clear_dynamic()
 		hp_value.text = ""
-		will_value.text = ""
 		return
 	unit.unit_instance.hp_changed.connect(_on_hp_changed)
-	unit.unit_instance.will_changed.connect(_on_will_changed)
 	unit.unit_instance.died.connect(_on_unit_died)
 	unit.downed_countdown_changed.connect(_on_countdown_changed)
 	unit.stats_changed.connect(_on_stats_changed)
@@ -80,17 +75,13 @@ func _refresh_bars():
 	hp_bar.max_value = unit.get_max_hp()
 	hp_bar.value = unit.get_current_hp()
 	hp_value.text = "%d/%d" % [unit.get_current_hp(), unit.get_max_hp()]
-	will_bar.max_value = unit.unit_instance.get_max_will()
-	will_bar.value = unit.unit_instance.get_current_will()
-	will_value.text = "%d/%d" % [unit.unit_instance.get_current_will(), unit.unit_instance.get_max_will()]
 
 func _refresh_limbs():
 	for child in limbs_row.get_children():
 		child.queue_free()
 	var inst := unit.unit_instance
-	var at_risk: int = -1
-	if not inst.can_afford_down():
-		at_risk = inst.next_maim_slot()
+	# The next limb is AT RISK once the unit is wounded (#1174): an ordinary hit can take it from then on.
+	var at_risk: int = inst.next_maim_slot() if unit.wounded else -1
 	for slot in UnitInstance.LimbSlot.values():
 		limbs_row.add_child(_limb_chip(inst, slot, at_risk))
 	# A body wears the badge either way since #1002; only the clock is conditional.
@@ -101,9 +92,12 @@ func _refresh_limbs():
 		else:
 			limbs_row.add_child(_badge("DOWN", EMPTY_COLOR,
 				"Healed while down — no death clock, still needs a rescue"))
+	elif unit.wounded:
+		# Standing again after a down (#1174); a body's DOWN already says it. Tooltip left for the dev.
+		limbs_row.add_child(_badge("WOUNDED", AT_RISK_COLOR, ""))
 	if unit.in_crisis:
 		limbs_row.add_child(_badge("CRISIS", CRISIS_COLOR,
-			"Will locked at 0 — another down this battle is death"))
+			"Another down this battle is death"))
 
 func _limb_chip(inst: UnitInstance, slot: UnitInstance.LimbSlot, at_risk: int) -> Label:
 	var chip := Label.new()
@@ -122,7 +116,7 @@ func _limb_chip(inst: UnitInstance, slot: UnitInstance.LimbSlot, at_risk: int) -
 			chip.tooltip_text = "%s: natural" % UnitInstance.LIMB_FULL[slot]
 	if slot == at_risk:
 		chip.add_theme_color_override("font_color", AT_RISK_COLOR)
-		chip.tooltip_text += " — NEXT AT RISK (Will can't cover another down)"
+		chip.tooltip_text += " — NEXT AT RISK"
 	chip.tooltip_text = UiText.wrap(chip.tooltip_text)
 	return chip
 
@@ -254,9 +248,6 @@ func _ability_row(ability: AbilityData) -> HBoxContainer:
 
 func _on_hp_changed(_current, _max):
 	_refresh_bars()
-
-func _on_will_changed(_current, _max):
-	_refresh()   # a maim rides this signal — bars, limbs AND stats can all shift
 
 func _on_unit_died():
 	hp_bar.value = 0

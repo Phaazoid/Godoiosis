@@ -676,7 +676,7 @@ func _apply_attack(atk: AttackAction, events: Array[String]) -> void:
 	# the victim to the blocker, so the only thing left for execution is spending the live ward.
 	if atk.blocked_for != null:
 		target.spend_guard()
-	target.take_damage(r.damage)   # routes through Unit.take_damage -> down/kill rung
+	target.take_damage(r.damage, r.non_blow())   # routes through Unit.take_damage -> rung and limb
 	for s in r.states_removed:
 		target.remove_element_state(s)
 	for s in r.states_added:

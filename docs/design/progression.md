@@ -53,7 +53,7 @@ Resolves the wiki's open question *"Alchemists == Mechanists??"* — not two cla
 - Proficiency "doing the thing" trigger + no-opportunity case. *(~~Momentum vs flat goals~~ — momentum RATIFIED at the 2026-07-06 jobs grill: pause-never-reset, the rate is the only thing switching costs — [jobs.md](jobs.md).)*
 - ~~Body-part granularity and which stat each part feeds~~ — **RESOLVED 2026-07-04/05: the limb-slot model** (arms→STR, legs→DEX, four slots — [will-and-death.md](will-and-death.md)).
 - Roguelike power-normalization for imported units.
-- See [will-and-death.md](will-and-death.md) for the Will / limb-loss forks.
+- See [will-and-death.md](will-and-death.md) for limb loss (Will, its old currency, retired 2026-10-01 — #1174).
 
 ## Captured ideas — wiki scratchpad (2026-06-17, unsorted)
 

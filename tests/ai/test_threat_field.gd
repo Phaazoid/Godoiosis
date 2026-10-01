@@ -227,7 +227,7 @@ func test_a_downed_enemy_threatens_nothing() -> void:
 	var board: Dictionary = _build_board()
 	var body: Unit = _spawn(board, Team.Faction.ENEMY, Vector2i(3, 1))
 	_bind(body, AIArchetype.Type.HOLD)
-	body._go_downed(false)
+	body.force_down()
 	var field := ThreatField.build(_context(board), Team.Faction.PLAYER)
 	assert_bool(field.cells.is_empty()).is_true()
 	assert_bool(field.by_unit.has(body)).is_false()

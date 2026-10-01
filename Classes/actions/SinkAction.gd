@@ -6,8 +6,9 @@ class_name SinkAction
 # each one under the attack whose deposit took the floor away, and both execution twins play them back.
 #
 # #116's drowning from the other side: there the unit arrives in the water, here the floor leaves. So
-# the water does what it does to a shove -- takes everything left, through the ordinary ladder (Will,
-# maim, Crisis, and a body already down is finished) -- and the answer is a rescue from the bank.
+# the water does what it does to a shove -- takes everything left, through the ordinary ladder (a
+# down, Crisis, and a body already down is finished; never a limb, the water not being a blow) -- and
+# the answer is a rescue from the bank.
 
 # WHEN it goes under. The ice melts when the pass's deposits land, straight after the attack volley
 # (OrderExecutor._apply_cell_effects); a melt only a COUNTER or a tail shot makes is not known until
@@ -50,7 +51,7 @@ static func make(unit: Unit, situation: LethalityRules.Situation, at: Vector2i, 
 func execute() -> void:
 	begin_execution()
 	if actor != null and is_instance_valid(actor) and resolved != null:
-		actor.take_damage(resolved.damage)
+		actor.take_damage(resolved.damage, resolved.damage)   # the ground is never a blow (#1174)
 		for s in resolved.states_added:
 			actor.add_element_state(s, resolved.state_turns.get(s, 0))
 	finish_execution()

@@ -81,7 +81,6 @@ stats = Dictionary[int, int]({
 7: 4
 })
 current_hp = 20
-current_will = 4
 inventory = Array[ExtResource("5_6wroh")]([SubResource("Resource_ewwln"), SubResource("Resource_qeafl")])
 equipped_index = 0
 worn_armor_index = 1
@@ -148,7 +147,6 @@ stats = Dictionary[int, int]({
 7: 4
 })
 current_hp = 20
-current_will = 4
 inventory = Array[ExtResource("5_6wroh")]([SubResource("Resource_emg0v"), SubResource("Resource_4g15e")])
 equipped_index = 0
 worn_armor_index = 1
@@ -215,7 +213,6 @@ stats = Dictionary[int, int]({
 7: 4
 })
 current_hp = 20
-current_will = 4
 inventory = Array[ExtResource("5_6wroh")]([SubResource("Resource_kuxfe"), SubResource("Resource_4gknw")])
 equipped_index = 0
 worn_armor_index = 1
@@ -285,7 +282,6 @@ stats = Dictionary[int, int]({
 7: 5
 })
 current_hp = 22
-current_will = 5
 inventory = Array[ExtResource("5_6wroh")]([SubResource("Resource_gem78"), SubResource("Resource_khbsf")])
 equipped_index = 0
 worn_armor_index = 1
@@ -352,7 +348,6 @@ stats = Dictionary[int, int]({
 7: 4
 })
 current_hp = 20
-current_will = 4
 inventory = Array[ExtResource("5_6wroh")]([SubResource("Resource_l7cbb"), SubResource("Resource_tbmit")])
 equipped_index = 0
 worn_armor_index = 1
@@ -446,7 +441,6 @@ stats = Dictionary[int, int]({
 7: 4
 })
 current_hp = 18
-current_will = 6
 inventory = Array[ExtResource("5_6wroh")]([SubResource("Resource_twq6n"), SubResource("Resource_w65ut")])
 equipped_index = 0
 worn_armor_index = 1
@@ -512,7 +506,6 @@ stats = Dictionary[int, int]({
 7: 4
 })
 current_hp = 20
-current_will = 4
 inventory = Array[ExtResource("5_6wroh")]([SubResource("Resource_ov2o0"), SubResource("Resource_pj7se")])
 equipped_index = 0
 worn_armor_index = 1

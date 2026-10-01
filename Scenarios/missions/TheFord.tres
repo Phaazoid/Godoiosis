@@ -64,7 +64,6 @@ stats = Dictionary[int, int]({
 7: 4
 })
 current_hp = 20
-current_will = 5
 inventory = Array[ExtResource("6_k443w")]([SubResource("Resource_jpi4j")])
 equipped_index = 0
 affinity_saved = true
@@ -111,7 +110,6 @@ stats = Dictionary[int, int]({
 7: 4
 })
 current_hp = 20
-current_will = 5
 inventory = Array[ExtResource("6_k443w")]([SubResource("Resource_k443w")])
 equipped_index = 0
 affinity_saved = true
@@ -158,7 +156,6 @@ stats = Dictionary[int, int]({
 7: 4
 })
 current_hp = 20
-current_will = 5
 inventory = Array[ExtResource("6_k443w")]([SubResource("Resource_n7e4l")])
 equipped_index = 0
 affinity_saved = true
@@ -208,7 +205,6 @@ stats = Dictionary[int, int]({
 7: 4
 })
 current_hp = 20
-current_will = 5
 inventory = Array[ExtResource("6_k443w")]([SubResource("Resource_agsin")])
 equipped_index = 0
 affinity_saved = true
@@ -255,7 +251,6 @@ stats = Dictionary[int, int]({
 7: 4
 })
 current_hp = 20
-current_will = 5
 inventory = Array[ExtResource("6_k443w")]([SubResource("Resource_ldylu")])
 equipped_index = 0
 affinity_saved = true
@@ -305,7 +300,6 @@ stats = Dictionary[int, int]({
 7: 4
 })
 current_hp = 20
-current_will = 5
 inventory = Array[ExtResource("6_k443w")]([SubResource("Resource_oy03i")])
 equipped_index = 0
 affinity_saved = true
@@ -352,7 +346,6 @@ stats = Dictionary[int, int]({
 7: 4
 })
 current_hp = 20
-current_will = 5
 inventory = Array[ExtResource("6_k443w")]([SubResource("Resource_46eyd")])
 equipped_index = 0
 affinity_saved = true

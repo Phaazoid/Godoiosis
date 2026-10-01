@@ -17,7 +17,7 @@ var game   # injected by DevOverlay
 var _dirty := false
 var _stats: Dictionary[Stats.Stat, int] = {}
 var _current_hp := 0
-var _current_will := 0
+var _wounded := false   # #1174: went down this battle (battle-scoped, on the Unit)
 var _faction: Team.Faction = Team.Faction.PLAYER
 var _squad_name := ""
 var _unit_name := ""
@@ -72,7 +72,7 @@ func _capture(unit: Unit) -> void:
 	var inst: UnitInstance = unit.unit_instance
 	_stats = inst.stats.duplicate()
 	_current_hp = unit.get_current_hp()
-	_current_will = inst.get_current_will()
+	_wounded = unit.wounded
 	_faction = unit.get_faction()
 	_squad_name = unit.squad.squad_name
 	_unit_name = unit.get_unit_name()
@@ -141,7 +141,7 @@ func _apply(unit: Unit) -> void:
 		unit.worn_armor = null
 
 	unit.set_current_hp(maxi(1, _current_hp))   # through the UNIT: only it can derive the ceiling
-	inst.set_current_will(_current_will)
+	unit.wounded = _wounded
 
 	if unit.get_faction() != _faction:
 		unit.change_faction(_faction)
@@ -282,7 +282,7 @@ func populate_unit_editor(unit):
 
 	var down_button := Button.new()
 	down_button.text = "Down Unit"
-	down_button.tooltip_text = "Straight to downed — skips the ladder, so no Will spend, no maim, no Crisis"
+	down_button.tooltip_text = "Straight to downed — skips the ladder, so no limb and no Crisis. Still wounds the unit."
 	down_button.disabled = not unit.is_active()
 	down_button.pressed.connect(func(): _down_unit(unit))
 	unit_editor_container.add_child(down_button)
@@ -334,7 +334,6 @@ func _add_stats_section(page: VBoxContainer) -> void:
 		var key: Stats.Stat = stat
 		_add_grid_spinbox(grid, Stats.Stat.keys()[key], _stats[key], func(v): _stage_stat(key, int(v)))
 	_add_grid_spinbox(grid, "Current HP", _current_hp, func(v): _stage_hp(int(v)))
-	_add_grid_spinbox(grid, "Current Will", _current_will, func(v): _stage_will(int(v)))
 
 	DevWidgets.add_option(page, "Faction", Team.Faction.keys(), Team.Faction.keys()[_faction],
 		func(s): _stage_faction(s))
@@ -342,6 +341,8 @@ func _add_stats_section(page: VBoxContainer) -> void:
 	DevWidgets.add_lineedit(page, "Squad Name", _squad_name, func(s): _stage_squad_name(s))
 	DevWidgets.add_checkbox(page, "Must survive", _must_survive, func(v): _stage_must_survive(v),
 		"#572: the mission is LOST if this unit dies. Declare PROTECTED_UNIT_LOST on the Scenario tab too -- this flag is the geometry, that list is the rule.")
+	DevWidgets.add_checkbox(page, "Wounded", _wounded, func(v): _stage_wounded(v),
+		"#1174: went down this battle, so a smaller blow takes a limb and Crisis cannot fire.")
 
 func _add_grid_spinbox(grid: GridContainer, label_text: String, value: int, on_change: Callable) -> void:
 	var label := Label.new()
@@ -375,8 +376,8 @@ func _stage_hp(value: int) -> void:
 	_current_hp = maxi(1, value)
 	_touch()
 
-func _stage_will(value: int) -> void:
-	_current_will = value
+func _stage_wounded(value: bool) -> void:
+	_wounded = value
 	_touch()
 
 func _stage_faction(faction_name: String) -> void:

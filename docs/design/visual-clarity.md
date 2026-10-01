@@ -7,7 +7,7 @@ its child [#49 Action Queue UX](https://github.com/Phaazoid/Godoiosis/issues/49)
 This is a *guidelines* doc, not a spec — it captures the principles we're holding the work to,
 plus the running order of the queue-UX checklist. Update it as items land.
 
-**Canon checked through #1171 (2026-09-29).**
+**Canon checked through #1171 (2026-09-29); #1174 (Will retired, the limb icons) folded in 2026-10-01.**
 
 ## Principles
 
@@ -2867,7 +2867,8 @@ ruled change is its own commit, moving two readings and nothing else.
 
 Flash-not-glow unit highlights; counter-hover -> show countering enemy's attack range;
 enemy attack-range on hover during player turn; real Will bars on panels (HP over a unit's head
-landed as #229 above; the PANEL half and Will are both still open); squad-target
+landed as #229 above; the PANEL half is still open, and Will is moot since #1174 retired it --
+#965 now asks for Wounded on the board instead); squad-target
 cursor color-coding; simultaneous-movement legibility (needs design first — the umbrella's core
 problem).
 

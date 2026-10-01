@@ -73,9 +73,17 @@ func _queue_walk(unit: Unit, to_x: int) -> MoveAction:
 
 # Where `witness` was standing each time `subject` took a hit, in the order the hits landed. The
 # whole suite reduces to this list.
+#
+# A hit is the number FALLING, not the signal firing: a stat settle re-emits hp_changed at an
+# unchanged value (Unit.reclamp_hp), and since #1174 a limb-sized blow settles one on the cell it
+# struck. `last` is boxed in an Array because a lambda captures a plain local by value.
 func _record_hits(subject: Unit, witness: Unit, into: Array[Vector2i]) -> void:
+	var last: Array[int] = [subject.get_current_hp()]
 	subject.unit_instance.hp_changed.connect(
-			func(_current: Variant, _max: Variant) -> void: into.append(witness.movement.cell))
+			func(current: Variant, _max: Variant) -> void:
+				if int(current) < last[0]:
+					into.append(witness.movement.cell)
+				last[0] = int(current))
 
 
 # THE case. The shot fires at the crossing MOMENT, so the crosser is standing on the crossing cell
