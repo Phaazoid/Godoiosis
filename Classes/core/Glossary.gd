@@ -26,7 +26,7 @@ enum Term {
 	# Squads
 	SQUAD, LEADER, COHESION, SQUAD_SIZE,
 	# Stats (one per Stats.Stat, plus the derived readout rows)
-	MHP, STR, LDR, WIL, DEX, PER, CON, COH, MOV, WEIGHT, DEF, DAMAGE_KIND,
+	MHP, STR, LDR, WIL, DEX, PER, CON, COH, BLD, MOV, WEIGHT, DEF, DAMAGE_KIND,
 	# Actions (one per MainActionMenu.ACTION_DATA row, one per MainActionMenu.CATEGORIES row --
 	# a radial category is a row the player hovers and so owes a readout like any other (#467) --
 	# plus ATTACK_TARGETING, the channel axis)
@@ -95,7 +95,7 @@ static func term_for_stat(stat: Stats.Stat) -> Term:
 	const MAP: Dictionary[Stats.Stat, Term] = {
 		Stats.Stat.MHP: Term.MHP, Stats.Stat.STR: Term.STR, Stats.Stat.LDR: Term.LDR,
 		Stats.Stat.WIL: Term.WIL, Stats.Stat.DEX: Term.DEX, Stats.Stat.PER: Term.PER,
-		Stats.Stat.CON: Term.CON, Stats.Stat.COH: Term.COH,
+		Stats.Stat.CON: Term.CON, Stats.Stat.COH: Term.COH, Stats.Stat.BLD: Term.BLD,
 	}
 	return MAP[stat]
 
@@ -276,7 +276,10 @@ static func _build_entries() -> Dictionary:
 	e[Term.COH] = {"category": Category.STATS, "title": "Cohesion (COH)",
 		"short": "Leash length as a leader: how far squadmates may stand, in path distance.",
 		"long": "Read off the leader only. See Cohesion under Squads for how the leash works."}
-	e[Term.MOV] = {"category": Category.STATS, "title": "Movement (MOV)",
+	e[Term.BLD] = {"category": Category.STATS, "title": "Build (BLD)",
+		"short": "",
+		"long": ""}
+	e[Term.MOV] ={"category": Category.STATS, "title": "Movement (MOV)",
 		"short": "Tiles per move: base %d shifted by DEX's band." % UnitInstance.JOBLESS_MOV_BASE,
 		"long": "How far a unit walks in one move order. Base %d, shifted by DEX's band. Losing a "
 			% UnitInstance.JOBLESS_MOV_BASE

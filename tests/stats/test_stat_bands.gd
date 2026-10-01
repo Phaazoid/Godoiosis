@@ -40,12 +40,23 @@ func test_per_ldr_band_rungs() -> void:
 	assert_int(Stats.per_ldr_band(Stats.BAND_MID_MAX + 1)).is_equal(1)
 	assert_int(Stats.per_ldr_band(Stats.BAND_MID_MAX + 5)).is_equal(1)
 
+func test_weight_band_rungs() -> void:
+	# #120: two thresholds over Unit.get_weight(), heavier is a higher rung, and it caps at 2.
+	assert_int(Stats.weight_band(0)).is_equal(0)
+	assert_int(Stats.weight_band(Stats.WEIGHT_BAND_1 - 1)).is_equal(0)
+	assert_int(Stats.weight_band(Stats.WEIGHT_BAND_1)).is_equal(1)
+	assert_int(Stats.weight_band(Stats.WEIGHT_BAND_2 - 1)).is_equal(1)
+	assert_int(Stats.weight_band(Stats.WEIGHT_BAND_2)).is_equal(2)
+	assert_int(Stats.weight_band(Stats.WEIGHT_BAND_2 + 20)).is_equal(2)
+
 func test_all_defaults_land_on_the_zero_rung() -> void:
 	# The no-behavior-shift guarantee: a default statline takes 0 from every band,
-	# so pre-CON units, scenarios, and fixtures keep their exact numbers.
+	# so pre-CON units, scenarios, and fixtures keep their exact numbers. A default BODY carrying
+	# nothing is band 0 too, which is why giving every unit a BLD (#120) changed no fall.
 	assert_int(Stats.dex_mov_band(Stats.STAT_DEFAULTS[Stats.Stat.DEX])).is_equal(0)
 	assert_int(Stats.con_mhp_band(Stats.STAT_DEFAULTS[Stats.Stat.CON])).is_equal(0)
 	assert_int(Stats.per_ldr_band(Stats.STAT_DEFAULTS[Stats.Stat.PER])).is_equal(0)
+	assert_int(Stats.weight_band(Stats.STAT_DEFAULTS[Stats.Stat.BLD])).is_equal(0)
 
 func test_armor_def_mechanism() -> void:
 	# DEF = flat + (power x CON x factor), stats.md. Value-free on CON_DEF_FACTOR (playtest-tunable):
