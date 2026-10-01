@@ -486,12 +486,17 @@ static func _rebalance_blend(blend: Dictionary, moved: Stats.Stat, value: int,
 # It exists because build_resource_editor draws no dictionary at all -- its match has arms for
 # int/float/bool/string/object and nothing else -- so every Dictionary field in the project has
 # been silently undrawn (WeaponModData.scaling_change, ArmorData.stat_modifiers).
-static func add_stat_dict(container: Node, label_text: String, values: Dictionary, tooltip := "") -> void:
+#
+# `exclude` names stats this dictionary may never hold, so the form does not offer what a law refuses
+# (gear passes Stats.GEAR_EXCLUDED).
+static func add_stat_dict(container: Node, label_text: String, values: Dictionary, tooltip := "", exclude: Array = []) -> void:
 	var first := container.get_child_count()
 	add_label(container, label_text)
 	var grid := GridContainer.new()
 	grid.columns = 4
 	for stat: Stats.Stat in Stats.STAT_DEFAULTS:
+		if exclude.has(stat):
+			continue
 		var key := stat
 		var name_label := Label.new()
 		name_label.text = Stats.Stat.keys()[key]

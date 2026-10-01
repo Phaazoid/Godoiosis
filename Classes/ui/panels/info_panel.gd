@@ -143,7 +143,7 @@ func _refresh_stats():
 		UnitInstance.JOBLESS_MOV_BASE,
 		Stats.dex_mov_band(unit.get_effective_stat(Stats.Stat.DEX)),
 		inst.empty_leg_count()))
-	_add_stat("WT", str(unit.get_weight()), Glossary.Term.WEIGHT, weight_tooltip(unit.get_weight()))
+	_add_stat("WT", str(unit.get_weight()), Glossary.Term.WEIGHT, weight_tooltip(unit.get_effective_stat(Stats.Stat.BLD), unit.get_carried_weight()))
 	var armor_name := ""
 	var armor_power := 0
 	var armor_coverage := ""
@@ -284,8 +284,8 @@ static func effect_source_text(source_name: String, delta: int, turns_remaining:
 	var plural := "" if turns_remaining == 1 else "s"
 	return "%s %+d (%d turn%s)" % [source_name, delta, turns_remaining, plural]
 
-static func weight_tooltip(carried: int) -> String:
-	return "Carried gear %d\nTracked only -- no effect yet" % carried
+static func weight_tooltip(body: int, carried: int) -> String:
+	return "Body %d + carried %d" % [body, carried]
 
 static func def_tooltip(armor_name: String, def_power: int, con: int, armor_def: int, cover_def: int, total: int, coverage: String = "") -> String:
 	# `total` is passed, not re-added: RulesService.def_breakdown already composed it, and a

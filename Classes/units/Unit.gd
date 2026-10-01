@@ -524,9 +524,15 @@ func get_current_hp() -> int:
 func get_mov() -> int:
 	return unit_instance.get_mov(get_effective_stat(Stats.Stat.DEX))
 
-# Everything carried, equipped or not: armor and the equipped weapon both live in `inventory`,
-# so one sweep covers them. No body term -- weight is gear only.
+# The body plus everything carried (#120). BLD is read EFFECTIVE so a job or a temporary effect can
+# move it; armor and the equipped weapon both live in `inventory`, so one sweep covers the gear.
+# CON is never a term (retracted 2026-07-27), and gear's mass is Item.weight alone --
+# tests/law/test_gear_has_one_mass.gd refuses a piece that names BLD in its stat_modifiers.
 func get_weight() -> int:
+	return get_effective_stat(Stats.Stat.BLD) + get_carried_weight()
+
+# The gear half of get_weight, for a readout that shows the two apart. A rule asks get_weight.
+func get_carried_weight() -> int:
 	var total := 0
 	for item in inventory:
 		if item != null:

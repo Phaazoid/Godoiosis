@@ -56,7 +56,7 @@
 >
 > **The dial's floor is ONE** (dev, 2026-09-12). An absent clock is legal `.tres` and means *burns forever* — but `tests/terrain/test_fire_clock.gd` refuses one on a shipped fuel, because a grass field that never goes out would ship silently. Forever is already spelled, and better: **ground that is not fuel never runs out**, which is what Prolog's braziers on flagstone have always been. So the TICK is how you say forever, and the dial cannot author a file CI reds.
 
-**Canon checked through #902 (2026-09-12); #1174 (the water takes no limb) folded in 2026-10-01; #1092's Chilled-beats-Wet rule folded in 2026-09-29; #1135's map-only rule folded in 2026-09-28; #922's melt-sinking folded in 2026-09-27; the burn-rule surface folded in 2026-09-12; the #895 firebreak measurement and fireproofing #892 folded in 2026-09-11; shallow water re-costed 2026-09-10.**
+**Canon checked through #902 (2026-09-12); #1174 (the water takes no limb) folded in 2026-10-01; #1092's Chilled-beats-Wet rule folded in 2026-09-29; #1135's map-only rule folded in 2026-09-28; #922's melt-sinking folded in 2026-09-27; the burn-rule surface folded in 2026-09-12; the #895 firebreak measurement and fireproofing #892 folded in 2026-09-11; shallow water re-costed 2026-09-10; #120's swim drop folded in 2026-10-01.**
 
 ## The tile model (implemented — [LOCKED shape])
 
@@ -220,9 +220,9 @@ bottom is what separates shallow water from ICE, which is what the first pass at
   against the pass's own states; `wets_in` reads the live unit). Kept as a correction rather than deleted: the mistake was
   *asserting a code fact from memory in a doc*, and the record of that is worth more than the tidy
   version. Standing rule it leaves behind: **grep before writing "nothing references X" into canon.**
-- **Weight ties in** — *"maybe the weight they carry affects whether they can swim"* — the same
-  conversation's other half, now [#120](https://github.com/Phaazoid/Godoiosis/issues/120)
-  ([stats.md](stats.md) → *Weight*).
+- ~~**Weight ties in**~~ — *"maybe the weight they carry affects whether they can swim"* — **DROPPED
+  2026-10-01** (dev, scoping [#120](https://github.com/Phaazoid/Godoiosis/issues/120)): swimming *"has
+  changed anyways, and doesn't really exist"*. Weight reads falls and shoves only ([weight.md](weight.md)).
 
 ## "Attack the map" ([WORKSHOP] — shared with elemental)
 

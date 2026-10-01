@@ -79,6 +79,20 @@ func test_setting_a_stat_dict_row_back_to_zero_erases_the_key() -> void:
 	spins[_row_for(Stats.Stat.STR)].value = 0
 	assert_bool(values.has(Stats.Stat.STR)).is_false()
 
+# #120: a stat the dictionary may never hold gets no row, so the mod form does not offer the body
+# weight that tests/law/test_gear_has_one_mass.gd refuses on gear.
+func test_an_excluded_stat_draws_no_row() -> void:
+	var box: VBoxContainer = auto_free(VBoxContainer.new())
+	add_child(box)
+	var values: Dictionary[Stats.Stat, int] = {}
+	DevWidgets.add_stat_dict(box, "Modifiers", values, "", Stats.GEAR_EXCLUDED)
+
+	assert_int(_spinboxes(box).size()).is_equal(Stats.STAT_DEFAULTS.size() - Stats.GEAR_EXCLUDED.size())
+	var labels: Array[String] = []
+	for node in box.find_children("*", "Label", true, false):
+		labels.append((node as Label).text)
+	assert_bool(labels.has(Stats.Stat.keys()[Stats.Stat.BLD])).is_false()
+
 
 # --- add_blend_sliders (#485) ---
 #
