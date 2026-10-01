@@ -41,3 +41,4 @@ size = 1
 inscriptions = Array[ExtResource("1_xnjhm")]([SubResource("Resource_7thox"), SubResource("Resource_dqqr4")])
 temper = 2
 display_name = "Water Rune"
+weight = 1

@@ -13,3 +13,4 @@ weapon_type = 5
 is_prototype = true
 display_name = "Shock Rod"
 icon = ExtResource("2_7kntj")
+weight = 3

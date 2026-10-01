@@ -12,4 +12,5 @@ main_attack = ExtResource("2_main")
 weapon_type = 6
 display_name = "Chemical Spitter"
 icon = ExtResource("3_icon")
+weight = 6
 metadata/_custom_type_script = "uid://cfeu07eqvatyn"

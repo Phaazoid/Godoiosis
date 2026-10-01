@@ -26,3 +26,4 @@ size = 1
 inscriptions = Array[ExtResource("1_6pdr4")]([SubResource("Resource_r24jr")])
 temper = 1
 display_name = "Electric Rune"
+weight = 1

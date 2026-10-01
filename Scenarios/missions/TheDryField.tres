@@ -41,6 +41,7 @@ flat_def = 2
 covered_kinds = Array[int]([3])
 granted_abilities = Array[ExtResource("8_4g15e")]([ExtResource("9_u1883")])
 display_name = "Asbestos Shroud"
+weight = 2
 metadata/_custom_type_script = "uid://dj0617uewvdny"
 
 [sub_resource type="Resource" id="Resource_6wroh"]
@@ -107,6 +108,7 @@ flat_def = 2
 covered_kinds = Array[int]([3])
 granted_abilities = Array[ExtResource("8_4g15e")]([ExtResource("9_u1883")])
 display_name = "Asbestos Shroud"
+weight = 2
 metadata/_custom_type_script = "uid://dj0617uewvdny"
 
 [sub_resource type="Resource" id="Resource_u1883"]
@@ -173,6 +175,7 @@ flat_def = 2
 covered_kinds = Array[int]([3])
 granted_abilities = Array[ExtResource("8_4g15e")]([ExtResource("9_u1883")])
 display_name = "Asbestos Shroud"
+weight = 2
 metadata/_custom_type_script = "uid://dj0617uewvdny"
 
 [sub_resource type="Resource" id="Resource_n31xq"]
@@ -239,6 +242,7 @@ flat_def = 2
 covered_kinds = Array[int]([3])
 granted_abilities = Array[ExtResource("8_4g15e")]([ExtResource("9_u1883")])
 display_name = "Asbestos Shroud"
+weight = 2
 metadata/_custom_type_script = "uid://dj0617uewvdny"
 
 [sub_resource type="Resource" id="Resource_2ljva"]
@@ -308,6 +312,7 @@ flat_def = 2
 covered_kinds = Array[int]([3])
 granted_abilities = Array[ExtResource("8_4g15e")]([ExtResource("9_u1883")])
 display_name = "Asbestos Shroud"
+weight = 2
 metadata/_custom_type_script = "uid://dj0617uewvdny"
 
 [sub_resource type="Resource" id="Resource_un4od"]
@@ -386,6 +391,7 @@ size = 1
 inscriptions = Array[ExtResource("18_vnqxw")]([SubResource("Resource_rdfi3")])
 temper = 1
 display_name = "Fire Rune"
+weight = 1
 metadata/_custom_type_script = "uid://ckrp1phgirys0"
 
 [sub_resource type="Resource" id="Resource_w65ut"]
@@ -394,6 +400,7 @@ flat_def = 2
 covered_kinds = Array[int]([3])
 granted_abilities = Array[ExtResource("8_4g15e")]([ExtResource("9_u1883")])
 display_name = "Asbestos Shroud"
+weight = 2
 metadata/_custom_type_script = "uid://dj0617uewvdny"
 
 [sub_resource type="Resource" id="Resource_kjqhg"]
@@ -466,6 +473,7 @@ flat_def = 2
 covered_kinds = Array[int]([3])
 granted_abilities = Array[ExtResource("8_4g15e")]([ExtResource("9_u1883")])
 display_name = "Asbestos Shroud"
+weight = 2
 metadata/_custom_type_script = "uid://dj0617uewvdny"
 
 [sub_resource type="Resource" id="Resource_u7qn7"]

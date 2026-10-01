@@ -10,4 +10,5 @@ stat_modifiers = Dictionary[int, int]({
 4: -1
 })
 display_name = "Riveted Mail"
+weight = 5
 metadata/_custom_type_script = "uid://dj0617uewvdny"

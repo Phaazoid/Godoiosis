@@ -13,3 +13,4 @@ weapon_type = 5
 is_prototype = true
 display_name = "Water Staff"
 icon = ExtResource("2_6k510")
+weight = 3

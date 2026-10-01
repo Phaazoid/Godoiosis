@@ -13,4 +13,5 @@ extra_attacks = Array[ExtResource("4_wad")]([ExtResource("5_blow")])
 weapon_type = 5
 display_name = "Kinetic Mace"
 icon = ExtResource("3_icon")
+weight = 5
 metadata/_custom_type_script = "uid://cfeu07eqvatyn"

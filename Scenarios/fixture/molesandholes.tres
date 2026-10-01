@@ -460,6 +460,7 @@ script = ExtResource("21_qlc3e")
 inscriptions = Array[ExtResource("19_j3sob")]([SubResource("Resource_mpdgd")])
 temper = 6
 display_name = "woosh"
+weight = 1
 
 [sub_resource type="Resource" id="Resource_6mrty"]
 script = ExtResource("15_gnsc6")
@@ -526,6 +527,7 @@ script = ExtResource("21_qlc3e")
 inscriptions = Array[ExtResource("19_j3sob")]([SubResource("Resource_mfdw7")])
 temper = 6
 display_name = "woosh"
+weight = 1
 
 [sub_resource type="Resource" id="Resource_gdt8c"]
 script = ExtResource("15_gnsc6")
@@ -750,6 +752,7 @@ script = ExtResource("21_qlc3e")
 inscriptions = Array[ExtResource("19_j3sob")]([SubResource("Resource_inpo2")])
 temper = 6
 display_name = "woosh"
+weight = 1
 
 [sub_resource type="Resource" id="Resource_vsr1d"]
 script = ExtResource("15_gnsc6")

@@ -11,3 +11,4 @@ display_name = "Lob Shot Mod"
 family = 4
 replaces_main = ExtResource("3_qip8k")
 granted_attacks = Array[ExtResource("2_edi57")]([ExtResource("3_qip8k")])
+weight = 1

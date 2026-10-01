@@ -16,7 +16,8 @@ portrait = ExtResource("5_7kq8x")
 base_stats = Dictionary[int, int]({
 1: 5,
 2: 5,
-4: 5
+4: 5,
+8: 11
 })
 map_sprite = ExtResource("3_v7khi")
 move_sprite = ExtResource("4_pyl5k")

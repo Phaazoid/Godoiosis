@@ -14,6 +14,9 @@
 script = ExtResource("3_pvpur")
 display_name = "Isaac"
 portrait = ExtResource("2_vwufm")
+base_stats = Dictionary[int, int]({
+8: 9
+})
 map_sprite = ExtResource("3_eo7yh")
 move_sprite = ExtResource("4_bijhs")
 downed_sprite = ExtResource("1_6qlil")

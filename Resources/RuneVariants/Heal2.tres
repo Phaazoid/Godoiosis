@@ -20,3 +20,4 @@ script = ExtResource("3_j4cyw")
 inscriptions = Array[ExtResource("1_fvwxf")]([SubResource("Resource_fvwxf")])
 temper = 7
 display_name = "Heal Rune"
+weight = 1
