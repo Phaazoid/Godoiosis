@@ -18,7 +18,7 @@ const MAX_FLASHES := 4
 const LOOK_FLOATS := 24
 const REGION_FLOATS := 8
 # The Frame block, in floats: two matrices, raster, the dispatch rect, then Params.
-const PARAM_FLOATS := 13 * 4 + (MAX_LAMPS * 2 + MAX_FLASHES) * 4
+const PARAM_FLOATS := 12 * 4 + (MAX_LAMPS * 2 + MAX_FLASHES) * 4
 const FRAME_FLOATS := 32 + 8 + PARAM_FLOATS
 
 
@@ -127,6 +127,14 @@ func submit(snapshot: Snapshot) -> void:
 	_mutex.lock()
 	_snapshot = snapshot
 	_mutex.unlock()
+
+
+# What was last submitted -- the readable half of the contract when no device runs it (headless).
+func current() -> Snapshot:
+	_mutex.lock()
+	var snap := _snapshot
+	_mutex.unlock()
+	return snap
 
 
 func _build() -> void:

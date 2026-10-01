@@ -136,6 +136,11 @@ func volume_effect() -> GasVolumeEffect:
 	return _effect
 
 
+# cells, amounts, masks, ground corners, ground centre -- as the volume and the floor read them.
+func board_textures() -> Array[Texture]:
+	return _textures
+
+
 func _process(delta: float) -> void:
 	_time += delta
 	if field == null:
