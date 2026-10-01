@@ -110,6 +110,21 @@ func test_body_weight_round_trips_and_an_older_save_keeps_the_built_body() -> vo
 	entry.apply_unit_state(c)
 	assert_int(c.unit_instance.get_base_stat(Stats.Stat.BLD)).is_equal(7)
 
+# #1174: a save written before WIL retired still carries the key. Applying it must not put a retired
+# stat back on the unit, or every surface that walks the unit's own dict draws a dead row.
+func test_an_older_save_does_not_restore_a_retired_stat() -> void:
+	var unit: Unit = H.spawn_unit(self, Team.Faction.PLAYER, Vector2i.ZERO, {}, false)
+	var entry := ScenarioUnitEntry.new()
+	entry.capture_unit_state(unit)
+	for stat: Stats.Stat in Stats.RETIRED:
+		entry.stats[stat] = 8   # what a pre-#1174 snapshot looks like
+
+	entry.apply_unit_state(unit)
+
+	for stat: Stats.Stat in Stats.RETIRED:
+		assert_bool(unit.unit_instance.stats.has(stat)) \
+			.override_failure_message("a save restored %s" % Stats.Stat.keys()[stat]).is_false()
+
 func test_apply_clamps_hp_to_the_edited_max() -> void:
 	# Saved HP can exceed the max the (possibly edited) saved stats produce — the setter clamps.
 	# And HP floors at 1 on apply: a load must never fire died().

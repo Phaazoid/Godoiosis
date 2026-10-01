@@ -16,7 +16,6 @@ portrait = ExtResource("2_7mujt")
 base_stats = Dictionary[int, int]({
 1: 4,
 2: 7,
-3: 9,
 4: 8,
 5: 8,
 6: 4,

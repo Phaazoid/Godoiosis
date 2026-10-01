@@ -55,3 +55,12 @@ func test_set_current_hp_clamps_to_banded_max() -> void:
 # Weight left UnitInstance entirely on 2026-07-27: it is gear-only, and gear lives on the
 # transient Unit, so there was nothing for the persistent instance to compute. Coverage moved
 # to tests/stats/test_carried_weight.gd.
+
+# A retired stat (#1174) is dropped at the door: a character file written before WIL retired still
+# carries the key, and the dev editor iterates this dict, so a surviving key would draw a dead row.
+func test_initialize_drops_a_retired_stat() -> void:
+	var inst := _make_instance({Stats.Stat.MHP: 20, Stats.Stat.WIL: 8})
+	for stat: Stats.Stat in Stats.RETIRED:
+		assert_bool(inst.stats.has(stat)) \
+			.override_failure_message("%s survived initialize" % Stats.Stat.keys()[stat]).is_false()
+	assert_int(inst.stats.size()).is_equal(Stats.STAT_DEFAULTS.size())

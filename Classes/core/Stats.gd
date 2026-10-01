@@ -8,7 +8,8 @@ class_name Stats
 # The canonical stat vocabulary. APPEND-ONLY: these serialize as ints in saved .tres
 # (UnitData.base_stats / WeaponData.scaling_blend keys). Reordering or deleting
 # a value silently corrupts existing resources — always add new stats at the END.
-# Roster + rationale: docs/design/stats.md. Input stats: STR/DEX/PER/CON. Capacity: MHP/WIL/LDR.
+# Roster + rationale: docs/design/stats.md. Input stats: STR/DEX/PER/CON. Capacity: MHP/LDR.
+# WIL is a TOMBSTONE (#1174): retired with Will, kept so every later value keeps its int. See RETIRED.
 # Squad: COH. Body: BLD, the body's own mass (#120) -- Unit.get_weight() is BLD plus what is carried.
 enum Stat { MHP, STR, LDR, WIL, DEX, PER, CON, COH, BLD }
 
@@ -16,7 +17,6 @@ const STAT_DEFAULTS: Dictionary[Stat, int] = {
 	Stat.MHP: 20,
 	Stat.STR: 5,
 	Stat.LDR: 5,
-	Stat.WIL: 5,
 	Stat.DEX: 5,
 	Stat.PER: 5,
 	Stat.CON: 5,
@@ -35,6 +35,12 @@ const STAT_DEFAULTS: Dictionary[Stat, int] = {
 # gear stat_modifier naming it would be a second spelling of one fact. Read by the law that guards it
 # (tests/law/test_gear_has_one_mass.gd) and by the editor that would otherwise offer it.
 const GEAR_EXCLUDED: Array[Stat] = [Stat.BLD]
+
+# Stats that no longer exist (#1174), kept in the enum only because it is append-only. Off
+# STAT_DEFAULTS, so every surface that lists stats drops them, and both loaders erase their keys
+# (UnitInstance.initialize, ScenarioUnitEntry.apply_unit_state): a save or a character file written
+# before the retirement still carries one.
+const RETIRED: Array[Stat] = [Stat.WIL]
 
 const CON_DEF_FACTOR := 0.2   # playtest-tunable: CON 5 wears armor at its printed value
 
