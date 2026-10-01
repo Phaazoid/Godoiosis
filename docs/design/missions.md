@@ -2,7 +2,7 @@
 
 **Status: ALL FOUR SLICES BUILT 2026-07-28 ([#96](https://github.com/Phaazoid/Godoiosis/issues/96)).** Filed 2026-07-27, when the project acquired a win condition for the first time. Before this, Iosis had ten interlocking systems and no way to finish a battle — which meant a design question could be answered *"is this coherent?"* but never *"does this improve play?"*
 
-**Canon checked through #1160 (2026-09-29); #120's body weight and #1174's WIL tombstone folded in 2026-10-01.**
+**Canon checked through #1160 (2026-09-29); #120's body weight and its authored table, and #1174's WIL tombstone, folded in 2026-10-01.**
 
 ## What a mission is
 
@@ -205,7 +205,7 @@ reached nothing a player could hover. `Item.describe()` is the one door now and 
 reads THROUGH to its template — re-wording a family re-words every weapon built on it, saved
 scenarios included, with no migration. Only then were the seven base-weapon descriptions worth
 writing. **Flavour never states a number**: a value in prose goes stale while the data stays right,
-which `test_derived_readouts.gd` enforces over every authored weapon file. Weight reads each unit's body (BLD) plus what it carries since #120 PR 1, and items still mostly weigh 0 until #120's authoring pass (dev's call — the slot is shown so the gap is visible rather than forgotten).
+which `test_derived_readouts.gd` enforces over every authored weapon file. Weight reads each unit's body (BLD) plus what it carries (#120), and every body and item has an authored weight since #120 PR 3, set on the dev-tools Weights page ([weight.md](weight.md)).
 
 ### Gear moves, and the stash that owns it ([#741](https://github.com/Phaazoid/Godoiosis/issues/741))
 

@@ -26,4 +26,5 @@ size = 1
 inscriptions = Array[ExtResource("1_tgbeh")]([SubResource("Resource_2aefx")])
 temper = 1
 display_name = "Fire Rune"
+weight = 1
 metadata/_custom_type_script = "uid://ckrp1phgirys0"

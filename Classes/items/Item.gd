@@ -15,13 +15,22 @@ class_name Item
 @export var description: String
 
 # Authored mass. A property of the ITEM alone -- no stat feeds it (the old CON body term was
-# doctrine drift, removed 2026-07-27). Tracked but INERT: nothing reads it into a rule yet.
+# doctrine drift, removed 2026-07-27). A carrier weighs its BLD plus every item it holds (#120).
 @export var weight: int = 0
 
 # Virtual so a composite item can report more than its authored value (WeaponInstance adds
 # its fitted modules). Everything else is just itself.
 func get_effective_weight() -> int:
 	return weight
+
+# What a pile of items weighs together -- a unit's inventory, or a character's starting kit before
+# anyone is spawned to carry it (the Weights tab's readout). One sum, so the two cannot disagree.
+static func total_weight(items: Array[Item]) -> int:
+	var total := 0
+	for item in items:
+		if item != null:
+			total += item.get_effective_weight()
+	return total
 
 # Field text for the dev tools' reflective editor (#473). Declared here so every item subclass
 # inherits the four base fields rather than restating them -- a subclass merges this into its own.
@@ -30,7 +39,7 @@ static func property_tips() -> Dictionary:
 		"display_name": "What this item is called wherever the game names it.",
 		"icon": "The picture shown in menus and the inventory. Optional -- an item with none simply draws nothing.",
 		"description": "Flavour text. Presentation only; no rule reads it. A weapon may leave this blank and inherit its template's -- see WeaponInstance.describe.",
-		"weight": "Authored mass. Tracked but nearly inert -- fall damage is its one wired reader (#120 owns the rest).",
+		"weight": "Authored mass. A carrier's weight is its BLD plus this, summed over everything it holds; the weight band shortens shoves and adds fall damage (#120). The Weights tab lists every item's weight side by side.",
 	}
 
 

@@ -18,3 +18,4 @@ script = ExtResource("3_rbhbv")
 inscriptions = Array[ExtResource("1_6pbac")]([SubResource("Resource_iovrl")])
 temper = 6
 display_name = "woosh"
+weight = 1

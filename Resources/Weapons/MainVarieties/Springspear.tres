@@ -13,4 +13,5 @@ extra_attacks = Array[ExtResource("1_r4sgd")]([ExtResource("5_spring")])
 weapon_type = 3
 display_name = "Springspear"
 icon = ExtResource("2_x53eu")
+weight = 4
 metadata/_custom_type_script = "uid://cfeu07eqvatyn"

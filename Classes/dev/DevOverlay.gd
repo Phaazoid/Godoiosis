@@ -33,6 +33,7 @@ class_name DevOverlay
 @onready var dev_info: DevInfoTool = get_node("%Info")
 @onready var replay_tool: ReplayTool = get_node("%Replay")
 @onready var roster_tool: RosterTool = get_node("%Rosters")
+@onready var weights_tool: WeightsTool = get_node("%Weights")
 @onready var dev_mode_toggle: CheckButton = %DevModeToggle
 @onready var dev_mode_banner: PanelContainer = %DevModeBanner
 
@@ -59,6 +60,8 @@ const LEAVES: Array[Dictionary] = [
 		"tip": "Author cast characters — the Resources/Units/ files authored saves reference. Update rewrites the character everywhere; Save As or Capture creates."},
 	{"scope": "Project", "label": "Items", "page": "%Item Editor",
 		"tip": "Author items — weapons and runes. Load a preset or start new, edit, name, save."},
+	{"scope": "Project", "label": "Weights", "page": "%Weights",
+		"tip": "Every body's BLD and every item's weight on one page, with what each character weighs and the band that puts them in. Save writes the files you changed."},
 	{"scope": "Project", "label": "Rosters", "page": "%Rosters",
 		"tip": "What a mission OFFERS — the units it fields, the gear its stash starts with, and the mods its fitting card lists. A scenario names one on the Properties page."},
 	{"scope": "Project", "label": "Attacks", "page": "%Attack Editor",
@@ -279,6 +282,8 @@ func _on_tab_changed(_tab: int):
 		dev_info.refresh_on_show()
 	if showing(replay_tool):
 		replay_tool.refresh_on_show()
+	if showing(weights_tool):
+		weights_tool.refresh_on_show()
 	if not showing(tile_brush):
 		tile_brush.deactivate()
 	_update_zone_visibility()

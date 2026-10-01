@@ -12,4 +12,5 @@ weapon_type = 1
 is_prototype = true
 display_name = "The Jaw"
 icon = ExtResource("4_icon")
+weight = 5
 metadata/_custom_type_script = "uid://cfeu07eqvatyn"

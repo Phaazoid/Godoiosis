@@ -38,3 +38,4 @@ size = 2
 inscriptions = Array[ExtResource("1_bs7q6")]([SubResource("Resource_vbu1b"), SubResource("Resource_vd2sa")])
 temper = 1
 display_name = "Lightning Tome"
+weight = 2

@@ -40,3 +40,4 @@ size = 1
 inscriptions = Array[ExtResource("1_vjyh4")]([SubResource("Resource_g65og"), SubResource("Resource_fgoxm")])
 temper = 2
 display_name = "FreezeRune"
+weight = 1

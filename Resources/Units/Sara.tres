@@ -19,7 +19,8 @@ base_stats = Dictionary[int, int]({
 4: 8,
 5: 8,
 6: 4,
-7: 3
+7: 3,
+8: 8
 })
 map_sprite = ExtResource("3_o3ygt")
 move_sprite = ExtResource("4_eio8b")

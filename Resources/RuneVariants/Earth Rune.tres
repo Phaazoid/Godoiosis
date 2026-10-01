@@ -20,3 +20,4 @@ script = ExtResource("3_15r8d")
 inscriptions = Array[ExtResource("1_44coc")]([SubResource("Resource_ftcn5")])
 temper = 5
 display_name = "Earth Rune"
+weight = 1

@@ -106,6 +106,7 @@ size = 1
 inscriptions = Array[ExtResource("16_qhv3w")]([SubResource("Resource_j83om")])
 temper = 1
 display_name = "Fire Rune"
+weight = 1
 metadata/_custom_type_script = "uid://ckrp1phgirys0"
 
 [sub_resource type="Resource" id="Resource_ynwst"]
@@ -114,6 +115,7 @@ flat_def = 2
 covered_kinds = Array[int]([3])
 granted_abilities = Array[ExtResource("11_jweqb")]([ExtResource("20_qiv5i")])
 display_name = "Asbestos Shroud"
+weight = 2
 metadata/_custom_type_script = "uid://dj0617uewvdny"
 
 [sub_resource type="Resource" id="Resource_mh666"]
@@ -329,6 +331,7 @@ size = 1
 inscriptions = Array[ExtResource("16_qhv3w")]([SubResource("Resource_oh8q3")])
 temper = 1
 display_name = "Electric Rune"
+weight = 1
 
 [sub_resource type="Resource" id="Resource_qiv5i"]
 script = ExtResource("15_frf67")
