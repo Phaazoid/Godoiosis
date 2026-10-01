@@ -8,20 +8,24 @@ class_name LethalityRules
 # hypothetical so the queue can preview the rung; Unit.take_damage asks at EXECUTION time against
 # live values. Law #2 says those two answers must be identical, and the only way to guarantee that
 # is for there to be one answer. Until 2026-07-27 there were two hand-synced implementations —
-# Unit._select_lethal_rung (DOWN/KILL only, with the maim decision buried a level down in
-# UnitInstance.spend_will_for_down) and PlanResolver._predict_lethality (the full ladder) — which
-# agreed by inspection and nothing else.
+# Unit._select_lethal_rung (DOWN/KILL only, with the maim decision buried a level down in the
+# since-retired Will spend) and PlanResolver._predict_lethality (the full ladder) — which agreed by
+# inspection and nothing else.
 #
-# This class names the rung. It decides nothing about how a rung is PAID: Unit still owns
-# execution (HP, lifecycle, the Will spend, entering Crisis) and PlanResolver still owns threading
-# the consequence into the next hit's hypothetical.
+# This class names the rung, and whether the blow takes a limb (#1174). It carries out neither:
+# Unit still owns execution (HP, lifecycle, entering Crisis, taking the limb) and PlanResolver still
+# owns threading the consequence into the next hit's hypothetical.
 
 # Overkill ceiling: a hit exceeding remaining HP by more than this kills outright (rung 3 — so
-# low-HP units aren't immortal). Stub tuning; replaced by Will math later.
+# low-HP units aren't immortal). Stub tuning.
 const OVERKILL_CEILING := 10
 
-# Crisis gates on a FULL Will pool — an identity gate, faction-agnostic since #57 (placeholder).
-const CRISIS_WILL_GATE := UnitInstance.MAX_WILL
+# A blow this big takes a limb, whether or not it downs (dev, #1174). A WOUNDED unit -- one that
+# has gone down this battle -- loses one to a smaller blow. The blow is the hit after armour, any
+# fall included, after Iron Will's cap: never the drowning top-up, never the ground. static var,
+# not const: tuned on the Game tab.
+static var LIMB_LOSS_DAMAGE := 10
+static var LIMB_LOSS_DAMAGE_WOUNDED := 8
 
 # Everything the ladder reads, and nothing else. A parameter object rather than loose args: eight
 # positional params was a real call-site hazard, which is the shape PlanResolver._Hypo had already
@@ -31,9 +35,9 @@ class Situation:
 	var hp: int = 0                          # HP going into THIS hit (threaded mid-pass by the resolver)
 	var start_hp: int = 0                    # HP at pass start — only the crisis-corpse case reads it
 	var lifecycle: Unit.LifecycleState = Unit.LifecycleState.ACTIVE
-	var will: int = 0
 	var in_crisis: bool = false
-	var can_maim: bool = false               # a limb remains to take; false = already fully maimed
+	var wounded: bool = false                # went down this battle (#1174): a smaller blow takes a limb
+	var limb_order: Array[int] = []          # the slots successive limb losses would take; empty = none left
 	var crisis_armed: bool = false           # holds the Crisis ability (#158) — the gambit fires itself
 
 	# A detached copy of the ladder's own fields — how a caller predicts against a threaded
@@ -43,9 +47,9 @@ class Situation:
 		s.hp = hp
 		s.start_hp = start_hp
 		s.lifecycle = lifecycle
-		s.will = will
 		s.in_crisis = in_crisis
-		s.can_maim = can_maim
+		s.wounded = wounded
+		s.limb_order = limb_order.duplicate()
 		s.crisis_armed = crisis_armed
 		return s
 
@@ -56,15 +60,15 @@ static func situation_for(unit: Unit) -> Situation:
 	s.hp = unit.get_current_hp()
 	s.start_hp = s.hp
 	s.lifecycle = unit.lifecycle_state
-	s.will = unit.unit_instance.get_current_will()
 	s.in_crisis = unit.in_crisis
-	s.can_maim = unit.unit_instance.next_maim_slot() != -1
+	s.wounded = unit.wounded
+	s.limb_order = unit.unit_instance.maim_order()
 	s.crisis_armed = crisis_armed_for(unit)
 	return s
 
 # Is the gambit ARMED on this unit? One kit read, faction-blind (#158): holding the Crisis ability
-# — from the Berserker job, or any source the kit knows — means a full-Will would-be-down ALWAYS
-# becomes Crisis. Equipping the source IS the acceptance; there is no prompt, no stance table, and
+# — from the Berserker job, or any source the kit knows — means an unwounded unit's would-be-down
+# ALWAYS becomes Crisis. Equipping the source IS the acceptance; there is no prompt, no stance table, and
 # the player previews their own Crisis like anyone else's. (Replaced accepts_crisis_by_stance,
 # whose PLAYER-always-false fork existed only to keep the live prompt unpredicted.)
 static func crisis_armed_for(unit: Unit) -> bool:
@@ -76,8 +80,11 @@ static func crisis_armed_for(unit: Unit) -> bool:
 #                          amended by #1002; a body nothing healed clings at 1, so any hit does)
 #   damage < hp         -> survivable (NONE)
 #   overkill > ceiling  -> KILLED
-#   would-be-down       -> CRISIS if full-Will + the Crisis ability is held (deterministic, #158),
-#                          else MAIMED if Will can't pay and a limb remains, else DOWNED
+#   would-be-down       -> CRISIS if the Crisis ability is held and the unit is not wounded
+#                          (deterministic, #158; the gate since #1174), else DOWNED
+#
+# Whether the blow ALSO takes a limb is not a rung: severs() answers it beside this, for any rung
+# the unit survives (#1174).
 #
 # Crisis-in-progress is special (dev call 2026-06-26): it never downs/maims (a would-be-down is
 # death), and EVERY independently-lethal hit stays flagged KILLED even after the unit "dies"
@@ -104,8 +111,8 @@ static func predict(s: Situation, damage: int) -> ResolvedOutcome.Lethality:
 		# HP-BASED since #1002 — a body holds real health once something heals it, and the dev's
 		# ruling is that it is then "not necessarily dead in one hit anymore". `>=` is the ACTIVE
 		# rung's own spelling four lines down, so there is one threshold in this file rather than
-		# two; a body at 1 HP (every body nothing has healed) is unchanged by construction. No Will,
-		# Crisis or maim branch: a body already paid those going down.
+		# two; a body at 1 HP (every body nothing has healed) is unchanged by construction. No Crisis
+		# branch: a body already paid that going down.
 		if damage <= 0:
 			return ResolvedOutcome.Lethality.NONE
 		return ResolvedOutcome.Lethality.KILLED if damage >= s.hp else ResolvedOutcome.Lethality.NONE
@@ -113,20 +120,32 @@ static func predict(s: Situation, damage: int) -> ResolvedOutcome.Lethality:
 		return ResolvedOutcome.Lethality.NONE
 	if damage - s.hp > OVERKILL_CEILING:
 		return ResolvedOutcome.Lethality.KILLED
-	if s.will >= CRISIS_WILL_GATE and s.crisis_armed:
+	if s.crisis_armed and not s.wounded:
 		return ResolvedOutcome.Lethality.CRISIS   # stands back up surged — the armed gambit is deterministic
-	if s.will < UnitInstance.DOWN_WILL_COST:
-		return ResolvedOutcome.Lethality.MAIMED if s.can_maim else ResolvedOutcome.Lethality.DOWNED
 	return ResolvedOutcome.Lethality.DOWNED
 
+# Does this blow take a limb (#1174)? Any rung the unit survives: a standing hit, a down, a Crisis
+# entry, a hit on a body that holds. A kill takes nothing. `blow` is the hit alone -- the caller
+# leaves out what is not a blow (the drowning top-up, the ground), which is why it is a parameter
+# rather than the damage predict() read. The threshold is read off the PRE-hit state, so the hit
+# that wounds a unit is still judged as a fresh one.
+static func severs(s: Situation, blow: int, rung: ResolvedOutcome.Lethality) -> bool:
+	if rung == ResolvedOutcome.Lethality.KILLED or s.limb_order.is_empty():
+		return false
+	if s.lifecycle == Unit.LifecycleState.DEAD:
+		return false
+	return blow >= limb_threshold(s)
+
+static func limb_threshold(s: Situation) -> int:
+	return LIMB_LOSS_DAMAGE_WOUNDED if s.wounded else LIMB_LOSS_DAMAGE
+
 # Which lifecycle a rung LEAVES its target in — the resolver's threading and any preview holding
-# only an outcome ask the same map. What a rung SPENDS is deliberately not here: the Will cost
-# differs per rung and stays beside the hypothetical it is spent from.
+# only an outcome ask the same map.
 static func lifecycle_for(rung: ResolvedOutcome.Lethality,
 		current := Unit.LifecycleState.ACTIVE) -> Unit.LifecycleState:
 	match rung:
-		ResolvedOutcome.Lethality.DOWNED, ResolvedOutcome.Lethality.MAIMED:
-			return Unit.LifecycleState.DOWNED   # a maim IS a down — same lifecycle
+		ResolvedOutcome.Lethality.DOWNED:
+			return Unit.LifecycleState.DOWNED
 		ResolvedOutcome.Lethality.KILLED:
 			return Unit.LifecycleState.DEAD
 	return current
@@ -145,8 +164,8 @@ static func lifecycle_for(rung: ResolvedOutcome.Lethality,
 # (threading from a negative, so the queue read -5->1 while execution healed the clinging body).
 static func hp_after(rung: ResolvedOutcome.Lethality, hp: int, damage: int) -> int:
 	match rung:
-		ResolvedOutcome.Lethality.DOWNED, ResolvedOutcome.Lethality.MAIMED:
-			return 1                             # _go_downed clings here; a maim is a down
+		ResolvedOutcome.Lethality.DOWNED:
+			return 1                             # _go_downed clings here
 		ResolvedOutcome.Lethality.CRISIS:
 			return Abilities.CRISIS_REVIVE_HP    # the gambit stands back up (enter_crisis)
 	return hp - damage

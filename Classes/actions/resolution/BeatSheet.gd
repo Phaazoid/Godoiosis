@@ -20,7 +20,7 @@ class_name BeatSheet
 #
 # A beat's WEIGHT is facts, never a duration and never a severity ranking: the lethality rungs it
 # contains, whether it shoves, drops, removes, or was held by Iron Will. Collapsing those into a
-# beat length is #519's table under a chosen profile, and ranking KILLED against MAIMED is that
+# beat length is #519's table under a chosen profile, and ranking KILLED against a lost limb is that
 # same table's call. Doing either here would be a second answer to a question #519 owns (Law #4).
 
 enum Kind { MOVES, VOLLEY, CELL_EFFECTS, TURNOVER, CODA }
@@ -47,6 +47,7 @@ class Beat:
 	var has_knockback := false
 	var has_fall := false
 	var has_removal := false
+	var has_severed := false        # a hit took a limb, standing or not (#1174)
 	var iron_will_held := false
 	var has_heal := false
 
@@ -132,6 +133,7 @@ class Beat:
 			has_knockback = has_knockback or out.knockback_applied
 			has_fall = has_fall or out.fall_levels > 0
 			has_removal = has_removal or out.removed
+			has_severed = has_severed or out.severed_limb != -1
 			iron_will_held = iron_will_held or out.iron_will_held
 			# The RESOLVER's own answer, like every other fact here -- never a re-read of
 			# fired_attack.heals. A heal that fired reads true even if the cap ate it.

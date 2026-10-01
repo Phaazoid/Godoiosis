@@ -1,7 +1,7 @@
 # Scenario persistence guards. Part 1 (#13): a unit whose resource no longer resolves loads
 # back as null and valid_entries drops it (with a push_error) so load_scenario never
 # null-derefs. Part 2 (#83): ScenarioUnitEntry.capture_unit_state/apply_unit_state round-trip
-# the UnitInstance side of the persistence seam — stats, HP, Will, inventory (shared-template
+# the UnitInstance side of the persistence seam — stats, HP, inventory (shared-template
 # rule), limbs (prosthetic re-link), proficiency, aura — and a default entry (= a pre-#83
 # save) applies as a no-op, keeping initialize()'s result.
 extends GdUnitTestSuite
@@ -52,11 +52,10 @@ func test_new_entry_defaults_to_jobless() -> void:
 
 func test_new_entry_instance_state_defaults_read_as_unsaved() -> void:
 	# Every #83 field's default must mean "not saved": empty dicts apply as no-ops, -1
-	# sentinels skip the HP/Will writes, empty inventory + -1 index leave the unit unarmed.
+	# sentinels skip the HP write, empty inventory + -1 index leave the unit unarmed.
 	var entry := ScenarioUnitEntry.new()
 	assert_bool(entry.stats.is_empty()).is_true()
 	assert_int(entry.current_hp).is_equal(-1)
-	assert_int(entry.current_will).is_equal(-1)
 	assert_bool(entry.inventory.is_empty()).is_true()
 	assert_int(entry.equipped_index).is_equal(-1)
 	assert_bool(entry.weapon_proficiency.is_empty()).is_true()
@@ -74,18 +73,16 @@ func test_apply_default_entry_keeps_initialize_state() -> void:
 
 	var inst: UnitInstance = unit.unit_instance
 	assert_int(inst.current_hp).is_equal(unit.get_max_hp())
-	assert_int(inst.current_will).is_equal(inst.get_max_will())
 	assert_int(inst.get_base_stat(Stats.Stat.STR)).is_equal(H.baseline_stats()[Stats.Stat.STR])
 	assert_bool(unit.has_equipped_weapon()).is_false()
 
-# --- stats / HP / Will / jobs round-trip (#83) ---
+# --- stats / HP / jobs round-trip (#83) ---
 
-func test_capture_apply_round_trips_stats_hp_will_jobs() -> void:
+func test_capture_apply_round_trips_stats_hp_jobs() -> void:
 	var a: Unit = H.spawn_unit(self, Team.Faction.PLAYER, Vector2i.ZERO, {}, false)
 	a.unit_instance.stats[Stats.Stat.STR] = 9
 	a.unit_instance.stats[Stats.Stat.MHP] = 12
 	a.set_current_hp(7)
-	a.unit_instance.set_current_will(2)
 	a.unit_instance.jobs = ["test_job_83"]  # persistence only; catalog validity is #9's concern
 
 	var entry := ScenarioUnitEntry.new()
@@ -96,7 +93,6 @@ func test_capture_apply_round_trips_stats_hp_will_jobs() -> void:
 	assert_int(b.unit_instance.get_base_stat(Stats.Stat.STR)).is_equal(9)
 	assert_int(b.unit_instance.get_base_stat(Stats.Stat.MHP)).is_equal(12)
 	assert_int(b.unit_instance.current_hp).is_equal(7)
-	assert_int(b.unit_instance.current_will).is_equal(2)
 	assert_array(b.unit_instance.jobs).contains_exactly(["test_job_83"])
 
 # #120: the body weight is a stat, so it rides the stat snapshot -- and a save written before BLD
@@ -114,20 +110,18 @@ func test_body_weight_round_trips_and_an_older_save_keeps_the_built_body() -> vo
 	entry.apply_unit_state(c)
 	assert_int(c.unit_instance.get_base_stat(Stats.Stat.BLD)).is_equal(7)
 
-func test_apply_clamps_hp_and_will_to_edited_maxes() -> void:
-	# Saved HP/Will can exceed the maxes the (possibly edited) saved stats produce — the
-	# setters clamp. And HP floors at 1 on apply: a load must never fire died().
+func test_apply_clamps_hp_to_the_edited_max() -> void:
+	# Saved HP can exceed the max the (possibly edited) saved stats produce — the setter clamps.
+	# And HP floors at 1 on apply: a load must never fire died().
 	var unit: Unit = H.spawn_unit(self, Team.Faction.PLAYER, Vector2i.ZERO, {}, false)
 	var entry := ScenarioUnitEntry.new()
 	entry.stats = unit.unit_instance.stats.duplicate()
 	entry.stats[Stats.Stat.MHP] = 4
 	entry.current_hp = 99
-	entry.current_will = 99
 
 	entry.apply_unit_state(unit)
 
 	assert_int(unit.unit_instance.current_hp).is_equal(unit.get_max_hp())
-	assert_int(unit.unit_instance.current_will).is_equal(unit.unit_instance.get_max_will())
 
 	entry.current_hp = 0
 	entry.apply_unit_state(unit)

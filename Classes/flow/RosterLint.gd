@@ -90,7 +90,6 @@ static func _check_hollow_snapshot(entry: ScenarioUnitEntry, index: int, found: 
 		return
 	var captured: bool = not entry.stats.is_empty() \
 		or entry.current_hp != -1 \
-		or entry.current_will != -1 \
 		or not entry.inventory.is_empty() \
 		or not entry.jobs.is_empty() \
 		or not entry.weapon_proficiency.is_empty() \

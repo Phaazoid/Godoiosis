@@ -1041,7 +1041,7 @@ Structurally it landed close to the prediction: the knockback stage still publis
 `knockback_from`/`knockback_to` and threads the hypo — but the landing had to be computed BEFORE
 the lethality rung is named (fall damage can change it), so `_resolve_knockback` split into a pure
 `_knockback_landing` called off a *provisional* rung (a hit that alone kills still shoves nothing)
-with the *final* `predict` feeding the Will-spend stage; and the trail gained
+with the *final* `predict` naming the rung (it fed the Will spend until #1174); and the trail gained
 `knockback_path`, since a landing tumble can bend a shove once.
 
 The declared placeholder that used to live at that call site — a shove asks the CELL-level

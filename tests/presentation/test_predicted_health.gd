@@ -370,7 +370,7 @@ func test_a_unit_at_one_hp_the_plan_fells_still_wears_a_readout() -> void:
 # the pass at the HP it started with. Nothing about its HP moved; everything about its situation did.
 func test_a_crisis_at_the_revive_hp_still_wears_a_readout() -> void:
 	var attacker := _spawn(PLAYER, Vector2i(2, 2))
-	var victim := _spawn(ENEMY, Vector2i(3, 2), true, {Stats.Stat.WIL: UnitInstance.MAX_WILL})
+	var victim := _spawn(ENEMY, Vector2i(3, 2), true)
 	victim.unit_instance.jobs.append("berserker")   # arms Crisis the way content does (#158)
 	victim.set_current_hp(Abilities.CRISIS_REVIVE_HP)
 	_aim_at(attacker, victim.movement.cell)

@@ -80,7 +80,7 @@ func test_a_real_walk_glides_the_sprite_to_the_destination() -> void:
 
 func test_downed_and_death_reconcile() -> void:
 	var unit := _live_units()[0]
-	unit._go_downed(false)
+	unit.force_down()
 	await await_idle_frame()
 	var sprite := _mirror.sprite_for(unit)
 	assert_bool(sprite.is_downed()).is_true()
@@ -155,7 +155,7 @@ func test_a_downed_unit_stays_on_screen() -> void:
 	# set_downed had correctly mirrored it. Note that the reconcile case above passes
 	# against the bug: it asserts the texture swap, not that anything is drawn.
 	var unit := _live_units()[0]
-	unit._go_downed(false)
+	unit.force_down()
 	await _settle()
 	var sprite := _mirror.sprite_for(unit)
 	assert_bool(sprite.is_downed()).is_true()

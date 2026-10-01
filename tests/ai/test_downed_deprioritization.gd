@@ -47,7 +47,7 @@ func _context(board: Dictionary) -> BoardContext:
 # thing clings at 1 HP (Unit._go_downed), and the attack cases below are decided by exactly that HP
 # through the overkill clamp -- hand-set, a body is priced at its full bar and outranks a standing
 # target the ruling says it must lose to. force_down is the dev bypass built for this: DOWNED with no
-# Will spend, no maim, no Crisis. Nothing listens to `went_downed` on a board_builder fixture.
+# limb taken and no Crisis. Nothing listens to `went_downed` on a board_builder fixture.
 func _down(unit: Unit) -> void:
 	unit.force_down()
 

@@ -199,7 +199,7 @@ func test_a_same_pass_rescue_revives_ejects_and_spends() -> void:
 func test_an_armed_squadmate_enters_crisis_mid_pass_and_keeps_its_squad() -> void:
 	var leader: Unit = game.spawn_unit(H.make_unit_data({Stats.Stat.LDR: 10}, Team.Faction.PLAYER), Vector2i(1, 0))
 	leader.equipped_weapon = H.make_weapon()
-	var victim: Unit = game.spawn_unit(H.make_unit_data({Stats.Stat.WIL: 20}, Team.Faction.PLAYER), Vector2i(2, 0))
+	var victim: Unit = game.spawn_unit(H.make_unit_data({}, Team.Faction.PLAYER), Vector2i(2, 0))
 	victim.unit_instance.jobs.append("berserker")
 	var _bystander := _spawn(Team.Faction.ENEMY, Vector2i(6, 0))
 	await await_idle_frame()

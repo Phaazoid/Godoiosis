@@ -1,12 +1,12 @@
-# Will/death stage of the resolver (docs/design/resolution-pipeline.md R7/R8,
+# Lethality stage of the resolver (docs/design/resolution-pipeline.md R7/R8,
 # will-and-death.md "Law #2 requirement"). PlanResolver predicts whether a hit DOWNS or
 # KILLS its target, stored on ResolvedOutcome.lethality, so the action queue can preview
 # the rung (the down/skull icons). Since 2026-07-27 the preview and Unit.take_damage call the
 # SAME ladder (LethalityRules.predict), so they can no longer disagree by construction — but the
 # execution-parity cases at the bottom stay, because "same rung named" and "same rung carried out"
 # are different claims and only the second one is what Law #2 (the queue never lies) promises.
-# STUB era: the rung keys off LethalityRules.OVERKILL_CEILING, not spent Will; these tests pin the
-# down/kill math so the Will stage can't silently regress it.
+# The rung keys off LethalityRules.OVERKILL_CEILING; these tests pin the down/kill math. Whether a hit
+# also takes a limb is a separate fact (#1174), pinned in tests/law/test_maim_preview.gd.
 #
 # Damage is made exact by spawning attackers with STR 0 + a known weapon power
 # (PlanResolver._source_base_damage = main-attack power + scaling), and resolving with an empty

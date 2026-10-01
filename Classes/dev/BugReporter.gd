@@ -396,14 +396,14 @@ static func build_report_text(stamp: String, state_name: String, kind: Kind, not
 		var squad_note: String = ""
 		if unit.has_squad():
 			squad_note = ", %s" % _squad_label(unit.squad)
-		out += "- %s (%s) @ %s -- HP %d/%d, Will %d, %s%s\n" % [
+		out += "- %s (%s) @ %s -- HP %d/%d, %s%s%s\n" % [
 			unit.get_unit_name(),
 			Team.Faction.keys()[unit.get_faction()],
 			unit.movement.cell,
 			unit.unit_instance.current_hp,
 			unit.get_max_hp(),
-			unit.unit_instance.current_will,
 			Unit.LifecycleState.keys()[unit.lifecycle_state],
+			" (wounded)" if unit.wounded else "",
 			squad_note,
 		]
 			

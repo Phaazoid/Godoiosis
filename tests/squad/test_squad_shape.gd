@@ -152,8 +152,8 @@ func test_leader_departure_overflow_detaches_newest_first() -> void:
 # that no verb can be fixed and another left behind.
 #
 # force_down() rather than take_damage(): #156's dev bypass enters DOWNED with none of the ladder's
-# consequences, so the case pins the LIFECYCLE rule and cannot be moved by a retune of damage, Will
-# or the maim slots (which take_damage would drag in).
+# consequences, so the case pins the LIFECYCLE rule and cannot be moved by a retune of damage or
+# the limb thresholds (which take_damage would drag in).
 func test_a_downed_body_is_not_a_squad_recruit() -> void:
 	var leader := _leader_with_ldr(4 * Squad.MEMBER_LDR_COST, Vector2i(0, 0))
 	var body := H.spawn_solo(self, _sm, ENEMY, Vector2i(1, 0))

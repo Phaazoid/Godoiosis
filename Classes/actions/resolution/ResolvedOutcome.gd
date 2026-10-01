@@ -2,7 +2,7 @@ extends RefCounted
 class_name ResolvedOutcome
 
 # One action's resolved consequences — the single source of truth for its damage (R8).
-# Every stage annotates this same object: base damage -> elemental (-> Will, Phase 3).
+# Every stage annotates this same object: base damage -> elemental -> the lethality rung and limb.
 
 var base_damage: int = 0
 var damage: int = 0                              # final, post-elemental
@@ -105,11 +105,21 @@ var relinks: Array[Relink] = []
 # outcome already holds — and which produced a two-tile "direction" the arrow atlas can't name.
 
 # Predicted lifecycle result for this hit's TARGET (R8's "lifecycle result"). Mirrors
-# Unit.take_damage + _go_downed so the queue previews down/maim/kill (Law #2). MAIMED is a
-# DOWN the target can't pay for in Will (will-and-death.md 2026-06-24) — same lifecycle as
-# DOWNED, flagged separately so the preview can say so.
-enum Lethality { NONE, DOWNED, KILLED, MAIMED, CRISIS }
+# Unit.take_damage + _go_downed so the queue previews down/kill/Crisis (Law #2). Not persisted --
+# telemetry writes the NAME -- so a retired rung is deleted, never tombstoned (MAIMED, #1174).
+enum Lethality { NONE, DOWNED, KILLED, CRISIS }
 var lethality: Lethality = Lethality.NONE
+
+# The limb slot this hit TAKES (#1174), or -1. Beside the rung rather than a rung of its own, because
+# a standing hit can take one too: LethalityRules.severs decides it, the resolver pops the slot off
+# its threaded limb_order, and execution takes the same slot by the same rotation.
+var severed_limb: int = -1
+
+# How much of `damage` is NOT a blow (#1174), so can never take a limb: the drowning top-up, or all of
+# it when the void took the unit (a removal is a kill, and a kill takes nothing). One answer for the
+# resolver and both execution twins -- execution re-asks the ladder, which cannot see a removal.
+func non_blow() -> int:
+	return damage if removed else drown_damage
 
 # R7: the pass felled this action's actor before its turn to act came round. A no-op at execution
 # on both twins, and dropped from the BeatSheet so the camera never frames it. What it does to the

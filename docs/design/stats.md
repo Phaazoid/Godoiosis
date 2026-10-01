@@ -2,7 +2,7 @@
 
 **Status: WORKING DESIGN (agreed direction, open forks flagged).** Decided 2026-06-20 with the developer + co-dev in a dedicated stats session. Replaces the *placeholder* stance the `Stats.gd` enum (`MHP/STR/LDR/WIL`) was standing in for — STR was a cliche we never actually chose; this doc derives the roster from what the game needs. Supersedes the wiki's `Stats Overview.docx` (random level-up growth — dead under Law #1) and the scattered Spd/Skill/CON assumptions in old data/tests. Pairs with [progression.md](progression.md) (where growth lives) and [philosophy.md](philosophy.md) (the axioms).
 
-**Canon checked through #1176 (2026-10-01).**
+**Canon checked through #1176 (2026-10-01); #1174 (Will retired) folded in 2026-10-01.**
 
 ## Core stance
 
@@ -145,9 +145,13 @@ costs 2 the moment it lapses.
 `PlanResolver._Hypo` threads position and element states through a resolution pass; it deliberately
 does **not** thread stat modifiers. Every stat-derived number is computed once at plan time and
 frozen (`AttackAction.execute` is pure playback, R3), and the one thing execution recomputes —
-`LethalityRules.predict` — reads no effective stat at all. So a stat change landing mid-pass (today
-only a maim's forced unequip) cannot make preview and execution disagree; it is un-modelled
-identically by both. **That stops being true the moment a queued ACTION applies an effect** — a
+`LethalityRules.predict` and `severs` — reads no effective stat at all. So a stat change landing
+mid-pass (today only a lost limb's forced unequip) cannot make preview and execution disagree; it is
+un-modelled identically by both. **Since [#1174](https://github.com/Phaazoid/Godoiosis/issues/1174) that limb can go from a STANDING unit with
+orders still queued** — a watch shot mid-walk, then its swing — and the swing still lands its
+previewed number, because it was frozen at plan time; the lost limb's settle can strip armour or a
+rune but never a weapon, and max HP cannot move with a limb. `tests/flow/test_limb_loss_mid_pass.gd`
+drives that sequence end to end. **That stops being true the moment a queued ACTION applies an effect** — a
 transmutation buffing an ally — because then one order's stat change has to reach a later order's
 damage. Pinned by `tests/law/test_resolution_laws.gd`; owed by
 [#113](https://github.com/Phaazoid/Godoiosis/issues/113) (parked until a buff transmutation is
@@ -168,7 +172,7 @@ hasn't happened yet when the move runs. Don't file that as a bug; it's the phase
 - **PER / Perception** — sight & reveal (the *only* honest hidden-info channel — philosophy Axiom 4); weapon range bands; reveals enemy jobs ([jobs.md](jobs.md)); small LDR band. Story: the watchful one.
 - **CON / Constitution** *(adopted 2026-07-06)* — gates + scales defensive gear; small MHP band. *(No longer a term of Weight — see the retraction below.)* Story: the unbreakable one.
 - **LDR / Leadership** — a **squad-capacity budget** (see [squad-system.md](squad-system.md)). Continuous, not binary — some units are simply better leaders.
-- **WIL / Will** *(provisional — may become "Tenacity")* — the **death-ladder pool** (see [will-and-death.md](will-and-death.md)).
+- **WIL / Will** — **RETIRED 2026-10-01 ([#1174](https://github.com/Phaazoid/Godoiosis/issues/1174))**: it was the death-ladder pool, and nothing reads it now that limbs go to big blows and Crisis gates on Wounded ([will-and-death.md](will-and-death.md)). The enum slot is removed in the next PR as a tombstone, since `Stats.Stat` is append-only and persisted as ints.
 - **COH / Cohesion** *(added 2026-08-06, [#142](https://github.com/Phaazoid/Godoiosis/issues/142))* — **squad leash length**: how far a squadmate may stand from its leader, in **path distance over terrain the member can traverse** ([#151](https://github.com/Phaazoid/Godoiosis/issues/151), same day — walls block cohesion; it was Manhattan for a few hours). Default 4 (3 → 4 with the metric swap: path ≥ Manhattan always, so the same number is a strictly tighter leash), read off the **leader only** ([squad-system.md](squad-system.md) I6). Still fully decoupled from LDR — #63's call stands; LDR buys capacity, COH buys reach. **Its structural class is an OPEN QUESTION** — it is not an input stat (feeds nothing, casts no band) and not a capacity stat (nothing spends it), but a flat per-unit reach, the first of its kind on the enum. It was made a stat rather than a bespoke field so job `stat_nudges`, `StatEffect`s and gear modifiers all reach it through the one existing pipeline instead of a second one. **No content uses that yet** — no job nudges COH, no gear moves it; today it is a number the dev tools can edit.
 - **BLD / Build** *(added 2026-10-01, [#120](https://github.com/Phaazoid/Godoiosis/issues/120))* — the body's own mass, authored per character on the same scale as `Item.weight` (default 10). It feeds nothing directly: it is the body term of **Weight** (below), which is what the rules read. Its structural class is COH's open question again — not an input stat (it scales and gates nothing), not a capacity — and it earns its slot on the *drive sandbox physics* half of the bar. Made a stat rather than a bespoke field (dev, 2026-10-01) so every door the stat list has carries it, and so a job or a temporary effect can lighten or burden a body.
 - **Weight** *(derived)* — **the body (BLD) plus every item carried** since 2026-10-01 ([#120](https://github.com/Phaazoid/Godoiosis/issues/120)); it was gear-only from 2026-07-27, when CON was struck out as its body term. Read through **bands** (`Stats.weight_band`), never as a raw number. Readers: **fall damage** (+1 per level per band, built) and **shove distance** (−1 tile per band from all sources, read off the target, built). Gear's mass has one home, `Item.weight` — no piece may name BLD in its `stat_modifiers`. **Owner doc: [weight.md](weight.md)** — the model, the rulings and the telemetry that sized it.
@@ -222,7 +226,7 @@ The fixed-stat stance risks locking each unit to one weapon type. Resolved *with
 
 - ~~**Move/Speed**~~ — **derivation RESOLVED 2026-07-06 (jobs grill): MOV = main-job base + DEX band modifier** ([jobs.md](jobs.md)). No SPD stat, ever; no innate per-unit MOV on the statline. (Ghost `SPD` retired 2026-07-07: the last fixture swept; scenario `.tres` were verified already clean — the audit's `.tres` claim was stale.) **The Weight×MOV coarse-threshold step from the CON mini-grill was UNWIRED 2026-07-27** — it had never once fired in play (every unit sat at CON 5 with weight-0 gear, under a threshold of 8), and it was removed rather than tuned so that re-introducing encumbrance is a deliberate decision instead of a number nudge. MOV is now base + DEX band + leg throttle, full stop.
 - **STR ↔ inventory weight / carry limits** — **split off as [#1176](https://github.com/Phaazoid/Godoiosis/issues/1176) (2026-10-01).** STR-as-capacity (raising a personal carry ceiling, rather than any stat adding mass) is still the named shape if encumbrance returns, and "cut Weight entirely" is off the table now that Weight has readers. **The referee question #120 raised is RULED (dev, 2026-10-01): Weight alone resists a shove** — STR's old "helps anchor against shoves" was a mistaken recording — so the clean split holds: STR may one day raise the carry ceiling, Weight resists the shove. [weight.md](weight.md).
-- **Will** — per-unit (current lean: per-unit, squad-fed) vs. squad-pooled. *(Persist-vs-reset is **decided: persists on `UnitInstance`** — #8, 2026-06-21.)* See [will-and-death.md](will-and-death.md).
+- ~~**Will**~~ — per-unit vs. squad-pooled. **Moot: Will retired 2026-10-01 (#1174).** See [will-and-death.md](will-and-death.md).
 - ~~**Squad range** tuning~~ — **BUILT 2026-07-14, feel-tested + CLOSED 2026-07-16** (static range 3 + `MEMBER_LDR_COST = 2` capacity budget — see [squad-system.md](squad-system.md) banner; [#63](https://github.com/Phaazoid/Godoiosis/issues/63)). **Became the per-unit `COH` stat 2026-08-06 ([#142](https://github.com/Phaazoid/Godoiosis/issues/142))** — `Squad.SQUAD_RANGE` deleted, default moved to `STAT_DEFAULTS[COH]`.
 - ~~**Jobs**~~ — **RATIFIED 2026-07-06, own doc: [jobs.md](jobs.md)** (LDR/WIL take the big job influence; input stats ±1–2; ceilings-not-prereqs clamping *effective* stats; MOV ownership).
 

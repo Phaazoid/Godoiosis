@@ -8,7 +8,6 @@ class_name UnitInstance
 
 signal died
 signal hp_changed(current, max)
-signal will_changed(current, max)
 
 #Permanent stat storage (base + growth gains, other permanent additions)
 var stats: Dictionary[Stats.Stat, int] = {}
@@ -28,15 +27,6 @@ var is_alkahest_affine: bool = false   # Isaac's hidden sixth — never surfaced
 #Battle stats
 var current_hp: int = 0
 #effective str, other things here
-
-# --- Will (docs/design/will-and-death.md — the limb/integrity buffer, 2026-06-24 reframe) ---
-# PERSISTENT, per-unit: lives here on UnitInstance (survives missions, like limb loss) — the
-# opposite side of the persistence seam from the battle-scoped lifecycle state on Unit.
-# Reframe: Will gates LIMBS, not life. A would-be-fatal sub-overkill hit ALWAYS downs you;
-# Will only decides whether that down is clean or MAIMED. Will never directly kills.
-const DOWN_WILL_COST := 5           # flat cost paid per down (placeholder). Can't pay it -> maim.
-const MAX_WILL := 20                # ceiling for the WIL-stat-derived Will pool (a cap, not a flat value).
-var current_will: int = 0
 
 const JOBLESS_MOV_BASE := 4       # playtest-tunable; prompt 9 swaps in the main job's base
 
@@ -108,7 +98,6 @@ func initialize():
 	# Gear-less CON is correct HERE and only here: initialize() runs from Unit._ready(), before the
 	# unit owns a single item. Every max-HP read after this one comes through Unit (#106).
 	current_hp = get_max_hp(get_effective_stat(Stats.Stat.CON))
-	current_will = get_max_will()
 
 func add_job(job_id: String) -> bool:
 	if job_id == "" or jobs.has(job_id) or JobCatalog.get_job(job_id) == null:
@@ -219,34 +208,12 @@ func is_dead() -> bool:
 # "went down the permanent path THIS mission". Neither answers "gone for good".
 var permadead: bool = false
 
-# --- Will API ---
-
-func get_max_will() -> int:
-	# Max Will = the unit's WIL stat (per-unit; set via the dev editor / UnitData), capped at MAX_WILL.
-	return min(get_base_stat(Stats.Stat.WIL), MAX_WILL)
-
-func get_current_will() -> int:
-	return current_will
-
-func set_current_will(value: int):
-	current_will = clamp(value, 0, get_max_will())
-	emit_signal("will_changed", current_will, get_max_will())
-
-func can_afford_down() -> bool:
-	# Pure read — the resolver uses it to PREVIEW maim (Law #2) without spending anything.
-	return current_will >= DOWN_WILL_COST
-
-func spend_will_for_down() -> bool:
-	# Pay the flat down cost. Can't pay -> Will floors at 0 and the rotation takes a limb;
-	# a maimed prosthetic detaches to recoverable gear. Fully maimed = still just a down —
-	# "Will never kills" is absolute, multi-maim never escalates.
-	if can_afford_down():
-		set_current_will(current_will - DOWN_WILL_COST)
-		return false
-	set_current_will(0)
+# Take the next limb in the rotation (#1174): what a big enough blow costs. A maimed prosthetic
+# detaches to recoverable gear; fully maimed = nothing left to take, and nothing escalates.
+func sever_next_limb() -> bool:
 	var slot := next_maim_slot()
 	if slot == -1:
-		return false                      # nothing left to take; the down stands, nothing escalates
+		return false
 	var fitting: LimbFitting = limbs[slot]
 	if fitting.state == LimbState.PROSTHETIC and fitting.prosthetic_item != null:
 		pass                              # TODO(10): route the detached prosthetic to inventory (recoverable)
@@ -308,13 +275,20 @@ func is_installed_prosthetic(item: WeaponInstance) -> bool:
 
 func next_maim_slot() -> int:
 	# The deterministic "next at risk" (Law #1 — previewable). -1 = fully maimed.
+	var order := maim_order()
+	return order[0] if not order.is_empty() else -1
+
+# Every slot a run of limb losses would take, in order: natural limbs by the rotation, then
+# prosthetics. The resolver threads it so two big hits in one pass take two limbs (#1174).
+func maim_order() -> Array[int]:
+	var order: Array[int] = []
 	for slot in MAIM_ROTATION:
 		if limbs[slot].state == LimbState.NATURAL:
-			return slot
+			order.append(slot)
 	for slot in MAIM_ROTATION:
 		if limbs[slot].state == LimbState.PROSTHETIC:
-			return slot
-	return -1
+			order.append(slot)
+	return order
 
 func is_maimed() -> bool:
 	# Maimed = an EMPTY slot. A prosthetic-fitted unit is repaired, not maimed.

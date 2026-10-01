@@ -87,7 +87,7 @@ Resolution against a target: collect *every* reaction with a trigger matching th
 
 ## Law #2 requirement (preview honesty)
 
-The attack preview **must surface the reacted outcome** — the combo'd damage and the state changes ("Electrocuted!", WET removed), including *stacked* results. Same obligation the Will design carries: resolution must never produce a surprise the queue didn't show. Since the resolver runs at plan time (E1–E4, E8), the queue already *has* the reacted numbers; the UI just renders them.
+The attack preview **must surface the reacted outcome** — the combo'd damage and the state changes ("Electrocuted!", WET removed), including *stacked* results. Same obligation the lethality design carries: resolution must never produce a surprise the queue didn't show. Since the resolver runs at plan time (E1–E4, E8), the queue already *has* the reacted numbers; the UI just renders them.
 
 ## First build target
 
@@ -130,6 +130,6 @@ Now narrow. Most session-1 forks were resolved (see ratified model above: states
 1. ~~**`weapon_type: String` → enum migration.**~~ — **DONE, closed as [#7](https://github.com/Phaazoid/Godoiosis/issues/7).** `WeaponType` is its own enum, `WeaponCatalog` derives from it, append-only.
 2. **E8 add/remove conflict rule** (remove-wins lean) — confirm once real reactions exist that actually collide.
 3. **The element / state / reaction rosters** — wholly authored content, deliberately empty here. Brainstormed in [elemental-interactions.md](elemental-interactions.md); narrow from that.
-4. **What each control-state *does*** — same: drafted in [elemental-interactions.md](elemental-interactions.md), settle as Will/abilities + the action economy firm up ("lose a turn" intersects them).
+4. **What each control-state *does*** — same: drafted in [elemental-interactions.md](elemental-interactions.md), settle as abilities + the action economy firm up ("lose a turn" intersects them).
 
 Cross-refs: [elemental-interactions.md](elemental-interactions.md) (the idea bank this spec executes), [squad-system.md](squad-system.md) (execution model + the derived-action/counter pattern the resolver mirrors), [progression.md](progression.md) (mechanist/alchemist, prosthesis = SHOCK interaction), [will-and-death.md](will-and-death.md) (the other Law #2 "preview must surface the outcome" system), `../../CLAUDE.md` (laws).

@@ -62,66 +62,77 @@ func test_is_maimed_derives_from_empty_slots_only() -> void:
 	assert_bool(inst.is_maimed()).is_true()
 
 func test_maim_rotation_takes_naturals_in_order() -> void:
-	# WIL 0 -> every down is unaffordable -> each spend maims the next rotation slot.
-	var inst := _make_instance({Stats.Stat.WIL: 0})
-	assert_bool(inst.spend_will_for_down()).is_true()
+	# Each sever takes the next slot in the rotation (#1174: what a limb-sized blow costs).
+	var inst := _make_instance({})
+	assert_bool(inst.sever_next_limb()).is_true()
 	assert_that(inst.limbs[UnitInstance.LimbSlot.ARM_R].state).is_equal(UnitInstance.LimbState.EMPTY)
-	inst.spend_will_for_down()
+	inst.sever_next_limb()
 	assert_that(inst.limbs[UnitInstance.LimbSlot.LEG_L].state).is_equal(UnitInstance.LimbState.EMPTY)
-	inst.spend_will_for_down()
+	inst.sever_next_limb()
 	assert_that(inst.limbs[UnitInstance.LimbSlot.ARM_L].state).is_equal(UnitInstance.LimbState.EMPTY)
-	inst.spend_will_for_down()
+	inst.sever_next_limb()
 	assert_that(inst.limbs[UnitInstance.LimbSlot.LEG_R].state).is_equal(UnitInstance.LimbState.EMPTY)
 
 func test_prosthetics_are_maimed_last() -> void:
-	var inst := _make_instance({Stats.Stat.WIL: 0})
+	var inst := _make_instance({})
 	_fit_prosthetic(inst, UnitInstance.LimbSlot.ARM_R, 6)
-	inst.spend_will_for_down()   # skips the prosthetic weapon arm — flesh pays first
+	inst.sever_next_limb()   # skips the prosthetic weapon arm — flesh pays first
 	assert_that(inst.limbs[UnitInstance.LimbSlot.ARM_R].state).is_equal(UnitInstance.LimbState.PROSTHETIC)
 	assert_that(inst.limbs[UnitInstance.LimbSlot.LEG_L].state).is_equal(UnitInstance.LimbState.EMPTY)
-	inst.spend_will_for_down()
-	inst.spend_will_for_down()   # all naturals gone now
+	inst.sever_next_limb()
+	inst.sever_next_limb()   # all naturals gone now
 	assert_int(inst.next_maim_slot()).is_equal(UnitInstance.LimbSlot.ARM_R)   # the prosthetic, at last
-	inst.spend_will_for_down()
+	inst.sever_next_limb()
 	assert_that(inst.limbs[UnitInstance.LimbSlot.ARM_R].state).is_equal(UnitInstance.LimbState.EMPTY)
 
 func test_fully_maimed_never_escalates() -> void:
-	# "Will never kills" is absolute: with nothing left to take, the down still just stands.
-	var inst := _make_instance({Stats.Stat.WIL: 0})
+	# A lost limb never kills: with nothing left to take, a limb-sized blow takes nothing more.
+	var inst := _make_instance({})
 	for i in 4:
-		inst.spend_will_for_down()
+		inst.sever_next_limb()
 	assert_int(inst.next_maim_slot()).is_equal(-1)
-	assert_bool(inst.spend_will_for_down()).is_false()   # no fifth limb, no escalation
-	assert_int(inst.get_current_will()).is_equal(0)
+	assert_bool(inst.sever_next_limb()).is_false()   # no fifth limb, no escalation
 
 func test_maim_taxes_highest_aura_pool() -> void:
-	var inst := _make_instance({Stats.Stat.WIL: 0}, {Elemental.Element.WATER: 3, Elemental.Element.FIRE: 2})
-	inst.spend_will_for_down()
+	var inst := _make_instance({}, {Elemental.Element.WATER: 3, Elemental.Element.FIRE: 2})
+	inst.sever_next_limb()
 	assert_int(inst.get_element_aura(Elemental.Element.WATER)).is_equal(2)
 	assert_int(inst.get_element_aura(Elemental.Element.FIRE)).is_equal(2)
 
 func test_aura_tax_tie_breaks_by_element_order() -> void:
 	# FIRE precedes WATER in the enum -> ties go to FIRE (TODO(11): primary affinity).
-	var inst := _make_instance({Stats.Stat.WIL: 0}, {Elemental.Element.FIRE: 2, Elemental.Element.WATER: 2})
-	inst.spend_will_for_down()
+	var inst := _make_instance({}, {Elemental.Element.FIRE: 2, Elemental.Element.WATER: 2})
+	inst.sever_next_limb()
 	assert_int(inst.get_element_aura(Elemental.Element.FIRE)).is_equal(1)
 	assert_int(inst.get_element_aura(Elemental.Element.WATER)).is_equal(2)
 
 func test_aura_tax_noop_on_empty_pools() -> void:
-	var inst := _make_instance({Stats.Stat.WIL: 0})
-	inst.spend_will_for_down()   # must not crash or invent negative aura
+	var inst := _make_instance({})
+	inst.sever_next_limb()   # must not crash or invent negative aura
 	for element in Elemental.SIGIL_ELEMENTS:
 		assert_int(inst.get_element_aura(element)).is_equal(0)
 
 func test_maim_preview_matches_execution_pick() -> void:
 	# Law #1/#2: next_maim_slot() is the public "next at risk" — the maim must take
 	# exactly the slot it promised.
-	var inst := _make_instance({Stats.Stat.WIL: 0})
+	var inst := _make_instance({})
 	_empty(inst, UnitInstance.LimbSlot.ARM_R)                       # rotation already one deep
 	var promised := inst.next_maim_slot()
 	assert_int(promised).is_equal(UnitInstance.LimbSlot.LEG_L)
-	inst.spend_will_for_down()
+	inst.sever_next_limb()
 	assert_that(inst.limbs[promised].state).is_equal(UnitInstance.LimbState.EMPTY)
+
+# maim_order() is the rotation the resolver threads (#1174), so two limbs in one pass are previewed in
+# the order they are taken: naturals by MAIM_ROTATION, then prosthetics. Its head IS next_maim_slot.
+func test_maim_order_lists_naturals_then_prosthetics() -> void:
+	var inst := _make_instance({})
+	_fit_prosthetic(inst, UnitInstance.LimbSlot.ARM_R, 6)
+	_empty(inst, UnitInstance.LimbSlot.LEG_R)
+	var order := inst.maim_order()
+	var expected: Array[int] = [UnitInstance.LimbSlot.LEG_L, UnitInstance.LimbSlot.ARM_L,
+			UnitInstance.LimbSlot.ARM_R]
+	assert_array(order).is_equal(expected)
+	assert_int(inst.next_maim_slot()).is_equal(order[0])
 
 # --- Installed prosthetic weapons (#59 item 6, weapons.md Prosthetic family) ---
 # limb_kind moved from WeaponData (template) to WeaponInstance (2026-07-19): different

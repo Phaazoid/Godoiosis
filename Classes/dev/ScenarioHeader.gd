@@ -55,7 +55,7 @@ func init(p_scenario_manager: ScenarioManager, p_game) -> void:
 		authored_save, func(pressed: bool): authored_save = pressed,
 		"ON (authoring mode): units spawned from a character file (Resources/Units/) save as\n"
 		+ "REFERENCES to that file — every load re-reads the character as authored, so editing\n"
-		+ "the file later updates this mission too. Their mid-battle state (HP, Will, elemental\n"
+		+ "the file later updates this mission too. Their mid-battle state (HP, wounds, elemental\n"
 		+ "states, weapon charge) is deliberately NOT saved. Ad-hoc units always save as full\n"
 		+ "snapshots either way.\n\n"
 		+ "OFF (snapshot mode): everything saves as an exact mid-battle snapshot, cast included —\n"

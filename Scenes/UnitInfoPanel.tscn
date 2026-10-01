@@ -1,4 +1,4 @@
-[gd_scene load_steps=10 format=3 uid="uid://damgnt4d7qqj3"]
+[gd_scene load_steps=9 format=3 uid="uid://damgnt4d7qqj3"]
 
 [ext_resource type="Script" uid="uid://8y7b6ai5o6aj" path="res://Classes/ui/panels/UnitInfoPanelControl.gd" id="1_ctrl"]
 [ext_resource type="Script" uid="uid://cekw8ivergjuo" path="res://Classes/ui/panels/portrait_panel.gd" id="2_port"]
@@ -16,13 +16,6 @@ corner_radius_bottom_left = 3
 
 [sub_resource type="StyleBoxFlat" id="StyleBoxFlat_hpfill"]
 bg_color = Color(0.29, 0.72, 0.35, 1)
-corner_radius_top_left = 3
-corner_radius_top_right = 3
-corner_radius_bottom_right = 3
-corner_radius_bottom_left = 3
-
-[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_willfill"]
-bg_color = Color(0.55, 0.47, 0.9, 1)
 corner_radius_top_left = 3
 corner_radius_top_right = 3
 corner_radius_bottom_right = 3
@@ -120,29 +113,6 @@ theme_override_styles/fill = SubResource("StyleBoxFlat_hpfill")
 show_percentage = false
 
 [node name="HPValue" type="Label" parent="UnitInfoPanel/Margin/VBox/StatsSection/HPRow"]
-custom_minimum_size = Vector2(60, 0)
-layout_mode = 2
-horizontal_alignment = 2
-
-[node name="WillRow" type="HBoxContainer" parent="UnitInfoPanel/Margin/VBox/StatsSection"]
-layout_mode = 2
-theme_override_constants/separation = 6
-
-[node name="WillTag" type="Label" parent="UnitInfoPanel/Margin/VBox/StatsSection/WillRow"]
-custom_minimum_size = Vector2(30, 0)
-layout_mode = 2
-text = "WIL"
-
-[node name="WillBar" type="ProgressBar" parent="UnitInfoPanel/Margin/VBox/StatsSection/WillRow"]
-custom_minimum_size = Vector2(0, 16)
-layout_mode = 2
-size_flags_horizontal = 3
-size_flags_vertical = 4
-theme_override_styles/background = SubResource("StyleBoxFlat_barbg")
-theme_override_styles/fill = SubResource("StyleBoxFlat_willfill")
-show_percentage = false
-
-[node name="WillValue" type="Label" parent="UnitInfoPanel/Margin/VBox/StatsSection/WillRow"]
 custom_minimum_size = Vector2(60, 0)
 layout_mode = 2
 horizontal_alignment = 2

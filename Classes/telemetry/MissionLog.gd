@@ -548,7 +548,6 @@ func _roster_entry(unit: Unit, deployed: bool) -> Dictionary:
 		"items": items,
 		"stats": stats,
 		"hp_max": unit.get_max_hp(),
-		"will_max": unit.unit_instance.get_max_will(),
 	})
 	return entry
 
@@ -590,8 +589,7 @@ func _vitals(unit: Unit) -> Dictionary:
 		"faction": _faction_name(unit),
 		"hp": unit.get_current_hp(),
 		"hp_max": unit.get_max_hp(),
-		"will": unit.unit_instance.get_current_will(),
-		"will_max": unit.unit_instance.get_max_will(),
+		"wounded": unit.wounded,
 		"state": Unit.LifecycleState.keys()[unit.lifecycle_state],
 		"crisis": unit.in_crisis,
 		"states": _names(Elemental.State, unit.element_states),
@@ -665,6 +663,7 @@ func _hit(kind: String, atk: AttackAction) -> Dictionary:
 		"elements": _names(Elemental.Element, r.elements),
 		"reactions": reactions,
 		"lethality": ResolvedOutcome.Lethality.keys()[r.lethality],
+		"severs": UnitInstance.LimbSlot.keys()[r.severed_limb] if r.severed_limb != -1 else null,
 		"hp_before": r.hp_before,
 		"hp_after": r.target_hp_after,
 		"knockback": r.knockback_applied,
