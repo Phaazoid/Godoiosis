@@ -757,6 +757,8 @@ func test_the_lowest_markup_plane_still_clears_the_tile_it_lies_on() -> void:
 	var lowest := 9999
 	for layer: BoardOverlays.Layer in BoardOverlays.LAYERS:
 		lowest = mini(lowest, BoardOverlays.LAYERS[layer]["sort"])
+	# The gas's fog floor lies in the same stack, below every layer (#508).
+	lowest = mini(lowest, BoardOverlays.GAS_FLOOR_SORT)
 	# Non-vacuity: a non-negative floor would make the assert below trivially true.
 	assert_int(lowest).override_failure_message(
 			"no layer sorts below zero, so this case proves nothing").is_less(0)

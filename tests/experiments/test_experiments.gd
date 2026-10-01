@@ -1,4 +1,4 @@
-# Guards for the experiment / feature-flag harness (Classes/Definitions/Experiments.gd).
+# Guards for the experiment / feature-flag harness (Classes/dev/Experiments.gd).
 # Pure static calls — no nodes built — so this stays orphan-clean.
 #
 # before_test() calls Experiments.reset_for_test() so every case starts hermetic
@@ -63,3 +63,70 @@ func test_persistence_roundtrip_keyed_by_name() -> void:
 	# Clean up the temp file and restore the hermetic seam for any later suite.
 	DirAccess.remove_absolute(Experiments.config_path)
 	Experiments.reset_for_test()
+
+# --- choice rows (#508) ---
+
+func _a_choice() -> Experiments.Flag:
+	for flag: Experiments.Flag in Experiments.all_flags():
+		if Experiments.is_choice(flag):
+			return flag
+	return Experiments.Flag.EXAMPLE_FLAG
+
+func test_every_choice_declares_options_and_a_default_inside_them() -> void:
+	for flag: Experiments.Flag in Experiments.all_flags():
+		if not Experiments.is_choice(flag):
+			continue
+		var options := Experiments.options_of(flag)
+		assert_int(options.size()).override_failure_message(
+			"%s offers fewer than two treatments -- that is a toggle" % Experiments.Flag.keys()[flag]).is_greater_equal(2)
+		assert_int(int(Experiments.default_value(flag))).is_between(0, options.size() - 1)
+
+func test_a_choice_reads_its_default_index_when_unset() -> void:
+	var flag := _a_choice()
+	assert_bool(Experiments.is_choice(flag)).override_failure_message("no choice flag is declared").is_true()
+	assert_int(Experiments.choice_of(flag)).is_equal(int(Experiments.default_value(flag)))
+
+func test_set_choice_clamps_into_the_options() -> void:
+	var flag := _a_choice()
+	Experiments.set_choice(flag, 999)
+	assert_int(Experiments.choice_of(flag)).is_equal(Experiments.options_of(flag).size() - 1)
+
+func test_the_toggle_writer_refuses_a_choice_row() -> void:
+	# set_on would store a BOOL that choice_of then reads back as 1 -- #647's trap, refused outright.
+	var flag := _a_choice()
+	var before := Experiments.choice_of(flag)
+	Experiments.set_on(flag, true)
+	assert_int(Experiments.choice_of(flag)).is_equal(before)
+
+func test_a_choice_survives_a_relaunch_as_an_INDEX() -> void:
+	# The load must answer a choice BEFORE the toggle's bool(): bool(2) is true, which would read
+	# every saved option back as 1 on every launch.
+	var flag := _a_choice()
+	var last := Experiments.options_of(flag).size() - 1
+	Experiments._state.clear()
+	Experiments._loaded = true
+	Experiments.persistence_enabled = true
+	Experiments.config_path = "user://experiments_choice_test.cfg"
+	if FileAccess.file_exists(Experiments.config_path):
+		DirAccess.remove_absolute(Experiments.config_path)
+	Experiments.set_choice(flag, last)
+	Experiments._state.clear()
+	Experiments._loaded = false
+	var read_back := Experiments.choice_of(flag)
+	DirAccess.remove_absolute(Experiments.config_path)
+	Experiments.reset_for_test()
+	assert_int(read_back).is_equal(last)
+
+func test_an_out_of_range_saved_choice_falls_back_to_the_default() -> void:
+	var flag := _a_choice()
+	Experiments._state.clear()
+	Experiments.persistence_enabled = true
+	Experiments.config_path = "user://experiments_choice_range_test.cfg"
+	var cfg := ConfigFile.new()
+	cfg.set_value(Experiments.CONFIG_SECTION, Experiments.Flag.keys()[flag], 99)
+	cfg.save(Experiments.config_path)
+	Experiments._loaded = false
+	var read_back := Experiments.choice_of(flag)
+	DirAccess.remove_absolute(Experiments.config_path)
+	Experiments.reset_for_test()
+	assert_int(read_back).is_equal(int(Experiments.default_value(flag)))

@@ -1772,6 +1772,18 @@ func prop_at(cell: Vector2i) -> Node3D:
 	return _props.get(cell)
 
 
+# Every lamp the board's own things cast, lit props and burning tiles both -- for an effect that
+# lights itself rather than being lit by the renderer (#508: the gas volume marches its own lamps).
+func lights() -> Array[OmniLight3D]:
+	var out: Array[OmniLight3D] = []
+	for root: Node3D in _props.values() + _fire_markers.values():
+		for child in root.get_children():
+			var light := child as OmniLight3D
+			if light != null and light.is_visible_in_tree():
+				out.append(light)
+	return out
+
+
 # Build the prop this cell wants, or leave the standing one alone when it is already the right
 # tile ON the same ground. The tile comparison is what makes REPLACEMENT work: painting a rock onto
 # a tree keeps the cell in the wanted-set, so a cell-only check would leave the tree standing. The

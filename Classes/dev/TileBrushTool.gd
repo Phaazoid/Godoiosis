@@ -21,13 +21,13 @@ class_name TileBrushTool
 # it drags the POINT four cells share to the level picker's height, welding them, where the cell
 # brush paints one whole tile and can still author a deliberate cliff between neighbours.
 
-const MODE_LABELS := ["Terrain", "Zones", "Tile States", "Corners"]   # index == PaintMode value
+const MODE_LABELS := ["Terrain", "Zones", "Tile States", "Corners", "Gas"]   # index == PaintMode value
 
 var brush_active := false
 var selected_tile := Vector2i(5, 0)
 var selected_source := 0
 var game   # injected by DevOverlay.init
-enum PaintMode { TERRAIN, ZONE, STATE, CORNER }
+enum PaintMode { TERRAIN, ZONE, STATE, CORNER, GAS }
 var paint_mode := PaintMode.TERRAIN
 const NEW_ZONE_LABEL := "(new zone)"
 var _zone_name := ""
@@ -47,6 +47,13 @@ var _state_row: HBoxContainer
 var _clear_states_button: Button
 var _state_labels: Array[String] = []
 var _state_values: Array[Terrain.TileState] = []
+# GAS mode (#508): which gas the next stroke lays and how much of it. Absolute like the corner tool --
+# every cell a drag crosses goes TO the amount, so a stroke repaints idempotently.
+var _gas_kind := Gas.Kind.STEAM
+var _gas_amount := 8
+var _gas_row: HBoxContainer
+var _gas_amount_row: HBoxContainer
+var _clear_gas_button: Button
 
 # The terrain brush's elevation half (#260, merged in by #340): the height the next click places at,
 # which way that cell rises, and — since #427 slice 2 — how far.
@@ -369,6 +376,24 @@ func _build_extra_controls() -> void:
 	_clear_states_button.pressed.connect(_on_clear_states_pressed)
 	add_child(_clear_states_button)
 
+	# Part 4b: gas painting (#508's look harness). Options scan Gas.Kind, so a new gas shows up here
+	# automatically. Right-drag takes away only the picked gas, the zone brush's scoping.
+	var gas_labels: Array = []
+	for kind_name: String in Gas.Kind.keys():
+		gas_labels.append(kind_name.capitalize())
+	_gas_row = DevWidgets.add_option(self, "Gas", gas_labels, gas_labels[0],
+		func(label: String): _gas_kind = gas_labels.find(label) as Gas.Kind)
+	var amount_spin := DevWidgets.add_spinbox(self, "Amount", _gas_amount,
+		func(value: float): _gas_amount = int(value))
+	amount_spin.min_value = 1
+	amount_spin.max_value = Gas.MAX_AMOUNT
+	_gas_amount_row = amount_spin.get_parent() as HBoxContainer
+	_clear_gas_button = Button.new()
+	_clear_gas_button.text = "Clear All Gas"
+	_clear_gas_button.tooltip_text = "Take every gas off the board. Unsaved paint is lost."
+	_clear_gas_button.pressed.connect(_on_clear_gas_pressed)
+	add_child(_clear_gas_button)
+
 	# Part 5: the elevation brush (#260). Hand-built rather than DevWidgets.add_spinbox/add_option
 	# for the reason the zone rows are: the wheel writes the level back INTO the SpinBox, and
 	# add_option builds a one-shot list (the #179 trap).
@@ -638,6 +663,12 @@ func update_zone_highlight() -> void:
 		cells = game.zone_manager.cells_in(selected_zone_name())
 	game.overlay_manager.redraw_zone_highlight(cells)
 
+func selected_gas_kind() -> Gas.Kind:
+	return _gas_kind
+
+func selected_gas_amount() -> int:
+	return _gas_amount
+
 func selected_tile_state() -> Terrain.TileState:
 	return _tile_state
 
@@ -649,6 +680,9 @@ func _set_paint_mode(mode: PaintMode) -> void:
 	_zone_name_row.visible = mode == PaintMode.ZONE
 	_state_row.visible = mode == PaintMode.STATE
 	_clear_states_button.visible = mode == PaintMode.STATE
+	_gas_row.visible = mode == PaintMode.GAS
+	_gas_amount_row.visible = mode == PaintMode.GAS
+	_clear_gas_button.visible = mode == PaintMode.GAS
 	# Level and rise ride the TERRAIN brush rather than a mode of their own (#340): a tile is painted
 	# AT a height, so asking how high is part of asking which tile, not a separate question.
 	#
@@ -675,3 +709,11 @@ func _clear_states_confirmed() -> void:
 	if game == null:
 		return
 	game.dev_controller.clear_tile_states()   # through the controller so the wipe is one undo step (#391)
+
+func _on_clear_gas_pressed() -> void:
+	DevWidgets.confirm_delete(self, "every gas on the board", _clear_gas_confirmed)
+
+func _clear_gas_confirmed() -> void:
+	if game == null:
+		return
+	game.dev_controller.clear_gas()   # through the controller so the wipe is one undo step (#391)

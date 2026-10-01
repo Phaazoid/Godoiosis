@@ -74,6 +74,10 @@ const EFFECT_RENDER_PRIORITY := 16
 # coplanar quads (outline, missing, fill, the predicted span, the notch) then the number's outline
 # and its glyphs.
 const UNIT_HUD_RENDER_PRIORITY := 48
+# The gas's fog floor (#508's pixel-puff style): it lies on the ground UNDER every piece of markup,
+# so a move tile or a zone still reads on a gassed cell. One below the lowest LAYERS sort, and both
+# its draw order and its height follow from that number the way a layer's do (gas_floor_lift).
+const GAS_FLOOR_SORT := -8
 
 const LAYERS: Dictionary[Layer, Dictionary] = {
 	# BLUE since #1066, and it is the player's half of a Fire Emblem readout: your unit says where it
@@ -1444,6 +1448,11 @@ func _build_bent_mesh(shape: Vector4i) -> ArrayMesh:
 # it outlines. Relational either way: it moves with fill_lift instead of becoming a second number.
 func _lift_of(spec: Dictionary) -> float:
 	return fill_lift + spec.get("lift_sort", spec["sort"]) * lift_step
+
+
+# How far off its surface the gas's fog floor lies: a plane of the same stack, at GAS_FLOOR_SORT.
+func gas_floor_lift() -> float:
+	return fill_lift + GAS_FLOOR_SORT * lift_step
 
 
 # How far off its surface this layer's markup sits. Public because a marker that has to MEET other

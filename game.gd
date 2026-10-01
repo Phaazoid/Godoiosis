@@ -132,6 +132,7 @@ var ai_controller: AIController
 var scenario_director: ScenarioDirector   # fires authored DialogBeats (#182)
 var terrain_states: TerrainStateManager
 var board_heights: BoardHeights   # per-cell elevation + ramps (#257); RefCounted, so not a child
+var gas_field: GasField   # the atmosphere: how much of each gas every cell holds (#508); RefCounted
 var height_debug_overlay: HeightDebugOverlay   # F5 readout, dev builds only; deleted when art lands
 var zone_manager: ZoneManager
 var main_action_menu: MainActionMenu
@@ -234,6 +235,7 @@ func _build_collaborators() -> void:
 	add_child(terrain_states)
 
 	board_heights = BoardHeights.new()   # no add_child: RefCounted, and it needs nothing from the tree
+	gas_field = GasField.new()   # the same: a RefCounted store, built beside its structural twin
 
 	if DevTools.enabled():
 		height_debug_overlay = HeightDebugOverlay.new()

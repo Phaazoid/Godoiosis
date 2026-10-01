@@ -42,6 +42,7 @@ var authored_save := true
 # anything else (zones, scenario fields) has marked since. _process polls the terrain counter
 # because DirtyCells is deliberately signal-free; gated on the window being visible.
 var _seen_terrain_version := -1
+var _seen_gas_version := -1   # the gas store's counter, the same poll (#508)
 var _marked := false
 var _shown_dirty := false   # what the label currently says, so the poll only redraws on a flip
 
@@ -92,7 +93,8 @@ func mark_modified() -> void:
 func is_modified() -> bool:
 	if game == null or scenario_manager == null or scenario_manager.last_loaded_path == "":
 		return false
-	return _marked or game.grid.dirty.version != _seen_terrain_version
+	return _marked or game.grid.dirty.version != _seen_terrain_version \
+		or game.gas_field.dirty.version != _seen_gas_version
 
 
 # A load or a save is the board and the file agreeing again, by definition.
@@ -100,6 +102,7 @@ func _stamp_clean() -> void:
 	_marked = false
 	if game != null:
 		_seen_terrain_version = game.grid.dirty.version
+		_seen_gas_version = game.gas_field.dirty.version
 
 
 # The terrain counter has no signal, so the label follows it by poll -- window-local, an int

@@ -114,6 +114,7 @@ func test_apply_scenario_restores_units_terrain_and_turn() -> void:
 	var scenario := ScenarioData.new()
 	scenario.tile_data = src.grid.tile_map_data
 	scenario.active_faction = ENEMY
+	scenario.gas = {Vector2i(1, 1): Gas.with_amount(0, Gas.Kind.STEAM, 7)}   # the atmosphere rides the third load path too (#508)
 	var entry := ScenarioUnitEntry.new()
 	entry.unit_data = _data("Loaded", PLAYER)
 	entry.cell = Vector2i(2, 3)
@@ -131,6 +132,9 @@ func test_apply_scenario_restores_units_terrain_and_turn() -> void:
 	# Locks the #71 int migration end-to-end: tileset int layer -> Terrain.Kind -> display name.
 	assert_str(sess.terrain_at(Vector2i(2, 3)).type).is_equal("grass")
 	assert_int(sess.active_faction()).is_equal(ENEMY)
+	var gas: GasField = dst.gas_field
+	assert_int(gas.amount_at(Vector2i(1, 1), Gas.Kind.STEAM)).override_failure_message(
+		"the headless loader dropped the gas field -- #103 one store along").is_equal(7)
 
 # #33 rescue loop: a unit picks up an ADJACENT DOWNED ally (a main action). After execute the
 # ally is ACTIVE again at 1 HP — the other half of the down/rescue cycle the bridge now exposes.

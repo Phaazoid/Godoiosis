@@ -108,7 +108,7 @@ func test_and_the_next_case_still_sees_full_health() -> void:
 
 func test_a_case_may_flip_a_setting_or_a_flag_freely() -> void:
 	PlayerSettings.set_on(PlayerSettings.Setting.PHOTOSENSITIVITY, true)
-	Experiments.set_on(Experiments.DEFS.keys()[0], true)
+	Experiments.set_on(_first_toggle(), true)
 	assert_bool(PlayerSettings.is_on(PlayerSettings.Setting.PHOTOSENSITIVITY)).override_failure_message(
 		"the flip did not take, so the case below proves nothing").is_true()
 
@@ -117,7 +117,16 @@ func test_and_the_next_case_sees_the_authored_defaults_again() -> void:
 	assert_bool(PlayerSettings.is_on(PlayerSettings.Setting.PHOTOSENSITIVITY)).override_failure_message(
 		"PHOTOSENSITIVITY arrived on -- the previous case's setting leaked through the reset"
 		).is_equal(bool(PlayerSettings.default_value(PlayerSettings.Setting.PHOTOSENSITIVITY)))
-	var flag: Experiments.Flag = Experiments.DEFS.keys()[0]
+	var flag: Experiments.Flag = _first_toggle()
 	assert_bool(Experiments.is_on(flag)).override_failure_message(
 		"%s arrived on -- the previous case's flag leaked through the reset"
 		% Experiments.Flag.keys()[flag]).is_equal(Experiments.default_of(flag))
+
+
+# The first ON/OFF flag: a choice row (#508) answers with an index, and flipping it as a bool is
+# exactly the coercion the registry refuses.
+func _first_toggle() -> Experiments.Flag:
+	for flag: Experiments.Flag in Experiments.all_flags():
+		if not Experiments.is_choice(flag):
+			return flag
+	return Experiments.Flag.EXAMPLE_FLAG
