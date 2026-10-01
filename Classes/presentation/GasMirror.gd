@@ -19,6 +19,21 @@ const RESOLUTION_DIVISORS: Array[int] = [1, 2, 4]
 const MASK_SCALE := 8
 const FLASH_LIFT := 1.1             # how far above the ground a strike glows
 const FLASH_SAFE_LEVEL := 0.15      # photosensitivity: every cloud holds a steady dim glow instead
+const FLOOR_SHADER := "res://Classes/presentation/gas_floor.gdshader"
+const PUFF_SHADER := "res://Classes/presentation/gas_puff.gdshader"
+const PIXEL_SIZE := 1.0 / 32.0      # one art pixel, in world units -- the sprites' density
+const ART_PIXELS_PER_CELL := 32.0
+# A cell's puff slots: which way it leans, the least gas that shows it, its biggest size, its lift,
+# and whether it is the one centre puff the Realistic + puffs style keeps.
+const SLOTS := [
+	[Vector2(0, 0), 1, 2, 0.0, true],
+	[Vector2(-1, -1), 6, 1, 0.0, false], [Vector2(1, 1), 6, 1, 0.0, false],
+	[Vector2(1, -1), 9, 1, 0.0, false], [Vector2(-1, 1), 9, 1, 0.0, false],
+	[Vector2(0, 0), 12, 1, 0.36, false],
+]
+# Extra roles, as gas_puff.gdshader numbers them (0 is a puff).
+const EXTRA_ROLES := {GasLook.Extra.WISP: 1, GasLook.Extra.SOOT: 2, GasLook.Extra.BUBBLE: 3,
+	GasLook.Extra.SNOW: 4, GasLook.Extra.BOLT: 5, GasLook.Extra.CURL: 6}
 
 @export_group("Volume")
 @export var resolution := 1   # an index into RESOLUTION_DIVISORS
@@ -47,6 +62,10 @@ const FLASH_SAFE_LEVEL := 0.15      # photosensitivity: every cloud holds a stea
 @export var pixel_bands := 3.0
 @export var pixel_cut := 0.35
 @export var pixel_ink := 0.12
+@export_group("Pixel puffs")
+@export var floor_corner_radius := 10.0   # art pixels
+@export var puff_lean := 0.3: set = _set_puff_lean
+@export var puff_tuck := 0.12: set = _set_puff_tuck
 
 # Handed in by battle3d.
 var field: GasField
@@ -57,6 +76,7 @@ var sun: DirectionalLight3D
 var environment: Environment
 var lights_source := Callable()     # -> Array[OmniLight3D], the board's own lamps
 var stands_down := Callable()       # -> bool, true in the flat 2D view
+var overlays: BoardOverlays          # the markup stack the fog floor lies in
 
 var _effect: GasVolumeEffect
 var _shape_noise: NoiseTexture3D
@@ -71,12 +91,19 @@ var _regions: Array[AABB] = []
 var _region_floats := PackedFloat32Array()
 var _regions_version := 0
 var _flash_clusters: Dictionary[Vector2i, Vector3] = {}
+var _floor: MeshInstance3D
+var _floor_material: ShaderMaterial
+var _puffs: MultiMeshInstance3D
+var _puff_material: ShaderMaterial
+# Instances whose gas flashes: [index, cluster, tint], re-lit every frame from the flash schedule.
+var _flash_instances: Array = []
 
 
 func _ready() -> void:
 	_shape_noise = _noise(FastNoiseLite.TYPE_SIMPLEX_SMOOTH, 0.05, 4, 64)
 	_detail_noise = _noise(FastNoiseLite.TYPE_CELLULAR, 0.09, 2, 48)
 	_pack_looks()
+	_build_nodes()
 	if camera != null:
 		_effect = GasVolumeEffect.new()
 		if camera.compositor == null:
@@ -115,11 +142,12 @@ func _process(delta: float) -> void:
 		return
 	var key := [field.dirty.version, heights.dirty.version if heights != null else 0,
 		grid.dirty.version if grid != null else 0, BoardSpace.staging_version,
-		BoardSpace.flight_active()]
+		BoardSpace.flight_active(), style(), _sun_light()]
 	if key != _seen:
 		_seen = key
 		_rebuild()
 	_submit()
+	_animate_pixels()
 
 
 func _submit() -> void:
@@ -180,6 +208,8 @@ func _rebuild() -> void:
 	_region_floats = floats
 	_regions_version += 1
 	_build_flash_clusters(shown)
+	_build_floor(shown)
+	_build_puffs(shown)
 
 
 func _build_textures(shown: Dictionary[Vector2i, int]) -> void:
@@ -263,6 +293,9 @@ func _pack_looks() -> void:
 
 func _on_look_changed() -> void:
 	_pack_looks()
+	if _puff_material != null:
+		_puff_material.set_shader_parameter("art", GasPuffArt.build())
+	_push_look_uniforms()
 	_seen = []
 
 
@@ -406,3 +439,239 @@ func _noise(type: FastNoiseLite.NoiseType, frequency: float, octaves: int, size:
 	texture.normalize = true
 	texture.noise = noise
 	return texture
+
+
+# --- the pixel styles: a fog floor and the puffs ------------------------------------------------
+
+func _build_nodes() -> void:
+	_floor_material = ShaderMaterial.new()
+	_floor_material.shader = load(FLOOR_SHADER) as Shader
+	_floor_material.render_priority = BoardOverlays.GAS_FLOOR_SORT
+	_floor = MeshInstance3D.new()
+	_floor.name = "GasFloor"
+	_floor.material_override = _floor_material
+	_floor.layers = BoardOverlays.WORLD_RENDER_LAYER
+	_floor.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	_floor.visible = false
+	add_child(_floor)
+	_puff_material = ShaderMaterial.new()
+	_puff_material.shader = load(PUFF_SHADER) as Shader
+	_puff_material.set_shader_parameter("art", GasPuffArt.build())
+	_puff_material.set_shader_parameter("pixel_size", PIXEL_SIZE)
+	_puff_material.set_shader_parameter("canvas_height", float(GasPuffArt.LAYER_SIZE.y))
+	_puff_material.set_shader_parameter("stride", float(GasPuffArt.STRIDE))
+	_puff_material.set_shader_parameter("extra_base", float(GasPuffArt.EXTRA_BASE))
+	var quad := QuadMesh.new()
+	quad.size = Vector2(GasPuffArt.LAYER_SIZE) * PIXEL_SIZE
+	quad.center_offset = Vector3(0.0, quad.size.y * 0.5, 0.0)
+	var multimesh := MultiMesh.new()
+	multimesh.transform_format = MultiMesh.TRANSFORM_3D
+	multimesh.use_colors = true
+	multimesh.use_custom_data = true
+	multimesh.mesh = quad
+	_puffs = MultiMeshInstance3D.new()
+	_puffs.name = "GasPuffs"
+	_puffs.multimesh = multimesh
+	_puffs.material_override = _puff_material
+	_puffs.layers = BoardOverlays.WORLD_RENDER_LAYER
+	_puffs.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	_puffs.visible = false
+	add_child(_puffs)
+	_push_look_uniforms()
+
+
+# What every kind's pixel half looks like, as the two shaders read it. Colours go in linear, because
+# a plain vec4 uniform is not converted the way a texture's sRGB texels are.
+func _push_look_uniforms() -> void:
+	if _floor_material == null:
+		return
+	var palettes: Array[Color] = []
+	var patterns := PackedInt32Array()
+	var boil := PackedFloat32Array()
+	var bob: Array[Vector2] = []
+	var sway := PackedFloat32Array()
+	for kind: Gas.Kind in Gas.Kind.values():
+		var look := GasLook.for_kind(kind)
+		for tone in look.palette():
+			palettes.append(tone.srgb_to_linear())
+		patterns.append(look.floor_pattern)
+		boil.append(look.boil_seconds)
+		bob.append(look.bob)
+		sway.append(look.sway)
+	_floor_material.set_shader_parameter("palettes", palettes)
+	_floor_material.set_shader_parameter("patterns", patterns)
+	_floor_material.set_shader_parameter("kind_count", Gas.Kind.size())
+	_floor_material.set_shader_parameter("art_pixels", ART_PIXELS_PER_CELL)
+	_puff_material.set_shader_parameter("boil_seconds", boil)
+	_puff_material.set_shader_parameter("bob", bob)
+	_puff_material.set_shader_parameter("sway", sway)
+
+
+func draws_floor() -> bool:
+	return style() == 1
+
+
+func draws_puffs() -> bool:
+	return style() == 1 or style() == 2
+
+
+func floor_node() -> MeshInstance3D:
+	return _floor
+
+
+func puff_node() -> MultiMeshInstance3D:
+	return _puffs
+
+
+# The sun as the puffs are lit by it: part of the rebuild key, since a puff's tint is baked.
+func _sun_light() -> Color:
+	return sun.light_color * sun.light_energy if sun != null and sun.visible else Color.BLACK
+
+
+# The light a flat-shaded pixel gets at a point, in sRGB: a floor of sky, the sun, and nearby lamps.
+func _tint_at(at: Vector3) -> Color:
+	var t := Color(0.42, 0.45, 0.52) + _sun_light() * 0.55
+	if lights_source.is_valid():
+		for light: OmniLight3D in lights_source.call():
+			var att := pow(clampf(1.0 - light.global_position.distance_to(at) / light.omni_range, 0.0, 1.0), 2.0)
+			t += light.light_color * light.light_energy * att * 0.35
+	return Color(minf(t.r, 1.0), minf(t.g, 1.0), minf(t.b, 1.0), 1.0)
+
+
+# One fan of four triangles per gas cell, every vertex on the true surface, lifted into the markup
+# stack. Each vertex carries the light there.
+func _build_floor(shown: Dictionary[Vector2i, int]) -> void:
+	if not draws_floor() or shown.is_empty():
+		_floor.mesh = null
+		return
+	var lift := overlays.gas_floor_lift() if overlays != null else 0.008
+	var st := SurfaceTool.new()
+	st.begin(Mesh.PRIMITIVE_TRIANGLES)
+	var fan: Array[Vector2] = [Vector2(0, 0), Vector2(1, 0), Vector2(1, 1), Vector2(0, 1)]
+	for cell: Vector2i in shown:
+		var corners := heights.corners_at(cell) if heights != null else Vector4i.ZERO
+		var offset := BoardSpace.staged_offset(cell) + Vector3(0.0, lift, 0.0)
+		var centre := _floor_point(cell, corners, Vector2(0.5, 0.5), offset)
+		st.set_color(_tint_at(centre).srgb_to_linear())
+		for i in 4:
+			st.add_vertex(centre)
+			st.add_vertex(_floor_point(cell, corners, fan[i], offset))
+			st.add_vertex(_floor_point(cell, corners, fan[(i + 1) % 4], offset))
+	_floor.mesh = st.commit()
+	_floor_material.set_shader_parameter("cells_tex", _textures[0])
+	_floor_material.set_shader_parameter("amount_tex", _textures[1])
+	_floor_material.set_shader_parameter("board_rect", Vector4(_rect.position.x, _rect.position.y,
+		maxi(_rect.size.x, 1), maxi(_rect.size.y, 1)))
+
+
+static func _floor_point(cell: Vector2i, corners: Vector4i, uv: Vector2, offset: Vector3) -> Vector3:
+	return Vector3(cell.x + uv.x, BoardSpace.world_y_of_height(Terrain.height_at_uv(corners, uv.x, uv.y)),
+		cell.y + uv.y) + offset
+
+
+# Each cell lays out its puffs by its neighbours: a slot facing gas leans out to meet it, one facing
+# an empty cell tucks inside the border. A mixed cell picks each slot's gas by the amounts, so the
+# mix reads as both shapes side by side. One moving extra per cell (two for snow and soot).
+func _build_puffs(shown: Dictionary[Vector2i, int]) -> void:
+	_flash_instances.clear()
+	var multimesh := _puffs.multimesh
+	if not draws_puffs() or shown.is_empty():
+		multimesh.instance_count = 0
+		return
+	var crown_only := style() == 2
+	var instances: Array = []   # [position, kind, role, phase, slot, cell]
+	for cell: Vector2i in shown:
+		var packed: int = shown[cell]
+		var kinds := Gas.kinds_in(packed)
+		var total := 0
+		for kind in kinds:
+			total += Gas.amount_in(packed, kind)
+		var rng := RandomNumberGenerator.new()
+		rng.seed = hash(cell)
+		var offset := BoardSpace.staged_offset(cell)
+		for slot: Array in SLOTS:
+			var kind := _weighted_kind(packed, kinds, total, rng)
+			var dir: Vector2 = slot[0]
+			var off := Vector2.ZERO
+			for axis in 2:
+				var sgn: float = dir[axis]
+				if sgn == 0.0:
+					continue
+				var n: Vector2i = cell + (Vector2i(int(sgn), 0) if axis == 0 else Vector2i(0, int(sgn)))
+				off[axis] = sgn * (puff_lean if shown.has(n) else puff_tuck)
+			off += Vector2(rng.randf_range(-0.03, 0.03), rng.randf_range(-0.03, 0.03))
+			var phase := rng.randf() * TAU
+			var variant := rng.randi() % 3
+			if total < int(slot[1]) or (crown_only and not slot[4]):
+				continue
+			var size := mini(0 if total < 4 else (1 if total < 9 else 2), int(slot[2]))
+			var x := cell.x + 0.5 + off.x
+			var z := cell.y + 0.5 + off.y
+			var at := Vector3(x, BoardSpace.surface_height_at(cell, x, z, heights) + float(slot[3]), z) + offset
+			instances.append([at, kind, 0, phase, size * 3 + variant, cell])
+		if crown_only or total < 3:
+			continue
+		var lead: Gas.Kind = kinds[0]
+		for kind in kinds:
+			if Gas.amount_in(packed, kind) > Gas.amount_in(packed, lead):
+				lead = kind
+		var extra := GasLook.for_kind(lead).extra
+		var count := 2 if extra == GasLook.Extra.SNOW or extra == GasLook.Extra.SOOT else 1
+		if extra == GasLook.Extra.BOLT and rng.randf() > 0.45:
+			count = 0
+		for k in count:
+			var x := cell.x + 0.5 + rng.randf_range(-0.25, 0.25)
+			var z := cell.y + 0.5 + rng.randf_range(-0.25, 0.25)
+			var at := Vector3(x, BoardSpace.surface_height_at(cell, x, z, heights), z) + offset
+			instances.append([at, lead, EXTRA_ROLES[extra], rng.randf(), 0, cell])
+	multimesh.instance_count = instances.size()
+	var bounds := AABB()
+	for i in instances.size():
+		var entry: Array = instances[i]
+		var at: Vector3 = entry[0]
+		var kind: Gas.Kind = entry[1]
+		var tint := _tint_at(at).srgb_to_linear()
+		multimesh.set_instance_transform(i, Transform3D(Basis.IDENTITY, at))
+		multimesh.set_instance_custom_data(i, Color(float(kind), float(entry[2]), entry[3], float(entry[4])))
+		multimesh.set_instance_color(i, Color(tint.r, tint.g, tint.b, 0.0))
+		if GasLook.for_kind(kind).flash > 0.0:
+			var cell: Vector2i = entry[5]
+			_flash_instances.append([i, Vector2i(floori(cell.x / 2.0), floori(cell.y / 2.0)), tint])
+		bounds = AABB(at, Vector3.ZERO) if i == 0 else bounds.expand(at)
+	_puffs.custom_aabb = bounds.grow(2.0)
+
+
+static func _weighted_kind(packed: int, kinds: Array[Gas.Kind], total: int, rng: RandomNumberGenerator) -> Gas.Kind:
+	var pick := rng.randf() * total
+	for kind in kinds:
+		pick -= Gas.amount_in(packed, kind)
+		if pick < 0.0:
+			return kind
+	return kinds[kinds.size() - 1]
+
+
+# Per frame: which pixel parts show, the clock, and the lightning on the puffs that carry it.
+func _animate_pixels() -> void:
+	var down: bool = stands_down.is_valid() and stands_down.call()
+	_floor.visible = not down and draws_floor() and _floor.mesh != null
+	_puffs.visible = not down and draws_puffs() and _puffs.multimesh.instance_count > 0
+	if _floor.visible:
+		_floor_material.set_shader_parameter("corner_radius", floor_corner_radius)
+	if not _puffs.visible:
+		return
+	_puff_material.set_shader_parameter("gas_time", _time)
+	var animated := flashes_allowed()
+	for entry: Array in _flash_instances:
+		var level := flash_level(entry[1], _time) if animated else FLASH_SAFE_LEVEL
+		var tint: Color = entry[2]
+		_puffs.multimesh.set_instance_color(entry[0], Color(tint.r, tint.g, tint.b, level))
+
+
+func _set_puff_lean(value: float) -> void:
+	puff_lean = value
+	_seen = []
+
+
+func _set_puff_tuck(value: float) -> void:
+	puff_tuck = value
+	_seen = []

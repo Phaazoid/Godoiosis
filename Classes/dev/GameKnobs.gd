@@ -453,6 +453,12 @@ const KNOBS: Array[Dictionary] = [
 		"tip": "How opaque the gas must be before an art pixel turns solid; the fringe below it dithers."},
 	{"group": "Gas: pixel volume", "node": "GasMirror", "prop": "pixel_ink", "label": "Outline band", "min": 0.0, "max": 0.5, "step": 0.01,
 		"tip": "How far past the solid line the pixels darken, which draws a rough outline round each cloud. 0 draws none."},
+	{"group": "Gas: pixel puffs", "node": "GasMirror", "prop": "floor_corner_radius", "label": "Floor corner radius", "min": 0.0, "max": 16.0, "step": 1.0,
+		"tip": "How round the fog floor's outer corners are, in art pixels (a cell is 32). Inner corners stay square either way, so the shape still reads as whole tiles."},
+	{"group": "Gas: pixel puffs", "node": "GasMirror", "prop": "puff_lean", "label": "Lean toward gas", "min": 0.0, "max": 0.5, "step": 0.01,
+		"tip": "How far a corner puff sits toward a neighbouring cell that also holds gas, in cells, so neighbouring cells' puffs meet into one cloud."},
+	{"group": "Gas: pixel puffs", "node": "GasMirror", "prop": "puff_tuck", "label": "Tuck from the edge", "min": 0.0, "max": 0.5, "step": 0.01,
+		"tip": "How far a corner puff sits toward a neighbouring cell WITHOUT gas, in cells. Small keeps the puffs inside the cell's own border so the edge of the gas stays legible."},
 ]
 
 # Board-markup values that are NOT node properties (#212 slice 2, moved here whole by #373). A
@@ -1733,6 +1739,7 @@ const GROUP_TABS: Dictionary[String, String] = {
 	"Gas: the march": "Gas",
 	"Gas: light": "Gas",
 	"Gas: pixel volume": "Gas",
+	"Gas: pixel puffs": "Gas",
 	"Camera handling": "Camera",
 	"Playback framing": "Playback",
 	"World": "World",

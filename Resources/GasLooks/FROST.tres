@@ -27,3 +27,4 @@ floor_pattern = 3
 extra = 3
 boil_seconds = 1.5
 bob = Vector2(0.8, 0.6)
+sway = 1.5

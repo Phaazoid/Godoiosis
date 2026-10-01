@@ -43,6 +43,7 @@ enum Extra { WISP, SOOT, BUBBLE, SNOW, BOLT, CURL }
 @export var soft := false                 # no outline, a dithered fringe instead (dark gases)
 @export var boil_seconds := 0.8           # how often a puff swaps to its next drawing
 @export var bob := Vector2(1.2, 1.6)      # art pixels of bob, and its rate
+@export var sway := 0.0                   # art pixels of side-to-side drift
 
 
 static var _looks_by_kind: Dictionary = {}

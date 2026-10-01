@@ -183,6 +183,7 @@ func _ready() -> void:
 	_gas.environment = ($WorldEnvironment as WorldEnvironment).environment
 	_gas.lights_source = _board_mirror.lights
 	_gas.stands_down = func() -> bool: return view == View.FLAT_2D
+	_gas.overlays = _overlays
 	add_child(_gas)
 	var dev_overlay: Node = _main.get_node_or_null("DevOverlay")
 	if dev_overlay is Window:
