@@ -1,0 +1,14 @@
+[remap]
+
+importer="glsl"
+type="RDShaderFile"
+uid="uid://ceihvrg31wo5i"
+path="res://.godot/imported/gas_volume.glsl-6a4f1730dd2a6da5408409795b74e30f.res"
+
+[deps]
+
+source_file="res://Classes/presentation/gas_volume.glsl"
+dest_files=["res://.godot/imported/gas_volume.glsl-6a4f1730dd2a6da5408409795b74e30f.res"]
+
+[params]
+

@@ -1,0 +1,6 @@
+[gd_resource type="Resource" script_class="GasLook" format=3 uid="uid://b8xejun6svg03"]
+
+[ext_resource type="Script" uid="uid://dwj8o3stxm5sr" path="res://Classes/presentation/GasLook.gd" id="1_yp3y3"]
+
+[resource]
+script = ExtResource("1_yp3y3")

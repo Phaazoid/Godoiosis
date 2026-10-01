@@ -123,6 +123,7 @@ var _crawl_pushed := -2.0
 # is a hitch in the one moment this effect exists for.
 var _staging_dust: StagingDust = null
 var _arc: ArcLightning = null
+var _gas: GasMirror = null
 # Which grid VERTEX the pointer is nearest (#427 slice 4). Stored beside the cell rather than derived
 # from it: it changes as the cursor crosses the MIDDLE of a cell, so the cell early-out below would
 # freeze it for the whole tile.
@@ -215,6 +216,18 @@ func _ready() -> void:
 	_arc = ArcLightning.new()
 	_arc.point_of = _surface_of
 	add_child(_arc)
+	# The gas store's drawing (#508), resident like the arc. Named, because GameKnobs rows address it.
+	_gas = GasMirror.new()
+	_gas.name = "GasMirror"
+	_gas.field = game.gas_field
+	_gas.heights = game.board_heights
+	_gas.grid = game.grid
+	_gas.camera = _camera
+	_gas.sun = $Sun
+	_gas.environment = ($WorldEnvironment as WorldEnvironment).environment
+	_gas.lights_source = _board_mirror.lights
+	_gas.stands_down = func() -> bool: return view == View.FLAT_2D
+	add_child(_gas)
 	_overlay_mirror.game = game
 	_overlay_mirror.overlays = _overlays
 	_overlay_mirror.unit_mirror = _unit_mirror
