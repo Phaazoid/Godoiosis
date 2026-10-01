@@ -56,7 +56,7 @@
 >
 > **The dial's floor is ONE** (dev, 2026-09-12). An absent clock is legal `.tres` and means *burns forever* — but `tests/terrain/test_fire_clock.gd` refuses one on a shipped fuel, because a grass field that never goes out would ship silently. Forever is already spelled, and better: **ground that is not fuel never runs out**, which is what Prolog's braziers on flagstone have always been. So the TICK is how you say forever, and the dial cannot author a file CI reds.
 
-**Canon checked through #902 (2026-09-12); #1092's Chilled-beats-Wet rule folded in 2026-09-29; #1135's map-only rule folded in 2026-09-28; #922's melt-sinking folded in 2026-09-27; the burn-rule surface folded in 2026-09-12; the #895 firebreak measurement and fireproofing #892 folded in 2026-09-11; shallow water re-costed 2026-09-10.**
+**Canon checked through #902 (2026-09-12); #1174 (the water takes no limb) folded in 2026-10-01; #1092's Chilled-beats-Wet rule folded in 2026-09-29; #1135's map-only rule folded in 2026-09-28; #922's melt-sinking folded in 2026-09-27; the burn-rule surface folded in 2026-09-12; the #895 firebreak measurement and fireproofing #892 folded in 2026-09-11; shallow water re-costed 2026-09-10.**
 
 ## The tile model (implemented — [LOCKED shape])
 
@@ -132,8 +132,9 @@ rescuer's reach, which is the drown clock's whole point.
 
 **Drowning is DAMAGE, not a lifecycle door of its own** (dev, 2026-08-26: *"Downing means getting set
 to one life. We don't need a no damage down — falling into deep water = losing all one's health"*).
-So the ordinary `LethalityRules` ladder names the rung, and the Will cost, the maim when Will cannot
-pay it, the Crisis gambit and finishing a body that is already DOWNED all arrive for free. It is
+So the ordinary `LethalityRules` ladder names the rung, and the down, the wound, the Crisis gambit
+and finishing a body that is already DOWNED all arrive for free. The water is never a BLOW, so it
+takes no limb ([#1174](https://github.com/Phaazoid/Godoiosis/issues/1174)): only a blow limb-sized on its own does, drowning or not. It is
 computed **after** the Iron Will clamp: the cap governs the *hit* and stays absolute, and the water
 then takes the remainder — a lake is not a blow, and capping it would mean a unit holding Iron Will
 above `Abilities.IRON_WILL_DAMAGE_CAP` simply could not drown.
