@@ -23,7 +23,7 @@ func set_unit(target: Unit):
 	if unit:
 		unit.unit_instance.hp_changed.disconnect(_on_hp_changed)
 		unit.unit_instance.died.disconnect(_on_unit_died)
-		unit.unit_instance.will_changed.disconnect(_on_will_changed)
+		unit.stats_changed.disconnect(_on_stats_changed)
 		unit.downed_countdown_changed.disconnect(_on_countdown_changed)
 	unit = target
 
@@ -41,7 +41,7 @@ func set_unit(target: Unit):
 
 	unit.unit_instance.died.connect(_on_unit_died)
 	unit.unit_instance.hp_changed.connect(_on_hp_changed)
-	unit.unit_instance.will_changed.connect(_on_will_changed)
+	unit.stats_changed.connect(_on_stats_changed)
 	unit.downed_countdown_changed.connect(_on_countdown_changed)
 
 	_refresh()
@@ -61,9 +61,7 @@ func _refresh():
 func _refresh_hp():
 	if unit == null:
 		return
-	hp_label.text = "%d/%d  WIL %d/%d" % [
-		unit.get_current_hp(), unit.get_max_hp(),
-		unit.unit_instance.get_current_will(), unit.unit_instance.get_max_will()]
+	hp_label.text = "%d/%d" % [unit.get_current_hp(), unit.get_max_hp()]
 
 # Element states first (this CLEARS the row), then lifecycle/maim status icons appended after.
 func _refresh_status_icons():
@@ -104,9 +102,11 @@ func _add_status_count(n: int):
 func _on_hp_changed(_current, _max):
 	_refresh_hp()
 
-func _on_will_changed(_current, _max):
+# A lost limb settles through Unit._settle_stat_change, which emits this (#1174) -- the one repaint a
+# STANDING maim gets, since no lifecycle signal fires for it.
+func _on_stats_changed():
 	_refresh_hp()
-	_refresh_status_icons()   # a maim sets Will->0 via this signal — repaint so the severed icon appears
+	_refresh_status_icons()
 
 func _on_countdown_changed(_turns: int):
 	_refresh_status_icons()

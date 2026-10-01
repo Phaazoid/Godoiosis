@@ -37,8 +37,7 @@ func execute() -> void:
 		if _still_adjacent():
 			_haul_out()
 			target.revive()
-			# Spent the turn it's rescued — no actions; resets next turn. (Future: Will could buy
-			# back movement/attack here.) A SAME-PASS rescue (#124) reaches here before the ejection
+			# Spent the turn it's rescued — no actions; resets next turn. A SAME-PASS rescue (#124) reaches here before the ejection
 			# sweep has built the target's solo squad — target.squad is still the ACTING squad, and
 			# marking it would spend the whole squad early — so OrderExecutor._process_downed_pending
 			# marks that case after it ejects.

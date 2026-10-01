@@ -444,6 +444,7 @@ const ZONE_MARKS_SCRIPT := "res://Classes/board/ZoneMarks.gd"
 const SQUAD_LINES_SCRIPT := "res://Classes/board/SquadLines2D.gd"
 const UNIT_VISUALS_SCRIPT := "res://Classes/units/UnitVisuals.gd"
 const MUSIC_DIRECTOR_SCRIPT := "res://Classes/audio/MusicDirector.gd"
+const LETHALITY_RULES_SCRIPT := "res://Classes/actions/resolution/LethalityRules.gd"
 const STAGING_DUST_SCRIPT := "res://Classes/presentation/StagingDust.gd"
 const ARC_LIGHTNING_SCRIPT := "res://Classes/presentation/ArcLightning.gd"
 const SHOCK_SPARKS_SCRIPT := "res://Classes/presentation/ShockSparks.gd"
@@ -1581,6 +1582,16 @@ const CLASS_KNOBS: Array[Dictionary] = [
 	{"group": "Music", "label": "Crossfade", "static": "CROSSFADE_SECONDS",
 		"script": MUSIC_DIRECTOR_SCRIPT, "min": 0.0, "max": 4.0, "step": 0.05,
 		"tip": "Seconds for one track to replace another. The swap fires twice a round, so judge this against a whole mission rather than against one hand-off: short enough and it reads as a cut every turn, long enough and the two tracks are audibly playing over each other. Zero is a hard cut. Takes effect on the next swap."},
+
+	# What a blow must deal to take a limb (#1174). The first GAMEPLAY rules on this tab: statics on
+	# LethalityRules, read by the resolver and by Unit.take_damage alike, so a drag reaches the preview
+	# at the next resolve and never re-words a queue already resolved.
+	{"group": "Limb loss", "label": "Limb loss damage", "static": "LIMB_LOSS_DAMAGE",
+		"script": LETHALITY_RULES_SCRIPT, "min": 1, "max": 40, "step": 1,
+		"tip": "A single blow this big takes a limb, whether or not it downs the unit. The blow is the hit after armour, any fall included, after Iron Will's cap; never the drowning or the ground. A kill takes nothing."},
+	{"group": "Limb loss", "label": "Limb loss damage (wounded)", "static": "LIMB_LOSS_DAMAGE_WOUNDED",
+		"script": LETHALITY_RULES_SCRIPT, "min": 1, "max": 40, "step": 1,
+		"tip": "The same threshold once the unit has gone down this battle. Lower than the fresh one, so a unit that has been down is easier to maim."},
 ]
 
 
@@ -1673,6 +1684,8 @@ const GROUP_TABS: Dictionary[String, String] = {
 	"Player settings": "Unit HUD",
 	"Mission HUD": "Mission",
 	"Pre-mission screen": "Mission",
+	# The first gameplay RULES on this panel (#1174) -- a tab of their own, since nothing else here is one.
+	"Limb loss": "Rules",
 	# Its own tab with one row in it, which is thin today and is where the lethality stings and any
 	# ducking land next -- a crossfade length has nothing to do with any other tab's subject.
 	"Music": "Audio",
@@ -2128,6 +2141,8 @@ static func read_static(name: String) -> Variant:
 		"SLICE_SELECTED_COLOR": return ActionMenuController.SLICE_SELECTED_COLOR
 		"SLICE_DISABLED_COLOR": return ActionMenuController.SLICE_DISABLED_COLOR
 		"CROSSFADE_SECONDS": return MusicDirector.CROSSFADE_SECONDS
+		"LIMB_LOSS_DAMAGE": return LethalityRules.LIMB_LOSS_DAMAGE
+		"LIMB_LOSS_DAMAGE_WOUNDED": return LethalityRules.LIMB_LOSS_DAMAGE_WOUNDED
 		"URGENT_ROUNDS": return MissionStatusPanel.URGENT_ROUNDS
 		"URGENT_COLOR": return MissionStatusPanel.URGENT_COLOR
 		"CARD_SLIDE_SECONDS": return PreMissionScreen.CARD_SLIDE_SECONDS
@@ -2863,6 +2878,13 @@ static func write_static(host: Node3D, name: String, value: Variant) -> void:
 		# and reads this value each time, so a drag mid-swap is honoured on the next frame by itself.
 		"CROSSFADE_SECONDS":
 			MusicDirector.CROSSFADE_SECONDS = value
+			return
+		# Read at every resolve and every take_damage; nothing caches them, so no re-apply.
+		"LIMB_LOSS_DAMAGE":
+			LethalityRules.LIMB_LOSS_DAMAGE = int(value)
+			return
+		"LIMB_LOSS_DAMAGE_WOUNDED":
+			LethalityRules.LIMB_LOSS_DAMAGE_WOUNDED = int(value)
 			return
 		# The mission clock (#101). These DO need a re-apply: the status panel is push-refreshed from
 		# MissionController's write points, so with nothing happening on the board -- which is exactly

@@ -117,6 +117,8 @@ const ATTACK_ICON := preload("res://Art/Icons/ActionIcons/FightActionIcon.png")
 const DOWN_ICON := preload("res://Art/Icons/StateIcons/Down.png")
 const KILL_ICON := preload("res://Art/Icons/StateIcons/DedIcon.png")
 const MAIM_ICON := preload("res://Art/Icons/StateIcons/DownMaim.png")
+const SEVERED_ARM_ICON := preload("res://Art/Icons/StateIcons/SeveredArm.png")
+const SEVERED_LEG_ICON := preload("res://Art/Icons/StateIcons/SeveredLeg.png")
 const CRISIS_ICON := preload("res://Art/Icons/ActionIcons/CrisisIcon.png")
 
 func init(attacker: Unit, origin: Vector2i, target_unit: Unit, target_location: Vector2i):
@@ -192,7 +194,7 @@ func execute():
 		if fired_attack != null and fired_attack.heals:
 			target.heal(resolved.heal_amount)
 		else:
-			target.take_damage(resolved.damage)
+			target.take_damage(resolved.damage, resolved.non_blow())
 		for s in resolved.states_removed:
 			target.remove_element_state(s)
 		for s in resolved.states_added:
@@ -290,19 +292,28 @@ func is_inert() -> bool:
 	return (resolved != null and resolved.skipped) or super()
 
 # Static since #419: a derived row that is NOT an attack shows the same rung triple, and two
-# spellings would let the queue disagree with itself about what a down looks like.
+# spellings would let the queue disagree with itself about what a down looks like. The limb (#1174)
+# rides the same slot: a down that takes one wears the maim, a standing hit that takes one wears the
+# severed limb, and a Crisis entry keeps the Crisis icon -- the limb it also takes goes unshown, a
+# declared residual (one slot, and a second badge is a look decision).
 static func lethality_icon(outcome: ResolvedOutcome) -> Texture2D:
 	if outcome != null:
+		var severs := outcome.severed_limb != -1
 		match outcome.lethality:
+			ResolvedOutcome.Lethality.NONE:
+				if severs:
+					return _severed_icon(outcome.severed_limb)
 			ResolvedOutcome.Lethality.DOWNED:
-				return DOWN_ICON
-			ResolvedOutcome.Lethality.MAIMED:
-				return MAIM_ICON
+				return MAIM_ICON if severs else DOWN_ICON
 			ResolvedOutcome.Lethality.KILLED:
 				return KILL_ICON
 			ResolvedOutcome.Lethality.CRISIS:
 				return CRISIS_ICON
 	return null
+
+static func _severed_icon(slot: int) -> Texture2D:
+	var kind := UnitInstance.limb_kind_for_slot(slot as UnitInstance.LimbSlot)
+	return SEVERED_LEG_ICON if kind == WeaponData.LimbKind.LEG else SEVERED_ARM_ICON
 
 func get_target_texture() -> Texture2D:
 	if target != null and is_instance_valid(target) and not target.is_queued_for_deletion():
@@ -439,10 +450,10 @@ func get_outcome_summary() -> String:
 	match resolved.lethality:
 		ResolvedOutcome.Lethality.DOWNED:
 			parts.append("DOWNS")
-		ResolvedOutcome.Lethality.MAIMED:
-			parts.append("MAIMS (no Will)")
 		ResolvedOutcome.Lethality.KILLED:
 			parts.append("KILLS")
+	if resolved.severed_limb != -1:
+		parts.append("MAIMS")
 	if resolved.brace_bonus > 0:
 		parts.append("+%d brace" % resolved.brace_bonus)
 	for p in resolved.popups:

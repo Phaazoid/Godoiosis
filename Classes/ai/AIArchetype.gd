@@ -19,9 +19,8 @@ static var _implementations := {
 }
 
 # (The per-archetype Crisis stance table lived here until #158: with Crisis an equipped ability
-# that always fires past the will gate, there is no accept/decline left to answer. An enemy gets
-# Crisis by carrying the ability — author it onto the units that should have it; the balance lever
-# is still authored WIL.)
+# that always fires on an unwounded unit, there is no accept/decline left to answer. An enemy gets
+# Crisis by carrying the ability — author it onto the units that should have it.)
 
 # FACTION_DEFAULT resolves to DEFAULT -- it's a sentinel, not an implementation of its own.
 static func resolve(t: Type) -> Callable:
