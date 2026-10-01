@@ -337,7 +337,7 @@ func test_only_rev_declines_an_ai_beat() -> void:
 		if type == BaseAction.ActionType.REV:
 			continue
 		assert_bool(Pacing.coda_earns_a_beat(type, true)) \
-			.override_failure_message("%s quietly stopped earning an AI beat -- #931 scoped this to REV alone, and RALLY/INTIMIDATE in particular are #965's question, not this one" % BaseAction.ActionType.keys()[type]) \
+			.override_failure_message("%s quietly stopped earning an AI beat -- #931 scoped this to REV alone" % BaseAction.ActionType.keys()[type]) \
 			.is_true()
 
 

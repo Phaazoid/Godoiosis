@@ -1,8 +1,8 @@
 extends BaseAction
 class_name ReloadAction
 
-# Reload (#73 as Spring Load, generalized #84): a plannable main-action rearm. Mirrors
-# RallyAction's shape exactly — self-only, no resolver pass, a plain state mutation on execute().
+# Reload (#73 as Spring Load, generalized #84): a plannable main-action rearm. Self-only, no
+# resolver pass, a plain state mutation on execute().
 # Deliberately family-AGNOSTIC now that a second reload-style weapon exists: the body only calls
 # the generic Unit.can_reload_weapon()/reload_weapon() seam, so a Springspear rearming its spring
 # and a Carbine swapping a magazine are the same order. What the player SEES is per-family

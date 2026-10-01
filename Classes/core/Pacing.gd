@@ -116,8 +116,6 @@ static var HOLD_HEAL := 0.75       # HP came back -- the quiet beat this table h
 # well"). PER VERB rather than one shared number, because a rescue and a reload are not the same
 # moment. coda_hold() below is the one lookup.
 static var HOLD_RESCUE := 0.5
-static var HOLD_RALLY := 0.5
-static var HOLD_INTIMIDATE := 0.5
 static var HOLD_RELOAD := 0.5
 static var HOLD_REV := 0.5
 static var HOLD_BURROW := 0.5
@@ -147,8 +145,6 @@ static var HOLD_OVERWATCH := 0.5
 static var LINGER_ATTACK := 0.45
 static var LINGER_DOWN := 1.0      # the whole grid goes at once -- the loudest thing to watch
 static var LINGER_RESCUE := 0.3
-static var LINGER_RALLY := 0.3
-static var LINGER_INTIMIDATE := 0.3
 static var LINGER_RELOAD := 0.2
 static var LINGER_REV := 0.2
 static var LINGER_BURROW := 0.3
@@ -467,8 +463,6 @@ static func hold_for(beat: BeatSheet.Beat) -> float:
 static func coda_hold(type: BaseAction.ActionType) -> float:
 	match type:
 		BaseAction.ActionType.RESCUE: return HOLD_RESCUE
-		BaseAction.ActionType.RALLY: return HOLD_RALLY
-		BaseAction.ActionType.INTIMIDATE: return HOLD_INTIMIDATE
 		BaseAction.ActionType.RELOAD: return HOLD_RELOAD
 		BaseAction.ActionType.REV: return HOLD_REV
 		BaseAction.ActionType.BURROW: return HOLD_BURROW
@@ -511,8 +505,6 @@ static func linger_for(beat: BeatSheet.Beat) -> float:
 static func coda_linger(type: BaseAction.ActionType) -> float:
 	match type:
 		BaseAction.ActionType.RESCUE: return LINGER_RESCUE
-		BaseAction.ActionType.RALLY: return LINGER_RALLY
-		BaseAction.ActionType.INTIMIDATE: return LINGER_INTIMIDATE
 		BaseAction.ActionType.RELOAD: return LINGER_RELOAD
 		BaseAction.ActionType.REV: return LINGER_REV
 		BaseAction.ActionType.BURROW: return LINGER_BURROW
@@ -540,8 +532,6 @@ static func coda_linger(type: BaseAction.ActionType) -> float:
 # play, red in the suite, the same bargain hold_for makes when it floors the -1.0.
 const CODA_EARNS_AN_AI_BEAT: Dictionary[BaseAction.ActionType, bool] = {
 	BaseAction.ActionType.RESCUE: true,
-	BaseAction.ActionType.RALLY: true,
-	BaseAction.ActionType.INTIMIDATE: true,
 	BaseAction.ActionType.RELOAD: true,
 	BaseAction.ActionType.REV: false,
 	BaseAction.ActionType.BURROW: true,

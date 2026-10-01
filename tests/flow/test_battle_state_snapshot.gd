@@ -4,7 +4,7 @@
 # The reason this is a whole suite rather than a few more cases next door: battle state is
 # deliberately NOT @export where it lives, on either side. Weapon readiness/charge/rev/ammo are
 # plain vars on WeaponInstance subclasses so make()/copy_for_grant() re-arm a weapon every mission;
-# lifecycle, element states, Crisis and rally are plain vars on the transient Unit for the same
+# lifecycle, element states and Crisis are plain vars on the transient Unit for the same
 # reason. So none of it rides along for free — every field here is captured EXPLICITLY, and a field
 # someone forgets fails silently and invisibly (the whole layer was silently absent from saves for
 # a year, noticed only when a Kinetic Mace lost its charge across an F2 reset).
@@ -199,7 +199,6 @@ func test_battle_state_survives_a_real_disk_round_trip() -> void:
 	a.apply_stat_effect(StatEffect.make("Crisis", {Stats.Stat.STR: 5}, 3))
 	a.stat_effects[0].turns_remaining = 1
 	a.add_element_state(Elemental.State.WET)
-	a.rally_count = 2
 
 	var entry := ScenarioUnitEntry.new()
 	entry.unit_data = a.unit_data
@@ -219,7 +218,6 @@ func test_battle_state_survives_a_real_disk_round_trip() -> void:
 	assert_int(loaded.stat_effects[0].turns_remaining).is_equal(1)
 	assert_int(loaded.stat_effects[0].get_modifier(Stats.Stat.STR)).is_equal(5)
 	assert_array(loaded.element_states).contains_exactly([Elemental.State.WET])
-	assert_int(loaded.rally_count).is_equal(2)
 
 	var dir := DirAccess.open("user://")
 	if dir != null:
@@ -321,22 +319,19 @@ func test_an_active_unit_reloads_active_with_no_downed_sprite() -> void:
 	assert_bool(loaded.downed_sprite.visible).is_false()
 
 
-func test_crisis_flags_and_rally_count_round_trip() -> void:
-	# All three are battle-long commitments: in_crisis locks Will at 0 and removes the safety net,
-	# crisis_surge_pending spans a turn boundary, and rally_count is the diminishing-returns
-	# counter. Reloading any of them clean hands back a gambit the player already spent.
+func test_crisis_flags_round_trip() -> void:
+	# Both are battle-long commitments: in_crisis locks Will at 0 and removes the safety net, and
+	# crisis_surge_pending spans a turn boundary. Reloading either clean hands back a gambit the
+	# player already spent.
 	# (crisis_offered_pending left this list with #158 -- no offer exists to be pending.)
 	var a: Unit = H.spawn_unit(self, Team.Faction.PLAYER, Vector2i.ZERO, {}, false)
 	a.in_crisis = true
 	a.crisis_surge_pending = true
-	a.rally_count = 2
 
 	var loaded := _round_trip(a)
 
 	assert_bool(loaded.in_crisis).is_true()
 	assert_bool(loaded.crisis_surge_pending).is_true()
-	assert_int(loaded.rally_count).is_equal(2)
-	assert_bool(loaded.can_rally()).is_false()   # and the rules downstream read the restored state
 
 
 # ==============================================================================
@@ -445,7 +440,6 @@ func test_new_entry_battle_state_defaults_read_as_unsaved() -> void:
 	assert_int(entry.downed_turns_remaining).is_equal(-1)
 	assert_bool(entry.in_crisis).is_false()
 	assert_bool(entry.crisis_surge_pending).is_false()
-	assert_int(entry.rally_count).is_equal(0)
 	assert_bool(entry.squad_has_acted).is_false()
 
 
@@ -459,7 +453,6 @@ func test_applying_a_default_entry_leaves_a_healthy_unit_alone() -> void:
 	assert_bool(unit.element_states.is_empty()).is_true()
 	assert_bool(unit.stat_effects.is_empty()).is_true()
 	assert_bool(unit.in_crisis).is_false()
-	assert_int(unit.rally_count).is_equal(0)
 	assert_int(unit.get_current_hp()).is_equal(unit.get_max_hp())
 
 

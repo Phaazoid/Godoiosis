@@ -59,7 +59,7 @@ func test_live_kit_unions_a_single_jobs_pool() -> void:
 	inst.add_job("tank")
 	assert_bool(_holds(inst, Abilities.Id.IRON_WILL)).is_true()
 	assert_bool(_holds(inst, Abilities.Id.TAUNT)).is_true()
-	assert_bool(_holds(inst, Abilities.Id.INTIMIDATION)).is_false()
+	assert_bool(_holds(inst, Abilities.Id.BRACE)).is_false()
 
 func test_live_kit_unions_across_multiple_jobs() -> void:
 	_tank.ability_pool = [_ability(Abilities.Id.IRON_WILL)]

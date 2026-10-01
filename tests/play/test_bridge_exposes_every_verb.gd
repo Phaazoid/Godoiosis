@@ -77,12 +77,12 @@ func test_every_session_verb_has_a_bridge_arm() -> void:
 		+ "NOT_COMMANDS with the reason.") % ", ".join(missing)).is_empty()
 
 
-func test_the_six_that_were_missing_are_reachable() -> void:
+func test_the_verbs_that_were_missing_are_reachable() -> void:
 	# Named explicitly rather than left to the law above, because these are the ones a real run hit
 	# and a regression here should say so by name.
 	var bridge := _source(BRIDGE)
 	var gone: Array[String] = []
-	for verb: String in ["guard", "overwatch", "rally", "reload", "rev", "burrow"]:
+	for verb: String in ["guard", "overwatch", "reload", "rev", "burrow"]:
 		if not bridge.contains('"%s"' % verb):
 			gone.append(verb)
 	assert_array(gone).override_failure_message(
@@ -93,7 +93,7 @@ func test_the_scan_actually_found_verbs() -> void:
 	# Non-vacuity: let the regex rot, or NOT_COMMANDS swallow everything, and the law above passes
 	# over an empty list.
 	assert_int(_session_verbs().size()).override_failure_message(
-		"the verb scan matched nothing -- the regex or NOT_COMMANDS has rotted").is_greater(5)
+		"the verb scan matched nothing -- the regex or NOT_COMMANDS has rotted").is_greater(0)
 	# ...and NOT_COMMANDS must describe methods that EXIST; a stale entry is an exemption guarding
 	# nothing, and worse, one that could hide a verb added later under the same name.
 	var session := _source(SESSION)

@@ -47,12 +47,12 @@ func _spawn_squad() -> Unit:
 	return leader
 
 
-# Rally is the cheapest real main action to author: it only needs Will to restore.
+# Rev is the cheapest real main action to author: it only needs a chainsword in hand.
 func _lock_a_main_action(unit: Unit) -> void:
-	unit.unit_instance.set_current_will(1)
-	var rally := RallyAction.new()
-	rally.init(unit)
-	assert_bool(game.squad_manager.queue_action(unit.squad, rally)).is_true()
+	unit.equipped_weapon = H.make_weapon()
+	var rev := RevAction.new()
+	rev.init(unit)
+	assert_bool(game.squad_manager.queue_action(unit.squad, rev)).is_true()
 
 
 func test_both_movement_rows_are_offered_before_the_main_action() -> void:

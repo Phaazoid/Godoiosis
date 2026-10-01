@@ -73,7 +73,6 @@ static func _run_pass(squad: Squad, actions: Array[BaseAction], board: BoardCont
 	_check_leader_range(squad, actions, move_actions, board)
 	_check_destination_conflicts(squad, actions, move_actions)
 	_revalidate_rescues(actions)
-	_revalidate_intimidates(actions)
 	_revalidate_captures(actions)
 	_revalidate_guards(actions)
 
@@ -141,19 +140,6 @@ static func _revalidate_rescues(actions: Array[BaseAction]) -> void:
 		if not _actor_ends_adjacent_to(rescue, target, actions):
 			rescue.add_validation_error("Rescuer no longer adjacent to the downed ally")
 
-# Same shape as rescue, but the target only has to still be ALIVE (active or downed).
-static func _revalidate_intimidates(actions: Array[BaseAction]) -> void:
-	for action in actions:
-		if not (action is IntimidateAction):
-			continue
-		var intimidate := action as IntimidateAction
-		var victim: Unit = intimidate.target
-		if victim == null or not is_instance_valid(victim) or victim.is_dead():
-			intimidate.add_validation_error("Intimidate target is gone")
-			continue
-		if not _actor_ends_adjacent_to(intimidate, victim, actions):
-			intimidate.add_validation_error("No longer adjacent to the intimidate target")
-
 # The pair must still be together WHEN THE GUARD ARMS, so a re-planned move that walks the blocker
 # out of range refuses the order rather than arming a Guard that covers nothing (#414).
 #
@@ -173,7 +159,7 @@ static func _revalidate_guards(actions: Array[BaseAction]) -> void:
 			guard.add_validation_error("Too far from the unit being guarded")
 
 # A re-planned move that walks the actor out of the zone invalidates the capture, rather than
-# claiming wherever it ended up. Same shape as rescue/intimidate; the context is a CELL.
+# claiming wherever it ended up. Same shape as rescue; the context is a CELL.
 static func _revalidate_captures(actions: Array[BaseAction]) -> void:
 	for action in actions:
 		if not (action is CaptureAction):
@@ -276,11 +262,10 @@ static func aim_finds_a_target(aim: AttackAction, actions: Array[BaseAction], un
 # The two sides are projected DIFFERENTLY, and the asymmetry is the point (#126).
 #
 # The ACTOR is inside the plan under validation, so it gets projected_cell_for's two load-bearing
-# falses. The TARGET is not — a rescue target is a body in its own solo squad, an intimidate victim
-# an enemy in its own — so its cell is a board FACT, read exactly the way board.projected_unit_at_cell
-# and the board preview read it. That is what makes rescue follow a shoved body: both verbs execute
-# in the side channel, AFTER attacks and counters have landed every shove, so the end-of-pass cell is
-# the one they meet the target on. Reading target.movement.cell instead was correct only while downed
+# falses. The TARGET is not — a rescue target is a body in its own solo squad — so its cell is a
+# board FACT, read exactly the way board.projected_unit_at_cell and the board preview read it. That
+# is what makes rescue follow a shoved body: it executes in the side channel, AFTER attacks and
+# counters have landed every shove, so the end-of-pass cell is the one it meets the target on. Reading target.movement.cell instead was correct only while downed
 # units could not move.
 #
 # Not a fixed-point hazard: this reads another squad's settled validity plus a knockback published

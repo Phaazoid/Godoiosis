@@ -290,15 +290,15 @@ func _record_visibility() -> Array:
 	return seen
 
 
-# A real order through the one queue door, which is what sets active_squad. Rally is the cheapest
-# real main action to author: it only needs Will to restore.
-func _queue_a_rally(unit: Unit) -> RallyAction:
-	unit.unit_instance.set_current_will(1)
-	var rally := RallyAction.new()
-	rally.init(unit)
-	assert_bool(game.squad_manager.queue_action(unit.squad, rally)).override_failure_message(
-		"fixture: the rally was refused, so nothing is queuing").is_true()
-	return rally
+# A real order through the one queue door, which is what sets active_squad. Rev is the cheapest
+# real main action to author: it only needs a chainsword in hand.
+func _queue_a_rev(unit: Unit) -> RevAction:
+	unit.equipped_weapon = H.make_weapon()
+	var rev := RevAction.new()
+	rev.init(unit)
+	assert_bool(game.squad_manager.queue_action(unit.squad, rev)).override_failure_message(
+		"fixture: the rev was refused, so nothing is queuing").is_true()
+	return rev
 
 
 func test_hidden_once_an_order_is_queued() -> void:
@@ -307,7 +307,7 @@ func test_hidden_once_an_order_is_queued() -> void:
 	assert_bool(game.end_turn_button.visible).override_failure_message(
 		"fixture: End Turn was already down").is_true()
 
-	_queue_a_rally(unit)
+	_queue_a_rev(unit)
 
 	assert_bool(game.end_turn_button.visible).override_failure_message(
 		"End Turn stayed up under Execute while a squad's plan was open").is_false()
@@ -318,10 +318,10 @@ func test_hidden_once_an_order_is_queued() -> void:
 # the squad as still queuing and leaves the button down for good.
 func test_back_when_the_queue_is_cancelled() -> void:
 	var unit := _spawn(Team.Faction.PLAYER, Vector2i(1, 1))
-	var rally := _queue_a_rally(unit)
+	var rev := _queue_a_rev(unit)
 	assert_bool(game.end_turn_button.visible).is_false()
 
-	game._on_queue_cancel_requested(rally)
+	game._on_queue_cancel_requested(rev)
 
 	assert_object(game.squad_manager.active_squad).override_failure_message(
 		"fixture: the cancel left the squad active, so this asks nothing").is_null()

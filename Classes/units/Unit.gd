@@ -19,14 +19,8 @@ signal went_downed(unit: Unit)
 const MAX_INVENTORY_SIZE := 6 #Balance actual size later
 const BASE_SPRITE_INDEX = 4
 
-# --- Rally (in-fight Will relief, will-and-death.md). rally_count is BATTLE-scoped — diminishing
-# returns must restart each mission — so it lives here on the transient Unit, not on UnitInstance. ---
-const RALLY_BASE := 6       # Will restored by the first rally this battle
-const RALLY_FALLOFF := 2    # each further rally restores this much less; below 1 it's not offered
-
 const DOWNED_TURNS := 3     # turns a downed unit survives unrescued; Glossary interpolates it
 
-var rally_count: int = 0
 var unit_instance: UnitInstance
 # Provenance (#177): the standalone character FILE this unit was spawned from, when there is one.
 # Set by UnitFactory (null for form-built or scenario-embedded UnitData). Authored saves read it
@@ -1167,21 +1161,6 @@ func revive():
 	_show_downed_sprite(false)
 	downed_countdown_changed.emit(downed_turns_remaining)
 
-func next_rally_amount() -> int:
-	return RALLY_BASE - RALLY_FALLOFF * rally_count
-
-func can_rally() -> bool:
-	# Offered while the next rally restores >= 1 Will and there's room to restore into.
-	# Crisis locks Will at 0 for the battle, so Rally is refused outright.
-	return is_active() and not in_crisis and next_rally_amount() >= 1 and unit_instance.get_current_will() < unit_instance.get_max_will()
-
-func rally() -> void:
-	var amount := next_rally_amount()
-	if amount < 1:
-		return
-	unit_instance.set_current_will(unit_instance.get_current_will() + amount)
-	rally_count += 1
-	
 func enter_crisis():
 	# The armed gambit fires (take_damage's CRISIS rung, #158): up at CRISIS_REVIVE_HP, Will locked
 	# at 0, surge primed for next turn, no safety net for the rest of the battle. Called on a unit
@@ -1192,7 +1171,7 @@ func enter_crisis():
 	downed_turns_remaining = -1
 	_show_downed_sprite(false)
 	set_current_hp(Abilities.CRISIS_REVIVE_HP)
-	unit_instance.set_current_will(0)                         # locked: can_rally() refuses while in_crisis
+	unit_instance.set_current_will(0)                         # locked for the battle
 	crisis_surge_pending = true
 
 func advance_crisis_surge():

@@ -9,35 +9,20 @@ extends GdUnitTestSuite
 const P := preload("res://tests/support/shape_fixtures.gd")
 
 const H := preload("res://tests/support/squad_fixtures.gd")
-const F := preload("res://tests/support/job_fixtures.gd")
 
 const PLAYER := Team.Faction.PLAYER
 const ENEMY := Team.Faction.ENEMY
 const ATTACK_ONLY: Array = [BaseAction.ActionType.ATTACK]
 
 var _sm: SquadManager
-var _tank: JobData
-var _tank_snap: Dictionary
 
 
 func before_test() -> void:
 	_sm = H.make_manager(self)
-	_tank = JobCatalog.get_job("tank")
-	_tank_snap = F.snapshot(_tank)
-
-
-func after_test() -> void:
-	F.restore(_tank, _tank_snap)
 
 
 func _board(units: Array[Unit]) -> BoardContext:
 	return BoardContext.new(_sm.grid, units, _sm)
-
-
-func _ability(id: Abilities.Id) -> AbilityData:
-	var a := AbilityData.new()
-	a.id = id
-	return a
 
 
 func _fireball(power: int) -> TransmutationData:
@@ -295,46 +280,3 @@ func test_rescue_leaves_a_stabilised_body_for_the_one_still_on_a_clock() -> void
 	var rescue: RescueAction = rescuer.squad.action_queue[0] as RescueAction
 	assert_object(rescue).is_not_null()
 	assert_object(rescue.target).is_same(dying)
-
-
-func test_intimidate_targets_the_lowest_positive_will() -> void:
-	var bully: Unit = H.spawn_solo(self, _sm, ENEMY, Vector2i(1, 1))
-	var pool: Array[AbilityData] = [_ability(Abilities.Id.INTIMIDATION)]
-	_tank.ability_pool = pool
-	bully.unit_instance.add_job("tank")
-	var drained: Unit = H.spawn_solo(self, _sm, PLAYER, Vector2i(0, 1))
-	var shaky: Unit = H.spawn_solo(self, _sm, PLAYER, Vector2i(2, 1))
-	var steady: Unit = H.spawn_solo(self, _sm, PLAYER, Vector2i(1, 0))
-	drained.unit_instance.set_current_will(0)   # nothing to drain -- must be skipped
-	shaky.unit_instance.set_current_will(3)     # closest to the maim cliff -- the pick
-	steady.unit_instance.set_current_will(8)
-
-	var units: Array[Unit] = [bully, drained, shaky, steady]
-	assert_bool(AITactics.queue_main_action(bully, _board(units), _sm, [BaseAction.ActionType.INTIMIDATE])).is_true()
-	var action: IntimidateAction = bully.squad.action_queue[0] as IntimidateAction
-	assert_object(action).is_not_null()
-	assert_object(action.target).is_same(shaky)
-
-
-func test_intimidate_declines_when_every_adjacent_will_is_empty() -> void:
-	var bully: Unit = H.spawn_solo(self, _sm, ENEMY, Vector2i(0, 0))
-	var pool: Array[AbilityData] = [_ability(Abilities.Id.INTIMIDATION)]
-	_tank.ability_pool = pool
-	bully.unit_instance.add_job("tank")
-	var hollow: Unit = H.spawn_solo(self, _sm, PLAYER, Vector2i(1, 0))
-	hollow.unit_instance.set_current_will(0)
-
-	var units: Array[Unit] = [bully, hollow]
-	assert_bool(AITactics.queue_main_action(bully, _board(units), _sm, [BaseAction.ActionType.INTIMIDATE])).is_false()
-	assert_array(bully.squad.action_queue).is_empty()
-
-
-func test_intimidate_requires_the_live_ability() -> void:
-	# No job, no ability -> the builder declines even with a juicy adjacent target. (The
-	# queue_action chokepoint would refuse too -- the builder mirrors the menu's gate.)
-	var poser: Unit = H.spawn_solo(self, _sm, ENEMY, Vector2i(0, 0))
-	var _victim: Unit = H.spawn_solo(self, _sm, PLAYER, Vector2i(1, 0))
-
-	var units: Array[Unit] = [poser, _victim]
-	assert_bool(AITactics.queue_main_action(poser, _board(units), _sm, [BaseAction.ActionType.INTIMIDATE])).is_false()
-	assert_array(poser.squad.action_queue).is_empty()

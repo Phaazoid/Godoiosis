@@ -316,7 +316,7 @@ Peak alchemists — named for the father of the Tria Prima. The dread mechanic, 
 - **But it's telegraphed (Law #2 / Axiom 2):** the ritual visibly builds, stage by stage, over several turns. The player disrupts it — break line-of-sight, kill or displace a council member, **Aether-cleanse a stage off the victim**, or interrupt before Rubedo. The scariest thing in the game is something done *to* you that you can see coming and must race to stop.
 - ⚗ Flavor: each councillor embodies a principle (Sulfur / Mercury / Salt) or an Opus color — kill order and which stage they own becomes the puzzle.
 
-(Other boss seeds: an **Exact-Lethal** machine that forces Crisis Mode — see [will-and-death.md](will-and-death.md); an **Intimidator** that drains Will at range.)
+(Other boss seeds: an **Exact-Lethal** machine that forces Crisis Mode — see [will-and-death.md](will-and-death.md); an **Intimidator** that drains Will at range, moot since #1174 retired Will.)
 
 ---
 

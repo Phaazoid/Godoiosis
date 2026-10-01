@@ -258,7 +258,7 @@ static func queue_main_action(unit: Unit, board: BoardContext, squad_manager: Sq
 		# The family's own say on its own verbs (#726): a weapon routine may refuse a preparation
 		# that is not worth it right now -- the same shape as can_reload() answering false, a
 		# builder gate rather than a skip of the walk. Asked about the weapon self-abilities only;
-		# rescue/intimidate/rally are not a weapon's to veto.
+		# rescue is not a weapon's to veto.
 		if AIWeaponRoutine.WEAPON_VERBS.has(verb) and not routine.allows_preparation(unit, verb, board):
 			continue
 		var queued := false
@@ -267,10 +267,6 @@ static func queue_main_action(unit: Unit, board: BoardContext, squad_manager: Sq
 				queued = _try_best_attack(unit, board, squad_manager)
 			BaseAction.ActionType.RESCUE:
 				queued = _try_rescue(unit, board, squad_manager)
-			BaseAction.ActionType.RALLY:
-				queued = _try_rally(unit, squad_manager)
-			BaseAction.ActionType.INTIMIDATE:
-				queued = _try_intimidate(unit, board, squad_manager)
 			BaseAction.ActionType.RELOAD:
 				queued = _try_reload(unit, squad_manager)
 			BaseAction.ActionType.REV:
@@ -581,28 +577,6 @@ static func _try_rescue(unit: Unit, board: BoardContext, squad_manager: SquadMan
 	rescue.init(unit, target, landings[0])
 	return squad_manager.queue_action(unit.squad, rescue)
 
-static func _try_rally(unit: Unit, squad_manager: SquadManager) -> bool:
-	if not unit.can_rally():
-		return false
-	var rally := RallyAction.new()
-	rally.init(unit)
-	return squad_manager.queue_action(unit.squad, rally)
-
-static func _try_intimidate(unit: Unit, board: BoardContext, squad_manager: SquadManager) -> bool:
-	if not unit.has_live_ability(Abilities.Id.INTIMIDATION):
-		return false
-	var target: Unit = null
-	for enemy in RulesService.adjacent_enemies(unit, board):
-		if enemy.unit_instance.get_current_will() <= 0:
-			continue   # nothing left to drain -- a wasted action
-		if target == null or enemy.unit_instance.get_current_will() < target.unit_instance.get_current_will():
-			target = enemy   # lowest Will = closest to the maim cliff; ties keep the earliest
-	if target == null:
-		return false
-	var action := IntimidateAction.new()
-	action.init(unit, target)
-	return squad_manager.queue_action(unit.squad, action)
-
 static func _try_reload(unit: Unit, squad_manager: SquadManager) -> bool:
 	if not unit.can_reload_weapon():
 		return false
@@ -776,8 +750,8 @@ static func _lane_can_be_entered(lane: Array[Vector2i], enemy: Unit, board: Boar
 # somebody else's turn, so it is a rule for the same reason Overwatch is.
 #
 # ZERO EXPOSURE REFUSES. "Shields whoever is most exposed" presumes exposure above zero -- without
-# the refusal a Guard would pre-empt INTIMIDATE with a purposeless ward whenever any ally happened to
-# be standing beside it, and menacing somebody is the better use of that action.
+# the refusal a Guard would spend the action on a purposeless ward whenever any ally happened to
+# be standing beside it.
 #
 # A DOWNED ally is in `guard_candidates` by design, but RESCUE sits above GUARD in the walk and
 # rescue adjacency IS the guard range, so a body is normally carried before this is asked.
@@ -855,7 +829,7 @@ static func engage(squad: Squad, target: Unit, board: BoardContext, squad_manage
 #
 # TWO PASSES, and the split is the point (#117). ATTACK is decided for the squad JOINTLY, because
 # an attack's worth depends on what the rest of the squad is already doing; the remaining verbs
-# stay the ratified per-unit priority walk (dev, 2026-07-22 -- rescue/reload/rev/intimidate are a
+# stay the ratified per-unit priority walk (dev, 2026-07-22 -- rescue/reload/rev are a
 # lexical order, not a score). The fallback list therefore has ATTACK REMOVED: leaving it in would
 # let a member the joint pass deliberately declined re-decide alone and undo that judgement.
 static func queue_main_actions_for_squad(squad: Squad, board: BoardContext, squad_manager: SquadManager) -> void:

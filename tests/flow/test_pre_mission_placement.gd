@@ -205,7 +205,7 @@ func test_the_phase_ring_offers_no_turn_verb() -> void:
 	assert_array(standing).is_not_empty()
 
 	var names := _ring_names(standing[0])
-	for forbidden: String in ["Move", "Group Move", "Wait", "Guard", "Rescue", "Rally", "Capture Point"]:
+	for forbidden: String in ["Move", "Group Move", "Wait", "Guard", "Rescue", "Capture Point"]:
 		assert_bool(names.has(forbidden)).override_failure_message(
 			"the phase ring offered '%s', which is a turn verb: %s" % [forbidden, str(names)]).is_false()
 	assert_bool(names.has("Undeploy")).override_failure_message(

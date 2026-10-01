@@ -4,7 +4,7 @@ extends WeaponInstance
 # Springspear's wind-up/recovery economy (#73). `ready` is deliberately NOT @export:
 # runtime-only battle state that lives on THIS INSTANCE so two spears in one inventory track
 # independently, and never serializes — make()/copy_for_grant() always hand back a fresh
-# `ready = true`, so it resets for free every mission (the same trick Unit.rally_count uses
+# `ready = true`, so it resets for free every mission (the same trick Unit.downed_turns_remaining uses
 # on the transient-node side of the persistence seam, just one layer down).
 var ready := true
 

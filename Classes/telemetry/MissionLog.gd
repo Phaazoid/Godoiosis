@@ -628,8 +628,6 @@ func _order(action: BaseAction) -> Dictionary:
 			row["haul_to"] = _cell(rescue.haul_to) if rescue.haul_to != GridUtils.NO_CELL else null
 		BaseAction.ActionType.GUARD:
 			row["target"] = _ref((action as GuardAction).target)
-		BaseAction.ActionType.INTIMIDATE:
-			row["target"] = _ref((action as IntimidateAction).target)
 		BaseAction.ActionType.CAPTURE:
 			row["zone"] = (action as CaptureAction).zone_name
 		BaseAction.ActionType.OVERWATCH:

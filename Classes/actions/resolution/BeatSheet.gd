@@ -50,7 +50,7 @@ class Beat:
 	var iron_will_held := false
 	var has_heal := false
 
-	# CODA only: which side-channel order this is (RESCUE, RALLY, GUARD, ...).
+	# CODA only: which side-channel order this is (RESCUE, RELOAD, GUARD, ...).
 	var coda_type: BaseAction.ActionType = BaseAction.ActionType.ATTACK
 
 	func has_lethality(rung: ResolvedOutcome.Lethality) -> bool:

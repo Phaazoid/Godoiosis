@@ -167,9 +167,6 @@ func _dispatch(cmd: String, args: Dictionary) -> Dictionary:
 		"overwatch":
 			var r = _session.overwatch(str(args.get("unit", "")), _xy(args))
 			return {"ok": r.ok, "text": _ack(r) + "\n\n" + BoardView.render_preview(_session)}
-		"rally":
-			var r = _session.rally(str(args.get("unit", "")))
-			return {"ok": r.ok, "text": _ack(r) + "\n\n" + BoardView.render_preview(_session)}
 		"reload":
 			var r = _session.reload(str(args.get("unit", "")))
 			return {"ok": r.ok, "text": _ack(r) + "\n\n" + BoardView.render_preview(_session)}
