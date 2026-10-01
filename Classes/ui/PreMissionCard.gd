@@ -76,8 +76,8 @@ const JOB_PICKER_MIN_W := 84
 const CHIP_MAX_W := JOB_PICKER_MIN_W
 const NO_JOB_LABEL := "— none —"
 
-# The eight, in Stats.Stat declaration order, two columns of four. Read off the enum rather than
-# listed here, so a ninth stat appears without an edit.
+# Every stat, in Stats.Stat declaration order, in two columns. Read off the enum rather than listed
+# here, so a new stat appears without an edit -- #120's BLD did, as the ninth.
 const STAT_COLUMNS := 2
 
 var unit: Unit
@@ -540,9 +540,8 @@ func _refresh_items() -> void:
 
 
 func _refresh_foot() -> void:
-	# WEIGHT IS INERT TODAY and shipping it anyway is the dev's call (2026-09-05): Item.weight and
-	# Unit.get_weight() both work, but every authored weight is 0 until #120's pass, so this reads
-	# WT 0 for everyone. Showing the slot is what makes the gap visible rather than forgotten.
+	# Weight is the body (BLD) plus what is carried (#120). Items mostly weigh 0 until #120's authoring
+	# pass, so today this is mostly the body; showing it anyway was the dev's call (2026-09-05).
 	_derived_label.text = "WT %d  ·  DEF %d" % [unit.get_weight(), unit.get_effective_def()]
 	_derived_label.tooltip_text = UiText.wrap(
 		"Weight is the whole inventory's; every item currently weighs 0 until weight is authored. "

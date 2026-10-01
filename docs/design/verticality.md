@@ -6,7 +6,7 @@ grill-style. Every ruling below is his; the rationale is recorded because almost
 re-derivable from the code. Numbers (tolerances, drop damage, the 2D offset) are deliberately absent —
 they are feel values and get knobs, not guesses (`CLAUDE.md` → the tuning rule).
 
-**Canon checked through #969 (2026-09-15).**
+**Canon checked through #969 (2026-09-15); #120's weight bands folded in 2026-10-01.**
 
 The one-line version: **a cell has a height, height changes only via ramps, ramps are chokepoints
 rather than tolls, and what height buys you is REACH — not damage, not to-hit.**
@@ -691,8 +691,8 @@ copy), not rules. Boards saved before an `AttackData` field existed need a re-sa
 
 ### Two kinds of edge
 
-- **A vertical drop** deals **fall damage**, scaled by height fallen and modified by weight
-  ([#120](https://github.com/Phaazoid/Godoiosis/issues/120)).
+- **A vertical drop** deals **fall damage**, scaled by height fallen and raised by the faller's weight band
+  ([#120](https://github.com/Phaazoid/Godoiosis/issues/120), [weight.md](weight.md)).
 - **A void** — chasm, airship edge, train side — is **removal**, not damage. This is
   [#116](https://github.com/Phaazoid/Godoiosis/issues/116)'s original kill doctrine, intact.
 
@@ -724,7 +724,7 @@ So a shove is **one flight, one landing** (`PlanResolver._knockback_landing`):
   lower =
   **fall damage** for the full levels dropped — `FallRules.damage_for`, which **bypasses DEF**
   (dev: armor does not stop gravity; it joins the total after mitigation, before the Iron Will cap
-  so the cap stays absolute) and carries the #120 weight term (inert until gear has mass). Ending
+  so the cap stays absolute) and adds +1 per level per weight band (#120, [weight.md](weight.md)). Ending
   on the doc's original tumble entry (a connected descending ramp — its high edge meets the flight
   level) = a free tumble, no fall. **Ending on any other ramp tumbles too**, down the slope's OWN
   downhill — after paying the drop, and possibly bending the shove's path once, which is why
@@ -1121,8 +1121,8 @@ Split so each is one reviewable diff and one feel-check, per the bite-sized-part
    AIRBORNE revision — see *Falls, shoves and tumbles* above, and the tumble-then-plummet reversal
    plus [#431](https://github.com/Phaazoid/Godoiosis/issues/431)'s drop pointer that followed it.
    The interlock closed as far as it can before content: the fall-damage **weight term is wired**
-   (`FallRules`) and inert at weight 0; #120's distance bands + the weight-authoring pass stay on
-   #120 — and **#116's water fork CLOSED 2026-08-26** (terrain.md → *Water — shallow vs deep*), so
+   (`FallRules`), read through weight BANDS since #120 PR 1 (2026-10-01); #120's shove-distance bands +
+   the weight-authoring pass stay on #120 — and **#116's water fork CLOSED 2026-08-26** (terrain.md → *Water — shallow vs deep*), so
    the interlock is complete.
 
 The dev-tools painting ticket (below) **landed out of order, as #260** — slice 1's store shipped with
