@@ -16,7 +16,6 @@ portrait = ExtResource("5_tddgv")
 base_stats = Dictionary[int, int]({
 1: 6,
 2: 2,
-3: 4,
 4: 8,
 5: 7,
 6: 7,

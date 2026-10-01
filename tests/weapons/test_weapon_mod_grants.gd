@@ -142,12 +142,13 @@ func test_an_installed_prosthetics_mods_grant_without_being_equipped() -> void:
 	unit.equipped_weapon = null
 
 	var before := unit.get_effective_stat(Stats.Stat.STR)
+	var coh_before := unit.get_effective_stat(Stats.Stat.COH)
 	var abilities: Array[AbilityData] = [_ability(Abilities.Id.BRACE)]
-	arm.fit(0, _mod({Stats.Stat.WIL: 2}, abilities))
+	arm.fit(0, _mod({Stats.Stat.COH: 2}, abilities))
 
 	assert_bool(_has_ability(unit, Abilities.Id.BRACE)).is_true()
-	assert_int(unit.get_effective_stat(Stats.Stat.WIL)).is_greater(0)
-	# STR is read only to show the limb stage did not move underneath the WIL claim.
+	assert_int(unit.get_effective_stat(Stats.Stat.COH)).is_equal(coh_before + 2)
+	# STR is read only to show the limb stage did not move underneath the COH claim.
 	assert_int(unit.get_effective_stat(Stats.Stat.STR)).is_equal(before)
 
 func test_a_prosthetic_that_is_also_the_equipped_weapon_pays_out_once() -> void:
@@ -166,9 +167,9 @@ func test_a_prosthetic_that_is_also_the_equipped_weapon_pays_out_once() -> void:
 	assert_bool(unit.unit_instance.is_installed_prosthetic(arm)).is_true()
 	assert_object(unit.get_equipped_weapon()).is_same(arm)
 
-	var before := unit.get_effective_stat(Stats.Stat.WIL)
-	arm.fit(0, _mod({Stats.Stat.WIL: 3}))
-	assert_int(unit.get_effective_stat(Stats.Stat.WIL)).is_equal(before + 3)
+	var before := unit.get_effective_stat(Stats.Stat.COH)
+	arm.fit(0, _mod({Stats.Stat.COH: 3}))
+	assert_int(unit.get_effective_stat(Stats.Stat.COH)).is_equal(before + 3)
 
 func test_a_mod_grants_its_attack_only_to_the_weapon_it_is_fitted_to() -> void:
 	# The declared asymmetry: abilities and stats describe the WIELDER and union across every

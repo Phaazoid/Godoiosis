@@ -200,6 +200,8 @@ func apply_unit_state(unit: Unit) -> void:
 	inst.jobs = jobs.duplicate()
 
 	for stat in stats:
+		if Stats.RETIRED.has(stat):
+			continue                     # a save written before the stat retired (#1174)
 		inst.stats[stat] = stats[stat]   # per-key: a stat appended after this save keeps its default
 
 	inst.weapon_proficiency = weapon_proficiency.duplicate()   # empty = all DEFAULT, saved or not
