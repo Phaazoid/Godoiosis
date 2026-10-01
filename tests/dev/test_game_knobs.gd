@@ -24,6 +24,8 @@ extends GdUnitTestSuite
 # SCENE_PATH stays a STRING: the knob-coverage law below reads the .tscn as TEXT. The scene is
 # preloaded separately because a per-test load() reloads the 5 MB mesh library every case (#621).
 const SCENE_PATH := "res://Scenes/Battle3D/Battle3D.tscn"
+# Knob nodes battle3d BUILDS in _ready rather than the scene authoring them (#508's GasMirror).
+const BUILT_IN_CODE := ["GasMirror"]
 const SCENE: PackedScene = preload("res://Scenes/Battle3D/Battle3D.tscn")
 const H := preload("res://tests/support/squad_fixtures.gd")   # the guard-link sweep case needs units
 
@@ -115,6 +117,12 @@ func _nudged(knob: Dictionary, value: Variant) -> Variant:
 		TYPE_COLOR:
 			var color: Color = value
 			return Color(color.r, color.g, color.b, fposmod(color.a + 0.3, 1.0))
+		TYPE_INT:
+			# An int property truncates a fractional nudge, so a tenth of a small range writes the
+			# value it already had and a live knob reads as inert. Step at least one.
+			var step_whole := maxi(1, roundi((float(knob["max"]) - float(knob["min"])) * 0.1))
+			var whole: int = value
+			return whole - step_whole if whole + step_whole > int(knob["max"]) else whole + step_whole
 		_:
 			var low: float = knob["min"]
 			var high: float = knob["max"]
@@ -750,6 +758,12 @@ func test_the_scene_overrides_no_game_knob_property() -> void:
 	assert_str(scene).override_failure_message(
 		"could not read %s -- this law would pass vacuously" % SCENE_PATH).is_not_empty()
 	for knob: Dictionary in _declaration_tables():
+		if BUILT_IN_CODE.has(knob["node"]):
+			# No scene block, so nothing can override it -- but it must still exist, or a misspelt
+			# name would sail through here.
+			assert_object(_scene.get_node_or_null(NodePath(knob["node"]))).override_failure_message(
+				"battle3d builds no node '%s'" % knob["node"]).is_not_null()
+			continue
 		var section := _node_section(scene, knob["node"])
 		assert_bool(section.is_empty()).override_failure_message(
 			"Battle3D.tscn has no node '%s'" % knob["node"]).is_false()

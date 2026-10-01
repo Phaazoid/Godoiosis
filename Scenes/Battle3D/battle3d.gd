@@ -171,6 +171,19 @@ func _ready() -> void:
 	# line answers "what is the camera doing", the trace answers "what did it just do", and the two
 	# questions have two homes for the reason the report already keeps View and Look apart.
 	game.bug_reporter.trace_source = _describe_trace
+	# The gas store's drawing (#508), resident like the arc. Named, because GameKnobs rows address
+	# it -- and built BEFORE the dev window is handed this host, which resolves those rows as it builds.
+	_gas = GasMirror.new()
+	_gas.name = "GasMirror"
+	_gas.field = game.gas_field
+	_gas.heights = game.board_heights
+	_gas.grid = game.grid
+	_gas.camera = _camera
+	_gas.sun = $Sun
+	_gas.environment = ($WorldEnvironment as WorldEnvironment).environment
+	_gas.lights_source = _board_mirror.lights
+	_gas.stands_down = func() -> bool: return view == View.FLAT_2D
+	add_child(_gas)
 	var dev_overlay: Node = _main.get_node_or_null("DevOverlay")
 	if dev_overlay is Window:
 		(dev_overlay as Window).visible = false
@@ -216,18 +229,6 @@ func _ready() -> void:
 	_arc = ArcLightning.new()
 	_arc.point_of = _surface_of
 	add_child(_arc)
-	# The gas store's drawing (#508), resident like the arc. Named, because GameKnobs rows address it.
-	_gas = GasMirror.new()
-	_gas.name = "GasMirror"
-	_gas.field = game.gas_field
-	_gas.heights = game.board_heights
-	_gas.grid = game.grid
-	_gas.camera = _camera
-	_gas.sun = $Sun
-	_gas.environment = ($WorldEnvironment as WorldEnvironment).environment
-	_gas.lights_source = _board_mirror.lights
-	_gas.stands_down = func() -> bool: return view == View.FLAT_2D
-	add_child(_gas)
 	_overlay_mirror.game = game
 	_overlay_mirror.overlays = _overlays
 	_overlay_mirror.unit_mirror = _unit_mirror

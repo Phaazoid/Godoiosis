@@ -13,14 +13,15 @@ class_name GasMirror
 # Any change rebuilds the board textures and the region boxes; every frame only re-sends the camera,
 # the light and the clock. Gas is 3D only -- the flat 2D view has no drawing of it (#292 ledger).
 
-enum Resolution { FULL, HALF, QUARTER }
+# The volume's march resolution, by index: full, half, quarter (one ray per 1, 2x2 or 4x4 pixels).
+const RESOLUTION_DIVISORS: Array[int] = [1, 2, 4]
 
 const MASK_SCALE := 8
 const FLASH_LIFT := 1.1             # how far above the ground a strike glows
 const FLASH_SAFE_LEVEL := 0.15      # photosensitivity: every cloud holds a steady dim glow instead
 
 @export_group("Volume")
-@export var resolution := Resolution.HALF
+@export var resolution := 1   # an index into RESOLUTION_DIVISORS
 @export var steps := 32
 @export var light_steps := 4
 @export var light_step := 0.15
@@ -140,7 +141,7 @@ func _submit() -> void:
 	snap.regions = _region_floats
 	snap.regions_version = _regions_version
 	snap.pixel = style() == 3
-	snap.block = pixel_block if snap.pixel else [1, 2, 4][resolution]
+	snap.block = pixel_block if snap.pixel else RESOLUTION_DIVISORS[clampi(resolution, 0, 2)]
 	snap.screen_rect = _screen_rect()
 	snap.params = _params()
 	_effect.submit(snap)
