@@ -4,7 +4,7 @@
 
 **Family tags:** [CS] Chainsword · [DR] Drill · [SS] Springspear · [CB] Carbine · [BL] Bludgeon · [SP] Chem Spitter · [PR] Prosthetic · [∀] any. Module **size 1–3**; a standard frame's spaces cap 1/2/3 (the default since [#486](https://github.com/Phaazoid/Godoiosis/issues/486) — a template authors its own), proficiency unlocks spaces in order.
 
-**Canon checked through #592 (2026-08-27).**
+**Canon checked through #592 (2026-08-27); #120's weight bands folded in 2026-10-01.**
 
 ---
 
@@ -26,7 +26,7 @@
 11. **Widened Cleave Head** [CS/BL] — standard line attack becomes a wide (sideways) pattern. **BUILDABLE NOW ([#529](https://github.com/Phaazoid/Godoiosis/issues/529)/[#530](https://github.com/Phaazoid/Godoiosis/issues/530), 2026-08-26):** via `replaces_main` -- a pattern swap is a whole authored attack, never a field override, because `Reach` reads a pattern with no wielder in hand.
 12. **Extended Piston** [SS] — reach +1 forward. **BUILDABLE NOW ([#529](https://github.com/Phaazoid/Godoiosis/issues/529)/[#530](https://github.com/Phaazoid/Godoiosis/issues/530), 2026-08-26):** via `replaces_main`, same reason as #11 -- reach is geometry, so it swaps the attack.
 13. **Capacitor Bank** [CB] — the charge system, itemized: forgo attacking this turn (telegraphed stance) → next shot +N. The deterministic "big hit" the no-crit doctrine promised.
-14. **Pneumatic Ram** [BL/DR] — standard attack shoves 1 tile, Weight-gated (physics teeth; pit/hazard pairing). **The shove half is buildable now** (`knockback_delta`); the Weight gate is not -- weight has one wired reader and it is fall damage.
+14. **Pneumatic Ram** [BL/DR] — standard attack shoves 1 tile, Weight-gated (physics teeth; pit/hazard pairing). **The shove half is buildable now** (`knockback_delta`); so is the Weight gate since #120 (2026-10-01): every shove already loses a tile per target weight band, so a Pneumatic Ram is ordinary content now.
 15. **Deflector Plate** [∀] — weapon-tied Guard: once per pass, blocks N damage to the wielder (standing policy, previewed — chassis-compliant). Was behind the same one gate as Insulated Grips (#8), and **that gate opened in [#74](https://github.com/Phaazoid/Godoiosis/issues/74)** — a fitted mod's `granted_abilities` reaches the kit. What is left here is the BRACE content itself (`Abilities.Id.BRACE` already exists, #414), not the plumbing.
 16. **Payload Doser** [SP] — hits also apply the loaded element's **tile** state under the target (attack the map through a body).
 17. **Safety Governor** [SP] — volleys exclude allies (`hits_allies` off). ⚠ Removes a core AoE tension — kept at size 2 so it *costs*; overlaps Lamplighter's Spotter (job vs gear redundancy is fine — different sources). **BUILDABLE NOW ([#529](https://github.com/Phaazoid/Godoiosis/issues/529)/[#530](https://github.com/Phaazoid/Godoiosis/issues/530), 2026-08-26):** `hits_allies_override` = Off, which wins over On whatever space it sits in.

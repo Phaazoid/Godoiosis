@@ -287,7 +287,8 @@ static func _build_entries() -> Dictionary:
 	e[Term.WEIGHT] = {"category": Category.STATS, "title": "Weight (WT)",
 		"short": "A total of a unit's BLD and the weight of what they are carrying.",
 		"long": ("Build plus the weight of every item in the inventory, equipped or not. Weight is "
-			+ "counted in bands, at %d and at %d. Each band a unit reaches adds 1 damage per level it falls.")
+			+ "counted in bands, at %d and at %d. Each band a unit reaches adds 1 damage per level it falls. "
+			+ "Heavier units are harder to push and take more fall damage.")
 			% [Stats.WEIGHT_BAND_1, Stats.WEIGHT_BAND_2]}
 	e[Term.DEF] = {"category": Category.STATS, "title": "Defense (DEF)",
 		"short": "Subtracted from incoming damage: armor scaled by CON, plus terrain cover.",

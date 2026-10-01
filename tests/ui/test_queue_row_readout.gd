@@ -460,7 +460,8 @@ func test_a_shove_the_targets_weight_holds_says_so_on_the_row() -> void:
 	assert_bool(entry.is_empty()).override_failure_message(
 		"the shove was held and the row said nothing about it -- got %s"
 		% [_texts(_consequence_entries(_attack_row()))]).is_false()
-	assert_str(String(entry["tip"])).contains(PlanResolver.HELD_POPUP % 2)
+	if not entry.is_empty():
+		assert_str(String(entry["tip"])).contains(PlanResolver.HELD_POPUP % 2)
 
 
 # A unit that shrugs off `element` entirely, so the resolver records its INSULATED popup — the one
