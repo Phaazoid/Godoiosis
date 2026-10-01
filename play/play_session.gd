@@ -308,7 +308,7 @@ func rescue(rescuer_handle: String, target_handle: String) -> Dictionary:
 
 # Guard (#414): become a nearby ally's bodyguard — the same GuardAction the menu queues, gated on the
 # same RulesService.guard_candidates query the menu's row is built from. Its own verb rather than a
-# queue_simple_action pass-through, for the reason rescue/intimidate have one: it takes a real unit.
+# queue_simple_action pass-through, for the reason rescue has one: it takes a real unit.
 func guard(handle: String, ward_handle: String) -> Dictionary:
 	var unit := unit_by_handle(handle)
 	var gate := _controllable(unit, handle)
@@ -347,20 +347,6 @@ func overwatch(handle: String, aim: Vector2i) -> Dictionary:
 	if not squad_manager.queue_action(unit.squad, action):
 		return {"ok": false, "error": "%s can't stand watch now (already has a main action, or another squad is active)" % handle}
 	return {"ok": true, "summary": "%s -> overwatch %s" % [handle, str(aim)]}
-
-# Rally: self-targeted Will restore (a main action) — the same RallyAction the menu queues.
-func rally(handle: String) -> Dictionary:
-	var unit := unit_by_handle(handle)
-	var gate := _controllable(unit, handle)
-	if not gate.ok:
-		return gate
-	if not unit.can_rally():
-		return {"ok": false, "error": "%s can't rally (Will full, in crisis, or nothing left to restore)" % handle}
-	var action := RallyAction.new()
-	action.init(unit)
-	if not squad_manager.queue_action(unit.squad, action):
-		return {"ok": false, "error": "%s can't rally now (already has a main action, or another squad is active)" % handle}
-	return {"ok": true, "summary": "%s -> rally" % handle}
 
 # Reload: self-targeted weapon rearm (a main action, #73 as Spring Load, generalized #84) — the
 # same ReloadAction the menu queues, driving the generic Unit.can_reload_weapon()/reload_weapon()

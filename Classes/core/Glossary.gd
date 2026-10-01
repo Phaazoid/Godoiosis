@@ -30,8 +30,8 @@ enum Term {
 	# Actions (one per MainActionMenu.ACTION_DATA row, one per MainActionMenu.CATEGORIES row --
 	# a radial category is a row the player hovers and so owes a readout like any other (#467) --
 	# plus ATTACK_TARGETING, the channel axis)
-	EXECUTE_ORDERS, MOVE, GROUP_MOVE, ATTACK, ATTACK_TARGETING, WEAPON_ACTION, TRANSMUTATION, ABILITY_ACTION,
-	GUARD, OVERWATCH, RESCUE, RALLY, CAPTURE, SQUAD_UP, JOIN_SQUAD, LEAVE_SQUAD, DISBAND_SQUAD, WAIT,
+	EXECUTE_ORDERS, MOVE, GROUP_MOVE, ATTACK, ATTACK_TARGETING, WEAPON_ACTION, TRANSMUTATION,
+	GUARD, OVERWATCH, RESCUE, CAPTURE, SQUAD_UP, JOIN_SQUAD, LEAVE_SQUAD, DISBAND_SQUAD, WAIT,
 	CANCEL_ACTIONS, INSPECT, END_TURN,
 	ACTION, RUNE, SQUAD_ACTIONS, UNDEPLOY, REPOSITION, PLACEMENT,
 	# Elemental -- affinity then aura, in the order a reader needs them: which elements you can touch
@@ -314,7 +314,7 @@ static func _build_entries() -> Dictionary:
 	e[Term.ATTACK] = {"category": Category.ACTIONS, "title": "Attack",
 		"short": "Fire the equipped weapon's main attack.",
 		"long": "Aims and queues the equipped weapon's main attack. Each unit gets one main action "
-			+ "per turn, so attack, rescue, rally and the other mains are exclusive."}
+			+ "per turn, so attack, rescue and the other mains are exclusive."}
 	e[Term.ATTACK_TARGETING] = {"category": Category.ACTIONS, "title": "Attack Targeting",
 		"short": "Every attack strikes units, tiles, or both. Its readout says which in parentheses.",
 		"long": "Every attack's hover readout ends with its targeting channel. (unit): hits whoever "
@@ -337,15 +337,11 @@ static func _build_entries() -> Dictionary:
 		"short": "Fire a carving inscribed on the equipped rune, paid for with elemental aura.",
 		"long": "A rune carries inscribed carvings; firing one channels the wielder's elemental "
 			+ "aura. A carving the wielder cannot pay for is listed greyed, with the reason."}
-	e[Term.ABILITY_ACTION] = {"category": Category.ACTIONS, "title": "Ability Action",
-		"short": "Verbs granted by a unit's abilities, like Intimidate.",
-		"long": "Actions a unit's abilities unlock. Intimidate, draining an adjacent enemy's Will, "
-			+ "is the first; more arrive with new abilities."}
 	# The action ring's two invented categories (#467). Move, Attack and Inspect reuse the verb
 	# terms of the same name; these two name a grouping the game had no word for before the ring.
 	# A third, "Turn", died in round 2 along with the category — the turn's verbs are the HUD's.
 	e[Term.ACTION] = {"category": Category.ACTIONS, "title": "Action",
-		"short": "Spending the turn on something other than an attack: guard, rescue, rally, capture, wait.",
+		"short": "Spending the turn on something other than an attack: guard, rescue, capture, wait.",
 		"long": "A unit spends its turn on one main action. Act gathers the ones that are not "
 			+ "swinging a weapon, plus Wait, which spends the squad's turn on nothing at all."}
 	e[Term.SQUAD_ACTIONS] = {"category": Category.ACTIONS, "title": "Squad",
@@ -373,11 +369,6 @@ static func _build_entries() -> Dictionary:
 		"short": "Stand an adjacent downed ally back up.",
 		"long": "Revives an adjacent downed ally before their clock runs out, at whatever health "
 			+ "they have. The rescued unit is out of formation and spent for the turn, but alive."}
-	e[Term.RALLY] = {"category": Category.ACTIONS, "title": "Rally",
-		"short": "Steel yourself: restore %d Will, less each rally after the first." % Unit.RALLY_BASE,
-		"long": "Restores the rallying unit's own Will. %d the first time this battle, %d less "
-			% [Unit.RALLY_BASE, Unit.RALLY_FALLOFF]
-			+ "with each repetition. It stops being offered once the returns run out."}
 	e[Term.CAPTURE] = {"category": Category.ACTIONS, "title": "Capture Point",
 		"short": "Claim the capture zone this unit stands on, or will stand on after its move.",
 		"long": "Claims the objective zone at the unit's destination. Only available when the "

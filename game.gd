@@ -3,7 +3,7 @@ extends Node2D
 # Input/game-state coordinator — the root node of the game scene (game.tscn), instanced inside
 # the GameView SubViewport (CLAUDE.md "Sharp edges"). Owns the GameState machine and routes
 # clicks into the right mode handler; PICKING_TARGET is the one generic "pick a highlighted
-# unit" mode (rescue/intimidate/squad-up/join-squad all ride it via enter_target_pick_mode) —
+# unit" mode (rescue/squad-up/join-squad all ride it via enter_target_pick_mode) —
 # ATTACK_TARGETING and the CHOOSING_MOVE/GROUP_MOVE cell-pickers stay their own modes on
 # purpose (see CLAUDE.md's Actions bullet). The seam most cross-system wiring hangs off of.
 #
@@ -1112,7 +1112,7 @@ func enter_attack_mode(unit: Unit, intent: AimIntent = AimIntent.FIRE):
 		Reach.get_all_attack_cells_from(unit, reach_origin, aiming),
 		Reach.blocked_cells_from(unit, reach_origin, aiming, _board()))
 
-# Generic "pick one highlighted unit" mode (rescue, intimidate, future targeted actions):
+# Generic "pick one highlighted unit" mode (rescue, future targeted actions):
 # overlay the candidates' cells, hand the clicked unit to on_pick. Attack targeting stays
 # its own mode — directional aiming doesn't fit this shape.
 # mark_candidates false means the CALLER is already marking them some other way (#442: join-squad's
@@ -1218,9 +1218,9 @@ func clear_selection():
 #  Queueing orders
 # ==============================================================================
 
-# The no-argument main-action verbs: all four differed only by which BaseAction subclass got
-# instantiated, so they share one queue path (dev call 2026-07-28). Rescue/intimidate/capture stay
-# separate on purpose — they take real arguments (a unit, a unit, a cell), and forcing them
+# The no-argument main-action verbs differ only by which BaseAction subclass gets instantiated,
+# so they share one queue path (dev call 2026-07-28). Rescue/capture stay
+# separate on purpose — they take real arguments (a unit, a cell), and forcing them
 # through this signature would just move the branching into a parameter bag.
 func queue_simple_action(unit: Unit, type: BaseAction.ActionType):
 	var action := _make_simple_action(type)
@@ -1235,8 +1235,6 @@ func queue_simple_action(unit: Unit, type: BaseAction.ActionType):
 # every branch statically typed. An unregistered type returns null and is a loud failure above.
 func _make_simple_action(type: BaseAction.ActionType) -> BaseAction:
 	match type:
-		BaseAction.ActionType.RALLY:
-			return RallyAction.new()
 		BaseAction.ActionType.RELOAD:
 			return ReloadAction.new()
 		BaseAction.ActionType.REV:
@@ -1260,11 +1258,6 @@ func queue_rescue(rescuer: Unit, target: Unit, landing: Vector2i) -> void:
 	var rescue := RescueAction.new()
 	rescue.init(rescuer, target, landing)
 	squad_manager.queue_action(rescuer.squad, rescue)
-
-func queue_intimidate(intimidator: Unit, target: Unit) -> void:
-	var intimidate := IntimidateAction.new()
-	intimidate.init(intimidator, target)
-	squad_manager.queue_action(intimidator.squad, intimidate)
 
 func queue_guard(guarding_unit: Unit, ward: Unit) -> void:
 	var guard := GuardAction.new()
@@ -2261,7 +2254,7 @@ func show_player_reach(unit: Unit, origin: Vector2i) -> void:
 
 # Where a set of units' SPRITES are -- projected, not live (#126), so the target-pick overlay marks the
 # tile the player can actually see and click. Both no-plan callers (squad-up, join-squad) are gated on an
-# empty queue, so projected == live for them; rescue and intimidate are the two that needed it.
+# empty queue, so projected == live for them; rescue is the one that needed it.
 func _unit_cells(units: Array[Unit]) -> Array[Vector2i]:
 	var cells: Array[Vector2i] = []
 	for unit in units:

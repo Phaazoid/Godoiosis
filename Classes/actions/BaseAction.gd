@@ -41,8 +41,6 @@ enum ActionType {
 	ATTACK,
 	COUNTER_ATTACK,
 	RESCUE,
-	RALLY,
-	INTIMIDATE,
 	RELOAD,
 	REV,
 	BURROW,
@@ -62,8 +60,6 @@ enum ActionType {
 const MAIN_ACTION_TYPES: Array[ActionType] = [
 	ActionType.ATTACK,
 	ActionType.RESCUE,
-	ActionType.RALLY,
-	ActionType.INTIMIDATE,
 	ActionType.RELOAD,
 	ActionType.REV,
 	ActionType.BURROW,
@@ -77,8 +73,6 @@ const MAIN_ACTION_TYPES: Array[ActionType] = [
 # queue panel's sections, and the Play API iterate THIS list.
 const SIDE_CHANNEL_ORDER: Array[ActionType] = [
 	ActionType.RESCUE,
-	ActionType.RALLY,
-	ActionType.INTIMIDATE,
 	ActionType.RELOAD,
 	ActionType.REV,
 	ActionType.BURROW,
@@ -110,11 +104,11 @@ func actor_can_perform() -> bool:
 	return true
 
 # Who this order is AIMED AT -- the unit it is done TO, rather than the one doing it. The default
-# is the actor, which is the honest answer for a verb that acts on itself (move, rally, reload);
-# Attack/Rescue/Intimidate/Guard override it with the `target` they each already store.
+# is the actor, which is the honest answer for a verb that acts on itself (move, reload, rev);
+# Attack/Rescue/Guard override it with the `target` they each already store.
 #
-# Declared per Law #4: those four have held a private `var target: Unit` each, with no shared door,
-# since they were written -- this is the door, not a fifth copy. It exists because BeatSheet has to
+# Declared per Law #4: those three have held a private `var target: Unit` each, with no shared door,
+# since they were written -- this is the door, not a fourth copy. It exists because BeatSheet has to
 # ask the question of an order whose class it does not know (#520): a beat frames what is being
 # done to whom, and only the order can say who that is.
 func aimed_at() -> Unit:

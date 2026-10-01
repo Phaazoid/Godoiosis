@@ -332,13 +332,9 @@ func _replay_order(order: Dictionary, event: Dictionary) -> void:
 			var ward := _unit_for(order.get("target"))
 			if ward != null:
 				game.queue_guard(unit, ward)
-		"INTIMIDATE":
-			var victim := _unit_for(order.get("target"))
-			if victim != null:
-				game.queue_intimidate(unit, victim)
 		"CAPTURE":
 			game.queue_capture(unit)
-		"RALLY", "RELOAD", "REV", "BURROW":
+		"RELOAD", "REV", "BURROW":
 			var type_name := str(order.get("type", ""))
 			game.queue_simple_action(unit, BaseAction.ActionType[type_name])
 		_:

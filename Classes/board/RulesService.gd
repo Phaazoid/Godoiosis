@@ -426,24 +426,8 @@ static func rescue_landings(rescuer: Unit, body: Unit, board: BoardContext) -> A
 static func rescue_needs_a_pick(body: Unit, board: BoardContext) -> bool:
 	return not can_traverse(body.get_projected_destination(), body, board)
 
-# Living (active OR downed) enemies adjacent to where `unit` will END UP — same shape as
-# adjacent_downed_allies above, projected on BOTH sides for the same reason (#126): intimidate is a
-# side-channel verb too, so it meets its victim at the cell every shove this pass has already moved it
-# to. Downed enemies stay legal intimidate targets on purpose: draining a body's Will can be worth a
-# main action.
-static func adjacent_enemies(unit: Unit, board: BoardContext) -> Array[Unit]:
-	var result: Array[Unit] = []
-	var origin := unit.get_projected_destination()
-	for cell in GridUtils.cells_within_manhattan_range(origin, 1):
-		if cell == origin:
-			continue
-		var other := board.projected_unit_at_cell(cell)
-		if other != null and other != unit and not other.is_dead() and Team.is_enemy(unit.get_faction(), other.get_faction()):
-			result.append(other)
-	return result
-	
-# Who `unit` could become the bodyguard of right now (#414) — same shape as adjacent_enemies above,
-# projected on BOTH sides for the same reason (#126): Guard arms after the move phase, so it meets
+# Who `unit` could become the bodyguard of right now (#414) — same shape as adjacent_downed_allies
+# above, projected on BOTH sides for the same reason (#126): Guard arms after the move phase, so it meets
 # its ward at the cell every queued move and every shove this pass has already moved it to.
 #
 # Allies, never enemies, and never yourself. A DOWNED ally stays a legal ward on purpose: a body

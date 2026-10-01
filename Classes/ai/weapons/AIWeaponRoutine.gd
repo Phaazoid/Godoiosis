@@ -27,7 +27,7 @@ class_name AIWeaponRoutine
 # ai-tactics.md, "Weapon routines".
 
 # Which verbs a routine may be asked about: the weapon SELF-abilities -- the Weapon Action
-# submenu's own set (Unit.has_weapon_actions) -- never RESCUE/INTIMIDATE/RALLY. A family cannot
+# submenu's own set (Unit.has_weapon_actions) -- never RESCUE. A family cannot
 # veto a verb that is not its own.
 #
 # OVERWATCH joined it in #751, because that set has included a watchable attack since #413 and this

@@ -1234,22 +1234,6 @@ const CLASS_KNOBS: Array[Dictionary] = [
 		"action": BaseAction.ActionType.CAPTURE,
 		"script": PACING_SCRIPT, "min": 0.0, "max": 4.0, "step": 0.05,
 		"tip": "How long the camera stays on a zone that has just changed hands."},
-	{"group": "Actions", "label": "Hold: a rally", "static": "HOLD_RALLY",
-		"action": BaseAction.ActionType.RALLY,
-		"script": PACING_SCRIPT, "min": 0.0, "max": 3.0, "step": 0.05,
-		"tip": "Extra time when Will comes back."},
-	{"group": "Actions", "label": "Linger: a rally", "static": "LINGER_RALLY",
-		"action": BaseAction.ActionType.RALLY,
-		"script": PACING_SCRIPT, "min": 0.0, "max": 4.0, "step": 0.05,
-		"tip": "How long the camera stays after Will comes back."},
-	{"group": "Actions", "label": "Hold: an intimidate", "static": "HOLD_INTIMIDATE",
-		"action": BaseAction.ActionType.INTIMIDATE,
-		"script": PACING_SCRIPT, "min": 0.0, "max": 3.0, "step": 0.05,
-		"tip": "Extra time when Will is drained out of someone."},
-	{"group": "Actions", "label": "Linger: an intimidate", "static": "LINGER_INTIMIDATE",
-		"action": BaseAction.ActionType.INTIMIDATE,
-		"script": PACING_SCRIPT, "min": 0.0, "max": 4.0, "step": 0.05,
-		"tip": "How long the camera stays on the unit whose Will just went."},
 	{"group": "Actions", "label": "Hold: a guard arming", "static": "HOLD_GUARD",
 		"action": BaseAction.ActionType.GUARD,
 		"script": PACING_SCRIPT, "min": 0.0, "max": 3.0, "step": 0.05,
@@ -2102,8 +2086,6 @@ static func read_static(name: String) -> Variant:
 		"HOLD_TURNOVER": return Pacing.HOLD_TURNOVER
 		"HOLD_HEAL": return Pacing.HOLD_HEAL
 		"HOLD_RESCUE": return Pacing.HOLD_RESCUE
-		"HOLD_RALLY": return Pacing.HOLD_RALLY
-		"HOLD_INTIMIDATE": return Pacing.HOLD_INTIMIDATE
 		"HOLD_RELOAD": return Pacing.HOLD_RELOAD
 		"HOLD_REV": return Pacing.HOLD_REV
 		"HOLD_BURROW": return Pacing.HOLD_BURROW
@@ -2113,8 +2095,6 @@ static func read_static(name: String) -> Variant:
 		"LINGER_ATTACK": return Pacing.LINGER_ATTACK
 		"LINGER_DOWN": return Pacing.LINGER_DOWN
 		"LINGER_RESCUE": return Pacing.LINGER_RESCUE
-		"LINGER_RALLY": return Pacing.LINGER_RALLY
-		"LINGER_INTIMIDATE": return Pacing.LINGER_INTIMIDATE
 		"LINGER_RELOAD": return Pacing.LINGER_RELOAD
 		"LINGER_REV": return Pacing.LINGER_REV
 		"LINGER_BURROW": return Pacing.LINGER_BURROW
@@ -2748,12 +2728,6 @@ static func write_static(host: Node3D, name: String, value: Variant) -> void:
 		"HOLD_RESCUE":
 			Pacing.HOLD_RESCUE = value
 			return
-		"HOLD_RALLY":
-			Pacing.HOLD_RALLY = value
-			return
-		"HOLD_INTIMIDATE":
-			Pacing.HOLD_INTIMIDATE = value
-			return
 		"HOLD_RELOAD":
 			Pacing.HOLD_RELOAD = value
 			return
@@ -2780,12 +2754,6 @@ static func write_static(host: Node3D, name: String, value: Variant) -> void:
 			return
 		"LINGER_RESCUE":
 			Pacing.LINGER_RESCUE = value
-			return
-		"LINGER_RALLY":
-			Pacing.LINGER_RALLY = value
-			return
-		"LINGER_INTIMIDATE":
-			Pacing.LINGER_INTIMIDATE = value
 			return
 		"LINGER_RELOAD":
 			Pacing.LINGER_RELOAD = value

@@ -63,7 +63,6 @@ class_name ScenarioUnitEntry
 @export var downed_turns_remaining := -1   # -1 = not counting, same sentinel Unit uses
 @export var in_crisis := false
 @export var crisis_surge_pending := false
-@export var rally_count := 0
 @export var squad_has_acted := false   # LEADER's entry only, beside squad_name/archetype/zone
 # The Guard this unit had armed (#414), as an INDEX into ScenarioData.unit_entries — a live Unit ref
 # cannot serialize and a name is not unique, so this is the limb_prosthetic_items re-link pattern.
@@ -172,7 +171,6 @@ func capture_unit_state(unit: Unit) -> void:
 	downed_turns_remaining = unit.downed_turns_remaining
 	in_crisis = unit.in_crisis
 	crisis_surge_pending = unit.crisis_surge_pending
-	rally_count = unit.rally_count
 
 	# The armed watch (#413). A save taken between a pass and the enemy phase is exactly when a live
 	# one is the whole point, which is why it is captured here rather than left to reset.
@@ -271,7 +269,6 @@ func apply_unit_state(unit: Unit) -> void:
 	unit.attunement = attunement
 	unit.in_crisis = in_crisis
 	unit.crisis_surge_pending = crisis_surge_pending
-	unit.rally_count = rally_count
 	unit.restore_lifecycle(lifecycle_state, downed_turns_remaining)
 
 	# The armed watch (#413), after the inventory, because the stored index IS the attack's identity —

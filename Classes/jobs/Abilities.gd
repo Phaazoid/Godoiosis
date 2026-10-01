@@ -8,10 +8,19 @@ class_name Abilities
 # counter path / action / movement), but every site reads its id and numbers from here,
 # so the roster and the balance surface both live in one place.
 
-enum Id { NONE, IRON_WILL, INTIMIDATION, TAUNT, WATERWALK, INSULATED_SHOCK, CRISIS, BRACE, INSULATED_FIRE }
+enum Id {
+	NONE,
+	IRON_WILL,
+	INTIMIDATION,  # RETIRED (#1174): nothing grants or reads it; the slot stays so every id below keeps its meaning
+	TAUNT,
+	WATERWALK,
+	INSULATED_SHOCK,
+	CRISIS,
+	BRACE,
+	INSULATED_FIRE
+}
 
 const IRON_WILL_DAMAGE_CAP := 6      # playtest-tunable
-const INTIMIDATION_WILL_DRAIN := 3   # playtest-tunable
 
 # Guard (#414, docs/design/standing-reactions.md). Guard itself is a BASIC main action everyone has
 # — the doc's working model, and the one fork it deliberately left open — so there is no GUARD
