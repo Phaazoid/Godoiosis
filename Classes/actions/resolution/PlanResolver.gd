@@ -8,6 +8,7 @@ const INSULATED_POPUP := "Insulated!"
 const FELL_POPUP := "Fell %d!"
 const DROWNING_POPUP := "Drowning!"
 const VOID_POPUP := "Into the void!"
+const HELD_POPUP := "Held %d!"   # #120: tiles of a shove the target's weight absorbed
 
 # The one place consequences are derived (docs/design/resolution-pipeline.md, R1-R8).
 # ONE pure pass over the ordered plan — attacks, then counters (R7) — threading a
@@ -723,6 +724,9 @@ static func _resolve_one(action: AttackAction, plan: ResolvedPlan, reactions: Ar
 	# feeds the Will-spend stage. predict is pure; the second call is the one that counts.
 	var landing: _Landing = null
 	if LethalityRules.predict(target_hypo, outcome.damage) != ResolvedOutcome.Lethality.KILLED:
+		outcome.knockback_held = _shove_against(action, target, target_hypo).y
+		if outcome.knockback_held > 0:
+			outcome.popups.append(HELD_POPUP % outcome.knockback_held)
 		landing = _knockback_landing(action, target, target_hypo, board)
 	if landing != null:
 		# The landing measures in height UNITS; the outcome reports LEVELS, since that is what the
@@ -1044,6 +1048,20 @@ static func _source_knockback(action: AttackAction) -> int:
 	# the authored number on the shared AttackData base is only the starting point.
 	return action.actor.get_attack_knockback(action.fired_attack)
 
+# The shove this hit delivers to THIS target (#120), as [tiles delivered, tiles its weight held]:
+# the attack's knockback, mods included, less the target's weight band, floored at 0. The ONE place
+# weight meets a shove -- the landing walks the first number and the outcome reports the second. Read
+# off the TARGET, so a Guard's substitution has the blocker's weight answer, and off live gear like
+# _source_knockback, since nothing inside a pass changes what anyone carries.
+static func _shove_against(action: AttackAction, target: Unit, target_hypo: _Hypo) -> Vector2i:
+	var authored := _source_knockback(action)
+	if authored <= 0 or target == null:
+		return Vector2i.ZERO
+	if GridUtils.cardinal_direction_i_between(action.origin_cell, target_hypo.position) == Vector2i.ZERO:
+		return Vector2i.ZERO   # a payload stuck to its victim shoves nobody, so nothing is held either
+	var held := mini(authored, Stats.weight_band(target.get_weight()))
+	return Vector2i(authored - held, held)
+
 # One shove's full result (#259): where it ends, every cell it crosses, and what the landing does.
 class _Landing:
 	var cell: Vector2i
@@ -1060,7 +1078,7 @@ class _Landing:
 # distance ran out or a blocker halted it early. Pure -- reads the hypo position, mutates nothing;
 # _resolve_one applies the result after the rung is named.
 static func _knockback_landing(action: AttackAction, target: Unit, target_hypo: _Hypo, board: BoardContext) -> _Landing:
-	var distance := _source_knockback(action)
+	var distance := _shove_against(action, target, target_hypo).x
 	if distance <= 0 or board == null:
 		return null
 	var dir := GridUtils.cardinal_direction_i_between(action.origin_cell, target_hypo.position)
