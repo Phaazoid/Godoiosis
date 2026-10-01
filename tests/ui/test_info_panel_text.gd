@@ -49,10 +49,12 @@ func test_mov_tooltip_says_nothing_about_legs_when_both_are_intact() -> void:
 
 # --- Weight ---
 
-func test_weight_tooltip_reports_carried_only() -> void:
-	# No CON body term (doctrine corrected 2026-07-27) -- weight is gear, full stop.
-	var tip: String = InfoPanel.weight_tooltip(5)
-	assert_str(tip).contains("Carried gear 5")
+func test_weight_tooltip_shows_the_body_and_the_carried_half() -> void:
+	# #120: weight is the body (BLD) plus what is carried, and the tooltip names both numbers. The
+	# words are the dev's, so only the numbers are pinned. CON is still not a term (2026-07-27).
+	var tip: String = InfoPanel.weight_tooltip(13, 11)
+	assert_str(tip).contains("13")
+	assert_str(tip).contains("11")
 	assert_str(tip).not_contains("CON")
 
 

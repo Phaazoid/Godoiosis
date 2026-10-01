@@ -544,7 +544,7 @@ func _refresh_foot() -> void:
 	# pass, so today this is mostly the body; showing it anyway was the dev's call (2026-09-05).
 	_derived_label.text = "WT %d  ·  DEF %d" % [unit.get_weight(), unit.get_effective_def()]
 	_derived_label.tooltip_text = UiText.wrap(
-		"Weight is the whole inventory's; every item currently weighs 0 until weight is authored. "
+		"A total of a unit's BLD and the weight of what they are carrying. "
 		+ "DEF is the effective value, armour included.")
 
 	var deployed: bool = _controller.game.is_deployed(unit)   # game is untyped: no inference
