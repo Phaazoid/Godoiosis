@@ -21,6 +21,9 @@ class_name ScenarioData
 											  # the only reader — see verticality.md. One field, not two:
 											  # a ramp at height 0 has non-zero corners, so it survives
 											  # the round trip on its own.
+# Vector2i -> int, every gas kind's amount packed four bits a kind (#508, GasField / Gas). SPARSE: a
+# cell absent holds no gas, so a board without any saves as {}.
+@export var gas: Dictionary = {}
 
 # DEPRECATED (#427), and NEVER read as data: a board saved before corner heights carries these and no
 # `corner_heights`. Godot ignores properties a resource no longer declares, so without them such a

@@ -73,6 +73,10 @@ static func build(parent: Node, root_name := "PlayRoot") -> Dictionary:
 	# disagree about whether a move is legal, which is exactly the split #103 was.
 	var board_heights := BoardHeights.new()
 
+	# The atmosphere (#508). No rule reads it yet, but the headless board carries it so a scenario
+	# round-trips the same here as in the game -- a store the third load path drops is #103's shape.
+	var gas_field := GasField.new()
+
 	# Cohesion reads live terrain (#151) -- fresh BoardContext per call, mirroring game._board, with
 	# units scanned off units_root so mid-test spawns are seen. Sits below terrain_states because a
 	# lambda captures what exists at creation.
@@ -92,6 +96,7 @@ static func build(parent: Node, root_name := "PlayRoot") -> Dictionary:
 		"turn_manager": turn_manager,
 		"terrain_states": terrain_states,
 		"board_heights": board_heights,
+		"gas_field": gas_field,
 	}
 
 static func paint_rect(grid: BoardGrid, rect: Rect2i) -> void:
@@ -138,6 +143,8 @@ static func apply_scenario(board: Dictionary, scenario: ScenarioData) -> Array[U
 		board.terrain_states.load_state_dict(scenario.terrain_states, scenario.terrain_state_turns)   # mirrors ScenarioManager
 	if board.get("board_heights") != null:
 		board.board_heights.load_corner_dict(scenario.corner_heights)   # mirrors ScenarioManager
+	if board.get("gas_field") != null:
+		board.gas_field.load_dict(scenario.gas)   # mirrors ScenarioManager
 
 	var spawned: Array[Unit] = []
 	var entry_by_unit := {}            # Unit -> ScenarioUnitEntry
