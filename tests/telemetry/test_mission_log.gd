@@ -4,7 +4,7 @@
 # Two cases exist because the plan's review caught what a naive recorder misses, and each is
 # pinned against its own mutant:
 #   * the FIRST turn_start is written by begin(): TurnManager.turn_started never fires for turn 1
-#   * a pass records the QUEUE as well as the plan: rescue, rally, reload are not on a ResolvedPlan
+#   * a pass records the QUEUE as well as the plan: rescue, rev, reload are not on a ResolvedPlan
 #
 # Persistence is ON here, aimed at a scratch folder, so the file half is exercised in every case
 # rather than trusted: the seal is read back off disk, and the flush case reads the file of a run
@@ -326,10 +326,10 @@ func test_a_pass_records_the_hit_it_landed() -> void:
 
 func test_a_pass_records_the_side_channel_order_the_plan_does_not_hold() -> void:
 	var hero := _spawn(Team.Faction.PLAYER, Vector2i(0, 0))
-	hero.unit_instance.set_current_will(0)
-	assert_bool(hero.can_rally()).override_failure_message("fixture: rally must be offered").is_true()
+	hero.equipped_weapon = H.make_weapon()   # a chainsword in hand
+	assert_bool(hero.can_rev_weapon()).override_failure_message("fixture: rev must be offered").is_true()
 	mc._begin_turn()
-	game.queue_simple_action(hero, BaseAction.ActionType.RALLY)
+	game.queue_simple_action(hero, BaseAction.ActionType.REV)
 	await game.order_executor.execute_orders(hero)
 
 	var passes := _of("pass")
@@ -337,10 +337,10 @@ func test_a_pass_records_the_side_channel_order_the_plan_does_not_hold() -> void
 	var types: Array[String] = []
 	for order: Dictionary in passes[0].get("orders", []):
 		types.append(str(order.get("type")))
-	# THE REVIEW'S CASE: a ResolvedPlan carries attacks; rally, rescue, reload live on the queue.
+	# THE REVIEW'S CASE: a ResolvedPlan carries attacks; rev, rescue, reload live on the queue.
 	assert_array(types).override_failure_message(
 		"a side-channel verb is on the squad's queue and NOT on the plan -- both must be read"
-		).contains(["RALLY"])
+		).contains(["REV"])
 	assert_int((passes[0].get("hits", []) as Array).size()).is_equal(0)
 
 

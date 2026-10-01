@@ -108,11 +108,11 @@ func test_battle_state_on_a_roster_entry_is_found_and_named() -> void:
 	var entry := _entry(true)
 	entry.stats = {Stats.Stat.STR: 9}
 	entry.in_crisis = true
-	entry.rally_count = 2
+	entry.downed_turns_remaining = 2
 	var findings := RosterLint.check(_roster_of(entry))
 	assert_int(findings.size()).override_failure_message(_texts(findings)).is_equal(1)
 	assert_str(findings[0]["text"]).contains("in_crisis")
-	assert_str(findings[0]["text"]).contains("rally_count")
+	assert_str(findings[0]["text"]).contains("downed_turns_remaining")
 
 
 func test_an_empty_entry_is_found_rather_than_crashing() -> void:

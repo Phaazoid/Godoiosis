@@ -46,7 +46,7 @@ static func _events() -> Array[Dictionary]:
 		"orders": [
 			{"unit": _ref(A, "Aldin"), "type": "MOVE", "hold": true},
 			{"unit": _ref(A, "Aldin"), "type": "ATTACK", "attack": "Slash"},
-			{"unit": _ref(A, "Aldin"), "type": "RALLY"},
+			{"unit": _ref(A, "Aldin"), "type": "RELOAD"},
 		],
 		"hits": [{"kind": "attack", "actor": _ref(A, "Aldin"), "target": _ref(B, "Brigand"),
 			"damage": 6, "heal": 0, "skipped": false}],
@@ -84,7 +84,7 @@ func test_usage_counts_resolved_player_orders_and_skips_the_hold_filler() -> voi
 	var s := MissionSummary.of(_events())
 	var usage: Dictionary = s.get("usage")
 	assert_int(int(usage.get("ATTACK", 0))).is_equal(1)
-	assert_int(int(usage.get("RALLY", 0))).is_equal(1)
+	assert_int(int(usage.get("RELOAD", 0))).is_equal(1)
 	assert_bool(usage.has("MOVE")).override_failure_message("a hold filler is not an order anyone gave").is_false()
 	assert_int(int((s.get("attacks_used") as Dictionary).get("Slash", 0))).is_equal(1)
 	assert_int(int((s.get("units_used") as Dictionary).get("Aldin", 0))).is_equal(2)

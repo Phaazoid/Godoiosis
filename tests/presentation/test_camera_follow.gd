@@ -230,8 +230,8 @@ func test_the_move_phase_publishes_the_span_for_the_rig_to_widen_to() -> void:
 # and squad, because everything about codas was pinned at its two ENDS (the sheet builds them, the
 # schedule reads them) and nothing drove the wire between. #103's shape exactly.
 #
-# The camera is parked on ANOTHER unit first, so "it ended up on the rallier" cannot pass by the
-# camera simply never having moved. A rally is the cheapest coda to stage: no target, no terrain,
+# The camera is parked on ANOTHER unit first, so "it ended up on the rever" cannot pass by the
+# camera simply never having moved. A rev is the cheapest coda to stage: no target, no terrain,
 # and _queue_action is the raw door the beat sheet suite already uses.
 func test_a_side_channel_verb_takes_the_camera_too() -> void:
 	var unit := _player_unit()
@@ -239,12 +239,12 @@ func test_a_side_channel_verb_takes_the_camera_too() -> void:
 	assert_object(elsewhere).override_failure_message(
 			"fixture: this board has only one unit").is_not_null()
 
-	var rally := RallyAction.new()
-	rally.init(unit)
-	unit.squad._queue_action(rally)
+	var rev := RevAction.new()
+	rev.init(unit)
+	unit.squad._queue_action(rev)
 
 	# ZOOM OFF, and that is what keeps the wire observable since #602 round 4: with the zoom on, a
-	# rally stages and the tear-down's return pan clears the follow at the pass's end -- by design
+	# rev stages and the tear-down's return pan clears the follow at the pass's end -- by design
 	# (the WIDE shot back before the tiles drop) -- so the real coda pan and a deleted-subjects
 	# mutant would both read null here. Plain board: the coda's pan is the only camera writer, and
 	# the subjects wire it drives is the same code path in either profile.

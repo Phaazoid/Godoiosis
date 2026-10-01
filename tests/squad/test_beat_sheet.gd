@@ -204,15 +204,14 @@ func test_a_pass_that_only_walks_touches_no_ground() -> void:
 			"walking tore out ground: %s" % [sheet.cells]).is_empty()
 
 
-# ...and a MAIN ACTION does, whichever one it is. A rally is the cheapest to stage -- no target, no
+# ...and a MAIN ACTION does, whichever one it is. A rev is the cheapest to stage -- no target, no
 # terrain -- and it is a side-channel verb, so this is the half an attack-shaped rule would miss.
 func test_a_side_channel_main_action_puts_its_ground_on_stage() -> void:
 	var unit := H.spawn_solo(self, _sm, PLAYER, Vector2i(2, 3), {Stats.Stat.LDR: 3})
-	var rally := RallyAction.new()
-	rally.init(unit)
-	assert_bool(rally.is_main_action()).override_failure_message(
+	var rev := _rev(unit)
+	assert_bool(rev.is_main_action()).override_failure_message(
 			"fixture drifted: this case needs a MAIN action").is_true()
-	unit.squad._queue_action(rally)
+	unit.squad._queue_action(rev)
 
 	var sheet := BeatSheet.read(unit.squad, ResolvedPlan.new())
 	assert_array(sheet.cells).override_failure_message(
@@ -624,27 +623,25 @@ func test_two_rescues_are_two_coda_beats() -> void:
 
 
 # What a coda frames is what the verb is done TO, which is the same rule a volley follows -- and it
-# is the ORDER that answers, because only the order knows. A rescue has a body; a rally has nobody
+# is the ORDER that answers, because only the order knows. A rescue has a body; a rev has nobody
 # but the unit doing it, and falls back to the actor.
 #
-# TWO actors, because rescue and rally are both MAIN actions: queued on one unit the second
+# TWO actors, because rescue and rev are both MAIN actions: queued on one unit the second
 # displaces the first, which is the queue's own rule working rather than a fixture detail.
 func test_a_coda_frames_what_its_verb_is_done_to() -> void:
 	var rescuer := H.spawn_solo(self, _sm, PLAYER, Vector2i(0, 0), {Stats.Stat.LDR: 3})
-	var rallier := H.spawn_solo(self, _sm, PLAYER, Vector2i(1, 0), {Stats.Stat.LDR: 3})
-	_sm.join_squad(rallier, rescuer.squad)
+	var rever := H.spawn_solo(self, _sm, PLAYER, Vector2i(1, 0), {Stats.Stat.LDR: 3})
+	_sm.join_squad(rever, rescuer.squad)
 	var body := H.spawn_solo(self, _sm, PLAYER, Vector2i(0, 1), {Stats.Stat.LDR: 3})
 	rescuer.squad._queue_action(_rescue(rescuer, body))
 
-	var rally := RallyAction.new()
-	rally.init(rallier)
-	rescuer.squad._queue_action(rally)
+	rescuer.squad._queue_action(_rev(rever))
 
 	var sheet := BeatSheet.read(rescuer.squad, ResolvedPlan.new())
 	assert_object(sheet.codas(BaseAction.ActionType.RESCUE)[0].subject()) \
 		.override_failure_message("a rescue framed the rescuer, not the body coming up").is_same(body)
-	assert_object(sheet.codas(BaseAction.ActionType.RALLY)[0].subject()) \
-		.override_failure_message("a rally has no target -- it must fall back to the unit rallying").is_same(rallier)
+	assert_object(sheet.codas(BaseAction.ActionType.REV)[0].subject()) \
+		.override_failure_message("a rev has no target -- it must fall back to the unit revving").is_same(rever)
 
 
 # --- a verb that earns no beat (#931) ----------------------------------------------------------

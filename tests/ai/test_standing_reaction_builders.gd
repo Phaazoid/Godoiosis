@@ -315,8 +315,7 @@ func test_a_guard_wards_the_ally_the_most_enemies_can_reach() -> void:
 
 
 # ZERO EXPOSURE REFUSES. "Most exposed" presumes exposure above zero -- without the refusal a Guard
-# would pre-empt INTIMIDATE (the verb directly below it) with a purposeless ward every time an ally
-# happened to be standing next to it. Same board, no enemy on it at all.
+# would spend the action on a purposeless ward every time an ally happened to be standing next to it. Same board, no enemy on it at all.
 func test_a_guard_refuses_when_nobody_can_be_reached() -> void:
 	var board := _board_of()
 	var guard: Unit = _spawn(board, PLAYER, Vector2i(4, 4))

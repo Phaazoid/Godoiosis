@@ -166,25 +166,9 @@ func test_rescue_rejects_a_healthy_target() -> void:
 	var res: Dictionary = sess.rescue(sess.handle_for(hero), sess.handle_for(ally))
 	assert_bool(res.ok).is_false()
 
-# The side-channel tail is generic (BaseAction.SIDE_CHANNEL_ORDER): a queued Rally shows in
-# the preview's side_actions and actually executes headless — closing the mirror-drift hole
-# where play never learned Rally after it shipped.
-func test_rally_previews_and_executes() -> void:
-	var hero: Unit = _session.unit_by_handle("A")
-	hero.unit_instance.set_current_will(1)
-	var res: Dictionary = _session.rally("A")
-	assert_bool(res.ok).is_true()
-	var prev: Dictionary = _session.preview()
-	assert_bool(prev.ok).is_true()
-	assert_int(prev.plan.side_actions.size()).is_equal(1)
-	assert_str(prev.plan.side_actions[0].type).is_equal("RALLY")
-	var will_before: int = hero.unit_instance.get_current_will()
-	var exe: Dictionary = _session.execute()
-	assert_bool(exe.ok).is_true()
-	assert_int(hero.unit_instance.get_current_will()).is_greater(will_before)
-
-# Rev rides the same generic side-channel tail (#84): a queued Rev shows in the preview's
-# side_actions and actually revs the equipped chainsword when executed headless (Law #2 parity).
+# Rev rides the generic side-channel tail (BaseAction.SIDE_CHANNEL_ORDER, #84): a queued Rev shows
+# in the preview's side_actions and actually revs the equipped chainsword when executed headless
+# (Law #2 parity).
 func test_rev_previews_and_executes() -> void:
 	var hero: Unit = _session.unit_by_handle("A")
 	var weapon := hero.get_equipped_weapon() as ChainswordWeaponInstance
