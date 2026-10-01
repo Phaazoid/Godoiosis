@@ -237,7 +237,7 @@ func test_a_crisis_armed_ally_is_not_offered_because_it_stands_back_up() -> void
 	var attacker := H.spawn_solo(self, _sm, PLAYER, Vector2i(1, 0))
 	var rescuer := H.spawn_solo(self, _sm, PLAYER, Vector2i(3, 0))
 	_sm.join_squad(rescuer, attacker.squad)
-	var victim := _bloodied_ally(Vector2i(2, 0), {Stats.Stat.WIL: 20})
+	var victim := _bloodied_ally(Vector2i(2, 0))
 	victim.unit_instance.jobs.append("berserker")   # arms Abilities.Id.CRISIS via the job pool
 
 	_lethal_aim(attacker, victim)

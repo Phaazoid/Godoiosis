@@ -9,7 +9,7 @@ var state: Terrain.TileState = Terrain.TileState.NONE   # which tile state is ch
 var resolved: ResolvedOutcome = null
 
 
-# `situation` is whose HP/Will/lifecycle the rung is predicted against — the pass's threaded
+# `situation` is whose HP/lifecycle the rung is predicted against — the pass's threaded
 # hypothetical at plan time, the live unit at execution.
 static func make(unit: Unit, tile_state: Terrain.TileState, damage: int,
 		situation: LethalityRules.Situation) -> TileHitAction:
@@ -33,7 +33,7 @@ static func make(unit: Unit, tile_state: Terrain.TileState, damage: int,
 func execute() -> void:
 	begin_execution()
 	if actor != null and is_instance_valid(actor) and resolved != null:
-		actor.take_damage(resolved.damage)
+		actor.take_damage(resolved.damage, resolved.damage)   # the ground is never a blow (#1174)
 	finish_execution()
 
 

@@ -93,23 +93,28 @@ signal stats_changed
 
 # --- Lifecycle (docs/design/will-and-death.md) ---
 # State is battle-scoped: it resets each mission, like element_states, so it lives on the
-# transient Unit. (Will — the PERSISTENT resource — lives on UnitInstance. Different sides
-# of the persistence seam.)
+# transient Unit. (Limb loss is the PERSISTENT half and lives on UnitInstance -- different sides of
+# the persistence seam.)
 enum LifecycleState { ACTIVE, DOWNED, DEAD }
 var lifecycle_state: LifecycleState = LifecycleState.ACTIVE
 
 # Which rung a would-be-fatal hit lands on is decided by LethalityRules.predict(), NOT here —
 # the resolver has to ask the same question at plan time (Law #2), so the ladder and its tuning
-# (OVERKILL_CEILING, CRISIS_WILL_GATE) live in one shared place. Unit owns only what happens
-# NEXT: take_damage carries the named rung out.
+# (OVERKILL_CEILING, the limb thresholds) live in one shared place. Unit owns only what happens
+# NEXT: take_damage carries the named rung out, and takes the limb.
 
-# --- Crisis Mode (will-and-death.md; an equipped ability since #158). A FULL-Will unit holding
+# Went down this battle (#1174): a smaller blow takes a limb from now on, and the Crisis gambit is
+# spent. Battle-scoped like the downed clock; a rescue or a heal does not clear it. Losing a limb
+# while STANDING does not wound -- only a down does.
+var wounded := false
+
+# --- Crisis Mode (will-and-death.md; an equipped ability since #158). An UNWOUNDED unit holding
 # the Crisis ability answers a would-be-down by standing straight back up surged — deterministic,
-# previewed, no prompt (the gambit's acceptance happened at loadout). Will locks at 0 and there is
-# no safety net (a would-be-down is death) for the rest of the battle. The arming read and the
-# gambit's tuning live with the ability roster (Abilities.CRISIS_*); the battle-scoped STATE
-# lives here on the transient Unit. ---
-var in_crisis: bool = false              # afflicted (skull icon, Will locked, die-on-down) for the battle
+# previewed, no prompt (the gambit's acceptance happened at loadout). There is no safety net (a
+# would-be-down is death) for the rest of the battle. The arming read and the gambit's tuning live
+# with the ability roster (Abilities.CRISIS_*); the battle-scoped STATE lives here on the transient
+# Unit. ---
+var in_crisis: bool = false              # afflicted (skull icon, die-on-down) for the battle
 var crisis_surge_pending: bool = false   # apply the surge at this unit's next turn start
 
 # Turns remaining before a downed unit dies without rescue. Starts at 3 when
@@ -238,7 +243,7 @@ func can_reseed_kit() -> bool:
 # its file.
 #
 # GEAR only: jobs and proficiency come along because the file authors them as part of the kit, but
-# HP, Will, limb STATE, element states and lifecycle are this unit's battle, not its loadout.
+# HP, limb STATE, wounds, element states and lifecycle are this unit's battle, not its loadout.
 # Battle state (ammo, rev, spring load) resets with the weapons — the grant is a fresh
 # copy_for_grant, exactly what a spawn hands back.
 #
@@ -519,9 +524,15 @@ func get_current_hp() -> int:
 func get_mov() -> int:
 	return unit_instance.get_mov(get_effective_stat(Stats.Stat.DEX))
 
-# Everything carried, equipped or not: armor and the equipped weapon both live in `inventory`,
-# so one sweep covers them. No body term -- weight is gear only.
+# The body plus everything carried (#120). BLD is read EFFECTIVE so a job or a temporary effect can
+# move it; armor and the equipped weapon both live in `inventory`, so one sweep covers the gear.
+# CON is never a term (retracted 2026-07-27), and gear's mass is Item.weight alone --
+# tests/law/test_gear_has_one_mass.gd refuses a piece that names BLD in its stat_modifiers.
 func get_weight() -> int:
+	return get_effective_stat(Stats.Stat.BLD) + get_carried_weight()
+
+# The gear half of get_weight, for a readout that shows the two apart. A rule asks get_weight.
+func get_carried_weight() -> int:
 	var total := 0
 	for item in inventory:
 		if item != null:
@@ -868,12 +879,19 @@ func die():
 	unit_died.emit(self)
 	queue_free()
 
-func take_damage(damage: int):
+func take_damage(damage: int, non_blow := 0):
 	# Lifecycle-aware damage entry -- every damage source calls this. LethalityRules names the
-	# rung (the same call PlanResolver makes at plan time, so the preview cannot disagree —
-	# Law #2); this function is the only thing that CARRIES it out. Raw HP math stays on
-	# UnitInstance; which rung to pay is battle-scoped, so paying it lives here on the Unit.
-	match LethalityRules.predict(LethalityRules.situation_for(self), damage):
+	# rung and whether a limb goes (the same calls PlanResolver makes at plan time, so the preview
+	# cannot disagree — Law #2); this function is the only thing that CARRIES them out. Raw HP math
+	# stays on UnitInstance; which rung to pay is battle-scoped, so paying it lives here on the Unit.
+	# `non_blow` is the part of `damage` that is not a blow (#1174): the drowning top-up, or the whole
+	# of a tile burn or a sinking. Both are judged on the PRE-hit situation, read once.
+	var s := LethalityRules.situation_for(self)
+	var rung := LethalityRules.predict(s, damage)
+	if LethalityRules.severs(s, damage - non_blow, rung):
+		unit_instance.sever_next_limb()
+		_settle_stat_change()                # a lost limb moves STR/DEX, which can drop the wearer under a gate
+	match rung:
 		ResolvedOutcome.Lethality.NONE:
 			if lifecycle_state != LifecycleState.DEAD:
 				unit_instance.apply_damage(damage, get_max_hp())   # survivable hit — ordinary HP loss
@@ -886,12 +904,10 @@ func take_damage(damage: int):
 				unit_instance.apply_damage(damage, get_max_hp())   # HP -> 0 -> died -> _on_instance_died -> die()
 		ResolvedOutcome.Lethality.CRISIS:
 			# The armed gambit (#158): stand straight back up, never DOWNED — no went_downed, no
-			# ejection queueing, no Will down-spend. Exactly what the resolver's hypo threads for
-			# this rung, which is what keeps preview and execution one thing with no offer step.
+			# ejection queueing, no wound. Exactly what the resolver's hypo threads for this rung,
+			# which is what keeps preview and execution one thing with no offer step.
 			enter_crisis()
-		_:
-			# DOWNED and MAIMED are the same execution: go down. spend_will_for_down picks
-			# clean-vs-maimed.
+		ResolvedOutcome.Lethality.DOWNED:
 			_go_downed()
 
 func heal(amount: int) -> void:
@@ -905,26 +921,25 @@ func heal(amount: int) -> void:
 		downed_turns_remaining = -1
 		downed_countdown_changed.emit(downed_turns_remaining)
 
-# The downed STATE. Its PRICE is the one opt-out: spend_will_for_down is the only source of a
-# maim-on-down, so skipping it is the whole of what a costless down means.
-func _go_downed(pay_will_cost := true):
+# The downed STATE, and the wound it leaves (#1174). The limb is take_damage's, not this function's:
+# a blow decides it, and the dev force_down below is not a blow.
+func _go_downed():
 	lifecycle_state = LifecycleState.DOWNED
+	wounded = true
 	set_current_hp(1)  # clings at 1 HP (stub) — stays >0, so no death emission
-	if pay_will_cost:
-		unit_instance.spend_will_for_down()  # pays the flat Will cost; maims (limb + Will->0) if it can't afford it
-		_settle_stat_change()                # a maim moves STR/DEX, which can drop the wearer under a gate
 	downed_turns_remaining = DOWNED_TURNS
 	_show_downed_sprite(true)
 	went_downed.emit(self)
 	downed_countdown_changed.emit(downed_turns_remaining)
 
 # Dev bypass (#156), the inverse of revive(): straight into DOWNED with none of the ladder's
-# consequences — no Will spend, no maim, no Crisis however the unit is armed. take_damage stays the
-# only rule-governed way down. The guard keeps a second press from reseeding a downed unit's clock.
+# consequences — no limb, no Crisis however the unit is armed. It still WOUNDS, being a down.
+# take_damage stays the only rule-governed way down. The guard keeps a second press from reseeding
+# a downed unit's clock.
 func force_down() -> void:
 	if lifecycle_state != LifecycleState.ACTIVE:
 		return
-	_go_downed(false)
+	_go_downed()
 
 func tick_downed_countdown():
 	if lifecycle_state != LifecycleState.DOWNED:
@@ -1162,16 +1177,15 @@ func revive():
 	downed_countdown_changed.emit(downed_turns_remaining)
 
 func enter_crisis():
-	# The armed gambit fires (take_damage's CRISIS rung, #158): up at CRISIS_REVIVE_HP, Will locked
-	# at 0, surge primed for next turn, no safety net for the rest of the battle. Called on a unit
-	# that never went DOWNED, so the lifecycle/clock/sprite resets are usually no-ops — kept because
-	# they make this function total over any state it could ever be reached from.
+	# The armed gambit fires (take_damage's CRISIS rung, #158): up at CRISIS_REVIVE_HP, surge primed
+	# for next turn, no safety net for the rest of the battle. Called on a unit that never went DOWNED,
+	# so the lifecycle/clock/sprite resets are usually no-ops — kept because they make this function
+	# total over any state it could ever be reached from.
 	in_crisis = true
 	lifecycle_state = LifecycleState.ACTIVE
 	downed_turns_remaining = -1
 	_show_downed_sprite(false)
 	set_current_hp(Abilities.CRISIS_REVIVE_HP)
-	unit_instance.set_current_will(0)                         # locked for the battle
 	crisis_surge_pending = true
 
 func advance_crisis_surge():
@@ -1457,7 +1471,7 @@ func can_burrow_weapon() -> bool:
 
 # --- Restoring battle state from a mid-battle save (#87) ---
 # Replays the RESULT, never the EVENT: the normal entry points (_go_downed, apply_stat_effect)
-# have side effects a restore must not repeat (squad ejection, Will spend, countdown reseed).
+# have side effects a restore must not repeat (squad ejection, countdown reseed).
 
 func restore_lifecycle(state: LifecycleState, turns_remaining: int) -> void:
 	lifecycle_state = state

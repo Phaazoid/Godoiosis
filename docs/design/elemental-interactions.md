@@ -34,7 +34,7 @@ Distilled from playtesting-the-imagination. New ideas get checked against these.
 - **Counter-denial (gated)**: STAGGERED (big SOUND), FROZEN, or shocking conductive-armor → can't counter.
 - **AIRBORNE** — and it's applied by *weapons* too (the kinetic mace), not just elements. Combos with AIR/EARTH.
 - **Aether** as a versatile medium: a *status-cleaner* (a prestidigitation cantrip) **and** action-at-a-distance combo carrier.
-- **Azoth** & **Galvanic** revive — *pick up a downed unit at a heavy Will cost* (alchemic vs mechanist flavors).
+- **Azoth** & **Galvanic** revive — *pick up a downed unit at a heavy Will cost* *(Will retired by #1174 — the cost needs a new currency)* (alchemic vs mechanist flavors).
 - **Coagula** (lock a state on) — love the concept/name; the element-tie is open (see Rework).
 - **Sympathetic link** (correspondence) — bind two units, mirror effects.
 - **Transmutation of tile/unit states** — promoted to a *core* alchemist verb, not a wild swing.
@@ -203,7 +203,7 @@ Grouped by incoming element. Reactions **stack** (E8): one hit can fire several.
 | ★ AETHER | friendly state | Cleanse | strip negative states (prestidigitation cantrip) |
 | ★ AETHER | distant stated unit | Conduction | complete a combo **at range** (no adjacency) |
 | ⚗ AZOTH | any matching state | Quintessence | re-fire the matching reaction stack once more (busted, fun) |
-| AZOTH/GALVANIC | downed ally | Revive | pick them up — **heavy Will cost** ([will-and-death.md](will-and-death.md)) |
+| AZOTH/GALVANIC | downed ally | Revive | pick them up — **heavy Will cost** *(Will retired, #1174 — needs a new cost)* ([will-and-death.md](will-and-death.md)) |
 | VITRIOL | armored/metal | Corrode | CORRODED + −target offense |
 | VITRIOL | WET | Dilute | −dmg (watered down) |
 | SOUND | FROZEN/BRITTLE/CORRODED | Shatter | ++dmg |
@@ -219,7 +219,7 @@ Concise riffs on the ✅ items; they lean on states/reactions above.
 - **Vision & command denial.** Smoke/fog on the enemy **leader** collapses their LDR range — their squad can't stay tethered and scatters into solo units (cohesion attack, straight at [squad-system.md](squad-system.md)). The non-lethal way to break a squad.
 - **Counter-denial (gated).** STAGGERED (a big enough SOUND hit), FROZEN, or Overload (SHOCK into conductive armor) → the target can't counter. Then the squad alpha-strikes freely. Strong → always behind a setup beat, never one cheap hit (Axiom 3).
 - **Transmutation (core alchemist verb).** Alchemists convert tile/unit states as a *baseline* ability: WET→ICE (instant bridge / freeze a swimmer), FIRE→STEAM, STONE→SAND, mud↔dust. Battlefield reshaping, not a wild swing.
-- **Revive (heavy Will).** Downed ally pickup: **Azoth** (alchemic — "shock them back to life" with aura) or **Galvanic** (mechanist — a jolt). Costs a big chunk of Will; ties straight into the stakes ladder. *Reanimating the actually-dead is ⚗⚗ far-future.*
+- **Revive (heavy Will).** Downed ally pickup: **Azoth** (alchemic — "shock them back to life" with aura) or **Galvanic** (mechanist — a jolt). Costs a big chunk of Will; *(Will retired by #1174 — the cost needs a new currency)* ties straight into the stakes ladder. *Reanimating the actually-dead is ⚗⚗ far-future.*
 - **Sympathetic link.** Bind two units (correspondence — "as above, so below"); a state or a share of damage mirrors between them. Combo delivery at range; or a sacrifice/share-the-pain tool.
 
 ---

@@ -3,7 +3,7 @@ class_name ScenarioUnitEntry
 
 # One saved unit's snapshot inside a ScenarioData (the persistence seam, #8): spawn cell,
 # squad membership, and the UnitInstance state that survives missions (#83) — stats, HP,
-# Will, inventory, limbs, proficiency, aura, jobs. What ScenarioManager reads on save
+# inventory, limbs, proficiency, aura, jobs. What ScenarioManager reads on save
 # and writes back on load.
 
 @export var unit_data: UnitData
@@ -38,7 +38,6 @@ class_name ScenarioUnitEntry
 # default below means "not saved — keep initialize()'s result". ---
 @export var stats: Dictionary[Stats.Stat, int] = {}
 @export var current_hp := -1     # -1 = unsaved; live HP is always >= 1
-@export var current_will := -1   # -1 = unsaved; 0 is a legal saved value
 @export var inventory: Array[Item] = []
 @export var equipped_index := -1   # into inventory; -1 = unarmed. Replaced the equipped_weapon copy (#83).
 @export var worn_armor_index := -1   # into inventory; -1 = unarmored. Mirrors equipped_index (#65).
@@ -61,6 +60,7 @@ class_name ScenarioUnitEntry
 @export var stat_effects: Array[StatEffect] = []
 @export var lifecycle_state: Unit.LifecycleState = Unit.LifecycleState.ACTIVE   # DEAD never saves: a corpse is absent, not stored
 @export var downed_turns_remaining := -1   # -1 = not counting, same sentinel Unit uses
+@export var wounded := false   # went down this battle (#1174)
 @export var in_crisis := false
 @export var crisis_surge_pending := false
 @export var squad_has_acted := false   # LEADER's entry only, beside squad_name/archetype/zone
@@ -101,7 +101,6 @@ func capture_unit_state(unit: Unit) -> void:
 	jobs = inst.jobs.duplicate()
 	stats = inst.stats.duplicate()
 	current_hp = inst.current_hp
-	current_will = inst.current_will
 	weapon_proficiency = inst.weapon_proficiency.duplicate()
 	aura = inst.aura.duplicate()
 	affinity = inst.affinity.duplicate()
@@ -169,6 +168,7 @@ func capture_unit_state(unit: Unit) -> void:
 		stat_effects.append(effect.duplicate(true))
 	lifecycle_state = unit.lifecycle_state
 	downed_turns_remaining = unit.downed_turns_remaining
+	wounded = unit.wounded
 	in_crisis = unit.in_crisis
 	crisis_surge_pending = unit.crisis_surge_pending
 
@@ -192,14 +192,16 @@ func capture_unit_state(unit: Unit) -> void:
 			watch_cancelled = unit.watch.cancelled
 
 # Write the snapshot back onto a freshly spawned unit. Runs AFTER initialize() (which
-# rebuilds stats/limbs/aura and refills HP+Will), deliberately overriding that reset.
-# Order matters: stats before HP/Will (their maxes may be edited), inventory before
+# rebuilds stats/limbs/aura and refills HP), deliberately overriding that reset.
+# Order matters: stats before HP (its max may be edited), inventory before
 # limbs (the prosthetic re-link reads loaded slots).
 func apply_unit_state(unit: Unit) -> void:
 	var inst: UnitInstance = unit.unit_instance
 	inst.jobs = jobs.duplicate()
 
 	for stat in stats:
+		if Stats.RETIRED.has(stat):
+			continue                     # a save written before the stat retired (#1174)
 		inst.stats[stat] = stats[stat]   # per-key: a stat appended after this save keeps its default
 
 	inst.weapon_proficiency = weapon_proficiency.duplicate()   # empty = all DEFAULT, saved or not
@@ -267,6 +269,7 @@ func apply_unit_state(unit: Unit) -> void:
 
 	unit.element_states = element_states.duplicate()
 	unit.attunement = attunement
+	unit.wounded = wounded
 	unit.in_crisis = in_crisis
 	unit.crisis_surge_pending = crisis_surge_pending
 	unit.restore_lifecycle(lifecycle_state, downed_turns_remaining)
@@ -288,5 +291,3 @@ func apply_unit_state(unit: Unit) -> void:
 		# gear-less max — so every save/load of an armoured unit quietly shed the band's worth of
 		# HP. A data-losing round trip, not just a bad readout.
 		unit.set_current_hp(maxi(1, current_hp))   # floor 1: never fire died() out of a load
-	if current_will >= 0:
-		inst.set_current_will(current_will)

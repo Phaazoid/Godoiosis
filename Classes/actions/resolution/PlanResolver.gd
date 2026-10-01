@@ -8,11 +8,12 @@ const INSULATED_POPUP := "Insulated!"
 const FELL_POPUP := "Fell %d!"
 const DROWNING_POPUP := "Drowning!"
 const VOID_POPUP := "Into the void!"
+const HELD_POPUP := "Held %d!"   # #120: tiles of a shove the target's weight absorbed
 
 # The one place consequences are derived (docs/design/resolution-pipeline.md, R1-R8).
 # ONE pure pass over the ordered plan — attacks, then counters (R7) — threading a
-# hypothetical {position, element states, HP, Will-slot} per unit forward (R4). Per hit:
-# base damage -> elemental (-> Will in Phase 3). Writes one ResolvedOutcome per action
+# hypothetical {position, element states, HP, lifecycle, limbs} per unit forward (R4). Per hit:
+# base damage -> elemental -> the rung and the limb. Writes one ResolvedOutcome per action
 # (R8). Reads a snapshot, mutates no live state, contains no RNG (R2).
 
 static func resolve(plan: ResolvedPlan, reactions: Array[ElementalReaction] = ReactionCatalog.get_all(), board: BoardContext = null, terrain_reactions: Array[TerrainReaction] = []) -> void:
@@ -720,9 +721,12 @@ static func _resolve_one(action: AttackAction, plan: ResolvedPlan, reactions: Ar
 	# Falls (#259): the landing must be known BEFORE the rung is named, because fall damage can
 	# change it -- so the landing computes here, off a PROVISIONAL rung (a hit that alone kills
 	# leaves nothing to shove, the pre-#259 rule preserved), and only the FINAL predict below
-	# feeds the Will-spend stage. predict is pure; the second call is the one that counts.
+	# names the rung. predict is pure; the second call is the one that counts.
 	var landing: _Landing = null
 	if LethalityRules.predict(target_hypo, outcome.damage) != ResolvedOutcome.Lethality.KILLED:
+		outcome.knockback_held = _shove_against(action, target, target_hypo).y
+		if outcome.knockback_held > 0:
+			outcome.popups.append(HELD_POPUP % outcome.knockback_held)
 		landing = _knockback_landing(action, target, target_hypo, board)
 	if landing != null:
 		# The landing measures in height UNITS; the outcome reports LEVELS, since that is what the
@@ -751,11 +755,12 @@ static func _resolve_one(action: AttackAction, plan: ResolvedPlan, reactions: Ar
 	# Iron Will above IRON_WILL_DAMAGE_CAP simply could not drown.
 	#
 	# DAMAGE rather than a lifecycle door of its own, which is what makes a drowning an ORDINARY down:
-	# the ladder below names the rung, so the Will cost, the maim when Will cannot pay it, the Crisis
-	# gambit, and finishing a body that is already DOWNED all arrive for free. A hit that alone downs
-	# its target leaves nothing to take (the clamp to 0), so the water can never promote a down into a
-	# kill -- and drowning is deliberately not the void's outright removal: it is a clock a rescuer can
-	# answer (RescueAction hauls the body out), which is what the two are meant to read as.
+	# the ladder below names the rung, so the down, the Crisis gambit and finishing a body that is
+	# already DOWNED all arrive for free. It is NOT part of the blow, so it never takes a limb (#1174).
+	# A hit that alone downs its target leaves nothing to take (the clamp to 0), so the water can never
+	# promote a down into a kill -- and drowning is deliberately not the void's outright removal: it is
+	# a clock a rescuer can answer (RescueAction hauls the body out), which is what the two are meant
+	# to read as.
 	if landing != null and landing.drowned:
 		outcome.drown_damage = maxi(0, target_hypo.hp - outcome.damage)
 		outcome.damage += outcome.drown_damage
@@ -778,16 +783,20 @@ static func _resolve_one(action: AttackAction, plan: ResolvedPlan, reactions: Ar
 	# --- thread the hypothetical forward (R4) ---
 	target_hypo.states = _states_after(target_hypo.states, outcome.states_removed, outcome.states_added)
 
-	# Will/death stage (R7): pick the rung from the now-final damage (fall included) so the queue
-	# previews it (Law #2). Reads pre-hit HP + Will, so it runs BEFORE the subtraction below. Same
-	# call Unit.take_damage makes at execution time — one ladder, two callers.
+	# Lethality stage (R7): pick the rung from the now-final damage (fall included) so the queue
+	# previews it (Law #2). Reads pre-hit HP and lifecycle, so it runs BEFORE the subtraction below.
+	# Same call Unit.take_damage makes at execution time — one ladder, two callers.
 	outcome.lethality = LethalityRules.predict(target_hypo, outcome.damage)
 	if landing != null and landing.removed:
-		# A void removal (#259) outranks the ladder: gone regardless of HP or Will. KILLED so
+		# A void removal (#259) outranks the ladder: gone regardless of HP. KILLED so
 		# every reader threads DEAD; the flag is execution's own die() door.
 		outcome.lethality = ResolvedOutcome.Lethality.KILLED
 		outcome.removed = true
 		outcome.popups.append(VOID_POPUP)
+	# The limb (#1174), judged on the pre-hit state like the rung, and on the BLOW: what the water added
+	# is not one. Popped off the threaded rotation so a second big hit this pass takes the NEXT limb.
+	if LethalityRules.severs(target_hypo, outcome.damage - outcome.non_blow(), outcome.lethality):
+		outcome.severed_limb = target_hypo.limb_order.pop_front()
 	_land_rung(target_hypo, outcome.lethality, outcome.damage)
 	outcome.target_hp_after = target_hypo.hp
 
@@ -817,19 +826,17 @@ static func _states_after(held: Array[Elemental.State], removed: Array[Elemental
 			after.append(s)
 	return after
 
-# Thread a named rung onto the hypo: the lifecycle it leaves, what it SPENDS, the HP it leaves. The
+# Thread a named rung onto the hypo: the lifecycle it leaves, what it MARKS, the HP it leaves. The
 # lifecycle a rung leaves behind is ONE map (#313) -- a preview holding only an outcome reads the same
-# one, and since #1002 the HP it leaves behind is its sibling. What a rung spends differs per rung and
-# is spent from the hypo. Shared by the hit and the sinking (#922), the two paths that name a rung here.
+# one, and since #1002 the HP it leaves behind is its sibling. A down WOUNDS (#1174), so a later
+# hit this pass is held to the lower limb threshold. Shared by the hit and the sinking (#922), the
+# two paths that name a rung here.
 static func _land_rung(h: _Hypo, rung: ResolvedOutcome.Lethality, damage: int) -> void:
 	h.lifecycle = LethalityRules.lifecycle_for(rung, h.lifecycle)
 	if rung == ResolvedOutcome.Lethality.DOWNED:
-		h.will -= UnitInstance.DOWN_WILL_COST
-	elif rung == ResolvedOutcome.Lethality.MAIMED:
-		h.will = 0
+		h.wounded = true
 	elif rung == ResolvedOutcome.Lethality.CRISIS:
 		h.in_crisis = true                          # the gambit: no safety net from here on
-		h.will = 0
 	h.hp = LethalityRules.hp_after(rung, h.hp, damage)
 
 
@@ -1044,6 +1051,20 @@ static func _source_knockback(action: AttackAction) -> int:
 	# the authored number on the shared AttackData base is only the starting point.
 	return action.actor.get_attack_knockback(action.fired_attack)
 
+# The shove this hit delivers to THIS target (#120), as [tiles delivered, tiles its weight held]:
+# the attack's knockback, mods included, less the target's weight band, floored at 0. The ONE place
+# weight meets a shove -- the landing walks the first number and the outcome reports the second. Read
+# off the TARGET, so a Guard's substitution has the blocker's weight answer, and off live gear like
+# _source_knockback, since nothing inside a pass changes what anyone carries.
+static func _shove_against(action: AttackAction, target: Unit, target_hypo: _Hypo) -> Vector2i:
+	var authored := _source_knockback(action)
+	if authored <= 0 or target == null:
+		return Vector2i.ZERO
+	if GridUtils.cardinal_direction_i_between(action.origin_cell, target_hypo.position) == Vector2i.ZERO:
+		return Vector2i.ZERO   # a payload stuck to its victim shoves nobody, so nothing is held either
+	var held := mini(authored, Stats.weight_band(target.get_weight()))
+	return Vector2i(authored - held, held)
+
 # One shove's full result (#259): where it ends, every cell it crosses, and what the landing does.
 class _Landing:
 	var cell: Vector2i
@@ -1060,7 +1081,7 @@ class _Landing:
 # distance ran out or a blocker halted it early. Pure -- reads the hypo position, mutates nothing;
 # _resolve_one applies the result after the rung is named.
 static func _knockback_landing(action: AttackAction, target: Unit, target_hypo: _Hypo, board: BoardContext) -> _Landing:
-	var distance := _source_knockback(action)
+	var distance := _shove_against(action, target, target_hypo).x
 	if distance <= 0 or board == null:
 		return null
 	var dir := GridUtils.cardinal_direction_i_between(action.origin_cell, target_hypo.position)
@@ -1305,8 +1326,7 @@ static func projected_situation(unit: Unit, hypo: Dictionary) -> LethalityRules.
 	return LethalityRules.situation_for(unit)
 
 # Does this pass MOVE the unit's rung -- the alarm's question (#313), re-asked against the hypo's own
-# baseline rather than the live unit (#354). DOWNED and MAIMED move the lifecycle, KILLED moves it
-# further, and CRISIS moves neither (it is never DOWNED, #158), which is why crisis is asked
+# baseline rather than the live unit (#354). DOWNED moves the lifecycle, KILLED moves it further, and CRISIS moves neither (it is never DOWNED, #158), which is why crisis is asked
 # separately. A unit already down, or already in Crisis, stays put and does not alarm.
 static func plan_fells(unit: Unit, hypo: Dictionary) -> bool:
 	if unit == null or not is_instance_valid(unit) or not hypo.has(unit):
@@ -1339,10 +1359,10 @@ static func _hypo_for(unit: Unit, hypo: Dictionary) -> _Hypo:
 		h.start_hp = unit.get_current_hp()
 		h.lifecycle = unit.lifecycle_state
 		h.start_lifecycle = unit.lifecycle_state
-		h.will = unit.unit_instance.get_current_will()
 		h.in_crisis = unit.in_crisis
 		h.start_in_crisis = unit.in_crisis
-		h.can_maim = unit.unit_instance.next_maim_slot() != -1
+		h.wounded = unit.wounded
+		h.limb_order = unit.unit_instance.maim_order()
 		h.crisis_armed = LethalityRules.crisis_armed_for(unit)
 		var held := unit.get_equipped_weapon() as WeaponInstance
 		h.charges = held.tank_charges() if held != null else 0
@@ -1360,9 +1380,9 @@ static func _hypo_for(unit: Unit, hypo: Dictionary) -> _Hypo:
 #   * Every stat-derived number (base damage, DEF mitigation) is computed ONCE here at plan time
 #     and frozen onto the ResolvedOutcome; AttackAction.execute is pure playback (R3).
 #   * The one thing execution DOES recompute — LethalityRules.predict, via Unit.take_damage — reads
-#     hp/will/lifecycle/limbs and no effective stat at all.
+#     hp/lifecycle/limbs and no effective stat at all.
 #
-# So a stat change landing mid-pass (today only a maim's forced unequip, Unit._settle_stat_change)
+# So a stat change landing mid-pass (today only a lost limb's forced unequip, Unit._settle_stat_change)
 # cannot make preview and execution disagree. It is un-modelled identically by both halves — a
 # fidelity gap, not a Law #2 break. Both bullets are pinned by tests/law/test_resolution_laws.gd.
 #

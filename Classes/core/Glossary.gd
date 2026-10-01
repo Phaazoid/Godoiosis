@@ -8,7 +8,7 @@ class_name Glossary
 # StateIcons (state hovers) and TileReadout (the tile hover card and the Inspect dock's tile mode).
 #
 # Two content rules, both Law #4:
-#   - Numbers are INTERPOLATED from the constants that rule them (DOWN_WILL_COST, COVER_DEF, ...),
+#   - Numbers are INTERPOLATED from the constants that rule them (DOWNED_TURNS, COVER_DEF, ...),
 #     never retyped — tuning a value re-words the glossary for free.
 #   - Elemental/terrain INTERACTIONS are composed from the authored reaction .tres data
 #     (reaction_lines/terrain_reaction_lines), never hand-written — the page cannot claim what
@@ -26,7 +26,7 @@ enum Term {
 	# Squads
 	SQUAD, LEADER, COHESION, SQUAD_SIZE,
 	# Stats (one per Stats.Stat, plus the derived readout rows)
-	MHP, STR, LDR, WIL, DEX, PER, CON, COH, MOV, WEIGHT, DEF, DAMAGE_KIND,
+	MHP, STR, LDR, DEX, PER, CON, COH, BLD, MOV, WEIGHT, DEF, DAMAGE_KIND,
 	# Actions (one per MainActionMenu.ACTION_DATA row, one per MainActionMenu.CATEGORIES row --
 	# a radial category is a row the player hovers and so owes a readout like any other (#467) --
 	# plus ATTACK_TARGETING, the channel axis)
@@ -39,7 +39,7 @@ enum Term {
 	ELEMENTS, AFFINITY, AURA, WET, CHILLED, REACTIONS,
 	# Terrain
 	TERRAIN_KINDS, WATER_TILE, SHALLOW_WATER, BURNING, SCORCHED, FROZEN, COVER,
-	# Will & lifecycle
+	# Lifecycle
 	DOWNED, CRISIS, MAIM, PROSTHETIC,
 	# Missions (one per player-facing ZoneManager.Kind, #1105)
 	CAPTURE_ZONE, EXTRACTION_ZONE, DEPLOYMENT_ZONE, DEFEND_ZONE,
@@ -54,7 +54,7 @@ const CATEGORY_NAMES: Dictionary[Category, String] = {
 	Category.ACTIONS: "Actions",
 	Category.ELEMENTAL: "Elemental",
 	Category.TERRAIN: "Terrain",
-	Category.LIFECYCLE: "Will & Lifecycle",
+	Category.LIFECYCLE: "Lifecycle",
 	Category.MISSIONS: "Missions",
 }
 
@@ -94,9 +94,10 @@ static func terms_in(category: Category) -> Array[Term]:
 static func term_for_stat(stat: Stats.Stat) -> Term:
 	const MAP: Dictionary[Stats.Stat, Term] = {
 		Stats.Stat.MHP: Term.MHP, Stats.Stat.STR: Term.STR, Stats.Stat.LDR: Term.LDR,
-		Stats.Stat.WIL: Term.WIL, Stats.Stat.DEX: Term.DEX, Stats.Stat.PER: Term.PER,
-		Stats.Stat.CON: Term.CON, Stats.Stat.COH: Term.COH,
+		Stats.Stat.DEX: Term.DEX, Stats.Stat.PER: Term.PER,
+		Stats.Stat.CON: Term.CON, Stats.Stat.COH: Term.COH, Stats.Stat.BLD: Term.BLD,
 	}
+	# Stats.RETIRED have no row, and test_glossary_coverage skips exactly those (#1174).
 	return MAP[stat]
 
 static func term_for_tile_state(state: Terrain.TileState) -> Term:
@@ -243,7 +244,7 @@ static func _build_entries() -> Dictionary:
 	e[Term.MHP] = {"category": Category.STATS, "title": "Max HP (MHP)",
 		"short": "The health pool. CON's band shifts the ceiling.",
 		"long": "Hit points. Reaching 0 does not simply kill. What actually happens is decided by "
-			+ "the stakes ladder: see Downed, Crisis and Maim under Will & Lifecycle."}
+			+ "the stakes ladder: see Downed, Crisis and Maim under Lifecycle."}
 	e[Term.STR] = {"category": Category.STATS, "title": "Strength (STR)",
 		"short": "Raw power. Weapon damage draws on it through each weapon's scaling blend.",
 		"long": "Every weapon blends its damage from STR, DEX, PER and CON in its own proportions, "
@@ -253,14 +254,6 @@ static func _build_entries() -> Dictionary:
 		"long": "A leader's effective LDR sets how many units their squad can hold (%d per member "
 			% Squad.MEMBER_LDR_COST
 			+ "beyond the leader). PER's band nudges effective LDR up or down."}
-	e[Term.WIL] = {"category": Category.STATS, "title": "Will (WIL)",
-		"short": "The survival pool: a down costs %d Will; a full pool can arm Crisis."
-			% UnitInstance.DOWN_WILL_COST,
-		"long": "Will is what stands between a felled unit and permanent harm. Surviving a down "
-			+ "spends %d Will; when the pool can't pay, the unit is maimed instead. A full pool "
-			% UnitInstance.DOWN_WILL_COST
-			+ "(%d) plus the Crisis ability turns a would-be down into a last stand."
-			% UnitInstance.MAX_WILL}
 	e[Term.DEX] = {"category": Category.STATS, "title": "Dexterity (DEX)",
 		"short": "Agility. Its band adds or removes MOV, and weapon blends draw on it.",
 		"long": "Feeds weapon scaling blends, and its band shifts movement range. A point or two "
@@ -276,15 +269,20 @@ static func _build_entries() -> Dictionary:
 	e[Term.COH] = {"category": Category.STATS, "title": "Cohesion (COH)",
 		"short": "Leash length as a leader: how far squadmates may stand, in path distance.",
 		"long": "Read off the leader only. See Cohesion under Squads for how the leash works."}
+	e[Term.BLD] = {"category": Category.STATS, "title": "Build (BLD)",
+		"short": "A unit's weight",
+		"long": "A unit's weight. This plus what the unit is carrying add to get a unit's total weight."}
 	e[Term.MOV] = {"category": Category.STATS, "title": "Movement (MOV)",
 		"short": "Tiles per move: base %d shifted by DEX's band." % UnitInstance.JOBLESS_MOV_BASE,
 		"long": "How far a unit walks in one move order. Base %d, shifted by DEX's band. Losing a "
 			% UnitInstance.JOBLESS_MOV_BASE
 			+ "leg halves it; losing both pins it to 1."}
 	e[Term.WEIGHT] = {"category": Category.STATS, "title": "Weight (WT)",
-		"short": "The mass of everything the unit carries.",   # the row's own tooltip already says "no effect yet"
-		"long": "The summed weight of everything in the unit's inventory. Tracked but not yet fed "
-			+ "into any rule."}
+		"short": "A total of a unit's BLD and the weight of what they are carrying.",
+		"long": ("Build plus the weight of every item in the inventory, equipped or not. Weight is "
+			+ "counted in bands, at %d and at %d. Each band a unit reaches adds 1 damage per level it falls. "
+			+ "Heavier units are harder to push and take more fall damage.")
+			% [Stats.WEIGHT_BAND_1, Stats.WEIGHT_BAND_2]}
 	e[Term.DEF] = {"category": Category.STATS, "title": "Defense (DEF)",
 		"short": "Subtracted from incoming damage: armor scaled by CON, plus terrain cover.",
 		"long": "Damage mitigation. Worn armor contributes its power scaled by CON, dug-in Cover "
@@ -506,26 +504,29 @@ static func _build_entries() -> Dictionary:
 			% Terrain.COVER_DEF
 			+ "never expires, but a destructive hit removes it."}
 
-	# Will & lifecycle
+	# Lifecycle. CRISIS and MAIM carry PLACEHOLDER text (#1174), the dev's to rewrite.
 	e[Term.DOWNED] = {"category": Category.LIFECYCLE, "title": "Downed",
 		"short": "Felled, not dead: %d turns to be rescued before dying. A hit that meets their health kills."
 			% Unit.DOWNED_TURNS,
-		"long": "A hit that would fell a unit downs it instead when its Will can pay (%d Will). A "
-			% UnitInstance.DOWN_WILL_COST
+		"long": "A hit that would fell a unit downs it instead. A "
 			+ "downed unit is helpless: it dies when its %d-turn clock runs out, and a hit that "
 			% Unit.DOWNED_TURNS
 			+ "meets the health it has left finishes it early. Rescue stands it back up."}
 	e[Term.CRISIS] = {"category": Category.LIFECYCLE, "title": "Crisis",
-		"short": "Full Will plus the Crisis ability turns a would-be down into a last stand, up at %d HP and surged."
+		"short": ("The Crisis ability turns a would-be down into a last stand, up at %d HP and surged, "
+			+ "unless the unit has already been down.")
 			% Abilities.CRISIS_REVIVE_HP,
-		"long": "A unit holding the Crisis ability at full Will refuses its down: it stands back up "
-			+ "at %d HP with +%d STR/DEX/PER for %d turns. The price is everything. Will locks at "
+		"long": "A unit holding the Crisis ability refuses its down, unless it has already been down "
+			+ "this battle: it stands back up at %d HP with +%d STR/DEX/PER for %d turns. The price is "
 			% [Abilities.CRISIS_REVIVE_HP, Abilities.CRISIS_SURGE, Abilities.CRISIS_SURGE_TURNS]
-			+ "0 for the rest of the battle, and the next would-be down is death."}
+			+ "everything. The next would-be down is death."}
 	e[Term.MAIM] = {"category": Category.LIFECYCLE, "title": "Maim",
-		"short": "When Will can't pay for a down, a limb is lost instead. Permanently.",
-		"long": "A down the Will pool cannot cover (%d Will) takes a limb instead, permanently. "
-			% UnitInstance.DOWN_WILL_COST
+		"short": "A hit of %d or more takes a limb, %d once the unit has been down. Permanently."
+			% [LethalityRules.LIMB_LOSS_DAMAGE, LethalityRules.LIMB_LOSS_DAMAGE_WOUNDED],
+		"long": "A hit of %d damage or more takes a limb, permanently, whether or not it downs. "
+			% LethalityRules.LIMB_LOSS_DAMAGE
+			+ "Once the unit has been down this battle, %d is enough. "
+			% LethalityRules.LIMB_LOSS_DAMAGE_WOUNDED
 			+ "Lost arms cost stats; one lost leg halves MOV, both pin it to 1. The inspect panel "
 			+ "marks the limb next at risk."}
 	e[Term.PROSTHETIC] = {"category": Category.LIFECYCLE, "title": "Prosthetic",

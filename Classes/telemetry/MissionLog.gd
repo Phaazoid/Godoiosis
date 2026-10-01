@@ -528,7 +528,7 @@ func _mission_start_fields() -> Dictionary:
 # Everything a unit brought: the denominator every usage metric needs.
 func _roster_entry(unit: Unit, deployed: bool) -> Dictionary:
 	var stats := {}
-	for stat: Stats.Stat in Stats.Stat.values():
+	for stat: Stats.Stat in Stats.STAT_DEFAULTS:   # the live roster, so a retired stat is not recorded
 		stats[Stats.Stat.keys()[stat]] = unit.get_effective_stat(stat)
 	# A NULL IS AN EMPTY SLOT, not a hole: `inventory` is fixed-size and add_item fills the first
 	# null it finds, so skipping them is reading the store's own vocabulary.
@@ -548,7 +548,6 @@ func _roster_entry(unit: Unit, deployed: bool) -> Dictionary:
 		"items": items,
 		"stats": stats,
 		"hp_max": unit.get_max_hp(),
-		"will_max": unit.unit_instance.get_max_will(),
 	})
 	return entry
 
@@ -590,8 +589,7 @@ func _vitals(unit: Unit) -> Dictionary:
 		"faction": _faction_name(unit),
 		"hp": unit.get_current_hp(),
 		"hp_max": unit.get_max_hp(),
-		"will": unit.unit_instance.get_current_will(),
-		"will_max": unit.unit_instance.get_max_will(),
+		"wounded": unit.wounded,
 		"state": Unit.LifecycleState.keys()[unit.lifecycle_state],
 		"crisis": unit.in_crisis,
 		"states": _names(Elemental.State, unit.element_states),
@@ -665,9 +663,11 @@ func _hit(kind: String, atk: AttackAction) -> Dictionary:
 		"elements": _names(Elemental.Element, r.elements),
 		"reactions": reactions,
 		"lethality": ResolvedOutcome.Lethality.keys()[r.lethality],
+		"severs": UnitInstance.LimbSlot.keys()[r.severed_limb] if r.severed_limb != -1 else null,
 		"hp_before": r.hp_before,
 		"hp_after": r.target_hp_after,
 		"knockback": r.knockback_applied,
+		"held": r.knockback_held,
 		"removed": r.removed,
 		"fall": r.fall_damage,
 		"skipped": r.skipped,

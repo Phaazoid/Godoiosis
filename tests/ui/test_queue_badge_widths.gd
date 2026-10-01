@@ -131,6 +131,7 @@ func test_every_world_event_badge_fits_the_dock() -> void:
 		ActionQueueRow.BADGE_FELL % 99,
 		ActionQueueRow.BADGE_DROWNED,
 		ActionQueueRow.BADGE_VOID,
+		ActionQueueRow.BADGE_HELD % 9,
 		ActionQueueRow.BADGE_INSULATED,
 		ActionQueueRow.BADGE_VIAL,
 		ActionQueueRow.BADGE_TANK,

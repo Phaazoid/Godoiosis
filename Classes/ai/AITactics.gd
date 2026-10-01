@@ -432,11 +432,11 @@ static func _attack_candidates(unit: Unit, board: BoardContext, origin: Vector2i
 # not exist. His words: "the ai simply won't see crisis mode until they have to react to a unit
 # currently in it." It counted as NOTHING before -- the damage was skipped here and CRISIS threads
 # ACTIVE so no removal followed -- which under #711's no-bar rule is not a refusal but a LOSING
-# candidate, so a full-Will Berserker was the last thing an AI would swing at. (#708, whose own
+# candidate, so an armed Berserker was the last thing an AI would swing at. (#708, whose own
 # "a neutral verdict means never" reading died with the bar.)
 #
 # Neither half needs new arithmetic. The damage is the raw pre-Crisis number (the resolver fixes
-# outcome.damage before the rung is named and the Crisis branch rewrites only hp/will/in_crisis),
+# outcome.damage before the rung is named and the Crisis branch rewrites only hp/in_crisis),
 # and the overkill clamp below caps it at the HP they had going in -- which a would-be-down met by
 # definition. The removal comes from _plan_removes asking PlanResolver.plan_fells.
 #

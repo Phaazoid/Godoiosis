@@ -42,6 +42,8 @@ func test_no_category_page_is_empty() -> void:
 func test_every_stat_is_bridged() -> void:
 	for value: int in Stats.Stat.values():
 		var stat: Stats.Stat = value
+		if Stats.RETIRED.has(stat):
+			continue   # a tombstone is off every stat list, so it owes the player nothing (#1174)
 		var term: Glossary.Term = Glossary.term_for_stat(stat)
 		assert_str(Glossary.short(term)) \
 			.override_failure_message("Stats.Stat.%s bridges to an empty glossary entry" % Stats.Stat.keys()[stat]) \

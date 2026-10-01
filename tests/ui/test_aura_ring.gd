@@ -284,11 +284,10 @@ func test_the_cards_ring_fills_its_column_and_the_sprite_fills_the_ring() -> voi
 
 # THE END-TO-END ONE: a lost limb docks the deepest pool, and the panel has to notice.
 #
-# It downs the unit FOR REAL rather than calling UnitInstance.spend_will_for_down() directly, and the
-# difference is not stylistic: that function emits will_changed BEFORE it applies the aura tax, so a
-# panel driven straight off it refreshes against the OLD pool and the case would pass on a broken
-# wire. What makes the readout correct in play is Unit._go_downed's NEXT line -- _settle_stat_change()
-# -> stats_changed -> _refresh(). take_damage is the door that runs both, so it is the door tested.
+# It takes the limb FOR REAL, with a limb-sized blow through take_damage (#1174), rather than calling
+# UnitInstance.sever_next_limb() directly, and the difference is not stylistic: that function applies
+# the tax and emits nothing. What makes the readout correct in play is take_damage's NEXT line --
+# _settle_stat_change() -> stats_changed -> _refresh(). take_damage is the door that runs both.
 # (tests/stats/test_limb_slots.gd writes limbs[slot].state directly, which skips the tax entirely --
 # a fixture worth not copying here.)
 func test_a_maim_moves_the_panels_wheel() -> void:
@@ -304,8 +303,7 @@ func test_a_maim_moves_the_panels_wheel() -> void:
 	var before := ring.tooltip_text
 	assert_int(before.find("Aether 3")).is_greater(-1)
 
-	dorian.unit_instance.current_will = 0     # cannot afford the down, so it maims
-	dorian.take_damage(dorian.get_current_hp())
+	dorian.take_damage(LethalityRules.LIMB_LOSS_DAMAGE)
 	await await_idle_frame()
 
 	assert_bool(dorian.unit_instance.is_maimed()).is_true()

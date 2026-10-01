@@ -184,7 +184,7 @@ func test_a_unit_going_down_on_fire_does_not_take_the_flame_with_it() -> void:
 	var before := mirror.fire_marker_count()
 	assert_int(before).override_failure_message("no flame to lose; the case is vacuous").is_greater(0)
 
-	unit._go_downed(false)
+	unit.force_down()
 	await await_idle_frame()
 	await await_idle_frame()
 	assert_int(mirror.fire_marker_count()).override_failure_message(
