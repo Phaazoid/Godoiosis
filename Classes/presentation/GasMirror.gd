@@ -198,6 +198,15 @@ func _rebuild() -> void:
 		else:
 			board_cells.append(cell)
 		shown[cell] = field.packed_at(cell)
+	if shown.is_empty():
+		# Nothing to draw, so no textures: a terrain stroke moves the grid version every frame of a drag.
+		_regions = []
+		_region_floats = PackedFloat32Array()
+		_regions_version += 1
+		_flash_clusters.clear()
+		_build_floor(shown)
+		_build_puffs(shown)
+		return
 	_build_textures(shown)
 	var span := func(cell: Vector2i) -> Vector2: return _ground_span(cell)
 	var top := func(cell: Vector2i) -> float: return _column_top(shown.get(cell, 0))

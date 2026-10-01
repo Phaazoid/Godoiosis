@@ -56,7 +56,7 @@
 >
 > **The dial's floor is ONE** (dev, 2026-09-12). An absent clock is legal `.tres` and means *burns forever* — but `tests/terrain/test_fire_clock.gd` refuses one on a shipped fuel, because a grass field that never goes out would ship silently. Forever is already spelled, and better: **ground that is not fuel never runs out**, which is what Prolog's braziers on flagstone have always been. So the TICK is how you say forever, and the dial cannot author a file CI reds.
 
-**Canon checked through #902 (2026-09-12); #1092's Chilled-beats-Wet rule folded in 2026-09-29; #1135's map-only rule folded in 2026-09-28; #922's melt-sinking folded in 2026-09-27; the burn-rule surface folded in 2026-09-12; the #895 firebreak measurement and fireproofing #892 folded in 2026-09-11; shallow water re-costed 2026-09-10.**
+**Canon checked through #902 (2026-09-12); #508's gas store folded in 2026-10-01; #1092's Chilled-beats-Wet rule folded in 2026-09-29; #1135's map-only rule folded in 2026-09-28; #922's melt-sinking folded in 2026-09-27; the burn-rule surface folded in 2026-09-12; the #895 firebreak measurement and fireproofing #892 folded in 2026-09-11; shallow water re-costed 2026-09-10.**
 
 ## The tile model (implemented — [LOCKED shape])
 
@@ -69,11 +69,13 @@ The board is a `TileMapLayer` (`Grid`). Tiles already carry **custom data** the 
 
 > **ELEVATION IS NOT HERE, and deliberately so (#218, 2026-08-14).** Height and ramp direction are **per-CELL**, not per-tile — the four entries above are per-*tile* (per atlas coordinate), so an `elevation` among them would need a distinct grass tile per level. They live in their own store beside `ScenarioData.terrain_states`, and separate from `TerrainStateManager` because that holds a stack of enum states with durations while height is a scalar. `walkable` is untouched and keeps its own question (*may anything ever stand here* — water, void); elevation answers *at what level does the surface sit*. Full spec: [verticality.md](verticality.md).
 
+> **#508 (2026-10-01): THE ATMOSPHERE LAYER HAS A STORE, and nothing else yet.** `GasField` (`Classes/terrain/GasField.gd`) is the declared second store #508's ruling 1 asked for, beside its structural twin `BoardHeights`: one `int` per cell packing an amount of 0-14 for each of the six `Gas.Kind`s (STEAM, SMOKE, POISON, FROST, THUNDER, SULFUR -- **append-only**, the ints are saved) four bits apiece, so a cell can hold SEVERAL gases at once. It saves as `ScenarioData.gas`, rides `BoardSnapshot` (so undo, save slots, bug reports and telemetry boards carry it), clears with the board, and is pruned with the ground: **gas needs ground** (painting a groundless cell is refused, erasing a tile takes its gas; water counts as ground). It is painted by the dev Tile Brush's **Gas** mode and nothing else. **No rule reads it**: no spreading, no thinning, no sources, no effect on a unit -- those are their own tickets once a LOOK is picked, and steam is the only gas planned to get rules; the other five are look-only. How it is drawn is [presentation-effects.md](presentation-effects.md) → *Gas*.
+
 Everything below layers **on top of** that base tile: dynamic, per-cell **state** that units, runes, and weapons apply and read. State round-trips through scenario save/load via **`ScenarioData.terrain_states`** — a dedicated field added by #50; `tile_data` itself stays the static tilemap and never carried dynamic state.
 
 ## Modification layers ([WORKSHOP] — from the wiki, de-RNG'd)
 
-A cell holds at most **one ground** + **one atmosphere** modification, but **many object** modifications (stack mines/cover); **1-time** effects fire and don't persist. Some tiles (water/lake) refuse ground/object mods.
+A cell holds at most **one ground** + **one atmosphere** modification (**gas is the exception since #508**: `GasField` holds an amount of every gas a cell has, so steam and smoke can share a cell -- see the banner above), but **many object** modifications (stack mines/cover); **1-time** effects fire and don't persist. Some tiles (water/lake) refuse ground/object mods.
 
 | Layer | Persistence | Examples |
 |---|---|---|
@@ -233,7 +235,7 @@ What that leaves genuinely unbuilt is narrower and worth naming precisely: **des
 
 ## Atmosphere as chemistry (captured — [WORKSHOP], from scratchpad)
 
-A deeper model the dev floated: the **atmosphere layer is gaseous materia** (default ≈ "inert air" + "vital air"), and **gases diffuse to neighboring tiles toward equilibrium.** That would make Smoke/Steam/gas mods **spread and dissipate** on a known cadence rather than sitting static, and couples to the **weather** subsystem (Doldrums → gas lingers; High Winds → gas disperses; see elemental-interactions "Weather & atmosphere"). Ties to [alchemy-kit.md](alchemy-kit.md)'s materia model — **which was rewritten 2026-08-29** (supercharge, never fuel), so re-read it before costing this: an atmosphere of gaseous materia would be a *diffusing, self-modifying source layer*, where the ratified model's sources are static terrain facts that change only when the terrain does. That is a real tension to resolve rather than a detail, and it is the reason this stays where it is. **Not committed — captured.**
+A deeper model the dev floated: the **atmosphere layer is gaseous materia** (default ≈ "inert air" + "vital air"), and **gases diffuse to neighboring tiles toward equilibrium.** That would make Smoke/Steam/gas mods **spread and dissipate** on a known cadence rather than sitting static, and couples to the **weather** subsystem (Doldrums → gas lingers; High Winds → gas disperses; see elemental-interactions "Weather & atmosphere"). Ties to [alchemy-kit.md](alchemy-kit.md)'s materia model — **which was rewritten 2026-08-29** (supercharge, never fuel), so re-read it before costing this: an atmosphere of gaseous materia would be a *diffusing, self-modifying source layer*, where the ratified model's sources are static terrain facts that change only when the terrain does. That is a real tension to resolve rather than a detail, and it is the reason this stays where it is. **Not committed — captured.** **The store such a rule would move gas through EXISTS since #508** (`GasField`, the banner at the top): an amount per gas per cell, which is exactly the quantity a diffusion step reads and writes. Nothing diffuses yet.
 
 ## Hazardous tiles and pathing — nothing avoids them today (captured 2026-08-20, NOT decided)
 

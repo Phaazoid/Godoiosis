@@ -2,7 +2,7 @@
 
 **Status: an idea wall plus two locked decisions.** Solicited by the dev on 2026-08-12, the day Stage 0 (#203) passed its GO gate: *"a full thought experiment, all ideas on the wall."* Nothing below the Decisions section is a commitment — it is the candidate pool for #176's stage 5 and beyond, kept so it can't evaporate from chat. The look-dev scene (`Scenes/LookDev/LookDev.tscn`) is the standing playground where any of it gets prototyped before it's real — and since #212 (2026-08-15) the **Moods tab** in the dev-tools window tunes the *shipping* view live, so a value on this wall can be judged on a real board rather than in the diorama. **It is a playground, not a scratch scene ([#393](https://github.com/Phaazoid/Godoiosis/issues/393), 2026-08-19)** — seven presentation suites fixture on it, `Battle3D.tscn` loads its MeshLibrary, and `BoardMirror`/`BoardOverlays` read textures out of `Art/LookDev/`, so it is edited with the same care as shipping code. Its four moods stopped being a second copy at the same time: `look_dev.gd` held them as a hardcoded `PRESETS` table, seeded from the same values four of the twelve `LookPreset` files now carry, and it resolves them by NAME through `LookKnobs` instead.
 
-**Canon checked through #1024 (2026-09-18).**
+**Canon checked through #1024 (2026-09-18); #508's gas look folded in 2026-10-01.**
 
 ---
 
@@ -1131,6 +1131,69 @@ a step the decal splits onto both tops where a patch would hang as a sheet.
 
 Chilled blocks Wet as a RULE in #1092, so this slice never draws both. Reaction beats (steam,
 shatter, freeze) are their own follow-up.
+
+### Gas: four looks behind one switch ([#508](https://github.com/Phaazoid/Godoiosis/issues/508), look harness BUILT 2026-10-01)
+
+Four rounds of throwaway probes narrowed the look to four candidates, and choosing between them
+"is going to take a lot of seeing" (dev), so all four are built into the real game behind the
+Experiments choice **Gas style**, painted with the Tile Brush's Gas mode, and the losers get deleted
+once one is picked. The store is terrain.md's `GasField`; nothing here is a rule.
+
+| Style | What draws it | Measured on round 4's zoo (1080p, RTX 2070 SUPER) |
+|---|---|---|
+| Realistic | the volume: billows over a crisp pool on the cells | +1.5 ms at half res, 32 steps |
+| Pixel puffs | puffs on an edged fog floor, no volume | +0.02 ms |
+| Realistic + puffs | the volume with one puff per cell | +1.44 ms |
+| Pixel volume | the volume marched once per art-pixel block, posterized | +0.9 ms |
+
+**`GasMirror` (`presentation/`, built by battle3d beside the arc) owns all of it** and polls rather
+than listens: the gas, heights and grid versions, the staging, the style and the sun. A change
+rebuilds the board textures, the region boxes, the floor mesh and the puff instances; every frame
+only re-sends the camera, the light, the lamps, the lightning and the clock. Its every value is a
+Game-tab row on a **Gas** tab; what one GAS looks like is its `GasLook` under `Resources/GasLooks/`.
+
+- **The volume is the project's first CompositorEffect** (`GasVolumeEffect` + `gas_volume.glsl`,
+  two compute versions of one file). MARCH runs at the volume resolution and casts one ray per texel
+  through every region box it crosses; COMPOSITE runs at full resolution, upsamples depth-aware (a
+  nearest/farthest checkerboard in the march so a unit's edge has a tap on each side) and integrates
+  the **pool in closed form against full-res depth**, which is what keeps the cell edge crisp at half
+  resolution. Both cover only the boxes' screen rectangle. `GasRegions` keeps the boxes DISJOINT,
+  because the march takes them one after another and an overlap would count gas twice.
+- **`get_cam_projection()` is already reversed-Z and y-flipped** in a compositor callback; applying
+  `Projection.create_depth_correction` on top is what made the STOP-0 spike draw nothing.
+- **The ground under the gas is the true surface**: four corner heights and the centre per cell,
+  decoded in the shader as a fan round the centre. The centre is `Terrain.height_at_uv`'s answer and
+  lies on whichever diagonal that rule splits on, so the fan is exact on every corner form without
+  a second copy of the split rule. The fog floor's mesh is built the same way.
+- **Layering is a second switch, `GAS_OVER_UNITS`**, because the probe and the round-1 ruling
+  disagreed in practice: unit sprites, markup, flames and health bars all draw in the TRANSPARENT
+  pass, so `POST_TRANSPARENT` (on, the default) veils all of them and `PRE_TRANSPARENT` (off) leaves
+  all of them crisp on top. The puffs are alpha-scissored and depth-sort with the units either way.
+- **Cost.** The march is two thirds of it and is spent on samples INSIDE the gas, spread evenly: an
+  exact empty-space skip (jumping whole steps through cells with no gas near, the picture provably
+  unchanged) bought nothing on the zoo and was reverted, and dropping detail noise or the exact
+  ground bought about 0.1 ms. Steps and resolution are the levers. The default stays half / 32 / 4
+  at +1.5 ms against a 1.2 ms budget, the dev's call after seeing the candidates side by side.
+- **Pixel puffs are one MultiMesh**, billboarded, boiled, bobbed and given each gas's moving extra by
+  `gas_puff.gdshader` from the pushed clock; `GasPuffArt` draws them from each look's palette into one
+  Texture2DArray at startup (a sprite sheet replaces it once a style wins). **The fog floor** is a fan
+  per cell lifted into the markup stack at `BoardOverlays.GAS_FLOOR_SORT`, under every layer, and
+  `gas_floor.gdshader` works out the shape per art pixel from the cell's neighbour bits: rounded
+  outer corners, square inner ones, ink, rim, pattern, and a mixed cell dithered by its amounts.
+  Colours go to both shaders LINEAR, because a plain vec4 uniform is not converted the way a
+  texture's sRGB texels are.
+- **A tear-out's diorama carries its gas**: a lifted region reads the same field at the stage offset,
+  only from the cells that went up. Gas on cells IN FLIGHT is hidden until they land.
+- **Thunder has one CPU flash schedule** that the volume's glows and the pixel bolts both read, so
+  they strike together. Under photosensitivity every cloud holds a steady dim glow and the bolts
+  never show.
+- **3D only, declared** (#292's ledger): the flat 2D view has no drawing of gas at all, and the mirror
+  stands down in it.
+
+What headless tests can see is the CPU half: the uniform block against the shader's own declaration,
+the dispatch rectangles, the region boxes, the board textures against the store, the floor's
+vertices on a corner cell, and the puff counts per style. Nothing rendered. Not built here: a hovered
+unit shining through the gas, a tile-card line for gas, a live per-gas tuning page.
 
 ### Conventions the art commission must carry (pending look-dev experiments)
 
