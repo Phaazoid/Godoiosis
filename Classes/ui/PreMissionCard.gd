@@ -339,6 +339,10 @@ func job_option_text(job_id: String) -> String:
 	var def_then := unit.previewed_def_for_jobs(ids)
 	if def_now != def_then:
 		deltas.append("DEF %d → %d" % [def_now, def_then])
+	var mov_now := unit.get_mov()
+	var mov_then := unit.previewed_mov_for_jobs(ids)
+	if mov_now != mov_then:
+		deltas.append("MOV %d → %d" % [mov_now, mov_then])
 	lines.append(", ".join(deltas) if not deltas.is_empty() else "No change to the numbers.")
 
 	for piece: EquippableData in unit.gear_lost_under_jobs(ids):
@@ -540,11 +544,14 @@ func _refresh_items() -> void:
 
 
 func _refresh_foot() -> void:
-	# Weight is the body (BLD) plus what is carried (#120). Items mostly weigh 0 until #120's authoring
-	# pass, so today this is mostly the body; showing it anyway was the dev's call (2026-09-05).
-	_derived_label.text = "WT %d  ·  DEF %d" % [unit.get_weight(), unit.get_effective_def()]
+	# Weight is the body (BLD) plus what is carried (#120), and its band costs MOV (#1176) -- so MOV
+	# leads the row: picking gear changes how far the unit walks, and this is the one place that says so
+	# before the battle. One row fits the narrowest card with ~12px spare (measured 2026-10-01).
+	_derived_label.text = "MOV %d  ·  WT %d  ·  DEF %d" % [
+		unit.get_mov(), unit.get_weight(), unit.get_effective_def()]
 	_derived_label.tooltip_text = UiText.wrap(
-		"A total of a unit's BLD and the weight of what they are carrying. "
+		"MOV is how many tiles the unit can move, after its weight. "
+		+ "WT is a total of a unit's BLD and the weight of what they are carrying. "
 		+ "DEF is the effective value, armour included.")
 
 	var deployed: bool = _controller.game.is_deployed(unit)   # game is untyped: no inference
@@ -745,7 +752,8 @@ func show_preview(candidate: Item, incoming: bool) -> void:
 		label.text = "%d → %d" % [now, then]
 		label.add_theme_color_override("font_color", QueueStyle.ink(
 			QueueStyle.Role.READOUT_ALLY if then > now else QueueStyle.Role.READOUT_ENEMY))
-	_derived_label.text = "WT %d → %d  ·  DEF %d → %d" % [
+	_derived_label.text = "MOV %d → %d  ·  WT %d → %d  ·  DEF %d → %d" % [
+		unit.get_mov(), unit.previewed_mov(candidate, incoming),
 		unit.get_weight(), unit.previewed_weight(candidate, incoming),
 		unit.get_effective_def(), unit.previewed_def(candidate)]
 

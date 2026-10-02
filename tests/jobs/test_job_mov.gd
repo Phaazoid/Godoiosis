@@ -6,9 +6,10 @@ extends GdUnitTestSuite
 const F := preload("res://tests/support/job_fixtures.gd")
 
 # get_mov takes the finished effective DEX since 2026-07-27 (see tests/stats/test_mov.gd);
-# a bare instance has no gear, so its own effective DEX is the whole answer.
+# a bare instance has no gear, so its own effective DEX is the whole answer, and it carries nothing,
+# so the weight it is handed is 0 and keeps it out of every band (#1176).
 func _mov(inst: UnitInstance) -> int:
-	return inst.get_mov(inst.get_effective_stat(Stats.Stat.DEX))
+	return inst.get_mov(inst.get_effective_stat(Stats.Stat.DEX), 0)
 
 func test_jobless_mov_uses_the_jobless_base() -> void:
 	var inst := F.make_instance()
