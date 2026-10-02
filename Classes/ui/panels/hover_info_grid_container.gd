@@ -74,6 +74,9 @@ func _refresh_status_icons():
 		_add_status_icon(StateIcons.DOWNED)
 		if unit.downed_turns_remaining > 0:
 			_add_status_count(unit.downed_turns_remaining)
+	elif unit.wounded:
+		# Standing again after a down (#1174); a body's DOWN glyph already says it.
+		_add_status_icon(StateIcons.WOUNDED)
 	if unit.unit_instance.is_maimed():
 		_add_status_icon(_maim_icon())
 	if unit.in_crisis:

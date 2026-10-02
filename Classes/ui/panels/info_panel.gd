@@ -94,7 +94,7 @@ func _refresh_limbs():
 				"Healed while down — no death clock, still needs a rescue"))
 	elif unit.wounded:
 		# Standing again after a down (#1174); a body's DOWN already says it. Tooltip left for the dev.
-		limbs_row.add_child(_badge("WOUNDED", AT_RISK_COLOR, ""))
+		limbs_row.add_child(_icon_badge(StateIcons.WOUNDED, "WOUNDED", AT_RISK_COLOR, ""))
 	if unit.in_crisis:
 		limbs_row.add_child(_badge("CRISIS", CRISIS_COLOR,
 			"Another down this battle is death"))
@@ -127,6 +127,21 @@ func _badge(text: String, color: Color, tip: String) -> Label:
 	lbl.tooltip_text = UiText.wrap(tip)
 	lbl.mouse_filter = Control.MOUSE_FILTER_STOP
 	return lbl
+
+# A badge with its status glyph in front of the word. Both halves carry the tooltip, since a hover can
+# land on either.
+func _icon_badge(tex: Texture2D, text: String, color: Color, tip: String) -> HBoxContainer:
+	var box := HBoxContainer.new()
+	box.add_theme_constant_override("separation", 2)
+	var icon := TextureRect.new()
+	icon.texture = tex
+	icon.stretch_mode = TextureRect.STRETCH_KEEP_CENTERED
+	icon.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	icon.tooltip_text = UiText.wrap(tip)
+	icon.mouse_filter = Control.MOUSE_FILTER_STOP
+	box.add_child(icon)
+	box.add_child(_badge(text, color, tip))
+	return box
 
 func _refresh_stats():
 	for child in stats_grid.get_children():

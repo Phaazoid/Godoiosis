@@ -255,6 +255,51 @@ func test_a_revive_takes_the_downed_glyph_off_the_unit_card() -> void:
 		"the card still counts a death clock for a unit that is standing").is_equal(0)
 
 
+# --- a rescued unit wears the Wounded glyph (#1174) ---
+
+# One real sequence over both readouts: never down, then downed by a hit (so `wounded` is the flag
+# _go_downed sets, never one written by hand), then stood up through revive(), a rescue's own path.
+# A body shows DOWN and no bandage, since its DOWN glyph already says it.
+func test_a_rescued_unit_wears_the_wounded_glyph_on_both_readouts() -> void:
+	var unit := _standing_unit()
+	assert_object(unit).override_failure_message("the sandbox stood nobody up").is_not_null()
+	var panel: UnitInfoPanelControl = game.unit_info_panel
+	panel.set_unit(unit, true, game._board())
+	game.show_unit_card(unit)
+	var card: HoverInfoPanelControl = game.hover_info_panel
+	var limbs: Node = panel.stats_section.limbs_row
+	assert_int(_wounded_glyphs(_status_row(card)) + _wounded_glyphs(limbs)).override_failure_message(
+		"a unit that never went down already wears the bandage").is_equal(0)
+
+	unit.take_damage(unit.get_current_hp())
+	await await_idle_frame()
+	assert_bool(unit.is_downed()).override_failure_message(
+		"a hit for exactly its HP did not down the unit, so there is no down to be wounded by").is_true()
+	assert_int(_wounded_glyphs(_status_row(card)) + _wounded_glyphs(limbs)).override_failure_message(
+		"a body wears the bandage beside its DOWN").is_equal(0)
+
+	unit.revive()
+	await await_idle_frame()
+
+	assert_int(_wounded_glyphs(_status_row(card))).override_failure_message(
+		"the unit card shows no bandage on a unit that went down and was rescued").is_equal(1)
+	assert_int(_wounded_glyphs(limbs)).override_failure_message(
+		"the inspect panel shows no bandage on a unit that went down and was rescued").is_equal(1)
+
+
+# Live WOUNDED glyphs anywhere under `root`; the inspect badge nests its glyph beside the word.
+func _wounded_glyphs(root: Node) -> int:
+	var count := 0
+	for child in root.get_children():
+		if child.is_queued_for_deletion():
+			continue
+		var rect := child as TextureRect
+		if rect != null and rect.texture == StateIcons.WOUNDED:
+			count += 1
+		count += _wounded_glyphs(child)
+	return count
+
+
 func _standing_unit() -> Unit:
 	for unit in _live_units():
 		if unit.is_active():
