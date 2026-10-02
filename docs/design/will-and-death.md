@@ -6,7 +6,7 @@
 >
 > **Co-dev grilled 2026-07-04 (Fable 5 session):** the open forks are now resolved or deliberately punted — **maim effects designed (the limb-slot model)**, which-limb = fixed-rotation placeholder (prosthetics last), transmutation **strain = affordability-gated cost** (never touches the lifecycle), **AI Crisis = per-archetype stances**. **The limb-slot model + MOV derivation + verb locks are now BUILT (#56, 2026-07-15), and AI Crisis stances + the CRISIS lethality preview are now BUILT too (#57, 2026-07-15)** — see Implementation status below. **Transmutation strain (#60, 2026-07-20):** the channeling math (`forced_points`/`strain_cost`, gating `can_channel`'s leeway budget) is BUILT; the affordability payment/enforcement half (A7) is deliberately deferred — see [#76](https://github.com/Phaazoid/Godoiosis/issues/76) — so the dev can playtest the access rules without the HP-cost consequence yet.
 >
-> **Canon checked through #1177 (2026-10-01).**
+> **Canon checked through #1177 (2026-10-01); #1174's placeholder Wounded glyph folded in 2026-10-01.**
 
 Design direction first agreed 2026-06-15; **reframed 2026-06-24**; **Will retired 2026-10-01**. Builds on the implemented death floor (`Unit.unit_died` fan-out). Supersedes the wiki's random-dismemberment framing (Law #1), this doc's own pre-2026-06-24 "Will gates life" ladder, and the 2026-06-24 "Will gates limbs" ladder after it (both below, as the record).
 
@@ -69,7 +69,7 @@ Why this is better: it removes the harsh "low Will → you just die" cliff (nobo
 - **Went down this battle.** `Unit.wounded`, battle-scoped on the transient `Unit` like the downed clock: set by every down (`_go_downed`, the dev `force_down` included), cleared by nothing — not a rescue, not a heal. Losing a limb while standing does NOT wound.
 - **What it costs:** a smaller blow takes a limb (`LIMB_LOSS_DAMAGE_WOUNDED`, 8, against 10 fresh), and the Crisis gambit can no longer fire.
 - **Saved** with the #87 battle-state snapshot (`ScenarioUnitEntry.wounded`), beside the lifecycle and the clock, because it is not derivable from either: a rescued unit is ACTIVE and still wounded.
-- **Readouts:** the inspect panel's limb row wears a **WOUNDED** badge on a standing unit (a body's DOWN already says it — its tooltip is the dev's to write), and the next-at-risk limb is tinted only while Wounded, since that is when an ordinary hit threatens one. A board readout is [#965](https://github.com/Phaazoid/Godoiosis/issues/965)'s, re-scoped to exactly that.
+- **Readouts:** a standing Wounded unit wears a bandage glyph (`StateIcons.WOUNDED`, placeholder art) on the unit card, and on the inspect panel's limb row in front of a **WOUNDED** badge (a body's DOWN already says it on both — the badge's tooltip is the dev's to write), and the next-at-risk limb is tinted only while Wounded, since that is when an ordinary hit threatens one. A board readout is [#965](https://github.com/Phaazoid/Godoiosis/issues/965)'s, re-scoped to exactly that.
 
 *(The Will resource this replaced — a per-unit 0–20 pool, max = the WIL stat, spent 5 per down, persisted on `UnitInstance` — is in the [repeal record](#the-2026-10-01-repeal--will-retired) and this doc's git history.)*
 
