@@ -268,6 +268,15 @@ func test_a_rescued_unit_wears_the_wounded_glyph_on_the_inspect_panel() -> void:
 	panel.set_unit(unit, true, game._board())
 	var limbs: Node = panel.stats_section.limbs_row
 	await _down_then_rescue(unit, func() -> int: return _wounded_glyphs(limbs), "the inspect panel")
+	# The badge explains itself with the Glossary's own line, never a second copy of it.
+	var tips: Array[String] = []
+	for child in limbs.find_children("*", "Control", true, false):
+		var control := child as Control
+		if not control.is_queued_for_deletion() and control.tooltip_text != "":
+			tips.append(control.tooltip_text)
+	assert_array(tips).override_failure_message(
+		"the WOUNDED badge's tooltip is not the Glossary's Wounded line: %s" % [tips]
+		).contains([UiText.wrap(Glossary.short(Glossary.Term.WOUNDED))])
 
 
 func test_a_rescued_unit_wears_the_wounded_glyph_on_the_unit_card() -> void:

@@ -93,8 +93,9 @@ func _refresh_limbs():
 			limbs_row.add_child(_badge("DOWN", EMPTY_COLOR,
 				"Healed while down — no death clock, still needs a rescue"))
 	elif unit.wounded:
-		# Standing again after a down (#1174); a body's DOWN already says it. Tooltip left for the dev.
-		limbs_row.add_child(_icon_badge(StateIcons.WOUNDED, "WOUNDED", AT_RISK_COLOR, ""))
+		# Standing again after a down (#1174); a body's DOWN already says it.
+		limbs_row.add_child(_icon_badge(StateIcons.WOUNDED, "WOUNDED", AT_RISK_COLOR,
+			Glossary.short(Glossary.Term.WOUNDED)))
 	if unit.in_crisis:
 		limbs_row.add_child(_badge("CRISIS", CRISIS_COLOR,
 			"Another down this battle is death"))

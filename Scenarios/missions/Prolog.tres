@@ -207,6 +207,7 @@ weapon_battle_states = Dictionary[int, Dictionary]({
 "rev": 0
 }
 })
+wounded = true
 
 [sub_resource type="Resource" id="Resource_1vcu4"]
 script = ExtResource("4_sox22")

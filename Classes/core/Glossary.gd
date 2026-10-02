@@ -40,7 +40,7 @@ enum Term {
 	# Terrain
 	TERRAIN_KINDS, WATER_TILE, SHALLOW_WATER, BURNING, SCORCHED, FROZEN, COVER,
 	# Lifecycle
-	DOWNED, CRISIS, MAIM, PROSTHETIC,
+	DOWNED, WOUNDED, CRISIS, MAIM, PROSTHETIC,
 	# Missions (one per player-facing ZoneManager.Kind, #1105)
 	CAPTURE_ZONE, EXTRACTION_ZONE, DEPLOYMENT_ZONE, DEFEND_ZONE,
 }
@@ -505,7 +505,7 @@ static func _build_entries() -> Dictionary:
 			% Terrain.COVER_DEF
 			+ "never expires, but a destructive hit removes it."}
 
-	# Lifecycle. CRISIS and MAIM carry PLACEHOLDER text (#1174), the dev's to rewrite.
+	# Lifecycle.
 	e[Term.DOWNED] = {"category": Category.LIFECYCLE, "title": "Downed",
 		"short": "Felled, not dead: %d turns to be rescued before dying. A hit that meets their health kills."
 			% Unit.DOWNED_TURNS,
@@ -513,23 +513,18 @@ static func _build_entries() -> Dictionary:
 			+ "downed unit is helpless: it dies when its %d-turn clock runs out, and a hit that "
 			% Unit.DOWNED_TURNS
 			+ "meets the health it has left finishes it early. Rescue stands it back up."}
+	e[Term.WOUNDED] = {"category": Category.LIFECYCLE, "title": "Wounded",
+		"short": "This unit injures more easily",
+		"long": "After going down once, a unit becomes wounded.  A wounded unit can be maimed more easily."}
 	e[Term.CRISIS] = {"category": Category.LIFECYCLE, "title": "Crisis",
-		"short": ("The Crisis ability turns a would-be down into a last stand, up at %d HP and surged, "
-			+ "unless the unit has already been down.")
-			% Abilities.CRISIS_REVIVE_HP,
-		"long": "A unit holding the Crisis ability refuses its down, unless it has already been down "
-			+ "this battle: it stands back up at %d HP with +%d STR/DEX/PER for %d turns. The price is "
-			% [Abilities.CRISIS_REVIVE_HP, Abilities.CRISIS_SURGE, Abilities.CRISIS_SURGE_TURNS]
-			+ "everything. The next would-be down is death."}
-	e[Term.MAIM] = {"category": Category.LIFECYCLE, "title": "Maim",
-		"short": "A hit of %d or more takes a limb, %d once the unit has been down. Permanently."
-			% [LethalityRules.LIMB_LOSS_DAMAGE, LethalityRules.LIMB_LOSS_DAMAGE_WOUNDED],
-		"long": "A hit of %d damage or more takes a limb, permanently, whether or not it downs. "
-			% LethalityRules.LIMB_LOSS_DAMAGE
-			+ "Once the unit has been down this battle, %d is enough. "
-			% LethalityRules.LIMB_LOSS_DAMAGE_WOUNDED
-			+ "Lost arms cost stats; one lost leg halves MOV, both pin it to 1. The inspect panel "
-			+ "marks the limb next at risk."}
+		"short": "Last stand.  Boosted stats, but next down kills",
+		"long": "Crisis mode.  Instead of going down, take a last stand.  A unit in crisis mode gains "
+			+ "boosted stats at the cost of their safety net - for the rest of the battle, going down "
+			+ "means instant death."}
+	# One sentence serves both lengths (dev, 2026-10-02). The numbers are the live knobs.
+	var maim: String = ("Hits of %d damage or over take a limb, %d while wounded."
+		% [LethalityRules.LIMB_LOSS_DAMAGE, LethalityRules.LIMB_LOSS_DAMAGE_WOUNDED])
+	e[Term.MAIM] = {"category": Category.LIFECYCLE, "title": "Maim", "short": maim, "long": maim}
 	e[Term.PROSTHETIC] = {"category": Category.LIFECYCLE, "title": "Prosthetic",
 		"short": "A built replacement for a lost limb, with its own stat value.",
 		"long": "A crafted limb installed in place of a lost one, carrying its own stat value, "
