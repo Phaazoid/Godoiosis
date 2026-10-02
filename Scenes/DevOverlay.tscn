@@ -20,6 +20,7 @@
 [ext_resource type="Script" path="res://Classes/dev/RosterTool.gd" id="14_rostr"]
 [ext_resource type="Script" path="res://Classes/dev/ReplayTool.gd" id="15_rplay"]
 [ext_resource type="Script" uid="uid://ndrh8mm5oufr" path="res://Classes/dev/WeightsTool.gd" id="16_wghts"]
+[ext_resource type="Script" path="res://Classes/dev/DevSearchBox.gd" id="17_srch"]
 
 [sub_resource type="StyleBoxFlat" id="StyleBoxFlat_1dnd3"]
 bg_color = Color(0.4416867, 0.22230786, 0.4029888, 1)
@@ -49,15 +50,25 @@ grow_vertical = 2
 [node name="VBoxContainer" type="VBoxContainer" parent="Panel/MarginContainer" unique_id=2047553017]
 layout_mode = 2
 
-[node name="DevModeBanner" type="PanelContainer" parent="Panel/MarginContainer/VBoxContainer" unique_id=1234134321]
-unique_name_in_owner = true
+[node name="TopRow" type="HBoxContainer" parent="Panel/MarginContainer/VBoxContainer" unique_id=990001300]
 layout_mode = 2
 
-[node name="DevModeToggle" type="CheckButton" parent="Panel/MarginContainer/VBoxContainer/DevModeBanner" unique_id=1234134320]
+[node name="DevModeBanner" type="PanelContainer" parent="Panel/MarginContainer/VBoxContainer/TopRow" unique_id=1234134321]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+
+[node name="DevModeToggle" type="CheckButton" parent="Panel/MarginContainer/VBoxContainer/TopRow/DevModeBanner" unique_id=1234134320]
 unique_name_in_owner = true
 layout_mode = 2
 theme_override_font_sizes/font_size = 20
 text = "DEV MODE: OFF        (F1)"
+
+[node name="DevSearch" type="LineEdit" parent="Panel/MarginContainer/VBoxContainer/TopRow" unique_id=990001301]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(280, 0)
+layout_mode = 2
+script = ExtResource("17_srch")
 
 [node name="ScenarioHeader" type="PanelContainer" parent="Panel/MarginContainer/VBoxContainer" unique_id=990000070]
 unique_name_in_owner = true
@@ -649,7 +660,7 @@ unique_name_in_owner = true
 layout_mode = 2
 size_flags_vertical = 3
 
-[connection signal="toggled" from="Panel/MarginContainer/VBoxContainer/DevModeBanner/DevModeToggle" to="." method="_on_dev_mode_toggled"]
+[connection signal="toggled" from="Panel/MarginContainer/VBoxContainer/TopRow/DevModeBanner/DevModeToggle" to="." method="_on_dev_mode_toggled"]
 [connection signal="item_selected" from="Panel/MarginContainer/VBoxContainer/Body/DevTabs/Rosters/ExistingRow/RosterLoadDropdown" to="Panel/MarginContainer/VBoxContainer/Body/DevTabs/Rosters" method="_on_load_dropdown_item_selected"]
 [connection signal="pressed" from="Panel/MarginContainer/VBoxContainer/Body/DevTabs/Rosters/ExistingRow/LoadRosterButton" to="Panel/MarginContainer/VBoxContainer/Body/DevTabs/Rosters" method="_on_load_pressed"]
 [connection signal="pressed" from="Panel/MarginContainer/VBoxContainer/Body/DevTabs/Rosters/ExistingRow/UpdateRosterButton" to="Panel/MarginContainer/VBoxContainer/Body/DevTabs/Rosters" method="_on_update_pressed"]

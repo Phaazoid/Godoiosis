@@ -14,6 +14,11 @@ class_name DevOverlay
 # marker, reachable from every leaf for the same reason the Moods tab pinned its buttons above its
 # sub-tabs (dev ask, 2026-08-14). Wires each tool that needs external state to the live game;
 # Item Editor, Attack Editor and Character are self-sufficient (their own _ready() does all setup).
+#
+# Top right, also always visible: the search box (#1184), which lands on any leaf, sub-tab, section
+# or value through reveal(). ONLY THE MOUSE CHANGES THE PAGE (#1184): the tree and every sub-tab bar
+# take no keyboard focus, or the arrow keys and the Tree's type-to-search move the page under a dev
+# key (C, the brush's turn key, landed on Characters). tests/dev/test_dev_page_keys.gd is the law.
 
 @onready var scenario_manager: ScenarioManager = get_node("../GameContainer/GameView/Game/ScenarioManager")
 @onready var game = get_node("../GameContainer/GameView/Game")
@@ -36,6 +41,7 @@ class_name DevOverlay
 @onready var weights_tool: WeightsTool = get_node("%Weights")
 @onready var dev_mode_toggle: CheckButton = %DevModeToggle
 @onready var dev_mode_banner: PanelContainer = %DevModeBanner
+@onready var search_box: DevSearchBox = %DevSearch
 
 # The tree, declared whole: scope -> leaves, each leaf naming its page by unique name and carrying
 # its tooltip. One table so the laws in tests/dev/test_dev_tree.gd can pin it — every leaf resolves
@@ -84,6 +90,8 @@ const LEAVES: Array[Dictionary] = [
 # LookKnobs has no business holding them, so they are consts here rather than Look-tab knobs.
 const DEV_MODE_ON_BG := Color(0.55, 0.16, 0.62)
 const DEV_MODE_OFF_BG := Color(0.14, 0.14, 0.16)
+# How long a row a search landed on glows gold. Dev chrome, a const for the banner's reason.
+const FLASH_SECONDS := 0.8
 
 var _banner_on: StyleBoxFlat
 var _banner_off: StyleBoxFlat
@@ -136,6 +144,8 @@ func _ready() -> void:
 	%DevTabs.tab_changed.connect(_on_tab_changed)
 	%AuthoringTabs.tab_changed.connect(_on_authoring_tab_changed)
 	_build_tree()
+	search_box.index_source = func() -> Array[Dictionary]: return DevSearch.index(self)
+	search_box.chosen.connect(_on_search_chosen)
 	show_leaf(spawn)   # boot where the old tab 0 opened
 
 # The 3D host PUSHES itself in from battle3d._ready (it already resolves this window to hide it).
@@ -236,6 +246,77 @@ func showing(page: Control) -> bool:
 		return %DevTabs.get_current_tab_control() == unit_authoring \
 			and %AuthoringTabs.get_current_tab_control() == page
 	return %DevTabs.get_current_tab_control() == page
+
+
+# --- Search (#1184) ----------------------------------------------------------------------------
+
+func _on_search_chosen(entry: Dictionary) -> void:
+	reveal(entry["control"], entry["kind"] != DevSearch.Kind.TAB)
+
+
+# The one door to "bring this control into view": open every sub-tab between it and its page, show
+# the page through show_leaf, then scroll the row in and flash it. A tab only shows -- flashing a
+# whole page would say nothing.
+func reveal(control: Control, flash := true) -> void:
+	if not is_instance_valid(control):
+		return
+	var page := page_of(control)
+	if page == null:
+		return
+	var node: Node = control
+	while node != page:
+		var tabs := node.get_parent() as TabContainer
+		if tabs != null:
+			tabs.current_tab = tabs.get_tab_idx_from_control(node as Control)
+		node = node.get_parent()
+	show_leaf(page)
+	if not flash:
+		return
+	await get_tree().process_frame   # a tab that just became visible lays out a frame later
+	if not is_instance_valid(control):
+		return
+	var scroll := _scroll_above(control, page)
+	if scroll != null:
+		scroll.ensure_control_visible(control)
+	_flash_row(control)
+
+
+# The LEAVES page a control sits on (itself, if it is one), or null.
+func page_of(control: Node) -> Control:
+	var pages: Array[Node] = []
+	for leaf: Dictionary in LEAVES:
+		pages.append(get_node(leaf["page"]))
+	var node := control
+	while node != null:
+		if pages.has(node):
+			return node as Control
+		node = node.get_parent()
+	return null
+
+
+func _scroll_above(control: Node, page: Node) -> ScrollContainer:
+	var node := control.get_parent()
+	while node != null and node != page:
+		if node is ScrollContainer:
+			return node
+		node = node.get_parent()
+	return null
+
+
+var _flash: Tween
+var _flashed: CanvasItem
+var _flashed_modulate := Color.WHITE
+
+func _flash_row(control: CanvasItem) -> void:
+	if _flash != null and _flash.is_valid():
+		_flash.kill()
+		if is_instance_valid(_flashed):
+			_flashed.modulate = _flashed_modulate
+	_flashed = control
+	_flashed_modulate = control.modulate
+	control.modulate = DevWidgets.HEADING_COLOR
+	_flash = create_tween()
+	_flash.tween_property(control, "modulate", _flashed_modulate, FLASH_SECONDS)
 
 
 func _leaf_item_for(page: Control) -> TreeItem:

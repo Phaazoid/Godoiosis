@@ -114,6 +114,8 @@ static func add_label(container: Node, text: String) -> void:
 # with its own HEADING_COLOR, and #825 wanted a fourth for the Attack Editor's form. One question,
 # one answer: the copies are gone and the colour lives here with the only code that reads it.
 const HEADING_COLOR := Color(1, 0.83, 0.4, 1)   # the Look and Scenario tabs' heading gold
+# Marks the label as a section heading, so DevSearch can name the section a row sits in (#1184).
+const HEADING_META := &"dev_heading"
 
 #
 # Returns the nodes it added -- the rule and its label -- so a caller that can HIDE a whole section
@@ -127,6 +129,7 @@ static func add_heading(container: Node, text: String) -> Array[Node]:
 	var heading := Label.new()
 	heading.text = text
 	heading.add_theme_color_override("font_color", HEADING_COLOR)
+	heading.set_meta(HEADING_META, true)
 	container.add_child(heading)
 	added.append(heading)
 	return added
