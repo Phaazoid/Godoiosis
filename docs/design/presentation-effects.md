@@ -2,7 +2,7 @@
 
 **Status: an idea wall plus two locked decisions.** Solicited by the dev on 2026-08-12, the day Stage 0 (#203) passed its GO gate: *"a full thought experiment, all ideas on the wall."* Nothing below the Decisions section is a commitment — it is the candidate pool for #176's stage 5 and beyond, kept so it can't evaporate from chat. The look-dev scene (`Scenes/LookDev/LookDev.tscn`) is the standing playground where any of it gets prototyped before it's real — and since #212 (2026-08-15) the **Moods tab** in the dev-tools window tunes the *shipping* view live, so a value on this wall can be judged on a real board rather than in the diorama. **It is a playground, not a scratch scene ([#393](https://github.com/Phaazoid/Godoiosis/issues/393), 2026-08-19)** — seven presentation suites fixture on it, `Battle3D.tscn` loads its MeshLibrary, and `BoardMirror`/`BoardOverlays` read textures out of `Art/LookDev/`, so it is edited with the same care as shipping code. Its four moods stopped being a second copy at the same time: `look_dev.gd` held them as a hardcoded `PRESETS` table, seeded from the same values four of the twelve `LookPreset` files now carry, and it resolves them by NAME through `LookKnobs` instead.
 
-**Canon checked through #1024 (2026-09-18); #508's gas look folded in 2026-10-01.**
+**Canon checked through #1024 (2026-09-18); #508's gas look and #1184's dev search folded in 2026-10-01.**
 
 ---
 
@@ -306,6 +306,19 @@ default size (the rows still EXPAND to fill a window with room) and degrades to 
 than to silent clipping when the window is dragged narrower. Measurement moved the fix: an
 `HSplitContainer` does **not** squeeze its first child, so the tool tree was never displaced and
 the split-offset clamp the report proposed would have fixed nothing.
+
+**A search box sits at the window's top right** ([#1184](https://github.com/Phaazoid/Godoiosis/issues/1184),
+2026-10-01), and it finds a page by reading the BUILT window, never the knob tables: a tab is a
+leaf or a sub-tab title, a section is a label `DevWidgets.add_heading` tagged, and a value is the
+first Label of a row that also holds an input (or a label/input pair in a grid, or a CheckBox's own
+text). So a new page is searchable with no entry anywhere, and a row the page HIDES is never
+offered (dev ruling: search offers what you would see if you went there). Its stated limit is the
+same fact from the other side: it finds what is built, so the Unit Editor offers nothing until a
+unit is clicked. `DevOverlay.reveal(control)` is the one door to bring a control into view. **And
+only the mouse changes the page**: the tool tree and every sub-tab bar take no keyboard focus,
+because a focused Tree moves its selection on the arrow keys and on letters (`allow_search`), so C,
+the brush's turn key, landed on Characters. `tests/dev/test_dev_page_keys.gd` walks the built
+window for anything that could.
 
 **A global is the DEFAULT, an object may override it** (dev, 2026-08-16). `BoardMirror` is the only
 place that resolves the two, so nothing downstream knows a global exists.
