@@ -1,8 +1,8 @@
 # Weight — How Heavy a Unit Is, and What Reads It
 
-**Status: RULED and BUILT (dev, 2026-10-01) on [#120](https://github.com/Phaazoid/Godoiosis/issues/120), in three PRs: the body and the falls, the shove, then the Weights page and the numbers. Weight slowing movement is [#1176](https://github.com/Phaazoid/Godoiosis/issues/1176).** This is the owner doc for weight. [stats.md](stats.md) keeps the roster entry and points here.
+**Status: RULED and BUILT (dev, 2026-10-01) on [#120](https://github.com/Phaazoid/Godoiosis/issues/120), in three PRs: the body and the falls, the shove, then the Weights page and the numbers. Weight slows movement too since [#1176](https://github.com/Phaazoid/Godoiosis/issues/1176), the same day.** This is the owner doc for weight. [stats.md](stats.md) keeps the roster entry and points here.
 
-**Canon checked through #1180 (2026-10-01).**
+**Canon checked through #1186 (2026-10-01).**
 
 ## The model
 
@@ -18,6 +18,7 @@
 |---|---|---|
 | **Fall damage** (`FallRules.damage_for`) | Per level: `FALL_DAMAGE_PER_LEVEL` (2) + the faller's band. A heavy unit thrown off a ledge hits harder. | **BUILT** (#120 PR 1). It replaced #259's raw term (+1 per 10 weight), which every unit would have tripped once bodies had mass. |
 | **Shove distance** | Distance = the attack's knockback (mods included) − the TARGET's band, floored at 0. A band that reduces a shove to 0 holds the unit in place. | **BUILT** (#120 PR 2). `PlanResolver._shove_against` is the one place weight meets a shove, and it reads the TARGET. |
+| **Movement** (`UnitInstance.get_mov`) | MOV = base + DEX band − the band, then the leg throttle, still last; the floor is 1. A heavy body or a heavy load walks fewer tiles. | **BUILT** ([#1176](https://github.com/Phaazoid/Godoiosis/issues/1176)). `Unit.get_mov` passes `get_weight()`, so the body counts; the pre-mission card previews it (`Unit.previewed_mov`). |
 
 **What a held shove looks like.** `ResolvedOutcome.knockback_held` records how many tiles the target's weight absorbed, whether the shove was shortened or stopped outright. It shows in the two channels Fell and Void already use: a popup on the hit and a badge on the queue row. A partly held shove's trail is already honest, because it draws the shorter path. A fully held one draws no trail at all, so the queue badge is the whole Law #2 preview for it. A board-level mark for a held shove is a look question, deferred until it has been played. Telemetry's hit record carries `"held"`.
 
@@ -54,14 +55,26 @@ Under the Will retirement ([#1174](https://github.com/Phaazoid/Godoiosis/issues/
 
 ## The rulings (dev, 2026-10-01)
 
-1. **Weight alone resists a shove; STR does not.** *"Definitely weight alone. I think that line was a mistaken recording"*, about stats.md's old note that STR "helps anchor against shoves". STR's only weight-adjacent role is the parked carry ceiling ([#1176](https://github.com/Phaazoid/Godoiosis/issues/1176)).
+1. **Weight alone resists a shove; STR does not.** *"Definitely weight alone. I think that line was a mistaken recording"*, about stats.md's old note that STR "helps anchor against shoves". STR has no weight role at all: [#1176](https://github.com/Phaazoid/Godoiosis/issues/1176) ruled out a carry ceiling (below).
 2. **Every unit has its own body weight.** *"Units will need to have weight"*, confirmed as *"yes, each unit has its own body weight."* This reverses stats.md's "carried gear only, no body term". The 2026-07-27 retraction it reverses was about **CON** adding mass, and that retraction still stands: the body is BLD, its own authored number, and CON is not a term.
 3. **A heavy-enough unit is immune to a shove.** *"If something is heavy enough, then yes."* The thresholds must leave that reachable with real loadouts.
-4. **Scope is shove resistance plus authoring weights.** Swimming is dropped (*"Swimming has changed anyways, and doesn't really exist"*). Weight slowing movement is deferred to #1176 (*"We can revisit weight slowing movement"*).
+4. **Scope is shove resistance plus authoring weights.** Swimming is dropped (*"Swimming has changed anyways, and doesn't really exist"*). Weight slowing movement was deferred to #1176 (*"We can revisit weight slowing movement"*), and revisited the same day (below).
 5. **Weights are editable in the dev tools**, and Claude proposes the numbers (*"Propose the weights, don't worry about them too much"*).
 6. **The body weight is a STAT named BLD**, not a bespoke field (plan question, 2026-10-01). A stat rides every door the stat list already has: the Character, Unit and Spawn editors, the mission snapshot (per key, so a save older than BLD keeps the body the unit was built with), and telemetry's roster entry.
 7. **Falls read the same bands** (plan question, 2026-10-01).
 8. **No push-strength field.** #120's original proposal had a "push tier" gate beside the distance reduction. The knockback number IS the shove's strength, and a band that reduces a shove to 0 already does what the gate would; one mechanism covers both (Law #4).
+
+## Weight slows movement ([#1176](https://github.com/Phaazoid/Godoiosis/issues/1176), rulings 2026-10-01)
+
+His WEIGHT glossary sentence promised it (*"Heavier units are harder to push, but can't move as far and take more fall damage"*, and asked, *"I meant both"* pushed and walked). Three forks set its size, and he took the recommended answer on each:
+
+1. **Total weight, through the same bands.** −1 MOV per band, so shove-proof armour is slow armour. The body counts, not only the load.
+2. **No hard carry limit.** Any unit can carry anything that fits its 6 slots; weight only costs movement. Together with ruling 1 this leaves **STR with no carry role**, which closes `stats.md`'s parked STR → carry slot.
+3. **The pre-mission card shows MOV beside WT** and previews it while gear is picked (`MOV 5 → 4`), and the job picker's delta line names it too. The battle inspect panel's MOV tooltip names the weight band whenever it costs a tile.
+
+**Effect on today's content:** only Torv (25, band 1) loses a tile; every placed enemy is band 0 and unchanged.
+
+**Nothing in play can make a queued move illegal.** The only mid-battle weight changes LOWER weight (a Toss, a vial the Chemical Spitter consumes), so MOV can only rise mid-turn.
 
 ## Measured, before building
 
@@ -70,4 +83,4 @@ The dev's local telemetry, 104 sent runs through 2026-09-29: **28 recorded shove
 ## Declared, not built
 
 - **Losing a limb does not change BLD.** An installed prosthetic weighs what its item weighs, which is already true because a prosthetic is carried in the inventory.
-- **Weight × MOV and STR as a carry ceiling** are [#1176](https://github.com/Phaazoid/Godoiosis/issues/1176). The inventory is 6 slots and has no weight limit.
+- **No carry limit** (#1176's ruling 2). The inventory is 6 slots, and weight never refuses an item; it only costs movement.
