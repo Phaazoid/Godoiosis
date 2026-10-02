@@ -75,6 +75,7 @@ size_flags_vertical = 3
 unique_name_in_owner = true
 custom_minimum_size = Vector2(210, 0)
 layout_mode = 2
+focus_mode = 0
 hide_root = true
 allow_reselect = true
 
