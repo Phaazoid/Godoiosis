@@ -522,7 +522,7 @@ func get_current_hp() -> int:
 	return unit_instance.get_current_hp()
 
 func get_mov() -> int:
-	return unit_instance.get_mov(get_effective_stat(Stats.Stat.DEX))
+	return unit_instance.get_mov(get_effective_stat(Stats.Stat.DEX), get_weight())
 
 # The body plus everything carried (#120). BLD is read EFFECTIVE so a job or a temporary effect can
 # move it; armor and the equipped weapon both live in `inventory`, so one sweep covers the gear.
@@ -562,6 +562,12 @@ func previewed_weight(candidate: Item, incoming: bool) -> int:
 	if candidate == null or not incoming:
 		return get_weight()
 	return get_weight() + candidate.get_effective_weight()
+
+
+# MOV reads both of the answers above (#1176): a piece can move DEX through its modifiers AND add mass,
+# so each goes through its own preview rather than this re-deriving either.
+func previewed_mov(candidate: Item, incoming: bool) -> int:
+	return unit_instance.get_mov(previewed_stat(Stats.Stat.DEX, candidate), previewed_weight(candidate, incoming))
 
 
 # The substitution itself: [armor, weapons] with the candidate in whichever slot it fills. A weapon
@@ -660,6 +666,11 @@ func previewed_stat_for_jobs(stat: Stats.Stat, job_ids: Array[String]) -> int:
 
 func previewed_def_for_jobs(job_ids: Array[String]) -> int:
 	var value: int = with_jobs(job_ids, get_effective_def)
+	return value
+
+# A job can nudge DEX and BLD alike, and the swap already answers both.
+func previewed_mov_for_jobs(job_ids: Array[String]) -> int:
+	var value: int = with_jobs(job_ids, get_mov)
 	return value
 
 func previewed_abilities_for_jobs(job_ids: Array[String]) -> Array[AbilityData]:

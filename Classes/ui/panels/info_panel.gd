@@ -157,6 +157,7 @@ func _refresh_stats():
 	_add_stat("MOV", str(unit.get_mov()), Glossary.Term.MOV, mov_tooltip(
 		UnitInstance.JOBLESS_MOV_BASE,
 		Stats.dex_mov_band(unit.get_effective_stat(Stats.Stat.DEX)),
+		Stats.weight_band(unit.get_weight()),
 		inst.empty_leg_count()))
 	_add_stat("WT", str(unit.get_weight()), Glossary.Term.WEIGHT, weight_tooltip(unit.get_effective_stat(Stats.Stat.BLD), unit.get_carried_weight()))
 	var armor_name := ""
@@ -274,8 +275,10 @@ func _on_countdown_changed(_turns: int):
 func _on_stats_changed():
 	_refresh()   # a stat move can shift bars (max HP), the limb row (a maim fired it) AND the grid
 
-static func mov_tooltip(base: int, dex_band: int, empty_legs: int) -> String:
+static func mov_tooltip(base: int, dex_band: int, weight_band: int, empty_legs: int) -> String:
 	var lines: Array[String] = ["Base %d %+d DEX band" % [base, dex_band]]
+	if weight_band > 0:   # #1176: a line only when weight actually costs a tile
+		lines.append("%+d weight band" % -weight_band)
 	match empty_legs:
 		1:
 			lines.append("Halved: one leg gone")

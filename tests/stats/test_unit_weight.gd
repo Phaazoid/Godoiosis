@@ -118,11 +118,5 @@ func test_a_weapon_carries_its_family_and_module_mass() -> void:
 	assert_int(unit.get_carried_weight()).is_equal(6)
 
 
-func test_weight_does_not_reach_mov() -> void:
-	# Weight slowing movement is deliberately unwired (2026-07-27) and its return is #1176's
-	# question. If this goes red, someone re-connected encumbrance -- a design decision, not an
-	# incidental change.
-	var unit := _bare_unit()
-	var before := unit.get_mov()
-	unit.inventory[0] = _item(50)
-	assert_int(unit.get_mov()).is_equal(before)
+# test_weight_does_not_reach_mov stood here as a tripwire for re-connecting encumbrance, and #1176 is
+# that decision (dev, 2026-10-01): weight now costs MOV, pinned in tests/stats/test_weight_mov.gd.

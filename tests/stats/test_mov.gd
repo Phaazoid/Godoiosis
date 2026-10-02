@@ -1,6 +1,7 @@
 # MOV as a derived readout (#56, jobs.md — closes audit A4): job base + DEX band
 # (retuned 2026-07-15), then the leg throttle LAST (dev ruling 2026-07-14: one empty leg
-# halves rounded up; two empty pin MOV to 1 flat). Weight does NOT feed MOV (2026-07-27).
+# halves rounded up; two empty pin MOV to 1 flat). Since #1176 (2026-10-01) each weight band takes a
+# tile, before the throttle.
 # Pure Resource tests.
 extends GdUnitTestSuite
 
@@ -12,11 +13,12 @@ func _make_instance(partial_stats: Dictionary[Stats.Stat, int]) -> UnitInstance:
 	inst.initialize()
 	return inst
 
-# UnitInstance.get_mov takes the FINISHED effective DEX as of 2026-07-27, so that gear (which
-# only Unit can see) enters the stat chain in exactly one place. These are bare instances with
-# no Unit and therefore no gear, so the instance's own effective DEX is the whole answer.
-func _mov(inst: UnitInstance) -> int:
-	return inst.get_mov(inst.get_effective_stat(Stats.Stat.DEX))
+# UnitInstance.get_mov takes the FINISHED effective DEX as of 2026-07-27, and the finished weight
+# since #1176, so that gear (which only Unit can see) enters the stat chain in exactly one place.
+# These are bare instances with no Unit and therefore no gear: the instance's own effective DEX is
+# the whole DEX answer, and the weight is whatever a case hands in.
+func _mov(inst: UnitInstance, weight := 0) -> int:
+	return inst.get_mov(inst.get_effective_stat(Stats.Stat.DEX), weight)
 
 func test_default_unit_moves_at_jobless_base() -> void:
 	# DEX 5 -> band 0.
@@ -34,16 +36,16 @@ func test_dex_band_rungs_reach_mov() -> void:
 		.is_equal(UnitInstance.JOBLESS_MOV_BASE + 2)   # the earned top rung
 
 func test_con_does_not_touch_mov() -> void:
-	# Doctrine correction 2026-07-27: weight is gear-only and feeds nothing, so a high-CON
-	# unit is no slower than anyone else. This used to assert the opposite.
+	# Doctrine correction 2026-07-27: CON is not a term of weight (the body is BLD since #120), so
+	# a high-CON unit is no slower than anyone else. This used to assert the opposite.
 	assert_int(_mov(_make_instance({Stats.Stat.CON: 8}))).is_equal(UnitInstance.JOBLESS_MOV_BASE)
 	assert_int(_mov(_make_instance({Stats.Stat.CON: 20}))).is_equal(UnitInstance.JOBLESS_MOV_BASE)
 
 # The throttle threads assert the RELATIONSHIP, not a finished number (2026-08-10 sweep): the
 # dragged DEX is read back off the real chain and the pre-throttle MOV rebuilt from it, so the only
 # thing each case can fail on is its own stage -- the halve-up -- and no knob retune reaches it.
-func _unthrottled_mov(inst: UnitInstance) -> int:
-	return UnitInstance.JOBLESS_MOV_BASE + Stats.dex_mov_band(inst.get_effective_stat(Stats.Stat.DEX))
+func _unthrottled_mov(inst: UnitInstance, weight := 0) -> int:
+	return UnitInstance.JOBLESS_MOV_BASE + Stats.dex_mov_band(inst.get_effective_stat(Stats.Stat.DEX)) 		- Stats.weight_band(weight)
 
 func test_one_empty_leg_halves_final_mov() -> void:
 	# The full thread, default unit: leg empties -> the DEX mean drags -> the band drops,
@@ -79,7 +81,34 @@ func test_prosthetic_leg_lifts_the_throttle() -> void:
 	assert_int(_mov(inst)).is_equal(UnitInstance.JOBLESS_MOV_BASE)
 
 func test_mov_never_drops_below_one() -> void:
-	# Low DEX + heavy body + one empty leg: 4-1-1=2 -> eff DEX drags band... floor holds at 1.
-	var inst := _make_instance({Stats.Stat.DEX: 0, Stats.Stat.CON: 8})
+	# Low DEX + the heaviest band + one empty leg: every penalty at once, and the floor holds.
+	var inst := _make_instance({Stats.Stat.DEX: 0})
 	inst.limbs[UnitInstance.LimbSlot.LEG_L].state = UnitInstance.LimbState.EMPTY
-	assert_int(_mov(inst)).is_greater_equal(1)
+	assert_int(_mov(inst, Stats.WEIGHT_BAND_2)).is_greater_equal(1)
+
+
+# --- weight (#1176) --------------------------------------------------------------------------
+#
+# Weights sit on the band THRESHOLDS (Stats.WEIGHT_BAND_*) and MOV is read against the same
+# instance unweighted, so retuning a threshold or the base moves nothing these cases assert.
+
+func test_each_weight_band_costs_one_tile() -> void:
+	var inst := _make_instance({})
+	var light := _mov(inst)
+	assert_int(_mov(inst, Stats.WEIGHT_BAND_1 - 1)).is_equal(light)
+	assert_int(_mov(inst, Stats.WEIGHT_BAND_1)).is_equal(light - 1)
+	assert_int(_mov(inst, Stats.WEIGHT_BAND_2)).is_equal(light - 2)
+
+
+# The weight comes off BEFORE the throttle, which is why the throttle can still be called LAST. A
+# sprinter in the heaviest band tells the two orders apart: halving what weight left differs from
+# taking weight off what halving left.
+func test_one_empty_leg_halves_the_weighted_mov() -> void:
+	var inst := _make_instance({Stats.Stat.DEX: 12})
+	inst.limbs[UnitInstance.LimbSlot.LEG_R].state = UnitInstance.LimbState.EMPTY
+	var heavy := Stats.WEIGHT_BAND_2
+	var weight_first := ceili(_unthrottled_mov(inst, heavy) / 2.0)
+	var halve_first := ceili(_unthrottled_mov(inst) / 2.0) - Stats.weight_band(heavy)
+	assert_int(weight_first).override_failure_message(
+		"the two orders agree for this unit, so the case cannot tell them apart").is_not_equal(halve_first)
+	assert_int(_mov(inst, heavy)).is_equal(weight_first)

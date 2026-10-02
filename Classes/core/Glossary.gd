@@ -273,15 +273,16 @@ static func _build_entries() -> Dictionary:
 		"short": "A unit's weight",
 		"long": "A unit's weight. This plus what the unit is carrying add to get a unit's total weight."}
 	e[Term.MOV] = {"category": Category.STATS, "title": "Movement (MOV)",
-		"short": "Tiles per move: base %d shifted by DEX's band." % UnitInstance.JOBLESS_MOV_BASE,
-		"long": "How far a unit walks in one move order. Base %d, shifted by DEX's band. Losing a "
-			% UnitInstance.JOBLESS_MOV_BASE
-			+ "leg halves it; losing both pins it to 1."}
+		"short": "Tiles per move: base %d, shifted by DEX's band, and one fewer for each weight band."
+			% UnitInstance.JOBLESS_MOV_BASE,
+		"long": ("How far a unit walks in one move order. Base %d, shifted by DEX's band, and one tile "
+			+ "fewer for each weight band the unit reaches. Losing a leg halves it; losing both pins it to 1.")
+			% UnitInstance.JOBLESS_MOV_BASE}
 	e[Term.WEIGHT] = {"category": Category.STATS, "title": "Weight (WT)",
 		"short": "A total of a unit's BLD and the weight of what they are carrying.",
 		"long": ("Build plus the weight of every item in the inventory, equipped or not. Weight is "
 			+ "counted in bands, at %d and at %d. Each band a unit reaches adds 1 damage per level it falls. "
-			+ "Heavier units are harder to push and take more fall damage.")
+			+ "Heavier units are harder to push, but can't move as far and take more fall damage.")
 			% [Stats.WEIGHT_BAND_1, Stats.WEIGHT_BAND_2]}
 	e[Term.DEF] = {"category": Category.STATS, "title": "Defense (DEF)",
 		"short": "Subtracted from incoming damage: armor scaled by CON, plus terrain cover.",

@@ -162,17 +162,17 @@ func get_max_hp(effective_con: int) -> int:
 # get_effective_ldr moved to Unit (#106): BOTH its terms are finished effective stats, so it
 # only computes correctly at the layer that can see every stage of the chain.
 
-func get_mov(effective_dex: int) -> int:
-	# MOV is a READOUT: flat jobless base + DEX band, then the leg throttle LAST: one empty leg
-	# halves (round up), two pin MOV to 1 flat. Job-driven MOV base is parked (#61,
-	# docs/design/jobs.md "Parked") -- audit A4 reopens. Weight is deliberately NOT wired in:
-	# it's tracked on Unit as a balance lever, with no gameplay effect yet.
+func get_mov(effective_dex: int, weight: int) -> int:
+	# MOV is a READOUT: flat jobless base + DEX band - weight band (#1176), then the leg throttle
+	# LAST: one empty leg halves (round up), two pin MOV to 1 flat. Job-driven MOV base is parked
+	# (#61, docs/design/jobs.md "Parked") -- audit A4 reopens.
 	#
-	# Takes the FINISHED effective DEX (Unit.get_effective_stat -- gear included), not a gear
-	# delta to add on. Until 2026-07-27 it took the delta and rebuilt the sum itself, which meant
-	# the chain's last stage was expressed in two places: a stage added to Unit.get_effective_stat
-	# later would have reached the stat panel but silently missed MOV. One expression, one answer.
-	var mov := JOBLESS_MOV_BASE + Stats.dex_mov_band(effective_dex)
+	# Takes the FINISHED effective DEX and the finished weight (Unit.get_weight -- body and gear), not
+	# deltas to add on: neither can be derived at this layer, which sees no gear. Until 2026-07-27 it
+	# took the DEX delta and rebuilt the sum itself, which meant the chain's last stage was expressed
+	# in two places: a stage added to Unit.get_effective_stat later would have reached the stat panel
+	# but silently missed MOV. One expression, one answer -- and no default, so no caller can skip one.
+	var mov := JOBLESS_MOV_BASE + Stats.dex_mov_band(effective_dex) - Stats.weight_band(weight)
 	match empty_leg_count():
 		2:
 			return 1

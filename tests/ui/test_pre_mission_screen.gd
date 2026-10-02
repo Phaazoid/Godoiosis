@@ -1005,3 +1005,32 @@ func test_a_weapon_with_no_pet_name_of_its_own_lists_as_its_family() -> void:
 	assert_object(_label_reading(card, GENERIC_FAMILY.display_name)).override_failure_message(
 		"the card lists the generic with a blank name instead of \"%s\""
 		% GENERIC_FAMILY.display_name).is_not_null()
+
+
+# #1176: weight costs MOV, so the card's foot names MOV beside WT and previews it -- the one place a
+# player picking gear can see that a piece will cost a tile before the battle shows it. Driven through
+# the card's real preview door with a plain item sized to tip this unit into its next band, so the
+# expectation is derived from the unit in front of it rather than from any authored number.
+func test_the_foot_shows_mov_and_previews_the_tile_a_heavy_piece_costs() -> void:
+	if not await _enter_phase():
+		return
+	var cards := _cards()
+	assert_int(cards.size()).is_greater(0)
+	var card: PreMissionCard = cards[0]
+	var unit := card.unit
+	var mov := unit.get_mov()
+	assert_str(card._derived_label.text).starts_with("MOV %d" % mov)
+
+	var weight := unit.get_weight()
+	var next_band := Stats.WEIGHT_BAND_1 if weight < Stats.WEIGHT_BAND_1 else Stats.WEIGHT_BAND_2
+	assert_int(weight).override_failure_message(
+		"this roster unit is already in the heaviest band, so no piece can cost it a tile") \
+		.is_less(Stats.WEIGHT_BAND_2)
+	var plate := Item.new()
+	plate.display_name = "Ballast"
+	plate.weight = next_band - weight
+
+	card.show_preview(plate, true)
+	assert_str(card._derived_label.text).starts_with("MOV %d → %d" % [mov, mov - 1])
+	card.clear_preview()
+	assert_str(card._derived_label.text).starts_with("MOV %d  ·" % mov)
