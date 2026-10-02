@@ -92,6 +92,7 @@ func _ready() -> void:
 	# tab -- Save and Reset are panel-wide, not per-group (the Moods tab's dev ask, same answer).
 	_tabs = TabContainer.new()
 	_tabs.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	_tabs.tab_focus_mode = Control.FOCUS_NONE   # only the mouse changes the page (#1184)
 	add_child(_tabs)
 	for tab_title: String in tab_titles():
 		_tab_rows[tab_title] = DevWidgets.add_knob_scroll(_tabs, tab_title)

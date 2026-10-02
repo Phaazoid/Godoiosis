@@ -244,6 +244,7 @@ func populate_unit_editor(unit):
 	var tabs := TabContainer.new()
 	tabs.name = "SubTabs"
 	tabs.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	tabs.tab_focus_mode = Control.FOCUS_NONE   # only the mouse changes the page (#1184)
 	unit_editor_container.add_child(tabs)
 
 	_add_stats_section(_add_subtab(tabs, "Stats"))
