@@ -105,6 +105,8 @@ var _puffs: MultiMeshInstance3D
 var _puff_material: ShaderMaterial
 # Instances whose gas flashes: [index, cluster, tint], re-lit every frame from the flash schedule.
 var _flash_instances: Array = []
+# What the puffs' MultiMesh was last handed, one [position, kind, role, phase, slot, cluster] each.
+var _puff_entries: Array = []
 
 
 func _ready() -> void:
@@ -567,6 +569,13 @@ func puff_node() -> MultiMeshInstance3D:
 	return _puffs
 
 
+# The puff instances as built -- the readable half when no renderer keeps a MultiMesh's instance data
+# (headless). Each is [position, kind, role, phase, slot, cluster]; role 0 is a puff, the rest are
+# EXTRA_ROLES.
+func puff_entries() -> Array:
+	return _puff_entries
+
+
 # The sun as the puffs are lit by it: part of the rebuild key, since a puff's tint is baked.
 func _sun_light() -> Color:
 	return sun.light_color * sun.light_energy if sun != null and sun.visible else Color.BLACK
@@ -620,6 +629,7 @@ static func _floor_point(cell: Vector2i, corners: Vector4i, uv: Vector2, offset:
 # strike, not a cell: one stands under each glow, lit by the same schedule.
 func _build_puffs(shown: Dictionary[Vector2i, int]) -> void:
 	_flash_instances.clear()
+	_puff_entries = []
 	var multimesh := _puffs.multimesh
 	_puff_material.set_shader_parameter("drift", float(_mix().drift))
 	if shown.is_empty():
@@ -679,6 +689,7 @@ func _build_puffs(shown: Dictionary[Vector2i, int]) -> void:
 		var glow := _flash_clusters[key]
 		var ground := Vector3(glow.x, glow.y - FLASH_LIFT, glow.z)
 		instances.append([ground, kind, EXTRA_ROLES[GasLook.Extra.BOLT], _hash01(key), 0, key])
+	_puff_entries = instances
 	multimesh.instance_count = instances.size()
 	var bounds := AABB()
 	for i in instances.size():
