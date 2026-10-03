@@ -157,15 +157,20 @@ func legal_moves(handle: String) -> Dictionary:
 	return {"ok": true, "unit": handle, "from": unit.movement.cell, "cells": cells, "leashed": leashed}
 
 
-func legal_targets(handle: String) -> Dictionary:
+func legal_targets(handle: String, attack_name := "") -> Dictionary:
 	var unit := unit_by_handle(handle)
 	var gate := _controllable(unit, handle)
 	if not gate.ok:
 		return gate
 	if not unit.has_equipped_weapon():
 		return {"ok": false, "error": "%s has no equipped weapon" % handle}
+	var pick := _fire_pick(unit, handle, attack_name)
+	if not pick.ok:
+		return pick
 	var origin := unit.get_projected_destination()
-	var aiming := unit.get_fired_attack()
+	var aiming: AttackData = pick.attack
+	# Armed for the loop's declare(), whose stamp the whiff policy reads -- queue_attack's arming.
+	unit.active_attack = aiming
 	var board := _board()
 	var out: Array[Dictionary] = []
 	# The candidate set is the union over four facings -- what the red overlay draws -- and
@@ -184,7 +189,8 @@ func legal_targets(handle: String) -> Dictionary:
 		for v: Unit in victims:
 			names.append(handle_for(v))
 		out.append({"cell": aim, "victims": names})
-	return {"ok": true, "unit": handle, "from": origin, "aims": out}
+	unit.active_attack = null
+	return {"ok": true, "unit": handle, "attack": _attack_label(aiming), "from": origin, "aims": out}
 
 
 # The turn's own state, which the rendered board has never carried: whose turn it is, which squad
@@ -225,6 +231,30 @@ func _controllable(unit: Unit, handle: String) -> Dictionary:
 		return {"ok": false, "error": "%s's squad has already acted this turn" % handle}
 	return {"ok": true}
 
+# WHICH attack an aim fires (#615): the one NAMED, else the default -- the menu's pick, made
+# headlessly. An attack that cannot fire is refused in the menu's own words, so a refusal and a
+# greyed row cannot disagree (#166).
+func _fire_pick(unit: Unit, handle: String, attack_name: String) -> Dictionary:
+	var attack: AttackData = unit.get_default_attack()
+	if attack_name != "":
+		attack = unit.fire_attack_named(attack_name)
+		if attack == null:
+			return {"ok": false, "error": "%s has no attack named '%s' (can fire: %s)" % [
+				handle, attack_name, _names_of(unit.get_selectable_attacks())]}
+	var reason := unit.attack_block_reason(attack)
+	if reason != "":
+		return {"ok": false, "error": "%s can't fire %s: %s" % [handle, _attack_label(attack), reason]}
+	return {"ok": true, "attack": attack}
+
+static func _attack_label(attack: AttackData) -> String:
+	return attack.display_name if attack != null else "(unarmed)"
+
+static func _names_of(attacks: Array[AttackData]) -> String:
+	var names: Array[String] = []
+	for attack: AttackData in attacks:
+		names.append(_attack_label(attack))
+	return ", ".join(names) if not names.is_empty() else "nothing"
+
 func queue_move(handle: String, dest: Vector2i) -> Dictionary:
 	var unit := unit_by_handle(handle)
 	var gate := _controllable(unit, handle)
@@ -243,17 +273,26 @@ func queue_move(handle: String, dest: Vector2i) -> Dictionary:
 		return {"ok": false, "error": "another squad is already active this turn"}
 	return {"ok": true, "summary": "%s -> move %s" % [handle, str(dest)], "valid": move.is_valid}
 
-func queue_attack(handle: String, aim: Vector2i) -> Dictionary:
+func queue_attack(handle: String, aim: Vector2i, attack_name := "") -> Dictionary:
 	var unit := unit_by_handle(handle)
 	var gate := _controllable(unit, handle)
 	if not gate.ok:
 		return gate
 	if not unit.has_equipped_weapon():
 		return {"ok": false, "error": "%s has no equipped weapon" % handle}
+	var pick := _fire_pick(unit, handle, attack_name)
+	if not pick.ok:
+		return pick
+	# The pick lives for this one aim, as the menu arms it and exit_current_mode clears it: left
+	# standing it would be the next unnamed aim's, and a rune's counter (RuneData.counter_attack).
+	unit.active_attack = pick.attack
+	var result := _queue_armed_attack(unit, handle, aim)
+	unit.active_attack = null
+	return result
+
+func _queue_armed_attack(unit: Unit, handle: String, aim: Vector2i) -> Dictionary:
 	var origin := unit.get_projected_destination()
 	# Aiming: the live pick IS the question, and it is exactly what declare() stamps below (#102).
-	# Play never sets active_attack, so today this is always the weapon's main -- the headless
-	# side has no way to select a secondary at all (#110).
 	var aiming := unit.get_fired_attack()
 	# The board carries the elevations for the vertical-tolerance half of the gate (#258),
 	# mirroring the player's click exactly.
@@ -277,7 +316,7 @@ func queue_attack(handle: String, aim: Vector2i) -> Dictionary:
 	for v in victims:
 		names.append(handle_for(v))
 	var hits: String = ", ".join(names) if not names.is_empty() else "nobody"
-	return {"ok": true, "summary": "%s -> attack %s (hits %s)" % [handle, str(aim), hits]}
+	return {"ok": true, "summary": "%s -> attack %s with %s (hits %s)" % [handle, str(aim), _attack_label(aiming), hits]}
 
 func cancel(handle: String) -> Dictionary:
 	var unit := unit_by_handle(handle)
@@ -325,17 +364,26 @@ func guard(handle: String, ward_handle: String) -> Dictionary:
 		return {"ok": false, "error": "%s can't Guard now (already has a main action, or another squad is active)" % handle}
 	return {"ok": true, "summary": "%s -> guard %s" % [handle, ward_handle]}
 
-# Overwatch (#413): aim an attack and hold fire — the same OverwatchAction the menu queues, gated on
-# the same two questions its ring row asks, the attack's own can_overwatch capability and whether the
-# aim is legal at all. Play never sets active_attack, so this watches with what the unit would fire.
-func overwatch(handle: String, aim: Vector2i) -> Dictionary:
+# Overwatch (#413): aim an attack and hold fire — the same OverwatchAction the menu queues, picking
+# from the list the menu's Overwatch rows read (#590 split it from the fire view, so the main is never
+# a watch unless it is watch-only), named or else the first -- normally the only one (#615).
+func overwatch(handle: String, aim: Vector2i, attack_name := "") -> Dictionary:
 	var unit := unit_by_handle(handle)
 	var gate := _controllable(unit, handle)
 	if not gate.ok:
 		return gate
-	var aiming := unit.get_fired_attack()
-	if aiming == null or not unit.attack_can_overwatch(aiming):
-		return {"ok": false, "error": "%s's attack cannot stand watch" % handle}
+	var watches := unit.overwatch_attacks()
+	if watches.is_empty():
+		return {"ok": false, "error": "%s has nothing to stand watch with" % handle}
+	var aiming: AttackData = watches[0]
+	if attack_name != "":
+		aiming = unit.watch_attack_named(attack_name)
+		if aiming == null:
+			return {"ok": false, "error": "%s has no watch named '%s' (can watch with: %s)" % [
+				handle, attack_name, _names_of(watches)]}
+	var reason := unit.attack_block_reason(aiming)
+	if reason != "":
+		return {"ok": false, "error": "%s can't watch with %s: %s" % [handle, aiming.display_name, reason]}
 	var origin := unit.get_projected_destination()
 	# The player's click gate, which is now one predicate rather than this pair (#756): a directional
 	# aim needs a facing whose spread survives the terrain, a point aim needs the cell itself. The
@@ -346,7 +394,7 @@ func overwatch(handle: String, aim: Vector2i) -> Dictionary:
 	action.init(unit, aim, aiming)
 	if not squad_manager.queue_action(unit.squad, action):
 		return {"ok": false, "error": "%s can't stand watch now (already has a main action, or another squad is active)" % handle}
-	return {"ok": true, "summary": "%s -> overwatch %s" % [handle, str(aim)]}
+	return {"ok": true, "summary": "%s -> overwatch %s with %s" % [handle, str(aim), aiming.display_name]}
 
 # Reload: self-targeted weapon rearm (a main action, #73 as Spring Load, generalized #84) — the
 # same ReloadAction the menu queues, driving the generic Unit.can_reload_weapon()/reload_weapon()
@@ -537,6 +585,7 @@ func _describe_attack(atk: AttackAction) -> Dictionary:
 	return {
 		"actor": handle_for(atk.actor),
 		"target": handle_for(atk.target),
+		"attack": _attack_label(atk.fired_attack),   # the stamp, read back -- what the pick reached (#615)
 		"dmg": dmg,
 		"hp_after": hp_after,
 		"lethality": lethality,   # NONE / DOWNED / KILLED (mirrors Unit.take_damage — Law #2)

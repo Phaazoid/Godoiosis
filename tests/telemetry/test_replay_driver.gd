@@ -124,6 +124,29 @@ func test_binding_does_not_depend_on_the_order_units_sit_in() -> void:
 			).is_same(before[recorded_id])
 
 
+# A RECORDED WATCH IS RE-ARMED FROM THE WATCH VIEW (#615). The log records a watch by NAME, and since
+# #590 a watch-only attack is never in the fire view -- so a lookup there missed every recorded
+# overwatch and replayed it with the MAIN. The outcome diff cannot see that (a watch nobody walks
+# into lands no hit), so this asks the board what the replayed watch fires.
+func test_a_recorded_watch_replays_with_its_own_attack() -> void:
+	var run_id := await _record_a_watch()
+	var run := ReplayRun.load_run(run_id)
+	assert_bool(driver.seed(run)).is_true()
+	await driver.play()
+
+	assert_array(driver.notes.filter(func(n: String) -> bool: return n.contains("no longer has"))
+		).override_failure_message("the replay could not find the recorded watch: %s" % str(driver.notes)
+		).is_empty()
+	var watcher: Unit = null
+	for live: Unit in game.units_root.get_children():
+		if live.get_faction() == Team.Faction.PLAYER:
+			watcher = live
+	assert_object(watcher).is_not_null()
+	assert_object(watcher.watch).override_failure_message("the replay armed no watch at all").is_not_null()
+	var armed: AttackData = watcher.watch.attack
+	assert_str(armed.display_name if armed != null else "(none)").is_equal("Watch")
+
+
 # THE STAND-DOWN IS AFTER THE SEED, and that ordering is the whole of it: apply_scenario REPLACES
 # the AI set from the board it loads (#150), so a stand-down written first is overwritten by the
 # very next line. Every faction's orders are in the log, so the driver plays them; letting the AI
@@ -460,6 +483,46 @@ func _record_a_mission(lethal := false) -> String:
 	assert_bool(FileAccess.file_exists(TelemetryStore.run_dir(run_id) + ReplayRun.EVENTS_FILE)).override_failure_message(
 		"fixture: nothing was written to disk").is_true()
 	return run_id
+
+
+# A mission whose one order is a WATCH, taken through the menu's own steps: pick the Overwatch row's
+# attack, queue, execute. The weapon has the shipped Carbine's shape -- a fire main and a watch that
+# is an extra -- which is the shape the fire-view lookup could not replay.
+func _record_a_watch() -> String:
+	var hero := _spawn(Team.Faction.PLAYER, Vector2i(0, 0))
+	_spawn(Team.Faction.ENEMY, Vector2i(5, 0))
+	hero.add_item(_carbine_shaped_weapon())
+	mc._begin_turn()
+	var run_id: String = mission_log.run_id()
+
+	hero.active_attack = hero.overwatch_attacks()[0]
+	game.queue_overwatch(hero, Vector2i(1, 0))
+	hero.active_attack = null
+	var queued := false
+	for action: BaseAction in hero.squad.action_queue:
+		queued = queued or action.action_type == BaseAction.ActionType.OVERWATCH
+	assert_bool(queued).override_failure_message("fixture: the watch never queued").is_true()
+	await game.order_executor.execute_orders(hero)
+
+	await game.end_turn()
+	mission_log.seal(MissionLog.Ending.ABANDONED)
+	return run_id
+
+
+static func _carbine_shaped_weapon() -> WeaponInstance:
+	var shot := WeaponAttackData.new()
+	shot.display_name = "Shot"
+	shot.power = 4
+	var watch := WeaponAttackData.new()
+	watch.display_name = "Watch"
+	watch.power = 4
+	watch.max_range = 2
+	watch.can_overwatch = true
+	var template := WeaponData.new()
+	template.weapon_type = WeaponData.WeaponType.CHAINSWORD
+	template.main_attack = shot
+	template.extra_attacks.assign([watch])
+	return WeaponInstance.make(template)
 
 
 # One recorded number moved: the first recorded hit's damage. Returns the index of the pass it sits

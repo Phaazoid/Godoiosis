@@ -134,12 +134,12 @@ func _dispatch(cmd: String, args: Dictionary) -> Dictionary:
 		"legal_moves":
 			return {"ok": true, "text": BoardView.render_legal_moves(_session, str(args.get("unit", "")))}
 		"legal_targets":
-			return {"ok": true, "text": BoardView.render_legal_targets(_session, str(args.get("unit", "")))}
+			return {"ok": true, "text": BoardView.render_legal_targets(_session, str(args.get("unit", "")), str(args.get("attack", "")))}
 		"move":
 			var r = _session.queue_move(str(args.get("unit", "")), _xy(args))
 			return {"ok": r.ok, "text": _ack(r) + "\n\n" + BoardView.render_preview(_session)}
 		"attack":
-			var r = _session.queue_attack(str(args.get("unit", "")), _xy(args))
+			var r = _session.queue_attack(str(args.get("unit", "")), _xy(args), str(args.get("attack", "")))
 			return {"ok": r.ok, "text": _ack(r) + "\n\n" + BoardView.render_preview(_session)}
 		"cancel":
 			var r = _session.cancel(str(args.get("unit", "")))
@@ -165,7 +165,7 @@ func _dispatch(cmd: String, args: Dictionary) -> Dictionary:
 			var r = _session.guard(str(args.get("unit", "")), str(args.get("target", "")))
 			return {"ok": r.ok, "text": _ack(r) + "\n\n" + BoardView.render_preview(_session)}
 		"overwatch":
-			var r = _session.overwatch(str(args.get("unit", "")), _xy(args))
+			var r = _session.overwatch(str(args.get("unit", "")), _xy(args), str(args.get("attack", "")))
 			return {"ok": r.ok, "text": _ack(r) + "\n\n" + BoardView.render_preview(_session)}
 		"reload":
 			var r = _session.reload(str(args.get("unit", "")))
