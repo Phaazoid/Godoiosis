@@ -242,7 +242,7 @@ func _cmd_load(path: String, resume := false) -> String:
 	_board = BoardBuilder.build(root, "PlayRoot_%d" % Time.get_ticks_msec())
 	var loaded: Array = await BoardBuilder.load_scenario(_board, path)
 	_session = PlaySession.new(_board)
-	var drawn := 0 if resume else _session.start_pre_mission()
+	var drawn: int = 0 if resume else _session.start_pre_mission()
 	await process_frame   # the drawn units' _ready, as load_scenario waits for its own spawns
 	var head := "Loaded %s (%d units)" % [path, loaded.size()]
 	if drawn > 0:
