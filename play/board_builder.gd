@@ -37,6 +37,17 @@ static func build(parent: Node, root_name := "PlayRoot") -> Dictionary:
 	units_root.name = "Units"
 	root.add_child(units_root)
 
+	# The pre-mission phase's two board pieces (#46): where a drawn roster waits off the board (the
+	# twin of game.reserve_root, #738), and the zones its DEPLOYMENT cells are read from.
+	var reserve_root := Node2D.new()
+	reserve_root.name = "Reserve"
+	reserve_root.visible = false
+	root.add_child(reserve_root)
+
+	var zone_manager := ZoneManager.new()
+	zone_manager.name = "ZoneManager"
+	root.add_child(zone_manager)
+
 	var overlay := OverlayManager.new()
 	overlay.name = "OverlayManager"
 	for child_name in OVERLAY_CHILD_NAMES:
@@ -91,6 +102,8 @@ static func build(parent: Node, root_name := "PlayRoot") -> Dictionary:
 		"root": root,
 		"grid": grid,
 		"units_root": units_root,
+		"reserve_root": reserve_root,
+		"zone_manager": zone_manager,
 		"overlay_manager": overlay,
 		"squad_manager": squad_manager,
 		"turn_manager": turn_manager,
@@ -145,6 +158,8 @@ static func apply_scenario(board: Dictionary, scenario: ScenarioData) -> Array[U
 		board.board_heights.load_corner_dict(scenario.corner_heights)   # mirrors ScenarioManager
 	if board.get("gas_field") != null:
 		board.gas_field.load_dict(scenario.gas)   # mirrors ScenarioManager
+	if board.get("zone_manager") != null:
+		board.zone_manager.load_dict(scenario.zones)   # the deployment zone the phase reads (#46)
 
 	var spawned: Array[Unit] = []
 	var entry_by_unit := {}            # Unit -> ScenarioUnitEntry

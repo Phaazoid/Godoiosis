@@ -98,7 +98,8 @@ func _run_one(cmd: String, args) -> Dictionary:
 		"new":
 			return {"ok": true, "text": await _cmd_new()}
 		"load":
-			return {"ok": true, "text": await _cmd_load(str((args as Dictionary).get("path", "")))}
+			return {"ok": true, "text": await _cmd_load(str((args as Dictionary).get("path", "")),
+					bool((args as Dictionary).get("resume", false)))}
 	if _session == null:
 		return {"ok": false, "text": "no board - send {\"cmd\":\"new\"} or a load command first"}
 	return _dispatch(cmd, args as Dictionary)
@@ -160,6 +161,19 @@ func _dispatch(cmd: String, args: Dictionary) -> Dictionary:
 		"disband":
 			var r = _session.disband(str(args.get("unit", "")))
 			return {"ok": r.ok, "text": _ack(r)}
+		# The pre-mission phase (#46): the loadout screen's placement decisions, then its Begin.
+		"deploy":
+			var r = _session.deploy(str(args.get("unit", "")), _xy(args))
+			return {"ok": r.ok, "text": _ack(r)}
+		"undeploy":
+			var r = _session.undeploy(str(args.get("unit", "")))
+			return {"ok": r.ok, "text": _ack(r)}
+		"reposition":
+			var r = _session.reposition(str(args.get("unit", "")), _xy(args))
+			return {"ok": r.ok, "text": _ack(r)}
+		"begin":
+			var r = _session.begin()
+			return {"ok": r.ok, "text": _ack(r)}
 		# The six verbs PlaySession has always implemented and _dispatch never exposed -- which is
 		# why a driver asking for `burrow` got `unknown cmd` for a verb the docs list (#613).
 		"guard":
@@ -218,14 +232,22 @@ func _cmd_new() -> String:
 	_session = PlaySession.new(_board)
 	return "New board (2 units)\n\n" + BoardView.render_overview(_session)
 
-func _cmd_load(path: String) -> String:
+# A load is a mission STARTING, the game's fresh-start door, so a board naming a roster opens the
+# pre-mission phase (#46). `resume` is the other door: a mid-battle snapshot records `roster` too, and
+# drawing it would stand a second force on top of the one the snapshot restored.
+func _cmd_load(path: String, resume := false) -> String:
 	if path == "":
 		return "load needs a path, e.g. {\"cmd\":\"load\",\"args\":{\"path\":\"res://Scenarios/Castle Assault.tres\"}}"
 	_reset_board()
 	_board = BoardBuilder.build(root, "PlayRoot_%d" % Time.get_ticks_msec())
 	var loaded: Array = await BoardBuilder.load_scenario(_board, path)
 	_session = PlaySession.new(_board)
-	return "Loaded %s (%d units)\n\n%s" % [path, loaded.size(), BoardView.render_overview(_session)]
+	var drawn := 0 if resume else _session.start_pre_mission()
+	await process_frame   # the drawn units' _ready, as load_scenario waits for its own spawns
+	var head := "Loaded %s (%d units)" % [path, loaded.size()]
+	if drawn > 0:
+		head += "; pre-mission: %d of the roster stood up" % drawn
+	return "%s\n\n%s" % [head, BoardView.render_overview(_session)]
 
 func _reset_board() -> void:
 	if _board.has("root") and is_instance_valid(_board.root):

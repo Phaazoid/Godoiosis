@@ -15,12 +15,19 @@ var overlay_manager: OverlayManager
 var terrain_states: TerrainStateManager   # twin of game.terrain_states; null on a board built without one
 var board_heights: BoardHeights           # twin of game.board_heights (#257); null board reads flat
 var scenario_data: ScenarioData           # authored scenario metadata (#612); null on fresh new boards
+var reserve_root: Node2D                  # where a drawn roster waits off the board (#46); null on a board built without one
+var zone_manager: ZoneManager             # the zones the deployment cells are read from (#46)
 
 var _handle_by_unit := {}      # Unit -> String (stable display handle)
 var _next_player := 0
 var _next_enemy := 0
 var _downed_pending: Array[Unit] = []   # units downed mid-execute; ejected AFTER the pass (mirrors OrderExecutor._downed_pending)
 var _mission_contested := false         # "both sides were up at once" latch (mirrors MissionController._contested)
+# The pre-mission phase (#46): the shared PreMissionPhase with this session as its host, whether the
+# phase is still open, and what the last Begin captured (kept for slice 3's restart).
+var _phase: PreMissionPhase = null
+var _deploying := false
+var staged: PreMissionSnapshot = null
 
 const PLAYER_GLYPHS := "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
 const ENEMY_GLYPHS := "abcdefghijklmnopqrstuvwxyz"
@@ -34,6 +41,8 @@ func _init(board: Dictionary) -> void:
 	terrain_states = board.get("terrain_states")
 	board_heights = board.get("board_heights")
 	scenario_data = board.get("scenario")
+	reserve_root = board.get("reserve_root")
+	zone_manager = board.get("zone_manager")
 	if scenario_data != null and scenario_data.contested:
 		_mission_contested = true
 	for unit in live_units():
@@ -91,10 +100,20 @@ func handle_for(unit: Unit) -> String:
 	return _handle_by_unit.get(unit, "?")
 
 func unit_by_handle(h: String) -> Unit:
-	for unit in live_units():
+	for unit in live_units() + reserve_units():
 		if _handle_by_unit.get(unit, "") == h:
 			return unit
 	return null
+
+# The drawn roster still waiting off the board (#46) -- named so the driver can deploy them.
+func reserve_units() -> Array[Unit]:
+	var result: Array[Unit] = []
+	if reserve_root == null:
+		return result
+	for child in reserve_root.get_children():
+		if child is Unit and not child.is_queued_for_deletion():
+			result.append(child)
+	return result
 
 func _board() -> BoardContext:
 	return BoardContext.new(grid, live_units(), squad_manager, terrain_states, null, board_heights)
@@ -217,14 +236,179 @@ func status() -> Dictionary:
 		"queued": 0 if active == null else active.action_queue.size(),
 		"acted": acted,
 		"free": free,
+		"pre_mission": _deploying,
 	}
+
+
+# ---- the pre-mission phase (#46) ----
+#
+# The SAME PreMissionPhase the game runs, with this session as its host: the six calls below are
+# the headless twins of game.gd's spawn_reserve_unit / deploy_unit / undeploy_unit / is_deployed /
+# can_spawn_at / get_unit_at_cell. Placement is per host by design (PreMission.gd); every RULE is the
+# phase's, and tests/flow/test_pre_mission_two_hosts.gd holds the two hosts to one answer.
+
+func spawn_reserve_unit(data: UnitData) -> Unit:
+	var unit := UnitFactory.create_unit(data, null, Vector2i.ZERO)
+	reserve_root.add_child(unit)
+	_register(unit)
+	return unit
+
+# game.deploy_unit's steps, over this board.
+func deploy_unit(unit: Unit, cell: Vector2i) -> bool:
+	if unit == null or reserve_root == null or unit.get_parent() != reserve_root:
+		push_error("deploy_unit: not a reserve unit")
+		return false
+	if not can_spawn_at(cell):
+		return false
+	reserve_root.remove_child(unit)
+	units_root.add_child(unit)
+	unit.movement.set_grid(grid)
+	unit.movement.set_cell(cell)   # after set_grid: set_cell push_errors without one
+	unit.movement.set_heights(board_heights)
+	squad_manager.create_squad(unit)
+	return true
+
+# game.undeploy_unit's steps: release (no re-solo) before the reparent, then drop the grid.
+func undeploy_unit(unit: Unit) -> void:
+	if not is_deployed(unit):
+		push_error("undeploy_unit: not a deployed unit")
+		return
+	squad_manager.release(unit)
+	units_root.remove_child(unit)
+	reserve_root.add_child(unit)
+	unit.movement.set_grid(null)
+
+func is_deployed(unit: Unit) -> bool:
+	return unit != null and unit.get_parent() == units_root
+
+func can_spawn_at(cell: Vector2i) -> bool:
+	return RulesService.can_spawn_at(_board(), cell)
+
+func get_unit_at_cell(cell: Vector2i) -> Unit:
+	return _board().unit_at_cell(cell)
+
+func is_deploying() -> bool:
+	return _deploying
+
+# The phase every load of a mission opens on (the bridge's `load` is the fresh-start door). Draws the
+# roster the scenario names; returns how many stood up, and the phase stays open only if someone did
+# -- a phase nobody stands in could never be committed, which is the game's own rule.
+func start_pre_mission() -> int:
+	if scenario_data == null or scenario_data.roster == "":
+		return 0
+	var scenario := scenario_data
+	_phase = PreMissionPhase.new(self, zone_manager, squad_manager,
+			func() -> int: return scenario.deployment_cap)
+	var drawn := _phase.draw(scenario.roster)
+	_deploying = drawn > 0
+	return drawn
+
+func deployment_cells() -> Array[Vector2i]:
+	var cells: Array[Vector2i] = []
+	if _phase != null:
+		cells = _phase.open_deployment_cells()
+	return cells
+
+func deployed_count() -> int:
+	return _phase.deployed_count() if _phase != null else 0
+
+# The roster in ENTRY order, MissionController.roster_units()'s twin.
+func roster_units() -> Array[Unit]:
+	var units: Array[Unit] = []
+	if _phase != null:
+		units = _phase.units
+	return units
+
+# Why one more cannot be placed, or "" -- the phase's own sentence.
+func deploy_block_reason() -> String:
+	return _phase.deploy_block_reason() if _phase != null else ""
+
+func deployment_cap() -> int:
+	return _phase.cap() if _phase != null else PreMission.NO_CAP
+
+func deploy(handle: String, cell: Vector2i) -> Dictionary:
+	var gate := _phase_gate()
+	if not gate.ok:
+		return gate
+	var unit := unit_by_handle(handle)
+	if unit == null:
+		return {"ok": false, "error": "no unit '%s'" % handle}
+	if not unit.drawn_from_roster:
+		return {"ok": false, "error": "%s is not part of the roster" % handle}
+	if is_deployed(unit):
+		return {"ok": false, "error": "%s is already deployed" % handle}
+	var reason := _phase.deploy_block_reason()
+	if reason != "":
+		return {"ok": false, "error": reason}
+	if not _phase.open_deployment_cells().has(cell):
+		return {"ok": false, "error": "%s is not an open deployment cell" % str(cell)}
+	if not deploy_unit(unit, cell):
+		return {"ok": false, "error": "%s cannot be placed at %s" % [handle, str(cell)]}
+	return {"ok": true, "summary": "%s deployed to %s" % [handle, str(cell)]}
+
+func undeploy(handle: String) -> Dictionary:
+	var gate := _phase_gate()
+	if not gate.ok:
+		return gate
+	var unit := unit_by_handle(handle)
+	if unit == null:
+		return {"ok": false, "error": "no unit '%s'" % handle}
+	if not unit.drawn_from_roster:
+		return {"ok": false, "error": "%s is not part of the roster" % handle}
+	if not is_deployed(unit):
+		return {"ok": false, "error": "%s is already in reserve" % handle}
+	undeploy_unit(unit)
+	return {"ok": true, "summary": "%s back to the reserve" % handle}
+
+func reposition(handle: String, cell: Vector2i) -> Dictionary:
+	var gate := _phase_gate()
+	if not gate.ok:
+		return gate
+	var unit := unit_by_handle(handle)
+	if unit == null:
+		return {"ok": false, "error": "no unit '%s'" % handle}
+	if not is_deployed(unit):
+		return {"ok": false, "error": "%s is in reserve -- deploy it instead" % handle}
+	if not _phase.reposition_cells(unit).has(cell):
+		return {"ok": false, "error": "%s cannot move to %s" % [handle, str(cell)]}
+	_phase.reposition(unit, cell)
+	return {"ok": true, "summary": "%s moved to %s" % [handle, str(cell)]}
+
+# The phase's one exit, refused in the game's own words. The snapshot is the commit's capture (#763),
+# held for slice 3's restart.
+func begin() -> Dictionary:
+	var gate := _phase_gate()
+	if not gate.ok:
+		return gate
+	var refusal := _phase.commit_block_reason()
+	if refusal != "":
+		return {"ok": false, "error": refusal}
+	staged = _phase.capture(scenario_data.resource_path if scenario_data != null else "")
+	_deploying = false
+	return {"ok": true, "summary": "mission begun with %d deployed" % _phase.deployed_count()}
+
+func _phase_gate() -> Dictionary:
+	if not _deploying:
+		return {"ok": false, "error": "the pre-mission phase is not open"}
+	return {"ok": true}
+
+# Every battle verb refuses while the phase is open: the mission has not started.
+func _battle_gate() -> Dictionary:
+	if _deploying:
+		return {"ok": false, "error": "the mission has not begun -- deploy, then begin"}
+	return {"ok": true}
 
 
 # ---- commands (mutating) — all flow through the real SquadManager (Law #3) ----
 
 func _controllable(unit: Unit, handle: String) -> Dictionary:
+	var phase := _battle_gate()
+	if not phase.ok:
+		return phase
 	if unit == null:
 		return {"ok": false, "error": "no unit '%s'" % handle}
+	if not is_deployed(unit):
+		return {"ok": false, "error": "%s is in reserve" % handle}
 	if unit.get_faction() != turn_manager.active_faction():
 		return {"ok": false, "error": "%s is not on the active faction (%s)" % [handle, _faction_name(active_faction())]}
 	if unit.squad.has_acted:
@@ -456,8 +640,12 @@ func join(member_handle: String, leader_handle: String) -> Dictionary:
 	var leader := unit_by_handle(leader_handle)
 	if member == null:
 		return {"ok": false, "error": "no unit '%s'" % member_handle}
+	if not is_deployed(member):
+		return {"ok": false, "error": "%s is in reserve" % member_handle}
 	if leader == null:
 		return {"ok": false, "error": "no unit '%s'" % leader_handle}
+	if not is_deployed(leader):
+		return {"ok": false, "error": "%s is in reserve" % leader_handle}
 	if member == leader:
 		return {"ok": false, "error": "a unit can't join itself"}
 	if member.squad == leader.squad:
@@ -481,6 +669,8 @@ func leave(handle: String) -> Dictionary:
 	var unit := unit_by_handle(handle)
 	if unit == null:
 		return {"ok": false, "error": "no unit '%s'" % handle}
+	if not is_deployed(unit):
+		return {"ok": false, "error": "%s is in reserve" % handle}
 	if not unit.has_squad():
 		return {"ok": false, "error": "%s is already solo" % handle}
 	if unit.get_faction() != active_faction():
@@ -495,6 +685,8 @@ func disband(handle: String) -> Dictionary:
 	var unit := unit_by_handle(handle)
 	if unit == null:
 		return {"ok": false, "error": "no unit '%s'" % handle}
+	if not is_deployed(unit):
+		return {"ok": false, "error": "%s is in reserve" % handle}
 	if not unit.has_squad():
 		return {"ok": false, "error": "%s isn't in a multi-unit squad" % handle}
 	if not unit.is_leader():
@@ -519,6 +711,9 @@ func _squad_change_gate(squad_a: Squad, squad_b: Squad) -> Dictionary:
 # ---- preview (pure look-ahead) ----
 
 func preview() -> Dictionary:
+	var phase := _battle_gate()
+	if not phase.ok:
+		return phase
 	var squad := squad_manager.active_squad
 	if squad == null:
 		return {"ok": false, "error": "no squad has queued orders"}
@@ -595,6 +790,9 @@ func _describe_attack(atk: AttackAction) -> Dictionary:
 # ---- execute (headless application of the resolved plan) ----
 
 func execute() -> Dictionary:
+	var phase := _battle_gate()
+	if not phase.ok:
+		return phase
 	var squad := squad_manager.active_squad
 	if squad == null:
 		return {"ok": false, "error": "no squad has queued orders"}
@@ -836,6 +1034,9 @@ func _lethality_tag(lethality: ResolvedOutcome.Lethality) -> String:
 # ---- turn flow ----
 
 func end_turn() -> Dictionary:
+	var phase := _battle_gate()
+	if not phase.ok:
+		return phase
 	# A finished mission does not hand off (mirrors game.end_turn's bail on mission_controller
 	# .is_over()). Refusing rather than silently passing keeps a headless run from grinding out
 	# turns on a board nobody can still win or lose.
