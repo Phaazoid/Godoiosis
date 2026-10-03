@@ -14,7 +14,8 @@ extends SceneTree
 #   overview | preview           - render the board / the active plan
 #   focus  {"unit": "A"}         - render a unit's move/attack reach
 #   move   {"unit": "A", "x": 4, "y": 0}
-#   attack {"unit": "A", "x": 5, "y": 0}
+#   attack {"unit": "A", "x": 5, "y": 0, "attack": "Splash"}   - "attack" optional (#615), as are
+#                                 overwatch's and legal_targets'; omitted, the default fires
 #   cancel {"unit": "A"}
 #   rescue {"unit": "A", "target": "b"}   - A picks up adjacent downed ally b (a main action)
 #   join   {"unit": "B", "leader": "A"}   - B joins A's squad (squad-up / join)
