@@ -7,7 +7,6 @@
 
 [resource]
 script = ExtResource("4_30iaj")
-mod_spaces = Array[int]([1, 2, 3])
 main_attack = ExtResource("3_x17ab")
 weapon_type = 5
 is_prototype = true
