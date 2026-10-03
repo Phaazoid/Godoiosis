@@ -86,6 +86,8 @@ func test_naming_an_attack_fires_that_attack() -> void:
 	assert_bool(r.ok).override_failure_message(str(r.get("error", ""))).is_true()
 	var orders := _queued(BaseAction.ActionType.ATTACK)
 	assert_int(orders.size()).is_equal(1)
+	if orders.size() != 1:
+		return
 	assert_object((orders[0] as AttackAction).fired_attack).is_same(_lob)
 	# The readback a driver sees names it too, off the resolved stamp.
 	assert_str(BoardView.render_preview(_sess)).contains("(Lob)")
@@ -95,6 +97,8 @@ func test_no_name_fires_the_default() -> void:
 	assert_bool((_sess.queue_attack("A", Vector2i(1, 0)) as Dictionary).ok).is_true()
 	var orders := _queued(BaseAction.ActionType.ATTACK)
 	assert_int(orders.size()).is_equal(1)
+	if orders.size() != 1:
+		return
 	assert_object((orders[0] as AttackAction).fired_attack).is_same(_jab)
 
 
@@ -194,6 +198,8 @@ func test_overwatch_watches_with_the_weapons_watch_attack() -> void:
 	assert_bool(r.ok).override_failure_message(str(r.get("error", ""))).is_true()
 	var watches := _queued(BaseAction.ActionType.OVERWATCH)
 	assert_int(watches.size()).is_equal(1)
+	if watches.size() != 1:
+		return
 	assert_object((watches[0] as OverwatchAction).fired_attack).is_same(_watch)
 
 
