@@ -566,6 +566,35 @@ func test_knockback_preview_mirrors_trail_and_landing_ghost() -> void:
 	assert_bool(_unit_mirror.sprite_for(foe).visible).is_false()
 
 
+# A fully held shove (#1186) reaches the diorama as ONE mark on its own cell, in the trail's tint and
+# with no ghost -- carried there by the trail's own array and parent, which is why the mirror has no
+# code for it -- and the preview's clear takes it with the rest.
+func test_a_held_shove_mirrors_one_mark_in_the_trail_colour_and_clears_with_it() -> void:
+	var foe := _spawn(ENEMY, Vector2i(3, 2))
+	var holds: Array[Vector2i] = [Vector2i(3, 2), Vector2i(3, 2)]   # two held hits, one cell
+	_om().show_knockback_preview([], holds)
+	await _settle()
+	var mark: Sprite2D = null
+	for node: Node2D in _om().knockback_preview_sprites:
+		var sprite := node as Sprite2D
+		if sprite != null and sprite.texture == OverlayManager.PATH_HELD:
+			mark = sprite
+	assert_object(mark).override_failure_message("no hold mark was drawn in 2D").is_not_null()
+	var markers := _overlays.markers_of(BoardOverlays.Layer.KNOCKBACK)
+	assert_int(markers.size()).is_equal(1)
+	if markers.size() == 1 and mark != null:
+		var pos: Vector3 = markers[0]["pos"]
+		assert_that(Vector2(pos.x, pos.z)).is_equal(mark.global_position / 16.0)
+		assert_that(markers[0]["texture"]).is_equal(OverlayManager.PATH_HELD)
+		assert_that(markers[0]["modulate"]).is_equal(OverlayManager.KNOCKBACK_MODULATE)
+	assert_int(_unit_mirror.ghost_count()).is_equal(0)
+	assert_bool(_unit_mirror.sprite_for(foe).visible).is_true()
+
+	_om().clear_knockback_preview()
+	await _settle()
+	assert_array(_overlays.markers_of(BoardOverlays.Layer.KNOCKBACK)).is_empty()
+
+
 # The honest trail (#259 rework, dev: the arrow should paint "in the air until he would drop,
 # then point straight down to his destination"). A shove off a terrace: the flown cell's arrow
 # hangs at the LAUNCH cell's level rather than lying on the ground below it, and the drop folds

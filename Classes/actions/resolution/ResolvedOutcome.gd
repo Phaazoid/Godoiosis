@@ -26,7 +26,7 @@ var fired_reactions: Array[ElementalReaction] = []
 var elements: Array[Elemental.Element] = []
 var target_hp_after: int = 0                     # threaded hypothetical HP after this hit (R4)
 var knockback_applied: bool = false               # #84: this hit shoved the target (Kinetic Mace Blowback)
-var knockback_from: Vector2i = Vector2i.ZERO       # the cell it was standing on BEFORE this shove
+var knockback_from: Vector2i = Vector2i.ZERO       # the cell it stood on when this hit's shove was judged
 var knockback_to: Vector2i = Vector2i.ZERO         # the cell it lands in — previewed and applied verbatim (Law #2)
 # Every cell of the shove, start included — the flight plus any landing tumble (#259). The TRAIL's
 # one source: a tumble down a sideways ramp bends the path once, so the endpoints above cannot
@@ -37,7 +37,7 @@ var knockback_path: Array[Vector2i] = []
 # shove animation and the 3D trail read it here rather than re-deriving (Law #2).
 var knockback_landing_index: int = 0
 # Tiles of this hit's shove the target's weight band absorbed (#120). Non-zero whether the shove was
-# shortened or stopped outright -- the one fact a fully held shove leaves behind, since it draws no trail.
+# shortened or stopped outright; a fully held one draws no trail, and held_in_place() marks it instead.
 var knockback_held: int = 0
 # The brace bonus actually subtracted from this hit (#414) — non-zero only when a Guard substituted
 # and the attack did not pierce DEF. Already folded into the mitigation; recorded so the queue row
@@ -120,6 +120,11 @@ var severed_limb: int = -1
 # resolver and both execution twins -- execution re-asks the ladder, which cannot see a removal.
 func non_blow() -> int:
 	return damage if removed else drown_damage
+
+# The target's weight held this hit's whole shove, so it stays on knockback_from (#1186). The board
+# marks that cell; a shove held only in part already draws its shorter trail.
+func held_in_place() -> bool:
+	return knockback_held > 0 and not knockback_applied
 
 # R7: the pass felled this action's actor before its turn to act came round. A no-op at execution
 # on both twins, and dropped from the BeatSheet so the camera never frames it. What it does to the
