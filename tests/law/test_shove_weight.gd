@@ -1,6 +1,7 @@
 # WEIGHT RESISTS A SHOVE (#120, dev 2026-10-01): a shove travels the attack's knockback (mods
 # included) less the TARGET's weight band, floored at 0, and the tiles weight absorbed are reported on
-# the outcome as `knockback_held` -- the one trace a fully held shove leaves, since it draws no trail.
+# the outcome as `knockback_held`. A fully held shove draws no trail, so `held_in_place()` names it and
+# `knockback_from` says where the board marks it (#1186).
 #
 # Driven through the real resolve. Weights are set relative to the band THRESHOLDS (Stats.WEIGHT_BAND_*),
 # never as literal numbers, so retuning a threshold moves nothing these cases assert.
@@ -81,6 +82,8 @@ func test_a_band_one_target_is_shoved_one_tile_short() -> void:
 	assert_int(_tiles_moved(outcome)).is_equal(1)
 	assert_int(outcome.knockback_held).is_equal(1)
 	assert_that(outcome.knockback_to).is_equal(Vector2i(3, 0))
+	assert_bool(outcome.held_in_place()).override_failure_message(
+		"a shove that still moved its target reads as held in place").is_false()
 
 
 # The case the telemetry is full of: Gust throwing an enemy into a hole. Heavy enough, it stays put.
@@ -94,6 +97,8 @@ func test_a_band_two_target_holds_beside_a_hole() -> void:
 	assert_bool(outcome.removed).is_false()
 	assert_int(outcome.fall_damage).is_equal(0)
 	assert_array(outcome.popups).contains([PlanResolver.HELD_POPUP % 2])
+	assert_bool(outcome.held_in_place()).is_true()
+	assert_that(outcome.knockback_from).is_equal(Vector2i(2, 0))
 
 
 func test_the_same_hole_takes_an_ordinary_body() -> void:
@@ -114,6 +119,28 @@ func test_a_mods_extra_tile_composes_with_the_band() -> void:
 	var outcome := _resolve(s)
 	assert_int(_tiles_moved(outcome)).is_equal(1)
 	assert_int(outcome.knockback_held).is_equal(1)
+
+
+# The hold is marked where the hit FINDS its target, which a shove earlier in the same pass can move
+# (#1186). The first hit carries the band-1 target a tile on; the second, a one-tile shove, is held whole
+# there -- so the cell must be the hypothetical one, never where the unit stood at the start.
+func test_a_hold_is_found_where_an_earlier_shove_left_its_target() -> void:
+	var s := _setup(2, Vector2i(1, 0), Vector2i(2, 0))
+	var target: Unit = s.d
+	_weigh_to(target, Stats.WEIGHT_BAND_1)
+	var second := H.spawn_solo(self, s.sm, PLAYER, Vector2i(4, 0))
+	(second.get_equipped_weapon() as WeaponInstance).template.main_attack.knockback = 1
+	var first := H.stamped_attack(s.a, target)
+	var then := H.stamped_attack(second, target)
+	var plan := ResolvedPlan.new()
+	var attacks: Array[AttackAction] = [first, then]
+	plan.attacks = attacks
+	var sm: SquadManager = s.sm
+	PlanResolver.resolve(plan, _no_reactions, sm.board_source.call())
+	assert_that(first.resolved.knockback_to).override_failure_message(
+		"the first shove did not move the target, so the case measures nothing").is_equal(Vector2i(3, 0))
+	assert_bool(then.resolved.held_in_place()).is_true()
+	assert_that(then.resolved.knockback_from).is_equal(Vector2i(3, 0))
 
 
 # --- whose weight answers --------------------------------------------------------------------

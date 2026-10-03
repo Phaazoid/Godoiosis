@@ -1500,13 +1500,17 @@ func _preview_plan_effects(plan: ResolvedPlan) -> void:
 	var all_hits: Array = []
 	all_hits.append_array(plan.attacks)
 	all_hits.append_array(plan.counters)
+	# A shove the target's weight held outright draws no trail, so it is marked where it held (#1186).
 	var shoves: Array = []
+	var holds: Array[Vector2i] = []
 	for atk: AttackAction in all_hits:
+		if atk.resolved != null and atk.resolved.held_in_place():
+			holds.append(atk.resolved.knockback_from)
 		if atk.resolved != null and atk.resolved.knockback_applied and atk.target != null and is_instance_valid(atk.target):
 			shoves.append({"target": atk.target, "path": atk.resolved.knockback_path,
 				"to": atk.resolved.knockback_to, "removed": atk.resolved.removed,
 				"landing_index": atk.resolved.knockback_landing_index})
-	overlay_manager.show_knockback_preview(shoves)
+	overlay_manager.show_knockback_preview(shoves, holds)
 	# Guards this plan has QUEUED but not yet armed (#450 part 2). ResolvedPlan.guards holds the
 	# armed wards and the pending ones together, and GuardWard.sequence already tells them apart --
 	# make() leaves it 0, arm() stamps 1 upward and copy() preserves it -- so "is this only a plan?"

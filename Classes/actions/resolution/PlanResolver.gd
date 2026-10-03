@@ -725,6 +725,9 @@ static func _resolve_one(action: AttackAction, plan: ResolvedPlan, reactions: Ar
 	var landing: _Landing = null
 	if LethalityRules.predict(target_hypo, outcome.damage) != ResolvedOutcome.Lethality.KILLED:
 		outcome.knockback_held = _shove_against(action, target, target_hypo).y
+		# Where the shove found its target: the launch cell when it lands, and the cell a fully held
+		# shove leaves it on (#1186 marks it there).
+		outcome.knockback_from = target_hypo.position
 		if outcome.knockback_held > 0:
 			outcome.popups.append(HELD_POPUP % outcome.knockback_held)
 		landing = _knockback_landing(action, target, target_hypo, board)
@@ -805,7 +808,6 @@ static func _resolve_one(action: AttackAction, plan: ResolvedPlan, reactions: Ar
 	# source (a landing tumble can bend it); from/to stay the endpoints execute reads.
 	if landing != null and landing.path.size() > 1:
 		outcome.knockback_applied = true
-		outcome.knockback_from = landing.path[0]
 		outcome.knockback_to = landing.cell
 		outcome.knockback_path = landing.path
 		outcome.knockback_landing_index = landing.landing_index

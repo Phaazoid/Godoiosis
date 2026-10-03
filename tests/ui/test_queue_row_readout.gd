@@ -464,6 +464,54 @@ func test_a_shove_the_targets_weight_holds_says_so_on_the_row() -> void:
 		assert_str(String(entry["tip"])).contains(PlanResolver.HELD_POPUP % 2)
 
 
+# #1186: the BOARD marks a shove held outright too -- the hold icon under the target, from the same
+# refresh that badges the row, so the board and the queue cannot disagree about it (Law #2).
+func test_a_shove_the_targets_weight_holds_is_marked_under_it_on_the_board() -> void:
+	var heavy: Unit = await _held_shove_fixture(Stats.WEIGHT_BAND_2)
+	assert_array(_held_mark_cells()).override_failure_message(
+		"the held shove left no mark under its target").is_equal([Vector2i(2, 1)])
+	assert_bool(heavy.visuals.projected).override_failure_message(
+		"a unit that stays put was hidden behind a ghost").is_false()
+	assert_bool(_entry(_attack_row(), ActionQueueRow.BADGE_HELD % 2).is_empty()).override_failure_message(
+		"the board marked a hold the row does not report").is_false()
+
+
+# Held in PART, the shove still moves its target, and its shorter trail already says so: no mark.
+func test_a_partly_held_shove_draws_its_trail_and_no_mark() -> void:
+	await _held_shove_fixture(Stats.WEIGHT_BAND_1)
+	assert_bool(game.overlay_manager.knockback_preview_sprites.is_empty()).override_failure_message(
+		"the shortened shove drew nothing, so the case measures nothing").is_false()
+	assert_array(_held_mark_cells()).is_empty()
+
+
+# A two-tile shove from (1,1) into an enemy at (2,1) weighed to exactly `weight`, queued and refreshed
+# through the real door.
+func _held_shove_fixture(weight: int) -> Unit:
+	var heavy := _spawn(Team.Faction.ENEMY, Vector2i(2, 1))
+	var ballast := Item.new()
+	ballast.weight = weight - heavy.get_weight()
+	assert_bool(heavy.add_item(ballast)).is_true()
+	assert_int(heavy.get_weight()).is_equal(weight)
+	var attacker := _spawn(Team.Faction.PLAYER, Vector2i(1, 1))
+	var weapon := H.make_weapon(4)
+	(weapon.template.main_attack as WeaponAttackData).knockback = 2
+	attacker.equipped_weapon = weapon
+	game.squad_manager.active_squad = attacker.squad
+	game.squad_manager.queue_action(attacker.squad, H.stamped_attack(attacker, heavy))
+	game.refresh_action_queue(attacker.squad)
+	await await_idle_frame()
+	return heavy
+
+
+func _held_mark_cells() -> Array[Vector2i]:
+	var cells: Array[Vector2i] = []
+	for node: Node2D in game.overlay_manager.knockback_preview_sprites:
+		var sprite := node as Sprite2D
+		if sprite != null and sprite.texture == OverlayManager.PATH_HELD:
+			cells.append(game.grid.local_to_map(game.grid.to_local(sprite.global_position)))
+	return cells
+
+
 # A unit that shrugs off `element` entirely, so the resolver records its INSULATED popup — the one
 # world-event pill reachable without a shove, a cliff or deep water.
 func _spawn_insulated_to(element: Elemental.Element, cell: Vector2i) -> Unit:

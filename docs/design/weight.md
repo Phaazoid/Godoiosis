@@ -2,7 +2,7 @@
 
 **Status: RULED and BUILT (dev, 2026-10-01) on [#120](https://github.com/Phaazoid/Godoiosis/issues/120), in three PRs: the body and the falls, the shove, then the Weights page and the numbers. Weight slows movement too since [#1176](https://github.com/Phaazoid/Godoiosis/issues/1176), the same day.** This is the owner doc for weight. [stats.md](stats.md) keeps the roster entry and points here.
 
-**Canon checked through #1186 (2026-10-01).**
+**Canon checked through #1190 (2026-10-02).**
 
 ## The model
 
@@ -20,7 +20,7 @@
 | **Shove distance** | Distance = the attack's knockback (mods included) − the TARGET's band, floored at 0. A band that reduces a shove to 0 holds the unit in place. | **BUILT** (#120 PR 2). `PlanResolver._shove_against` is the one place weight meets a shove, and it reads the TARGET. |
 | **Movement** (`UnitInstance.get_mov`) | MOV = base + DEX band − the band, then the leg throttle, still last; the floor is 1. A heavy body or a heavy load walks fewer tiles. | **BUILT** ([#1176](https://github.com/Phaazoid/Godoiosis/issues/1176)). `Unit.get_mov` passes `get_weight()`, so the body counts; the pre-mission card previews it (`Unit.previewed_mov`). |
 
-**What a held shove looks like.** `ResolvedOutcome.knockback_held` records how many tiles the target's weight absorbed, whether the shove was shortened or stopped outright. It shows in the two channels Fell and Void already use: a popup on the hit and a badge on the queue row. A partly held shove's trail is already honest, because it draws the shorter path. A fully held one draws no trail at all, so the queue badge is the whole Law #2 preview for it. A board-level mark for a held shove is a look question, deferred until it has been played. Telemetry's hit record carries `"held"`.
+**What a held shove looks like.** `ResolvedOutcome.knockback_held` records how many tiles the target's weight absorbed, whether the shove was shortened or stopped outright. It shows in the two channels Fell and Void already use: a popup on the hit and a badge on the queue row. A partly held shove's trail is already honest, because it draws the shorter path. A fully held one draws no trail, so the board marks it instead ([#1186](https://github.com/Phaazoid/Godoiosis/issues/1186)): the hold icon, the same one a hold-position order shows in the queue, lies under the target on the cell the shove found it on (`ResolvedOutcome.held_in_place()`, at `knockback_from`). It wears the shove trail's tint and follows that knob, from a greyscale copy of the icon (`nomove_trail.png`), and it covers the target's squad ring while it shows (dev, 2026-10-02, picked off a mockup). It marks only what weight held: a shove braced by a wall, a body or high ground still draws nothing. Telemetry's hit record carries `"held"`.
 
 **Whose weight answers.** Always the unit being shoved:
 - **A Guard** resolves the whole hit as the victim, so the BLOCKER's weight answers. A heavy Vanguard holds a shove that would have thrown its ward.
