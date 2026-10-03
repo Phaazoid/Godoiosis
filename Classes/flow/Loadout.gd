@@ -12,9 +12,8 @@ extends RefCounted
 # gear through copy_for_grant(). The stash simply never got the same treatment, because until this
 # ticket nothing could move it.
 #
-# So the stash here is COPIES, and the phase owns them. MissionController builds one in deploy_roster
-# -- where the Roster is already in hand -- and drops it in reset(), the same pair of edges
-# _roster_units lives on.
+# So the stash here is COPIES, and the phase owns them. PreMissionPhase builds one in its draw --
+# where the Roster is already in hand -- and dies with the phase, on the same edges as its roster.
 #
 # ONE RULE, TWO INPUTS. Clicking and dragging both ask move_block_reason and both act through move();
 # a drag that judged for itself would be a second answer to "may this move", which is the exact shape

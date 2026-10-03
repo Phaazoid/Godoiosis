@@ -9,10 +9,10 @@ class_name PreMission
 #
 # It spawns nothing and touches no board. Two things follow from that and both are contracts:
 #
-#   * CELLS ARRIVE ALREADY LEGAL. "May a unit stand here" is the HOST's question -- game.can_spawn_at
-#     is spawn_unit's own gate, while board_builder.spawn currently refuses nothing at all -- so a
-#     legality rule stated here would be a second answer that is wrong on one of the two hosts.
-#     The caller filters, this pairs.
+#   * CELLS ARRIVE ALREADY LEGAL. "May a unit stand here" is the HOST's question, asked through ONE
+#     rule both hosts share since #46 (RulesService.can_spawn_at) -- so a legality rule stated here
+#     would be a second answer. The caller filters, this pairs. The phase that drives this walk on
+#     either host is PreMissionPhase.
 #   * NOTHING IS WRITTEN BACK ONTO AN ENTRY. RosterCatalog.resolve serves the CACHED Roster, so its
 #     entries are shared sub-resources of a file on disk; filling in `cell` would edit content in
 #     memory and the next roster save would write it out. The plan is a separate pairing.

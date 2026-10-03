@@ -15,6 +15,10 @@ static func render_overview(session) -> String:
 	lines.append(_grid_block(session, bounds, _overview_overlay(session)))
 	lines.append("")
 	lines.append(_legend(session))
+	var pre_mission := _pre_mission_block(session)
+	if pre_mission != "":
+		lines.append("")
+		lines.append(pre_mission)
 	var mission_str := _mission_block(session)
 	if mission_str != "":
 		lines.append("")
@@ -22,8 +26,9 @@ static func render_overview(session) -> String:
 	return "\n".join(lines)
 
 # Mark every downed-but-alive body on the board ("v"), live watches ("!"),
-# and mission zones ("C" = capture, "E" = extraction) (#413, #612).
-# Precedence: downed "v" > watch "!" > zone "C"/"E".
+# mission zones ("C" = capture, "E" = extraction) (#413, #612), and while the pre-mission phase is
+# open the deployment zone ("D", #46), which the game hides the moment the battle begins.
+# Precedence: downed "v" > watch "!" > zone "C"/"E"/"D".
 static func _overview_overlay(session) -> Dictionary:
 	var overlay := {}
 	for zname in session.zones():
@@ -34,6 +39,8 @@ static func _overview_overlay(session) -> Dictionary:
 			glyph = "C"
 		elif kind == ZoneManager.Kind.EXTRACTION:
 			glyph = "E"
+		elif kind == ZoneManager.Kind.DEPLOYMENT and session.is_deploying():
+			glyph = "D"
 		if glyph != "":
 			for cell in zone.get("cells", []):
 				overlay[cell] = glyph
@@ -194,6 +201,28 @@ static func _legend(session) -> String:
 		lines[0] = "Units:   (%s)" % "; ".join(notes)
 	return "\n".join(lines)
 
+# The pre-mission phase (#46): how many are placed against the cap, where one more may stand, and
+# who is waiting in reserve -- the decisions the loadout screen offers, before anything moves.
+static func _pre_mission_block(session) -> String:
+	if not session.is_deploying():
+		return ""
+	var cap: int = session.deployment_cap()
+	var lines: Array[String] = []
+	lines.append("Pre-mission: deployed %d/%s  -- deploy, undeploy, reposition, then begin" % [
+		session.deployed_count(), str(cap) if cap > 0 else "any"])
+	lines.append("  open cells: %s" % _format_cells(session.deployment_cells()))
+	var reserve: Array[Unit] = session.reserve_units()
+	if reserve.is_empty():
+		lines.append("  reserve: (empty)")
+		return "\n".join(lines)
+	lines.append("  reserve:")
+	for unit: Unit in reserve:
+		# Not _unit_line: a reserve unit has no squad and no cell to report.
+		var wep := _weapon_str(unit.get_equipped_weapon(), unit) if unit.has_equipped_weapon() else "(unarmed)"
+		lines.append("    %s %s  hp%d/%d  %s" % [session.handle_for(unit), unit.get_unit_name(),
+			unit.get_current_hp(), unit.get_max_hp(), wep])
+	return "\n".join(lines)
+
 static func _mission_block(session) -> String:
 	if session.scenario_data == null:
 		return ""
@@ -287,6 +316,8 @@ static func render_status(session) -> String:
 		return "[no board]"
 	var st: Dictionary = session.status()
 	var parts: Array[String] = ["turn=" + str(st.faction)]
+	if st.get("pre_mission", false):
+		parts.push_front("phase=PRE_MISSION")
 	if int(st.active_squad) < 0:
 		parts.append("active=none")
 	else:

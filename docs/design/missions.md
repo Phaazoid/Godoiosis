@@ -2,7 +2,7 @@
 
 **Status: ALL FOUR SLICES BUILT 2026-07-28 ([#96](https://github.com/Phaazoid/Godoiosis/issues/96)).** Filed 2026-07-27, when the project acquired a win condition for the first time. Before this, Iosis had ten interlocking systems and no way to finish a battle — which meant a design question could be answered *"is this coherent?"* but never *"does this improve play?"*
 
-**Canon checked through #1160 (2026-09-29); #120's body weight and its authored table, and #1174's WIL tombstone, folded in 2026-10-01.**
+**Canon checked through #1160 (2026-09-29); #120's body weight and its authored table, and #1174's WIL tombstone, folded in 2026-10-01; #46's shared pre-mission phase folded in 2026-10-03.**
 
 ## What a mission is
 
@@ -174,7 +174,7 @@ A briefing is written on the **Dialog & Tutorial** page now, not in Dialogic's e
 
 The ring paid for it: `DEPLOY_GROUP` held one verb and so collapsed to a terminal slice named for its only child, which a second verb breaks. It is **Placement** now — what the pair answers together, where the unit stands and whether it stands at all.
 
-**`MissionController._roster_units` keeps the roster in ENTRY order.** Deploying and undeploying *reparent* between `units_root` and `reserve_root`, so both lists reshuffle every time the player changes their mind. The card grid stopped reading this order at #1089 (below). What depends on it now is the restart buffer (#763), whose rows are indexed by it, and that guarantee is what the suite pins.
+**`PreMissionPhase.units` keeps the roster in ENTRY order** (it was `MissionController._roster_units` until #46 moved the phase's state onto the object both hosts share; `MissionController.roster_units()` still answers it). Deploying and undeploying *reparent* between `units_root` and `reserve_root`, so both lists reshuffle every time the player changes their mind. The card grid stopped reading this order at #1089 (below). What depends on it now is the restart buffer (#763), whose rows are indexed by it, and that guarantee is what the suite pins.
 
 **The grid orders itself: deployed first, opening A-Z** ([#1089](https://github.com/Phaazoid/Godoiosis/issues/1089), 2026-09-28, dev rulings the same day off an interactive demo). A deploy toggle moves its card **only as far as the line between the deployed and the waiting cards**. A new deploy joins the end of the deployed line. An undeploy stays put if the card was last in that line, and otherwise moves to the first waiting slot. It never snaps back to its alphabetical slot. (His words: *"It should stay in place if at the end, or just move the the closest next spot if in between deployed units."*) Both halves are **one stable partition of the order already on screen**, never a re-sort, so the deployed line keeps deploy order, and a toggle made on the board through the Placement ring settles the same way when Tab brings the screen back. `PreMissionScreen._cards` is the one store of the display order, and the grid's child order draws it. The cards are **moved, never rebuilt**, so each keeps its own state through the shuffle. The screen opens **alphabetically** (his pick over the roster's authored order, which only Company happens to share), and a **Reset order** button in the ROSTER header returns to that. Every reorder **slides**: each card that changes slot glides from where it stood to the slot the GridContainer just gave it, so the container stays the one answer to where a slot is. The slide's length is the Game tab's *Card slide* row (`CARD_SLIDE_SECONDS`), where zero snaps. The order is the screen's alone, so nothing on the controller moved. Sort keys beyond A-Z are [#1142](https://github.com/Phaazoid/Godoiosis/issues/1142). **Declared, not built:** a click sends its card away from the cursor, so a fast double-click can land on the neighbour.
 
@@ -216,7 +216,7 @@ every mission after it, which is ruling 3 broken by one drag. Nothing on disk wa
 saves a roster); the cached object was. `Loadout.from_roster` copies through `copy_for_grant()`, the
 same grant the unit side already made in `apply_unit_state`, and `MissionController` builds one in
 `deploy_roster` — where the Roster is already in hand — and drops it in `reset()`, the pair of edges
-`_roster_units` lives on.
+the phase's roster lives on (both on `PreMissionPhase` since #46).
 
 **Four directions are ONE function, because the stash is a null owner at either end.** `move(item,
 from, to)` with `null` meaning the stash covers stash→unit, unit→stash and unit→unit without three

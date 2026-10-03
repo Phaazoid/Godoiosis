@@ -42,6 +42,21 @@ const NOT_COMMANDS := {
 	"handle_for": "read by the view, not ordered",
 	"unit_by_handle": "read by the view, not ordered",
 	"active_faction": "read by the view, not ordered",
+	# The pre-mission phase (#46): PreMissionPhase's HOST calls, the game.gd twins the phase drives.
+	"spawn_reserve_unit": "a host call PreMissionPhase makes, not ordered",
+	"deploy_unit": "a host call PreMissionPhase makes; the player verb is `deploy`",
+	"undeploy_unit": "a host call PreMissionPhase makes; the player verb is `undeploy`",
+	"is_deployed": "a host call PreMissionPhase makes, not ordered",
+	"can_spawn_at": "a host call PreMissionPhase makes, not ordered",
+	"get_unit_at_cell": "a host call PreMissionPhase makes, not ordered",
+	"start_pre_mission": "called by `load`, the fresh-start door",
+	"is_deploying": "read by the view, not ordered",
+	"reserve_units": "read by the view, not ordered",
+	"deployment_cells": "read by the view, not ordered",
+	"deployed_count": "read by the view, not ordered",
+	"deployment_cap": "read by the view, not ordered",
+	"roster_units": "read by the view, not ordered",
+	"deploy_block_reason": "read by the view, not ordered",
 }
 
 
