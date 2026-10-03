@@ -38,7 +38,6 @@ Under the Will retirement ([#1174](https://github.com/Phaazoid/Godoiosis/issues/
 - **It edits the live catalog resource.** A character's kit references its gear files, so dialling an item moves the readout of everyone carrying it. What reaches the board follows the grant rule (`Item.copy_for_grant`): armour, runes and vials are copied when a unit receives them and a body's stats are copied at spawn, so those reach the next unit spawned. Weapon families and mods are shared, so a weapon already on the board follows at once.
 - **Save** writes only the files touched since the last save or Reset, and asks first, listing them (#380). **Reset** puts every unsaved edit back, including a character whose BLD was unauthored, which goes back to unauthored rather than to a written-out 10.
 - **The page re-reads on every show**, because the Character and Item pages write the same live resources.
-- **Saving a weapon family writes its `mod_spaces` out.** The runtime writer materializes that defaulted array (the trap `CLAUDE.md` records for headless saves), which pins the family's spaces to today's default. Every template save does this, the Item and Attack editors' included; it is not specific to this page.
 
 ### The starting table (#120 PR 3, Claude's proposal for the dev to tune)
 

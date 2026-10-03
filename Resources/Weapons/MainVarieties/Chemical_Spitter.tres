@@ -7,7 +7,6 @@
 
 [resource]
 script = ExtResource("1_iwbgy")
-mod_spaces = Array[int]([1, 2, 3])
 main_attack = ExtResource("2_main")
 weapon_type = 6
 display_name = "Chemical Spitter"

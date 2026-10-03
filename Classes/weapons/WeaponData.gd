@@ -35,17 +35,18 @@ enum LimbKind { ARM, LEG }
 # A plain family's frame: three spaces of capacity 1/2/3 (weapons.md). Playtest-tunable.
 const SPACE_CAPACITIES: Array[int] = [1, 2, 3]
 
-@export var mod_spaces: Array[int] = SPACE_CAPACITIES.duplicate()
+@export var mod_spaces: Array[int] = Array(SPACE_CAPACITIES, TYPE_INT, &"", null)
 # One entry per mod space, holding that space's capacity. AUTHORED per template since #486 —
 # a prototype used to be FORCED to a single size-1 space, so "weaker, but roomier" could not be
 # expressed at all. No count cap: proficiency decides what a wielder reaches, not this array.
 #
-# .duplicate() is load-bearing, and not for the reason it looks like. A const Array is READ-ONLY
-# in Godot 4 and that flag travels with the assignment, so `= SPACE_CAPACITIES` would hand every
-# un-overridden template an array nothing can edit IN PLACE — the Prototype editor's Add space and
-# its capacity spinners both write in place, so they would raise a runtime error and silently do
-# nothing on a panel that looks like it works. Measured 2026-08-25; the engine refuses the write
-# rather than letting one template's edit reach another.
+# The default is a typed COPY of the const, and both halves are load-bearing (measured, #1185).
+# A copy: a const Array is READ-ONLY and the flag travels with `= SPACE_CAPACITIES`, so the
+# Prototype editor's in-place writes (Add space, the spinners) would silently do nothing.
+# This spelling: the parser folds it, so a saver can see the default and leaves an untouched
+# template's spaces out of the file. A CALL (`.duplicate()`) has no default a saver can see, so
+# every save wrote the array out (`null` from the editor) and pinned that template to the day's
+# const. A template at the default follows a retune, prototypes included (dev, 2026-10-03).
 
 @export var main_attack: WeaponAttackData
 # The family's standard attack — the one REQUIRED attack, what counters and default aim
