@@ -11,13 +11,16 @@ const PlaySession := preload("res://play/play_session.gd")
 const PLAYER := Team.Faction.PLAYER
 const ENEMY := Team.Faction.ENEMY
 
+# The fixture's own attack, named once: the fixture authors it and the shove cases fire it by name.
+const BLOWBACK := "Blowback"
+
 
 func _data(name: String, fac: Team.Faction) -> UnitData:
 	return UnitFactory.create_unit_data(Stats.STAT_DEFAULTS.duplicate(), name, fac)
 
 
 # Arm `unit` with a Kinetic Mace carrying a Blowback extra (knockback 1, null pattern = adjacent
-# reach), pre-charged and pre-picked so a single queue_attack fires the shove. Returns the session.
+# reach), pre-charged so a queue_attack naming BLOWBACK fires the shove (#615). Returns the session.
 func _mace_board(hero_cell: Vector2i, foe_cell: Vector2i, extra_blocker: Vector2i = Vector2i(999, 999)) -> Dictionary:
 	var b := BoardBuilder.build(self, "KnockbackRoot")
 	auto_free(b.root)
@@ -30,7 +33,7 @@ func _mace_board(hero_cell: Vector2i, foe_cell: Vector2i, extra_blocker: Vector2
 	# knockback is the shove; the charge economy rides on the authored readiness flags (#108),
 	# which is why this fixture sets both rather than relying on knockback to imply them.
 	var blowback := WeaponAttackData.new()
-	blowback.display_name = "Blowback"
+	blowback.display_name = BLOWBACK
 	blowback.knockback = 1
 	blowback.requires_readiness = true
 	blowback.consumes_readiness = true
@@ -43,7 +46,6 @@ func _mace_board(hero_cell: Vector2i, foe_cell: Vector2i, extra_blocker: Vector2
 	template.extra_attacks = extras
 	hero.add_item(WeaponInstance.make(template))
 	(hero.get_equipped_weapon() as KineticMaceWeaponInstance).charge = 1
-	hero.active_attack = blowback
 
 	var sess = PlaySession.new(b)
 	return {"sess": sess, "hero": hero, "foe": foe}
@@ -53,7 +55,7 @@ func test_blowback_shoves_target_one_tile_away() -> void:
 	var s := _mace_board(Vector2i(0, 0), Vector2i(1, 0))
 	var sess = s.sess
 	var foe: Unit = s.foe
-	var res: Dictionary = sess.queue_attack(sess.handle_for(s.hero), Vector2i(1, 0))
+	var res: Dictionary = sess.queue_attack(sess.handle_for(s.hero), Vector2i(1, 0), BLOWBACK)
 	assert_bool(res.ok).is_true()
 	sess.execute()
 	# Hero at x=0, foe at x=1 -> shoved to x=2 (directly away), y unchanged.
@@ -65,7 +67,7 @@ func test_firing_blowback_spends_a_charge() -> void:
 	var s := _mace_board(Vector2i(0, 0), Vector2i(1, 0))
 	var sess = s.sess
 	var mace := s.hero.get_equipped_weapon() as KineticMaceWeaponInstance
-	sess.queue_attack(sess.handle_for(s.hero), Vector2i(1, 0))
+	sess.queue_attack(sess.handle_for(s.hero), Vector2i(1, 0), BLOWBACK)
 	sess.execute()
 	assert_int(mace.charge).is_equal(0)   # started at 1, the shove spent it
 
@@ -75,7 +77,7 @@ func test_shove_stops_at_the_board_edge() -> void:
 	var s := _mace_board(Vector2i(6, 0), Vector2i(7, 0))
 	var sess = s.sess
 	var foe: Unit = s.foe
-	sess.queue_attack(sess.handle_for(s.hero), Vector2i(7, 0))
+	sess.queue_attack(sess.handle_for(s.hero), Vector2i(7, 0), BLOWBACK)
 	sess.execute()
 	assert_int(foe.movement.cell.x).is_equal(7)   # nowhere to go — stays put
 	assert_int(foe.movement.cell.y).is_equal(0)
@@ -86,7 +88,7 @@ func test_shove_stops_at_an_occupied_cell() -> void:
 	var s := _mace_board(Vector2i(0, 0), Vector2i(1, 0), Vector2i(2, 0))
 	var sess = s.sess
 	var foe: Unit = s.foe
-	sess.queue_attack(sess.handle_for(s.hero), Vector2i(1, 0))
+	sess.queue_attack(sess.handle_for(s.hero), Vector2i(1, 0), BLOWBACK)
 	sess.execute()
 	assert_int(foe.movement.cell.x).is_equal(1)   # blocked by the unit behind it
 	assert_int(foe.movement.cell.y).is_equal(0)
@@ -111,8 +113,8 @@ func test_armed_enemy_counters_a_non_shoving_attack() -> void:
 	var attacker: Unit = s.hero
 	var foe: Unit = s.foe
 	_arm_chainsword(foe)
-	attacker.active_attack = null   # fire the mace's main (Smash) — no knockback
 	var attacker_hp := attacker.get_current_hp()
+	# No name: the mace's main (Smash) fires, which carries no knockback.
 	s.sess.queue_attack(s.sess.handle_for(attacker), Vector2i(1, 0))
 	s.sess.execute()
 	assert_int(foe.movement.cell.x).is_equal(1)                        # not shoved
@@ -127,7 +129,7 @@ func test_shoved_enemy_out_of_range_does_not_counter() -> void:
 	var foe: Unit = s.foe
 	_arm_chainsword(foe)   # same armed, adjacent foe as the control — only difference is the shove
 	var attacker_hp := attacker.get_current_hp()
-	s.sess.queue_attack(s.sess.handle_for(attacker), Vector2i(1, 0))
+	s.sess.queue_attack(s.sess.handle_for(attacker), Vector2i(1, 0), BLOWBACK)
 	s.sess.execute()
 	assert_int(foe.movement.cell.x).is_equal(2)                        # shoved to x=2, out of reach
 	assert_int(attacker.get_current_hp()).is_equal(attacker_hp)        # no counter landed
@@ -144,7 +146,7 @@ func test_a_shove_into_the_void_removes_the_unit() -> void:
 	var foe: Unit = s.foe
 	(sess.grid as TileMapLayer).set_cell(Vector2i(2, 0), 0, Vector2i(18, 2))   # the hole tile
 
-	var res: Dictionary = sess.queue_attack(sess.handle_for(s.hero), Vector2i(1, 0))
+	var res: Dictionary = sess.queue_attack(sess.handle_for(s.hero), Vector2i(1, 0), BLOWBACK)
 	assert_bool(res.ok).is_true()
 	var result: Dictionary = sess.execute()
 
@@ -176,7 +178,6 @@ func _modded_board(delta: int) -> Dictionary:
 	var mod := WeaponModData.new()
 	mod.knockback_delta = delta
 	(hero.get_equipped_weapon() as WeaponInstance).fit(0, mod)
-	hero.active_attack = swing
 
 	var sess = PlaySession.new(b)
 	return {"sess": sess, "hero": hero, "foe": foe}

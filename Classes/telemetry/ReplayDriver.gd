@@ -317,7 +317,7 @@ func _replay_order(order: Dictionary, event: Dictionary) -> void:
 			var attack := AttackAction.declare(unit, unit.get_projected_destination(), _cell_of(order.get("at")))
 			refused = not game.squad_manager.queue_action(unit.squad, attack)
 		"OVERWATCH":
-			_arm_attack(unit, str(order.get("attack", "")), round_no)
+			_arm_attack(unit, str(order.get("attack", "")), round_no, true)
 			game.queue_overwatch(unit, _cell_of(order.get("at")))
 		"RESCUE":
 			var body := _unit_for(order.get("target"))
@@ -346,15 +346,16 @@ func _replay_order(order: Dictionary, event: Dictionary) -> void:
 
 # A declared attack stamps whatever get_fired_attack() answers, which reads the live `active_attack`
 # PICK -- so replaying an attack without re-making that pick fires the unit's default and silently
-# resolves a different attack. This is the player's own menu pick, replayed.
-func _arm_attack(unit: Unit, attack_name: String, round_no: int) -> void:
+# resolves a different attack. This is the player's own menu pick, replayed. A WATCH is picked from
+# the watch view (#590 split the two), or every recorded overwatch replays with the main (#615).
+func _arm_attack(unit: Unit, attack_name: String, round_no: int, watch := false) -> void:
 	unit.active_attack = null
 	if attack_name == "":
 		return
-	for candidate: AttackData in unit.get_selectable_attacks():
-		if candidate != null and candidate.display_name == attack_name:
-			unit.active_attack = candidate
-			return
+	var pick: AttackData = unit.watch_attack_named(attack_name) if watch else unit.fire_attack_named(attack_name)
+	if pick != null:
+		unit.active_attack = pick
+		return
 	notes.append("round %d: %s no longer has an attack named '%s' -- fired its default" % [
 		round_no, unit.get_unit_name(), attack_name])
 

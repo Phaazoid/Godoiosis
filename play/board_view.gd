@@ -86,12 +86,12 @@ static func render_preview(session) -> String:
 	for m in plan.moves:
 		lines.append("  MOVE   %s -> %s" % [m.actor, str(m.dest)])
 	for a in plan.attacks:
-		lines.append("  ATTACK %s -> %s : %d dmg%s" % [a.actor, a.target, a.dmg, _hp_tag(a)])
+		lines.append("  ATTACK %s -> %s (%s): %d dmg%s" % [a.actor, a.target, a.attack, a.dmg, _hp_tag(a)])
 	for c in plan.counters:
 		if c.skipped:
 			lines.append("    ctr  %s : none (downed/killed before it could strike back)" % c.actor)
 		else:
-			lines.append("    ctr  %s -> %s : %d dmg%s" % [c.actor, c.target, c.dmg, _hp_tag(c)])
+			lines.append("    ctr  %s -> %s (%s): %d dmg%s" % [c.actor, c.target, c.attack, c.dmg, _hp_tag(c)])
 	for s in plan.side_actions:
 		if s.has("target"):
 			lines.append("  %-6s %s -> %s" % [s.type, s.actor, s.target])
@@ -268,13 +268,13 @@ static func render_legal_moves(session, handle: String) -> String:
 	return head + "\n" + body
 
 
-static func render_legal_targets(session, handle: String) -> String:
-	var res: Dictionary = session.legal_targets(handle)
+static func render_legal_targets(session, handle: String, attack_name := "") -> String:
+	var res: Dictionary = session.legal_targets(handle, attack_name)
 	if not res.ok:
 		return "> ERROR: " + str(res.error)
 	if res.aims.is_empty():
-		return "targets %s from (%d,%d): none" % [res.unit, res.from.x, res.from.y]
-	var lines: Array[String] = ["targets %s from (%d,%d): %d aims" % [res.unit, res.from.x, res.from.y, res.aims.size()]]
+		return "targets %s with %s from (%d,%d): none" % [res.unit, res.attack, res.from.x, res.from.y]
+	var lines: Array[String] = ["targets %s with %s from (%d,%d): %d aims" % [res.unit, res.attack, res.from.x, res.from.y, res.aims.size()]]
 	for aim: Dictionary in res.aims:
 		lines.append("  (%d,%d) hits %s" % [aim.cell.x, aim.cell.y, ", ".join(aim.victims)])
 	return "\n".join(lines)
@@ -370,8 +370,6 @@ static func _weapon_str(e: EquippableData, wielder: Unit) -> String:
 	# shape (an omnidirectional point attack at range vs a one-cell-deep cleave), which decides reach
 	# AND who can counter. Hiding it once made a correct no-counter look like a bug.
 	var s := "%s pow%d %s" % [WeaponData.WeaponType.keys()[w.weapon_type], main_power, _pattern_str(main)]
-	if w.extra_attacks.size() > 0:
-		s += " +%datk" % w.extra_attacks.size()   # stock alternates beyond the main (#72)
 	if main != null and main.elemental_damage_type != Elemental.Element.NONE:
 		s += "/" + Elemental.Element.keys()[main.elemental_damage_type]
 	if main != null and main.can_ever_counter():
@@ -383,6 +381,14 @@ static func _weapon_str(e: EquippableData, wielder: Unit) -> String:
 	var status := inst.status_text()
 	if status != "":
 		s += " [%s]" % status
+	# Every other attack BY NAME, off the unit's live views rather than the template's extras, so a
+	# mod-granted attack lists and a watch-only one reads as a watch -- the names `attack` and
+	# `overwatch` take (#615). A weapon counters with its main alone, so no alternate carries /ctr.
+	if wielder != null:
+		for attack: AttackData in wielder.get_weapon_secondary_attacks():
+			s += "; " + _attack_str(inst, wielder, attack, false)
+		for attack: AttackData in wielder.overwatch_attacks():
+			s += "; watch: " + _attack_str(inst, wielder, attack, false)
 	return s
 
 # A rune gets the same treatment the weapon branch above gets, for the reason stated there (#614):
@@ -395,12 +401,13 @@ static func _rune_str(rune: RuneData, wielder: Unit) -> String:
 		return head
 	var parts: Array[String] = []
 	for attack in rune.choice_attacks(wielder):
-		parts.append(_carving_str(rune, wielder, attack))
+		parts.append(_attack_str(rune, wielder, attack, attack.can_ever_counter()))
 	if parts.is_empty():
 		return head
 	return head + "  " + "; ".join(parts)
 
-static func _carving_str(rune: RuneData, wielder: Unit, attack: AttackData) -> String:
+# One attack by name, for a carving or a weapon's alternate: the name is what `attack` takes.
+static func _attack_str(source: EquippableData, wielder: Unit, attack: AttackData, counters: bool) -> String:
 	var s := "%s pow%d %s" % [attack.display_name, attack.power, _pattern_str(attack)]
 	# A carving's element is its SIGILS (repeats = weight, so dedupe). elemental_damage_type is
 	# WeaponAttackData-only — reading it on a TransmutationData is a runtime error, not a blank.
@@ -412,16 +419,19 @@ static func _carving_str(rune: RuneData, wielder: Unit, attack: AttackData) -> S
 				continue
 			seen.append(sigil)
 			s += "/" + Elemental.Element.keys()[sigil]
+	var swing := attack as WeaponAttackData
+	if swing != null and swing.elemental_damage_type != Elemental.Element.NONE:
+		s += "/" + Elemental.Element.keys()[swing.elemental_damage_type]
 	# heals/deals_no_damage reinterpret the power printed above, so a line without them misreads.
 	if attack.heals:
 		s += "/heal"
 	if attack.deals_no_damage:
 		s += "/nodmg"
-	if attack.can_ever_counter():
+	if counters:
 		s += "/ctr"
 	if attack.hits_allies:
 		s += "/ff"
-	var reason := rune.attack_block_reason(wielder, attack)
+	var reason := source.attack_block_reason(wielder, attack)
 	if reason != "":
 		s += " (blocked: %s)" % reason
 	return s

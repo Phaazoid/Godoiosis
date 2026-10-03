@@ -59,10 +59,11 @@ view**, not raw JSON — see *State representation*. Command vocabulary:
 | Command | Returns |
 |---|---|
 | `describe_state()` | full board snapshot (rendered view — see below) |
-| `legal_moves(unit_id)` / `legal_targets(unit_id)` | reachable cells / hittable cells + victims. **Each calls the predicate its own gate calls** — `compute_move_range` for moves, `can_hit_cell_from` + `gather_attack_victims` for aims — so a cell offered can never be one the queue refuses. A second derivation here would be Law #4 with a silent failure mode, and `tests/play/test_affordances.gd` drives both sides to keep them honest |
+| `legal_moves(unit_id)` / `legal_targets(unit_id, attack?)` | reachable cells / hittable cells + victims, the latter for the NAMED attack (else the default) and saying which. **Each calls the predicate its own gate calls** — `compute_move_range` for moves, `can_hit_cell_from` + `gather_attack_victims` for aims — so a cell offered can never be one the queue refuses. A second derivation here would be Law #4 with a silent failure mode, and `tests/play/test_affordances.gd` drives both sides to keep them honest |
 | `status()` | whose turn, which squad holds the activation and what it has queued, which squads are spent. Rides every frame rather than being asked for |
 | `squad_up / join / leave / disband` | new squad state |
-| `queue_move(unit_id, dest)` / `queue_attack(unit_id, aim_cell)` | validity + updated plan |
+| `queue_move(unit_id, dest)` / `queue_attack(unit_id, aim_cell, attack?)` | validity + updated plan. `attack` names which attack fires — see *Choosing an attack* below |
+| `overwatch(unit_id, aim_cell, attack?)` | stand watch with the NAMED watch attack, else the unit's first (a weapon normally carries one) |
 | `rescue / reload / rev / burrow / guard` | the side-channel main actions, one verb each — the argument-taking ones (`rescue(a, b)`, `guard(a, ward)`) stay separate from the argument-free ones for the reason `game.queue_simple_action` does. Each gates on the same `RulesService` query the menu's row is built from. *(Still missing: `capture` — see Known gaps.)* |
 | `cancel(unit_id)` / `wait(unit_id)` | updated plan |
 | `preview()` | `resolve_plan(active_squad)` outcomes **without applying** (damage, state deltas, deaths, counters) |
@@ -72,6 +73,20 @@ view**, not raw JSON — see *State representation*. Command vocabulary:
 
 `preview()` is the playtesting superpower: deterministic look-ahead at exact damage/deaths before I
 commit.
+
+**Choosing an attack (#615).** `attack`, `overwatch` and `legal_targets` take an optional
+`"attack": "<name>"`, the attack's `display_name` as the unit line lists it; omitted, they use the
+default (a weapon's main, a rune's first carving) and the first watch. A name is looked up in the
+list its verb fires from — `Unit.fire_attack_named` / `Unit.watch_attack_named`, the same lookup the
+replay viewer uses — so a watch-only attack cannot be fired and a fire attack cannot stand watch
+(#590). The pick is armed for that one command and cleared after, the way the menu's aiming mode
+clears it, so a later unnamed `attack` fires the default again. An attack that cannot fire right now
+is refused in `attack_block_reason`'s words, the reason the menu greys its row with. The preview and
+`legal_targets` name the attack they answer for.
+
+```bash
+play/send.sh attack '{"unit":"A","x":23,"y":15,"attack":"Splash"}'
+```
 
 ### 3. Transport hosts — "are 1 and 3 exclusive?" → no
 
@@ -118,8 +133,8 @@ assigned by `PlaySession` — units have no persistent id today.
 - **Focus** (`focus(unit)`): board re-rendered with that unit's **move range** (`+`) and **attack range** (`×`) overlaid; the unit's full stats / weapon / states; its legal actions; and (if squadded) the leader LDR range.
 - **Preview** (`preview`): the **resolved** outcome of the current/hypothetical plan — exact damage, deaths, counters, net board change — as a concise diff, not a re-dump. The deterministic-engine payoff.
 - **Result** (`execute`): the event log (equals the preview, by Law #2). No overview — see below.
-- **Affordances** (`legal_moves(unit)` / `legal_targets(unit)`): where this unit may go, and which
-  aims hit whom. Cell lists grouped by row (`y=13: 19-23`), a few hundred bytes where the only way
+- **Affordances** (`legal_moves(unit)` / `legal_targets(unit, attack?)`): where this unit may go, and
+  which aims of a given attack hit whom. Cell lists grouped by row (`y=13: 19-23`), a few hundred bytes where the only way
   to ask used to be `focus`, which renders a 2 KB board to say it.
 
 Micro-commands (`queue_move`, `cancel`) return a one-line ack + plan delta, **not** a full re-render —

@@ -1300,6 +1300,23 @@ func overwatch_attacks() -> Array[AttackData]:
 		return []
 	return equipped_weapon.watch_attacks(self)
 
+# An attack picked by NAME, the way a recorded run and the Play API name one (#615). Each searches
+# the view its verb fires from: a watch attack is never in the fire view (#590), so a watch looked
+# up there misses. Null when nothing matches.
+func fire_attack_named(attack_name: String) -> AttackData:
+	return _attack_named(get_selectable_attacks(), attack_name)
+
+func watch_attack_named(attack_name: String) -> AttackData:
+	return _attack_named(overwatch_attacks(), attack_name)
+
+static func _attack_named(attacks: Array[AttackData], attack_name: String) -> AttackData:
+	if attack_name == "":
+		return null
+	for attack: AttackData in attacks:
+		if attack != null and attack.display_name == attack_name:
+			return attack
+	return null
+
 # Does the Weapon Action submenu have anything ACTIONABLE right now? A weapon self-ability (rev /
 # reload), a fireable secondary attack, OR a watchable attack it could fire right now -- #413 made
 # Overwatch a weapon action, so the slice has to open for it. Mere existence isn't enough -- a
