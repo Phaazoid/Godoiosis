@@ -19,6 +19,15 @@ const NEIGHBOURS: Array[Vector2i] = [Vector2i.UP, Vector2i.DOWN, Vector2i.LEFT, 
 #
 # Deliberately says NOTHING about occupancy. An enemy body blocks a MOVE (movement_cost adds that
 # below) but is not a terrain fact and moves every turn — a connectivity field must see through it.
+# May a unit be PLACED here? spawn_unit's gate, and the pre-mission phase's on both hosts (#46):
+# on the map, somewhere a unit may stand (unless it is a body, #116), and nobody already there.
+static func can_spawn_at(board: BoardContext, cell: Vector2i, is_body := false) -> bool:
+	if board.grid.get_cell_tile_data(cell) == null:
+		return false
+	if not is_body and not board.is_walkable(cell):
+		return false
+	return board.unit_at_cell(cell) == null
+
 static func can_traverse(cell: Vector2i, unit: Unit, board: BoardContext) -> bool:
 	if board.is_walkable(cell):
 		return true

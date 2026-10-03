@@ -597,12 +597,7 @@ func _refresh_frame() -> void:
 
 
 func _deploy_block_reason() -> String:
-	if not _controller.can_deploy_another():
-		return "Your force is full — %d of %d placed. Take someone off first." % [
-			_controller.deployed_roster_count(), _controller.game.scenario_manager.current_deployment_cap]
-	if _controller.open_deployment_cells().is_empty():
-		return "The deployment zone has no free cell left."
-	return ""
+	return _controller.deploy_block_reason()   # the phase's sentence, shared with the Play API (#46)
 
 
 # --- small builders ------------------------------------------------------------------------------

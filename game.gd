@@ -1714,11 +1714,7 @@ func spawn_sandbox() -> void:
 # `is_body` is the #116 exception: a drowning unit legitimately lies where nothing may stand.
 #TODO later change the walkability half for various unit types, i.e. flyers can spawn on rocks, etc
 func can_spawn_at(pos: Vector2i, is_body := false) -> bool:
-	if grid.get_cell_tile_data(pos) == null:
-		return false
-	if not is_body and not _board().is_walkable(pos):
-		return false
-	return get_unit_at_cell(pos) == null
+	return RulesService.can_spawn_at(_board(), pos, is_body)   # one rule for both hosts (#46)
 
 # Build a Unit and give it the two wires every unit needs, WITHOUT parenting it (#738). Shared by
 # the two entry doors below, so there is one place a unit is made and one place it is wired -- the
