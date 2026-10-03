@@ -1,17 +1,15 @@
 extends Node3D
 class_name GasMirror
 
-# The 3D drawing of the gas store (#508's look harness). Owned by battle3d beside ArcLightning; reads
-# GasField and draws it in whichever style Experiments' GAS_STYLE picks:
-#   0 Realistic         the volume (GasVolumeEffect), billows over a pool that marks the cells
-#   1 Pixel puffs       pixel puffs on an edged fog floor
-#   2 Realistic + puffs the volume, with one pixel puff over each cell
-#   3 Pixel volume      the volume marched per art-pixel block and posterized
-# Each style is a separable part so the losers can be deleted when the experiment ends.
+# The 3D drawing of the gas store (#508). Owned by battle3d beside ArcLightning; reads GasField and
+# draws it as the realistic volume (GasVolumeEffect: billows over a pool that marks the cells) with
+# pixel puffs in and over it, in whichever MIX Experiments' GAS_STYLE picks (the MIXES table). An
+# edged pixel fog floor shows only while the floor key is held, and the cloud fades and the puffs
+# hide under it so the board reads.
 #
-# Polls rather than listens: the gas, heights and grid versions, the staging, the style and the view.
+# Polls rather than listens: the gas, heights and grid versions, the staging, the mix and the view.
 # Any change rebuilds the board textures and the region boxes; every frame only re-sends the camera,
-# the light and the clock. Gas is 3D only -- the flat 2D view has no drawing of it (#292 ledger).
+# the light, the clock and the key. Gas is 3D only -- the flat 2D view has no drawing of it (#292).
 
 # The volume's march resolution, by index: full, half, quarter (one ray per 1, 2x2 or 4x4 pixels).
 const RESOLUTION_DIVISORS: Array[int] = [1, 2, 4]
@@ -23,13 +21,27 @@ const FLOOR_SHADER := "res://Classes/presentation/gas_floor.gdshader"
 const PUFF_SHADER := "res://Classes/presentation/gas_puff.gdshader"
 const PIXEL_SIZE := 1.0 / 32.0      # one art pixel, in world units -- the sprites' density
 const ART_PIXELS_PER_CELL := 32.0
-# A cell's puff slots: which way it leans, the least gas that shows it, its biggest size, its lift,
-# and whether it is the one centre puff the Realistic + puffs style keeps.
-const SLOTS := [
-	[Vector2(0, 0), 1, 2, 0.0, true],
-	[Vector2(-1, -1), 6, 1, 0.0, false], [Vector2(1, 1), 6, 1, 0.0, false],
-	[Vector2(1, -1), 9, 1, 0.0, false], [Vector2(-1, 1), 9, 1, 0.0, false],
-	[Vector2(0, 0), 12, 1, 0.36, false],
+const FLOOR_ACTION := &"show_gas_floor"
+# A cell's puff slots: which way it leans, the least gas that shows it, its biggest size, its lift in
+# world units, and its rise as a share of the gas's column height.
+const FIELD_SLOTS := [
+	[Vector2(0, 0), 1, 2, 0.0, 0.0],
+	[Vector2(-1, -1), 6, 1, 0.0, 0.0], [Vector2(1, 1), 6, 1, 0.0, 0.0],
+	[Vector2(1, -1), 9, 1, 0.0, 0.0], [Vector2(-1, 1), 9, 1, 0.0, 0.0],
+	[Vector2(0, 0), 12, 1, 0.36, 0.0],
+]
+const CLOUD_SLOTS := [
+	[Vector2(0, 0), 1, 2, 0.0, 0.1],
+	[Vector2(1, -1), 5, 1, 0.0, 0.45],
+	[Vector2(-1, 1), 10, 1, 0.0, 0.75],
+]
+# The Gas style experiment's options, in its order. Each differs from the first in one way: the slot
+# table, how far a puff wanders (world units), or the volume's height and density.
+const MIXES := [
+	{"slots": FIELD_SLOTS, "drift": 0.0, "height": 1.0, "density": 1.0},    # Puff field
+	{"slots": FIELD_SLOTS, "drift": 0.15, "height": 1.0, "density": 1.0},   # Drifting puffs
+	{"slots": FIELD_SLOTS, "drift": 0.0, "height": 0.45, "density": 0.5},   # Haze + puffs
+	{"slots": CLOUD_SLOTS, "drift": 0.0, "height": 1.0, "density": 1.0},    # Puffs in the cloud
 ]
 # Extra roles, as gas_puff.gdshader numbers them (0 is a puff).
 const EXTRA_ROLES := {GasLook.Extra.WISP: 1, GasLook.Extra.SOOT: 2, GasLook.Extra.BUBBLE: 3,
@@ -55,14 +67,8 @@ const EXTRA_ROLES := {GasLook.Extra.WISP: 1, GasLook.Extra.SOOT: 2, GasLook.Extr
 @export var flash_color := Color(0.78, 0.82, 1.0)
 @export var flash_energy := 10.0
 @export var flash_radius := 1.7
-@export var glint_size := 0.035
-@export var glint_strength := 30.0
-@export_group("Pixel volume")
-@export var pixel_block := 3
-@export var pixel_bands := 3.0
-@export var pixel_cut := 0.35
-@export var pixel_ink := 0.12
-@export_group("Pixel puffs")
+@export_group("Puffs and floor")
+@export var held_cloud_strength := 0.25   # how much of the cloud stays while the floor key is held
 @export var floor_corner_radius := 10.0   # art pixels
 @export var puff_lean := 0.3: set = _set_puff_lean
 @export var puff_tuck := 0.12: set = _set_puff_tuck
@@ -87,10 +93,12 @@ var _rect := Rect2i()
 var _textures: Array[Texture] = []
 var _looks := PackedFloat32Array()
 var _looks_version := 0
+var _packed_mix := -1
 var _regions: Array[AABB] = []
 var _region_floats := PackedFloat32Array()
 var _regions_version := 0
 var _flash_clusters: Dictionary[Vector2i, Vector3] = {}
+var _flash_kinds: Dictionary[Vector2i, Gas.Kind] = {}
 var _floor: MeshInstance3D
 var _floor_material: ShaderMaterial
 var _puffs: MultiMeshInstance3D
@@ -120,12 +128,16 @@ func _exit_tree() -> void:
 		camera.compositor.compositor_effects = effects
 
 
-func style() -> int:
-	return Experiments.choice_of(Experiments.Flag.GAS_STYLE)
+func mix() -> int:
+	return clampi(Experiments.choice_of(Experiments.Flag.GAS_STYLE), 0, MIXES.size() - 1)
 
 
-func draws_volume() -> bool:
-	return style() != 1
+func _mix() -> Dictionary:
+	return MIXES[mix()]
+
+
+func floor_held() -> bool:
+	return Input.is_action_pressed(FLOOR_ACTION)
 
 
 func region_boxes() -> Array[AABB]:
@@ -147,7 +159,7 @@ func _process(delta: float) -> void:
 		return
 	var key := [field.dirty.version, heights.dirty.version if heights != null else 0,
 		grid.dirty.version if grid != null else 0, BoardSpace.staging_version,
-		BoardSpace.flight_active(), style(), _sun_light()]
+		BoardSpace.flight_active(), mix(), _sun_light()]
 	if key != _seen:
 		_seen = key
 		_rebuild()
@@ -159,7 +171,7 @@ func _submit() -> void:
 	if _effect == null:
 		return
 	var down: bool = stands_down.is_valid() and stands_down.call()
-	if down or _regions.is_empty() or not draws_volume():
+	if down or _regions.is_empty():
 		_effect.submit(null)
 		return
 	var over_units := Experiments.is_on(Experiments.Flag.GAS_OVER_UNITS)
@@ -173,8 +185,7 @@ func _submit() -> void:
 	snap.looks_version = _looks_version
 	snap.regions = _region_floats
 	snap.regions_version = _regions_version
-	snap.pixel = style() == 3
-	snap.block = pixel_block if snap.pixel else RESOLUTION_DIVISORS[clampi(resolution, 0, 2)]
+	snap.block = RESOLUTION_DIVISORS[clampi(resolution, 0, 2)]
 	snap.screen_rect = _screen_rect()
 	snap.params = _params()
 	_effect.submit(snap)
@@ -183,6 +194,8 @@ func _submit() -> void:
 # --- the board textures and the boxes, rebuilt whenever the gas or the ground under it moves -------
 
 func _rebuild() -> void:
+	if _packed_mix != mix():
+		_pack_looks()
 	_rect = grid.get_used_rect() if grid != null else Rect2i()
 	var hidden := BoardSpace.flight_active()
 	var board_cells: Array[Vector2i] = []
@@ -204,6 +217,7 @@ func _rebuild() -> void:
 		_region_floats = PackedFloat32Array()
 		_regions_version += 1
 		_flash_clusters.clear()
+		_flash_kinds.clear()
 		_build_floor(shown)
 		_build_puffs(shown)
 		return
@@ -286,18 +300,30 @@ func _column_top(packed: int) -> float:
 	for kind in Gas.kinds_in(packed):
 		var look := GasLook.for_kind(kind)
 		top = maxf(top, look.base_height + look.column_height)
-	return top
+	return top * float(_mix().height)
 
 
+# How tall a kind's volume stands over a cell holding this much of it, as the march draws it.
+func _column_at(kind: Gas.Kind, amount: int) -> float:
+	var look := GasLook.for_kind(kind)
+	var a := maxf(float(amount) / Gas.MAX_AMOUNT, thin_floor)
+	return (look.base_height + look.column_height * a) * float(_mix().height)
+
+
+# The mix's height and density are folded in here, so the march, the region boxes and the puffs that
+# rise with the column all read one scaled look.
 func _pack_looks() -> void:
+	_packed_mix = mix()
+	var height := float(_mix().height)
+	var density := float(_mix().density)
 	var f := PackedFloat32Array()
 	for kind: Gas.Kind in Gas.Kind.values():
 		var look := GasLook.for_kind(kind)
-		f.append_array([look.albedo.r, look.albedo.g, look.albedo.b, look.extinction,
+		f.append_array([look.albedo.r, look.albedo.g, look.albedo.b, look.extinction * density,
 			look.emission.r, look.emission.g, look.emission.b, look.flash,
-			look.base_height, look.column_height, look.top_softness, look.shape_scale,
+			look.base_height * height, look.column_height * height, look.top_softness, look.shape_scale,
 			look.stretch, look.erosion, look.rise_speed, look.coverage_boost,
-			look.pool_height, look.pool_density, look.sparkle, 0.0,
+			look.pool_height, look.pool_density, 0.0, 0.0,
 			look.wind.x, look.wind.y, 0.0, 0.0])
 		if not look.changed.is_connected(_on_look_changed):
 			look.changed.connect(_on_look_changed)
@@ -318,19 +344,28 @@ func _on_look_changed() -> void:
 # Every 2x2 cluster of a flashing gas strikes on its own beat, glowing above the middle of its cells.
 func _build_flash_clusters(shown: Dictionary[Vector2i, int]) -> void:
 	var sums: Dictionary[Vector2i, Vector4] = {}
+	_flash_kinds.clear()
 	for cell: Vector2i in shown:
-		var flashes := false
+		var flashing := -1
 		for kind in Gas.kinds_in(shown[cell]):
-			flashes = flashes or GasLook.for_kind(kind).flash > 0.0
-		if not flashes:
+			if flashing < 0 and GasLook.for_kind(kind).flash > 0.0:
+				flashing = kind
+		if flashing < 0:
 			continue
 		var at := BoardSpace.surface_point(cell, heights) + BoardSpace.staged_offset(cell)
-		var key := Vector2i(floori(cell.x / 2.0), floori(cell.y / 2.0))
+		var key := _cluster_of(cell)
 		sums[key] = sums.get(key, Vector4.ZERO) + Vector4(at.x, at.y + FLASH_LIFT, at.z, 1.0)
+		if not _flash_kinds.has(key):
+			_flash_kinds[key] = flashing as Gas.Kind
 	_flash_clusters.clear()
 	for key: Vector2i in sums:
 		var s := sums[key]
 		_flash_clusters[key] = Vector3(s.x, s.y, s.z) / s.w
+
+
+# Where each strike glows, by cluster -- the point the volume lights and the bolt stands under.
+func strike_points() -> Dictionary[Vector2i, Vector3]:
+	return _flash_clusters
 
 
 static func _hash01(v: Vector2i) -> float:
@@ -386,10 +421,8 @@ func _params() -> GasVolumeEffect.Params:
 	p.march0 = Vector4(steps, light_steps, light_step, min_step)
 	p.march1 = Vector4(forward_scatter, back_scatter, back_mix, powder)
 	p.march2 = Vector4(thin_floor, contain_softness, pool_softness, detail_scale)
-	p.march3 = Vector4(flash_energy, flash_radius, glint_size, upsample_tolerance)
-	p.pixel = Vector4(pixel_bands, pixel_cut, pixel_ink, 0.0)
+	p.march3 = Vector4(flash_energy, flash_radius, upsample_tolerance, cloud_strength())
 	p.flash_color = Vector3(flash_color.r, flash_color.g, flash_color.b)
-	p.glint = glint_strength
 	p.kind_count = Gas.Kind.size()
 	var offset := BoardSpace.stage_offset()
 	p.stage = Vector4(offset.x, offset.y, offset.z, 1.0 if BoardSpace.staging_active() else 0.0)
@@ -455,7 +488,7 @@ func _noise(type: FastNoiseLite.NoiseType, frequency: float, octaves: int, size:
 	return texture
 
 
-# --- the pixel styles: a fog floor and the puffs ------------------------------------------------
+# --- the pixel half: the puffs, and the fog floor the key shows ------------------------------------
 
 func _build_nodes() -> void:
 	_floor_material = ShaderMaterial.new()
@@ -521,12 +554,9 @@ func _push_look_uniforms() -> void:
 	_puff_material.set_shader_parameter("sway", sway)
 
 
-func draws_floor() -> bool:
-	return style() == 1
-
-
-func draws_puffs() -> bool:
-	return style() == 1 or style() == 2
+# How much of the volume and its pool draws right now: all of it, or what the floor key leaves.
+func cloud_strength() -> float:
+	return held_cloud_strength if floor_held() else 1.0
 
 
 func floor_node() -> MeshInstance3D:
@@ -555,7 +585,7 @@ func _tint_at(at: Vector3) -> Color:
 # One fan of four triangles per gas cell, every vertex on the true surface, lifted into the markup
 # stack. Each vertex carries the light there.
 func _build_floor(shown: Dictionary[Vector2i, int]) -> void:
-	if not draws_floor() or shown.is_empty():
+	if shown.is_empty():
 		_floor.mesh = null
 		return
 	var lift := overlays.gas_floor_lift() if overlays != null else 0.008
@@ -583,17 +613,20 @@ static func _floor_point(cell: Vector2i, corners: Vector4i, uv: Vector2, offset:
 		cell.y + uv.y) + offset
 
 
-# Each cell lays out its puffs by its neighbours: a slot facing gas leans out to meet it, one facing
-# an empty cell tucks inside the border. A mixed cell picks each slot's gas by the amounts, so the
-# mix reads as both shapes side by side. One moving extra per cell (two for snow and soot).
+# Each cell lays out its puffs by its neighbours and the mix's slot table: a slot facing gas leans out
+# to meet it, one facing an empty cell tucks inside the border, and a slot that rises stands that share
+# of the way up its gas's column. A mixed cell picks each slot's gas by the amounts, so the mix reads as
+# both shapes side by side. One moving extra per cell (two for snow and soot). A bolt belongs to a
+# strike, not a cell: one stands under each glow, lit by the same schedule.
 func _build_puffs(shown: Dictionary[Vector2i, int]) -> void:
 	_flash_instances.clear()
 	var multimesh := _puffs.multimesh
-	if not draws_puffs() or shown.is_empty():
+	_puff_material.set_shader_parameter("drift", float(_mix().drift))
+	if shown.is_empty():
 		multimesh.instance_count = 0
 		return
-	var crown_only := style() == 2
-	var instances: Array = []   # [position, kind, role, phase, slot, cell]
+	var slots: Array = _mix().slots
+	var instances: Array = []   # [position, kind, role, phase, slot, cluster]
 	for cell: Vector2i in shown:
 		var packed: int = shown[cell]
 		var kinds := Gas.kinds_in(packed)
@@ -603,7 +636,7 @@ func _build_puffs(shown: Dictionary[Vector2i, int]) -> void:
 		var rng := RandomNumberGenerator.new()
 		rng.seed = hash(cell)
 		var offset := BoardSpace.staged_offset(cell)
-		for slot: Array in SLOTS:
+		for slot: Array in slots:
 			var kind := _weighted_kind(packed, kinds, total, rng)
 			var dir: Vector2 = slot[0]
 			var off := Vector2.ZERO
@@ -616,28 +649,36 @@ func _build_puffs(shown: Dictionary[Vector2i, int]) -> void:
 			off += Vector2(rng.randf_range(-0.03, 0.03), rng.randf_range(-0.03, 0.03))
 			var phase := rng.randf() * TAU
 			var variant := rng.randi() % 3
-			if total < int(slot[1]) or (crown_only and not slot[4]):
+			if total < int(slot[1]):
 				continue
 			var size := mini(0 if total < 4 else (1 if total < 9 else 2), int(slot[2]))
+			var lift := float(slot[3]) + float(slot[4]) * _column_at(kind, Gas.amount_in(packed, kind))
 			var x := cell.x + 0.5 + off.x
 			var z := cell.y + 0.5 + off.y
-			var at := Vector3(x, BoardSpace.surface_height_at(cell, x, z, heights) + float(slot[3]), z) + offset
-			instances.append([at, kind, 0, phase, size * 3 + variant, cell])
-		if crown_only or total < 3:
+			var at := Vector3(x, BoardSpace.surface_height_at(cell, x, z, heights) + lift, z) + offset
+			instances.append([at, kind, 0, phase, size * 3 + variant, _cluster_of(cell)])
+		if total < 3:
 			continue
 		var lead: Gas.Kind = kinds[0]
 		for kind in kinds:
 			if Gas.amount_in(packed, kind) > Gas.amount_in(packed, lead):
 				lead = kind
 		var extra := GasLook.for_kind(lead).extra
+		if extra == GasLook.Extra.BOLT:
+			continue
 		var count := 2 if extra == GasLook.Extra.SNOW or extra == GasLook.Extra.SOOT else 1
-		if extra == GasLook.Extra.BOLT and rng.randf() > 0.45:
-			count = 0
 		for k in count:
 			var x := cell.x + 0.5 + rng.randf_range(-0.25, 0.25)
 			var z := cell.y + 0.5 + rng.randf_range(-0.25, 0.25)
 			var at := Vector3(x, BoardSpace.surface_height_at(cell, x, z, heights), z) + offset
-			instances.append([at, lead, EXTRA_ROLES[extra], rng.randf(), 0, cell])
+			instances.append([at, lead, EXTRA_ROLES[extra], rng.randf(), 0, _cluster_of(cell)])
+	for key: Vector2i in _flash_clusters:
+		var kind: Gas.Kind = _flash_kinds[key]
+		if GasLook.for_kind(kind).extra != GasLook.Extra.BOLT:
+			continue
+		var glow := _flash_clusters[key]
+		var ground := Vector3(glow.x, glow.y - FLASH_LIFT, glow.z)
+		instances.append([ground, kind, EXTRA_ROLES[GasLook.Extra.BOLT], _hash01(key), 0, key])
 	multimesh.instance_count = instances.size()
 	var bounds := AABB()
 	for i in instances.size():
@@ -649,10 +690,13 @@ func _build_puffs(shown: Dictionary[Vector2i, int]) -> void:
 		multimesh.set_instance_custom_data(i, Color(float(kind), float(entry[2]), entry[3], float(entry[4])))
 		multimesh.set_instance_color(i, Color(tint.r, tint.g, tint.b, 0.0))
 		if GasLook.for_kind(kind).flash > 0.0:
-			var cell: Vector2i = entry[5]
-			_flash_instances.append([i, Vector2i(floori(cell.x / 2.0), floori(cell.y / 2.0)), tint])
+			_flash_instances.append([i, entry[5], tint])
 		bounds = AABB(at, Vector3.ZERO) if i == 0 else bounds.expand(at)
 	_puffs.custom_aabb = bounds.grow(2.0)
+
+
+static func _cluster_of(cell: Vector2i) -> Vector2i:
+	return Vector2i(floori(cell.x / 2.0), floori(cell.y / 2.0))
 
 
 static func _weighted_kind(packed: int, kinds: Array[Gas.Kind], total: int, rng: RandomNumberGenerator) -> Gas.Kind:
@@ -664,11 +708,13 @@ static func _weighted_kind(packed: int, kinds: Array[Gas.Kind], total: int, rng:
 	return kinds[kinds.size() - 1]
 
 
-# Per frame: which pixel parts show, the clock, and the lightning on the puffs that carry it.
+# Per frame: which pixel parts show, the clock, and the lightning on the puffs that carry it. Holding
+# the floor key swaps the puffs for the floor.
 func _animate_pixels() -> void:
 	var down: bool = stands_down.is_valid() and stands_down.call()
-	_floor.visible = not down and draws_floor() and _floor.mesh != null
-	_puffs.visible = not down and draws_puffs() and _puffs.multimesh.instance_count > 0
+	var held := floor_held()
+	_floor.visible = not down and held and _floor.mesh != null
+	_puffs.visible = not down and not held and _puffs.multimesh.instance_count > 0
 	if _floor.visible:
 		_floor_material.set_shader_parameter("corner_radius", floor_corner_radius)
 	if not _puffs.visible:

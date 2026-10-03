@@ -401,12 +401,12 @@ const KNOBS: Array[Dictionary] = [
 	{"group": "Water (shared)", "node": "BoardMirror", "prop": "water_shore_fade_range", "label": "Shore fade", "min": 1.0, "max": 8.0, "step": 0.1,
 		"tip": "How far from land, in cells, the two Shore darken dials take to reach full. Longer is a gentler gradient out to sea; it does nothing at all while both of those are 0."},
 
-	# The gas volume (#508's look harness). Every row is read each frame, so all are live. What one
-	# GAS looks like is its GasLook file under Resources/GasLooks/; these are what every gas shares.
+	# The gas volume and puffs (#508). Every row is read each frame or rebuilds, so all are live. What
+	# one GAS looks like is its GasLook file under Resources/GasLooks/; these are what every gas shares.
 	# Measured on round 4's zoo at 1080p on an RTX 2070 SUPER: half / 32 / 4 costs about +1.5 ms.
 	{"group": "Gas: the march", "node": "GasMirror", "prop": "resolution", "label": "Volume resolution",
 		"options": ["Full", "Half", "Quarter"],
-		"tip": "How many rays the volume casts: one per pixel, one per 2x2 or one per 4x4, upsampled with depth so units keep a crisp edge. The pool on the cells is drawn at full resolution whatever this says. Half costs about a third of Full; Quarter softens the billows and fattens the frost glints. The pixel volume ignores this and uses its own block size."},
+		"tip": "How many rays the volume casts: one per pixel, one per 2x2 or one per 4x4, upsampled with depth so units keep a crisp edge. The pool on the cells is drawn at full resolution whatever this says. Half costs about a third of Full; Quarter softens the billows."},
 	{"group": "Gas: the march", "node": "GasMirror", "prop": "steps", "label": "Steps", "min": 4, "max": 96, "step": 1,
 		"tip": "Samples along each ray through a gas region. The biggest cost dial: on the zoo at half resolution 32 costs about +1.5 ms and 16 about +1.0. Fewer reads as grain inside the cloud."},
 	{"group": "Gas: the march", "node": "GasMirror", "prop": "light_steps", "label": "Sun steps", "min": 0, "max": 8, "step": 1,
@@ -441,23 +441,13 @@ const KNOBS: Array[Dictionary] = [
 		"tip": "How bright a strike is at its peak."},
 	{"group": "Gas: light", "node": "GasMirror", "prop": "flash_radius", "label": "Lightning reach", "min": 0.3, "max": 5.0, "step": 0.05,
 		"tip": "How far a strike's glow reaches through the cloud, in world units."},
-	{"group": "Gas: light", "node": "GasMirror", "prop": "glint_size", "label": "Glint size", "min": 0.005, "max": 0.15, "step": 0.005,
-		"tip": "Radius of a glint in a gas whose look sparkles (frost), in world units. At half resolution a glint is never smaller than about two pixels."},
-	{"group": "Gas: light", "node": "GasMirror", "prop": "glint_strength", "label": "Glint brightness", "min": 0.0, "max": 100.0, "step": 1.0,
-		"tip": "How bright a glint is."},
-	{"group": "Gas: pixel volume", "node": "GasMirror", "prop": "pixel_block", "label": "Art pixel size", "min": 1, "max": 12, "step": 1,
-		"tip": "Screen pixels per art pixel in the Pixel volume style. One ray per block, so bigger is also cheaper."},
-	{"group": "Gas: pixel volume", "node": "GasMirror", "prop": "pixel_bands", "label": "Bands", "min": 1.0, "max": 8.0, "step": 1.0,
-		"tip": "How many flat tones the lit gas is cut into, measured against the gas's own colour so dark smoke stays dark."},
-	{"group": "Gas: pixel volume", "node": "GasMirror", "prop": "pixel_cut", "label": "Solid at", "min": 0.05, "max": 0.95, "step": 0.01,
-		"tip": "How opaque the gas must be before an art pixel turns solid; the fringe below it dithers."},
-	{"group": "Gas: pixel volume", "node": "GasMirror", "prop": "pixel_ink", "label": "Outline band", "min": 0.0, "max": 0.5, "step": 0.01,
-		"tip": "How far past the solid line the pixels darken, which draws a rough outline round each cloud. 0 draws none."},
-	{"group": "Gas: pixel puffs", "node": "GasMirror", "prop": "floor_corner_radius", "label": "Floor corner radius", "min": 0.0, "max": 16.0, "step": 1.0,
+	{"group": "Gas: puffs and floor", "node": "GasMirror", "prop": "held_cloud_strength", "label": "Cloud while floor held", "min": 0.0, "max": 1.0, "step": 0.01,
+		"tip": "How much of the cloud and its pool still draws while the floor key is held, which is what lets the floor underneath read. The puffs hide altogether. 1 leaves the cloud untouched."},
+	{"group": "Gas: puffs and floor", "node": "GasMirror", "prop": "floor_corner_radius", "label": "Floor corner radius", "min": 0.0, "max": 16.0, "step": 1.0,
 		"tip": "How round the fog floor's outer corners are, in art pixels (a cell is 32). Inner corners stay square either way, so the shape still reads as whole tiles."},
-	{"group": "Gas: pixel puffs", "node": "GasMirror", "prop": "puff_lean", "label": "Lean toward gas", "min": 0.0, "max": 0.5, "step": 0.01,
+	{"group": "Gas: puffs and floor", "node": "GasMirror", "prop": "puff_lean", "label": "Lean toward gas", "min": 0.0, "max": 0.5, "step": 0.01,
 		"tip": "How far a corner puff sits toward a neighbouring cell that also holds gas, in cells, so neighbouring cells' puffs meet into one cloud."},
-	{"group": "Gas: pixel puffs", "node": "GasMirror", "prop": "puff_tuck", "label": "Tuck from the edge", "min": 0.0, "max": 0.5, "step": 0.01,
+	{"group": "Gas: puffs and floor", "node": "GasMirror", "prop": "puff_tuck", "label": "Tuck from the edge", "min": 0.0, "max": 0.5, "step": 0.01,
 		"tip": "How far a corner puff sits toward a neighbouring cell WITHOUT gas, in cells. Small keeps the puffs inside the cell's own border so the edge of the gas stays legible."},
 ]
 
@@ -1747,12 +1737,11 @@ const GROUP_TABS: Dictionary[String, String] = {
 	# Its own tab with one row in it, which is thin today and is where the lethality stings and any
 	# ducking land next -- a crossfade length has nothing to do with any other tab's subject.
 	"Music": "Audio",
-	# The gas look harness (#508): a tab of its own while the experiment runs, since no other tab's
-	# subject is a volume. The floor and the puffs join it as groups.
+	# Gas (#508): a tab of its own, since no other tab's subject is a volume. The floor and the puffs
+	# join it as a group.
 	"Gas: the march": "Gas",
 	"Gas: light": "Gas",
-	"Gas: pixel volume": "Gas",
-	"Gas: pixel puffs": "Gas",
+	"Gas: puffs and floor": "Gas",
 	"Camera handling": "Camera",
 	"Playback framing": "Playback",
 	"World": "World",

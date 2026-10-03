@@ -136,6 +136,9 @@ const ENTRIES: Array[Dictionary] = [
 	{"key": "V", "context": Context.BOARD, "when": "",
 		"does": "Enemy ranges",
 		"action": "toggle_enemy_ranges"},
+	{"key": "Alt (hold)", "context": Context.BOARD, "when": "",
+		"does": "Gas tiles",
+		"action": "show_gas_floor"},
 	# A PLAYER BINDING SINCE #1050. It was a dev key for its whole life, which meant a shipped build
 	# had no hotkey for the one thing a stranger most needs to do -- and this page is half the point
 	# of promoting it, the other half being that a key nobody is told about is not a door.
