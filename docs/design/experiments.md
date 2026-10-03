@@ -4,7 +4,7 @@ A lightweight way to build a proposed feature behind a toggle, *feel* it in play
 it on/off without committing to it. Lets us carry several "maybe" systems in the codebase
 at once and decide by playing, not arguing.
 
-**Canon checked through #1176 (2026-10-01).**
+**Canon checked through #1176 (2026-10-01); #508's gas mixes folded in 2026-10-02.**
 
 ## Shape
 
@@ -40,8 +40,8 @@ The Experiments page picks it up automatically. Toggle state persists across lau
 ### A CHOICE between several treatments (#508)
 
 A flag is a toggle unless its `DEFS` entry declares `options`, which makes it a **choice**: `default`
-is then an option INDEX and the tab draws a dropdown. #508's `GAS_STYLE` is the first (four ways to
-draw gas, compared in play); `GAS_OVER_UNITS` beside it stays a toggle. It is `PlayerSettings`' row
+is then an option INDEX and the tab draws a dropdown. #508's `GAS_STYLE` is the first (four looks
+for gas, then four mixes of the one that won, compared in play); `GAS_OVER_UNITS` beside it stays a toggle. It is `PlayerSettings`' row
 kind, same shape, and it brings the same refusal (#647): **each typed facade turns the other kind
 away** -- `is_on` / `set_on` / `default_of` push an error on a choice, `choice_of` / `set_choice` on a
 toggle -- because the coercions underneath are silent: `bool(2)` is `true`, so a caller left on

@@ -18,7 +18,7 @@ const MAX_FLASHES := 4
 const LOOK_FLOATS := 24
 const REGION_FLOATS := 8
 # The Frame block, in floats: two matrices, raster, the dispatch rect, then Params.
-const PARAM_FLOATS := 12 * 4 + (MAX_LAMPS * 2 + MAX_FLASHES) * 4
+const PARAM_FLOATS := 11 * 4 + (MAX_LAMPS * 2 + MAX_FLASHES) * 4
 const FRAME_FLOATS := 32 + 8 + PARAM_FLOATS
 
 
@@ -35,10 +35,8 @@ class Params:
 	var march0 := Vector4()     # steps, light steps, first light step, min step
 	var march1 := Vector4()     # g forward, g back, back mix, powder
 	var march2 := Vector4()     # thin floor, contain softness, pool softness, detail scale
-	var march3 := Vector4()     # flash energy, flash radius, glint size, upsample tolerance
-	var pixel := Vector4()      # bands, cut, ink, 0
+	var march3 := Vector4()     # flash energy, flash radius, upsample tolerance, cloud strength
 	var flash_color := Vector3.ONE
-	var glint := 0.0
 	var kind_count := 0
 	var stage := Vector4()      # the diorama's offset, w = 1 while a fight is staged
 	var lamps: Array[Vector4] = []        # xyz, range
@@ -55,8 +53,7 @@ class Params:
 		_v4(f, march1)
 		_v4(f, march2)
 		_v4(f, march3)
-		_v4(f, pixel)
-		_v4(f, Vector4(flash_color.x, flash_color.y, flash_color.z, glint))
+		_v4(f, Vector4(flash_color.x, flash_color.y, flash_color.z, 0.0))
 		var lamp_count := mini(lamps.size(), MAX_LAMPS)
 		var flash_count := mini(flashes.size(), MAX_FLASHES)
 		_v4(f, Vector4(lamp_count, flash_count, kind_count, 0.0))
@@ -87,7 +84,6 @@ class Snapshot:
 	var params: Params
 	var screen_rect := Rect2()   # the regions' projection, as fractions of the viewport
 	var block := 2               # full pixels per march texel
-	var pixel := false
 
 
 var _rd: RenderingDevice
@@ -178,7 +174,7 @@ func _notification(what: int) -> void:
 
 # The Frame block, whole. Static so its layout can be pinned without a device.
 static func frame_bytes(inv_projection: Projection, camera: Transform3D, full: Vector2i, block: int,
-		pixel: bool, screen_origin: Vector2i, march_origin: Vector2i, params: Params) -> PackedByteArray:
+		screen_origin: Vector2i, march_origin: Vector2i, params: Params) -> PackedByteArray:
 	var f := PackedFloat32Array()
 	for column: Vector4 in [inv_projection.x, inv_projection.y, inv_projection.z, inv_projection.w]:
 		Params._v4(f, column)
@@ -187,7 +183,7 @@ static func frame_bytes(inv_projection: Projection, camera: Transform3D, full: V
 	Params._v4(f, Vector4(b.y.x, b.y.y, b.y.z, 0.0))
 	Params._v4(f, Vector4(b.z.x, b.z.y, b.z.z, 0.0))
 	Params._v4(f, Vector4(camera.origin.x, camera.origin.y, camera.origin.z, 1.0))
-	Params._v4(f, Vector4(full.x, full.y, block, 1.0 if pixel else 0.0))
+	Params._v4(f, Vector4(full.x, full.y, block, 0.0))
 	Params._v4(f, Vector4(screen_origin.x, screen_origin.y, march_origin.x, march_origin.y))
 	f.append_array(params.pack())
 	return f.to_byte_array()
@@ -235,7 +231,7 @@ func _render_callback(callback_type: int, render_data: RenderData) -> void:
 	var targets := _march_targets(buffers, march_size)
 	_sync_buffers(snap)
 	var bytes := frame_bytes(scene.get_cam_projection().inverse(), scene.get_cam_transform(), full, block,
-		snap.pixel, rects[0].position, rects[1].position, snap.params)
+		rects[0].position, rects[1].position, snap.params)
 	_rd.buffer_update(_frame_ubo, 0, bytes.size(), bytes)
 	for view in buffers.get_view_count():
 		var shared: Array[RDUniform] = [

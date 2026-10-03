@@ -35,6 +35,7 @@ func _params() -> GasVolumeEffect.Params:
 	p.board_rect = Vector4(1, 2, 3, 4)
 	p.kind_count = 6
 	p.region_count = 5
+	p.march3 = Vector4(10, 1.7, 0.03, 0.25)
 	p.stage = Vector4(0, 40, 0, 1)
 	p.lamps = [Vector4(7, 8, 9, 3)]
 	p.lamp_colors = [Vector4(0.5, 0.25, 0.125, 0)]
@@ -52,25 +53,26 @@ func test_the_frame_block_is_the_size_the_shader_declares() -> void:
 		"GasVolumeEffect.FRAME_FLOATS says %d floats, gas_volume.glsl's Frame block holds %d"
 			% [GasVolumeEffect.FRAME_FLOATS, declared]).is_equal(declared)
 	var bytes := GasVolumeEffect.frame_bytes(Projection.IDENTITY, Transform3D.IDENTITY, Vector2i(1920, 1080), 2,
-		false, Vector2i.ZERO, Vector2i.ZERO, _params())
+		Vector2i.ZERO, Vector2i.ZERO, _params())
 	assert_int(bytes.size()).is_equal(declared * 4)
 
 
 func test_every_member_lands_where_the_shader_reads_it() -> void:
 	var cam := Transform3D(Basis.IDENTITY, Vector3(5, 6, 7))
-	var f := _floats(GasVolumeEffect.frame_bytes(Projection.IDENTITY, cam, Vector2i(1920, 1080), 2, true,
+	var f := _floats(GasVolumeEffect.frame_bytes(Projection.IDENTITY, cam, Vector2i(1920, 1080), 2,
 		Vector2i(100, 200), Vector2i(49, 99), _params()))
 	# camera_to_world's origin column is the second matrix's last.
 	assert_array([f[28], f[29], f[30], f[31]]).is_equal([5.0, 6.0, 7.0, 1.0])
-	assert_array([f[32], f[33], f[34], f[35]]).is_equal([1920.0, 1080.0, 2.0, 1.0])     # raster
+	assert_array([f[32], f[33], f[34], f[35]]).is_equal([1920.0, 1080.0, 2.0, 0.0])     # raster
 	assert_array([f[36], f[37], f[38], f[39]]).is_equal([100.0, 200.0, 49.0, 99.0])     # screen_rect
 	assert_array([f[40], f[41], f[42], f[43]]).is_equal([1.0, 2.0, 3.0, 4.0])           # board_rect
 	assert_float(f[55]).is_equal(5.0)                                                    # ambient.w: regions
-	assert_array([f[80], f[81], f[82]]).is_equal([1.0, 1.0, 6.0])                       # counts
-	assert_array([f[84], f[85], f[86], f[87]]).is_equal([0.0, 40.0, 0.0, 1.0])          # stage
-	assert_array([f[88], f[89], f[90], f[91]]).is_equal([7.0, 8.0, 9.0, 3.0])           # lamps[0]
-	assert_array([f[120], f[121], f[122]]).is_equal([0.5, 0.25, 0.125])                # lamp_colors[0]
-	assert_array([f[152], f[153], f[154], f[155]]).is_equal([11.0, 12.0, 13.0, 0.75])   # flashes[0]
+	assert_float(f[71]).is_equal(0.25)                                                   # march3.w: cloud strength
+	assert_array([f[76], f[77], f[78]]).is_equal([1.0, 1.0, 6.0])                       # counts
+	assert_array([f[80], f[81], f[82], f[83]]).is_equal([0.0, 40.0, 0.0, 1.0])          # stage
+	assert_array([f[84], f[85], f[86], f[87]]).is_equal([7.0, 8.0, 9.0, 3.0])           # lamps[0]
+	assert_array([f[116], f[117], f[118]]).is_equal([0.5, 0.25, 0.125])                # lamp_colors[0]
+	assert_array([f[148], f[149], f[150], f[151]]).is_equal([11.0, 12.0, 13.0, 0.75])   # flashes[0]
 
 
 func test_more_lamps_than_the_shader_holds_are_dropped_not_overflowed() -> void:
@@ -79,9 +81,9 @@ func test_more_lamps_than_the_shader_holds_are_dropped_not_overflowed() -> void:
 		p.lamps.append(Vector4(i, i, i, 1))
 		p.lamp_colors.append(Vector4.ONE)
 	var bytes := GasVolumeEffect.frame_bytes(Projection.IDENTITY, Transform3D.IDENTITY, Vector2i(64, 64), 1,
-		false, Vector2i.ZERO, Vector2i.ZERO, p)
+		Vector2i.ZERO, Vector2i.ZERO, p)
 	assert_int(bytes.size()).is_equal(GasVolumeEffect.FRAME_FLOATS * 4)
-	assert_float(_floats(bytes)[80]).is_equal(float(GasVolumeEffect.MAX_LAMPS))
+	assert_float(_floats(bytes)[76]).is_equal(float(GasVolumeEffect.MAX_LAMPS))
 
 
 func test_a_whole_screen_dispatches_every_pixel_and_every_texel() -> void:

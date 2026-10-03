@@ -1,5 +1,5 @@
-// The pixel puffs (#508's look harness): one MultiMesh, every quad a Y-billboard standing on its feet,
-// animated here from GasMirror's pushed clock -- the boil, the bob and each gas's moving extra -- so
+// The pixel puffs (#508): one MultiMesh, every quad a Y-billboard standing on its feet, animated here
+// from GasMirror's pushed clock -- the boil, the bob, the wander and each gas's moving extra -- so
 // nothing is moved by script per frame. Ported from round 4's probe, which moved 700 sprites by hand.
 //
 // INSTANCE_CUSTOM: x = kind, y = role (0 puff, 1 wisp, 2 soot, 3 bubble, 4 snow, 5 bolt, 6 curl),
@@ -17,6 +17,7 @@ uniform float extra_base = 9.0;
 uniform float boil_seconds[6];
 uniform vec2 bob[6];                   // art pixels of bob, rate
 uniform float sway[6];                 // art pixels of side-to-side drift
+uniform float drift = 0.0;             // world units a puff wanders around its spot (the mix's)
 uniform float bolt_threshold = 0.35;   // how lit a strike must be before its bolt shows
 
 varying flat float layer;
@@ -44,7 +45,9 @@ void vertex() {
 		float boil = mod(floor(t / max(boil_seconds[kind], 0.05) + ph), 3.0);
 		layer = base + size * 3.0 + mod(variant + boil, 3.0);
 		offset.y = snap(sin(t * bob[kind].y + ph) * bob[kind].x);
-		offset.x = snap(sin(t * 0.5 + ph) * sway[kind]);
+		float wander = drift / pixel_size;
+		offset.x = snap(sin(t * 0.5 + ph) * sway[kind] + sin(t * 0.43 + ph * 3.0) * wander);
+		offset.z = snap(sin(t * 0.31 + ph * 5.0) * wander);
 	} else if (role == 1) {
 		float u = fract(t / 1.8 + ph);
 		layer = base + extra_base + (u < 0.55 ? 0.0 : 1.0);

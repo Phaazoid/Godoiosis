@@ -48,13 +48,13 @@ const DEFS := {
 	},
 	Flag.GAS_STYLE: {
 		"title": "Gas style",
-		"desc": "How gas is drawn (#508's look harness): a realistic volume pooled on its cells, pixel puffs on an edged fog floor, the realistic volume with one pixel puff per cell, or the volume drawn as chunky dithered pixels. Paint gas with the Tile Brush's Gas mode. Pick one and the losers get deleted.",
+		"desc": "Which mix of the realistic volume and the pixel puffs draws gas (#508, round 6). Puff field: the pixel puffs' full layout over the volume. Drifting puffs: the same, every puff wandering round its spot. Haze + puffs: the volume thinned to a low haze so the puffs carry the shapes. Puffs in the cloud: fewer puffs, floating through the volume's height. Hold Alt to see the edged floor under every cloud. Paint gas with the Tile Brush's Gas mode. Pick one and the losers get deleted.",
 		"default": 0,
-		"options": ["Realistic", "Pixel puffs", "Realistic + puffs", "Pixel volume"],
+		"options": ["Puff field", "Drifting puffs", "Haze + puffs", "Puffs in the cloud"],
 	},
 	Flag.GAS_OVER_UNITS: {
 		"title": "Gas draws over units",
-		"desc": "On: a gas volume veils whatever is behind it -- units, move tiles, flames and health bars too. Off: all of those draw crisp on top of the gas. #508's layering test; the pixel puffs ignore it.",
+		"desc": "On: a gas volume veils whatever is behind it -- units, move tiles, flames and health bars too. Off: all of those draw crisp on top of the gas. #508's layering test.",
 		"default": true,
 	},
 }

@@ -13,11 +13,11 @@ composite = "#define COMPOSITE_PASS";
 // default): each texel casts one ray through every gas region box it crosses, stops at the scene
 // depth, and writes premultiplied colour plus the distance it used. COMPOSITE runs at full
 // resolution: a depth-aware upsample of the march, then the POOL in closed form against full-res
-// depth (so the cell edge stays crisp), over the colour buffer. The pixel style marches once per
-// art-pixel block, folds the pool in there, posterizes, and the composite takes it nearest.
+// depth (so the cell edge stays crisp), over the colour buffer, scaled by the cloud's strength (lower
+// while the floor key is held).
 //
 // Ported from round 4's spatial probe: Beer-Lambert extinction, a short sun march for self-shadow,
-// a two-lobe Henyey-Greenstein phase, lamps, lightning glows, frost glints.
+// a two-lobe Henyey-Greenstein phase, lamps, lightning glows.
 //
 // A tear-out's diorama is the board lifted rigidly (BoardSpace.stage_offset), so a LIFTED region
 // reads the same field at p - offset, and only from the cells that went up with it.
@@ -29,7 +29,7 @@ struct Look {
 	vec4 emit;     // rgb emission, lightning (0/1)
 	vec4 column;   // base height, column height, top softness, shape scale
 	vec4 motion;   // stretch, erosion, rise speed, coverage boost
-	vec4 pool;     // height, density, sparkle, 0
+	vec4 pool;     // height, density, 0, 0
 	vec4 wind;     // x, z drift, 0, 0
 };
 
@@ -46,7 +46,7 @@ layout(set = 0, binding = 3) uniform sampler2D march_depth_in;
 layout(set = 0, binding = 4, std140) uniform Frame {
 	mat4 inv_projection;
 	mat4 camera_to_world;
-	vec4 raster;         // full w, full h, full pixels per march texel, pixel style (0/1)
+	vec4 raster;         // full w, full h, full pixels per march texel, 0
 	vec4 screen_rect;    // full-res origin x, y; march origin x, y
 	vec4 board_rect;     // x, z, w, h in cells (one cell is one world unit)
 	vec4 sun_dir;        // xyz toward the sun, w ambient strength
@@ -55,9 +55,8 @@ layout(set = 0, binding = 4, std140) uniform Frame {
 	vec4 march0;         // steps, light steps, first light step, min step
 	vec4 march1;         // g forward, g back, back mix, powder
 	vec4 march2;         // thin floor, contain softness, pool softness, detail scale
-	vec4 march3;         // flash energy, flash radius, glint size, upsample tolerance
-	vec4 pixel;          // bands, cut, ink, 0
-	vec4 flash_color;    // rgb, glint strength
+	vec4 march3;         // flash energy, flash radius, upsample tolerance, cloud strength
+	vec4 flash_color;    // rgb, 0
 	vec4 counts;         // lamp count, flash count, kind count, 0
 	vec4 stage;          // the diorama's offset, w = 1 while a fight is staged
 	vec4 lamps[8];       // xyz, range
@@ -284,14 +283,11 @@ float kind_density(vec3 q, float h, float t, bool detailed, int k) {
 	return d;
 }
 
-// Total extinction at p; when `detailed`, also the extinction-weighted albedo, glow, lightning and
-// glint weight.
-float medium_at(vec3 p, bool lifted, float t, bool detailed, out vec3 alb, out vec3 emit, out float flash,
-		out float glint) {
+// Total extinction at p; when `detailed`, also the extinction-weighted albedo, glow and lightning.
+float medium_at(vec3 p, bool lifted, float t, bool detailed, out vec3 alb, out vec3 emit, out float flash) {
 	alb = vec3(0.0);
 	emit = vec3(0.0);
 	flash = 0.0;
-	glint = 0.0;
 	vec3 q = lifted ? p - frame.stage.xyz : p;
 	uint near = kinds_near(cell_of(q.xz), lifted);
 	if (near == 0u) {
@@ -317,25 +313,17 @@ float medium_at(vec3 p, bool lifted, float t, bool detailed, out vec3 alb, out v
 			alb += L.albedo.rgb * s;
 			emit += L.emit.rgb * s;
 			flash += L.emit.w * s;
-			glint += L.pool.z * s;
 		}
 	}
 	if (detailed && sigma > 0.0) {
 		alb /= sigma;
 		emit /= sigma;
 		flash /= sigma;
-		glint /= sigma;
 	}
 	return sigma;
 }
 
-float bayer4(ivec2 p) {
-	int m[16] = int[](0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5);
-	return (float(m[(p.y & 3) * 4 + (p.x & 3)]) + 0.5) / 16.0;
-}
-
-void march_span(vec3 ro, vec3 rd, vec2 span, bool lifted, float jitter, inout vec3 color, inout float T,
-		inout vec3 alb_acc) {
+void march_span(vec3 ro, vec3 rd, vec2 span, bool lifted, float jitter, inout vec3 color, inout float T) {
 	float t_gas = frame.sun_color.w;
 	int steps = int(frame.march0.x);
 	float dt = max((span.y - span.x) / float(steps), frame.march0.w);
@@ -349,8 +337,7 @@ void march_span(vec3 ro, vec3 rd, vec2 span, bool lifted, float jitter, inout ve
 		vec3 alb;
 		vec3 emit;
 		float fl;
-		float gl;
-		float sigma = medium_at(p, lifted, t_gas, true, alb, emit, fl, gl);
+		float sigma = medium_at(p, lifted, t_gas, true, alb, emit, fl);
 		if (sigma > 0.01) {
 			float od = 0.0;
 			float ls = frame.march0.z;
@@ -360,8 +347,7 @@ void march_span(vec3 ro, vec3 rd, vec2 span, bool lifted, float jitter, inout ve
 				vec3 a2;
 				vec3 e2;
 				float f2;
-				float g2;
-				od += medium_at(lp, lifted, t_gas, false, a2, e2, f2, g2) * ls;
+				od += medium_at(lp, lifted, t_gas, false, a2, e2, f2) * ls;
 				ls *= 1.5;
 			}
 			float sun_t = exp(-od);
@@ -369,25 +355,10 @@ void march_span(vec3 ro, vec3 rd, vec2 span, bool lifted, float jitter, inout ve
 			if (fl > 0.0) {
 				emit += alb * flashes_at(p, 1.0) * fl;
 			}
-			if (gl > 0.0) {
-				// Glints: one point in some cells of a falling grid, lit when the ray passes near it --
-				// a distance to the LINE, so a glint never depends on a step landing on it.
-				vec3 gq = (p + vec3(0.0, t_gas * 0.3, 0.0)) * 3.0;
-				vec3 ci = floor(gq);
-				float hs = fract(sin(dot(ci, vec3(12.9898, 78.233, 37.719))) * 43758.5453);
-				if (hs > 0.72) {
-					vec3 gp = (ci + vec3(fract(hs * 7.13), fract(hs * 13.71), fract(hs * 3.37))) / 3.0
-						- vec3(0.0, t_gas * 0.3, 0.0);
-					float dline = length(cross(gp - ro, rd));
-					float twinkle = 0.55 + 0.45 * sin(t_gas * 5.0 + hs * 40.0);
-					emit += vec3(frame.flash_color.w) * gl * smoothstep(frame.march3.z, 0.0, dline) * twinkle;
-				}
-			}
 			vec3 radiance = alb * (frame.sun_color.rgb * sun_t * sun_phase * powder_term
 				+ frame.ambient.rgb * frame.sun_dir.w + lamps_at(p, rd)) + emit;
 			float st = exp(-sigma * dt);
 			color += T * radiance * (1.0 - st);
-			alb_acc += T * alb * (1.0 - st);
 			T *= st;
 		}
 		t += dt;
@@ -402,24 +373,18 @@ void main() {
 	}
 	vec2 full = frame.raster.xy;
 	float block = frame.raster.z;
-	bool pixel_style = frame.raster.w > 0.5;
 	ivec2 full_i = ivec2(full) - 1;
 
-	// The depth this texel stands for. Smooth: a checkerboard of nearest and farthest over its block,
-	// so the upsample always has a tap on each side of a unit's edge. Pixel: the block's centre.
+	// The depth this texel stands for: a checkerboard of nearest and farthest over its block, so the
+	// upsample always has a tap on each side of a unit's edge.
 	ivec2 origin = ivec2(vec2(tex) * block);
-	float depth;
-	if (pixel_style) {
-		depth = texelFetch(depth_tex, clamp(origin + ivec2(block * 0.5), ivec2(0), full_i), 0).r;
-	} else {
-		bool nearest = ((tex.x + tex.y) & 1) == 0;
-		depth = nearest ? 0.0 : 1.0;
-		int b = int(block);
-		for (int y = 0; y < b; y++) {
-			for (int x = 0; x < b; x++) {
-				float d = texelFetch(depth_tex, clamp(origin + ivec2(x, y), ivec2(0), full_i), 0).r;
-				depth = nearest ? max(depth, d) : min(depth, d);   // reversed-Z: larger is nearer
-			}
+	bool nearest = ((tex.x + tex.y) & 1) == 0;
+	float depth = nearest ? 0.0 : 1.0;
+	int b = int(block);
+	for (int y = 0; y < b; y++) {
+		for (int x = 0; x < b; x++) {
+			float d = texelFetch(depth_tex, clamp(origin + ivec2(x, y), ivec2(0), full_i), 0).r;
+			depth = nearest ? max(depth, d) : min(depth, d);   // reversed-Z: larger is nearer
 		}
 	}
 	vec2 uv = clamp((vec2(tex) + 0.5) * block / full, vec2(0.0), vec2(1.0));
@@ -455,41 +420,11 @@ void main() {
 
 	vec3 color = vec3(0.0);
 	float T = 1.0;
-	vec3 alb_acc = vec3(0.0);
 	float jitter = fract(52.9829189 * fract(dot(vec2(tex), vec2(0.06711056, 0.00583715))));
 	for (int s = 0; s < span_count; s++) {
-		march_span(ro, rd, spans[s].xy, spans[s].z > 0.5, jitter, color, T, alb_acc);
+		march_span(ro, rd, spans[s].xy, spans[s].z > 0.5, jitter, color, T);
 	}
-
-	if (pixel_style) {
-		// The pool belongs to this block too, then the whole block is posterized against the gas's
-		// OWN colour, so dark smoke stays dark, and its fringe dithers.
-		if (depth > 0.0) {
-			float od;
-			vec3 rad;
-			vec3 alb_pool;
-			pool_at(ro + rd * dist, rd, frame.sun_color.w, od, rad, alb_pool);
-			if (od > 0.0) {
-				float st = exp(-od);
-				color += T * rad * (1.0 - st);
-				alb_acc += T * alb_pool * (1.0 - st);
-				T *= st;
-			}
-		}
-		float A = 1.0 - T;
-		float b = bayer4(tex);
-		float cut = frame.pixel.y + (b - 0.5) * 0.35;
-		float solid = step(cut, A);
-		vec3 c = color / max(A, 1e-3);
-		vec3 alb_avg = alb_acc / max(A, 1e-3);
-		float lit = dot(c, vec3(0.3, 0.59, 0.11)) / max(dot(alb_avg, vec3(0.3, 0.59, 0.11)), 0.03);
-		float q = max(floor(lit * frame.pixel.x + b) / frame.pixel.x, 1.0 / frame.pixel.x);
-		vec3 cq = alb_avg * q;
-		cq = mix(cq, cq * 0.55, step(A, cut + frame.pixel.z));
-		imageStore(march_out, tex, vec4(cq * solid, solid));
-	} else {
-		imageStore(march_out, tex, vec4(color, 1.0 - T));
-	}
+	imageStore(march_out, tex, vec4(color, 1.0 - T));
 	imageStore(march_depth_out, tex, vec4(dist));
 }
 
@@ -502,7 +437,6 @@ void main() {
 		return;
 	}
 	float block = frame.raster.z;
-	bool pixel_style = frame.raster.w > 0.5;
 	ivec2 march_size = textureSize(march_in, 0);
 	float depth = texelFetch(depth_tex, px, 0).r;
 	vec2 uv = (vec2(px) + 0.5) / full;
@@ -510,43 +444,40 @@ void main() {
 	vec3 rd = view_dir_world(uv);
 	float dist = depth > 0.0 ? length(unproject(uv, depth)) : 1e6;
 
-	vec4 gas;
-	if (pixel_style) {
-		gas = texelFetch(march_in, clamp(ivec2(vec2(px) / block), ivec2(0), march_size - 1), 0);
-	} else {
-		// Depth-aware upsample: bilinear weights, each tap discounted by how far its depth sits from
-		// this pixel's, so gas does not bleed across a unit's silhouette.
-		vec2 mp = (vec2(px) + 0.5) / block - 0.5;
-		ivec2 b = ivec2(floor(mp));
-		vec2 f = fract(mp);
-		vec4 sum = vec4(0.0);
-		float wsum = 0.0;
-		vec4 best = vec4(0.0);
-		float best_err = 1e9;
-		float tol = max(frame.march3.w * dist, 0.05);
-		for (int j = 0; j < 2; j++) {
-			for (int i = 0; i < 2; i++) {
-				ivec2 tp = clamp(b + ivec2(i, j), ivec2(0), march_size - 1);
-				vec4 g = texelFetch(march_in, tp, 0);
-				float err = abs(texelFetch(march_depth_in, tp, 0).r - dist);
-				float w = (i == 0 ? 1.0 - f.x : f.x) * (j == 0 ? 1.0 - f.y : f.y);
-				w *= exp(-err / tol);
-				sum += g * w;
-				wsum += w;
-				if (err < best_err) {
-					best_err = err;
-					best = g;
-				}
+	// Depth-aware upsample: bilinear weights, each tap discounted by how far its depth sits from this
+	// pixel's, so gas does not bleed across a unit's silhouette.
+	vec2 mp = (vec2(px) + 0.5) / block - 0.5;
+	ivec2 b = ivec2(floor(mp));
+	vec2 f = fract(mp);
+	vec4 sum = vec4(0.0);
+	float wsum = 0.0;
+	vec4 best = vec4(0.0);
+	float best_err = 1e9;
+	float tol = max(frame.march3.z * dist, 0.05);
+	for (int j = 0; j < 2; j++) {
+		for (int i = 0; i < 2; i++) {
+			ivec2 tp = clamp(b + ivec2(i, j), ivec2(0), march_size - 1);
+			vec4 g = texelFetch(march_in, tp, 0);
+			float err = abs(texelFetch(march_depth_in, tp, 0).r - dist);
+			float w = (i == 0 ? 1.0 - f.x : f.x) * (j == 0 ? 1.0 - f.y : f.y);
+			w *= exp(-err / tol);
+			sum += g * w;
+			wsum += w;
+			if (err < best_err) {
+				best_err = err;
+				best = g;
 			}
 		}
-		gas = wsum > 1e-4 ? sum / wsum : best;
 	}
+	float strength = frame.march3.w;
+	vec4 gas = (wsum > 1e-4 ? sum / wsum : best) * strength;
 
 	float pool_od = 0.0;
 	vec3 pool_rad = vec3(0.0);
-	if (!pixel_style && depth > 0.0) {
+	if (depth > 0.0) {
 		vec3 alb_pool;
 		pool_at(ro + rd * dist, rd, frame.sun_color.w, pool_od, pool_rad, alb_pool);
+		pool_od *= strength;
 	}
 	if (gas.a <= 0.0 && pool_od <= 0.0) {
 		return;
