@@ -226,23 +226,6 @@ func _build_unit_half() -> Control:
 
 # --- the job picker (#742) ------------------------------------------------------------------------
 
-# WHAT THIS CARD MAY OFFER: the mission's own list (#964), plus whatever this unit already holds.
-#
-# The union is not politeness. A character authoring a starting_job, or a state_saved roster entry,
-# can arrive holding a job the mission does not offer — and without it that unit falls into the
-# unknown-id branch of _refresh_job below, which prints the raw id and leaves the job un-re-pickable
-# once dropped. Offered ∪ held reads right and stays reversible.
-func _offered_job_ids() -> Array[String]:
-	var ids: Array[String] = []
-	for id: String in _controller.loadout().available_jobs:
-		if id != "" and not ids.has(id):
-			ids.append(id)
-	for id: String in unit.unit_instance.jobs:
-		if id != "" and not ids.has(id):
-			ids.append(id)
-	return ids
-
-
 # BUILT ONCE AND NEVER REBUILT. _refresh_job below only moves the selection, because the refresh that
 # follows a pick would otherwise replace the very control the pick came out of.
 #
@@ -253,8 +236,10 @@ func _offered_job_ids() -> Array[String]:
 # fit_to_longest_item is the knob that matters here, not clip_text: it defaults TRUE, which makes an
 # OptionButton's minimum width its widest ITEM — one long job name and the card's column walks out of
 # the region, which is the law in this file's header and the #685 failure one surface over.
+#
+# What it lists is Loadout.offered_jobs_for: the mission's offer plus what this unit holds (#964).
 func _build_job_picker() -> Control:
-	var ids := _offered_job_ids()
+	var ids := _controller.loadout().offered_jobs_for(unit)
 	if ids.is_empty():
 		return null
 
@@ -487,9 +472,9 @@ func _refresh_job() -> void:
 			break
 	if not matched:
 		# A BACKSTOP since #964, no longer the ordinary path: a held job is in the list by construction
-		# now (_offered_job_ids unions it in), including one no catalogue file answers, which lists under
-		# its raw id. This survives for a job assigned after the picker was built -- nothing does that
-		# today -- and says the raw id rather than claiming "none".
+		# now (Loadout.offered_jobs_for unions it in), including one no catalogue file answers, which
+		# lists under its raw id. This survives for a job assigned after the picker was built --
+		# nothing does that today -- and says the raw id rather than claiming "none".
 		_job_picker.select(-1)
 		_job_picker.text = held
 	_job_picker.tooltip_text = UiText.wrap(
