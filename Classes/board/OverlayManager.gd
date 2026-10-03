@@ -2,7 +2,8 @@ extends Node
 class_name OverlayManager
 
 # All 2D board visuals: the tile-layer fills (move/attack/hover/squad/zones), path
-# arrows, selection icons, projected-unit ghosts, knockback + terrain previews, and
+# arrows, selection icons, projected-unit ghosts, knockback + terrain previews (a fully held
+# shove's mark among them, #1186), and
 # the target-pulse channel, and the aim's travel-order flash (AimFlash2D). Every draw is RETAINED — the layers hold their cells and
 # the dicts below hold their sprites — which is what lets the 3D OverlayMirror poll
 # full parity off this manager with zero trigger hooks (#222).
@@ -18,6 +19,8 @@ class_name OverlayManager
 @onready var zone_overlay = $ZoneOverlay
 
 const PATH_ERROR := preload("res://Art/Icons/ArrowIcons/ERROR.png")
+# A shove the target's weight holds outright (#1186): the hold icon, greyscale so the shove tint reads true.
+const PATH_HELD := preload("res://Art/Icons/ArrowIcons/nomove_trail.png")
 const PATH_HORIZONTAL := preload("res://Art/Icons/ArrowIcons/horizontal.png")
 const PATH_VERTICAL := preload("res://Art/Icons/ArrowIcons/vertical.png")
 
@@ -1461,8 +1464,18 @@ func clear_terrain_preview() -> void:
 # endpoints-plus-direction reconstruction can no longer describe it (and its `while cursor != to`
 # was an infinite loop for any bent pair). A REMOVED target (shoved into a void) gets a trail and
 # neither ghost nor hide: its sprite stays where it stands, matching the unpublished projection.
-func show_knockback_preview(shoves: Array) -> void:
+# `holds` are the cells where a target's weight held a whole shove (#1186): each gets the hold icon
+# in the trail's tint and nothing else, since that unit stays put. Riding the trail's array and
+# parent is what clears, retints and mirrors it.
+func show_knockback_preview(shoves: Array, holds: Array[Vector2i] = []) -> void:
 	clear_knockback_preview()
+
+	var marked := {}
+	for cell in holds:
+		if marked.has(cell):
+			continue
+		marked[cell] = true
+		knockback_preview_sprites.append(_create_arrow_sprite(cell, PATH_HELD, KNOCKBACK_MODULATE))
 
 	var final_cell := {}   # Unit -> Vector2i; entries arrive in resolve order, so the last one wins
 	var removed := {}      # Unit -> bool, same last-one-wins
