@@ -21,6 +21,8 @@ extends SceneTree
 #   join   {"unit": "B", "leader": "A"}   - B joins A's squad (squad-up / join)
 #   leave  {"unit": "B"}                  - B leaves its squad (back to solo)
 #   disband{"unit": "A"}                  - A (squad leader) disbands its squad
+#   deploy {"unit": "F", "x": 4, "y": 0} | undeploy {"unit": "C"} | reposition {...} | begin
+#                                - the pre-mission phase a roster mission opens on (#46)
 #   execute | endturn            - resolve+apply the plan / pass the turn
 #   quit                         - shut the bridge down
 

@@ -64,6 +64,7 @@ view**, not raw JSON — see *State representation*. Command vocabulary:
 | `squad_up / join / leave / disband` | new squad state |
 | `queue_move(unit_id, dest)` / `queue_attack(unit_id, aim_cell, attack?)` | validity + updated plan. `attack` names which attack fires — see *Choosing an attack* below |
 | `overwatch(unit_id, aim_cell, attack?)` | stand watch with the NAMED watch attack, else the unit's first (a weapon normally carries one) |
+| `deploy(unit, cell)` / `undeploy(unit)` / `reposition(unit, cell)` / `begin()` | the PRE-MISSION phase (#46) -- see *Pre-mission* below |
 | `rescue / reload / rev / burrow / guard` | the side-channel main actions, one verb each — the argument-taking ones (`rescue(a, b)`, `guard(a, ward)`) stay separate from the argument-free ones for the reason `game.queue_simple_action` does. Each gates on the same `RulesService` query the menu's row is built from. *(Still missing: `capture` — see Known gaps.)* |
 | `cancel(unit_id)` / `wait(unit_id)` | updated plan |
 | `preview()` | `resolve_plan(active_squad)` outcomes **without applying** (damage, state deltas, deaths, counters) |
@@ -86,6 +87,24 @@ is refused in `attack_block_reason`'s words, the reason the menu greys its row w
 
 ```bash
 play/send.sh attack '{"unit":"A","x":23,"y":15,"attack":"Splash"}'
+```
+
+**Pre-mission (#46).** Loading a mission that names a Roster opens the same pre-mission phase the
+game opens: the whole roster is drawn, as many as the cap allows stand on the DEPLOYMENT zone (the
+authored walk), and the rest wait in reserve with handles of their own. The overview shows
+`deployed N/cap`, the open cells, the reserve, and the zone as `D`; the status line leads with
+`phase=PRE_MISSION`. Until `begin`, every battle verb refuses ("the mission has not begun") and a
+reserve unit takes no squad or battle verb. `deploy` / `undeploy` / `reposition` / `begin` judge
+through the rules the loadout screen uses, refusing in its words -- they are ONE implementation,
+`PreMissionPhase`, which the game drives with `game.gd` as its host and the Play API with
+`PlaySession` (`tests/flow/test_pre_mission_two_hosts.gd` holds the two to one answer). `load` with
+`"resume": true` skips the draw, for a mid-battle snapshot whose `roster` would otherwise stand a
+second force on top of the saved one. Gear, mods and jobs are slice 2; a restart that keeps the
+loadout is slice 3.
+
+```bash
+play/send.sh load '{"path":"res://Scenarios/missions/Level_1.tres"}'
+play/send.sh --batch '[{"cmd":"undeploy","args":{"unit":"C"}},{"cmd":"deploy","args":{"unit":"F","x":29,"y":3}},{"cmd":"begin"}]'
 ```
 
 ### 3. Transport hosts — "are 1 and 3 exclusive?" → no
