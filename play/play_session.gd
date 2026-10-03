@@ -387,6 +387,140 @@ func begin() -> Dictionary:
 	_deploying = false
 	return {"ok": true, "summary": "mission begun with %d deployed" % _phase.deployed_count()}
 
+# ---- the loadout screen's writes (#46 slice 2a) ----
+# Gear, jobs and mods, each through the door the screen calls: Loadout.move, Loadout.set_job, and the
+# fitting card's own library plus WeaponInstance.fit_block_reason. Any roster unit, deployed or in
+# reserve, since the screen's cards cover both; STASH names the phase's stash at either end of a give.
+
+const STASH := "stash"
+
+func stash() -> Array[Item]:
+	var items: Array[Item] = []
+	if _phase != null:
+		items = _phase.loadout.stash
+	return items
+
+# The jobs this unit's picker would list -- the Loadout's answer, and none outside the phase.
+func offered_jobs_for(unit: Unit) -> Array[String]:
+	var ids: Array[String] = []
+	if _deploying:
+		ids = _phase.loadout.offered_jobs_for(unit)
+	return ids
+
+# The mods the fitting card's library would offer this weapon, keyed as the card keys them.
+func offered_mods_for(weapon: WeaponInstance) -> Dictionary:
+	if not _deploying or weapon == null or weapon.template == null:
+		return {}
+	return WeaponModCatalog.offerable_for(weapon.template.weapon_type, _phase.loadout.available_mods)
+
+# A fitted mod's name as the library keys it -- found by PATH, offerable_for's own match, since a
+# repaired load hands back a copy (#608). `mods` is WeaponModCatalog.get_mods(), passed in because
+# that call rescans the folder. A mod from outside the catalogue falls back to its own name.
+func mod_key(mod: WeaponModData, mods: Dictionary) -> String:
+	for key in mods:
+		var known: WeaponModData = mods[key]
+		if mod.resource_path != "" and known.resource_path == mod.resource_path:
+			return str(key)
+	return mod.display_name if mod.display_name != "" else mod.id
+
+func give(from_name: String, slot: int, to_name: String) -> Dictionary:
+	var gate := _phase_gate()
+	if not gate.ok:
+		return gate
+	var source := _gear_holder(from_name)
+	if not source.ok:
+		return source
+	var target := _gear_holder(to_name)
+	if not target.ok:
+		return target
+	var from_unit: Unit = source.unit
+	var to_unit: Unit = target.unit
+	var item := _gear_at(from_unit, slot)
+	var refusal := _phase.loadout.move(item, from_unit, to_unit)
+	if refusal != "":
+		return {"ok": false, "error": refusal}
+	return {"ok": true, "summary": "%s: %s -> %s" % [item.shown_name(), from_name, to_name]}
+
+func set_job(handle: String, job_id: String) -> Dictionary:
+	var gate := _phase_gate()
+	if not gate.ok:
+		return gate
+	var who := _gear_holder(handle)
+	if not who.ok:
+		return who
+	var unit: Unit = who.unit
+	if unit == null:
+		return {"ok": false, "error": "the stash holds no job"}
+	var refusal := _phase.loadout.set_job(unit, job_id)
+	if refusal != "":
+		return {"ok": false, "error": refusal}
+	return {"ok": true, "summary": "%s job: %s" % [handle, job_id if job_id != "" else "none"]}
+
+# `space` is 1-based, as every fit_block_reason sentence counts them.
+func fit(holder_name: String, slot: int, mod_name: String, space: int) -> Dictionary:
+	var gate := _phase_gate()
+	if not gate.ok:
+		return gate
+	var held := _weapon_at(holder_name, slot)
+	if not held.ok:
+		return held
+	var weapon: WeaponInstance = held.weapon
+	var offered := offered_mods_for(weapon)
+	if not offered.has(mod_name):
+		return {"ok": false, "error": "this mission offers no mod '%s' for %s" % [mod_name, weapon.shown_name()]}
+	var mod: WeaponModData = offered[mod_name]
+	var refusal := weapon.fit_block_reason(space - 1, mod)
+	if refusal != "":
+		return {"ok": false, "error": refusal}
+	weapon.fit(space - 1, mod)
+	return {"ok": true, "summary": "%s fitted to %s, space %d" % [mod_name, weapon.shown_name(), space]}
+
+# Coming off is never refused, as on the card: the library is not depleted by a fit.
+func unfit(holder_name: String, slot: int, mod_name: String) -> Dictionary:
+	var gate := _phase_gate()
+	if not gate.ok:
+		return gate
+	var held := _weapon_at(holder_name, slot)
+	if not held.ok:
+		return held
+	var weapon: WeaponInstance = held.weapon
+	var mods := WeaponModCatalog.get_mods()
+	for i in range(weapon.space_count()):
+		for mod: WeaponModData in weapon.space(i):
+			if mod_key(mod, mods) == mod_name:
+				weapon.unfit(mod)
+				return {"ok": true, "summary": "%s taken off %s" % [mod_name, weapon.shown_name()]}
+	return {"ok": false, "error": "%s has no mod '%s' fitted" % [weapon.shown_name(), mod_name]}
+
+# STASH or a roster unit's handle -> {ok, unit}, the unit null for the stash. The screen's cards are
+# the roster's, so an enemy or an authored unit has no gear to give.
+func _gear_holder(holder_name: String) -> Dictionary:
+	if holder_name == STASH:
+		return {"ok": true, "unit": null}
+	var unit := unit_by_handle(holder_name)
+	if unit == null:
+		return {"ok": false, "error": "no unit '%s'" % holder_name}
+	if not unit.drawn_from_roster:
+		return {"ok": false, "error": "%s is not part of the roster" % holder_name}
+	return {"ok": true, "unit": unit}
+
+# What sits at that slot of a unit's inventory or the stash, or null -- which Loadout.move refuses in
+# its own words.
+func _gear_at(holder: Unit, slot: int) -> Item:
+	var items: Array[Item] = holder.inventory if holder != null else _phase.loadout.stash
+	if slot < 0 or slot >= items.size():
+		return null
+	return items[slot]
+
+func _weapon_at(holder_name: String, slot: int) -> Dictionary:
+	var who := _gear_holder(holder_name)
+	if not who.ok:
+		return who
+	var weapon := _gear_at(who.unit, slot) as WeaponInstance
+	if weapon == null:
+		return {"ok": false, "error": "%s slot %d holds no weapon" % [holder_name, slot]}
+	return {"ok": true, "weapon": weapon}
+
 func _phase_gate() -> Dictionary:
 	if not _deploying:
 		return {"ok": false, "error": "the pre-mission phase is not open"}

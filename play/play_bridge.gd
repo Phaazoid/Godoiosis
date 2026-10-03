@@ -23,6 +23,11 @@ extends SceneTree
 #   disband{"unit": "A"}                  - A (squad leader) disbands its squad
 #   deploy {"unit": "F", "x": 4, "y": 0} | undeploy {"unit": "C"} | reposition {...} | begin
 #                                - the pre-mission phase a roster mission opens on (#46)
+#   give  {"from": "C", "slot": 0, "to": "stash"} - move gear; "stash" at either end
+#   job   {"unit": "C", "job": "scout"}           - pick a job by id; "" for none
+#   fit   {"unit": "C", "slot": 0, "mod": "Line Sniper", "space": 1} | unfit {unit, slot, mod}
+#                                - "unit" may be "stash"; `slot` counts from 0, `space` from 1
+#   kit   {"unit": "C"}          - a unit's slots, job and mods, or "stash"
 #   execute | endturn            - resolve+apply the plan / pass the turn
 #   quit                         - shut the bridge down
 
@@ -176,6 +181,22 @@ func _dispatch(cmd: String, args: Dictionary) -> Dictionary:
 		"begin":
 			var r = _session.begin()
 			return {"ok": r.ok, "text": _ack(r)}
+		# ...and its writes (#46 slice 2a): gear, jobs and mods, read back through `kit`.
+		"give":
+			var r = _session.give(str(args.get("from", "")), int(args.get("slot", -1)), str(args.get("to", "")))
+			return {"ok": r.ok, "text": _ack(r)}
+		"job":
+			var r = _session.set_job(str(args.get("unit", "")), str(args.get("job", "")))
+			return {"ok": r.ok, "text": _ack(r)}
+		"fit":
+			var r = _session.fit(str(args.get("unit", "")), int(args.get("slot", -1)),
+					str(args.get("mod", "")), int(args.get("space", 0)))
+			return {"ok": r.ok, "text": _ack(r)}
+		"unfit":
+			var r = _session.unfit(str(args.get("unit", "")), int(args.get("slot", -1)), str(args.get("mod", "")))
+			return {"ok": r.ok, "text": _ack(r)}
+		"kit":
+			return {"ok": true, "text": BoardView.render_kit(_session, str(args.get("unit", "")))}
 		# The six verbs PlaySession has always implemented and _dispatch never exposed -- which is
 		# why a driver asking for `burrow` got `unknown cmd` for a verb the docs list (#613).
 		"guard":

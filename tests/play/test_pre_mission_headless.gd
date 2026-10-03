@@ -179,3 +179,244 @@ func test_begin_is_refused_with_nobody_standing_and_then_opens_the_battle() -> v
 	assert_bool(_sess.is_deploying()).is_false()
 	var moves: Dictionary = _sess.legal_moves(_sess.handle_for(first))
 	assert_str(str(moves.get("error", ""))).not_contains("has not begun")
+
+
+# ==============================================================================
+# The loadout screen's writes (#46 slice 2a): gear, jobs and mods, each through the door the screen
+# calls. Every piece moved is authored HERE (a bare Item), and the jobs and mods are whatever the
+# catalogues hold -- nothing below asserts which.
+
+const BoardView := preload("res://play/board_view.gd")
+const NOT_OPEN := "the pre-mission phase is not open"
+
+
+func _loadout() -> Loadout:
+	return _sess._phase.loadout
+
+
+func _stash_piece(piece_name := "Loadout Test Piece") -> Item:
+	var piece := Item.new()
+	piece.display_name = piece_name
+	_loadout().stash.append(piece)
+	return piece
+
+
+# The first of these with an empty slot, or null.
+static func _with_room(units: Array[Unit]) -> Unit:
+	for unit: Unit in units:
+		if unit.inventory.has(null):
+			return unit
+	return null
+
+
+func _enemy_handle() -> String:
+	for unit: Unit in _sess.live_units():
+		if unit.get_faction() == Team.Faction.ENEMY:
+			return _sess.handle_for(unit)
+	return ""
+
+
+func test_give_moves_gear_between_the_stash_and_roster_units() -> void:
+	if not _precondition_reserve():
+		return
+	var taker := _with_room(_reserve())
+	var other := _with_room(_deployed())
+	if taker == null or other == null:
+		fail("fixture: no roster unit on one side has an empty slot")
+		return
+	var piece := _stash_piece()
+	var taker_h: String = _sess.handle_for(taker)
+	var other_h: String = _sess.handle_for(other)
+
+	var given: Dictionary = _sess.give("stash", _loadout().stash.find(piece), taker_h)
+	assert_bool(given.ok).override_failure_message(str(given.get("error", ""))).is_true()
+	assert_bool(_loadout().stash.has(piece)).override_failure_message(
+		"the piece reached a reserve unit and is still in the stash").is_false()
+	assert_bool(taker.inventory.has(piece)).is_true()
+
+	var passed: Dictionary = _sess.give(taker_h, taker.inventory.find(piece), other_h)
+	assert_bool(passed.ok).override_failure_message(str(passed.get("error", ""))).is_true()
+	assert_bool(taker.inventory.has(piece)).is_false()
+	assert_bool(other.inventory.has(piece)).is_true()
+
+	var back: Dictionary = _sess.give(other_h, other.inventory.find(piece), "stash")
+	assert_bool(back.ok).override_failure_message(str(back.get("error", ""))).is_true()
+	assert_bool(other.inventory.has(piece)).is_false()
+	assert_bool(_loadout().stash.has(piece)).is_true()
+
+
+func test_give_refuses_in_the_loadouts_own_words() -> void:
+	var unit := _with_room(_sess.roster_units())
+	if unit == null:
+		fail("fixture: no roster unit has an empty slot")
+		return
+	var h: String = _sess.handle_for(unit)
+
+	# An empty slot: Loadout's sentence for moving nothing.
+	var empty: Dictionary = _sess.give(h, unit.inventory.find(null), "stash")
+	assert_bool(empty.ok).is_false()
+	assert_str(str(empty.error)).is_equal(_loadout().move_block_reason(null, unit, null))
+
+	# A full unit: the unit's own sentence, through Loadout.
+	while unit.inventory.has(null):
+		unit.add_item(Item.new())
+	var piece := _stash_piece()
+	var full: Dictionary = _sess.give("stash", _loadout().stash.find(piece), h)
+	assert_bool(full.ok).is_false()
+	assert_str(str(full.error)).override_failure_message("fixture: the unit is not full").is_not_empty()
+	assert_str(str(full.error)).is_equal(unit.add_block_reason(piece))
+	assert_bool(_loadout().stash.has(piece)).is_true()
+
+	# An enemy holds no roster gear.
+	var foe := _enemy_handle()
+	assert_str(foe).override_failure_message("fixture: no enemy on the board").is_not_empty()
+	var to_foe: Dictionary = _sess.give("stash", _loadout().stash.find(piece), foe)
+	assert_bool(to_foe.ok).is_false()
+	assert_str(str(to_foe.error)).contains("not part of the roster")
+
+
+func test_a_job_is_picked_from_what_the_mission_offers_and_nothing_else() -> void:
+	var unit: Unit = _sess.roster_units()[0]
+	var held: Array[String] = unit.unit_instance.jobs
+	if held.size() > 1:
+		fail("fixture: the first roster unit holds several jobs, which the picker refuses outright")
+		return
+	# One job to offer, and one neither offered nor held.
+	var offered := ""
+	var withheld := ""
+	for id: String in JobCatalog.get_jobs():
+		if held.has(id):
+			continue
+		if offered == "":
+			offered = id
+		elif withheld == "":
+			withheld = id
+	if withheld == "":
+		fail("fixture: the job catalogue holds fewer than two jobs this unit does not hold")
+		return
+	var only: Array[String] = [offered]
+	_loadout().available_jobs = only
+	var h: String = _sess.handle_for(unit)
+
+	assert_bool((_sess.set_job(h, offered) as Dictionary).ok).is_true()
+	assert_array(unit.unit_instance.jobs).contains_exactly([offered])
+	assert_bool((_sess.set_job(h, "") as Dictionary).ok).is_true()
+	assert_array(unit.unit_instance.jobs).is_empty()
+
+	var refused: Dictionary = _sess.set_job(h, withheld)
+	assert_bool(refused.ok).override_failure_message(
+		"a job the mission does not offer was taken").is_false()
+	assert_str(str(refused.get("error", ""))).contains("does not offer")
+	assert_array(unit.unit_instance.jobs).is_empty()
+
+
+# A weapon with mod spaces anywhere in the phase, as [holder name, slot, weapon], or [].
+func _weapon_with_spaces() -> Array:
+	var stash := _loadout().stash
+	for i in stash.size():
+		var weapon := stash[i] as WeaponInstance
+		if weapon != null and weapon.space_count() > 0:
+			return ["stash", i, weapon]
+	for unit: Unit in _sess.roster_units():
+		for i in unit.inventory.size():
+			var weapon := unit.inventory[i] as WeaponInstance
+			if weapon != null and weapon.space_count() > 0:
+				return [_sess.handle_for(unit), i, weapon]
+	return []
+
+
+func test_a_mod_goes_on_and_comes_off_by_the_name_the_kit_prints() -> void:
+	var found := _weapon_with_spaces()
+	if found.is_empty():
+		fail("fixture: no weapon in the phase carries a mod space")
+		return
+	var holder: String = found[0]
+	var slot: int = found[1]
+	var weapon: WeaponInstance = found[2]
+	# A mod some empty space would take, and a second mod to offer in its place.
+	var everything := WeaponModCatalog.offerable_for(weapon.template.weapon_type)
+	var key := ""
+	var mod: WeaponModData = null
+	var space := -1
+	for k in everything:
+		var candidate: WeaponModData = everything[k]
+		for i in range(weapon.space_count()):
+			if weapon.can_fit(i, candidate):
+				key = str(k)
+				mod = candidate
+				space = i + 1
+				break
+		if mod != null:
+			break
+	if mod == null:
+		fail("fixture: no authored mod fits %s" % weapon.shown_name())
+		return
+	var all_mods := WeaponModCatalog.get_mods()
+	var other: WeaponModData = null
+	for k in all_mods:
+		var candidate: WeaponModData = all_mods[k]
+		if candidate.resource_path != mod.resource_path:
+			other = candidate
+			break
+	if other == null:
+		fail("fixture: the mod catalogue holds a single mod")
+		return
+
+	# Outside the mission's pool: the card's library would not list it, so `fit` refuses it.
+	var not_this: Array[WeaponModData] = [other]
+	_loadout().available_mods = not_this
+	var unoffered: Dictionary = _sess.fit(holder, slot, key, space)
+	assert_bool(unoffered.ok).override_failure_message(
+		"a mod the mission does not offer was fitted").is_false()
+	assert_int(weapon.space_holding(mod)).is_equal(-1)
+
+	var just_this: Array[WeaponModData] = [mod]
+	_loadout().available_mods = just_this
+	var fitted: Dictionary = _sess.fit(holder, slot, key, space)
+	assert_bool(fitted.ok).override_failure_message(str(fitted.get("error", ""))).is_true()
+	assert_int(weapon.space_holding(mod)).is_equal(space - 1)
+
+	# A second fit is refused in the weapon's own words.
+	var again: Dictionary = _sess.fit(holder, slot, key, space)
+	assert_bool(again.ok).is_false()
+	assert_str(str(again.get("error", ""))).is_equal(weapon.fit_block_reason(space - 1, mod))
+
+	# The name the kit prints for a fitted mod is the name `unfit` takes: the round trip.
+	assert_str(str(_sess.mod_key(mod, all_mods))).is_equal(key)
+	var off: Dictionary = _sess.unfit(holder, slot, key)
+	assert_bool(off.ok).override_failure_message(str(off.get("error", ""))).is_true()
+	assert_int(weapon.space_holding(mod)).is_equal(-1)
+
+
+func test_the_loadout_writes_close_with_the_phase() -> void:
+	var piece := _stash_piece()
+	var unit := _with_room(_deployed())
+	if unit == null:
+		fail("fixture: no deployed unit has an empty slot")
+		return
+	assert_bool((_sess.begin() as Dictionary).ok).is_true()
+	var h: String = _sess.handle_for(unit)
+	var answers: Array[Dictionary] = [
+		_sess.give("stash", _loadout().stash.find(piece), h),
+		_sess.set_job(h, ""),
+		_sess.fit(h, 0, "anything", 1),
+		_sess.unfit(h, 0, "anything"),
+	]
+	for answer: Dictionary in answers:
+		assert_bool(answer.ok).is_false()
+		assert_str(str(answer.get("error", ""))).is_equal(NOT_OPEN)
+	assert_bool(_loadout().stash.has(piece)).is_true()
+
+
+func test_the_kit_shows_a_given_piece_under_the_unit_that_took_it() -> void:
+	var unit := _with_room(_sess.roster_units())
+	if unit == null:
+		fail("fixture: no roster unit has an empty slot")
+		return
+	var piece := _stash_piece("Kit Readout Probe")
+	var h: String = _sess.handle_for(unit)
+	assert_str(BoardView.render_kit(_sess, "stash")).contains("Kit Readout Probe")
+	assert_bool((_sess.give("stash", _loadout().stash.find(piece), h) as Dictionary).ok).is_true()
+	assert_str(BoardView.render_kit(_sess, h)).contains(
+		"slot %d  Kit Readout Probe" % unit.inventory.find(piece))
+	assert_str(BoardView.render_kit(_sess, "stash")).not_contains("Kit Readout Probe")
