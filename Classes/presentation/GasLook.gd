@@ -1,10 +1,10 @@
 extends Resource
 class_name GasLook
 
-# How one gas looks (#508's look harness), in every style the Experiments page can switch between:
-# the volume's medium (what the realistic and pixel-volume styles march through) and the pixel art
-# (the puffs, their motion and the fog floor). One file per Gas.Kind under Resources/GasLooks/,
-# named for the kind, so a look is found where the kind is spelled. Tuned in the inspector for now.
+# How one gas looks (#508), in every mix the Experiments page can switch between: the volume's
+# medium (what the march draws) and the pixel art (the puffs, their motion and the fog floor). One
+# file per Gas.Kind under Resources/GasLooks/, named for the kind, so a look is found where the kind
+# is spelled. Tuned in the inspector for now.
 #
 # Dumb data. GasMirror packs the volume half for the GPU and GasPuffArt draws the pixel half.
 
@@ -30,7 +30,6 @@ enum Extra { WISP, SOOT, BUBBLE, SNOW, BOLT, CURL }
 @export var wind := Vector2(0.05, 0.03)   # drift on x / z, world units a second
 @export var emission := Color(0, 0, 0)    # a gas's own glow
 @export var flash := 0.0                  # 1 = lightning strikes inside it
-@export var sparkle := 0.0                # 1 = glints drifting down
 
 @export_group("Pixel art")
 @export var palette_light := Color(1, 1, 1)
