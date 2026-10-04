@@ -13,7 +13,7 @@ class_name SquadPlanValidator
 # (clear_validation_messages, which leaves is_valid alone) so text doesn't stack up across passes.
 #
 # Actions carrying their own queueing requirements (move-before-main, verb locks) enforce those in
-# BaseAction.actor_can_perform at queue time. This is the separate, plan-CONTEXT layer: leader
+# BaseAction.actor_block_reason at queue time. This is the separate, plan-CONTEXT layer: leader
 # range, destination conflicts, and adjacency that a re-planned move can silently break.
 
 # `board` (#151): cohesion is path distance, so the validator reads terrain. Taken as a PARAMETER,

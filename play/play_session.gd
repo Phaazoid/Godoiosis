@@ -578,6 +578,11 @@ func _controllable(unit: Unit, handle: String) -> Dictionary:
 		return {"ok": false, "error": "%s is not on the active faction (%s)" % [handle, _faction_name(active_faction())]}
 	if unit.squad.has_acted:
 		return {"ok": false, "error": "%s's squad has already acted this turn" % handle}
+	# One squad plans at a time -- the menu's own rule, which the order chokepoint leaves to its
+	# callers (SquadManager.try_queue_action). Without it a second squad silently took the activation.
+	if squad_manager.is_another_squad_active(unit.squad):
+		return {"ok": false, "error": "squad %d has orders queued -- execute or cancel them before ordering %s" % [
+			_squad_id(squad_manager.active_squad), handle]}
 	return {"ok": true}
 
 # WHICH attack an aim fires (#615): the one NAMED, else the default -- the menu's pick, made
@@ -618,8 +623,9 @@ func queue_move(handle: String, dest: Vector2i) -> Dictionary:
 	var path := RulesService.reconstruct_path(range_info.came_from, unit.movement.cell, dest)
 	var move := MoveAction.new()
 	move.init(unit, path, GridUtils.get_terrain_icon_at_cell(grid, dest))
-	if not squad_manager.queue_action(unit.squad, move):
-		return {"ok": false, "error": "another squad is already active this turn"}
+	var refusal := squad_manager.try_queue_action(unit.squad, move)
+	if refusal != "":
+		return {"ok": false, "error": "%s can't move to %s: %s" % [handle, str(dest), refusal]}
 	return {"ok": true, "summary": "%s -> move %s" % [handle, str(dest)], "valid": move.is_valid}
 
 func queue_attack(handle: String, aim: Vector2i, attack_name := "") -> Dictionary:
@@ -658,9 +664,9 @@ func _queue_armed_attack(unit: Unit, handle: String, aim: Vector2i) -> Dictionar
 	# Store ONE aim order (target=null); resolve_plan derives the volley/victims at resolve time
 	# (#15), mirroring game.gd. Pre-expanding a volley here made resolve_plan re-expand each member
 	# -> N^2 hits for AoE weapons. `victims` above is used only to validate + describe the aim.
-	var any_ok := squad_manager.queue_action(unit.squad, order)
-	if not any_ok:
-		return {"ok": false, "error": "another squad is already active this turn"}
+	var refusal := squad_manager.try_queue_action(unit.squad, order)
+	if refusal != "":
+		return {"ok": false, "error": "%s can't attack %s: %s" % [handle, str(aim), refusal]}
 	var names: Array[String] = []
 	for v in victims:
 		names.append(handle_for(v))
@@ -690,8 +696,9 @@ func rescue(rescuer_handle: String, target_handle: String) -> Dictionary:
 	# the deterministic answer the rule gave before the player was handed the choice.
 	var action := RescueAction.new()
 	action.init(rescuer, target, RulesService.rescue_landings(rescuer, target, _board())[0])
-	if not squad_manager.queue_action(rescuer.squad, action):
-		return {"ok": false, "error": "%s can't rescue now (already has a main action, or another squad is active)" % rescuer_handle}
+	var refusal := squad_manager.try_queue_action(rescuer.squad, action)
+	if refusal != "":
+		return {"ok": false, "error": "%s can't rescue %s: %s" % [rescuer_handle, target_handle, refusal]}
 	return {"ok": true, "summary": "%s -> rescue %s" % [rescuer_handle, target_handle]}
 
 # Guard (#414): become a nearby ally's bodyguard — the same GuardAction the menu queues, gated on the
@@ -709,8 +716,9 @@ func guard(handle: String, ward_handle: String) -> Dictionary:
 		return {"ok": false, "error": "%s is not an ally within %s's Guard range" % [ward_handle, handle]}
 	var action := GuardAction.new()
 	action.init(unit, ward)
-	if not squad_manager.queue_action(unit.squad, action):
-		return {"ok": false, "error": "%s can't Guard now (already has a main action, or another squad is active)" % handle}
+	var refusal := squad_manager.try_queue_action(unit.squad, action)
+	if refusal != "":
+		return {"ok": false, "error": "%s can't guard %s: %s" % [handle, ward_handle, refusal]}
 	return {"ok": true, "summary": "%s -> guard %s" % [handle, ward_handle]}
 
 # Overwatch (#413): aim an attack and hold fire — the same OverwatchAction the menu queues, picking
@@ -730,9 +738,6 @@ func overwatch(handle: String, aim: Vector2i, attack_name := "") -> Dictionary:
 		if aiming == null:
 			return {"ok": false, "error": "%s has no watch named '%s' (can watch with: %s)" % [
 				handle, attack_name, _names_of(watches)]}
-	var reason := unit.attack_block_reason(aiming)
-	if reason != "":
-		return {"ok": false, "error": "%s can't watch with %s: %s" % [handle, aiming.display_name, reason]}
 	var origin := unit.get_projected_destination()
 	# The player's click gate, which is now one predicate rather than this pair (#756): a directional
 	# aim needs a facing whose spread survives the terrain, a point aim needs the cell itself. The
@@ -741,8 +746,11 @@ func overwatch(handle: String, aim: Vector2i, attack_name := "") -> Dictionary:
 		return {"ok": false, "error": "%s cannot aim at %s from %s" % [handle, str(aim), str(origin)]}
 	var action := OverwatchAction.new()
 	action.init(unit, aim, aiming)
-	if not squad_manager.queue_action(unit.squad, action):
-		return {"ok": false, "error": "%s can't stand watch now (already has a main action, or another squad is active)" % handle}
+	# Whether this watch can fire at all is the order's own gate (OverwatchAction.actor_block_reason),
+	# answered by the chokepoint in the menu's words (#662).
+	var refusal := squad_manager.try_queue_action(unit.squad, action)
+	if refusal != "":
+		return {"ok": false, "error": "%s can't watch with %s: %s" % [handle, aiming.display_name, refusal]}
 	return {"ok": true, "summary": "%s -> overwatch %s with %s" % [handle, str(aim), aiming.display_name]}
 
 # Reload: self-targeted weapon rearm (a main action, #73 as Spring Load, generalized #84) — the
@@ -755,13 +763,11 @@ func reload(handle: String) -> Dictionary:
 	var gate := _controllable(unit, handle)
 	if not gate.ok:
 		return gate
-	var refusal := unit.reload_block_reason()
-	if refusal != "":
-		return {"ok": false, "error": "%s can't reload: %s" % [handle, refusal]}
 	var action := ReloadAction.new()
 	action.init(unit)
-	if not squad_manager.queue_action(unit.squad, action):
-		return {"ok": false, "error": "%s can't reload now (already has a main action, or another squad is active)" % handle}
+	var refusal := squad_manager.try_queue_action(unit.squad, action)
+	if refusal != "":
+		return {"ok": false, "error": "%s can't reload: %s" % [handle, refusal]}
 	return {"ok": true, "summary": "%s -> %s" % [handle, unit.reload_label().to_lower()]}
 
 # Rev: self-targeted Chainsword rev-up (a main action, #84) — the same RevAction the menu
@@ -772,12 +778,11 @@ func rev(handle: String) -> Dictionary:
 	var gate := _controllable(unit, handle)
 	if not gate.ok:
 		return gate
-	if not unit.can_rev_weapon():
-		return {"ok": false, "error": "%s can't rev (no chainsword equipped)" % handle}
 	var action := RevAction.new()
 	action.init(unit)
-	if not squad_manager.queue_action(unit.squad, action):
-		return {"ok": false, "error": "%s can't rev now (already has a main action, or another squad is active)" % handle}
+	var refusal := squad_manager.try_queue_action(unit.squad, action)
+	if refusal != "":
+		return {"ok": false, "error": "%s can't rev: %s" % [handle, refusal]}
 	return {"ok": true, "summary": "%s -> rev" % handle}
 
 # Burrow: the Drill's self-targeted entrenchment (a main action, #84) — the same BurrowAction the
@@ -789,12 +794,11 @@ func burrow(handle: String) -> Dictionary:
 	var gate := _controllable(unit, handle)
 	if not gate.ok:
 		return gate
-	if not unit.can_burrow_weapon():
-		return {"ok": false, "error": "%s can't burrow (no drill equipped)" % handle}
 	var action := BurrowAction.new()
 	action.init(unit)
-	if not squad_manager.queue_action(unit.squad, action):
-		return {"ok": false, "error": "%s can't burrow now (already has a main action, or another squad is active)" % handle}
+	var refusal := squad_manager.try_queue_action(unit.squad, action)
+	if refusal != "":
+		return {"ok": false, "error": "%s can't burrow: %s" % [handle, refusal]}
 	return {"ok": true, "summary": "%s -> burrow" % handle}
 
 # member joins leader's squad — one join_squad call covers both "squad up" (leader was solo) and

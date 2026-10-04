@@ -33,8 +33,14 @@ func execute() -> void:
 		controller.capture(zone_name)
 	finish_execution()
 
-func actor_can_perform() -> bool:
-	return controller != null and zone_name != "" and not controller.is_zone_captured(zone_name)
+func actor_block_reason() -> String:
+	if controller == null:
+		return "There is no mission to capture for."
+	if zone_name == "":
+		return "%s is not standing on a capture point." % actor.get_unit_name()
+	if controller.is_zone_captured(zone_name):
+		return "%s is already captured." % zone_name
+	return ""
 
 func get_description() -> String:
 	return "%s captures %s" % [actor.get_unit_name(), zone_name]

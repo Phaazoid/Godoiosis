@@ -158,7 +158,7 @@ damage. Pinned by `tests/law/test_resolution_laws.gd`; owed by
 wanted).
 
 A stat can also never **gate** what gets queued, and that is structural rather than unbuilt
-*(2026-07-29)*. No `actor_can_perform` override reads an effective stat, and `SquadPlanValidator`
+*(2026-07-29)*. No `actor_block_reason` override reads an effective stat, and `SquadPlanValidator`
 reads none; the only stat that gates planning at all is MOV, via `RulesService`'s reachable-cell
 query. And `OrderExecutor` resolves **moves first** — before attacks, counters and every
 side-channel verb — so a buff applied by any order cannot raise a mover's MOV in the same turn. It

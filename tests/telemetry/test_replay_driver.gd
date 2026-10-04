@@ -176,6 +176,29 @@ func test_a_refused_gear_act_is_reported_as_a_divergence() -> void:
 		).is_not_empty()
 
 
+# A refused recorded ORDER names the chokepoint's reason (#662): the divergence is where someone
+# reading a replay finds out WHY today's rules turned it down. The aim is doctored onto bare ground,
+# which the plan-context gate refuses. The reason's wording is not pinned, only that one is there.
+func test_a_refused_order_is_reported_with_its_reason() -> void:
+	var run := ReplayRun.load_run(await _record_a_mission())
+	var doctored := false
+	for e: Dictionary in run.events:
+		for order: Dictionary in e.get("orders", []):
+			if str(order.get("type", "")) == "ATTACK":
+				order["at"] = [9, 9]   # nobody stands there on the replayed board
+				doctored = true
+	assert_bool(doctored).override_failure_message("fixture: the run recorded no attack order").is_true()
+	assert_bool(driver.seed(run)).is_true()
+	await driver.play()
+	const MARK := "was refused: "
+	var refusals := driver.divergences.filter(func(d: String) -> bool: return d.contains(MARK))
+	assert_array(refusals).override_failure_message(
+		"a refused order went unreported, or carried no reason: %s" % str(driver.divergences)).is_not_empty()
+	var line: String = refusals[0]
+	assert_str(line.substr(line.find(MARK) + MARK.length()).strip_edges()).override_failure_message(
+		"the refusal named no reason: %s" % line).is_not_empty()
+
+
 # THE STAND-DOWN IS AFTER THE SEED, and that ordering is the whole of it: apply_scenario REPLACES
 # the AI set from the board it loads (#150), so a stand-down written first is overwritten by the
 # very next line. Every faction's orders are in the log, so the driver plays them; letting the AI

@@ -60,10 +60,12 @@ func init_hold_position(unit: Unit, destination_tile_texture: Texture2D):
 	else:
 		destination_texture = destination_tile_texture
 
-func actor_can_perform() -> bool:
+func actor_block_reason() -> String:
 	# Move-before-main: a unit that locked its main action can't move after it (attacks
 	# resolve from the final position — no attack-then-flee).
-	return not actor.has_main_action_queued()
+	if actor.has_main_action_queued():
+		return "%s already has a main action queued, and a move must come before it." % actor.get_unit_name()
+	return ""
 
 func is_reorderable() -> bool:
 	# A hold is a filler nobody ordered and crosses nothing — resequencing it means nothing (#412).

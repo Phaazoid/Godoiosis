@@ -17,8 +17,10 @@ func execute() -> void:
 	begin_execution()
 	finish_execution()
 
-func actor_can_perform() -> bool:
-	return actor.can_burrow_weapon()
+func actor_block_reason() -> String:
+	if actor.can_burrow_weapon():
+		return ""
+	return "%s has nothing equipped that can burrow." % actor.get_unit_name()
 
 func get_description() -> String:
 	return "%s burrows cover" % actor.get_unit_name()

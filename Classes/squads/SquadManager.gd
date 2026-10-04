@@ -417,21 +417,34 @@ func _deal_ring_hue(faction: Team.Faction) -> Color:
 	return palette[index % palette.size()]
 
 func queue_action(squad: Squad, action: BaseAction) -> bool:
-	# Downed/dead units can't be ordered. This is the single order chokepoint (Law #3 —
-	# future AI funnels here too), so one check here covers every actor.
-	if action.actor != null and not action.actor.is_active():
-		return false
+	return try_queue_action(squad, action) == ""
 
-	# Per-action requirement (BaseAction.actor_can_perform — move ordering, verb locks,
+# THE order chokepoint (Law #3): queue `action` and answer "", or refuse it and answer WHY, in the
+# words of the gate that refused (#662) -- so a caller reporting a refusal never has to guess.
+#
+# The TURN-FLOW rules are deliberately the CALLER's, not this door's: whose turn it is, whether the
+# squad has acted, and whether another squad is mid-plan. The AI's preview_turn queues enemy orders
+# on the player's turn while the player's squad is active, so the menu, the AI and the Play API each
+# gate those themselves.
+func try_queue_action(squad: Squad, action: BaseAction) -> String:
+	# Downed/dead units can't be ordered; one check here covers every actor.
+	if action.actor != null:
+		var down := RulesService.standing_block_reason(action.actor)
+		if down != "":
+			return down
+
+	# Per-action requirement (BaseAction.actor_block_reason — move ordering, verb locks,
 	# ability gates): each action class declares its own; this chokepoint enforces it for
 	# every caller, including AI. The menu merely hides what this refuses.
-	if action.actor != null and not action.actor_can_perform():
-		return false
+	if action.actor != null:
+		var cannot := action.actor_block_reason()
+		if cannot != "":
+			return cannot
 
 	# Plan-context requirement: invalid is a state you fall into, never one you choose. Batched
 	# orders skip it -- a formation is one decision, judged whole by queue_group_move.
 	if not batching and not _candidate_would_be_valid(squad, action):
-		return false
+		return _plan_refusal(action)
 
 	active_squad = squad
 	# One gesture, one id: a batch wears the id its opener allocated, a lone order takes a fresh
@@ -442,12 +455,20 @@ func queue_action(squad: Squad, action: BaseAction) -> bool:
 	action.batch_id = _next_batch_id
 	squad._queue_action(action)
 	if batching:
-		return true   # the batch re-validates and redraws once, after the last order
+		return ""   # the batch re-validates and redraws once, after the last order
 	validate_squad_plan(squad)
 	if not previewing:
 		overlay_manager.redraw_planned_paths()
 
-	return true
+	return ""
+
+# The plan-context gate's reason: the refused candidate's own validation errors. Never empty -- an
+# empty reason would read as ACCEPTED to every caller deriving yes/no from it.
+static func _plan_refusal(action: BaseAction) -> String:
+	if action.validation_errors.is_empty():
+		push_error("try_queue_action: a plan-context refusal carried no validation error")
+		return "The order would leave the squad's plan invalid."
+	return "; ".join(action.validation_errors)
 
 # Would this order be legal if queued right now? Reads the CANDIDATE's flag, not validate's return
 # value -- that is whole-plan validity, and an already-broken row would refuse a legal order.

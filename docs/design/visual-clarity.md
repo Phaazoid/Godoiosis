@@ -1559,7 +1559,7 @@ live on both counts**: re-planning a move still sends it to the back of the queu
 section is draggable, so the escape hatch exists exactly where this note said it would need to.
 
 Two things deliberately did NOT change. **Move-before-main stands**: a unit holding a main action
-still loses the row, because `MoveAction.actor_can_perform` refuses the order at the chokepoint, so
+still loses the row, because `MoveAction.actor_block_reason` refuses the order at the chokepoint, so
 relaxing that would be a rules change and not a menu one. Greying it with a reason instead of hiding
 it stays a live idea, and stays governed by the top-level ruling above — a permanently full main menu
 is a UX change, not a readout fix. **Group Move was one-shot for one day**: both rows read
