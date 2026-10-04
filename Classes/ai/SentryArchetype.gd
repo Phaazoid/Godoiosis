@@ -25,7 +25,7 @@ static func take_squad_turn(squad: Squad, board: BoardContext, squad_manager: Sq
 	# a target it cannot legally walk to is not one it can engage.
 	var intruder := AITactics.choose_engagement_target(leader, board, squad_manager, zone_set, allowed)
 	if intruder != null:
-		AITactics.engage(squad, intruder, board, squad_manager, allowed)
+		AITactics.engage(squad, intruder, board, squad_manager, allowed, zone_set)
 		return
 
 	if leader.movement.cell != squad.home_cell:

@@ -828,15 +828,279 @@ static func best_attack_destination(leader: Unit, enemy: Unit, board: BoardConte
 	return _best_approach(leader, enemy.movement.cell, board, allowed, true, route_target)
 
 
-# Fights `target`: destination pick -> conditional group move -> every member tries a main
-# action. The shared shape behind Rushdown's whole turn and Sentry's intruder branch -- was
+# Fights `target`: destination pick -> the seek -> conditional group move -> every member tries a
+# main action. The shared shape behind Rushdown's whole turn and Sentry's intruder branch -- was
 # hand-duplicated in both files with no third caller (AI generalization sweep, finding #2).
-static func engage(squad: Squad, target: Unit, board: BoardContext, squad_manager: SquadManager, allowed = null) -> void:
+# `within` is a Sentry's zone: the seek only goes looking for an intruder.
+static func engage(squad: Squad, target: Unit, board: BoardContext, squad_manager: SquadManager, allowed = null,
+		within = null) -> void:
 	var leader := squad.get_leader()
-	var destination := best_attack_destination(leader, target, board, allowed)
-	if destination != leader.movement.cell:
-		squad_manager.queue_group_move(squad, destination, board, allowed)
+	var seek := seek_positions(squad, best_attack_destination(leader, target, board, allowed), board,
+			squad_manager, allowed, within)
+	if seek.destination != leader.movement.cell or not seek.pins.is_empty():
+		squad_manager.queue_group_move(squad, seek.destination, board, allowed, seek.pins)
 	queue_main_actions_for_squad(squad, board, squad_manager)
+
+
+# WHERE THE SQUAD STANDS TO TAKE A REMOVAL OR A SQUAD BREAK it can reach this turn (#760; dev rulings
+# 2026-10-03, on the issue). Only those two -- the terms the score ranks above damage -- pull anyone
+# off the cell the approach and the formation would give them, so all other positioning is today's.
+#
+# THE SQUAD IS ONE UNIT, and the priority is the search order: the leader first (its cell decides
+# everyone's cohesion), then in rounds the CLOSEST member that can do something, each scored against
+# what the earlier ones will already do. A unit's own default cell is asked first and the first
+# removal ends its search; a squad break is only kept while a removal is still being looked for.
+#
+# A CELL IS SCORED BY STANDING THERE -- the positional snapshot the threat preview opens, through the
+# same teleport door. With the queue empty a unit set on a cell projects to it, so the counters, the
+# watches and the lethality all read the cell it would really fire from. Every cell is put back and
+# the real plan re-resolved before anything is queued. The attack itself is still the joint pass's
+# to choose; this decides only where people stand.
+class SeekResult:
+	var destination: Vector2i
+	var pins := {}   # Unit -> cell, for GroupMoveSolver.plan
+
+
+class _Opportunity:
+	var unit: Unit
+	var cell: Vector2i
+	var cost: int
+	var action: AttackAction
+	var removal: bool
+
+
+static func seek_positions(squad: Squad, default_destination: Vector2i, board: BoardContext,
+		squad_manager: SquadManager, allowed = null, within = null) -> SeekResult:
+	var out := SeekResult.new()
+	out.destination = default_destination
+	var leader := squad.get_leader()
+	# Honest only with nothing queued: a queued move would out-project the cell the unit is set on.
+	if leader == null or not squad.action_queue.is_empty():
+		return out
+	var reactions := ReactionCatalog.get_all()
+	var terrain := TerrainReactionCatalog.get_all()
+	var live := {}
+	for member in squad.get_members():
+		live[member] = member.movement.cell
+	var wins: Array[BaseAction] = []
+
+	if _can_seek(leader):
+		var lead := _first_opportunity(leader, _leader_cells(squad, leader, default_destination, board, allowed),
+				squad, board, squad_manager, wins, within, reactions, terrain)
+		if lead != null:
+			out.destination = lead.cell
+			wins.append(lead.action)
+
+	var waiting: Array[Unit] = []
+	for member in squad.get_members():
+		if member != leader and _can_seek(member):
+			waiting.append(member)
+	while not waiting.is_empty():
+		_restore_cells(live)
+		var placed := _formation(squad, out.destination, board, allowed, out.pins)
+		var options := {}
+		for member in waiting:
+			options[member] = _member_cells(squad, member, out.destination, board, allowed, out.pins, placed)
+		_stand(squad, leader, out.destination, placed)
+		var best: _Opportunity = null
+		for member in waiting:
+			var found := _first_opportunity(member, options[member], squad, board, squad_manager, wins, within,
+					reactions, terrain)
+			if found != null and (best == null or _opportunity_beats(found, best)):
+				best = found
+		if best == null:
+			break
+		out.pins[best.unit] = best.cell
+		wins.append(best.action)
+		waiting.erase(best.unit)
+
+	_restore_cells(live)
+	squad_manager.resolve_plan(squad, board, reactions, terrain)
+	return out
+
+
+static func _can_seek(unit: Unit) -> bool:
+	return unit.is_active() and unit.can_wield_equipped()
+
+
+# A removal beats a break; then the closest -- the cheaper move -- does it; ties keep member order.
+static func _opportunity_beats(a: _Opportunity, b: _Opportunity) -> bool:
+	if a.removal != b.removal:
+		return a.removal
+	return a.cost < b.cost
+
+
+# The leader's cells in search order, as [cell, cost] pairs: the default destination, then cheapest,
+# then row-major. Only cells its squad can follow it to, inside the leash, and nobody else's.
+static func _leader_cells(squad: Squad, leader: Unit, default_destination: Vector2i, board: BoardContext,
+		allowed) -> Array:
+	var costs: Dictionary = RulesService.compute_move_range(leader, board).reachable.duplicate()
+	costs[leader.movement.cell] = 0
+	var cells: Array = []
+	for cell: Vector2i in costs:
+		if allowed != null and not allowed.has(cell):
+			continue
+		var occupant := board.unit_at_cell(cell)
+		if occupant != null and occupant != leader:
+			continue
+		cells.append(cell)
+	if squad.get_members().size() > 1:
+		var followable := GroupMoveSolver.followable_destinations(squad, board, cells)
+		cells = cells.filter(func(c: Vector2i) -> bool: return followable.has(c) or c == leader.movement.cell)
+	return _search_order(cells, costs, default_destination)
+
+
+# A member's cells for this leader destination, as [cell, cost] pairs: its formation cell first, then
+# cheapest. Never the leader's cell, a pinned cell or another member's formation cell.
+static func _member_cells(squad: Squad, member: Unit, leader_destination: Vector2i, board: BoardContext,
+		allowed, pins: Dictionary, placed: Dictionary) -> Array:
+	var costs := GroupMoveSolver.follow_cells(squad, member, leader_destination, board, allowed)
+	var held := { leader_destination: true }
+	for other: Unit in placed:
+		if other != member:
+			held[placed[other]] = true
+	var cells: Array = []
+	for cell: Vector2i in costs:
+		if not held.has(cell):
+			cells.append(cell)
+	return _search_order(cells, costs, placed.get(member, member.movement.cell))
+
+
+static func _search_order(cells: Array, costs: Dictionary, first: Vector2i) -> Array:
+	cells.sort_custom(func(a: Vector2i, b: Vector2i) -> bool:
+		if (a == first) != (b == first):
+			return a == first
+		var ca: int = costs.get(a, 0)
+		var cb: int = costs.get(b, 0)
+		if ca != cb:
+			return ca < cb
+		return a.y < b.y or (a.y == b.y and a.x < b.x))
+	var out: Array = []
+	for cell: Vector2i in cells:
+		out.append([cell, int(costs.get(cell, 0))])
+	return out
+
+
+# Where everyone else ends for this leader destination: the solver's placements (pins included), and
+# a member it moves nowhere stays where it stands. Asked on the LIVE board -- the solver walks from
+# where members really are.
+static func _formation(squad: Squad, leader_destination: Vector2i, board: BoardContext, allowed,
+		pins: Dictionary) -> Dictionary:
+	var placed := {}
+	for member in squad.get_members():
+		placed[member] = member.movement.cell
+	for move in GroupMoveSolver.plan(squad, leader_destination, board, allowed, pins):
+		placed[move.actor] = move.destination
+	placed[squad.get_leader()] = leader_destination
+	return placed
+
+
+static func _stand(squad: Squad, leader: Unit, leader_destination: Vector2i, placed: Dictionary) -> void:
+	for member in squad.get_members():
+		member.movement.set_cell(placed.get(member, member.movement.cell))
+	leader.movement.set_cell(leader_destination)
+
+
+static func _restore_cells(saved: Dictionary) -> void:
+	for unit: Unit in saved:
+		unit.movement.set_cell(saved[unit])
+
+
+# The first cell in `cells` from which `unit` takes a removal, else the first that breaks a squad.
+# Each cell is scored by standing there, as a marginal over what `wins` already does; `unit` is put
+# back where it started before returning.
+#
+# One resolve stands for a GROUP of cells: see _group_key. A group whose first resolve shows its
+# single victim neither removed nor broken is skipped from then on, since every cell in it hands that
+# victim the same fate. A good fate that still nets a loss -- a counter fells us -- tries the next
+# cell, because counters are the one thing that differs inside a group.
+static func _first_opportunity(unit: Unit, cells: Array, squad: Squad, board: BoardContext,
+		squad_manager: SquadManager, wins: Array[BaseAction], within,
+		reactions: Array[ElementalReaction], terrain: Array[TerrainReaction]) -> _Opportunity:
+	var start := unit.movement.cell
+	var faction := unit.get_faction()
+	var base_plan := squad_manager.resolve_hypothetical(squad, wins, board, reactions, terrain)
+	var stale := false
+	var dead := {}
+	var split: _Opportunity = null
+	var found: _Opportunity = null
+	for entry: Array in cells:
+		var cell: Vector2i = entry[0]
+		unit.movement.set_cell(cell)
+		# A trial leaves its shove PUBLISHED, and the candidate builder reads published positions
+		# (#709), so the base goes back before the next cell's candidates are built. With earlier
+		# seekers' attacks in it, the base is re-read anyway: standing here can make this unit their
+		# counter target, or the cell one of their shoves lands on.
+		if stale or not wins.is_empty():
+			base_plan = squad_manager.resolve_hypothetical(squad, wins, board, reactions, terrain)
+			stale = false
+		var candidates := _attack_candidates(unit, board, cell, base_plan.hypo)
+		if candidates.is_empty():
+			continue
+		var base := _score_plan(faction, base_plan)
+		for candidate in candidates:
+			if within != null and not within.has(candidate.target_cell):
+				continue
+			var key := _group_key(candidate, board)
+			if dead.has(key):
+				continue
+			var trial: Array[BaseAction] = wins.duplicate()
+			trial.append(candidate)
+			var plan := squad_manager.resolve_hypothetical(squad, trial, board, reactions, terrain)
+			stale = true
+			var score := _score_plan(faction, plan) - base
+			if score.x > 0:
+				found = _opportunity(unit, cell, int(entry[1]), candidate, true)
+				break
+			if score.x == 0 and score.y > 0:
+				if split == null:
+					split = _opportunity(unit, cell, int(entry[1]), candidate, false)
+			elif not _fate_can_pay(candidate, plan):
+				dead[key] = true
+		if found != null:
+			break
+	unit.movement.set_cell(start)
+	return found if found != null else split
+
+
+static func _opportunity(unit: Unit, cell: Vector2i, cost: int, action: AttackAction, removal: bool) -> _Opportunity:
+	var out := _Opportunity.new()
+	out.unit = unit
+	out.cell = cell
+	out.cost = cost
+	out.action = action
+	out.removal = removal
+	return out
+
+
+# Cells that hand a candidate's victim the same fate share a key. What the resolver reads off an
+# attacker's cell is exactly three things -- the shove direction, the height, and a carving's
+# empowerment -- so those, plus the attack and the aim, are the key. A DIRECTIONAL attack's footprint
+# moves with the origin, so its cell joins the key outright. A rule that ever reads more of the origin
+# (backstrike) has to join it here, or the seek skips a real opportunity without a word.
+static func _group_key(candidate: AttackAction, board: BoardContext) -> String:
+	var attack := candidate.fired_attack
+	var origin := candidate.origin_cell
+	var empowered := ""
+	if attack is TransmutationData:
+		empowered = str(Materia.empowered_at(origin, board))
+	var anchor := str(origin) if Reach.is_directional_attack(attack) else ""
+	return "%d|%s|%s|%d|%s|%s" % [attack.get_instance_id() if attack != null else 0, candidate.target_cell,
+			GridUtils.cardinal_direction_i_between(origin, candidate.target_cell), board.elevation_at(origin),
+			empowered, anchor]
+
+
+# Could another cell of this candidate's group still pay? Only a single-victim volley is shareable --
+# a wider one's other victims are shoved in directions the key does not pin -- and then only if that
+# victim was removed or knocked out of its squad here.
+static func _fate_can_pay(candidate: AttackAction, plan: ResolvedPlan) -> bool:
+	var victims: Array[Unit] = []
+	for a in plan.attacks:
+		if a.source_aim == candidate and a.target != null and is_instance_valid(a.target) and not victims.has(a.target):
+			victims.append(a.target)
+	if victims.size() != 1:
+		return true
+	return _plan_removes(victims[0], plan) or SplitForecast.leavers(plan).has(victims[0])
 
 
 # Every member takes a main action. The tail of engage() and the whole of HoldArchetype's turn --
