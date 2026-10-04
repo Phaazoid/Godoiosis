@@ -642,8 +642,10 @@ func _on_detail_requested(item: Item, owner_unit: Unit) -> void:
 # The card offers the job; the screen performs it, the same division every gear move keeps. Deferred
 # like every other mutation here so that one place decides when the screen redraws -- and the redraw
 # is real work either way: the ability chips, the stat grid and the derived strip all follow a job.
+#
+# Through the Loadout, the one door a pick takes on this screen and in the headless Play API (#46).
 func _on_job_picked(target: Unit, job_id: String) -> void:
-	_last_refusal = target.set_sole_job(job_id)
+	_last_refusal = _controller.loadout().set_job(target, job_id)
 	_hover_note = ""
 	_redraw()
 

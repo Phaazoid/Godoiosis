@@ -65,6 +65,7 @@ view**, not raw JSON — see *State representation*. Command vocabulary:
 | `queue_move(unit_id, dest)` / `queue_attack(unit_id, aim_cell, attack?)` | validity + updated plan. `attack` names which attack fires — see *Choosing an attack* below |
 | `overwatch(unit_id, aim_cell, attack?)` | stand watch with the NAMED watch attack, else the unit's first (a weapon normally carries one) |
 | `deploy(unit, cell)` / `undeploy(unit)` / `reposition(unit, cell)` / `begin()` | the PRE-MISSION phase (#46) -- see *Pre-mission* below |
+| `give(from, slot, to)` / `job(unit, job)` / `fit(unit, slot, mod, space)` / `unfit(unit, slot, mod)` / `kit(unit)` | the pre-mission loadout: gear, jobs and mods, and the view that reads them back (#46) -- see *Pre-mission* below |
 | `rescue / reload / rev / burrow / guard` | the side-channel main actions, one verb each — the argument-taking ones (`rescue(a, b)`, `guard(a, ward)`) stay separate from the argument-free ones for the reason `game.queue_simple_action` does. Each gates on the same `RulesService` query the menu's row is built from. *(Still missing: `capture` — see Known gaps.)* |
 | `cancel(unit_id)` / `wait(unit_id)` | updated plan |
 | `preview()` | `resolve_plan(active_squad)` outcomes **without applying** (damage, state deltas, deaths, counters) |
@@ -99,12 +100,36 @@ through the rules the loadout screen uses, refusing in its words -- they are ONE
 `PreMissionPhase`, which the game drives with `game.gd` as its host and the Play API with
 `PlaySession` (`tests/flow/test_pre_mission_two_hosts.gd` holds the two to one answer). `load` with
 `"resume": true` skips the draw, for a mid-battle snapshot whose `roster` would otherwise stand a
-second force on top of the saved one. Gear, mods and jobs are slice 2; a restart that keeps the
-loadout is slice 3.
+second force on top of the saved one.
 
 ```bash
 play/send.sh load '{"path":"res://Scenarios/missions/Level_1.tres"}'
 play/send.sh --batch '[{"cmd":"undeploy","args":{"unit":"C"}},{"cmd":"deploy","args":{"unit":"F","x":29,"y":3}},{"cmd":"begin"}]'
+```
+
+**The loadout (#46 slice 2a).** The screen's writes, each through the door the screen calls, and
+each refused in its words:
+- `give {from, slot, to}` moves gear through `Loadout.move`; `"stash"` names the stash at either end.
+- `job {unit, job}` picks a job by id (`""` for none) through `Loadout.set_job`, from the mission's
+  offer plus whatever the unit already holds -- the list the card's picker shows.
+- `fit {unit, slot, mod, space}` / `unfit {unit, slot, mod}` fit and remove weapon mods. The mod is
+  named by its catalogue key and must be in the fitting card's own library
+  (`WeaponModCatalog.offerable_for` with the mission's pool); every refusal is
+  `WeaponInstance.fit_block_reason`'s. `unit` may be `"stash"` for a stash weapon.
+
+`slot` counts from 0, as the recorded gear `index` does; `space` counts from 1, as every
+`fit_block_reason` sentence does. A unit's six slots are fixed, but the stash is a list, as on the
+screen: when a piece leaves it, everything after moves up one, so re-read `kit stash` before the
+next stash `slot`. All four are pre-mission only (fitting is read-only in battle,
+#1152) and take any roster unit, deployed or in reserve, as the screen's cards do.
+
+`kit {unit}` reads it back: each slot with `(E)` / `(W)`, why this unit cannot use a piece, each
+weapon's spaces (`1 [1/2: Line Sniper]`, `off` past the wielder's proficiency), and while the phase
+is open the offered jobs and mods. `kit stash` lists the stash. Equip and wear (the inspect dock's
+verbs) are slice 2b; a restart that keeps the loadout is slice 3.
+
+```bash
+play/send.sh --batch '[{"cmd":"kit","args":{"unit":"stash"}},{"cmd":"give","args":{"from":"stash","slot":0,"to":"A"}},{"cmd":"kit","args":{"unit":"A"}}]'
 ```
 
 ### 3. Transport hosts — "are 1 and 3 exclusive?" → no

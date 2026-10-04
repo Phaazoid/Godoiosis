@@ -57,6 +57,12 @@ const NOT_COMMANDS := {
 	"deployment_cap": "read by the view, not ordered",
 	"roster_units": "read by the view, not ordered",
 	"deploy_block_reason": "read by the view, not ordered",
+	# ...and its writes (#46 slice 2a).
+	"set_job": "dispatched as `job`",
+	"stash": "read by the view (`kit stash`), not ordered",
+	"offered_jobs_for": "read by the view, not ordered",
+	"offered_mods_for": "read by the view, not ordered",
+	"mod_key": "read by the view and by `unfit`, not ordered",
 }
 
 
