@@ -170,7 +170,7 @@ func test_a_squad_wiped_on_the_expiry_round_reports_the_squad_not_the_clock() ->
 	_spawn(Team.Faction.ENEMY, Vector2i(5, 5))
 	mc.check()
 	_clock(1)
-	mc._rounds_elapsed = 1   # the clock is expired AND the squad is about to fall, in one check()
+	mc.mission.rounds_elapsed = 1   # the clock is expired AND the squad is about to fall, in one check()
 	player.die()
 
 	assert_int(mc.failure_for(game._board())) \
@@ -184,7 +184,7 @@ func test_meeting_the_objective_on_the_last_round_still_wins() -> void:
 	_contest()
 	_objectives([MissionRules.Objective.ROUT])
 	_clock(1)
-	mc._rounds_elapsed = 1   # the clock has run out...
+	mc.mission.rounds_elapsed = 1   # the clock has run out...
 
 	for unit: Unit in game._board().units:
 		if unit.get_faction() == Team.Faction.ENEMY:
@@ -316,8 +316,8 @@ func test_a_hostile_standing_on_the_cargo_loses_the_mission() -> void:
 	mc.check()
 	assert_int(mc.outcome).is_equal(MissionRules.Outcome.DEFEAT)
 	# The banner has to name THIS reason -- a defeat reporting the wrong one is exactly what #101's
-	# "_failed_by is set beside outcome" rule exists to stop.
-	assert_str(MissionRules.defeat_reason(mc._failed_by)) \
+	# "failed_by is set beside outcome" rule exists to stop.
+	assert_str(MissionRules.defeat_reason(mc.mission.failed_by)) \
 		.is_equal(MissionRules.defeat_reason(MissionRules.LoseCondition.POINT_LOST))
 
 
@@ -405,7 +405,7 @@ func test_the_ai_walking_onto_the_cargo_ends_the_mission() -> void:
 	assert_int(mc.outcome) \
 		.override_failure_message("the AI reached the cargo (or failed to) and the mission did not end") \
 		.is_equal(MissionRules.Outcome.DEFEAT)
-	assert_str(MissionRules.defeat_reason(mc._failed_by)) \
+	assert_str(MissionRules.defeat_reason(mc.mission.failed_by)) \
 		.is_equal(MissionRules.defeat_reason(MissionRules.LoseCondition.POINT_LOST))
 
 
@@ -431,7 +431,7 @@ func test_the_protected_unit_dying_loses_the_mission() -> void:
 	vip.die()
 	mc.check()
 	assert_int(mc.outcome).is_equal(MissionRules.Outcome.DEFEAT)
-	assert_str(MissionRules.defeat_reason(mc._failed_by)) \
+	assert_str(MissionRules.defeat_reason(mc.mission.failed_by)) \
 		.is_equal(MissionRules.defeat_reason(MissionRules.LoseCondition.PROTECTED_UNIT_LOST))
 
 

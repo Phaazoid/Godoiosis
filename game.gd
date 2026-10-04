@@ -259,6 +259,7 @@ func _build_collaborators() -> void:
 
 	mission_controller = MissionController.new()
 	mission_controller.game = self
+	mission_controller.mission.zones = zone_manager   # the one zone store, built above (#46)
 	add_child(mission_controller)
 	# The pre-mission briefing's one wire (#882): the phase holds its loadout screen back until the
 	# director has stopped talking. Connected here rather than in either node's _ready, because the
@@ -883,7 +884,7 @@ func start_faction_turn(faction: Team.Faction):
 	#Right now, mouse icon changes while menu is up and you hover around, so a new state could be used to stop erratic behavoir like that
 
 func end_turn():
-	await order_executor.apply_burning_tile_damage(turn_manager.active_faction())
+	await order_executor.apply_end_of_turn_tiles(turn_manager.active_faction())
 	mission_controller.check()   # a burning tile can take the last unit (#96)
 	if mission_controller.is_over():
 		return
@@ -2206,7 +2207,7 @@ func _leash_cells_of(subjects: Array[Unit]) -> Array[Vector2i]:
 # ==============================================================================
 
 func _board() -> BoardContext:
-	return BoardContext.new(grid, _all_units(), squad_manager, terrain_states, zone_manager, board_heights)
+	return BoardContext.new(grid, _all_units(), squad_manager, terrain_states, zone_manager, board_heights, gas_field)
 
 func _all_units() -> Array[Unit]:
 	var result: Array[Unit] = []

@@ -2,7 +2,7 @@
 
 **Status: THE ARC IS COMPLETE ([#53](https://github.com/Phaazoid/Godoiosis/issues/53), closed 2026-09-09).** Five slices, all merged: the recorder + replay-grade capture (#831), the notice (#840), the replay viewer (#843), the quit record (#845), and transport + storage (#848, with #849 and #850 behind it). Filed 2026-07-14, parked, and unparked by the dev 2026-09-07 with *"now that we've started to close the loop of a player playing a mission, we can start on it."* The polish it deliberately left is [#856](https://github.com/Phaazoid/Godoiosis/issues/856).
 
-**Canon checked through [#1160](https://github.com/Phaazoid/Godoiosis/issues/1160) (2026-09-29); #46's replayed gear acts folded in 2026-10-04.**
+**Canon checked through [#1160](https://github.com/Phaazoid/Godoiosis/issues/1160) (2026-09-29); #46's replayed gear acts folded in 2026-10-04; #508's soak rows folded in 2026-10-04.**
 
 **Not to be confused with [`playtest-experiments.md`](../playtest-experiments.md)**, whose name is one word away and whose subject is different: that one is how to drive an AI agent through the headless bridge and get a measurement you can believe. This one is the record a HUMAN's played mission leaves behind. Neither reads the other's data.
 
@@ -98,6 +98,8 @@ Recorded: the mission's start (roster, scenario, build, install and session ids,
 **A PAYLOAD hit carries `payload_depth`** ([#1058](https://github.com/Phaazoid/Godoiosis/issues/1058), 2026-09-23): 1 for a payload a fired attack dropped, 2 for that payload's own, absent on every hit a unit fired. Nothing else on the hit record can tell the two apart -- a payload shares its thrower as `actor` and its parent's list as `kind` -- so without the field "how much damage do payloads do" would be a question needing a new build and a new cohort, which is the one thing this record exists to avoid.
 
 **A pass also carries its `sinks`** ([#922](https://github.com/Phaazoid/Godoiosis/issues/922), 2026-09-27): each unit the pass's own melt dropped into the water, with its cell, its moment, the damage the water took and the rung. It is damage no hit carries, so `MissionSummary` adds it to `damage_to` the way it adds a `turn_effects` burn -- without that, every sinking would read as an `unattributed` gap in the reconciliation. The down itself needs nothing new: it fires `unit_downed` like any other.
+
+**A `turn_effects` row can be a SOAK** ([#508](https://github.com/Phaazoid/Godoiosis/issues/508) PR 3, 2026-10-04): steam over a unit at its turn's end rides the burn's own list, so its row is in the same event with `damage` 0 and two keys only a soak carries, `gas` (the `Gas.Kind` name) and `states` (what it gave). The keys are added to soak rows alone, so a burn row keeps the shape every older run holds and `ReplayDriver`'s compare of `turn_effects` still lines up across it; `MissionSummary` already skips a row whose damage is 0.
 
 **`build` is a version string, and it resolves to a commit and to a kept binary only because the build was tagged** ([#1027](https://github.com/Phaazoid/Godoiosis/issues/1027)). It is the whole of what identifies the code a run came from — `Checkout.describe()`'s `branch @ sha` is dev-only by construction, so a stranger's run carries `v0.188.3` and nothing more. `tools/archive-build.ps1` is what makes a handed-out build: it tags `v<version>` at the commit it exported from and keeps the zip, which is what lets a run recorded weeks ago be replayed against the rules that actually produced it rather than against today's.
 
