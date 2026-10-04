@@ -316,7 +316,7 @@ func test_a_hostile_standing_on_the_cargo_loses_the_mission() -> void:
 	mc.check()
 	assert_int(mc.outcome).is_equal(MissionRules.Outcome.DEFEAT)
 	# The banner has to name THIS reason -- a defeat reporting the wrong one is exactly what #101's
-	# "_failed_by is set beside outcome" rule exists to stop.
+	# "failed_by is set beside outcome" rule exists to stop.
 	assert_str(MissionRules.defeat_reason(mc.mission.failed_by)) \
 		.is_equal(MissionRules.defeat_reason(MissionRules.LoseCondition.POINT_LOST))
 
