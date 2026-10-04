@@ -61,8 +61,12 @@ static func _apply(tree: SceneTree, game_root: Node) -> void:
 	# BEFORE the game_root check, so the pause lifts even for a card that outlives its Game --
 	# Dialogic is an autoload, so a stuck pause hangs every dialogue after it.
 	var frozen := any_open(tree)
-	if Dialogic.paused != frozen:
-		Dialogic.paused = frozen
+	# Found through the tree, never by its autoload NAME: a name does not resolve in script mode (-s),
+	# and this file failing to compile there took the whole headless chain with it -- including
+	# AIArchetype's registry, so the Play API's bridge AI never acted (#46).
+	var dialogic: Node = tree.root.get_node_or_null(^"Dialogic")
+	if dialogic != null and dialogic.get(&"paused") != frozen:
+		dialogic.set(&"paused", frozen)
 	if not is_instance_valid(game_root):
 		return
 	if frozen:
