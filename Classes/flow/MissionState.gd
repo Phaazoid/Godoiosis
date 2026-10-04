@@ -9,6 +9,10 @@ class_name MissionState
 # the latches, the captured zones, the round clock. It never touches the HUD, the overlay, the
 # telemetry log or the banner; what a host DOES about an ending stays with the host.
 
+# A capture() that actually claimed a zone -- never a refused one. The host hangs what it DOES about a
+# claim here, so whoever holds this state, the CaptureAction included, reaches it (#46).
+signal zone_captured(zone_name: String)
+
 # The board's zone store, the one place a capture point, extraction zone or defended cargo lives.
 var zones: ZoneManager
 
@@ -105,13 +109,15 @@ func capturable_zone_at(cell: Vector2i) -> String:
 	return ""
 
 # Standing anywhere in a capture zone claims the WHOLE zone -- a multi-tile objective is one
-# objective, not N of them. True when this call claimed it; what follows a claim is the host's.
+# objective, not N of them. True when this call claimed it; what follows a claim is the host's,
+# heard off zone_captured.
 func capture(zone_name: String) -> bool:
 	if zone_name == "" or captured_zones.has(zone_name):
 		return false
 	if zones.kind_of(zone_name) != ZoneManager.Kind.CAPTURE:
 		return false
 	captured_zones.append(zone_name)
+	zone_captured.emit(zone_name)
 	return true
 
 func is_zone_captured(zone_name: String) -> bool:

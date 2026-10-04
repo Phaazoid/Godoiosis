@@ -19,6 +19,7 @@ extends SceneTree
 #                                 overwatch's and legal_targets'; omitted, the default fires
 #   cancel {"unit": "A"}
 #   rescue {"unit": "A", "target": "b"}   - A picks up adjacent downed ally b (a main action)
+#   capture {"unit": "A"}                 - A claims the capture zone it will stand in (a main action)
 #   join   {"unit": "B", "leader": "A"}   - B joins A's squad (squad-up / join)
 #   leave  {"unit": "B"}                  - B leaves its squad (back to solo)
 #   disband{"unit": "A"}                  - A (squad leader) disbands its squad
@@ -169,6 +170,9 @@ func _dispatch(cmd: String, args: Dictionary) -> Dictionary:
 			return {"ok": r.ok, "text": _ack(r) + "\n\n" + BoardView.render_preview(_session)}
 		"rescue":
 			var r = _session.rescue(str(args.get("unit", "")), str(args.get("target", "")))
+			return {"ok": r.ok, "text": _ack(r) + "\n\n" + BoardView.render_preview(_session)}
+		"capture":
+			var r = _session.capture(str(args.get("unit", "")))
 			return {"ok": r.ok, "text": _ack(r) + "\n\n" + BoardView.render_preview(_session)}
 		# The squad verbs used to redraw the whole board to report a one-line change. What they
 		# actually changed -- which squads exist and which are spent -- is what the status line on

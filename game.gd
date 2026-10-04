@@ -260,6 +260,8 @@ func _build_collaborators() -> void:
 	mission_controller = MissionController.new()
 	mission_controller.game = self
 	mission_controller.mission.zones = zone_manager   # the one zone store, built above (#46)
+	# A claim's game reactions hang off the state, which a CaptureAction holds in place of this node (#46).
+	mission_controller.mission.zone_captured.connect(mission_controller._on_zone_captured)
 	add_child(mission_controller)
 	# The pre-mission briefing's one wire (#882): the phase holds its loadout screen back until the
 	# director has stopped talking. Connected here rather than in either node's _ready, because the
@@ -1250,7 +1252,7 @@ func _make_simple_action(type: BaseAction.ActionType) -> BaseAction:
 # tile the move ends on (#96 slice 3).
 func queue_capture(unit: Unit):
 	var capture := CaptureAction.new()
-	capture.init(unit, unit.get_projected_destination(), mission_controller)
+	capture.init(unit, unit.get_projected_destination(), mission_controller.mission)
 	squad_manager.queue_action(unit.squad, capture)
 	clear_selection()
 

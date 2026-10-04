@@ -604,11 +604,13 @@ func abandon_mission() -> void:
 func capturable_zone_at(cell: Vector2i) -> String:
 	return mission.capturable_zone_at(cell)
 
-# The claim is the state's; what the GAME does about one -- the log, the zone overlay, the HUD -- is
-# this node's.
+# The claim is the state's, and so is the order's: CaptureAction holds the mission, not this node.
 func capture(zone_name: String) -> void:
-	if not mission.capture(zone_name):
-		return
+	mission.capture(zone_name)
+
+# What the GAME does about a claim -- the log, the zone overlay, the HUD. Heard off
+# MissionState.zone_captured (wired in game._build_collaborators), so every claimant reaches it (#46).
+func _on_zone_captured(zone_name: String) -> void:
 	game.mission_log.record_capture(zone_name)
 	game.overlay_manager.redraw_zones(game.zone_manager, hidden_zone_names())
 	game.refresh_mission_status()

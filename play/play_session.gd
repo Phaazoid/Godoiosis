@@ -811,6 +811,22 @@ func rescue(rescuer_handle: String, target_handle: String) -> Dictionary:
 		return {"ok": false, "error": "%s can't rescue %s: %s" % [rescuer_handle, target_handle, refusal]}
 	return {"ok": true, "summary": "%s -> rescue %s" % [rescuer_handle, target_handle]}
 
+# Capture (#46): claim the unclaimed CAPTURE zone the unit will stand in -- the same CaptureAction the
+# menu queues, stamped with this session's mission, gated on the menu's own capturable_zone_at read
+# at the PROJECTED destination, so a capture queued behind a move claims where the move ends.
+func capture(handle: String) -> Dictionary:
+	var unit := unit_by_handle(handle)
+	var gate := _controllable(unit, handle)
+	if not gate.ok:
+		return gate
+	# No pre-check of its own: CaptureAction.actor_block_reason is the one answer, read at the chokepoint.
+	var action := CaptureAction.new()
+	action.init(unit, unit.get_projected_destination(), mission)
+	var refusal := squad_manager.try_queue_action(unit.squad, action)
+	if refusal != "":
+		return {"ok": false, "error": "%s can't capture: %s" % [handle, refusal]}
+	return {"ok": true, "summary": "%s -> capture %s" % [handle, action.zone_name]}
+
 # Guard (#414): become a nearby ally's bodyguard — the same GuardAction the menu queues, gated on the
 # same RulesService.guard_candidates query the menu's row is built from. Its own verb rather than a
 # queue_simple_action pass-through, for the reason rescue has one: it takes a real unit.
