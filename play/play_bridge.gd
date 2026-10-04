@@ -18,7 +18,9 @@ extends SceneTree
 #   attack {"unit": "A", "x": 5, "y": 0, "attack": "Splash"}   - "attack" optional (#615), as are
 #                                 overwatch's and legal_targets'; omitted, the default fires
 #   cancel {"unit": "A"}
-#   rescue {"unit": "A", "target": "b"}   - A picks up adjacent downed ally b (a main action)
+#   rescue {"unit": "A", "target": "b", "x": 4, "y": 0}   - A picks up adjacent downed ally b (a main
+#                                 action); x/y optional: the bank a body in deep water is hauled to (#116),
+#                                 the first when omitted, with the reply naming the others
 #   capture {"unit": "A"}                 - A claims the capture zone it will stand in (a main action)
 #   join   {"unit": "B", "leader": "A"}   - B joins A's squad (squad-up / join)
 #   leave  {"unit": "B"}                  - B leaves its squad (back to solo)
@@ -169,7 +171,7 @@ func _dispatch(cmd: String, args: Dictionary) -> Dictionary:
 			var r = _session.cancel(str(args.get("unit", "")))
 			return {"ok": r.ok, "text": _ack(r) + "\n\n" + BoardView.render_preview(_session)}
 		"rescue":
-			var r = _session.rescue(str(args.get("unit", "")), str(args.get("target", "")))
+			var r = _session.rescue(str(args.get("unit", "")), str(args.get("target", "")), _optional_xy(args))
 			return {"ok": r.ok, "text": _ack(r) + "\n\n" + BoardView.render_preview(_session)}
 		"capture":
 			var r = _session.capture(str(args.get("unit", "")))
@@ -360,6 +362,12 @@ func _write_state(id: int, ok: bool, cmd: String, text: String) -> void:
 
 func _xy(args: Dictionary) -> Vector2i:
 	return Vector2i(int(args.get("x", 0)), int(args.get("y", 0)))
+
+# The cell a command names, or null when it names none: _xy reads a missing x/y as (0,0), a real cell.
+func _optional_xy(args: Dictionary) -> Variant:
+	if not args.has("x"):
+		return null
+	return _xy(args)
 
 func _ack(r: Dictionary) -> String:
 	return "> " + str(r.summary) if r.ok else "> ERROR: " + str(r.error)

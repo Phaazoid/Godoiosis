@@ -792,7 +792,11 @@ func cancel(handle: String) -> Dictionary:
 
 # ---- rescue + squad management (drives the same SquadManager / RescueAction as the player) ----
 
-func rescue(rescuer_handle: String, target_handle: String) -> Dictionary:
+# Rescue (#33): the same RescueAction the menu queues, gated on the menu's own candidate query with the
+# squad's last resolve, so a squadmate this pass will drop is a legal pickup (#124). A body that cannot
+# stand where it lies is hauled to a bank (#116): `landing` names one of rescue_landings (null or a
+# Vector2i); omitted, the first, like the AI -- and the summary names the others, since the game asks.
+func rescue(rescuer_handle: String, target_handle: String, landing: Variant = null) -> Dictionary:
 	var rescuer := unit_by_handle(rescuer_handle)
 	var gate := _controllable(rescuer, rescuer_handle)
 	if not gate.ok:
@@ -800,16 +804,38 @@ func rescue(rescuer_handle: String, target_handle: String) -> Dictionary:
 	var target := unit_by_handle(target_handle)
 	if target == null:
 		return {"ok": false, "error": "no unit '%s'" % target_handle}
-	if not RulesService.adjacent_downed_allies(rescuer, _board()).has(target):
+	var board := _board()
+	if not RulesService.adjacent_downed_allies(rescuer, board, squad_manager.resolved_plan_for(rescuer.squad)).has(target):
 		return {"ok": false, "error": "%s is not an adjacent downed ally of %s" % [target_handle, rescuer_handle]}
-	# The headless API has no tile pick either, so it takes the first landing like the AI (#116) --
-	# the deterministic answer the rule gave before the player was handed the choice.
+	# Read BEFORE queueing: the queue's resolve publishes the haul, and the body then reads as standing.
+	var banks := RulesService.rescue_landings(rescuer, target, board)
+	var hauled := RulesService.rescue_needs_a_pick(target, board)
+	var bank: Vector2i = banks[0]
+	if landing != null:
+		if not (landing is Vector2i and banks.has(landing)):
+			return {"ok": false, "error": "%s can't be put down at %s (legal: %s)" % [target_handle, str(landing), _cells_text(banks)]}
+		bank = landing
 	var action := RescueAction.new()
-	action.init(rescuer, target, RulesService.rescue_landings(rescuer, target, _board())[0])
+	action.init(rescuer, target, bank)
 	var refusal := squad_manager.try_queue_action(rescuer.squad, action)
 	if refusal != "":
 		return {"ok": false, "error": "%s can't rescue %s: %s" % [rescuer_handle, target_handle, refusal]}
-	return {"ok": true, "summary": "%s -> rescue %s" % [rescuer_handle, target_handle]}
+	var summary := "%s -> rescue %s" % [rescuer_handle, target_handle]
+	if hauled:
+		summary += " to %s" % str(bank)
+		if landing == null and banks.size() > 1:
+			var others: Array[Vector2i] = []
+			for cell: Vector2i in banks:
+				if cell != bank:
+					others.append(cell)
+			summary += " (other banks: %s)" % _cells_text(others)
+	return {"ok": true, "summary": summary}
+
+func _cells_text(cells: Array[Vector2i]) -> String:
+	var parts: Array[String] = []
+	for cell: Vector2i in cells:
+		parts.append(str(cell))
+	return ", ".join(parts)
 
 # Capture (#46): claim the unclaimed CAPTURE zone the unit will stand in -- the same CaptureAction the
 # menu queues, stamped with this session's mission, gated on the menu's own capturable_zone_at read
