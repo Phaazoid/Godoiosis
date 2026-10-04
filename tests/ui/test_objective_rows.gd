@@ -272,11 +272,11 @@ func test_rows_that_name_no_place_do_not_answer() -> void:
 # The pre-mission contract draws the same briefing as plain text: the board is behind an opaque
 # screen there. The HUD's rows are what answer; the briefing names each row's place all the same.
 func test_the_briefing_stays_plain_text_and_names_each_rows_place() -> void:
-	for label in MissionStatusPanel.briefing_rows(game.mission_controller, game._board()):
+	for label in MissionStatusPanel.briefing_rows(game.mission_controller.mission, game._board()):
 		assert_int(label.mouse_filter).is_equal(Control.MOUSE_FILTER_IGNORE)
 		label.free()
 	var kinds: Array[int] = []
-	for row in MissionStatusPanel.briefing(game.mission_controller, game._board()):
+	for row in MissionStatusPanel.briefing(game.mission_controller.mission, game._board()):
 		kinds.append(row.zone_kind)
 		row.label.free()
 	# OBJECTIVES header, Rout, Capture, Extract, FAIL IF header, Time.

@@ -29,8 +29,8 @@ class_name ScenarioUnitEntry
 # subject is marked by painting a zone rather than by naming one on ScenarioData. "Which person is
 # this" is a real question and #501 will ask it; a half-answer built here would be the one to beat.
 #
-# Written and read by ScenarioManager directly, OUTSIDE the #177 reference/snapshot fork -- a
-# reference entry (state_saved = false) never calls apply_unit_state, and a VIP must survive that.
+# Read through apply_placement, OUTSIDE the #177 reference/snapshot fork -- a reference entry
+# (state_saved = false) never calls apply_unit_state, and a VIP must survive that.
 @export var must_survive := false
 @export var jobs: Array[String] = []
 
@@ -92,6 +92,19 @@ class_name ScenarioUnitEntry
 @export var watch_attack_index := -1
 @export var watch_spent := false
 @export var watch_cancelled := false   # #810: broken by a blow -- a third ending beside spent
+
+# What this entry says about the unit's place in the MISSION -- the VIP flag, and a leader's squad
+# name, AI archetype, zone and post. The ONE writer for both loaders (#46): the headless one never
+# copied these, so every saved Sentry rushed and no escort could be lost. Outside the #177 fork,
+# since a VIP or a sentry is usually cast. Called right after the spawn, which made the solo squad.
+func apply_placement(unit: Unit) -> void:
+	unit.must_survive = must_survive
+	if squad_id == -1 or not is_leader:
+		return
+	unit.squad.squad_name = squad_name
+	unit.squad.archetype = squad_archetype
+	unit.squad.zone_name = squad_zone
+	unit.squad.home_cell = cell
 
 # Snapshot the unit's persistent side of the seam. Inventory copies via copy_for_grant()
 # — never duplicate(true), which would fork a WeaponInstance off its shared template. An

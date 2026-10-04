@@ -415,7 +415,6 @@ func test_scenario_objectives_and_zones_surface_in_overview() -> void:
 	assert_str(text).contains("CAPTURE  \"CapPoint\"  (2,2) (2,3)")
 	assert_str(text).contains("EXTRACT  \"ExitPoint\"  (5,5)")
 	assert_str(text).contains("FAIL IF  Time ran out.")
-	assert_str(text).contains("progress: not scored headlessly (#46)")
 	# Grid overlay marks capture 'C' and extraction 'E'
 	assert_str(text).contains(".C")
 	assert_str(text).contains(".E")

@@ -197,7 +197,8 @@ func test_the_summary_carries_the_separation_flags() -> void:
 
 func test_a_resume_is_flagged_with_its_starting_round() -> void:
 	_spawn(Team.Faction.PLAYER, Vector2i(0, 0))
-	mc.restore_progress([], false, 3)   # a save taken three rounds in
+	var no_zones: Array[String] = []
+	mc.mission.restore(no_zones, false, 3)   # a save taken three rounds in
 	mc._begin_turn()
 	var start := _of("mission_start")[0]
 	assert_bool(bool(start.get("resumed", false))).is_true()

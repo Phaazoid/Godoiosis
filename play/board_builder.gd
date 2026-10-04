@@ -98,7 +98,7 @@ static func build(parent: Node, root_name := "PlayRoot") -> Dictionary:
 		for child in units_root.get_children():
 			if child is Unit:
 				units.append(child)
-		return BoardContext.new(grid, units, squad_manager, terrain_states, null, board_heights, gas_field)
+		return BoardContext.new(grid, units, squad_manager, terrain_states, zone_manager, board_heights, gas_field)
 
 	return {
 		"root": root,
@@ -161,7 +161,7 @@ static func apply_scenario(board: Dictionary, scenario: ScenarioData) -> Array[U
 	if board.get("gas_field") != null:
 		board.gas_field.load_dict(scenario.gas)   # mirrors ScenarioManager
 	if board.get("zone_manager") != null:
-		board.zone_manager.load_dict(scenario.zones)   # the deployment zone the phase reads (#46)
+		board.zone_manager.load_dict(scenario.zones)   # every zone: the phase's deployment, a Sentry's patrol, the mission's own (#46)
 
 	var spawned: Array[Unit] = []
 	var entry_by_unit := {}            # Unit -> ScenarioUnitEntry
@@ -173,6 +173,7 @@ static func apply_scenario(board: Dictionary, scenario: ScenarioData) -> Array[U
 			push_warning("Play: scenario entry with null unit_data; skipping")
 			continue
 		var unit := spawn(board, entry.unit_data.duplicate(true), entry.cell)
+		entry.apply_placement(unit)   # the VIP flag and a leader's AI squad fields -- ScenarioManager's own call (#46)
 		spawned.append(unit)
 		entry_by_unit[unit] = entry
 		if entry.squad_id != -1:

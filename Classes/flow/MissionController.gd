@@ -121,7 +121,7 @@ func check() -> void:
 	_end_mission()   # deliberately un-awaited: outcome is already set, so is_over() is true for
 					 # every caller the moment we return, while the banner blocks only itself
 
-# Mission START: the blank slate restore_progress() writes a mid-battle snapshot back over (#87).
+# Mission START: the blank slate apply_scenario() writes a mid-battle snapshot back over (#87).
 func reset() -> void:
 	# FIRST, and before anything below is cleared (#53): this is the universal teardown, so it is
 	# the one place that catches every door out of a mission that does NOT go through a named exit
@@ -171,9 +171,11 @@ func is_contested() -> bool:
 func rounds_elapsed() -> int:
 	return mission.rounds_elapsed
 
-# Runs after zones are refilled, since the redraw needs them painted.
-func restore_progress(zones: Array[String], contested: bool, rounds := 0) -> void:
-	mission.restore(zones, contested, rounds)
+# The mission half of a scenario load (#46): the state reads the scenario, and this is what the GAME
+# does about it. Runs after the zones are refilled, since the shout and the redraw both read them.
+func apply_scenario(scenario: ScenarioData) -> void:
+	mission.apply_scenario(scenario)
+	_shout_missing_geometry()
 	game.overlay_manager.redraw_zones(game.zone_manager, hidden_zone_names())
 	game.refresh_mission_status()
 
@@ -523,7 +525,7 @@ func _on_load_game_chosen() -> void:
 func _begin_turn(record_to_disk := true) -> void:
 	# The deployment window closes here (#736), and the zones that showed it stop being drawn. Set
 	# BEFORE the redraw for the obvious reason, and the redraw is needed at all because every
-	# arrival painted the zones on the way in (apply_scenario -> restore_progress) while this was
+	# arrival painted the zones on the way in (the load's apply_scenario) while this was
 	# still false.
 	_battle_begun = true
 	# Defaulted, so all five arrival doors are unchanged. The replay driver is the one caller that
@@ -617,11 +619,14 @@ func is_zone_captured(zone_name: String) -> bool:
 
 func set_objectives(list: Array[MissionRules.Objective]) -> void:
 	mission.objectives.assign(list)
-	for objective in objectives_missing_geometry():
-		push_error("Mission objective %s is declared but no matching zone is painted — this mission cannot be won." % MissionRules.Objective.keys()[objective])
+	_shout_missing_geometry()
 	game.refresh_mission_status()
 
-# The Scenario tab shows this live while authoring; set_objectives shouts it once on load.
+func _shout_missing_geometry() -> void:
+	for objective in objectives_missing_geometry():
+		push_error("Mission objective %s is declared but no matching zone is painted — this mission cannot be won." % MissionRules.Objective.keys()[objective])
+
+# The Scenario tab shows this live while authoring; set_objectives and apply_scenario shout it on load.
 func objectives_missing_geometry() -> Array[MissionRules.Objective]:
 	return mission.objectives_missing_geometry()
 
