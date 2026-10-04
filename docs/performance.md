@@ -526,3 +526,22 @@ foes a chain reaches much faster than with its size on empty ground, because eac
 The Attack Editor already warns past a fan-out of 16. If a payload hover ever feels sticky, the first
 things to measure are the restore resolve (it re-resolves the whole real queue, which is empty here
 and will not be in play) and the per-call `ReactionCatalog.get_all()` default arguments.
+
+## 2026-10-03 — the AI's seek for a removal or a squad break (#760)
+
+`AITactics.seek_positions` runs once per fighting squad (`engage`), before its group move. It stands
+the leader, then each member, on its cells and resolves its candidates there, so its cost is resolves
+per cell. Measured with `tools/profile_ai_turn.gd`, the branch against the same branch with the seek
+short-circuited (so the difference is the seek alone), two runs each:
+
+| Board | Seek off | Seek on |
+|---|---|---|
+| Castle Assault, whole board (3 squads) | 1222 / 1046 ms | 1260 / 1249 ms |
+| Moles and Holes, whole board (13 squads, opening board) | 774 ms | 795 ms |
+
+About **+10%** on Castle Assault, inside noise on Moles and Holes, and every decision record is
+byte-identical (neither board offers a removal or a break from another cell on the turns measured).
+Two things keep it that size, both in `ai-tactics.md` → *Seeking a removal or a squad break*: the
+first removal ends a unit's search, and cells that give a victim the same fate share one resolve. The
+base plan is re-resolved before each cell only when a trial has run since, because a trial's shove
+stays published and the candidate builder reads it (#709).

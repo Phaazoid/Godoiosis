@@ -1,6 +1,6 @@
 # AI Tactics — the archetype layer's integration contract
 
-**Canon checked through #1020 (2026-09-18); #1196 (a unit leaving its squad keeps its archetype) folded in 2026-10-03; #761 (the score gains a squad-break term) folded in 2026-10-03; #1174 (Rally and Intimidate retired; the AI stays blind to limb loss) folded in 2026-10-01; #1135 (the reactive heal repealed) folded in 2026-09-28.**
+**Canon checked through #1020 (2026-09-18); #760 (the squad goes looking for a removal or a squad break) folded in 2026-10-03; #1196 (a unit leaving its squad keeps its archetype) folded in 2026-10-03; #761 (the score gains a squad-break term) folded in 2026-10-03; #1174 (Rally and Intimidate retired; the AI stays blind to limb loss) folded in 2026-10-01; #1135 (the reactive heal repealed) folded in 2026-09-28.**
 
 **Status: BUILT 2026-07-22, #78 CLOSED 2026-07-23 (commit `239555b`)** — ratified and hand-typed the same day; full suite 444/444 green. Feel iteration continues through ordinary playtesting (the v1 approximations below are the watch-list). The #29-era archetype layer (Rushdown/Hold/Sentry, painted zones, Crisis stances — see CLAUDE.md's architecture map) is the substrate; this doc covers the #78 rebuild of *how the AI decides*, and the standing contract that keeps it from rotting again. *(2026-08-09: the Crisis-stance piece of that substrate is GONE — [#158](https://github.com/Phaazoid/Godoiosis/issues/158) made Crisis a deterministic equipped ability, deleting `CRISIS_STANCES`/`accepts_crisis` with the accept/decline question they answered; enemy Crisis access is authored content now.)*
 
@@ -84,8 +84,8 @@ Both verbs are **preparations**, so both are rules rather than score terms — t
 
 ## Shared engage plumbing
 
-`AITactics.engage(squad, target, board, squad_manager, allowed = null)` is the one place "fight
-this target" is defined: destination pick (`best_attack_destination`) → conditional group move
+`AITactics.engage(squad, target, board, squad_manager, allowed = null, within = null)` is the one place "fight
+this target" is defined: destination pick (`best_attack_destination`) → the seek (`seek_positions`, see the next section) → conditional group move
 → every member tries a main action. Rushdown's whole turn and Sentry's intruder branch both call
 it. It had been hand-duplicated between the two files since #29 — flagged by the #127 handoff
 (2026-08-06) as the shape that let that fix's destination-picker half reach both archetypes for
@@ -97,6 +97,59 @@ The per-member "everybody tries a main action" step is itself `AITactics.queue_m
 Rushdown's own no-enemy branch, which used to `return` above it and skip fallback main actions
 (Reload/Rev) entirely whenever the squad found no target at all (`choose_engagement_target` since
 2026-09-02; `nearest_enemy` before it). `HoldArchetype` never moves, so it has no destination/move step, only this one.
+
+## Seeking a removal or a squad break ([#760](https://github.com/Phaazoid/Godoiosis/issues/760), 2026-10-03)
+
+The AI used to take a void kill only when it happened to be standing in the right place. The destination pick chooses where the leader stands before any attack is scored, the formation solver places the members by offset, and the attack pass then works from wherever everyone ended up. So a kill one step away was never even built as a candidate. `AITactics.seek_positions` runs inside `engage()`, between the destination pick and the group move, and decides where people stand.
+
+**The dev's rulings (2026-10-03, recorded on #760):**
+- **Only a removal or a squad break pulls a unit off its usual cell.** Those are the two terms the score ranks above damage. Damage alone never moves anyone, so all other positioning is what it was. This was chosen over "a removal only" and over "its best attack by full score". The rule reads as one sentence: *if it can knock you off, out or into something this turn, it will.*
+- **Every member seeks, and the squad is one unit.** His words: *"First priority squad leader, second priority closest member that can do it, etc."*, and *"we have a lot of heuristics to make this not as big of a calculation."*
+
+**How it works:**
+- **The leader goes first**, because its cell decides everyone's cohesion.
+  - It searches its move range, inside the leash (`allowed`), on cells its squad can follow it to (`GroupMoveSolver.followable_destinations`) and nobody else stands on.
+  - The order is its default destination first, then cheapest to reach, then row-major.
+- **Members go in rounds.** Each round:
+  - the formation solver places everyone not yet assigned;
+  - every unassigned member searches its own cells (`GroupMoveSolver.follow_cells`), its formation cell first;
+  - the winner is a removal over a break, then the **lowest move cost**, then member order;
+  - the winner is **pinned** (`GroupMoveSolver.plan(…, pinned)`), so the formation places everyone else around it.
+  - Each member scores against what the earlier winners will already do, so two never chase one body.
+- **The first removal ends a unit's search.** A squad break is kept only as a fallback while a removal is still being looked for.
+- **A Sentry counts only a candidate aimed at an intruder** (`within`), so bait outside the zone cannot pull it.
+- **The attack is still the joint pass's to choose** (*Attack scoring* below). The seek only decides where people stand.
+
+**A cell is scored by standing the unit on it.** This uses the threat preview's positional snapshot, through `MovementComponent.set_cell`, and it is the *only* way.
+- The resolve re-expands every queued aim from its **actor's** projected cell (#15). It ignores the origin the aim was declared with, so an aim "from" a cell the actor is not on resolves as nothing.
+- #760's own body claimed the opposite ("an attack carries its own origin through the whole resolve"). That holds for the knockback and elevation reads, but the volley itself is rebuilt from the actor, so the claim was half stale. The issue's counter question has the same answer.
+- With the squad's queue empty, a unit set on a cell projects to it, so the volley, the counters and the lethality all read the cell it would really fire from.
+- This is honest **only while nothing is queued**. That is true at every `engage()` call, because the hand-off drain sheds orders and engage runs first. With orders queued, `seek_positions` returns the default instead.
+- Every cell is put back and the real plan re-resolved before anything is queued.
+
+**Heuristics that bound the cost:**
+1. **The priority is the search order.** The leader first, then the closest member, then each unit's default cell before any other. The first removal stops that unit's search.
+2. **One resolve per outcome-equivalent group** (`_group_key`).
+   - The resolver reads three things off an attacker's cell: the shove direction, the height, and a carving's empowerment. Cells that agree on those, on the attack and on the aim give a single victim the same fate.
+   - A directional attack's footprint moves with its origin, so for those the cell itself joins the key.
+   - Once a group's first resolve shows its one victim neither removed nor broken, the group is skipped.
+   - Counters differ per cell, so a group whose fate is good but whose first cell nets a loss tries its next cell.
+   - **A rule that ever reads more of the origin (backstrike) has to join the key**, or the seek skips a real opportunity without a word.
+3. **Only fights seek.** Hold never moves. A Sentry at its post or walking home does not seek, and neither does Rushdown's cargo run.
+4. **Geometry before resolves.** A cell from which nothing can be aimed costs no resolve.
+
+**A trial's shove stays PUBLISHED** (#709's trap again). The candidate builder reads published positions, so the base plan is re-resolved before the next cell's candidates are built. The first build missed this: after the default cell's trial, the target projected one cell east and nothing was aimable from the cell that would have dropped it in the hole.
+
+**Measured** (`tools/profile_ai_turn.gd`, Castle Assault, against the branch with the seek short-circuited):
+- The whole-board decision went from about 1134 ms to about 1254 ms, **+10%**, against a 50% budget.
+- Castle Assault carries no shoves and its decision record is byte-identical, so that number is cost alone.
+- Moles and Holes: +3% on the opening board. A four-round AI-vs-AI replay is decision-identical too, apart from squad id numbering; its Gust void kill happens either way.
+- **No shipped board has yet shown a detour.** `tests/ai/test_shove_seeking.gd` carries the behaviour.
+
+**Declared limits:**
+- **The walk to the cell is not priced:** a watch crossed on the way, or fire at the end of it. This is the same as the ordinary approach (*Known v1 approximations* below).
+- **The leader's search sees its followers where they stand now**, not where the formation will put them.
+- **A cell another unit stands on is not searched by the leader**, a squadmate's included, even though that squadmate would move.
 
 Its second half stands alone as `AITactics.queue_fallback_actions_for_squad` — the per-member walk with ATTACK removed — because **a Sentry AT ITS POST with nobody in the zone takes exactly that and never an attack** ([#726](https://github.com/Phaazoid/Godoiosis/issues/726), dev 2026-09-03: *"at the post only"*). An enemy in reach but outside the zone is bait, and the lure-proofing contract is unchanged (`test_cannot_be_lured_by_enemy_in_reach_but_outside_zone` now asserts no move and no attack rather than an empty queue). Before this the branch queued nothing at all, so an idle sentry never reloaded either — the "Carbine needed zero AI work" story was false for one archetype. The walk-home branch stays silent on purpose: entrenching a cell you are leaving is waste.
 
@@ -191,6 +244,7 @@ It never introduces a verb the archetype declared `NEVER`, never invents a targe
 ## Known v1 approximations (accepted at ratification)
 
 - **Destination planning reads the default pick** — `best_attack_destination` hoists one `leader.get_fired_attack()` and evaluates every cell against it, rather than per-candidate-attack. Cells × attacks × enemies was judged not worth it yet.
+  - **Narrowed by [#760](https://github.com/Phaazoid/Godoiosis/issues/760) (2026-10-03):** the seek that runs after it searches every selectable attack from every reachable cell, but only for a removal or a squad break (*Seeking a removal or a squad break* above). For everything else the default pick still decides where the leader stands.
   - Corrected 2026-08-06 by [#127](https://github.com/Phaazoid/Godoiosis/issues/127), which is worth knowing because the failure was *silent and permanent*: the approach ranked candidate cells by hops toward **the enemy's own square**, and `path_hops` is deliberately occupancy-blind, so a downed body parked on the one adjacent firing cell in a corridor read as the shortest way in. The unit walked up to the corpse and stopped — every turn, forever, because a dead end is stable. Two halves were both required, and each was falsified alone: the route now targets the nearest **standable** firing cell (`_nearest_standable_attack_cell`), *and* the ranking walk opts into occupancy (`path_hops(…, block_on_occupancy = true)`) so it stops imagining it can cut straight through the bodies in the way. Retargeting alone still stalled. The generalizable shape: **when a metric and the thing it measures disagree about what is passable, fixing the target does not fix the measure.** Note the two halves have **different scopes**, which is the part worth copying: the retarget is attack-specific (a firing position is not the target's own square), but the honest metric is not — it is unconditional in `_best_approach`, so **Sentry's walk home got the same fix**. Scoping it to the attack case would have meant gating it on the retarget parameter, i.e. one flag answering two unrelated questions, and `closest_reachable_cell_to` could never have reached it. A sentry stalls identically against an enemy holding a corridor; pinned by `test_walking_home_routes_around_a_body_holding_the_corridor`.
   - **Target selection was then brought onto the same metric (same day, same sweep).** Fixing the approach alone left `nearest_enemy` measuring occupancy-*blind* while the approach measured aware — two answers to "how far is that enemy", so the AI could pick a target it would only then discover was the long way round. Both now measure to a **standable firing cell** rather than the target's own square, via one shared `_standable_attack_cells`. Note the detail that makes it possible at all: an active enemy blocks passage, so an occupancy-aware walk *to enemy squares* scores every enemy UNREACHABLE — routing to firing cells is what lets target selection use the honest metric. Still one BFS for all enemies (the `until` set is the union). Pinned by `test_nearest_enemy_measures_to_a_firing_position_not_to_the_target_itself`, and **the whole rest of the suite passes with the old metric restored** — which is why this went unnoticed.
 - ~~**Counters aren't scored**~~ and ~~**Squad-level coordination**~~ — **both closed 2026-09-02 by the plan-marginal rebuild above.** What they leave behind is three narrower approximations, each named so nobody re-derives it:
@@ -203,7 +257,9 @@ It never introduces a verb the archetype declared `NEVER`, never invents a targe
 - **Movement never seeks rescue targets**
  — fallback verbs fire from wherever attack-driven movement landed the unit.
 - **Movement is not scored at all** — joint selection prices *what a member does*, never *where it stands*. `score(plan with X at cell C)` is the same delta and is the natural next step, but the destination pick is still the group move below.
+  - **Narrowed by #760:** where a unit stands IS scored now, by standing it on each cell, but only for a removal or a squad break. Damage alone moves nobody, by ruling.
 - **Movement is a group move, not per-unit destinations** — both moving archetypes call `queue_group_move`, so a member's destination is "preserve your path-offset from the leader" rather than anything tactical. Measured 2026-07-29 while fixing [#103](https://github.com/Phaazoid/Godoiosis/issues/103): this is **not** why the AI authored illegal plans (a single individual leader move produces the identical refusal — the invalid order is the hold-position filler `game.gd` gives every member, and the binding rule is `SquadPlanValidator._check_leader_range`, which applies to any plan from any author). But `GroupMoveSolver` is currently the AI's *only* cohesion solver, so this cannot simply be deleted. The replacement needs no new solver — `RulesService.compute_move_range` already leashes a non-leader to the leader's *projected* destination, so queueing the leader first makes each member's own range cohesion-clamped — what it needs is a decision about each archetype's per-unit movement taste. Tracked on [#117](https://github.com/Phaazoid/Godoiosis/issues/117).
+  - **Narrowed by #760:** a member the seek assigns a removal or a break is PINNED to its cell (`GroupMoveSolver.plan(…, pinned)`), and the formation places everyone else around it. Everyone else still follows the offset rule.
 
 **The standing home for all of the above is [#117](https://github.com/Phaazoid/Godoiosis/issues/117)** (evergreen), added 2026-07-29 on the premise that the AI is permanently behind the feature set: every system we add creates AI work that lands after the system ships. New approximations go there as well as here — here for the doctrine, there for the queue.
 
@@ -223,7 +279,7 @@ It never introduces a verb the archetype declared `NEVER`, never invents a targe
 
 `AITactics.choose_engagement_target` is the fork; `RushdownArchetype` and `SentryArchetype` both call it. **Sentry passes BOTH its leashes and they answer different questions:** `within` tests the *enemy's own cell* (is this intruder in my zone), `allowed` tests the *cell I would fight from*. Dropping either lures a sentry out — one by target, one by footing.
 
-**The exchange term is a BOOLEAN — can this target answer me from the cell I would attack from — not a scored one**, and that ceiling is structural: scoring an attack from a cell nobody has moved to is impossible today (see *Out of scope* below). It is asked through `SquadManager.can_counter`, which takes the attacker's cell as a parameter rather than `AITactics` re-deriving counter reach — Law #4's own words, *"if you cannot reach the existing answer from where you are standing, take it as a parameter"*. A private counter-reach predicate would be exactly the drift #78 exists to stop.
+**The exchange term is a BOOLEAN — can this target answer me from the cell I would attack from — not a scored one**. A hypothetical MOVE moves nobody, so this layer cannot resolve the fight it is choosing. Scoring a cell IS possible by standing the unit on it, which is what the seek does (#760, above), but only for a removal or a squad break, by ruling. So who to fight stays this boolean. It is asked through `SquadManager.can_counter`, which takes the attacker's cell as a parameter rather than `AITactics` re-deriving counter reach — Law #4's own words, *"if you cannot reach the existing answer from where you are standing, take it as a parameter"*. A private counter-reach predicate would be exactly the drift #78 exists to stop.
 
 **One BFS, and the legality filter runs BEFORE it.** `_engageable_enemies` collects each enemy's firing cells that are both in move range and inside `allowed`, then walks `path_hops` once over the union (`_approach_distances`' own trick). Asking for the globally nearest firing cell and testing *that* is wrong twice: it excludes an enemy whose nearest cell is outside the leash when another one inside it would serve, and it pays a whole BFS per enemy — measured at +21% on Castle Assault before the fix, and *faster than baseline* after it.
 
@@ -232,7 +288,7 @@ It never introduces a verb the archetype declared `NEVER`, never invents a targe
 **Known limits, declared:**
 
 - **The engageable set is OPTIMISTIC for a leader with squadmates.** It uses the leader's own unclamped move range, but cohesion (V3) can refuse the group move to a cell the leader alone could stand on, in which case the squad stays put. `best_attack_destination` has carried the identical optimism since #29, so nothing new is introduced — but in play it reads as *"it went for the mage and then didn't."*
-- **Leader-only.** `engage` group-moves the whole squad toward the leader's pick, so a target good for the leader may be poor for a member. Widening it is #117's per-unit movement item.
+- **Leader-only.** `engage` group-moves the whole squad toward the leader's pick, so a target good for the leader may be poor for a member. Widening it is #117's per-unit movement item. **Narrowed by #760:** a member that can take a removal or a squad break is pinned to the cell it takes it from, so the leader's pick no longer decides that member's footing.
 
 ## Not this layer
 
