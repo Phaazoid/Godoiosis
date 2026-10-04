@@ -1409,24 +1409,37 @@ class _Hypo extends LethalityRules.Situation:
 # Cell-effect stage (#50 / the #47 cell-effect channel). A map-hitting attack deposits its
 # element(s) across EVERY cell of its blast footprint — AoE parity with damage, which already
 # hits every affected cell. Terrain reactions turn each into tile-state changes (FIRE on a tree ->
-# BURNING). Pure like the rest of the pass — reads the board snapshot, returns one ResolvedCellEffect
-# per reacting cell. Empty when nothing fires: a unit-only attack, no element, or no cell reacts.
+# BURNING), and may release gas; an attack that authors gas leaves it on every struck cell too (#508).
+# Pure like the rest of the pass — reads the board snapshot, returns one ResolvedCellEffect per cell
+# that changes. Empty when nothing does: no gas, and a unit-only attack, no element, or no reaction.
 static func _resolve_cell_effects(action: AttackAction, board: BoardContext, terrain_reactions: Array[TerrainReaction]) -> Array[ResolvedCellEffect]:
 	var effects: Array[ResolvedCellEffect] = []
 	var attacker := action.actor
 	if attacker == null or not is_instance_valid(attacker):
 		return effects
-	if not _source_hits_map(action):
-		return effects                                  # unit-only attack -> deposits nothing
-	var elements := _source_elements(action)
-	if elements.is_empty():
+	# Two halves with different gates. The ELEMENT reacts with the ground only on a map-hitting attack;
+	# the attack's own GAS (#508) lands whatever Targets says (AttackData.gas_amount's note).
+	var elements: Array[Elemental.Element] = []
+	if _source_hits_map(action):
+		elements = _source_elements(action)
+	var fired := action.fired_attack
+	var gas_amount: int = fired.gas_amount if fired != null else 0
+	if elements.is_empty() and gas_amount <= 0:
 		return effects
 	# The deposit lands on the tiles the attack STRUCK -- every one, occupied or not -- as stamped by
 	# whoever built the volley (#1057). Not re-derived from Reach: a single-target swing stops at its
 	# victim, and who that was is this pass's answer, gone by the time anything could re-ask; and a
 	# watch shot's geometry was frozen when it armed. Once per tile, however often a path revisits it.
 	for cell in action.struck_cells:
-		var effect := _resolve_cell_effect_at(cell, elements, board, terrain_reactions)
+		var effect: ResolvedCellEffect = null
+		if not elements.is_empty():
+			effect = _resolve_cell_effect_at(cell, elements, board, terrain_reactions)
+		# Gas needs ground: GasField refuses it, so the preview must not promise it (Law #2).
+		if gas_amount > 0 and GridUtils.has_ground(board.grid, cell):
+			if effect == null:
+				effect = ResolvedCellEffect.new()
+				effect.cell = cell
+			effect.add_gas(fired.gas, gas_amount)
 		if effect != null:
 			effect.cause = action
 			effects.append(effect)
@@ -1455,6 +1468,7 @@ static func _resolve_cell_effect_at(cell: Vector2i, elements: Array[Elemental.El
 		for s in reaction.remove_tile_states:
 			if not effect.states_removed.has(s):
 				effect.states_removed.append(s)
+		effect.add_gas(reaction.gas, reaction.gas_amount)
 		if reaction.popup != "":
 			effect.popups.append(reaction.popup)
 		if reaction.icon != null:

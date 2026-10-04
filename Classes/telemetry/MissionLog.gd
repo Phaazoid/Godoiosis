@@ -306,10 +306,14 @@ func record_pass(squad: Squad, plan: ResolvedPlan) -> void:
 		hits.append(_hit("watch_shot", shot))
 	var effects: Array[Dictionary] = []
 	for effect: ResolvedCellEffect in plan.cell_effects:
+		var gas := {}
+		for kind: Gas.Kind in effect.gas_added:
+			gas[Gas.name_of(kind)] = effect.gas_added[kind]
 		effects.append({
 			"cell": _cell(effect.cell),
 			"added": _names(Terrain.TileState, effect.states_added),
 			"removed": _names(Terrain.TileState, effect.states_removed),
+			"gas": gas,
 		})
 	# Who the pass's own terrain dropped into the water (#922) -- the ground's damage, recorded beside
 	# the hits the way turn_effects records a burn, because no hit carries it.

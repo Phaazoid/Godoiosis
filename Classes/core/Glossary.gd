@@ -169,12 +169,19 @@ static func _terrain_reaction_line(r: TerrainReaction) -> String:
 		trigger += " on %s" % Terrain.kind_display_name(r.required_kind)
 	if r.required_tile_state != Terrain.TileState.NONE:
 		trigger += " on a %s tile" % Terrain.tile_state_display_name(r.required_tile_state)
+	return _assemble_line(trigger, _terrain_effects(r), r.popup)
+
+
+# What a terrain reaction DOES, worded once for the glossary page and the tile card.
+static func _terrain_effects(r: TerrainReaction) -> Array[String]:
 	var effects: Array[String] = []
 	for state: Terrain.TileState in r.add_tile_states:
 		effects.append("sets %s" % Terrain.tile_state_display_name(state))
 	for state: Terrain.TileState in r.remove_tile_states:
 		effects.append("clears %s" % Terrain.tile_state_display_name(state))
-	return _assemble_line(trigger, effects, r.popup)
+	if r.gas_amount > 0:
+		effects.append("releases %s" % Gas.display_name(r.gas))
+	return effects
 
 # The interactions that can touch ONE tile — the tile hover card's list (#135 round 2). The
 # kind/state gate is TerrainReaction.applies_to_tile, the same predicate the resolver's deposit
@@ -185,11 +192,7 @@ static func terrain_reactions_for(kind: Terrain.Kind, states: Array[Terrain.Tile
 	for reaction in TerrainReactionCatalog.get_all():
 		if not reaction.applies_to_tile(kind, states):
 			continue
-		var effects: Array[String] = []
-		for state: Terrain.TileState in reaction.add_tile_states:
-			effects.append("sets %s" % Terrain.tile_state_display_name(state))
-		for state: Terrain.TileState in reaction.remove_tile_states:
-			effects.append("clears %s" % Terrain.tile_state_display_name(state))
+		var effects := _terrain_effects(reaction)
 		if effects.is_empty():
 			continue
 		lines.append("%s → %s" % [Elemental.display_name(reaction.incoming_element), ", ".join(effects)])

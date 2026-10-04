@@ -43,6 +43,12 @@ class_name TerrainReaction
 # flame, not to what it is reaching for.
 @export var spread_and_a_half: bool = false
 
+# Gas the reaction RELEASES on its cell (#508), added to what is there -- water dousing a fire makes
+# steam. AttackData's gas/gas_amount pair, one spelling for both: 0 means none, since STEAM is the
+# kind enum's zero.
+@export var gas: Gas.Kind = Gas.Kind.STEAM
+@export var gas_amount: int = 0
+
 @export var popup: String = ""
 @export var icon: Texture2D
 

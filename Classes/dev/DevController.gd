@@ -776,11 +776,9 @@ func _prune_groundless_stores() -> void:
 	game.gas_field.prune_groundless(has_ground)
 
 # Gas painting (#508's look harness). ABSOLUTE like the corner tool: every cell a drag crosses goes to
-# the picked amount of the picked gas, so a stroke repaints idempotently. A groundless cell is refused
-# -- gas needs ground (GasField's header) -- and the store marks nothing when the value is unchanged.
+# the picked amount of the picked gas, so a stroke repaints idempotently. The store refuses a
+# groundless cell (GasField.ground_source) and marks nothing when the value is unchanged.
 func _paint_gas(cell: Vector2i) -> void:
-	if not GridUtils.has_ground(game.grid, cell):
-		return
 	var brush: TileBrushTool = game.dev_overlay.tile_brush
 	game.gas_field.set_amount(cell, brush.selected_gas_kind(), brush.selected_gas_amount())
 

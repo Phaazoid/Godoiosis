@@ -922,6 +922,7 @@ func _play_sinks(sinks: Array[SinkAction]) -> void:
 func _apply_cell_effects(cell_effects: Array[ResolvedCellEffect]) -> void:
 	for effect in cell_effects:
 		game.terrain_states.apply(effect)
+		game.gas_field.apply(effect)   # GasMirror polls the store's version, so no redraw call
 	game.overlay_manager.redraw_terrain_live(game.terrain_states)
 
 # ==============================================================================

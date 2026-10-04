@@ -70,6 +70,40 @@ func test_prune_groundless_takes_only_the_cells_without_ground() -> void:
 	assert_int(field.amount_at(B, Gas.Kind.STEAM)).is_equal(0)
 
 
+func test_a_groundless_cell_refuses_gas_but_always_gives_it_up() -> void:
+	var field := GasField.new()
+	var ground := {A: true}
+	field.ground_source = func(cell: Vector2i) -> bool: return ground.has(cell)
+	field.set_amount(B, Gas.Kind.STEAM, 4)
+	field.add_amount(B, Gas.Kind.STEAM, 4)
+	assert_int(field.amount_at(B, Gas.Kind.STEAM)).override_failure_message(
+		"gas landed on a cell with no ground").is_equal(0)
+	field.set_amount(A, Gas.Kind.STEAM, 4)
+	ground.erase(A)   # the tile goes; taking its gas away must not be refused with it
+	field.set_amount(A, Gas.Kind.STEAM, 0)
+	assert_bool(field.is_empty()).is_true()
+
+
+func test_a_deposit_adds_to_what_is_there_and_clamps() -> void:
+	var field := GasField.new()
+	field.add_amount(A, Gas.Kind.STEAM, 5)
+	field.add_amount(A, Gas.Kind.STEAM, 4)
+	assert_int(field.amount_at(A, Gas.Kind.STEAM)).is_equal(9)
+	field.add_amount(A, Gas.Kind.STEAM, Gas.MAX_AMOUNT)
+	assert_int(field.amount_at(A, Gas.Kind.STEAM)).is_equal(Gas.MAX_AMOUNT)
+
+
+func test_apply_plays_a_cell_effects_gas_into_the_store() -> void:
+	var field := GasField.new()
+	field.set_amount(A, Gas.Kind.STEAM, 2)
+	var effect := ResolvedCellEffect.new()
+	effect.cell = A
+	effect.add_gas(Gas.Kind.STEAM, 3)
+	effect.add_gas(Gas.Kind.STEAM, 1)   # two reactions on one cell sum
+	field.apply(effect)
+	assert_int(field.amount_at(A, Gas.Kind.STEAM)).is_equal(6)
+
+
 func test_the_scenario_bridge_carries_gas_both_ways() -> void:
 	# BoardSnapshot.from_scenario / write_into are the ONE place "which fields are the board" is
 	# written down, so a save, a load and an undo all ride this.

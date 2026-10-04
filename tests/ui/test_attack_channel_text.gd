@@ -1,5 +1,5 @@
 # AttackChannelText.ally_line (#1083): when an attack says whether it hits allies, and which word it
-# uses. Pure, no scene: the rule is a function of the attack's own footprint and targets. The two
+# uses. Plus the card's gas line (#508) at the bottom. Pure, no scene: the rule is a function of the attack's own footprint and targets. The two
 # surfaces that draw it are pinned where they draw -- the battle ring in test_menu_catalogue_rows, the
 # rune card in test_rune_detail_card.
 #
@@ -79,3 +79,18 @@ func test_the_cards_list_carries_the_ally_line() -> void:
 	for line: String in zap_lines:
 		assert_str(line).override_failure_message(
 			"a one-cell attack's list still speaks about allies: %s" % [zap_lines]).not_contains("allies")
+
+
+# An attack that leaves gas names it on the card (#508); one that leaves none says nothing about gas.
+# Asked by the gas's own name rather than the sentence, which is the dev's to reword.
+func test_the_cards_list_names_the_gas_an_attack_leaves() -> void:
+	var none: Array[Elemental.Element] = []
+	var steam := Gas.display_name(Gas.Kind.STEAM)
+	var steamer := _attack(null)
+	steamer.gas_amount = 3
+	var named := false
+	for line: String in AttackChannelText.lines(steamer, 0, none, false, false):
+		named = named or line.contains(steam)
+	assert_bool(named).override_failure_message("the card never says the attack leaves steam").is_true()
+	for line: String in AttackChannelText.lines(_attack(null), 0, none, false, false):
+		assert_str(line).not_contains(steam)

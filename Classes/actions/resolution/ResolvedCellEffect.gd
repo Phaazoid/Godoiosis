@@ -10,6 +10,14 @@ var states_added: Array[Terrain.TileState] = []
 var states_removed: Array[Terrain.TileState] = []
 var popups: Array[String] = []
 var icons: Array[Texture2D] = []
+# Gas this cell GAINS, added to what it holds (#508): the reactions that fired here plus the attack's
+# own deposit. GasField.apply plays it; a cell effect may carry gas and no state at all.
+var gas_added: Dictionary[Gas.Kind, int] = {}
+
+
+func add_gas(kind: Gas.Kind, amount: int) -> void:
+	if amount > 0:
+		gas_added[kind] = gas_added.get(kind, 0) + amount
 # The blow that deposited it, or null for an order's own deposit (Burrow's COVER). Live applies a
 # pass's deposits in one batch, so nothing in playback reads this; the Split forecast does (#367),
 # to hand a break over ice this pass melts to the fire that melted it.

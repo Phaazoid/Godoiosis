@@ -84,9 +84,11 @@ static func build(parent: Node, root_name := "PlayRoot") -> Dictionary:
 	# disagree about whether a move is legal, which is exactly the split #103 was.
 	var board_heights := BoardHeights.new()
 
-	# The atmosphere (#508). No rule reads it yet, but the headless board carries it so a scenario
-	# round-trips the same here as in the game -- a store the third load path drops is #103's shape.
+	# The atmosphere (#508), the twin of game.gas_field: attacks and reactions deposit into it, so the
+	# headless board carries it -- a store the third load path drops is #103's shape. Gas needs ground,
+	# by the tile states' own rule.
 	var gas_field := GasField.new()
+	gas_field.ground_source = terrain_states.ground_source
 
 	# Cohesion reads live terrain (#151) -- fresh BoardContext per call, mirroring game._board, with
 	# units scanned off units_root so mid-test spawns are seen. Sits below terrain_states because a
