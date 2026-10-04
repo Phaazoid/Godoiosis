@@ -1030,6 +1030,22 @@ func test_a_tick_rewires_the_live_board() -> void:
 		).is_not_null()
 
 
+# The terrain catalog CACHES its scan (#1213), and this page is the one runtime writer that changes
+# which reaction files exist. Driven through the real door a tick's create and delete both end on,
+# so no file is written: what is asserted is that the folder is read AGAIN, not what it holds.
+func test_a_ground_change_makes_the_terrain_catalog_read_its_folder_again() -> void:
+	var panel := _tiles_page()
+	var _filled := TerrainReactionCatalog.get_all()
+	var before := TerrainReactionCatalog.scans
+
+	panel._after_ground_change("x")
+
+	assert_int(TerrainReactionCatalog.scans).override_failure_message(
+		"a tick's create or delete left the catalog answering from the list it cached before the file "
+		+ "changed, so the board and the page go on seeing the old ground until a relaunch"
+		).is_greater(before)
+
+
 func _paint_a_grass_cell(game: Node2D) -> Vector2i:
 	for entry: Dictionary in ObjectKnobs.authorable_tiles(game.grid.tile_set):
 		if GridUtils.terrain_kind_of(entry["data"]) != Terrain.Kind.GRASS:

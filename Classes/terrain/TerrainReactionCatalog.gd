@@ -4,13 +4,29 @@ class_name TerrainReactionCatalog
 # All terrain reactions the resolver considers, authored as .tres in Resources/TerrainReactions/
 # and edited in the inspector — exactly like ReactionCatalog for unit reactions. Sorted so
 # discovery is deterministic (R2).
+#
+# CACHED like ReactionCatalog (#1213), for its reason. The Tiles page's burnable tick is the one
+# runtime writer that adds or removes a file here, and it calls refresh(); a test that writes one must
+# too. A dial edit needs nothing -- it mutates the loaded resource, which is the one this list holds.
 
 const REACTION_DIR := "res://Resources/TerrainReactions/"
 
+# How many times the folder was actually read -- the cache's one observable (see ReactionCatalog).
+static var scans := 0
+
+static var _cache: Array[TerrainReaction] = []
+static var _scanned := false
+
+# A COPY of the cached list: a caller appending to what it was handed must not change everyone's.
 static func get_all() -> Array[TerrainReaction]:
-	var reactions: Array[TerrainReaction] = []
-	reactions.assign(ResourceCatalog.load_all(REACTION_DIR, TerrainReaction))
-	return reactions
+	if not _scanned:
+		_cache.assign(ResourceCatalog.load_all(REACTION_DIR, TerrainReaction))
+		_scanned = true
+		scans += 1
+	return _cache.duplicate()
+
+static func refresh() -> void:
+	_scanned = false
 
 
 # THE spelling of "what does fire consume on this ground" (#890) -- the ignition reaction keyed on

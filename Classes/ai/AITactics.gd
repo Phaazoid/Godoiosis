@@ -289,8 +289,8 @@ static func queue_main_action(unit: Unit, board: BoardContext, squad_manager: Sq
 static func _try_best_attack(unit: Unit, board: BoardContext, squad_manager: SquadManager) -> bool:
 	if not unit.can_wield_equipped() or unit.squad == null:
 		return false
-	var reactions := ReactionCatalog.get_all()   # hoisted -- both catalogs dir-scan per call, and
-	var terrain := TerrainReactionCatalog.get_all()   # a scoring pass resolves many times
+	var reactions := ReactionCatalog.get_all()   # hoisted -- a scoring pass resolves many times, and
+	var terrain := TerrainReactionCatalog.get_all()   # each call copies the cached list (#1213)
 	var squad := unit.squad
 	var base_plan := squad_manager.resolve_plan(squad, board, reactions, terrain)
 	var alone: Array[Unit] = [unit]
