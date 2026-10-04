@@ -883,7 +883,7 @@ func start_faction_turn(faction: Team.Faction):
 	#Right now, mouse icon changes while menu is up and you hover around, so a new state could be used to stop erratic behavoir like that
 
 func end_turn():
-	await order_executor.apply_burning_tile_damage(turn_manager.active_faction())
+	await order_executor.apply_end_of_turn_tiles(turn_manager.active_faction())
 	mission_controller.check()   # a burning tile can take the last unit (#96)
 	if mission_controller.is_over():
 		return
@@ -2206,7 +2206,7 @@ func _leash_cells_of(subjects: Array[Unit]) -> Array[Vector2i]:
 # ==============================================================================
 
 func _board() -> BoardContext:
-	return BoardContext.new(grid, _all_units(), squad_manager, terrain_states, zone_manager, board_heights)
+	return BoardContext.new(grid, _all_units(), squad_manager, terrain_states, zone_manager, board_heights, gas_field)
 
 func _all_units() -> Array[Unit]:
 	var result: Array[Unit] = []

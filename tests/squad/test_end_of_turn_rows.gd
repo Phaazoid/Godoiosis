@@ -16,11 +16,13 @@ const STOUT := {Stats.Stat.MHP: 60}   # survives a burn, so a rung assertion mea
 
 var _sm: SquadManager
 var _states: TerrainStateManager
+var _gas: GasField
 
 
 func before_test() -> void:
 	_sm = H.make_manager(self)
 	_states = auto_free(TerrainStateManager.new())
+	_gas = GasField.new()   # no ground_source: a fixture grid judges nothing
 
 
 func after_test() -> void:
@@ -41,7 +43,7 @@ func _deposit(cell: Vector2i, state: Terrain.TileState) -> ResolvedCellEffect:
 func _board(units_in: Array) -> BoardContext:
 	var units: Array[Unit] = []
 	units.assign(units_in)
-	return BoardContext.new(_sm.grid, units, _sm, _states)
+	return BoardContext.new(_sm.grid, units, _sm, _states, null, null, _gas)
 
 
 func _walk(unit: Unit, dest: Vector2i) -> MoveAction:
@@ -240,3 +242,54 @@ func test_the_row_closes_the_panel_in_its_own_section_and_cannot_be_dragged() ->
 	assert_str(headers[-1]).override_failure_message(
 			"END OF TURN is not the last section -- it happens after everything in the queue") \
 		.is_equal("END OF TURN")
+
+
+# ==============================================================================
+#  The soak (#508)
+# ==============================================================================
+
+# Steam this pass deposits is folded in the way its fire is -- a douse over your own squadmate's
+# burning tile steams them, and the queue has to say so before the pass runs.
+func test_the_forecast_sees_steam_this_pass_deposits() -> void:
+	var rules := GasRules.for_kind(Gas.Kind.STEAM)
+	assert_int(rules.state).override_failure_message(
+			"fixture: steam's rules name no state").is_not_equal(Elemental.State.NONE)
+	var stander := H.spawn_solo(self, _sm, PLAYER, FIRE, STOUT, false)
+	var plan := ResolvedPlan.new()
+	var steam := ResolvedCellEffect.new()
+	steam.cell = FIRE
+	steam.add_gas(Gas.Kind.STEAM, rules.state_from)
+	plan.cell_effects.append(steam)
+
+	PlanResolver.resolve_tile_hits(plan, stander.squad, stander.squad.action_queue, plan.hypo, _board([stander]))
+
+	var hit := _hit_for(plan, stander)
+	assert_object(hit).override_failure_message(
+			"the forecast read the live gas and missed the steam this pass makes").is_not_null()
+	assert_array(hit.resolved.states_added).contains_exactly([rules.state])
+
+
+# The soak is a ROW in the same END OF TURN section as the burn, carrying the state for the chip and
+# no HP for the arrow -- the two things ActionQueueRow reads off any outcome.
+func test_a_soak_lands_in_the_end_of_turn_section_as_a_state_with_no_hp() -> void:
+	var rules := GasRules.for_kind(Gas.Kind.STEAM)
+	var stander := H.spawn_solo(self, _sm, PLAYER, FIRE, STOUT, false)
+	_gas.set_level(FIRE, Gas.Kind.STEAM, Gas.MAX_LEVEL)
+	var plan := _sm.resolve_plan(stander.squad, _board([stander]))
+
+	var entries := ActionQueueDisplayEntry.build_for(stander.squad, plan)
+
+	var heading := ""
+	var soaks := 0
+	for entry: ActionQueueDisplayEntry in entries:
+		if entry.entry_type == ActionQueueDisplayEntry.EntryType.HEADER:
+			heading = entry.label
+		elif entry.entry_type == ActionQueueDisplayEntry.EntryType.ACTION and entry.action is TileHitAction:
+			soaks += 1
+			assert_str(heading).is_equal("END OF TURN")
+			var outcome := entry.action.resolved_outcome()
+			assert_array(outcome.states_added).contains_exactly([rules.state])
+			assert_bool(outcome.reads_hp).is_false()
+			assert_object(entry.action.get_action_icon()).override_failure_message(
+					"the soak row has no icon").is_not_null()
+	assert_int(soaks).override_failure_message("the soak never reached the panel").is_equal(1)

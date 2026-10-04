@@ -49,7 +49,7 @@ var executing_plan: ResolvedPlan = null
 # for the same reason executing_plan is, and read by the same poll: a health readout is up because
 # something is ABOUT to happen to that unit (#350), and this phase is exactly that -- but it has no
 # ResolvedPlan to be read out of and must not fake one. Instance ids, since the reader asks per unit
-# per frame. apply_burning_tile_damage owns both ends; nothing here consumes it.
+# per frame. apply_end_of_turn_tiles owns both ends; nothing here consumes it.
 var effect_pass_subjects: Dictionary[int, bool] = {}
 
 # ==============================================================================
@@ -926,12 +926,13 @@ func _apply_cell_effects(cell_effects: Array[ResolvedCellEffect]) -> void:
 	game.overlay_manager.redraw_terrain_live(game.terrain_states)
 
 # ==============================================================================
-#  End-of-phase damage
+#  End-of-turn tiles
 # ==============================================================================
 
-# End-of-phase burn: a unit standing in fire when ITS faction's turn ends takes damage. Routed
-# through take_damage so downs/kills/Crisis apply, then the same ejection sweep the attack pass
-# uses. No is_active() filter (#191): burn is a damage source like any other, so the ladder names
+# End-of-turn tiles: a unit standing in fire when ITS faction's turn ends takes damage, and since
+# #508 one standing in steam is soaked first (TileHitAction.gas_hits). The burn is routed through
+# take_damage so downs/kills/Crisis apply, then the same ejection sweep the attack pass uses. No
+# is_active() filter (#191): burn is a damage source like any other, so the ladder names
 # its rung exactly as it names a blow's, and take_damage no-ops safely on an already-DEAD unit --
 # nothing upstream needs to ask the question again. #191's own wording said the ladder rules
 # DOWNED-plus-any-damage KILLED, which #1002 repealed: a body burns for real damage now and dies
@@ -946,17 +947,18 @@ func _apply_cell_effects(cell_effects: Array[ResolvedCellEffect]) -> void:
 # and deliberately NOT a BeatSheet: that reads a Squad and a ResolvedPlan, and this phase has
 # neither, so using it would mean faking a plan. It reuses #520's camera seam at a shorter
 # duration rather than growing one of its own.
-func apply_burning_tile_damage(faction: Team.Faction) -> void:
+func apply_end_of_turn_tiles(faction: Team.Faction) -> void:
 	var units: Array[Unit] = game._all_units()
 	var states_store: TerrainStateManager = game.terrain_states
-	var hits := TurnBoundary.tile_hits(units, states_store, faction)
+	var gas: GasField = game.gas_field
+	var hits := TurnBoundary.tile_hits(units, states_store, gas, faction)
 	# Claim NOTHING for a phase with nothing to show: the release is what hands the player their
 	# view back (#520 follow-up), so claiming here would fire a camera return at the end of every
 	# turn, burning or not.
 	if hits.is_empty():
 		_process_downed_pending()
 		return
-	game.mission_log.record_turn_effects(faction, hits)   # the one damage channel no pass holds (#53)
+	game.mission_log.record_turn_effects(faction, hits)   # the one channel no pass holds (#53)
 
 	var camera_was_locked: bool = game.camera_controller.playback_locked
 	game.camera_controller.set_playback_locked(true)

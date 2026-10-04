@@ -18,7 +18,7 @@ class_name SplitForecast
 #   - at pass end, OrderExecutor._process_downed_pending ejects each downed unit in the order it went
 #     down -- skipping one finished off later in the pass -- and a downed leader hands over;
 #   - then SquadManager.enforce_contact ejects every member out of its leader's range;
-#   - then, at END OF TURN, the burn (OrderExecutor.apply_burning_tile_damage): a death at once, the
+#   - then, at END OF TURN, the burn (OrderExecutor.apply_end_of_turn_tiles): a death at once, the
 #     downed once every burn has landed. Its Split rides the END OF TURN row.
 # The RULES inside each step are not copied: the successor and the capacity overflow are
 # SquadManager's own statics, and range is SquadCohesion's. tests/squad/test_split_forecast.gd runs

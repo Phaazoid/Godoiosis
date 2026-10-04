@@ -122,6 +122,34 @@ func test_apply_plays_a_cell_effects_gas_into_the_store() -> void:
 	assert_int(field.level_at(A, Gas.Kind.STEAM)).is_equal(THICK)
 
 
+# The forecast's read (#508 PR 3): what apply WOULD leave, written nowhere -- the same add-and-cap,
+# this cell's deposits only, and the live store untouched.
+func test_the_projected_cell_folds_this_passes_deposits_and_writes_nothing() -> void:
+	var field := GasField.new()
+	field.set_level(A, Gas.Kind.STEAM, MEDIUM)
+	var here := ResolvedCellEffect.new()
+	here.cell = A
+	here.add_gas(Gas.Kind.STEAM, MEDIUM)
+	var elsewhere := ResolvedCellEffect.new()
+	elsewhere.cell = B
+	elsewhere.add_gas(Gas.Kind.STEAM, THICK)
+	var effects: Array[ResolvedCellEffect] = [here, elsewhere]
+	var version := field.dirty.version
+
+	var projected := field.projected_packed_at(A, effects)
+
+	assert_int(Gas.level_in(projected, Gas.Kind.STEAM)).is_equal(Gas.MAX_LEVEL)   # capped, as apply caps
+	assert_int(Gas.level_in(field.projected_packed_at(B, effects), Gas.Kind.STEAM)).is_equal(THICK)
+	assert_int(field.level_at(A, Gas.Kind.STEAM)).override_failure_message(
+			"the projection wrote into the live store").is_equal(MEDIUM)
+	assert_int(field.dirty.version).is_equal(version)
+	var applied := GasField.new()
+	applied.set_level(A, Gas.Kind.STEAM, MEDIUM)
+	applied.apply(here)
+	assert_int(Gas.level_in(projected, Gas.Kind.STEAM)).override_failure_message(
+			"the projection and apply disagree about the same deposit").is_equal(applied.level_at(A, Gas.Kind.STEAM))
+
+
 func test_a_tick_that_moves_nothing_marks_nothing() -> void:
 	# SMOKE has no rules file, so the round leaves it exactly where it lies (#508 ruling 10).
 	var field := GasField.new()

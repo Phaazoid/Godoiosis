@@ -114,9 +114,10 @@ static func _volley_of(member: AttackAction) -> Array[AttackAction]:
 # faction alone, so an enemy shoved into fire correctly grows no row here — that happens at the end
 # of THEIR turn. The cell comes from get_projected_destination (the halt, the shove and the rescue
 # haul all land in it), the states from the store WITH this pass's own deposits folded in — your own
-# fireball igniting a squadmate's cell is a burn the queue has to show.
+# fireball igniting a squadmate's cell is a burn the queue has to show. The gas the same way (#508):
+# dousing a squadmate's fire steams them, and the soak reads the states the pass leaves them holding.
 static func resolve_tile_hits(plan: ResolvedPlan, squad: Squad, actions: Array[BaseAction], hypo: Dictionary, board: BoardContext) -> void:
-	if board == null or board.terrain_states == null or squad == null:
+	if board == null or squad == null:
 		return
 	var revived := _rescued_this_pass(actions, hypo)
 	for unit in squad.get_members():
@@ -131,8 +132,13 @@ static func resolve_tile_hits(plan: ResolvedPlan, squad: Squad, actions: Array[B
 			situation.lifecycle = Unit.LifecycleState.ACTIVE
 		if situation.lifecycle == Unit.LifecycleState.DEAD:
 			continue
-		var states := board.terrain_states.projected_states_at(
-				unit.get_projected_destination(), plan.cell_effects)
+		var destination := unit.get_projected_destination()
+		if board.gas != null:
+			plan.tile_hits.append_array(TileHitAction.gas_hits(unit, projected_states(unit, hypo),
+					board.gas.projected_packed_at(destination, plan.cell_effects)))
+		if board.terrain_states == null:
+			continue
+		var states := board.terrain_states.projected_states_at(destination, plan.cell_effects)
 		var damage := RulesService.occupant_damage_for(unit, states)
 		if damage <= 0:
 			continue

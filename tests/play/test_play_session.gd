@@ -130,6 +130,23 @@ func test_the_headless_round_spreads_the_gas_too() -> void:
 	for cell: Vector2i in expected:
 		assert_int(field.packed_at(cell)).is_equal(expected[cell])
 
+# ...and its turn end soaks as the game's does (#508 PR 3): OrderExecutor.apply_end_of_turn_tiles'
+# twin, through the same TurnBoundary list. The state and its level are read off the rules file.
+func test_the_headless_turn_end_soaks_a_unit_standing_in_steam() -> void:
+	var rules := GasRules.for_kind(Gas.Kind.STEAM)
+	assert_int(rules.state).override_failure_message(
+			"fixture: steam's rules name no state").is_not_equal(Elemental.State.NONE)
+	var unit: Unit = _session.unit_by_handle("A")
+	var field: GasField = _board.gas_field
+	field.set_level(unit.movement.cell, Gas.Kind.STEAM, rules.state_from)
+	var res: Dictionary = _session.end_turn()
+	assert_bool(unit.element_states.has(rules.state)).override_failure_message(
+			"the headless turn end never soaked the unit standing in steam").is_true()
+	var events: Array = res.get("ai_events", [])
+	assert_bool(events.any(func(line: Variant) -> bool:
+			return str(line).contains(Elemental.state_display_name(rules.state)))) \
+		.override_failure_message("the headless turn end soaked without saying so").is_true()
+
 # The headless scenario loader: an in-memory ScenarioData round-trips onto a fresh board
 # (file-independent, so it survives scenario renames).
 func test_apply_scenario_restores_units_terrain_and_turn() -> void:
