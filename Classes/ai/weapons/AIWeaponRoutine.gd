@@ -89,5 +89,5 @@ func allows_preparation(_unit: Unit, _verb: BaseAction.ActionType, _board: Board
 # Is this candidate a LAST RESORT for its own member? Asked by AITactics._best_candidate_for after
 # the hypothetical is resolved and scored. A deferred candidate loses to every candidate the same
 # member did not defer and is still taken when it has nothing else -- deferred, never deleted.
-func defers_candidate(_unit: Unit, _candidate: AttackAction, _plan: ResolvedPlan, _score: Vector3i) -> bool:
+func defers_candidate(_unit: Unit, _candidate: AttackAction, _plan: ResolvedPlan, _score: Vector4i) -> bool:
 	return false

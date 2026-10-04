@@ -707,8 +707,8 @@ func resolve_plan(squad: Squad, board: BoardContext,
 		reactions: Array[ElementalReaction] = ReactionCatalog.get_all(),
 		terrain_reactions: Array[TerrainReaction] = TerrainReactionCatalog.get_all()) -> ResolvedPlan:
 	var plan := _resolve_actions(squad, squad.action_queue, board, reactions, terrain_reactions)
-	# Who the pass will knock out of a squad, and which blow does it (#367). Here and not in
-	# _resolve_actions: a hypothetical is AI scoring, which reads no Split.
+	# Who the pass will knock out of a squad, and which blow does it (#367). A hypothetical stamps it
+	# too, since the AI scores a split (#761).
 	SplitForecast.stamp(plan, board)
 	_last_resolved_plan = plan
 	_last_resolved_squad = squad
@@ -726,10 +726,15 @@ func resolve_plan(squad: Squad, board: BoardContext,
 # squad.get_actions()), so a hypothetical MOVE moves nobody in the projection every stage here
 # reads. Main actions are unaffected -- they do not move anyone. Scoring a movement candidate has to
 # queue the move for real or extend projected_cell's axes; it cannot ride this.
+#
+# The split forecast is stamped here as in resolve_plan (#761: the AI scores a squad break), so a
+# hypothetical differs from the real resolve in one thing only -- it never writes the cache.
 func resolve_hypothetical(squad: Squad, candidates: Array[BaseAction], board: BoardContext,
 		reactions: Array[ElementalReaction] = ReactionCatalog.get_all(),
 		terrain_reactions: Array[TerrainReaction] = TerrainReactionCatalog.get_all()) -> ResolvedPlan:
-	return _resolve_actions(squad, _hypothetical_actions(squad, candidates), board, reactions, terrain_reactions)
+	var plan := _resolve_actions(squad, _hypothetical_actions(squad, candidates), board, reactions, terrain_reactions)
+	SplitForecast.stamp(plan, board)
+	return plan
 
 
 # What an aim not yet queued would DROP (#1058 D2b): every payload row the resolve derives from
