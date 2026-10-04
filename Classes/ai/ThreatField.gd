@@ -11,6 +11,9 @@ class_name ThreatField
 # watcher could arm, since a watch armed over somebody fires on the spot (#1003) and a watch attack
 # is never in the fire view (#590); and where a SHOCK hit's current runs, through water and through
 # anyone wet -- counting whoever the viewer's own PENDING plan will soak (dev, 2026-10-03).
+# Declared, not drawn: a placed blast's splash and a payload's landing (#1207, on no shipped enemy);
+# a wet unit HOVERING a dry cell (per cell, not per unit -- queue the move and it is drawn); and a
+# soaking the enemy's own turn deals before its shock.
 #
 # WHICH BOARD it is built on is the CALLER's decision and both callers pick the same one: the
 # projected board, every unit stood on its get_projected_destination(). game.threat_field() opens
