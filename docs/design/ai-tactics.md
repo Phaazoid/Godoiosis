@@ -1,6 +1,6 @@
 # AI Tactics — the archetype layer's integration contract
 
-**Canon checked through #1020 (2026-09-18); #761 (the score gains a squad-break term) folded in 2026-10-03; #1174 (Rally and Intimidate retired; the AI stays blind to limb loss) folded in 2026-10-01; #1135 (the reactive heal repealed) folded in 2026-09-28.**
+**Canon checked through #1020 (2026-09-18); #1196 (a unit leaving its squad keeps its archetype) folded in 2026-10-03; #761 (the score gains a squad-break term) folded in 2026-10-03; #1174 (Rally and Intimidate retired; the AI stays blind to limb loss) folded in 2026-10-01; #1135 (the reactive heal repealed) folded in 2026-09-28.**
 
 **Status: BUILT 2026-07-22, #78 CLOSED 2026-07-23 (commit `239555b`)** — ratified and hand-typed the same day; full suite 444/444 green. Feel iteration continues through ordinary playtesting (the v1 approximations below are the watch-list). The #29-era archetype layer (Rushdown/Hold/Sentry, painted zones, Crisis stances — see CLAUDE.md's architecture map) is the substrate; this doc covers the #78 rebuild of *how the AI decides*, and the standing contract that keeps it from rotting again. *(2026-08-09: the Crisis-stance piece of that substrate is GONE — [#158](https://github.com/Phaazoid/Godoiosis/issues/158) made Crisis a deterministic equipped ability, deleting `CRISIS_STANCES`/`accepts_crisis` with the accept/decline question they answered; enemy Crisis access is authored content now.)*
 
@@ -39,6 +39,8 @@ Two things follow, and both already happened:
 Every main action type must land in exactly one of the two, for every archetype — pinned by `tests/law/test_ai_action_coverage.gd`. **A new verb cannot silently skip the AI**: the suite stays red until a stance is declared, even if that stance is NEVER. This is the action registry's AI column, mirroring how `test_action_registry.gd` pins the pipeline.
 
 Candidate builders live in `AITactics` (one per type, each mirroring `MainActionMenu`'s gate for that verb); an undeclared builder is a loud `push_error`, never a silent skip. **The table says WHAT an archetype will ever do; WHEN a weapon verb is worth doing is the family's own call** — `queue_main_action` asks the equipped weapon's `AIWeaponRoutine` before a weapon verb's builder runs (see *Weapon routines*).
+
+**An archetype outlives the squad for anyone who leaves it** ([#1196](https://github.com/Phaazoid/Godoiosis/issues/1196), dev 2026-10-03). A unit ejected from its squad (downed, out of contact, dropped by a new leader) or disbanded keeps the old squad's archetype and zone in its solo squad. Before this it read `FACTION_DEFAULT`, i.e. Rushdown, so a Hold squad that rescued its own member got back a unit that charged the player. The post is not copied: `SentryArchetype` gives a solo Sentry a fresh one at its first turn.
 
 ### Ratified tables (dev calls, 2026-07-22; REV column added 2026-08-06; REV/BURROW on Hold+Sentry 2026-09-03)
 
