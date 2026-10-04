@@ -259,6 +259,7 @@ func _build_collaborators() -> void:
 
 	mission_controller = MissionController.new()
 	mission_controller.game = self
+	mission_controller.mission.zones = zone_manager   # the one zone store, built above (#46)
 	add_child(mission_controller)
 	# The pre-mission briefing's one wire (#882): the phase holds its loadout screen back until the
 	# director has stopped talking. Connected here rather than in either node's _ready, because the

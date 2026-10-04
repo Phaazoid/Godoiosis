@@ -224,7 +224,7 @@ func test_capturing_twice_does_not_double_register() -> void:
 	_paint("Point", ZoneManager.Kind.CAPTURE, [Vector2i(2, 2)])
 	mc.capture("Point")
 	mc.capture("Point")
-	assert_int(mc._captured_zones.size()).is_equal(1)
+	assert_int(mc.mission.captured_zones.size()).is_equal(1)
 
 
 func test_a_non_capture_zone_cannot_be_captured() -> void:
@@ -238,7 +238,7 @@ func test_a_non_capture_zone_cannot_be_captured() -> void:
 func test_capturing_an_unknown_or_empty_zone_is_a_no_op() -> void:
 	mc.capture("")
 	mc.capture("NoSuchZone")
-	assert_array(mc._captured_zones).is_empty()
+	assert_array(mc.mission.captured_zones).is_empty()
 
 
 func test_capturable_zone_at_distinguishes_kind() -> void:
@@ -491,3 +491,30 @@ func test_active_hostile_count_matches_the_rout_predicate() -> void:
 	standing.die()
 	assert_int(MissionRules.active_hostile_count(game._board())).is_equal(0)
 	assert_bool(MissionRules.has_active_hostiles(game._board())).is_false()
+
+
+# ==============================================================================
+#  The authored lists are FORWARDED, not copied (#46)
+# ==============================================================================
+
+func test_the_scenario_tabs_in_place_writes_land_in_the_mission_state() -> void:
+	# The Scenario tab appends to and erases from these lists in place, through the controller.
+	# They are MissionState's own arrays handed back, so a copy anywhere on the way would let every
+	# tick on that page land on an array nobody reads. Drives the real checkboxes.
+	var tool: ScenarioTool = game.dev_overlay.scenario_tool
+	var capture_box: CheckBox = tool._objective_boxes[MissionRules.Objective.CAPTURE]
+	var clock_box: CheckBox = tool._lose_boxes[MissionRules.LoseCondition.ROUND_LIMIT]
+
+	capture_box.button_pressed = true
+	clock_box.button_pressed = true
+	tool._round_limit_spin.value = 4
+
+	assert_bool(mc.mission.objectives.has(MissionRules.Objective.CAPTURE)) \
+		.override_failure_message("ticking an objective did not reach the mission state").is_true()
+	assert_bool(mc.mission.lose_conditions.has(MissionRules.LoseCondition.ROUND_LIMIT)) \
+		.override_failure_message("ticking a lose condition did not reach the mission state").is_true()
+	assert_int(mc.mission.round_limit).is_equal(4)
+
+	capture_box.button_pressed = false
+	assert_bool(mc.mission.objectives.has(MissionRules.Objective.CAPTURE)) \
+		.override_failure_message("un-ticking an objective did not reach the mission state").is_false()

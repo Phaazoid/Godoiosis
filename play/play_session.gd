@@ -23,7 +23,7 @@ var _handle_by_unit := {}      # Unit -> String (stable display handle)
 var _next_player := 0
 var _next_enemy := 0
 var _downed_pending: Array[Unit] = []   # units downed mid-execute; ejected AFTER the pass (mirrors OrderExecutor._downed_pending)
-var _mission_contested := false         # "both sides were up at once" latch (mirrors MissionController._contested)
+var _mission_contested := false         # "both sides were up at once" latch (mirrors MissionState.contested)
 # The pre-mission phase (#46): the shared PreMissionPhase with this session as its host, whether the
 # phase is still open, and what the last Begin captured. A session lives as long as its board, so the
 # bridge takes `staged` from here and keeps it across boards (MissionController._staged's twin).
