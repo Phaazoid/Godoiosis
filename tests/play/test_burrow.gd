@@ -118,4 +118,8 @@ func test_a_unit_without_a_drill_cannot_burrow() -> void:
 	var s := _dig_board(Vector2i(1, 1), false)
 	var res: Dictionary = s.sess.burrow(s.sess.handle_for(s.digger))
 	assert_bool(res.ok).is_false()
-	assert_str(res.error).contains("drill")
+	# The order's own reason, answered by the chokepoint (#662), not a sentence spelled here.
+	var probe := BurrowAction.new()
+	probe.init(s.digger)
+	assert_str(probe.actor_block_reason()).is_not_empty()
+	assert_str(res.error).contains(probe.actor_block_reason())
