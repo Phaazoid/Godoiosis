@@ -67,12 +67,12 @@ view**, not raw JSON — see *State representation*. Command vocabulary:
 | `deploy(unit, cell)` / `undeploy(unit)` / `reposition(unit, cell)` / `begin()` | the PRE-MISSION phase (#46) -- see *Pre-mission* below |
 | `give(from, slot, to)` / `job(unit, job)` / `fit(unit, slot, mod, space)` / `unfit(unit, slot, mod)` / `kit(unit)` | the pre-mission loadout: gear, jobs and mods, and the view that reads them back (#46) -- see *Pre-mission* below |
 | `equip / wear / use / toss (unit, slot)` / `unequip / remove_armor (unit)` | the inspect dock's verbs, in either phase (#46) -- see *The inspect dock* below |
-| `rescue / reload / rev / burrow / guard` | the side-channel main actions, one verb each — the argument-taking ones (`rescue(a, b)`, `guard(a, ward)`) stay separate from the argument-free ones for the reason `game.queue_simple_action` does. Each gates on the same `RulesService` query the menu's row is built from. *(Still missing: `capture` — see Known gaps.)* |
+| `rescue / reload / rev / burrow / guard` | the side-channel main actions, one verb each — the argument-taking ones (`rescue(a, b)`, `guard(a, ward)`) stay separate from the argument-free ones for the reason `game.queue_simple_action` does. Each gates on the same `RulesService` query the menu's row is built from. *(Still missing: `capture` — see *Limits*.)* |
 | `cancel(unit_id)` / `wait(unit_id)` | updated plan |
 | `preview()` | `resolve_plan(active_squad)` outcomes **without applying** (damage, state deltas, deaths, counters) |
 | `execute()` | apply the resolved plan headlessly; return the event log — plus a `mission` key the pass that ends the mission (#96) |
 | `end_turn()` | new turn/faction, through the whole turn boundary the game runs (the burn, the round's tile tick, the turn-start ticks — see *The turn boundary* below); refuses once the mission is over |
-| `mission_outcome()` / `mission_tag()` | won / lost / ongoing — the same `MissionRules` call the game makes (#96) |
+| `mission_outcome()` / `mission_tag()` | won / lost / ongoing — the session's own `MissionState`, the object the game's `MissionController` holds (#46): every objective, the clock and every lose condition, with the ending latched on the first answer that is not ongoing |
 
 `preview()` is the playtesting superpower: deterministic look-ahead at exact damage/deaths before I
 commit.
@@ -356,13 +356,22 @@ win/loss (real since #96 — `mission_tag()` reports it). Claude can play **both
 (hotseat-as-Claude) — itself a way to pressure-test scenarios — through the exact API the
 archetype AI uses.
 
-**Headless sees rout and defeat only (#96 gap).** `mission_outcome()` calls the same
-`MissionRules.evaluate` the game does, but there is no `MissionController` out here, so it always
-passes `Progress.NONE` — every board evaluates as a plain rout map, and an authored CAPTURE or
-EXTRACT objective is invisible. There is also no `capture` command to queue a `CaptureAction`
-(the action itself would execute fine: `SIDE_CHANNEL_ORDER` gives it a phase for free). Closing
-this means teaching the headless board about zones and captured-zone state — worth doing when the
-Play API becomes the verification lane for missions.
+**Headless scores a mission the way the game does (#46).** `PlaySession` owns a `MissionState`,
+the object the game's `MissionController` holds, filled from the scenario by the same
+`MissionState.apply_scenario` the game's loader calls. So a CAPTURE or EXTRACT map is not won by a
+rout, the clock counts the session's own completed rounds, a protected unit's death latches through
+the session's death handler, and a hostile on a defended point loses it. The ending LATCHES on the
+first answer that is not ongoing, as it does in the game, which is why the session asks only where
+the board has settled: the end of `execute()`, the end-of-turn burn and the hand-off. The overview's
+mission block shows the HUD's own briefing rows (`MissionStatusPanel.briefing`), so a driver reads
+progress in the words the player does. Both loaders also apply each unit's placement through one door,
+`ScenarioUnitEntry.apply_placement`, so a saved Sentry or Hold squad plays its own archetype here and
+the board contexts carry the zone store a Sentry's patrol is read from. `tests/flow/test_mission_two_hosts.gd`
+loads one mission in both hosts and requires them to agree.
+
+**Still missing: the `capture` command.** Nothing can queue a `CaptureAction` headlessly yet (the
+action itself would execute fine: `SIDE_CHANNEL_ORDER` gives it a phase for free), so a capture
+map is scored correctly and cannot be won out here. That is #46's next slice.
 
 ## Open questions
 

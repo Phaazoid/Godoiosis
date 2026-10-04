@@ -170,7 +170,7 @@ func capture_board() -> BoardSnapshot:
 # could not move the load path:
 #   - CameraController.refresh_bounds. A load gets it from board_loaded (game.gd, #974); the dev
 #     brush does it at its own three sites, and undo joins them there.
-#   - the CAPTURED-zone redraw. MissionController.restore_progress runs one immediately after a
+#   - the CAPTURED-zone redraw. MissionController.apply_scenario runs one immediately after a
 #     load and is the last writer either way; the plain redraw here is what an undo needs, since
 #     nothing else follows it.
 func restore_board(snapshot: BoardSnapshot) -> void:
@@ -277,10 +277,7 @@ func apply_scenario(scenario: ScenarioData, path := "") -> void:
 	last_loaded_path = path
 
 	restore_board(BoardSnapshot.from_scenario(scenario))
-	game.mission_controller.set_objectives(scenario.objectives)
-	game.mission_controller.set_lose_conditions(scenario.lose_conditions, scenario.round_limit)   # #101
-	game.mission_controller.restore_progress(scenario.captured_zones, scenario.contested,
-			scenario.rounds_elapsed)
+	game.mission_controller.apply_scenario(scenario)   # objectives, lose conditions, the clock (#46)
 	# Before any turn starts: MissionController._begin_turn runs after load_scenario returns, and
 	# start_faction_turn is what reads these. The set is REPLACED, not merged (#150).
 	game.ai_controller.set_ai_factions(scenario.ai_factions)
@@ -314,8 +311,7 @@ func apply_scenario(scenario: ScenarioData, path := "") -> void:
 			push_warning("Could not spawn unit at %s (blocked or off-map)" % entry.cell)
 			continue
 
-		unit.must_survive = entry.must_survive   # #572, and BEFORE the fork: apply_unit_state never
-												 # runs for a reference entry, and a VIP is cast
+		entry.apply_placement(unit)   # the VIP flag and a leader's squad fields, BEFORE the fork (#46)
 		if entry.state_saved:
 			entry.apply_unit_state(unit)
 
@@ -326,10 +322,6 @@ func apply_scenario(scenario: ScenarioData, path := "") -> void:
 
 		if entry.is_leader:
 			leaders_by_squad_id[entry.squad_id] = unit
-			unit.squad.squad_name = entry.squad_name
-			unit.squad.archetype = entry.squad_archetype
-			unit.squad.zone_name = entry.squad_zone
-			unit.squad.home_cell = entry.cell
 			if entry.squad_has_acted:
 				acted_squad_ids.append(entry.squad_id)   # applied AFTER the rebuild below
 		else:

@@ -6,6 +6,7 @@ extends RefCounted
 # resolved plan's EFFECTS (move = teleport, attack = apply_damage + element states;
 # side-channel actions run their REAL execute() — it's pure synchronous logic) —
 # i.e. game.gd.execute_orders minus the animation awaits, so preview == execution (Law #2).
+# A mission is scored through the same MissionState the game's MissionController holds (#46).
 
 var grid: TileMapLayer
 var units_root: Node2D
@@ -23,7 +24,9 @@ var _handle_by_unit := {}      # Unit -> String (stable display handle)
 var _next_player := 0
 var _next_enemy := 0
 var _downed_pending: Array[Unit] = []   # units downed mid-execute; ejected AFTER the pass (mirrors OrderExecutor._downed_pending)
-var _mission_contested := false         # "both sides were up at once" latch (mirrors MissionState.contested)
+# This mission's state and rules (#46) -- the SAME object the game's MissionController holds, so a
+# headless run scores objectives, the clock and every latch exactly as the game does.
+var mission: MissionState
 # The pre-mission phase (#46): the shared PreMissionPhase with this session as its host, whether the
 # phase is still open, and what the last Begin captured. A session lives as long as its board, so the
 # bridge takes `staged` from here and keeps it across boards (MissionController._staged's twin).
@@ -46,8 +49,9 @@ func _init(board: Dictionary) -> void:
 	scenario_data = board.get("scenario")
 	reserve_root = board.get("reserve_root")
 	zone_manager = board.get("zone_manager")
-	if scenario_data != null and scenario_data.contested:
-		_mission_contested = true
+	mission = MissionState.new(zone_manager)
+	if scenario_data != null:
+		mission.apply_scenario(scenario_data)
 	for unit in live_units():
 		_register(unit)
 	# The turn boundary's signal-driven halves (#898), heard in the order game.gd hears them.
@@ -71,6 +75,7 @@ func _register(unit: Unit) -> void:
 		unit.went_downed.connect(_on_unit_downed)
 
 func _on_unit_died(unit: Unit) -> void:
+	mission.note_unit_died(unit)   # FIRST, as game._on_unit_died: the mission may be protecting this one
 	squad_manager.handle_unit_death(unit)
 
 func _on_unit_downed(unit: Unit) -> void:
@@ -119,7 +124,7 @@ func reserve_units() -> Array[Unit]:
 	return result
 
 func _board() -> BoardContext:
-	return BoardContext.new(grid, live_units(), squad_manager, terrain_states, null, board_heights, gas_field)
+	return BoardContext.new(grid, live_units(), squad_manager, terrain_states, zone_manager, board_heights, gas_field)
 
 func active_faction() -> Team.Faction:
 	return turn_manager.active_faction()
@@ -1158,34 +1163,26 @@ func _spend_firing_costs(atk: AttackAction, actor: Unit) -> void:
 			tank.spend_charge()
 
 # ---- mission metadata & outcome (#96, #612) ----
+# Read off the mission and the zone store the scorer reads (#46), never the scenario a second time.
 
 func objectives() -> Array[MissionRules.Objective]:
-	var result: Array[MissionRules.Objective] = []
-	if scenario_data != null:
-		result.assign(scenario_data.objectives)
-	return result
+	return mission.objectives.duplicate()
 
 func zones() -> Dictionary:
-	return scenario_data.zones if scenario_data != null else {}
+	return zone_manager.to_dict() if zone_manager != null else {}
 
 func round_limit() -> int:
-	return scenario_data.round_limit if scenario_data != null else 0
+	return mission.round_limit
 
 func lose_conditions() -> Array[MissionRules.LoseCondition]:
-	var result: Array[MissionRules.LoseCondition] = []
-	if scenario_data != null:
-		result.assign(scenario_data.lose_conditions)
-	return result
+	return mission.lose_conditions.duplicate()
 
-# The headless twin of MissionController: the SAME MissionRules call the game makes, with the
-# same caller-held `contested` latch (see MissionRules.evaluate -- a live read could never end a
-# mission). The game's version also raises a banner and locks the board; headless has no use for
-# either, so this reports and nothing more.
+# MissionController.check()'s rule half: the SAME MissionState the game holds, which latches the
+# ending. Asked only where the board has settled -- the end of a pass, the end-of-turn burn, the
+# hand-off -- as the game asks it. The game also raises a banner and locks the board; headless has no
+# use for either, so this reports and nothing more.
 func mission_outcome() -> MissionRules.Outcome:
-	var board := _board()
-	if not _mission_contested:
-		_mission_contested = MissionRules.is_contested(board)
-	return MissionRules.evaluate(board, _mission_contested)
+	return mission.evaluate(_board())
 
 # "VICTORY" / "DEFEAT", or "" while the mission is ongoing -- so callers can test one string
 # instead of importing the enum.
@@ -1231,8 +1228,7 @@ func end_turn() -> Dictionary:
 	# Mirror the game's auto-skip: pass over factions with no commandable units (e.g. only
 	# downed), guarding against an all-downed board where this would loop with nothing to stop on.
 	# The board is re-read per pass, and the mission check mirrors game._on_turn_started's before it
-	# skips. No turn-start tick can change a headless outcome yet: a downed unit already counts as
-	# lost, and authored lose conditions are not headless (#46).
+	# skips -- the round that just completed may have run the mission clock out (#46).
 	while mission_tag() == "":
 		var board := _board()
 		if board.faction_has_active_units(turn_manager.active_faction()) or not board.has_active_units():
@@ -1307,6 +1303,7 @@ func _on_round_completed() -> void:
 		terrain_states.tick_states()
 	if gas_field != null:
 		gas_field.tick(_board())   # game._on_round_completed's twin (#508)
+	mission.advance_round()   # the clock's ONE tick, LAST as the game orders it; the turn-start check sees it
 
 
 func _on_turn_started(faction: Team.Faction) -> void:

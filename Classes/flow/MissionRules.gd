@@ -3,7 +3,7 @@ class_name MissionRules
 
 # The win/lose predicate for a mission (#96 slice 1, docs/design/missions.md). Pure and static,
 # in LethalityRules' shape: it reads a BoardContext and returns an answer, holding no state, so
-# the in-game MissionController, the headless Play API and the tests all ask ONE question and
+# both hosts (through the MissionState each holds, #46) and the tests all ask ONE question and
 # cannot drift into three.
 #
 # Slice 1 has exactly one objective and it is authored nowhere: wipe every hostile faction,
@@ -125,7 +125,7 @@ static func breaching_unit(board: BoardContext, zone_names: Array[String],
 # Who this mission is protecting, still standing (#572). NOT the answer to "has one died" -- a dead
 # unit is FREED (Unit.die queue_frees), so it is not absent from this list, it is absent from the
 # BOARD, and the two are indistinguishable from a unit that was never placed. That question is a
-# latch on MissionController; this one is the HUD's readout and the setup guard's.
+# latch on MissionState; this one is the HUD's readout and the setup guard's.
 static func protected_units(board: BoardContext) -> Array[Unit]:
 	var protected: Array[Unit] = []
 	for unit in board.units:
@@ -149,7 +149,7 @@ static func active_hostile_count(board: BoardContext) -> int:
 	return count
 
 # Both sides commandable right now -- i.e. this board is a mission in progress and not a dev
-# scratchpad. MissionController latches this; see the `contested` note on evaluate().
+# scratchpad. MissionState latches this; see the `contested` note on evaluate().
 static func is_contested(board: BoardContext) -> bool:
 	return board.faction_has_active_units(Team.Faction.PLAYER) and has_active_hostiles(board)
 
@@ -157,7 +157,7 @@ static func is_contested(board: BoardContext) -> bool:
 # routing the enemy on a capture map does not win it. Locking yourself out is a level-design
 # problem, solved by building the map so it can't happen -- not by adding a consolation win.
 #
-# `failure` is handed in the way `progress` is: MissionController computes it, this stays pure.
+# `failure` is handed in the way `progress` is: MissionState computes it, this stays pure.
 # ORDER (#101): the squad wipe is asked FIRST, so mutual destruction stays a DEFEAT and reports
 # SQUAD_LOST rather than whatever else fired that instant. Every VICTORY path is asked BEFORE an
 # authored failure -- finishing on the last allowed round is finishing in time, and a clock must

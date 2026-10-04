@@ -517,7 +517,7 @@ func test_the_contract_renders_the_same_briefing_the_hud_does() -> void:
 		"the contract drew nothing for a board with a declared objective").is_not_empty()
 
 	var expected: Array[String] = []
-	for row: Label in MissionStatusPanel.briefing_rows(mc, game._board()):
+	for row: Label in MissionStatusPanel.briefing_rows(mc.mission, game._board()):
 		expected.append(row.text)
 		row.free()
 	assert_array(drawn).override_failure_message(

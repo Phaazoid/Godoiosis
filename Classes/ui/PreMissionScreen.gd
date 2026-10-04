@@ -583,7 +583,7 @@ func _refresh_contract() -> void:
 	for child in _objectives_box.get_children():
 		_objectives_box.remove_child(child)
 		child.free()
-	for row: Label in MissionStatusPanel.briefing_rows(_controller, _controller.game._board()):
+	for row: Label in MissionStatusPanel.briefing_rows(_controller.mission, _controller.game._board()):
 		_objectives_box.add_child(row)
 
 

@@ -81,6 +81,15 @@ func restore(zone_names: Array[String], was_contested: bool, rounds := 0) -> voi
 	contested = was_contested
 	rounds_elapsed = rounds
 
+# The mission half of a scenario load: what it requires, what loses it, and how far through it a
+# saved battle was. The ONE reading of those fields, for both hosts' loaders -- a second hand-copy
+# is how a load path drops a store (#103).
+func apply_scenario(scenario: ScenarioData) -> void:
+	objectives.assign(scenario.objectives)
+	lose_conditions.assign(scenario.lose_conditions)
+	round_limit = scenario.round_limit
+	restore(scenario.captured_zones, scenario.contested, scenario.rounds_elapsed)
+
 # ==============================================================================
 #  The capture objective (#96 slice 3)
 # ==============================================================================
