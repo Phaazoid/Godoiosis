@@ -143,15 +143,18 @@ func faction_all_squads_acted(faction: Team.Faction) -> bool:
 			return false
 	return any_active
 
-func create_squad(leader: Unit) -> Squad:
+func create_squad(leader: Unit, archetype := AIArchetype.Type.FACTION_DEFAULT, zone_name := "") -> Squad:
 	var squad := Squad.new()
 	add_child(squad)
 
 	squad.set_leader(leader)
+	# Settled before the emit, as join_squad does for the hue (#1196).
+	squad.archetype = archetype
+	squad.zone_name = zone_name
 
 	squads.append(squad)
 	_register_squad_signals(squad)
-	
+
 	squad_created.emit(squad)
 	return squad
 	
@@ -196,9 +199,18 @@ func leave_squad(unit: Unit):
 
 # Detach and re-solo, for a unit that stays standing: loss of contact, a leader swap's range or
 # capacity overflow (FORCED), a downing (DOWNED).
+#
+# The solo squad keeps the old squad's archetype and zone (#1196): a rescued Hold unit still holds.
+# Not its name (the formation is gone) and not its post (the old leader's cell; Sentry sets a fresh
+# one). Read before the detach, which can free an emptied squad.
 func eject(unit: Unit, cause: LeaveCause):
+	var archetype := AIArchetype.Type.FACTION_DEFAULT
+	var zone_name := ""
+	if unit.squad != null:
+		archetype = unit.squad.archetype
+		zone_name = unit.squad.zone_name
 	_detach_from_current_squad(unit, cause)
-	create_squad(unit)
+	create_squad(unit, archetype, zone_name)
 
 # The detach WITHOUT the re-solo (#738) -- for a unit that is leaving the BOARD, not just its squad.
 # leave_squad/eject directly above cannot serve that: they exist for a unit that stays standing, so
@@ -357,7 +369,7 @@ func disband_squad(squad: Squad):
 	
 	for member in squad.get_members().duplicate():
 		_erase_from(squad, member, LeaveCause.VOLUNTARY)
-		create_squad(member)
+		create_squad(member, squad.archetype, squad.zone_name)
 		
 	destroy_empty_squad(squad)
 		
