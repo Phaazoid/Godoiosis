@@ -210,8 +210,9 @@ static func _pre_mission_block(session) -> String:
 		return ""
 	var cap: int = session.deployment_cap()
 	var lines: Array[String] = []
-	lines.append("Pre-mission: deployed %d/%s  -- deploy, undeploy, reposition, give, job, fit, unfit, then begin" % [
+	lines.append("Pre-mission: deployed %d/%s  -- then begin" % [
 		session.deployed_count(), str(cap) if cap > 0 else "any"])
+	lines.append("  verbs: deploy undeploy reposition | give job fit unfit kit | equip unequip wear remove_armor use toss")
 	lines.append("  open cells: %s" % _format_cells(session.deployment_cells()))
 	# A count, not a list: a roster's stash runs to a dozen pieces, and `kit stash` lists them.
 	var stash: Array[Item] = session.stash()

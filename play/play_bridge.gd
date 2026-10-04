@@ -28,6 +28,8 @@ extends SceneTree
 #   fit   {"unit": "C", "slot": 0, "mod": "Line Sniper", "space": 1} | unfit {unit, slot, mod}
 #                                - "unit" may be "stash"; `slot` counts from 0, `space` from 1
 #   kit   {"unit": "C"}          - a unit's slots, job and mods, or "stash"
+#   equip | wear | use | toss {"unit": "C", "slot": 0} | unequip | remove_armor {"unit": "C"}
+#                                - the inspect dock's verbs (#46), in either phase, for a unit on the board
 #   execute | endturn            - resolve+apply the plan / pass the turn
 #   quit                         - shut the bridge down
 
@@ -197,6 +199,14 @@ func _dispatch(cmd: String, args: Dictionary) -> Dictionary:
 			return {"ok": r.ok, "text": _ack(r)}
 		"kit":
 			return {"ok": true, "text": BoardView.render_kit(_session, str(args.get("unit", "")))}
+		# The inspect dock's six verbs (#46 slice 2b), named as a run records them, in either phase.
+		# With a plan open, the reply carries its preview: a gear change re-resolves it.
+		"equip", "unequip", "wear", "remove_armor", "use", "toss":
+			var r = _session.gear(str(args.get("unit", "")), cmd, int(args.get("slot", -1)))
+			var text: String = _ack(r)
+			if r.ok and _session.squad_manager.active_squad != null:
+				text += "\n\n" + BoardView.render_preview(_session)
+			return {"ok": r.ok, "text": text}
 		# The six verbs PlaySession has always implemented and _dispatch never exposed -- which is
 		# why a driver asking for `burrow` got `unknown cmd` for a verb the docs list (#613).
 		"guard":

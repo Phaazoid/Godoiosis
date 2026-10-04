@@ -408,6 +408,32 @@ func test_the_loadout_writes_close_with_the_phase() -> void:
 	assert_bool(_loadout().stash.has(piece)).is_true()
 
 
+# The inspect dock (#46 slice 2b) is reached from the board, in this phase as in battle: a unit on the
+# deployment zone may wear, one waiting in reserve may not.
+func test_the_dock_serves_a_deployed_unit_and_not_one_in_reserve() -> void:
+	if not _precondition_reserve():
+		return
+	var standing := _with_room(_deployed())
+	var waiting := _with_room(_reserve())
+	if standing == null or waiting == null:
+		fail("fixture: no roster unit on one side has an empty slot")
+		return
+	var plate := ArmorData.new()
+	plate.display_name = "Dock Test Plate"
+	standing.add_item(plate)
+	var worn: Dictionary = _sess.gear(_sess.handle_for(standing), "wear", standing.inventory.find(plate))
+	assert_bool(worn.ok).override_failure_message(str(worn.get("error", ""))).is_true()
+	assert_object(standing.worn_armor).is_same(plate)
+
+	var other := ArmorData.new()
+	other.display_name = "Dock Test Plate"
+	waiting.add_item(other)
+	var refused: Dictionary = _sess.gear(_sess.handle_for(waiting), "wear", waiting.inventory.find(other))
+	assert_bool(refused.ok).override_failure_message("a unit in reserve used the dock").is_false()
+	assert_str(str(refused.get("error", ""))).contains("in reserve")
+	assert_object(waiting.worn_armor).is_null()
+
+
 func test_the_kit_shows_a_given_piece_under_the_unit_that_took_it() -> void:
 	var unit := _with_room(_sess.roster_units())
 	if unit == null:

@@ -492,6 +492,31 @@ func unfit(holder_name: String, slot: int, mod_name: String) -> Dictionary:
 				return {"ok": true, "summary": "%s taken off %s" % [mod_name, weapon.shown_name()]}
 	return {"ok": false, "error": "%s has no mod '%s' fitted" % [weapon.shown_name(), mod_name]}
 
+# ---- the inspect dock (#46 slice 2b) ----
+# Its six verbs, in EITHER phase, through GearVerbs -- the rule the dock's buttons and the replay
+# viewer ask. Who may use the dock is game.can_control's rule (RulesService.command_block_reason); a
+# reserve unit is refused because the dock is reached from the board. A change re-resolves the active
+# squad, the twin of game.gd's loadout_changed wire: Equip swaps which weapon a queued attack fires with.
+func gear(handle: String, verb_name: String, slot: int) -> Dictionary:
+	var verb := GearVerbs.from_name(verb_name)
+	if verb == -1:
+		return {"ok": false, "error": "no gear verb '%s'" % verb_name}
+	var unit := unit_by_handle(handle)
+	if unit == null:
+		return {"ok": false, "error": "no unit '%s'" % handle}
+	if not is_deployed(unit):
+		return {"ok": false, "error": "%s is in reserve -- the dock is reached from the board" % handle}
+	var reason := RulesService.command_block_reason(unit, turn_manager.active_faction())
+	if reason != "":
+		return {"ok": false, "error": reason}
+	var refusal := GearVerbs.perform(unit, verb as GearVerbs.Verb, slot)
+	if refusal != "":
+		return {"ok": false, "error": refusal}
+	var squad := squad_manager.active_squad
+	if squad != null:
+		squad_manager.validate_squad_plan(squad, squad_manager.resolve_plan(squad, _board()))
+	return {"ok": true, "summary": "%s: %s" % [handle, verb_name]}
+
 # STASH or a roster unit's handle -> {ok, unit}, the unit null for the stash. The screen's cards are
 # the roster's, so an enemy or an authored unit has no gear to give.
 func _gear_holder(holder_name: String) -> Dictionary:
