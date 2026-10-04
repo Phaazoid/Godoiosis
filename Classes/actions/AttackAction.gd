@@ -134,28 +134,20 @@ func init(attacker: Unit, origin: Vector2i, target_unit: Unit, target_location: 
 	else:
 		target_name = "Tile %s" % target_location   # cell-targeted attack (#47)
 
+# The game's playback. What it does to the BOARD is the six state steps below, which the headless Play
+# API calls back to back (play_session._apply_attack, #46); what stays here is this host's alone -- the
+# lunges, the impact, going_over, the slide and the hang and plummet, each between the steps exactly
+# where it falls.
 func execute():
 	begin_execution()
-	# Actor must be live to swing. (target may be null = a cell-targeted attack, #47.)
-	if actor == null or not is_instance_valid(actor) or actor.is_queued_for_deletion():
+	if not actor_gate():
 		finish_execution()
 		return
 
-	# The watch absorbs exactly one trigger, and THIS was it (#413). The ACTOR is the watcher, and
-	# only the LIVE watch is touched here — the resolver spent its own per-pass copy (R2). Placed
-	# above every remaining early-out and outside the target block, because a triggered shot that
-	# whiffs or lands on an empty cell has still been taken; lead volley member only.
-	if is_watch_shot and not is_secondary_hit:
-		actor.spend_watch()
+	take_watch()
 
-	# A UNIT attack whose target vanished this pass — nothing to hit, no lunge (unchanged).
-	# A null target is intentional (a cell attack) and falls through to the lunge.
-	if target != null and (not is_instance_valid(target) or target.is_queued_for_deletion()):
+	if not playback_gate():
 		finish_execution()
-		return
-
-	if resolved != null and resolved.skipped:
-		finish_execution()                          # counter-er went down/dead this pass — no lunge, no damage
 		return
 
 	var direction = GridUtils.cardinal_direction_between(actor.get_projected_destination(), target_cell)
@@ -185,20 +177,7 @@ func execute():
 
 	# Pure playback of the resolved outcome (R3) — no recomputation. A cell attack (target
 	# null) has no unit consequence; it still plays out and (later, #50) deposits terrain effects.
-	if target != null and resolved != null:
-		# The Guard absorbs exactly one trigger, and THIS was it (#414). Spent before the payload
-		# lands, so a shove into the void that frees the node below cannot skip it. Only the LIVE
-		# ward is touched here — the resolver spent its own per-pass copy.
-		if blocked_for != null:
-			target.spend_guard()
-		if fired_attack != null and fired_attack.heals:
-			target.heal(resolved.heal_amount)
-		else:
-			target.take_damage(resolved.damage, resolved.non_blow())
-		for s in resolved.states_removed:
-			target.remove_element_state(s)
-		for s in resolved.states_added:
-			target.add_element_state(s, resolved.state_turns.get(s, 0))
+	if land():
 		# Knockback (#84, animated by the #259 rework): the target SLIDES the resolver's own trail
 		# to its landing, holding its facing (the mirror gates on movement.sliding). Awaited, so a
 		# sequential later attack finds the body where the plan already said it lands.
@@ -208,16 +187,13 @@ func execute():
 			target.movement.slide_along_path(resolved.knockback_path, resolved.knockback_landing_index)
 			if target.movement.sliding:
 				await target.movement.movement_finished
-		# A void shove (#259): the hit's own damage may be 0, so take_damage above cannot carry
-		# the death -- removal is its own door. die() frees the node and tears the squad down.
-		# MIRRORED in play_session._apply_attack (the hand-copied twin, per the went_downed trap) --
-		# except for the plummet, which is pure spectacle: the sprite falls a long way past the lip
-		# before it goes (#431, dev: it used to vanish in mid-air), and the headless twin has no
-		# sprite to drop. Awaited so the removal lands after the fall, not during it. A body a tether is
-		# holding first HANGS over the hole from its arrival and the tether snaps as the hang ends (#1104),
-		# then it stays up while the snap plays (#1171): the plummet is what the camera rides, so falling
-		# on the snap took the camera down before the break could be seen. Both beats are play-checks --
-		# Pacing.beat spends nothing headless, so no suite can see either length.
+		# The removal (remove(), #259) lands after the fall, not during it. The plummet is pure
+		# spectacle and this host's alone: the sprite falls a long way past the lip before it goes
+		# (#431, dev: it used to vanish in mid-air). A body a tether is holding first HANGS over the
+		# hole from its arrival and the tether snaps as the hang ends (#1104), then it stays up while
+		# the snap plays (#1171): the plummet is what the camera rides, so falling on the snap took the
+		# camera down before the break could be seen. Both beats are play-checks -- Pacing.beat spends
+		# nothing headless, so no suite can see either length.
 		if resolved.removed and is_instance_valid(target):
 			if tether_held:
 				await Pacing.beat(target, Pacing.VOID_HANG)
@@ -226,14 +202,70 @@ func execute():
 					await Pacing.beat(target, Pacing.VOID_SNAP_HOLD)
 			if is_instance_valid(target):   # each await spans frames; the board can go in them
 				await target.movement.plummet()
-				if is_instance_valid(target):
-					target.die()
+				remove()
 
+	settle()
+	finish_execution()
+
+# --- The state steps (#46) ------------------------------------------------------------------------
+#
+# Everything an attack's playback does to the board, as synchronous methods both hosts call in this
+# order: actor_gate, take_watch, playback_gate, land, remove, settle. execute() takes them between its
+# awaits; play_session._apply_attack back to back, with a teleport to the landing where execute()
+# slides -- the one declared per-host difference.
+
+# The swinger must still be on the board to swing. (target may be null = a cell-targeted attack, #47.)
+func actor_gate() -> bool:
+	return actor != null and is_instance_valid(actor) and not actor.is_queued_for_deletion()
+
+# The watch absorbs exactly one trigger, and THIS was it (#413). The ACTOR is the watcher, and
+# only the LIVE watch is touched here — the resolver spent its own per-pass copy (R2). Taken
+# above every remaining early-out and outside the target block, because a triggered shot that
+# whiffs or lands on an empty cell has still been taken; lead volley member only.
+func take_watch() -> void:
+	if is_watch_shot and not is_secondary_hit:
+		actor.spend_watch()
+
+# Is anything left to play? Not a UNIT attack whose target vanished this pass — nothing to hit, no
+# lunge (a null target is intentional, a cell attack, and plays on) — nor a skipped one, a counter-er
+# that went down/dead this pass (R7): no lunge, no damage, and nothing spent.
+func playback_gate() -> bool:
+	if target != null and (not is_instance_valid(target) or target.is_queued_for_deletion()):
+		return false
+	return resolved == null or not resolved.skipped
+
+# The blow lands on the target: false, and nothing done, for a cell attack (target null, #47) or an
+# unresolved one, which have no unit consequence.
+func land() -> bool:
+	if target == null or resolved == null:
+		return false
+	# The Guard absorbs exactly one trigger, and THIS was it (#414). Spent before the payload
+	# lands, so a shove into the void that frees the node below cannot skip it. Only the LIVE
+	# ward is touched here — the resolver spent its own per-pass copy.
+	if blocked_for != null:
+		target.spend_guard()
+	if fired_attack != null and fired_attack.heals:
+		target.heal(resolved.heal_amount)
+	else:
+		target.take_damage(resolved.damage, resolved.non_blow())
+	for s in resolved.states_removed:
+		target.remove_element_state(s)
+	for s in resolved.states_added:
+		target.add_element_state(s, resolved.state_turns.get(s, 0))
+	return true
+
+# A void shove (#259): the hit's own damage may be 0, so take_damage cannot carry the death --
+# removal is its own door. die() frees the node and tears the squad down.
+func remove() -> void:
+	if resolved != null and resolved.removed and is_instance_valid(target):
+		target.die()
+
+# What the blow leaves once it has played out, hit or whiff: the watch it broke, then what firing cost.
+func settle() -> void:
 	# The watch broken by this blow (#810), the charge spend's shape: the resolver already decided
 	# WHETHER this hit ended a standing watch -- here there is only the marking. MARKS, never lapses
 	# (Unit.cancel_watch says why), and outside the is_secondary_hit gate the economies above use:
 	# a volley that reaches two watchers breaks both, because each of them was hit.
-	# MIRRORED in play_session._apply_attack (the hand-copied twin).
 	if resolved != null and resolved.cancels_watch and is_instance_valid(target):
 		target.cancel_watch()
 	# Readiness spend (#73): the ACT of firing consumes it, hit or whiff — lead volley member
@@ -267,8 +299,6 @@ func execute():
 		var tank := actor.get_equipped_weapon() as WeaponInstance
 		if tank != null:
 			tank.spend_charge()
-
-	finish_execution()
 
 func get_action_icon() -> Texture2D:
 	var lethal := lethality_icon(resolved)

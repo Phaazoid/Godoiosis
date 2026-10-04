@@ -3,7 +3,7 @@ extends RefCounted
 # Owns the player's turn vocabulary, driving the REAL SquadManager / TurnManager /
 # PlanResolver / RulesService. No side channels (Law #3). Commands return structured
 # Dictionaries; play/board_view.gd renders them. The headless executor applies the
-# resolved plan's EFFECTS (move = teleport, attack = apply_damage + element states;
+# resolved plan's EFFECTS (move = teleport, attack = AttackAction's own state steps, #46;
 # side-channel actions run their REAL execute() — it's pure synchronous logic) —
 # i.e. game.gd.execute_orders minus the animation awaits, so preview == execution (Law #2).
 # A mission is scored through the same MissionState the game's MissionController holds (#46).
@@ -1264,92 +1264,34 @@ func _apply_sinks(sinks: Array[SinkAction], events: Array[String]) -> void:
 		events.append(sink.get_description())
 
 
+# One attack's playback: AttackAction's own state steps, in the order execute() takes them (#46), so
+# a heal heals and a shot whose target vanished or that the pass skipped spends nothing, here as in
+# the game. This host's own are the event log and the knockback, which execute() slides along the
+# resolver's trail and this teleports to the landing the resolver picked (stopped at any
+# wall/unit/edge). execute()'s awaits -- the lunges, the slide, the hang and plummet -- have nothing
+# to stand for headless.
 func _apply_attack(atk: AttackAction, events: Array[String]) -> void:
+	if not atk.actor_gate():
+		return
+	atk.take_watch()
+	if not atk.playback_gate():
+		return
 	var actor := atk.actor
 	var target := atk.target
-	# The watch absorbs its one trigger (#413) — MIRRORS AttackAction.execute, including its
-	# position: above every early-out, because a shot that whiffs or lands on an empty cell has
-	# still been taken. Lead volley member only.
-	if atk.is_watch_shot and not atk.is_secondary_hit and actor != null and is_instance_valid(actor):
-		actor.spend_watch()
-	# Post-fire economy, ABOVE the early-outs because that is where the twin puts it: execute()
-	# gates only the UNIT consequence on a target, so a cell attack with no victim still spends what
-	# firing costs. Returning first (as this did until #97) meant a headless cell shot rearmed itself
-	# for free -- a real divergence the Carbine already had and nothing had asked about.
-	if actor != null and is_instance_valid(actor):
-		_spend_firing_costs(atk, actor)
-	if actor == null or target == null:
-		return
-	if not is_instance_valid(actor) or not is_instance_valid(target):
-		return
-	if actor.is_queued_for_deletion() or target.is_queued_for_deletion():
-		return
 	var r := atk.resolved
-	if r == null:
-		return
-	if r.skipped:
-		return   # counter-er was downed/killed earlier this pass — no-op (matches the preview)
-	# Guard (#414) — MIRRORS AttackAction.execute (the hand-copied twin): the resolver already moved
-	# the victim to the blocker, so the only thing left for execution is spending the live ward.
-	if atk.blocked_for != null:
-		target.spend_guard()
-	target.take_damage(r.damage, r.non_blow())   # routes through Unit.take_damage -> rung and limb
-	for s in r.states_removed:
-		target.remove_element_state(s)
-	for s in r.states_added:
-		target.add_element_state(s, r.state_turns.get(s, 0))
-	var dropped := " (payload)" if atk.dropped_by != null else ""
-	events.append("%s hits %s for %d%s%s" % [handle_for(actor), handle_for(target), r.damage, _lethality_tag(r.lethality), dropped])
-	# Knockback (#84): the headless stand-in for AttackAction.execute()'s shove — the resolver
-	# already picked the landing cell (stopped at any wall/unit/edge), so this just applies it.
-	if r.knockback_applied and is_instance_valid(target):
-		target.movement.set_cell(r.knockback_to)
-		events.append("%s is shoved to %s" % [handle_for(target), str(r.knockback_to)])
-	# The void door (#259) — MIRRORS AttackAction.execute exactly (the hand-copied twin): a
-	# 0-damage take_damage cannot kill an ACTIVE unit, so removal is applied here or nowhere.
-	# The ONE thing deliberately not copied is that twin's plummet (#431): a headless session has
-	# no sprite to fall, and the rule outcome is identical either way.
-	if r.removed and is_instance_valid(target):
-		events.append("%s falls into the void" % handle_for(target))
-		target.die()
-
-	# The watch this blow broke (#810) — MIRRORS AttackAction.execute (the hand-copied twin). Here
-	# rather than in _spend_firing_costs beside the other post-fire hooks, deliberately: those are
-	# the ATTACKER's costs and are gated on is_secondary_hit, while this is the TARGET's watch and
-	# every volley member has its own. MARKS, never lapses — Unit.cancel_watch says why.
-	if r.cancels_watch and is_instance_valid(target):
-		target.cancel_watch()
-
-# Post-fire economy (#73/#84/#697/#97): mirrors AttackAction.execute()'s readiness/charge/vial/tank
-# hooks — the headless executor bypasses that method entirely, so without this the play path
-# diverges from the game (a fired Spring stays sprung; a Blowback keeps its charge; a cast draws on
-# an attunement and never burns it; a supercharged spray never empties its tank). Lead volley member
-# only. Counters DO reach here — they stamp main (CounterAttackAction.create_counter_volley), so a
-# family whose main spends is charged for reactive fire too, while a Stab/Smash main with
-# consumes_readiness = false is the no-op it always was.
-#
-# Every one of these is a SPEND the resolver already decided: it records a burn only when the
-# attunement changed the damage, and a charge only when the pass still had one to give. There is
-# nothing to judge here.
-#
-# A PAYLOAD spends nothing (#1058) -- MIRRORS AttackAction.execute: it was never fired, the hit that
-# dropped it was.
-func _spend_firing_costs(atk: AttackAction, actor: Unit) -> void:
-	if atk.is_secondary_hit or atk.dropped_by != null:
-		return
-	var r := atk.resolved
-	if atk.fired_attack is WeaponAttackData:
-		var weapon := actor.get_equipped_weapon() as WeaponInstance
-		if weapon != null:
-			weapon.consume_readiness_for(atk.fired_attack as WeaponAttackData)
-	if r == null:
-		return
-	if r.burned_vial != null:
-		actor.attunement = null
-	if r.charge_spent:
-		var tank := actor.get_equipped_weapon() as WeaponInstance
-		if tank != null:
-			tank.spend_charge()
+	if atk.land():
+		var dropped := " (payload)" if atk.dropped_by != null else ""
+		if atk.fired_attack != null and atk.fired_attack.heals:
+			events.append("%s heals %s for %d%s" % [handle_for(actor), handle_for(target), r.heal_amount, dropped])
+		else:
+			events.append("%s hits %s for %d%s%s" % [handle_for(actor), handle_for(target), r.damage, _lethality_tag(r.lethality), dropped])
+		if r.knockback_applied and is_instance_valid(target):
+			target.movement.set_cell(r.knockback_to)
+			events.append("%s is shoved to %s" % [handle_for(target), str(r.knockback_to)])
+		if r.removed and is_instance_valid(target):
+			events.append("%s falls into the void" % handle_for(target))
+		atk.remove()
+	atk.settle()
 
 # ---- mission metadata & outcome (#96, #612) ----
 # Read off the mission and the zone store the scorer reads (#46), never the scenario a second time.
