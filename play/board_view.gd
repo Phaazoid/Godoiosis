@@ -238,7 +238,8 @@ static func render_kit(session, holder: String) -> String:
 		if not session.is_deploying():
 			return "kit stash: the stash exists only in the pre-mission phase"
 		var stash: Array[Item] = session.stash()
-		lines.append("kit stash  (%d items)" % stash.size())
+		# A list, not a slot grid, as on the screen: a piece leaving moves everything after it up one.
+		lines.append("kit stash  (%d items -- positions shift when a piece leaves)" % stash.size())
 		for i in stash.size():
 			lines.append(_kit_row(session, str(i), stash[i], null, mods))
 		return "\n".join(lines)

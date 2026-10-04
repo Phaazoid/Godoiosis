@@ -118,7 +118,9 @@ each refused in its words:
   `WeaponInstance.fit_block_reason`'s. `unit` may be `"stash"` for a stash weapon.
 
 `slot` counts from 0, as the recorded gear `index` does; `space` counts from 1, as every
-`fit_block_reason` sentence does. All four are pre-mission only (fitting is read-only in battle,
+`fit_block_reason` sentence does. A unit's six slots are fixed, but the stash is a list, as on the
+screen: when a piece leaves it, everything after moves up one, so re-read `kit stash` before the
+next stash `slot`. All four are pre-mission only (fitting is read-only in battle,
 #1152) and take any roster unit, deployed or in reserve, as the screen's cards do.
 
 `kit {unit}` reads it back: each slot with `(E)` / `(W)`, why this unit cannot use a piece, each
