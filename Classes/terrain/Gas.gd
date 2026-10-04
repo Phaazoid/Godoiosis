@@ -48,3 +48,9 @@ static func kind_mask(packed: int) -> int:
 
 static func name_of(kind: Kind) -> String:
 	return Kind.keys()[kind]
+
+
+# What the PLAYER calls this gas ("Steam") -- Elemental.display_name's rule. name_of stays the raw key,
+# which is what the look files are named by.
+static func display_name(kind: Kind) -> String:
+	return name_of(kind).capitalize()

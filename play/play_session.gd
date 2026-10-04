@@ -14,7 +14,8 @@ var turn_manager: TurnManager
 var overlay_manager: OverlayManager
 var terrain_states: TerrainStateManager   # twin of game.terrain_states; null on a board built without one
 var board_heights: BoardHeights           # twin of game.board_heights (#257); null board reads flat
-var scenario_data: ScenarioData           # authored scenario metadata (#612); null on fresh new boards
+var gas_field: GasField                   # twin of game.gas_field (#508); null on a board built without one
+var scenario_data: ScenarioData          # authored scenario metadata (#612); null on fresh new boards
 var reserve_root: Node2D                  # where a drawn roster waits off the board (#46); null on a board built without one
 var zone_manager: ZoneManager             # the zones the deployment cells are read from (#46)
 
@@ -40,6 +41,7 @@ func _init(board: Dictionary) -> void:
 	overlay_manager = board.overlay_manager
 	terrain_states = board.get("terrain_states")
 	board_heights = board.get("board_heights")
+	gas_field = board.get("gas_field")
 	scenario_data = board.get("scenario")
 	reserve_root = board.get("reserve_root")
 	zone_manager = board.get("zone_manager")
@@ -1045,6 +1047,10 @@ func _apply_cell_effects(cell_effects: Array[ResolvedCellEffect], events: Array[
 		terrain_states.apply(effect)
 		for state in effect.states_added:
 			events.append("%s becomes %s" % [str(effect.cell), Terrain.TileState.keys()[state]])
+		if gas_field != null:
+			gas_field.apply(effect)
+		for kind: Gas.Kind in effect.gas_added:
+			events.append("%s gains %d %s" % [str(effect.cell), effect.gas_added[kind], Gas.name_of(kind)])
 
 
 func _apply_sinks(sinks: Array[SinkAction], events: Array[String]) -> void:

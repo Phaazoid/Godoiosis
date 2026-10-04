@@ -2,7 +2,7 @@
 
 **Status: IDENTITIES + PHILOSOPHY (workshop); BALANCE OPEN (won't lock for a long time).** Distilled 2026-06-17 (issue #32) from the wiki (`Economy/Items/Weapons/{Main info, Weapon List, Upgrade System}`, `Code/Headers/Enums`) and reconciled with the implemented `WeaponData` / `WeaponCatalog`. Per the dev: *the outlines are here; specifics — especially balancing numbers — are not locked and won't be for a while.* So this captures **what each weapon family is for** and **the rules weapons obey**, not tuned stats.
 
-**Canon checked through #1152 (2026-09-28); #120's inventory correction folded in 2026-10-01; #1185's spaces default folded in 2026-10-03.**
+**Canon checked through #1152 (2026-09-28); #120's inventory correction folded in 2026-10-01; #1185's spaces default folded in 2026-10-03; #508's attack gas folded in 2026-10-03.**
 
 ## The architecture (implemented — [LOCKED shape])
 
@@ -105,6 +105,8 @@
 - **It restores the board itself.** The hypothetical publishes the candidate's shoves, so `preview_payloads` ends with the real `resolve_plan` — `resolve_hypothetical`'s documented contract, kept beside it rather than left to the hover. That is two resolves per hovered cell, and only for an attack that carries a payload: measured at ~28 ms with 9 payload volleys and 42–100 ms with 81, over one frame each (docs/performance.md).
 - **A watch shows none.** Its shot fires later, from wherever the crosser is, so there is no landing yet to show.
 - **Both views, one clock.** The flat layer (`OverlayManager.payload_overlay`) is a child of the footprint layer, so it wears the footprint's colour and z, and a watch aim or a player's palette reaches it with no second write; it is painted and cleared with the aim flash (`set_aim_flash(steps, insets)`), so every exit that stops the flash takes the squares too. `AimFlash2D` whitens the inset square rather than the whole tile. In 3D, `BoardOverlays.Layer.PAYLOAD` is a FILL on AIM's sort — legal, because its cells are the payloads' minus the aim's and never meet AIM's — and `OverlayMirror` lights it from the same `levels()` as AIM.
+
+**An attack may also leave GAS ([#508](https://github.com/Phaazoid/Godoiosis/issues/508), 2026-10-03).** `AttackData.gas` + `gas_amount`, drawn in the editor's Payload section under the pick: every tile the attack struck gains that much of that gas, **whatever Targets says**, and the cards say *Leaves Steam where it hits* after the payload chain. It is NOT a payload (nothing goes off), but a payload that authors gas leaves its own where it lands, since it resolves as a whole attack. The rule, the ground it needs and the reactions that release gas are terrain.md's #508 banner.
 
 ## Cross-cutting principles ([WORKSHOP])
 

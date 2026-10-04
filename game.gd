@@ -236,6 +236,7 @@ func _build_collaborators() -> void:
 
 	board_heights = BoardHeights.new()   # no add_child: RefCounted, and it needs nothing from the tree
 	gas_field = GasField.new()   # the same: a RefCounted store, built beside its structural twin
+	gas_field.ground_source = terrain_states.ground_source   # gas needs ground, by the tile states' own rule
 
 	if DevTools.enabled():
 		height_debug_overlay = HeightDebugOverlay.new()
@@ -1492,6 +1493,13 @@ func _preview_plan_effects(plan: ResolvedPlan) -> void:
 				continue
 			seen[key] = true
 			deposits.append({"cell": effect.cell, "state": state})
+		# Gas the pass leaves (#508), one ghost per cell AND kind for the same reason.
+		for kind: Gas.Kind in effect.gas_added:
+			var gas_key := "%s/%s/gas%d" % [effect.cell.x, effect.cell.y, kind]
+			if seen.has(gas_key):
+				continue
+			seen[gas_key] = true
+			deposits.append({"cell": effect.cell, "gas": kind})
 	overlay_manager.show_terrain_preview(deposits)
 	# Attacks AND counters (#259 closed the gap: counter shoves were never previewed). The path
 	# is the trail's one source -- a landing tumble can bend it, so endpoints cannot describe it.

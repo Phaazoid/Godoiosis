@@ -1436,15 +1436,22 @@ func clear_hover_ghosts() -> void:
 # you execute). Takes {"cell": Vector2i, "state": Terrain.TileState} entries (mirrors
 # show_knockback_preview's shape) so each deposit draws its OWN icon — was BURNING-only until
 # Burrow (#84) made a second previewable state real. Ephemeral: redrawn on plan change.
+# A {"cell", "gas": Gas.Kind} entry is a gas the pass leaves (#508), drawn with the kind's own puff.
 func show_terrain_preview(deposits: Array) -> void:
 	clear_terrain_preview()
 	for deposit in deposits:
-		var state: Terrain.TileState = deposit["state"]
-		if not TERRAIN_STATE_ICONS.has(state):
+		var icon: Texture2D = null
+		if deposit.has("gas"):
+			var kind: Gas.Kind = deposit["gas"]
+			icon = GasPuffArt.icon(kind)
+		else:
+			var state: Terrain.TileState = deposit["state"]
+			icon = TERRAIN_STATE_ICONS.get(state, null)
+		if icon == null:
 			continue
 		var cell: Vector2i = deposit["cell"]
 		var sprite := Sprite2D.new()
-		sprite.texture = TERRAIN_STATE_ICONS[state]
+		sprite.texture = icon
 		sprite.global_position = GridUtils.cell_world(board_tilemap, cell)
 		sprite.z_index = TERRAIN_Z_INDEX
 		sprite.modulate = TERRAIN_PREVIEW_MODULATE

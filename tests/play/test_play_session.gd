@@ -105,6 +105,18 @@ func test_end_turn_hands_over_control() -> void:
 	var res: Dictionary = _session.queue_move("a", Vector2i(2, 1))
 	assert_bool(res.ok).is_true()
 
+# The headless twin plays an attack's gas into ITS store (#508): a deposit only the game executor
+# applied would have the Play API and the game disagree about the board after a pass.
+func test_an_attack_that_leaves_gas_leaves_it_on_the_headless_board_too() -> void:
+	var attacker: Unit = _session.unit_by_handle("A")
+	(attacker.get_equipped_weapon() as WeaponInstance).template.main_attack.gas_amount = 5
+	_session.queue_move("A", Vector2i(1, 0))
+	_session.queue_attack("A", Vector2i(2, 0))
+	var res: Dictionary = _session.execute()
+	assert_bool(res.ok).is_true()
+	var field: GasField = _board.gas_field
+	assert_int(field.amount_at(Vector2i(2, 0), Gas.Kind.STEAM)).is_equal(5)
+
 # The headless scenario loader: an in-memory ScenarioData round-trips onto a fresh board
 # (file-independent, so it survives scenario renames).
 func test_apply_scenario_restores_units_terrain_and_turn() -> void:

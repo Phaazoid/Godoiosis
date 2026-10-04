@@ -24,6 +24,25 @@ const SIZES := {
 }
 
 
+# One puff per kind on a board-icon canvas (GridUtils.TILE_SIZE square): the PLACEHOLDER ghost the
+# plan preview draws where a pass will leave gas (#508). Built once per kind and kept.
+const ICON_PUFF := Vector2i(14, 9)
+static var _icons_by_kind: Dictionary = {}
+
+
+static func icon(kind: Gas.Kind) -> Texture2D:
+	if not _icons_by_kind.has(kind):
+		var look := GasLook.for_kind(kind)
+		var drawing := puff_image(look.puff_shape, 7 + int(kind) * 31, ICON_PUFF, look.palette(), look.soft)
+		drawing.convert(Image.FORMAT_RGBA8)
+		var side := GridUtils.TILE_SIZE
+		var canvas := Image.create_empty(side, side, false, Image.FORMAT_RGBA8)
+		var at := Vector2i((side - drawing.get_width()) / 2, (side - drawing.get_height()) / 2)
+		canvas.blit_rect(drawing, Rect2i(Vector2i.ZERO, drawing.get_size()), at)
+		_icons_by_kind[kind] = ImageTexture.create_from_image(canvas)
+	return _icons_by_kind[kind]
+
+
 static func layer_of_puff(kind: Gas.Kind, size: int, variant: int) -> int:
 	return int(kind) * STRIDE + size * 3 + variant
 

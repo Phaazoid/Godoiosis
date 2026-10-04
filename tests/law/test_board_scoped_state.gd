@@ -62,6 +62,7 @@ const PROCESS_SCOPED := [
 	"_maps_by_texture",                           # StatusArt: per-texture effect map, keyed by the sampled texture's path
 	"_art_cache", "art_version",                 # ZoneMarks (#955): generated cell art keyed by (look, mask), and the count restyle() moves
 	"_looks_by_kind",                             # GasLook (#508): each kind's loaded look, keyed by Gas.Kind
+	"_icons_by_kind",                             # GasPuffArt (#508): each kind's preview ghost, keyed by Gas.Kind
 	"GUARD_RING_SCALE",                           # tuning, no knob
 	"texels_per_unit",                            # tuning, no knob
 ]
