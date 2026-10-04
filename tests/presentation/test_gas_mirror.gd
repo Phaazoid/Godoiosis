@@ -4,7 +4,7 @@
 # draws itself, the fog floor's mesh and the puffs' instances. Whether any of it LOOKS right is the
 # dev's to judge in play; see the PR's How to check this.
 #
-# Every case paints through the store (GasField.set_amount), never pokes the mirror, and waits for
+# Every case paints through the store (GasField.set_level), never pokes the mirror, and waits for
 # its poll -- a mirror that only works when a test calls it goes red here.
 extends GdUnitTestSuite
 
@@ -119,7 +119,7 @@ func test_an_empty_board_hands_the_volume_nothing() -> void:
 
 func test_every_mix_draws_the_volume_and_the_puffs_and_no_floor() -> void:
 	var cell := await _loaded_cell()
-	_field().set_amount(cell, Gas.Kind.STEAM, Gas.MAX_AMOUNT)
+	_field().set_level(cell, Gas.Kind.STEAM, Gas.MAX_LEVEL)
 	for index in GasMirror.MIXES.size():
 		await _mix(index)
 		assert_object(_gas.volume_effect().current()).override_failure_message(
@@ -131,7 +131,7 @@ func test_every_mix_draws_the_volume_and_the_puffs_and_no_floor() -> void:
 
 func test_holding_the_key_shows_the_floor_and_fades_the_cloud() -> void:
 	var cell := await _loaded_cell()
-	_field().set_amount(cell, Gas.Kind.SMOKE, 9)
+	_field().set_level(cell, Gas.Kind.SMOKE, Gas.Level.THICK)
 	await _settle()
 	assert_float(_gas.volume_effect().current().params.march3.w).is_equal(1.0)
 	await _hold_floor(true)
@@ -149,7 +149,7 @@ func test_holding_the_key_shows_the_floor_and_fades_the_cloud() -> void:
 
 func test_the_flat_view_stands_the_gas_down() -> void:
 	var cell := await _loaded_cell()
-	_field().set_amount(cell, Gas.Kind.STEAM, 8)
+	_field().set_level(cell, Gas.Kind.STEAM, Gas.Level.THICK)
 	await _hold_floor(true)
 	var was: int = _scene.get("view")
 	_scene.set("view", 1)   # View.FLAT_2D (HD_2D, FLAT_2D, CORNER)
@@ -161,7 +161,7 @@ func test_the_flat_view_stands_the_gas_down() -> void:
 
 func test_the_layering_switch_picks_the_callback_point() -> void:
 	var cell := await _loaded_cell()
-	_field().set_amount(cell, Gas.Kind.SMOKE, 8)
+	_field().set_level(cell, Gas.Kind.SMOKE, Gas.Level.THICK)
 	Experiments.set_on(Experiments.Flag.GAS_OVER_UNITS, true)
 	await _settle()
 	assert_int(_gas.volume_effect().effect_callback_type).is_equal(
@@ -175,9 +175,9 @@ func test_the_layering_switch_picks_the_callback_point() -> void:
 func test_the_board_texture_says_what_the_store_holds() -> void:
 	var cell := await _loaded_cell()
 	var east := cell + Vector2i(1, 0)
-	_field().set_amount(cell, Gas.Kind.STEAM, 7)
-	_field().set_amount(cell, Gas.Kind.SMOKE, 3)
-	_field().set_amount(east, Gas.Kind.POISON, 5)
+	_field().set_level(cell, Gas.Kind.STEAM, Gas.Level.THICK)
+	_field().set_level(cell, Gas.Kind.SMOKE, Gas.Level.THIN)
+	_field().set_level(east, Gas.Kind.POISON, Gas.Level.MEDIUM)
 	await _settle()
 	var image := (_gas.board_textures()[0] as Texture2D).get_image()
 	var rect: Rect2i = _game.grid.get_used_rect()
@@ -194,7 +194,7 @@ func test_the_board_texture_says_what_the_store_holds() -> void:
 
 func test_the_regions_follow_the_paint() -> void:
 	var cell := await _loaded_cell()
-	_field().set_amount(cell, Gas.Kind.STEAM, 9)
+	_field().set_level(cell, Gas.Kind.STEAM, Gas.Level.THICK)
 	await _settle()
 	assert_int(_gas.region_boxes().size()).is_equal(1)
 	assert_bool(_gas.region_boxes()[0].has_point(BoardSpace.surface_point(cell, _game.board_heights)
@@ -206,7 +206,7 @@ func test_the_regions_follow_the_paint() -> void:
 
 func test_gas_on_a_staged_cell_rides_the_diorama() -> void:
 	var cell := await _loaded_cell()
-	_field().set_amount(cell, Gas.Kind.STEAM, 9)
+	_field().set_level(cell, Gas.Kind.STEAM, Gas.Level.THICK)
 	var cells: Array[Vector2i] = [cell]
 	var lift := Vector3(0.0, 40.0, 0.0)
 	BoardSpace.stage(cells, lift)
@@ -226,7 +226,7 @@ func test_the_floor_lies_on_the_true_surface_of_a_corner_cell() -> void:
 	assert_bool(Terrain.is_legal_corners(corners) and not Terrain.is_planar_form(corners)) \
 		.override_failure_message("the test's corner form %s is not a legal non-planar cell" % corners).is_true()
 	_game.board_heights.set_corners(cell, corners)
-	_field().set_amount(cell, Gas.Kind.FROST, 6)
+	_field().set_level(cell, Gas.Kind.FROST, Gas.Level.MEDIUM)
 	await _settle()
 	var mesh := _gas.floor_node().mesh as ArrayMesh
 	assert_object(mesh).is_not_null()
@@ -249,11 +249,11 @@ func test_puff_counts_follow_each_mix_slot_table() -> void:
 			break
 	var extra := GasLook.for_kind(kind).extra
 	var extras := 2 if extra == GasLook.Extra.SNOW or extra == GasLook.Extra.SOOT else 1
-	_field().set_amount(cell, kind, Gas.MAX_AMOUNT)
+	_field().set_level(cell, kind, Gas.MAX_LEVEL)
 	for index in GasMirror.MIXES.size():
 		var shown_slots := 0
 		for slot: Array in GasMirror.MIXES[index].slots:
-			if Gas.MAX_AMOUNT >= int(slot[1]):
+			if Gas.MAX_LEVEL >= int(slot[1]):
 				shown_slots += 1
 		await _mix(index)
 		# A full cell shows every slot of the mix's table plus its extras.
@@ -267,7 +267,7 @@ func test_every_strike_has_one_bolt_under_its_glow() -> void:
 	assert_float(GasLook.for_kind(kind).flash).override_failure_message(
 		"the gas whose extra is the bolt does not flash, so no strike would carry it").is_greater(0.0)
 	for offset: Vector2i in [Vector2i(0, 0), Vector2i(1, 0), Vector2i(-1, -1), Vector2i(1, 1)]:
-		_field().set_amount(cell + offset, kind, 9)
+		_field().set_level(cell + offset, kind, Gas.Level.THICK)
 	await _settle()
 	var strikes := _gas.strike_points()
 	var bolts := _instances_of(GasMirror.EXTRA_ROLES[GasLook.Extra.BOLT])
@@ -284,7 +284,7 @@ func test_every_strike_has_one_bolt_under_its_glow() -> void:
 
 func test_the_haze_stands_lower_than_the_full_cloud() -> void:
 	var cell := await _loaded_cell()
-	_field().set_amount(cell, Gas.Kind.STEAM, Gas.MAX_AMOUNT)
+	_field().set_level(cell, Gas.Kind.STEAM, Gas.MAX_LEVEL)
 	await _mix(0)
 	var full_top := _gas.region_boxes()[0].end.y
 	var haze := -1
@@ -300,7 +300,7 @@ func test_the_haze_stands_lower_than_the_full_cloud() -> void:
 
 func test_frost_falls_as_snow_in_every_mix() -> void:
 	var cell := await _loaded_cell()
-	_field().set_amount(cell, _kind_with(GasLook.Extra.SNOW), Gas.MAX_AMOUNT)
+	_field().set_level(cell, _kind_with(GasLook.Extra.SNOW), Gas.MAX_LEVEL)
 	for index in GasMirror.MIXES.size():
 		await _mix(index)
 		assert_int(_instances_of(GasMirror.EXTRA_ROLES[GasLook.Extra.SNOW]).size()).override_failure_message(
@@ -311,3 +311,36 @@ func test_every_gas_node_stays_off_the_ground_layer() -> void:
 	# The damp blot's decal paints the ground layer (#358); anything else on it is darkened.
 	for node: GeometryInstance3D in [_gas.floor_node(), _gas.puff_node()]:
 		assert_int(node.layers).is_equal(BoardOverlays.WORLD_RENDER_LAYER)
+
+
+# Holding the floor key also draws NEXT round (#508): the floor's shader in outline-only mode, built
+# from GasField.next_round -- the round's own rule -- so the outline and the round cannot disagree.
+# The cell is FOUND, not named: any one a thick puff would spill out of (the content razor).
+func test_holding_the_key_outlines_next_round_as_the_round_will_play_it() -> void:
+	_scene.load_mission(PROLOG)
+	await _settle()
+	var board: BoardContext = _game._board()
+	var cell := GridUtils.NO_CELL
+	for candidate: Vector2i in _game.grid.get_used_cells():
+		_field().set_level(candidate, Gas.Kind.STEAM, Gas.Level.THICK)
+		if _field().next_round(board).size() > 1:
+			cell = candidate
+			break
+		_field().set_level(candidate, Gas.Kind.STEAM, Gas.Level.NONE)
+	assert_bool(cell != GridUtils.NO_CELL).override_failure_message(
+		"no cell on this board would spill a thick puff, so there is no next round to outline").is_true()
+	await _settle()
+	assert_bool(_gas.forecast_node().visible).override_failure_message(
+		"next round is outlined with the key up").is_false()
+
+	await _hold_floor(true)
+	var expected := _field().next_round(_game._board())
+	assert_bool(_gas.forecast_node().visible).override_failure_message(
+		"holding the floor key does not outline next round").is_true()
+	var drawn := _gas.forecast_cells()
+	assert_int(drawn.size()).is_equal(expected.size())
+	for at: Vector2i in expected:
+		assert_int(drawn.get(at, -1)).override_failure_message("the outline disagrees with the round at %s" % [at]).is_equal(expected[at])
+
+	await _hold_floor(false)
+	assert_bool(_gas.forecast_node().visible).is_false()

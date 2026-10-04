@@ -51,7 +51,7 @@ static func lines(attack: AttackData, knockback: int, elements: Array[Elemental.
 			out.append("%s drops %s where it hits" % [_name_of(dropper), _name_of(payload)])
 		dropper = payload
 
-	if attack.gas_amount > 0:
+	if attack.gas_level != Gas.Level.NONE:
 		out.append("Leaves %s where it hits" % Gas.display_name(attack.gas))
 
 	if can_overwatch:

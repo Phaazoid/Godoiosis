@@ -159,12 +159,12 @@ enum Kind { BLUNT, SLASH, PIERCE, FIRE, SHOCK, COLD, CORROSION, NONE }
 # OFF = board north, as a placed shape lands.
 @export var payload_turns := true
 
-# GAS this attack LEAVES on every tile it strikes (#508), added to what is there. Read whatever
-# `targets` says: Targets is whether the attack's ELEMENT reacts with the map and whether it may aim
-# at a cell, and a sword slash leaving steam should need neither. 0 means none -- STEAM is the kind
-# enum's zero, so the amount is the off switch. TerrainReaction carries the same pair.
+# GAS this attack LEAVES on every tile it strikes (#508), its levels added to what is there. Read
+# whatever `targets` says: Targets is whether the attack's ELEMENT reacts with the map and whether it
+# may aim at a cell, and a sword slash leaving steam should need neither. NONE is the off switch --
+# STEAM is the kind enum's zero, so the level carries it. TerrainReaction carries the same pair.
 @export var gas: Gas.Kind = Gas.Kind.STEAM
-@export var gas_amount: int = 0
+@export var gas_level: Gas.Level = Gas.Level.NONE
 
 # What this attack would deliver if it delivered `kind`: NONE for a heal or a pure-utility attack,
 # the kind itself otherwise. ONE home for that rule -- delivered_kind() reads it for the authored
@@ -354,7 +354,7 @@ static func property_sections() -> Array[Dictionary]:
 		# "On hit" was "Payload" until #1058 gave that word to the attack a hit DROPS, which is the
 		# section right under it: what a hit does, then what it leaves behind.
 		{"title": "On hit", "fields": PackedStringArray(["heals", "deals_no_damage", "power", "damage_kind", "knockback", "sound"])},
-		{"title": "Payload", "fields": PackedStringArray(["payload", "payload_turns", "gas_amount", "gas"])},
+		{"title": "Payload", "fields": PackedStringArray(["payload", "payload_turns", "gas_level", "gas"])},
 		{"title": "How it is used", "fields": PackedStringArray(["can_counter", "can_overwatch"])},
 		# LAST because it is the biggest: one picker plus every look row the element has, which for
 		# SHOCK is thirty-five. Placed above "How it is used" it would push two checkboxes off the
@@ -403,7 +403,7 @@ static func in_section(sections: Array[Dictionary], title: String, fields: Packe
 #                           payloads onward) and the payload HAS one (a single cell has no facing).
 #   can_counter          -- read only through can_ever_counter, which a heal or a map-only attack
 #                           answers false whatever the box says.
-#   gas                  -- read only when gas_amount is above 0 (PlanResolver's deposit).
+#   gas                  -- read only when gas_level is above NONE (PlanResolver's deposit).
 # `scaling_blend` is named from here though only WeaponAttackData has it: the RULE is this class's
 # (deals_no_damage suppresses scaling, per its own comment), and a name matching no row is ignored.
 #
@@ -423,7 +423,7 @@ func hidden_fields() -> PackedStringArray:
 		hidden.append("damage_kind")
 	if attack_shape != null or payload == null or payload.attack_shape == null:
 		hidden.append("payload_turns")
-	if gas_amount <= 0:
+	if gas_level == Gas.Level.NONE:
 		hidden.append("gas")
 	if _counter_is_moot():
 		hidden.append("can_counter")
@@ -471,7 +471,7 @@ static func property_tips() -> Dictionary:
 		"effect_looks": "A named LOOK for this attack's elemental effect, shared with every other attack that names it -- so a family of shock weapons can share one feel and one of them can differ.\nEach row inherits the Game tab's value until you untick it. Leave the look empty and nothing changes; pick (none) and the effect plays exactly as the Game tab has it tuned.\nThe RULE is never in here: how far a current arcs is a property of electricity, not of an attack.",
 		"payload": "Another attack this one DROPS where it hits, which then goes off as a whole attack of its own: its own damage, element, shove and shape, with the thrower still the attacker.\nA unit attack drops one per unit it hits (a miss drops nothing). A tile attack drops one per tile it strikes, whether anyone is there or not.\nOn a unit it goes off where they LAND, after this hit's shove. A payload may carry a payload of its own, to any depth, but never back round to an attack already in the chain.",
 		"payload_turns": "Which way the payload's shape faces. On, it faces the way this attack was going. Off, it lands as drawn, top of the grid to board north.\nOnly asked of an attack with no shape of its own: a shaped attack always turns its payloads the way it was travelling.",
-		"gas_amount": "How much GAS this attack leaves on every tile it strikes, added to what is already there (a tile holds at most 14 of each gas). 0 leaves none.\nIt lands whatever Targets says, on empty tiles and occupied ones alike, but never on a tile with no ground.",
+		"gas_level": "How thick a GAS this attack leaves on every tile it strikes: thin, medium or thick, added to what is already there and capped at thick. None leaves no gas.\nIt lands whatever Targets says, on empty tiles and occupied ones alike, but never where gas cannot be -- no ground, a hole, or a tile a unit could not stand on that is not water.",
 		"gas": "Which gas the attack leaves. Only steam has rules so far; the others are looks only.",
 		"can_overwatch": "Makes this an OVERWATCH attack, and only that -- it is aimed as a standing watch and never fired directly, so it does not appear in the attack menu, the AI never picks it, and it cannot be a weapon's main. It fires on the first enemy who enters the aimed cells during someone else's turn, once, then it is spent.",
 	}

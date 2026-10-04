@@ -5,7 +5,7 @@
 //
 // The shape: a cell's side facing a gas-less neighbour is an edge, an outer corner (both its sides
 // edges) is rounded, an inner corner stays square. One ink pixel at the edge, then a light rim, then
-// the fill with the gas's own pattern. A mixed cell dithers between its gases by their amounts.
+// the fill with the gas's own pattern. A mixed cell dithers between its gases by their levels.
 shader_type spatial;
 render_mode unshaded, cull_disabled, depth_draw_never, shadows_disabled, fog_disabled;
 
@@ -18,6 +18,11 @@ uniform vec4 palettes[24];                          // kind * 4: light, mid, dar
 uniform int patterns[6];                            // GasLook.FloorPattern per kind
 uniform int kind_count = 6;
 uniform vec4 alphas = vec4(0.95, 0.9, 0.55, 0.8);   // ink, rim, fill, pattern mark
+// The NEXT-ROUND forecast (#508) draws with this same shader, as its region's ink edge only: a band
+// outline_step art pixels wide per level, so thicker steam next round reads as a bolder border.
+uniform bool outline_only = false;
+uniform float outline_step = 2.0;
+uniform float max_level = 3.0;
 
 varying vec3 world;
 varying vec4 light;
@@ -112,7 +117,13 @@ void fragment() {
 		}
 	}
 	vec4 col;
-	if (d < 1.0) {
+	if (outline_only) {
+		float level = max(round(texelFetch(amount_tex, ivec3(cell, kind), 0).r * max_level), 1.0);
+		if (d >= outline_step * level) {
+			discard;
+		}
+		col = vec4(palettes[kind * 4 + 3].rgb, alphas.x);
+	} else if (d < 1.0) {
 		col = vec4(palettes[kind * 4 + 3].rgb, alphas.x);
 	} else if (d < 2.0) {
 		col = vec4(palettes[kind * 4].rgb, alphas.y);

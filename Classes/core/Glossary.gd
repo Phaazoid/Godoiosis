@@ -179,7 +179,7 @@ static func _terrain_effects(r: TerrainReaction) -> Array[String]:
 		effects.append("sets %s" % Terrain.tile_state_display_name(state))
 	for state: Terrain.TileState in r.remove_tile_states:
 		effects.append("clears %s" % Terrain.tile_state_display_name(state))
-	if r.gas_amount > 0:
+	if r.gas_level != Gas.Level.NONE:
 		effects.append("releases %s" % Gas.display_name(r.gas))
 	return effects
 

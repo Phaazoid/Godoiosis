@@ -78,7 +78,7 @@ func test_nothing_but_the_ground_is_on_the_ground_layer() -> void:
 	# The gas's fog floor (built whether or not its key is held) and puffs (#508), raised so each is on
 	# the board to be asked.
 	var gas := _scene.get_node("GasMirror") as GasMirror
-	_game.gas_field.set_amount(burning[0], Gas.Kind.STEAM, Gas.MAX_AMOUNT)
+	_game.gas_field.set_level(burning[0], Gas.Kind.STEAM, Gas.MAX_LEVEL)
 	await _settle()
 	assert_bool(gas.floor_node().mesh != null and gas.puff_node().multimesh.instance_count > 0) \
 			.override_failure_message("no gas floor or puff was raised, so their layers are never asked").is_true()

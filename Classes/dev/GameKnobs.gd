@@ -449,6 +449,8 @@ const KNOBS: Array[Dictionary] = [
 		"tip": "How far a corner puff sits toward a neighbouring cell that also holds gas, in cells, so neighbouring cells' puffs meet into one cloud."},
 	{"group": "Gas: puffs and floor", "node": "GasMirror", "prop": "puff_tuck", "label": "Tuck from the edge", "min": 0.0, "max": 0.5, "step": 0.01,
 		"tip": "How far a corner puff sits toward a neighbouring cell WITHOUT gas, in cells. Small keeps the puffs inside the cell's own border so the edge of the gas stays legible."},
+	{"group": "Gas: puffs and floor", "node": "GasMirror", "prop": "forecast_width", "label": "Next-round outline width", "min": 0.5, "max": 8.0, "step": 0.5,
+		"tip": "How wide next round's outline is while the floor key is held, in art pixels (a cell is 32) for each level of steam -- so thick steam next round draws three times as bold as thin."},
 ]
 
 # Board-markup values that are NOT node properties (#212 slice 2, moved here whole by #373). A

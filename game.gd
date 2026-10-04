@@ -913,6 +913,7 @@ func _on_end_turn_button_pressed() -> void:
 func _on_round_completed() -> void:
 	terrain_states.tick_states()
 	overlay_manager.redraw_terrain_live(terrain_states)
+	gas_field.tick(_board())   # the gas's round (#508); GasMirror polls the store, so no redraw call
 	mission_controller.advance_round()   # the mission clock's ONE tick (#101); the turn-start check() sees it
 
 # The board is fully hands-off for the player while an AI faction resolves its turn, while the
