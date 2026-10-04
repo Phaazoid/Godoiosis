@@ -171,6 +171,22 @@ func capture(mission_path: String) -> PreMissionSnapshot:
 	return snapshot
 
 
+# The buffer, but only if it describes THIS board -- the reason no mission door has to remember to
+# clear one (#763 ruling 1). Every fresh start of a mission asks, on both hosts; the answer for a
+# mission not committed once in this session is null, which is the authored draw.
+static func replay_for(buffer: PreMissionSnapshot, path: String) -> PreMissionSnapshot:
+	if buffer == null or buffer.mission_path != path or path == "":
+		return null
+	return buffer
+
+
+# What a RESTART leaves of the buffer (#763 ruling 2): one taken from inside the phase drops it, since
+# that is the player's way back to the authored draw (the pause row reads Reset Loadout there). The
+# host must ask BEFORE its reload, while it still knows it was in the phase.
+static func kept_by_restart(buffer: PreMissionSnapshot, from_inside_phase: bool) -> PreMissionSnapshot:
+	return null if from_inside_phase else buffer
+
+
 # The half BOTH endings need: the whole roster spawns into reserve (#738), so a card is a real Unit
 # and every wielder-taking predicate serves it unchanged. Returns entry -> reserve Unit.
 func _draw_reserve(roster: Roster, entries: Array[ScenarioUnitEntry]) -> Dictionary:
