@@ -311,3 +311,36 @@ func test_every_gas_node_stays_off_the_ground_layer() -> void:
 	# The damp blot's decal paints the ground layer (#358); anything else on it is darkened.
 	for node: GeometryInstance3D in [_gas.floor_node(), _gas.puff_node()]:
 		assert_int(node.layers).is_equal(BoardOverlays.WORLD_RENDER_LAYER)
+
+
+# Holding the floor key also draws NEXT round (#508): the floor's shader in outline-only mode, built
+# from GasField.next_round -- the round's own rule -- so the outline and the round cannot disagree.
+# The cell is FOUND, not named: any one a thick puff would spill out of (the content razor).
+func test_holding_the_key_outlines_next_round_as_the_round_will_play_it() -> void:
+	_scene.load_mission(PROLOG)
+	await _settle()
+	var board: BoardContext = _game._board()
+	var cell := GridUtils.NO_CELL
+	for candidate: Vector2i in _game.grid.get_used_cells():
+		_field().set_level(candidate, Gas.Kind.STEAM, Gas.Level.THICK)
+		if _field().next_round(board).size() > 1:
+			cell = candidate
+			break
+		_field().set_level(candidate, Gas.Kind.STEAM, Gas.Level.NONE)
+	assert_bool(cell != GridUtils.NO_CELL).override_failure_message(
+		"no cell on this board would spill a thick puff, so there is no next round to outline").is_true()
+	await _settle()
+	assert_bool(_gas.forecast_node().visible).override_failure_message(
+		"next round is outlined with the key up").is_false()
+
+	await _hold_floor(true)
+	var expected := _field().next_round(_game._board())
+	assert_bool(_gas.forecast_node().visible).override_failure_message(
+		"holding the floor key does not outline next round").is_true()
+	var drawn := _gas.forecast_cells()
+	assert_int(drawn.size()).is_equal(expected.size())
+	for at: Vector2i in expected:
+		assert_int(drawn.get(at, -1)).override_failure_message("the outline disagrees with the round at %s" % [at]).is_equal(expected[at])
+
+	await _hold_floor(false)
+	assert_bool(_gas.forecast_node().visible).is_false()

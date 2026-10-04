@@ -73,6 +73,7 @@ const EXTRA_ROLES := {GasLook.Extra.WISP: 1, GasLook.Extra.SOOT: 2, GasLook.Extr
 @export var floor_corner_radius := 10.0   # art pixels
 @export var puff_lean := 0.3: set = _set_puff_lean
 @export var puff_tuck := 0.12: set = _set_puff_tuck
+@export var forecast_width := 2.0   # art pixels of next round's outline, per level of steam
 
 # Handed in by battle3d.
 var field: GasField
@@ -84,6 +85,7 @@ var environment: Environment
 var lights_source := Callable()     # -> Array[OmniLight3D], the board's own lamps
 var stands_down := Callable()       # -> bool, true in the flat 2D view
 var overlays: BoardOverlays          # the markup stack the fog floor lies in
+var board_source := Callable()      # -> BoardContext, the board next round's forecast is ruled on
 
 var _effect: GasVolumeEffect
 var _shape_noise: NoiseTexture3D
@@ -102,6 +104,12 @@ var _flash_clusters: Dictionary[Vector2i, Vector3] = {}
 var _flash_kinds: Dictionary[Vector2i, Gas.Kind] = {}
 var _floor: MeshInstance3D
 var _floor_material: ShaderMaterial
+# Next round's outline (#508): the floor's own shader in outline_only mode, built from the rule's
+# answer for the board (GasField.next_round) while the floor key is held.
+var _forecast: MeshInstance3D
+var _forecast_material: ShaderMaterial
+var _forecast_cells: Dictionary[Vector2i, int] = {}
+var _forecast_seen := []
 var _puffs: MultiMeshInstance3D
 var _puff_material: ShaderMaterial
 # Instances whose gas flashes: [index, cluster, tint], re-lit every frame from the flash schedule.
@@ -166,6 +174,7 @@ func _process(delta: float) -> void:
 	if key != _seen:
 		_seen = key
 		_rebuild()
+	_update_forecast()
 	_submit()
 	_animate_pixels()
 
@@ -244,6 +253,11 @@ func _rebuild() -> void:
 
 
 func _build_textures(shown: Dictionary[Vector2i, int]) -> void:
+	_textures = _board_textures_for(shown)
+
+
+# The board textures for any field -- the live one, or the forecast's next round.
+func _board_textures_for(shown: Dictionary[Vector2i, int]) -> Array[Texture]:
 	var size := _rect.size.max(Vector2i.ONE)
 	var kinds := Gas.Kind.size()
 	var cells := Image.create_empty(size.x, size.y, false, Image.FORMAT_RGBA8)
@@ -287,8 +301,9 @@ func _build_textures(shown: Dictionary[Vector2i, int]) -> void:
 	amount_array.create_from_images(amounts)
 	var mask_array := Texture2DArray.new()
 	mask_array.create_from_images(masks)
-	_textures = [ImageTexture.create_from_image(cells), amount_array, mask_array,
+	var out: Array[Texture] = [ImageTexture.create_from_image(cells), amount_array, mask_array,
 		ImageTexture.create_from_image(ground), ImageTexture.create_from_image(mid)]
+	return out
 
 
 func _ground_span(cell: Vector2i) -> Vector2:
@@ -504,6 +519,21 @@ func _build_nodes() -> void:
 	_floor.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	_floor.visible = false
 	add_child(_floor)
+	# Next round's outline: the floor's shader again, drawn after the floor at its own sort so the
+	# two transparent sheets never trade places with the camera.
+	_forecast_material = ShaderMaterial.new()
+	_forecast_material.shader = _floor_material.shader
+	_forecast_material.render_priority = BoardOverlays.GAS_FLOOR_SORT
+	_forecast_material.set_shader_parameter("outline_only", true)
+	_forecast_material.set_shader_parameter("max_level", float(Gas.MAX_LEVEL))
+	_forecast = MeshInstance3D.new()
+	_forecast.name = "GasForecast"
+	_forecast.material_override = _forecast_material
+	_forecast.layers = BoardOverlays.WORLD_RENDER_LAYER
+	_forecast.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	_forecast.sorting_offset = 1.0
+	_forecast.visible = false
+	add_child(_forecast)
 	_puff_material = ShaderMaterial.new()
 	_puff_material.shader = load(PUFF_SHADER) as Shader
 	_puff_material.set_shader_parameter("art", GasPuffArt.build())
@@ -548,10 +578,11 @@ func _push_look_uniforms() -> void:
 		boil.append(look.boil_seconds)
 		bob.append(look.bob)
 		sway.append(look.sway)
-	_floor_material.set_shader_parameter("palettes", palettes)
-	_floor_material.set_shader_parameter("patterns", patterns)
-	_floor_material.set_shader_parameter("kind_count", Gas.Kind.size())
-	_floor_material.set_shader_parameter("art_pixels", ART_PIXELS_PER_CELL)
+	for material: ShaderMaterial in [_floor_material, _forecast_material]:
+		material.set_shader_parameter("palettes", palettes)
+		material.set_shader_parameter("patterns", patterns)
+		material.set_shader_parameter("kind_count", Gas.Kind.size())
+		material.set_shader_parameter("art_pixels", ART_PIXELS_PER_CELL)
 	_puff_material.set_shader_parameter("boil_seconds", boil)
 	_puff_material.set_shader_parameter("bob", bob)
 	_puff_material.set_shader_parameter("sway", sway)
@@ -564,6 +595,15 @@ func cloud_strength() -> float:
 
 func floor_node() -> MeshInstance3D:
 	return _floor
+
+
+func forecast_node() -> MeshInstance3D:
+	return _forecast
+
+
+# The field the forecast outline was last built from -- next round, as GasField.next_round ruled it.
+func forecast_cells() -> Dictionary[Vector2i, int]:
+	return _forecast_cells
 
 
 func puff_node() -> MultiMeshInstance3D:
@@ -592,12 +632,48 @@ func _tint_at(at: Vector3) -> Color:
 	return Color(minf(t.r, 1.0), minf(t.g, 1.0), minf(t.b, 1.0), 1.0)
 
 
+func _build_floor(shown: Dictionary[Vector2i, int]) -> void:
+	_floor.mesh = _floor_mesh(shown)
+	if _floor.mesh != null:
+		_bind_floor(_floor_material, _textures)
+
+
+# Next round's outline, rebuilt while the floor key is held whenever the rule's answer or the board
+# under it changes. The rule is GasField.next_round -- the round's own -- so the outline cannot show
+# a round the board would not play.
+func _update_forecast() -> void:
+	if not floor_held() or not board_source.is_valid() or field == null:
+		return
+	var board: BoardContext = board_source.call()
+	if board == null:
+		return
+	var next := field.next_round(board)
+	var shown: Dictionary[Vector2i, int] = {}
+	for cell: Vector2i in next:
+		if _rect.has_point(cell):
+			shown[cell] = next[cell]
+	var key := [shown, _seen]
+	if key == _forecast_seen:
+		return
+	_forecast_seen = key
+	_forecast_cells = shown
+	_forecast.mesh = _floor_mesh(shown)
+	if _forecast.mesh != null:
+		_bind_floor(_forecast_material, _board_textures_for(shown))
+
+
+func _bind_floor(material: ShaderMaterial, textures: Array[Texture]) -> void:
+	material.set_shader_parameter("cells_tex", textures[0])
+	material.set_shader_parameter("amount_tex", textures[1])
+	material.set_shader_parameter("board_rect", Vector4(_rect.position.x, _rect.position.y,
+		maxi(_rect.size.x, 1), maxi(_rect.size.y, 1)))
+
+
 # One fan of four triangles per gas cell, every vertex on the true surface, lifted into the markup
 # stack. Each vertex carries the light there.
-func _build_floor(shown: Dictionary[Vector2i, int]) -> void:
+func _floor_mesh(shown: Dictionary[Vector2i, int]) -> Mesh:
 	if shown.is_empty():
-		_floor.mesh = null
-		return
+		return null
 	var lift := overlays.gas_floor_lift() if overlays != null else 0.008
 	var st := SurfaceTool.new()
 	st.begin(Mesh.PRIMITIVE_TRIANGLES)
@@ -611,11 +687,7 @@ func _build_floor(shown: Dictionary[Vector2i, int]) -> void:
 			st.add_vertex(centre)
 			st.add_vertex(_floor_point(cell, corners, fan[i], offset))
 			st.add_vertex(_floor_point(cell, corners, fan[(i + 1) % 4], offset))
-	_floor.mesh = st.commit()
-	_floor_material.set_shader_parameter("cells_tex", _textures[0])
-	_floor_material.set_shader_parameter("amount_tex", _textures[1])
-	_floor_material.set_shader_parameter("board_rect", Vector4(_rect.position.x, _rect.position.y,
-		maxi(_rect.size.x, 1), maxi(_rect.size.y, 1)))
+	return st.commit()
 
 
 static func _floor_point(cell: Vector2i, corners: Vector4i, uv: Vector2, offset: Vector3) -> Vector3:
@@ -721,14 +793,18 @@ static func _weighted_kind(packed: int, kinds: Array[Gas.Kind], total: int, rng:
 
 
 # Per frame: which pixel parts show, the clock, and the lightning on the puffs that carry it. Holding
-# the floor key swaps the puffs for the floor.
+# the floor key swaps the puffs for the floor and next round's outline.
 func _animate_pixels() -> void:
 	var down: bool = stands_down.is_valid() and stands_down.call()
 	var held := floor_held()
 	_floor.visible = not down and held and _floor.mesh != null
+	_forecast.visible = not down and held and _forecast.mesh != null
 	_puffs.visible = not down and not held and _puffs.multimesh.instance_count > 0
 	if _floor.visible:
 		_floor_material.set_shader_parameter("corner_radius", floor_corner_radius)
+	if _forecast.visible:
+		_forecast_material.set_shader_parameter("corner_radius", floor_corner_radius)
+		_forecast_material.set_shader_parameter("outline_step", forecast_width)
 	if not _puffs.visible:
 		return
 	_puff_material.set_shader_parameter("gas_time", _time)
