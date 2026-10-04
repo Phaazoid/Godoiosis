@@ -18,7 +18,8 @@ class_name TurnBoundary
 #
 # Walks UNITS rather than burning cells, which is what keeps it symmetric with the forecast: both
 # ask "what is under this unit", so a hazard family the forecast can see cannot be one this misses.
-# A unit's soak comes BEFORE its burn (#508), so a soak never lands on a body its own burn killed.
+# A unit's soak comes BEFORE its burn (#508), here and in the forecast, so the pass plays them in
+# the order the queue lists them.
 static func tile_hits(units: Array[Unit], states: TerrainStateManager, gas: GasField,
 		faction: Team.Faction) -> Array[TileHitAction]:
 	var hits: Array[TileHitAction] = []

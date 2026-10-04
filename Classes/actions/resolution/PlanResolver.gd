@@ -116,6 +116,7 @@ static func _volley_of(member: AttackAction) -> Array[AttackAction]:
 # haul all land in it), the states from the store WITH this pass's own deposits folded in — your own
 # fireball igniting a squadmate's cell is a burn the queue has to show. The gas the same way (#508):
 # dousing a squadmate's fire steams them, and the soak reads the states the pass leaves them holding.
+# A unit's soak is listed before its burn, matching TurnBoundary.tile_hits.
 static func resolve_tile_hits(plan: ResolvedPlan, squad: Squad, actions: Array[BaseAction], hypo: Dictionary, board: BoardContext) -> void:
 	if board == null or squad == null:
 		return
