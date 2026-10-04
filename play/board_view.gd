@@ -310,7 +310,7 @@ static func _mission_block(session) -> String:
 		obj_names.append(MissionRules.Objective.keys()[obj])
 	var title := "ROUT" if obj_names.is_empty() else " + ".join(obj_names)
 	var limit_str := "no limit" if session.round_limit() <= 0 else "limit: %d rounds" % session.round_limit()
-	lines.append("Mission: %s      (round %d, %s)" % [title, session.scenario_data.rounds_elapsed + 1, limit_str])
+	lines.append("Mission: %s      (round %d, %s)" % [title, session.mission.rounds_elapsed + 1, limit_str])
 	if session.objectives().is_empty():
 		lines.append("  ROUT     defeat all hostile units")
 	else:
@@ -338,8 +338,22 @@ static func _mission_block(session) -> String:
 						lines.append("  EXTRACT  (no zone painted)")
 	for cond in session.lose_conditions():
 		lines.append("  FAIL IF  %s" % MissionRules.defeat_reason(cond))
-	lines.append("  (progress: not scored headlessly (#46))")
+	var progress := _progress_lines(session)
+	if not progress.is_empty():
+		lines.append("  Progress:")
+		lines.append_array(progress)
 	return "\n".join(lines)
+
+# The briefing's own rows (#46): MissionStatusPanel.briefing is the ONE wording of a mission's
+# progress, so a driver reads it in the words the player does. Its labels never enter a tree here,
+# so each is freed the moment its text is read.
+static func _progress_lines(session) -> Array[String]:
+	var out: Array[String] = []
+	var board: BoardContext = session._board()
+	for row: MissionStatusPanel.Row in MissionStatusPanel.briefing(session.mission, board):
+		out.append("    " + row.label.text)
+		row.label.free()
+	return out
 
 static func _format_cells(cells: Array) -> String:
 	var list: Array[Vector2i] = []

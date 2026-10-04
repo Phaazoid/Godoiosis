@@ -1411,7 +1411,7 @@ func refresh_action_queue(squad: Squad):
 		squad_action_queue_control.set_execute_state(SquadActionQueueControl.ExecuteState.READY)
 
 # The mission-status HUD (#134). Called from MissionController's write points (check, capture,
-# set_objectives, set_lose_conditions, advance_round, restore_progress, reset) plus the dev Scenario
+# set_objectives, set_lose_conditions, advance_round, apply_scenario, reset) plus the dev Scenario
 # tab's live objective toggle — the refresh_action_queue pattern, not a signal. A board that declares
 # nothing (sandbox, cleared) hides the panel.
 #
@@ -1423,7 +1423,7 @@ func refresh_mission_status() -> void:
 			and instruction == "":
 		mission_status_panel.clear()
 		return
-	mission_status_panel.show_status(mission_controller, _board(), instruction)
+	mission_status_panel.show_status(mission_controller.mission, _board(), instruction)
 
 # The bottom-right End Turn affordance (#189): whether it is OFFERED, and whether it flashes with the
 # SAME Pulse cue as Execute Orders once every squad on the active faction has acted or waited.

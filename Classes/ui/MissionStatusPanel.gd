@@ -11,14 +11,16 @@ class_name MissionStatusPanel
 # that band is what stops a second node restating where the first one ends.
 #
 # A declared second REPRESENTATION of what the board's zone marks already show (Law #4):
-# MissionController stays authoritative, this panel only draws what it is handed on refresh, and
-# game.refresh_mission_status() is the one caller. Rules and counts are read off the controller,
+# MissionState stays authoritative, this panel only draws what it is handed on refresh, and
+# game.refresh_mission_status() is the one caller. Rules and counts are read off the mission,
 # never re-derived here.
 #
 # THE ROWS THEMSELVES HAVE A SECOND READER since #740: the pre-mission contract shows the same
 # briefing before the battle that this shows during it. `briefing` is that one builder -- a static,
 # so the screen needs no panel instance -- and this file is the only place the wording, the ordering
 # and the two headers live.
+# A THIRD reader since #46: the headless Play API's board view prints the rows' text, so a driver
+# reads a mission's progress in the words the player does.
 #
 # A ROW ABOUT A PLACE ANSWERS THE POINTER since #955 part 3, here and not in the briefing: Capture,
 # Extract and Defend wear their zone's emblem, hovering one lights its zones on the board and a click
@@ -139,38 +141,38 @@ func clear() -> void:
 # readout: the SquadManager.contact_breaks split, one domain over. Each row names the zone kind it is
 # about, off MissionRules' one pairing, so the HUD can make it answer the pointer (#955 part 3).
 #
-# Static, and every fact still comes off the controller -- this re-derives nothing.
-static func briefing(controller: MissionController, board: BoardContext) -> Array[Row]:
+# Static, and every fact still comes off the mission -- this re-derives nothing.
+static func briefing(mission: MissionState, board: BoardContext) -> Array[Row]:
 	var rows: Array[Row] = []
-	if not controller.objectives.is_empty():   # a lesson-only board has no OBJECTIVES header to earn
+	if not mission.objectives.is_empty():   # a lesson-only board has no OBJECTIVES header to earn
 		rows.append(Row.new(_build_header("OBJECTIVES"), MissionRules.NO_ZONE))
-	for objective in controller.objectives:
-		rows.append(Row.new(_build_row(objective, controller, board),
+	for objective in mission.objectives:
+		rows.append(Row.new(_build_row(objective, mission, board),
 				MissionRules.zone_kind_of_objective(objective)))
 	# What LOSES it (#101), under its own header: a countdown listed among the objectives reads as
 	# something to achieve. Driven off the declared list, so the next condition needs no edit here.
-	if not controller.lose_conditions.is_empty():
+	if not mission.lose_conditions.is_empty():
 		rows.append(Row.new(_build_header("FAIL IF"), MissionRules.NO_ZONE))
-	for condition in controller.lose_conditions:
-		rows.append(Row.new(_build_lose_row(condition, controller, board),
+	for condition in mission.lose_conditions:
+		rows.append(Row.new(_build_lose_row(condition, mission, board),
 				MissionRules.zone_kind_of_lose(condition)))
 	return rows
 
 # The briefing as plain labels -- what the pre-mission contract draws, where nothing answers the
 # pointer (the board is behind an opaque screen there; its Tab preview has this panel).
-static func briefing_rows(controller: MissionController, board: BoardContext) -> Array[Label]:
+static func briefing_rows(mission: MissionState, board: BoardContext) -> Array[Label]:
 	var labels: Array[Label] = []
-	for row in briefing(controller, board):
+	for row in briefing(mission, board):
 		labels.append(row.label)
 	return labels
 
-func show_status(controller: MissionController, board: BoardContext, instruction := "") -> void:
+func show_status(mission: MissionState, board: BoardContext, instruction := "") -> void:
 	# Immediate free, not queue_free: the panel re-lays out from minimum size below, and a dying
 	# child still counts toward it until end of frame.
 	for child in _rows.get_children():
 		_rows.remove_child(child)
 		child.free()
-	for row in briefing(controller, board):
+	for row in briefing(mission, board):
 		if row.zone_kind == MissionRules.NO_ZONE:
 			_rows.add_child(row.label)
 		else:
@@ -297,22 +299,22 @@ static func _build_header(text: String) -> Label:
 	header.modulate = Color(1, 1, 1, 0.65)
 	return header
 
-# One declared lose condition. Rules and counts come off the controller, never re-derived here.
+# One declared lose condition. Rules and counts come off the mission, never re-derived here.
 # Takes the board since #572: a protect row NAMES the units it is grading you on, and who is still
 # standing is a board question -- the same argument _build_row has always needed.
-static func _build_lose_row(condition: MissionRules.LoseCondition, controller: MissionController,
+static func _build_lose_row(condition: MissionRules.LoseCondition, mission: MissionState,
 		board: BoardContext) -> Label:
 	var label := Label.new()
 	label.add_theme_font_size_override("font_size", 13)
 	# Declared with nothing to fire on -- the objectives' unpainted-geometry row, same doctrine: the
 	# mission is broken and the row must say so rather than vanish.
-	if controller.lose_conditions_missing_setup().has(condition):
+	if mission.lose_conditions_missing_setup(board).has(condition):
 		label.text = "%s — not set" % _lose_title(condition)
 		label.modulate = UNWINNABLE_COLOR
 		return label
 	match condition:
 		MissionRules.LoseCondition.ROUND_LIMIT:
-			var left: int = controller.rounds_remaining()
+			var left: int = mission.rounds_remaining()
 			label.text = "Time — %d %s" % [left, "round left" if left == 1 else "rounds left"]
 			label.modulate = URGENT_COLOR if left <= URGENT_ROUNDS else PENDING_COLOR
 			return label
@@ -320,7 +322,7 @@ static func _build_lose_row(condition: MissionRules.LoseCondition, controller: M
 			# NAMED, not counted (#572 fork D): "Protect" on a board with twelve units tells the
 			# player nothing about which one they are being graded on.
 			var names: Array[String] = []
-			for unit in controller.protected_units(board):
+			for unit in mission.protected_units(board):
 				names.append(unit.get_unit_name())
 			label.text = "Protect — %s" % ", ".join(names)
 			label.modulate = PENDING_COLOR
@@ -329,7 +331,7 @@ static func _build_lose_row(condition: MissionRules.LoseCondition, controller: M
 			# NAMED, not counted (#571): a defended point is a place on the board, and "Defend — 1
 			# point" tells a player nothing about which one. Zone names are already authored to be
 			# read ("South Bank", "Landing"), so they are the readout.
-			label.text = "Defend — %s" % ", ".join(controller.defend_zone_names())
+			label.text = "Defend — %s" % ", ".join(mission.defend_zone_names())
 			label.modulate = PENDING_COLOR
 			return label
 	label.text = _lose_title(condition)
@@ -339,16 +341,16 @@ static func _build_lose_row(condition: MissionRules.LoseCondition, controller: M
 static func _lose_title(condition: MissionRules.LoseCondition) -> String:
 	return String(MissionRules.LoseCondition.keys()[condition]).capitalize()
 
-static func _build_row(objective: MissionRules.Objective, controller: MissionController, board: BoardContext) -> Label:
+static func _build_row(objective: MissionRules.Objective, mission: MissionState, board: BoardContext) -> Label:
 	var label := Label.new()
 	label.add_theme_font_size_override("font_size", 13)
 	# Declared but unpainted: the mission is unwinnable and the row must say so, never vanish
 	# (canon -- silently dropping it would turn a broken map into a different, playable one).
-	if controller.objectives_missing_geometry().has(objective):
+	if mission.objectives_missing_geometry().has(objective):
 		label.text = "%s — no zone painted" % _title(objective)
 		label.modulate = UNWINNABLE_COLOR
 		return label
-	if controller.progress_for(objective, board) == MissionRules.Progress.MET:
+	if mission.progress_for(objective, board) == MissionRules.Progress.MET:
 		label.text = "✓ " + _title(objective)
 		label.modulate = MET_COLOR
 		return label
@@ -357,10 +359,10 @@ static func _build_row(objective: MissionRules.Objective, controller: MissionCon
 			var left := MissionRules.active_hostile_count(board)
 			label.text = "Rout — %d %s" % [left, "foe remains" if left == 1 else "foes remain"]
 		MissionRules.Objective.CAPTURE:
-			var captured: Vector2i = controller.capture_counts()
+			var captured: Vector2i = mission.capture_counts()
 			label.text = "Capture — %d/%d zones" % [captured.x, captured.y]
 		MissionRules.Objective.EXTRACT:
-			var extracted: Vector2i = controller.extract_counts(board)
+			var extracted: Vector2i = mission.extract_counts(board)
 			label.text = "Extract — %d/%d in the zone" % [extracted.x, extracted.y]
 		_:
 			label.text = _title(objective)
