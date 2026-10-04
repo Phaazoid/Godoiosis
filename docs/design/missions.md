@@ -2,18 +2,19 @@
 
 **Status: ALL FOUR SLICES BUILT 2026-07-28 ([#96](https://github.com/Phaazoid/Godoiosis/issues/96)).** Filed 2026-07-27, when the project acquired a win condition for the first time. Before this, Iosis had ten interlocking systems and no way to finish a battle — which meant a design question could be answered *"is this coherent?"* but never *"does this improve play?"*
 
-**Canon checked through #1160 (2026-09-29); #120's body weight and its authored table, and #1174's WIL tombstone, folded in 2026-10-01; #46's shared pre-mission phase and its job door (`Loadout.set_job`) folded in 2026-10-03; #46's restart buffer rules (`PreMissionPhase.replay_for`/`kept_by_restart`) folded in 2026-10-03.**
+**Canon checked through #1160 (2026-09-29); #120's body weight and its authored table, and #1174's WIL tombstone, folded in 2026-10-01; #46's shared pre-mission phase and its job door (`Loadout.set_job`) folded in 2026-10-03; #46's restart buffer rules (`PreMissionPhase.replay_for`/`kept_by_restart`) folded in 2026-10-03; #46's `MissionState` (mission scoring slice 1: the state both hosts own) folded in 2026-10-04.**
 
 ## What a mission is
 
 A mission is a board you can **lose**. Everything else — selection, capture points, extraction, briefings, rewards — is content stacked on a loop that already closes.
 
-The loop lives in four places, and the split is load-bearing:
+The loop lives in these places, and the split is load-bearing:
 
 | part | lives in | why there |
 |---|---|---|
 | **the rule** — won, lost, or ongoing? | `MissionRules` (`flow/`, static, pure) | Mirrors `LethalityRules`: one function reading a `BoardContext`, so the game, the headless Play API and the tests cannot each grow their own copy. |
-| **the state** — the latches, the objective progress, the ending | `MissionController` (`flow/`, a game collaborator) | Everything a pure predicate structurally cannot hold, plus what the game *does* about an ending. |
+| **the state** — the latches, the objective progress, the round clock, why it was lost | `MissionState` (`flow/`, `RefCounted`, since #46) | Everything a pure predicate structurally cannot hold. ONE object per mission that both hosts own — the game and the headless Play API — so the two cannot score a mission differently (`TurnBoundary` and `PreMissionPhase` are the precedent). |
+| **what the game DOES about an ending** | `MissionController` (`flow/`, a game collaborator) | The HUD, the zone overlay, the telemetry seal, the banner and the screens. It holds the game's `MissionState` and delegates every rule to it under the names its readers already call; the authored lists forward to the state's own arrays, so the Scenario tab's in-place edits land. |
 | **what a mission requires** | `ScenarioData.objectives` | Authored content, saved with the board. |
 | **where a requirement IS** | `ScenarioData.zones` (via `ZoneManager.Kind`) | Geometry. A capture point is a zone of size one. |
 | **who the computer plays** | `ScenarioData.ai_factions` (#150) | Authored content, saved with the board — same shelf as `objectives`. Commanding is hotseat-gated, so a mission that declares nobody hands the player both sides rather than stalling — **which is a board the dev authors on purpose** (2026-08-26: *"controlling both sides is important to testing"*), so `BoardLint` warns about it and never refuses it. |
@@ -428,7 +429,7 @@ So it is its own Kind, and the reckoning is what a fifth kind actually cost agai
 | `capturable_zone_at` | untouched — a DEFEND zone is not a CAPTURE zone, so it is never offered | must refuse your own zones, or the menu offers *Capture* on your own cargo |
 | `capture_counts` | untouched | must count an owned zone as already claimed |
 | board tint | its own colour, free (per-layer modulate) | shares the capture tint, or costs a layer anyway |
-| persisted state | **none** — `_captured_zones`, `ScenarioData.captured_zones` and the #87 snapshot are all untouched | a live owner map, a type change on a persisted field, and a migration |
+| persisted state | **none** — `MissionState.captured_zones` (then `MissionController._captured_zones`), `ScenarioData.captured_zones` and the #87 snapshot are all untouched | a live owner map, a type change on a persisted field, and a migration |
 
 **It is a LOSE CONDITION's geometry, not an objective's.** `MissionRules.LoseCondition.POINT_LOST` is what a mission declares; the painted zone is where. Painting one without declaring the condition is legal and inert, exactly as a decorative CAPTURE zone is — what a mission requires is the authored list, never what happens to be on the board. Declared with nothing painted is `objectives_missing_geometry`'s twin and is reported the same three ways.
 
@@ -464,7 +465,7 @@ No id, no lookup, nothing to dangle. *Which person is this* is a real question a
 
 ### The guard: declared without painted
 
-An objective ticked with no matching zone painted can never be met — the mission is unwinnable. Three things catch it, all reading the one rule (`MissionController.objectives_missing_geometry`):
+An objective ticked with no matching zone painted can never be met — the mission is unwinnable. Three things catch it, all reading the one rule (`MissionState.objectives_missing_geometry`, which the controller forwards):
 
 - **Authoring time.** The dev Scenario tab's objective checkboxes render a live warning naming every declared-but-unpainted objective. This is the one that matters; it is cheaper than finding out mid-playtest.
 - **On demand.** Scenario ▸ Properties ▸ **Check board** ([#390](https://github.com/Phaazoid/Godoiosis/issues/390)) reports it alongside the board's other authoring faults, and CI runs the same pass over every shipped mission.
@@ -497,16 +498,16 @@ At runtime the unpainted objective reads **PENDING, not NONE** — deliberately.
 
 ### The order two conditions are asked in
 
-`evaluate` takes `failure` exactly as it already takes `progress` — `MissionController` computes it, the rule stays pure — and the order is load-bearing at both ends:
+`evaluate` takes `failure` exactly as it already takes `progress` — `MissionState` computes it, the rule stays pure — and the order is load-bearing at both ends:
 
 1. **The squad wipe is asked FIRST**, so mutual destruction is still a DEFEAT (unchanged doctrine) and a squad lost on the round the clock expires reports **SQUAD_LOST**, the more concrete thing that happened.
 2. **Every VICTORY path is asked BEFORE an authored failure.** Finishing on the last allowed round is finishing *in time*; a clock must not steal a win the player earned.
 
-`MissionController.failure_for` names the reason and `evaluate` decides the outcome. Both read the one `faction_has_active_units` predicate — `evaluate` keeps its own wipe branch because callers that pass no failure (the headless Play API) still need it.
+`MissionState.failure_for` names the reason and `evaluate` decides the outcome. Both read the one `faction_has_active_units` predicate — `evaluate` keeps its own wipe branch because callers that pass no failure (the headless Play API) still need it.
 
 ### Where the clock lives — fork B
 
-**The count is battle-scoped, the limit is authored**, the same split objectives already have: `MissionController._rounds_elapsed` (cleared by `reset()`, saved with the #87 snapshot) against `ScenarioData.round_limit`. A **round**, not a turn: the cycle is N-faction and rebuilt from the board each hand-off, so a round is the only stable unit.
+**The count is battle-scoped, the limit is authored**, the same split objectives already have: `MissionState.rounds_elapsed` (cleared by `reset()`, saved with the #87 snapshot) against `ScenarioData.round_limit`. A **round**, not a turn: the cycle is N-faction and rebuilt from the board each hand-off, so a round is the only stable unit.
 
 **There is ONE increment point**, `game._on_round_completed`, beside the terrain tick. `TurnManager` emits `round_completed` before `turn_started`, so the very next `check()` — turn start, after the downed clocks tick — is the one that sees it. **No new evaluation seam was added**; fork E's three points still are the three points.
 
@@ -555,7 +556,7 @@ If the last player unit and the last hostile fall in the same resolution pass, t
 
 A board holding only enemies satisfies "the player has no active units" perfectly, and it is obviously not a defeat. The board alone cannot distinguish **wiped out** from **never here** (`present_factions` drops factions whose units are all dead, so the record of who started is gone).
 
-So the caller latches it: `MissionRules.is_contested(board)` is true while both sides have a commandable unit, and `MissionController` remembers that it was ever true. `evaluate` is *handed* that latch rather than reading it live — a live read could never end a mission, because the moment one side is wiped the board stops being contested.
+So the caller latches it: `MissionRules.is_contested(board)` is true while both sides have a commandable unit, and `MissionState` remembers that it was ever true. `evaluate` is *handed* that latch rather than reading it live — a live read could never end a mission, because the moment one side is wiped the board stops being contested.
 
 The practical effect: **dev sandbox boards stay inert.** Spawn five enemies in the Unit tab with no player units and nothing fires. No `dev_mode` flag was needed.
 
@@ -663,7 +664,7 @@ The one thing the branch does need is the *fallback*: a defended point has the p
 
 ## Known gaps
 
-- **The Play API cannot see authored objectives, and now cannot see lose conditions either.** `play_session.mission_outcome()` calls the same `MissionRules.evaluate`, but with no `MissionController` it passes `Progress.NONE` and no `failure` — so headless runs evaluate every board as a rout map with no clock, and there is no `capture` command to queue. Headless coverage of the loop stops at rout/defeat. The clock is precisely the kind of rule headless play is good at pressure-testing, so this is worth closing before the conditions with geometry land. **Tracked on [#46](https://github.com/Phaazoid/Godoiosis/issues/46)**, the Play API evergreen — it is a headless-interface gap rather than a mission one, and it already had a home.
+- **The Play API cannot see authored objectives, and now cannot see lose conditions either.** `play_session.mission_outcome()` calls the same `MissionRules.evaluate`, but with no `MissionController` it passes `Progress.NONE` and no `failure` — so headless runs evaluate every board as a rout map with no clock, and there is no `capture` command to queue. **Closing, in three slices on #46 (2026-10-04):** slice 1 moved the state and its rules out of the controller into `MissionState`, which a headless host can own; slice 2 gives `PlaySession` one; slice 3 adds the `capture` verb. Headless coverage of the loop stops at rout/defeat. The clock is precisely the kind of rule headless play is good at pressure-testing, so this is worth closing before the conditions with geometry land. **Tracked on [#46](https://github.com/Phaazoid/Godoiosis/issues/46)**, the Play API evergreen — it is a headless-interface gap rather than a mission one, and it already had a home.
 - **The end-of-mission banner's three choices are untested.** `_end_mission` awaits `MissionEndBanner.show_banner`, and nothing asserts what RETRY (reload + re-begin the turn), MISSION_SELECT (back to the front door) and STAY (unlock the board, mission stays over) go on to do, so those are verified only in play. The gap is unwritten, not unwritable: this line used to say a button press cannot be given headlessly, and [#1052](https://github.com/Phaazoid/Godoiosis/issues/1052)'s cases in `tests/ui/test_report_flow.gd` press the banner's own Submit button on a real ending. Coverage stops at the board reaching `MISSION_OVER` with input locked. *(The rest of `MissionController` IS covered as of 2026-07-29 — `tests/flow/test_mission_controller.gd`, 31 cases on a real game scene, pinning both latches, AND-composition, whole-zone capture, extraction counting the downed, declared-but-unpainted reading PENDING, and DEFEAT beating a met objective in the same pass; falsified against seven mutations, each caught by its own test. The "game scene segfaults in the runner" belief that had blocked this was false — see [#114](https://github.com/Phaazoid/Godoiosis/issues/114).)*
 - ~~**No mission-status UI.**~~ BUILT [#134](https://github.com/Phaazoid/Godoiosis/issues/134) (2026-08-11) — `MissionStatusPanel` shows every declared objective and its live progress. The prerequisite [#101](https://github.com/Phaazoid/Godoiosis/issues/101) fork D named is now in place.
 - **`CaptureAction`'s icon is a placeholder** (the board target marker).
