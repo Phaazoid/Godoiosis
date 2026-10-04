@@ -155,7 +155,7 @@ func _execute(actor: Unit, then_burn := false) -> void:
 					"leader": link.leader.get_instance_id(), "ends": link.ends})
 	await game.order_executor.execute_orders(actor)
 	if then_burn:
-		await game.order_executor.apply_burning_tile_damage(faction)
+		await game.order_executor.apply_end_of_turn_tiles(faction)
 
 
 # Every member -> leader link on the board, by instance id.

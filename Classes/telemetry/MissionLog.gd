@@ -341,12 +341,20 @@ func record_turn_effects(faction: Team.Faction, hits: Array[TileHitAction]) -> v
 		return
 	var rows: Array[Dictionary] = []
 	for hit: TileHitAction in hits:
-		rows.append({
+		var row := {
 			"unit": _ref(hit.actor),
 			"state": Terrain.TileState.keys()[hit.state],
 			"damage": hit.resolved.damage,
 			"lethality": ResolvedOutcome.Lethality.keys()[hit.resolved.lethality],
-		})
+		}
+		if hit.gas >= 0:
+			# A soak (#508). Keys added to its row alone, so a burn's row keeps the shape old runs hold.
+			var gained: Array[String] = []
+			for s in hit.resolved.states_added:
+				gained.append(Elemental.State.keys()[s])
+			row["gas"] = Gas.Kind.keys()[hit.gas]
+			row["states"] = gained
+		rows.append(row)
 	_record("turn_effects", {"faction": Team.Faction.keys()[faction], "hits": rows})
 
 

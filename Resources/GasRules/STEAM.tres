@@ -4,3 +4,4 @@
 
 [resource]
 script = ExtResource("1_gasrl")
+state = 1

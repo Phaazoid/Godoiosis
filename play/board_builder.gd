@@ -98,7 +98,7 @@ static func build(parent: Node, root_name := "PlayRoot") -> Dictionary:
 		for child in units_root.get_children():
 			if child is Unit:
 				units.append(child)
-		return BoardContext.new(grid, units, squad_manager, terrain_states, null, board_heights)
+		return BoardContext.new(grid, units, squad_manager, terrain_states, null, board_heights, gas_field)
 
 	return {
 		"root": root,
