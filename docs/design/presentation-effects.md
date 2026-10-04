@@ -2,7 +2,7 @@
 
 **Status: an idea wall plus two locked decisions.** Solicited by the dev on 2026-08-12, the day Stage 0 (#203) passed its GO gate: *"a full thought experiment, all ideas on the wall."* Nothing below the Decisions section is a commitment — it is the candidate pool for #176's stage 5 and beyond, kept so it can't evaporate from chat. The look-dev scene (`Scenes/LookDev/LookDev.tscn`) is the standing playground where any of it gets prototyped before it's real — and since #212 (2026-08-15) the **Moods tab** in the dev-tools window tunes the *shipping* view live, so a value on this wall can be judged on a real board rather than in the diorama. **It is a playground, not a scratch scene ([#393](https://github.com/Phaazoid/Godoiosis/issues/393), 2026-08-19)** — seven presentation suites fixture on it, `Battle3D.tscn` loads its MeshLibrary, and `BoardMirror`/`BoardOverlays` read textures out of `Art/LookDev/`, so it is edited with the same care as shipping code. Its four moods stopped being a second copy at the same time: `look_dev.gd` held them as a hardcoded `PRESETS` table, seeded from the same values four of the twelve `LookPreset` files now carry, and it resolves them by NAME through `LookKnobs` instead.
 
-**Canon checked through #1024 (2026-09-18); #508's gas look and #1184's dev search folded in 2026-10-01; #508's gas mixes folded in 2026-10-02; #508's gas preview ghost folded in 2026-10-03.**
+**Canon checked through #1024 (2026-09-18); #508's gas look and #1184's dev search folded in 2026-10-01; #508's gas mixes folded in 2026-10-02; #508's gas preview ghost, levels and next-round outline folded in 2026-10-03.**
 
 ---
 
@@ -1216,14 +1216,29 @@ is a Game-tab row on a **Gas** tab; what one GAS looks like is its `GasLook` und
   extra by `gas_puff.gdshader` from the pushed clock; `GasPuffArt` draws them from each look's
   palette into one Texture2DArray at startup (a sprite sheet replaces it once a mix wins). A cell's
   slots lean toward neighbouring gas and tuck in from an empty edge; a mixed cell picks each slot's
-  gas by the amounts. **The dummy renderer a headless run uses keeps no MultiMesh instance data**
+  gas by the levels. **The dummy renderer a headless run uses keeps no MultiMesh instance data**
   (every transform and custom datum reads back zero), so `GasMirror.puff_entries()` is the readable
   record of what the MultiMesh was handed.
+- **Three levels step the look** (#508 PR 2, 2026-10-03; the store holds thin, medium or thick
+  rather than 0-14). The volume's density is the level's third, so the existing `thin_floor` still
+  sets how much thin steam shows; the puffs COUNT the level -- a slot table's thresholds are levels
+  now, so thin shows one puff, medium three and thick every slot, each a size bigger. A first pass:
+  whether the three read apart is the dev's to judge in play.
 - **The fog floor** is a fan per cell lifted into the markup stack at `BoardOverlays.GAS_FLOOR_SORT`,
   under every layer, and `gas_floor.gdshader` works out the shape per art pixel from the cell's
   neighbour bits: rounded outer corners, square inner ones, ink, rim, pattern, and a mixed cell
-  dithered by its amounts. Colours go to both shaders LINEAR, because a plain vec4 uniform is not
+  dithered by its levels. Colours go to both shaders LINEAR, because a plain vec4 uniform is not
   converted the way a texture's sRGB texels are.
+- **Holding the same key also outlines NEXT round** (#508 PR 2; the dev's pick, *"Alt shows next
+  round"*, against the worry that a creeping cloud must be readable from turn to turn). A second
+  copy of the floor, `GasForecast`, is built from `GasField.next_round` -- the round's own rule, so
+  the outline cannot show a round the board will not play -- and drawn by the same shader in its
+  `outline_only` mode: the region's ink edge alone, `forecast_width` art pixels per level, so thick
+  steam next round reads as a bolder border. It shares the floor's sort with a `sorting_offset` so
+  the two sheets never trade places. **It is not a markup layer, and that is measured**: the plan
+  was three dashed line layers in `BoardOverlays.LAYERS`, and every integer sort from 0 to 15 is
+  taken under the flame band at 16, so a new layer meant sharing a sort with layers whose cells it
+  overlaps or renumbering pinned ones.
 - **A tear-out's diorama carries its gas**: a lifted region reads the same field at the stage offset,
   only from the cells that went up. Gas on cells IN FLIGHT is hidden until they land.
 - **Thunder has one CPU flash schedule** per 2x2 cluster, and a bolt belongs to a STRIKE, not a cell:
