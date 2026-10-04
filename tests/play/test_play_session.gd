@@ -147,6 +147,22 @@ func test_the_headless_turn_end_soaks_a_unit_standing_in_steam() -> void:
 			return str(line).contains(Elemental.state_display_name(rules.state)))) \
 		.override_failure_message("the headless turn end soaked without saying so").is_true()
 
+# ...and the headless PREVIEW forecasts it first, off the session's own board -- the Play API's half
+# of Law #2, which reads its gas through that board and nowhere else.
+func test_the_headless_preview_forecasts_the_soak_at_the_walks_end() -> void:
+	var rules := GasRules.for_kind(Gas.Kind.STEAM)
+	var field: GasField = _board.gas_field
+	field.set_level(Vector2i(1, 0), Gas.Kind.STEAM, rules.state_from)
+	_session.queue_move("A", Vector2i(1, 0))
+	var prev: Dictionary = _session.preview()
+	assert_bool(prev.ok).is_true()
+	var rows: Array = prev.plan.tile_hits
+	assert_int(rows.size()).override_failure_message(
+			"the headless preview forecast no soak at the end of the walk").is_equal(1)
+	if rows.size() != 1:
+		return
+	assert_str(str((rows[0] as Dictionary).get("actor"))).is_equal("A")
+
 # The headless scenario loader: an in-memory ScenarioData round-trips onto a fresh board
 # (file-independent, so it survives scenario renames).
 func test_apply_scenario_restores_units_terrain_and_turn() -> void:
