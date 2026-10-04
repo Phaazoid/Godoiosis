@@ -24,6 +24,7 @@ var _handle_by_unit := {}      # Unit -> String (stable display handle)
 var _next_player := 0
 var _next_enemy := 0
 var _downed_pending: Array[Unit] = []   # units downed mid-execute; ejected AFTER the pass (mirrors OrderExecutor._downed_pending)
+var _executing := false   # true while execute() plays the pass, up to its order clear: a running pass owns its plan (#361)
 # This mission's state and rules (#46) -- the SAME object the game's MissionController holds, so a
 # headless run scores objectives, the clock and every latch exactly as the game does.
 var mission: MissionState
@@ -59,6 +60,16 @@ func _init(board: Dictionary) -> void:
 		turn_manager.round_completed.connect(_on_round_completed)
 	if not turn_manager.turn_started.is_connected(_on_turn_started):
 		turn_manager.turn_started.connect(_on_turn_started)
+	# Every change to a plan re-resolves it, off the queue signals game._wire_signals hangs
+	# refresh_action_queue on (#46): the next order is judged against the plan as it stands.
+	if not squad_manager.squad_action_queued.is_connected(_on_order_queued):
+		squad_manager.squad_action_queued.connect(_on_order_queued)
+	if not squad_manager.squad_action_cancelled.is_connected(_on_order_cancelled):
+		squad_manager.squad_action_cancelled.connect(_on_order_cancelled)
+	if not squad_manager.squad_became_active.is_connected(_on_plan_opened):
+		squad_manager.squad_became_active.connect(_on_plan_opened)
+	if not squad_manager.squad_became_empty.is_connected(_refresh_plan):
+		squad_manager.squad_became_empty.connect(_refresh_plan)
 
 func _register(unit: Unit) -> void:
 	if _handle_by_unit.has(unit):
@@ -94,6 +105,26 @@ func _process_downed_pending() -> void:
 			continue
 		squad_manager.handle_unit_downed(unit)
 	_downed_pending.clear()
+
+# game._on_unit_action_queued's rule half: a batch is judged once, when queue_batch re-emits at its close.
+func _on_order_queued(squad: Squad, _action: BaseAction) -> void:
+	if not squad_manager.batching:
+		_refresh_plan(squad)
+
+func _on_order_cancelled(squad: Squad, _unit: Unit, _type: BaseAction.ActionType) -> void:
+	_refresh_plan(squad)
+
+func _on_plan_opened(squad: Squad, _action: BaseAction) -> void:
+	_refresh_plan(squad)
+
+# game.refresh_action_queue's rule half (#46). Refused while a pass executes (#361: a re-derive
+# mid-pass re-simulates attacks that already landed), and while the AI's threat preview queues and
+# rolls back, which every game handler on these signals sits out.
+func _refresh_plan(squad: Squad) -> void:
+	if squad == null or not is_instance_valid(squad) or _executing or squad_manager.previewing:
+		return
+	var plan := squad_manager.resolve_plan(squad, _board())
+	squad_manager.validate_squad_plan(squad, plan)
 
 # ---- queries ----
 
@@ -523,9 +554,7 @@ func gear(handle: String, verb_name: String, slot: int) -> Dictionary:
 	var refusal := GearVerbs.perform(unit, verb as GearVerbs.Verb, slot)
 	if refusal != "":
 		return {"ok": false, "error": refusal}
-	var squad := squad_manager.active_squad
-	if squad != null:
-		squad_manager.validate_squad_plan(squad, squad_manager.resolve_plan(squad, _board()))
+	_refresh_plan(squad_manager.active_squad)
 	return {"ok": true, "summary": "%s: %s" % [handle, verb_name]}
 
 # STASH or a roster unit's handle -> {ok, unit}, the unit null for the stash. The screen's cards are
@@ -980,6 +1009,7 @@ func execute() -> Dictionary:
 	if squad_manager.squad_has_invalid_actions(squad):
 		return {"ok": false, "error": "plan has invalid actions; fix before executing"}
 
+	_executing = true
 	var events: Array[String] = []
 
 	# 1) moves — teleport, the headless stand-in for tweened MoveAction.execute()
@@ -1037,6 +1067,9 @@ func execute() -> Dictionary:
 	# 5) eject units downed during the pass into solo squads (mirrors OrderExecutor._process_downed_pending)
 	_process_downed_pending()
 
+	# The pass is over before its orders clear, as OrderExecutor drops executing_plan before
+	# _end_squad_turn: the clear's own refreshes re-resolve the emptied plan.
+	_executing = false
 	# clear the squad's orders + mark acted (mirrors execute_orders' tail)
 	if is_instance_valid(squad):
 		for action in squad.action_queue.duplicate():
