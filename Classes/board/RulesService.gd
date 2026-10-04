@@ -20,12 +20,21 @@ static func can_spawn_at(board: BoardContext, cell: Vector2i, is_body := false) 
 		return false
 	return board.unit_at_cell(cell) == null
 
+# WHY this unit may not act at all -- "" means it is standing. Downed and dead units can't be
+# commanded (will-and-death.md). Its own question because the order chokepoint asks it without the
+# faction half: the AI's preview queues enemy orders on the player's turn (#662).
+static func standing_block_reason(unit: Unit) -> String:
+	if not unit.is_active():
+		return "%s is down." % unit.get_unit_name()
+	return ""
+
 # WHY this unit may not be commanded right now -- "" means it may. game.can_control's board half,
 # which the headless Play API's dock verbs ask too (#46): standing, and on the side whose turn it is.
 # Says nothing about whether its squad has acted -- the inspect dock works after that.
 static func command_block_reason(unit: Unit, active_faction: Team.Faction) -> String:
-	if not unit.is_active():   # downed/dead units can't be commanded (will-and-death.md)
-		return "%s is down." % unit.get_unit_name()
+	var down := standing_block_reason(unit)
+	if down != "":
+		return down
 	if unit.get_faction() != active_faction:
 		return "%s is not on the side whose turn it is." % unit.get_unit_name()
 	return ""

@@ -303,7 +303,7 @@ func _replay_order(order: Dictionary, event: Dictionary) -> void:
 	if unit == null:
 		_diverge("round %d: an order names a unit that could not be bound" % round_no)
 		return
-	var refused := false
+	var refusal := ""   # the chokepoint's own reason (#662); "" = accepted, or not asked
 	match str(order.get("type", "")):
 		"MOVE":
 			var move := _build_move(unit, _cell_of(order.get("to")))
@@ -311,11 +311,11 @@ func _replay_order(order: Dictionary, event: Dictionary) -> void:
 				_diverge("round %d: %s cannot reach %s any more" % [
 					round_no, unit.get_unit_name(), str(_cell_of(order.get("to")))])
 				return
-			refused = not game.squad_manager.queue_action(unit.squad, move)
+			refusal = game.squad_manager.try_queue_action(unit.squad, move)
 		"ATTACK":
 			_arm_attack(unit, str(order.get("attack", "")), round_no)
 			var attack := AttackAction.declare(unit, unit.get_projected_destination(), _cell_of(order.get("at")))
-			refused = not game.squad_manager.queue_action(unit.squad, attack)
+			refusal = game.squad_manager.try_queue_action(unit.squad, attack)
 		"OVERWATCH":
 			_arm_attack(unit, str(order.get("attack", "")), round_no, true)
 			game.queue_overwatch(unit, _cell_of(order.get("at")))
@@ -339,9 +339,9 @@ func _replay_order(order: Dictionary, event: Dictionary) -> void:
 			game.queue_simple_action(unit, BaseAction.ActionType[type_name])
 		_:
 			notes.append("round %d: no replay door for a %s order" % [round_no, str(order.get("type", ""))])
-	if refused:
-		_diverge("round %d: %s's recorded %s was refused" % [
-			round_no, unit.get_unit_name(), str(order.get("type", ""))])
+	if refusal != "":
+		_diverge("round %d: %s's recorded %s was refused: %s" % [
+			round_no, unit.get_unit_name(), str(order.get("type", "")), refusal])
 
 
 # A declared attack stamps whatever get_fired_attack() answers, which reads the live `active_attack`

@@ -328,11 +328,17 @@ func get_target_texture() -> Texture2D:
 func is_reorderable() -> bool:
 	return not is_watch_shot
 
-func actor_can_perform() -> bool:
-	# Verb lock (will-and-death.md limb model) + readiness gate (#73) — an unfireable pick
-	# (a sprung Spring, or Stab too if the family locks the whole weapon) can't be queued even
-	# bypassing the menu (Law #3; the menu merely hides/disables what this refuses).
-	return actor.can_wield_equipped() and actor.is_attack_fireable(fired_attack)
+func actor_block_reason() -> String:
+	return AttackAction.fire_block_reason(actor, fired_attack)
+
+# Verb lock (will-and-death.md limb model) + readiness gate (#73) — an unfireable pick (a sprung
+# Spring, or Stab too if the family locks the whole weapon) can't be queued even bypassing the menu
+# (Law #3; the menu merely hides/disables what this refuses). Shared with OverwatchAction.
+static func fire_block_reason(shooter: Unit, attack: AttackData) -> String:
+	var locked := shooter.wield_block_reason()
+	if locked != "":
+		return locked
+	return shooter.attack_block_reason(attack)
 
 func get_description() -> String:
 	# A blocked hit names BOTH ends: the row would otherwise read as an attack on a unit that was

@@ -82,8 +82,8 @@ func execute() -> void:
 # only that the attack CAN watch, so the Play API could arm a dry Carbine's watch that the menu
 # greys out and AITactics._try_overwatch refuses -- the API stronger than the game. Declared
 # residual of #810 part 1; closed here.
-func actor_can_perform() -> bool:
-	return actor.can_wield_equipped() and actor.is_attack_fireable(fired_attack)
+func actor_block_reason() -> String:
+	return AttackAction.fire_block_reason(actor, fired_attack)
 
 
 func get_description() -> String:

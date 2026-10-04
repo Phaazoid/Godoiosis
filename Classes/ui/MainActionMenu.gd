@@ -407,7 +407,7 @@ func _can_take_main_action(unit: Unit) -> bool:
 
 # Shared gate for BOTH movement entries. Same three clauses, and the main-action one carries the
 # rule from the other side: move-before-main, so a unit that locked its main cannot move after it
-# (MoveAction.actor_can_perform is the chokepoint that enforces it). Group Move used to carry its
+# (MoveAction.actor_block_reason is what the chokepoint enforces). Group Move used to carry its
 # own hand-copy of this, which had drifted -- missing the main-action clause, so the menu offered a
 # formation queue_group_move would then refuse the leader half of (#443). One gate now, so the next
 # clause added here reaches both rows.

@@ -97,11 +97,17 @@ func is_main_action() -> bool:
 func is_reorderable() -> bool:
 	return true
 
-# Actor-intrinsic requirement for queueing this action; subclasses override (move ordering,
-# verb locks, ability gates). SquadManager.queue_action is the sole enforcement point
-# (Law #3). Plan-context checks (adjacency, occupancy) belong to plan validation instead.
+# WHY the actor may not take this action, "" meaning it may -- the actor-intrinsic requirement for
+# queueing it (move ordering, verb locks, ability gates). Subclasses override THIS, never
+# actor_can_perform, so a refusal always carries its reason (#662). SquadManager.try_queue_action
+# is the sole enforcement point (Law #3); plan-context checks (adjacency, occupancy) belong to plan
+# validation instead.
+func actor_block_reason() -> String:
+	return ""
+
+# Derived, never overridden: the yes/no and its reason cannot disagree.
 func actor_can_perform() -> bool:
-	return true
+	return actor_block_reason() == ""
 
 # Who this order is AIMED AT -- the unit it is done TO, rather than the one doing it. The default
 # is the actor, which is the honest answer for a verb that acts on itself (move, reload, rev);

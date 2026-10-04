@@ -80,8 +80,10 @@ func _haul_out() -> void:
 		return
 	target.movement.set_cell(haul_to)
 
-func actor_can_perform() -> bool:
-	return actor.can_rescue_carry()   # verb lock (will-and-death.md limb model)
+func actor_block_reason() -> String:
+	if actor.can_rescue_carry():   # verb lock (will-and-death.md limb model)
+		return ""
+	return "%s is missing an arm and cannot carry anyone." % actor.get_unit_name()
 
 func get_description() -> String:
 	if target != null and is_instance_valid(target):

@@ -1129,12 +1129,18 @@ func set_equipped_weapon(weapon: EquippableData) -> bool:
 	equipped_weapon = weapon
 	return true
 
-func can_wield_equipped() -> bool:
-	# Verb lock: any missing arm locks two-handed patterns. One-handed kit is unaffected.
+# Verb lock: any missing arm locks two-handed patterns. One-handed kit is unaffected. The reason is
+# the rule (#662); can_wield_equipped is derived from it.
+func wield_block_reason() -> String:
 	var weapon := get_equipped_weapon() as WeaponInstance
 	if weapon == null or weapon.template == null or not weapon.template.two_handed:
-		return true
-	return not unit_instance.has_missing_arm()
+		return ""
+	if not unit_instance.has_missing_arm():
+		return ""
+	return "%s is missing an arm and cannot wield the two-handed %s." % [get_unit_name(), weapon.shown_name()]
+
+func can_wield_equipped() -> bool:
+	return wield_block_reason() == ""
 
 func can_rescue_carry() -> bool:
 	return not unit_instance.has_missing_arm()
@@ -1420,7 +1426,7 @@ func attack_gauge(attack: AttackData) -> WeaponGauge:
 # re-asking, so a greyed menu row and a refused order can never disagree about what is fireable.
 # Note it now answers false for an unchannelable carving, which it could not before: the rune's
 # list was pre-filtered, so the question never reached here. That makes the queue-time gate
-# (AttackAction.actor_can_perform) refuse one too, which is the correct reading of strict queueing.
+# (AttackAction.actor_block_reason) refuse one too, which is the correct reading of strict queueing.
 func is_attack_fireable(attack: AttackData) -> bool:
 	return attack_block_reason(attack).is_empty()
 

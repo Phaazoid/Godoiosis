@@ -19,8 +19,10 @@ func execute() -> void:
 		actor.rev_weapon()
 	finish_execution()
 
-func actor_can_perform() -> bool:
-	return actor.can_rev_weapon()
+func actor_block_reason() -> String:
+	if actor.can_rev_weapon():
+		return ""
+	return "%s has nothing equipped that can rev." % actor.get_unit_name()
 
 func get_description() -> String:
 	return "%s revs up" % actor.get_unit_name()

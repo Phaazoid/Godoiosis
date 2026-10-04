@@ -21,8 +21,8 @@ func execute() -> void:
 		actor.reload_weapon()
 	finish_execution()
 
-func actor_can_perform() -> bool:
-	return actor.can_reload_weapon()
+func actor_block_reason() -> String:
+	return actor.reload_block_reason()
 
 func get_description() -> String:
 	# The family's own word, not "reloads" -- a Springspear springs and a Spitter injects, and the
