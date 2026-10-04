@@ -132,6 +132,8 @@ func test_the_queue_forecasts_exactly_the_soak_the_pass_applies() -> void:
 	var soaks := _soaks_of(plan)
 	assert_int(soaks.size()).override_failure_message(
 			"the queue forecast no soak for a unit standing in steam").is_equal(1)
+	if soaks.size() != 1:
+		return
 	assert_array(soaks[0].resolved.states_added).contains_exactly([rules.state])
 	assert_bool(soaks[0].resolved.reads_hp).override_failure_message(
 			"a soak row would print an HP arrow for a hit nobody took").is_false()
@@ -173,6 +175,8 @@ func test_steam_over_fire_soaks_first_and_still_burns() -> void:
 	var plan: ResolvedPlan = game.squad_manager.resolve_plan(unit.squad, game._board())
 	assert_int(plan.tile_hits.size()).override_failure_message(
 			"steam over fire should forecast a soak AND a burn").is_equal(2)
+	if plan.tile_hits.size() != 2:
+		return
 	assert_int(plan.tile_hits[0].gas).override_failure_message(
 			"the burn was forecast ahead of the soak").is_equal(STEAM)
 

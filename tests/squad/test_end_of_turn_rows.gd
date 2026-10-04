@@ -266,6 +266,8 @@ func test_the_forecast_sees_steam_this_pass_deposits() -> void:
 	var hit := _hit_for(plan, stander)
 	assert_object(hit).override_failure_message(
 			"the forecast read the live gas and missed the steam this pass makes").is_not_null()
+	if hit == null:
+		return
 	assert_array(hit.resolved.states_added).contains_exactly([rules.state])
 
 
