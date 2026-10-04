@@ -13,6 +13,9 @@ extends SceneTree
 #   load   {"path": "res://..."} - load a saved scenario
 #   overview | preview           - render the board / the active plan
 #   focus  {"unit": "A"}         - render a unit's move/attack reach
+#   ranges {"unit": "a"}         - where the enemy can strike or stand next turn, and who can hit each
+#                                  of your units where its plan leaves it (the game's V key); "unit"
+#                                  optional: omitted, every enemy
 #   move   {"unit": "A", "x": 4, "y": 0}
 #   group_move {"unit": "A", "x": 4, "y": 0} - A (a squad leader) moves and the squad follows in formation
 #   attack {"unit": "A", "x": 5, "y": 0, "attack": "Splash"}   - "attack" optional (#615), as are
@@ -158,6 +161,8 @@ func _dispatch(cmd: String, args: Dictionary) -> Dictionary:
 			return {"ok": true, "text": BoardView.render_legal_moves(_session, str(args.get("unit", "")))}
 		"legal_targets":
 			return {"ok": true, "text": BoardView.render_legal_targets(_session, str(args.get("unit", "")), str(args.get("attack", "")))}
+		"ranges":
+			return {"ok": true, "text": BoardView.render_ranges(_session, str(args.get("unit", "")))}
 		"move":
 			var r = _session.queue_move(str(args.get("unit", "")), _xy(args))
 			return {"ok": r.ok, "text": _ack(r) + "\n\n" + BoardView.render_preview(_session)}

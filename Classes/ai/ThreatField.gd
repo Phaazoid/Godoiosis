@@ -16,10 +16,11 @@ class_name ThreatField
 # soaking the enemy's own turn deals before its shock.
 #
 # WHICH BOARD it is built on is the CALLER's decision and both callers pick the same one: the
-# projected board, every unit stood on its get_projected_destination(). game.threat_field() opens
-# that snapshot itself, AIController.preview_turn holds one open across its whole planning pass.
-# The two tiers answering about different boards is what let a threat LINE name a victim these
-# tones said was out of reach (slice 4).
+# projected board, every unit stood on its get_projected_destination(). for_viewer opens that
+# snapshot for the danger view's two hosts (game.threat_field() and the Play API's `ranges`, #46),
+# AIController.preview_turn holds one open across its whole planning pass. The two tiers answering
+# about different boards is what let a threat LINE name a victim these tones said was out of reach
+# (slice 4).
 
 var cells: Dictionary = {}     # Vector2i -> Array[Unit] that can attack it
 var by_unit: Dictionary = {}   # Unit -> Dictionary[Vector2i, true]
@@ -58,6 +59,20 @@ static func build(board: BoardContext, viewer: Team.Faction, pending: Dictionary
 			if not field.cells.has(cell):
 				field.cells[cell] = []
 			field.cells[cell].append(unit)
+	return field
+
+
+# THE ONE BUILD both hosts call (#46), so the game and the Play API cannot read different boards.
+# The pending soak is resolved first, on the live board as every resolve is; then every unit stands
+# on its projected cell for the build and is put back. `with_pending` is false mid-pass, where a
+# resolve would count the hits that already landed twice.
+static func for_viewer(squad_manager: SquadManager, viewer: Team.Faction, with_pending: bool) -> ThreatField:
+	var pending: Dictionary = {}
+	if with_pending:
+		pending = AIController.pending_hypo(AIController.viewer_plans(viewer, squad_manager))
+	var saved := AIController.stand_on_projected(squad_manager)
+	var field := build(squad_manager.board_source.call() as BoardContext, viewer, pending)
+	AIController.restore_cells(saved)
 	return field
 
 

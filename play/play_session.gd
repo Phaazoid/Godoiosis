@@ -276,6 +276,47 @@ func legal_targets(handle: String, attack_name := "") -> Dictionary:
 	return {"ok": true, "unit": handle, "attack": _attack_label(aiming), "from": origin, "aims": out}
 
 
+# The game's enemy ranges, the V key (#46), through the builder game.threat_field() calls. The viewer
+# is the ACTIVE faction, where the game hardcodes PLAYER: the two differ only in hotseat, when the side
+# on the move is the one asking. Subjects are every hostile unit, or the one named; each viewer unit is
+# judged where its plan leaves it, and with a subject named only that subject counts as a hitter.
+func ranges(enemy_handle := "") -> Dictionary:
+	var phase := _battle_gate()
+	if not phase.ok:
+		return phase
+	var viewer := active_faction()
+	var subjects: Array[Unit] = []
+	if enemy_handle != "":
+		var enemy := unit_by_handle(enemy_handle)
+		if enemy == null:
+			return {"ok": false, "error": "no unit '%s'" % enemy_handle}
+		if not is_deployed(enemy) or not Team.is_enemy(viewer, enemy.get_faction()):
+			return {"ok": false, "error": "%s is not a unit hostile to %s on the board" % [enemy_handle, _faction_name(viewer)]}
+		subjects.append(enemy)
+	var field := ThreatField.for_viewer(squad_manager, viewer, not _executing)
+	var named: Array[Unit] = subjects.duplicate()
+	if named.is_empty():
+		named.assign(field.by_unit.keys())   # the field's own store: every hostile unit still standing
+	var rows: Array[Dictionary] = []
+	for unit: Unit in live_units():
+		if unit.get_faction() != viewer:
+			continue
+		var cell := unit.get_projected_destination()
+		var hitters: Array[String] = []
+		for attacker: Unit in field.attackers_of(cell):
+			if named.has(attacker):
+				hitters.append(handle_for(attacker))
+		hitters.sort()
+		rows.append({"unit": handle_for(unit), "cell": cell, "attackers": hitters})
+	var subject_names: Array[String] = []
+	for unit: Unit in named:
+		subject_names.append(handle_for(unit))
+	subject_names.sort()
+	# An empty list is every enemy, ThreatField's own union convention.
+	return {"ok": true, "viewer": _faction_name(viewer), "subjects": subject_names,
+			"move": field.move_cells_of(subjects), "reach": field.reach_cells_of(subjects), "units": rows}
+
+
 # The turn's own state, which the rendered board has never carried: whose turn it is, which squad
 # holds the activation, what it has queued, and which squads are spent. 43 of the refusals were
 # "another squad is already active" / "already acted" / "not the active faction" and 34 more were
