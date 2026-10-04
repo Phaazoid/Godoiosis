@@ -11,14 +11,6 @@ const OUT_OF_MAP_TILE := 999
 const UNREACHABLE := 999999   # path_hops' "no route to here"; any real hop count is far below
 const NEIGHBOURS: Array[Vector2i] = [Vector2i.UP, Vector2i.DOWN, Vector2i.LEFT, Vector2i.RIGHT]
 
-# May THIS unit traverse this cell's TERRAIN? BoardContext.is_walkable answers the cell-only form
-# ("may a unit stand here", #109); this is the per-unit layer on top, and #115 made it the ONE
-# home for that layer — movement_cost and path_hops had been deciding separately,
-# so Waterwalk worked when a unit moved alone and silently stopped working when it moved with its
-# squad.
-#
-# Deliberately says NOTHING about occupancy. An enemy body blocks a MOVE (movement_cost adds that
-# below) but is not a terrain fact and moves every turn — a connectivity field must see through it.
 # May a unit be PLACED here? spawn_unit's gate, and the pre-mission phase's on both hosts (#46):
 # on the map, somewhere a unit may stand (unless it is a body, #116), and nobody already there.
 static func can_spawn_at(board: BoardContext, cell: Vector2i, is_body := false) -> bool:
@@ -28,6 +20,24 @@ static func can_spawn_at(board: BoardContext, cell: Vector2i, is_body := false) 
 		return false
 	return board.unit_at_cell(cell) == null
 
+# WHY this unit may not be commanded right now -- "" means it may. game.can_control's board half,
+# which the headless Play API's dock verbs ask too (#46): standing, and on the side whose turn it is.
+# Says nothing about whether its squad has acted -- the inspect dock works after that.
+static func command_block_reason(unit: Unit, active_faction: Team.Faction) -> String:
+	if not unit.is_active():   # downed/dead units can't be commanded (will-and-death.md)
+		return "%s is down." % unit.get_unit_name()
+	if unit.get_faction() != active_faction:
+		return "%s is not on the side whose turn it is." % unit.get_unit_name()
+	return ""
+
+# May THIS unit traverse this cell's TERRAIN? BoardContext.is_walkable answers the cell-only form
+# ("may a unit stand here", #109); this is the per-unit layer on top, and #115 made it the ONE
+# home for that layer — movement_cost and path_hops had been deciding separately,
+# so Waterwalk worked when a unit moved alone and silently stopped working when it moved with its
+# squad.
+#
+# Deliberately says NOTHING about occupancy. An enemy body blocks a MOVE (movement_cost adds that
+# below) but is not a terrain fact and moves every turn — a connectivity field must see through it.
 static func can_traverse(cell: Vector2i, unit: Unit, board: BoardContext) -> bool:
 	if board.is_walkable(cell):
 		return true

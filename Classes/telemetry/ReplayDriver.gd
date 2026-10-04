@@ -365,15 +365,19 @@ func _replay_gear(event: Dictionary) -> void:
 	if unit == null:
 		return
 	var index := int(event.get("index", -1))
-	# The same Unit doors inventory_panel calls -- the ACT, replayed, never a state blob written in
-	# (which would be the side-channel write Law #3 forbids).
-	match str(event.get("verb", "")):
-		"equip": unit.equip_weapon_from_inventory(index)
-		"unequip": unit.unequip_weapon()
-		"wear": unit.wear_armor(index)
-		"remove_armor": unit.remove_armor()
-		"use": unit.use_vial(index)
-		"toss": unit.remove_item(index)
+	var round_no := int(event.get("round", 0))
+	# Through GearVerbs, the rule inventory_panel's buttons ask (#46) -- the ACT, replayed, never a
+	# state blob written in (which would be the side-channel write Law #3 forbids). A refused act is a
+	# disagreement with the run, as a refused recorded order is.
+	var verb_name := str(event.get("verb", ""))
+	var verb := GearVerbs.from_name(verb_name)
+	if verb == -1:
+		notes.append("round %d: no replay door for a '%s' gear act" % [round_no, verb_name])
+		return
+	var refusal := GearVerbs.perform(unit, verb as GearVerbs.Verb, index)
+	if refusal != "":
+		_diverge("round %d: %s's recorded %s was refused: %s" % [
+			round_no, unit.get_unit_name(), verb_name, refusal])
 
 
 func _replay_squad_verb(event: Dictionary) -> void:

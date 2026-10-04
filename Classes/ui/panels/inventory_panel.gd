@@ -145,23 +145,25 @@ func _show_action_popup(index: int):
 	popup.global_position = slot.global_position + Vector2(slot.size.x + 4, 0)
 	action_popup = popup
 
-# The verbs that CHANGE what the unit carries -- only ever built for a controllable unit.
+# The verbs that CHANGE what the unit carries -- only ever built for a controllable unit. Which verb a
+# row offers is this surface's; whether it may happen, and why not, is GearVerbs' (#46), the rule the
+# replay viewer and the headless Play API ask too.
 func _add_loadout_rows(vbox: VBoxContainer, item, index: int) -> void:
 	if item is ArmorData:
 		var wear_btn := Button.new()
 		if item == unit.worn_armor:
 			wear_btn.text = "Remove"
 			wear_btn.pressed.connect(_do_remove_armor)
-		elif item.can_equip(unit):
-			wear_btn.text = "Wear"
-			wear_btn.pressed.connect(_do_wear.bind(index))
 		else:
 			# The gate, shown rather than silently swallowed -- and since #744 in the SENTENCE the
 			# gate itself chose, against this wearer, rather than this surface re-wording the rule
 			# from requirement_text (which cannot see who is holding it, so it could only ever say
 			# what the piece demands, never how far short you are).
-			wear_btn.text = "Wear — %s" % item.can_equip_reason(unit)
-			wear_btn.disabled = true
+			var refusal := GearVerbs.block_reason(unit, GearVerbs.Verb.WEAR, index)
+			wear_btn.text = "Wear" if refusal == "" else "Wear — %s" % refusal
+			wear_btn.disabled = refusal != ""
+			if refusal == "":
+				wear_btn.pressed.connect(_do_wear.bind(index))
 		vbox.add_child(wear_btn)
 	# Any non-armor equippable: weapons AND runes. Mirrors equip_weapon_from_inventory's
 	# own split — armor is caught above and fills a different slot.
@@ -170,15 +172,15 @@ func _add_loadout_rows(vbox: VBoxContainer, item, index: int) -> void:
 		if item == unit.get_equipped_weapon():
 			equip_btn.text = "Unequip"
 			equip_btn.pressed.connect(_do_unequip.bind(index))
-		elif item.can_equip(unit):
-			equip_btn.text = "Equip"
-			equip_btn.pressed.connect(_do_equip.bind(index))
 		else:
 			# The gate, shown rather than silently swallowed — armor's precedent above (#157). This
 			# used to hardcode "can't channel", which was true only while runes were the one kind
 			# that could refuse; #744 made every kind able to say its own.
-			equip_btn.text = "Equip — %s" % item.can_equip_reason(unit)
-			equip_btn.disabled = true
+			var refusal := GearVerbs.block_reason(unit, GearVerbs.Verb.EQUIP, index)
+			equip_btn.text = "Equip" if refusal == "" else "Equip — %s" % refusal
+			equip_btn.disabled = refusal != ""
+			if refusal == "":
+				equip_btn.pressed.connect(_do_equip.bind(index))
 		vbox.add_child(equip_btn)
 
 	# A vial is CARRIED, never slotted, so its verb is Use rather than Equip (#697). Same shape as
@@ -188,7 +190,7 @@ func _add_loadout_rows(vbox: VBoxContainer, item, index: int) -> void:
 	if item is VialData:
 		var vial := item as VialData
 		var use_btn := Button.new()
-		var refusal := vial.use_block_reason(unit)
+		var refusal := GearVerbs.block_reason(unit, GearVerbs.Verb.USE, index)
 		if refusal != "":
 			use_btn.text = "Use — %s" % refusal
 			use_btn.disabled = true
@@ -201,7 +203,7 @@ func _add_loadout_rows(vbox: VBoxContainer, item, index: int) -> void:
 	# Unit's own rule (#741), not a second reading of the prosthetic fitting -- the gate this used to
 	# re-ask is the shape #744 collapsed in the three branches above. Disabled wearing the sentence
 	# rather than hidden, for their reason: a row the player cannot use still has to say why (#166).
-	var toss_block := unit.remove_block_reason(index)
+	var toss_block := GearVerbs.block_reason(unit, GearVerbs.Verb.TOSS, index)
 	var toss_btn := Button.new()
 	if toss_block != "":
 		toss_btn.text = "Toss — %s" % toss_block
@@ -226,37 +228,37 @@ func _apply_change(verb := "", index := -1):
 	if verb != "":
 		loadout_acted.emit(unit, verb, index)
 
+# The six acts, each through GearVerbs.perform (the refusal was asked above and wears it on the
+# button). What loadout_acted records is unchanged, Remove's missing index included (#46).
 func _do_use(index: int):
-	if unit != null:
-		unit.use_vial(index)   # the refusal was asked above and wears it on the button
+	_perform(GearVerbs.Verb.USE, index)
 	selected_index = -1
-	_apply_change("use", index)
+	_apply_change(GearVerbs.name_of(GearVerbs.Verb.USE), index)
 
 func _do_equip(index: int):
-	if unit != null:
-		unit.equip_weapon_from_inventory(index)
-	_apply_change("equip", index)
+	_perform(GearVerbs.Verb.EQUIP, index)
+	_apply_change(GearVerbs.name_of(GearVerbs.Verb.EQUIP), index)
 
 func _do_unequip(index: int):
-	if unit != null:
-		unit.unequip_weapon()
-	_apply_change("unequip", index)
+	_perform(GearVerbs.Verb.UNEQUIP, index)
+	_apply_change(GearVerbs.name_of(GearVerbs.Verb.UNEQUIP), index)
 
 func _do_wear(index: int):
-	if unit != null:
-		unit.wear_armor(index)
-	_apply_change("wear", index)
+	_perform(GearVerbs.Verb.WEAR, index)
+	_apply_change(GearVerbs.name_of(GearVerbs.Verb.WEAR), index)
 
 func _do_remove_armor():
-	if unit != null:
-		unit.remove_armor()
-	_apply_change("remove_armor")
+	_perform(GearVerbs.Verb.REMOVE_ARMOR, -1)
+	_apply_change(GearVerbs.name_of(GearVerbs.Verb.REMOVE_ARMOR))
 
 func _do_toss(index: int):
-	if unit != null:
-		unit.remove_item(index)
+	_perform(GearVerbs.Verb.TOSS, index)
 	selected_index = -1
-	_apply_change("toss", index)
+	_apply_change(GearVerbs.name_of(GearVerbs.Verb.TOSS), index)
+
+func _perform(verb: GearVerbs.Verb, index: int) -> void:
+	if unit != null:
+		GearVerbs.perform(unit, verb, index)
 
 func _do_inspect(index: int):
 	var item: Item = unit.inventory[index] if unit != null else null
