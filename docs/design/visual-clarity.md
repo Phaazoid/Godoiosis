@@ -7,7 +7,7 @@ its child [#49 Action Queue UX](https://github.com/Phaazoid/Godoiosis/issues/49)
 This is a *guidelines* doc, not a spec — it captures the principles we're holding the work to,
 plus the running order of the queue-UX checklist. Update it as items land.
 
-**Canon checked through #1171 (2026-09-29); #1174 (Will retired, the limb icons) folded in 2026-10-01.**
+**Canon checked through #1171 (2026-09-29); #1174 (Will retired, the limb icons) folded in 2026-10-01; #1197 (the danger field draws the watch shot and the current) folded in 2026-10-03.**
 
 ## Principles
 
@@ -3558,7 +3558,53 @@ A zone knob restyles both views through one door (`GameKnobs._restyle_zone_marks
 
 **COHESION IS IGNORED, and until slice 4 it was not.** `_origins_of` read `compute_move_range`'s `reachable` alone, which files every cell outside the squad's bubble under `squad_unreachable` -- measured against where the LEADER stands now. On the enemy's own turn the leader moves FIRST and `GroupMoveSolver` measures each member against its DESTINATION, so the clamped half is exactly the ground a follower walks and this field, whose whole contract is an upper bound, was under-stating it. Both buckets now: the standable footprint, the same pair `followable_destinations` unions.
 
-**A PATROL ANSWERS OUTSIDE ITS LEASH (dev, 2026-09-17: _"technically they can attack one tile outside of their range if already there in counter situations"_).** The zone clip is a fact about a Sentry's AGGRESSION, not its counter -- and because the clipped reach is a subset of the zone while the origins cover the zone, nearly the whole red layer sat underneath the blue: measured, a melee patrol showed **2 of its 30** reach cells and a bow **5 of 36**, so the outer silhouette of the threat was the MOVEMENT tone. `_add_counter_reach` is a second, unclipped pass over the counter attack alone, borrowing `SquadManager.can_counter`'s own gates so an unarmed or dry enemy adds nothing. **It adds nothing to any archetype WITHOUT a leash either** (measured: rushdown +0, hold +0), because their counter is already inside `get_selectable_attacks()`. For a RANGED patrol the rim is its bow's own range rather than one tile, which is the consequence the dev ruled on: it will never OPEN from out there and will always ANSWER from there. It deliberately does NOT ask `is_standing_watch()` the way `can_counter` does -- an armed watch is a threat by a mechanism this field cannot draw at all, so dropping the rim there would under-state exactly where the warning matters. Whether a poked sentry should then AGGRO is its own ticket.
+**A PATROL ANSWERS OUTSIDE ITS LEASH (dev, 2026-09-17: _"technically they can attack one tile outside of their range if already there in counter situations"_).** The zone clip is a fact about a Sentry's AGGRESSION, not its counter -- and because the clipped reach is a subset of the zone while the origins cover the zone, nearly the whole red layer sat underneath the blue: measured, a melee patrol showed **2 of its 30** reach cells and a bow **5 of 36**, so the outer silhouette of the threat was the MOVEMENT tone. `_add_counter_reach` is a second, unclipped pass over the counter attack alone, borrowing `SquadManager.can_counter`'s own gates so an unarmed or dry enemy adds nothing. **It adds nothing to any archetype WITHOUT a leash either** (measured: rushdown +0, hold +0), because their counter is already inside `get_selectable_attacks()`. For a RANGED patrol the rim is its bow's own range rather than one tile, which is the consequence the dev ruled on: it will never OPEN from out there and will always ANSWER from there. It deliberately does NOT ask `is_standing_watch()` the way `can_counter` does. A watch standing NOW fires during your own move, on the cells you walk through, and that is the watch overlay's to draw, not this field's; dropping the rim there would under-state exactly where the warning matters. (This sentence used to say an armed watch was a mechanism the field "cannot draw at all". #1197 below made the field draw the lanes a watcher could set NEXT turn, so the claim is narrowed to the watch already standing.) Whether a poked sentry should then AGGRO is its own ticket.
+
+**THE FIELD DRAWS THE WATCH SHOT AND THE CURRENT ([#1197](https://github.com/Phaazoid/Godoiosis/issues/1197), 2026-10-03).** The field promises an upper bound, and two live mechanisms hit cells it painted safe.
+
+- **The watch shot.** A watch set over a cell an enemy already stands in fires on the spot ([#1003](https://github.com/Phaazoid/Godoiosis/issues/1003)). A watch attack is never in the fire view ([#590](https://github.com/Phaazoid/Godoiosis/issues/590)), so the reach pass never saw one. The Carbine's Shot fires at exactly 2 and its watch lane runs 1 to 4, so in practice the watch is its point-blank shot. That was live on The Causeway's Bridge Watch.
+- **Shock arcs.** A SHOCK hit runs on through water and through anyone wet, and the field never asked `Conduction`. That was live by The Quarry's ford.
+
+So the prediction reach (`ThreatField._threat_of`) now has four parts:
+1. **Fire, accumulated by attack.** Keyed by attack because the current depends on the element of the attack that made the hit.
+2. **The counter rim**, as above.
+3. **`_add_watch_reach`.** The union of every lane `AITactics.watch_lanes` could set from every origin, asked only of an archetype whose declared priority list has OVERWATCH (Rushdown's is NEVER), and only of a watch attack `AITactics.watch_attack_for` says is ready.
+   - These are the builder's own two doors, so the drawn lanes are the lanes it could set.
+   - **They are not zone-clipped:** the shot takes anyone in the lane, and a Sentry at its post aims at the nearest enemy wherever that enemy stands.
+4. **`_add_arc`.** `Conduction.arc_cells`, seeded with each attack's own cells.
+   - One flood over the union is the union of one flood per aim, because it is a bounded multi-source search.
+   - Not zone-clipped either; a current doesn't respect a leash.
+
+**Your own red (`reach_from`) keeps parts 1 and 2 only.** It is a permission, and a watch in your hands shows what it can fire at, not the lanes it could set.
+
+**A soaking your own plan hasn't made yet counts (dev, 2026-10-03, chosen over declaring it as a limit).** The board only knows who is wet now.
+- The usual case is wading the ford onto dry ground beside the lit water.
+- `game.threat_field()` therefore resolves your pending plan first, on the live board, through `AIController.viewer_plans` (`#1001`'s loop, extracted), and hands its hypo to `ThreatField.build`. `Conduction` reads wetness through that hypo exactly as a pass does.
+- `preview_turn` passes the same hypo, so the two tiers still feed the field the same inputs.
+- **It re-resolves rather than reading the plan cache, because the cache is one order stale at that moment.** `_on_unit_action_queued` and `_on_unit_action_cancelled` drop the field BEFORE `refresh_action_queue` resolves the new order, and the drop rebuilds synchronously.
+- **One plan, because one squad holds orders at a time.** `MainActionMenu._can_take_main_action` refuses a squad while another is mid-activation, so `pending_hypo` reads the active squad's plan, which `viewer_plans` resolves last.
+- A resolve republishes that plan's own shoves, which is what was published already, so building the field leaves the board as it found it.
+- Not mid-pass, for `refresh_action_queue`'s reason: a resolve then counts the hits that already landed twice.
+
+**Measured on every shipped board as loaded** (no pending plan):
+
+| Board | Cells gained |
+|---|---|
+| The Causeway | +7 (watch) |
+| The Quarry | +25 (7 watch, 18 arc) |
+| Level_1 | +7 |
+| The Dry Field | +8 |
+| The Ford | +7 |
+| Castle Assault | +1 |
+| 2, Terraces | 0 |
+
+The red grows modestly everywhere.
+
+**Declared limits:**
+- **Placed-blast splash and payload landings.** For an attack placed at range, `Reach.get_all_attack_cells_from` answers the range ring, not the blast area around each aim. No shipped enemy carries either; filed as [#1207](https://github.com/Phaazoid/Godoiosis/issues/1207).
+- **A wet unit HOVERING a dry destination beside lit water reads safe until the move is queued.** The field is per cell, not per unit; queued, the field rebuilds with the unit standing there.
+- **A soaking from the enemy's own turn is not chained** (their Splash, then their Zap). No shipped squad pairs the two.
+- **The dormant plan preview's AI still plans against live states**, the positions-only snapshot from #1001. The field it gates is a superset either way.
 
 > **REPEALED by [#1066](https://github.com/Phaazoid/Godoiosis/issues/1066) (2026-09-21) — the two tones below are ONE, and the ordering ruling went with them.** An enemy no longer says where it can STAND as against where it can HIT; that pair is the vocabulary your OWN unit speaks now. The record below stays because the *field* is unchanged — `move_by_unit` and `by_unit` are both still computed, and the archetype honesty and the counter rim are exactly as described — only the DRAWING merged. See *...and what #1066 re-cut about the vocabulary* at the end of this half.
 

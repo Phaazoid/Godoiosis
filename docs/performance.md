@@ -545,3 +545,28 @@ Two things keep it that size, both in `ai-tactics.md` → *Seeking a removal or 
 first removal ends a unit's search, and cells that give a victim the same fate share one resolve. The
 base plan is re-resolved before each cell only when a trial has run since, because a trial's shove
 stays published and the candidate builder reads it (#709).
+
+## 2026-10-03 — the danger field draws watch lanes and shock arcs, and reads your pending plan (#1197)
+
+`ThreatField.build` gained two passes (the lanes a watcher could set, and a `Conduction` flood per
+attack), and `game.threat_field()` now resolves your pending plan once before building, to learn who
+it soaks. Measured with a scratch tool (not committed): 20 builds or rebuilds averaged, two runs each,
+this branch against `main`'s versions of the same four files.
+
+| What | `main` | #1197 |
+|---|---|---|
+| Castle Assault, `ThreatField.build` alone | 2.2 / 2.6 ms | 3.6 / 3.7 ms |
+| Castle Assault, `drop_threat_field` + `threat_field()`, no orders queued | 2.3 / 2.7 ms | 3.7 / 3.8 ms |
+| Castle Assault, the same with one player move queued | 2.4 / 2.6 ms | 12.0 / 12.8 ms |
+| The Quarry, `ThreatField.build` alone | 32.7 / 34.1 ms | 33.3 / 33.9 ms |
+
+- **The two passes cost about +1.2 ms** on Castle Assault and nothing measurable on The Quarry.
+  The Quarry's ~33 ms build is `main`'s own (its Rushdown Galvanist walks a large envelope), and is
+  worth its own look if the range view ever feels slow there.
+- **The pending resolve costs about 9.5 ms, and 7.2 ms of that is the two reaction catalogs**
+  (`ReactionCatalog.get_all()` + `TerrainReactionCatalog.get_all()`, measured alone). They scan
+  their folders on every call, as `resolve_hypothetical`'s default arguments. The resolve itself is
+  about 2.3 ms. `refresh_action_queue`'s own resolve pays the same scans on every order, so caching
+  those two catalogs would cut both.
+- **It runs once per plan change, never per frame.** The field is cached and dropped only when the
+  plan or the board moves; with no orders queued, `viewer_plans` resolves nothing.

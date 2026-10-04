@@ -123,12 +123,13 @@ static func preview_turn(viewer: Team.Faction, sm: SquadManager,
 	previewed_squad_count = 0
 	sm.previewing = true
 
-	var doomed := _felled_by_viewer(viewer, sm)   # on the LIVE board, before anybody is moved
+	var plans := viewer_plans(viewer, sm)   # on the LIVE board, before anybody is moved
+	var doomed := _felled_by_viewer(viewer, plans)
 
 	var saved := stand_on_projected(sm)
 
 	var board: BoardContext = sm.board_source.call()   # fresh, so every read below sees the projected cells
-	var field := ThreatField.build(board, viewer)
+	var field := ThreatField.build(board, viewer, pending_hypo(plans))
 	for faction in factions:
 		if not Team.is_enemy(viewer, faction):
 			continue
@@ -160,26 +161,57 @@ static func preview_turn(viewer: Team.Faction, sm: SquadManager,
 # felled actor does nothing (#1005) -- not `plan_fells`, which also answers true for a unit entering
 # CRISIS. A unit in Crisis is emphatically still attacking, and dropping its line would UNDER-warn,
 # which is the one direction this feature must never err in.
-static func _felled_by_viewer(viewer: Team.Faction, sm: SquadManager) -> Array[Unit]:
+static func _felled_by_viewer(viewer: Team.Faction, plans: Array[ResolvedPlan]) -> Array[Unit]:
 	var doomed: Array[Unit] = []
-	var board: BoardContext = sm.board_source.call()
-	for squad: Squad in sm.squads.duplicate():
-		if not is_instance_valid(squad) or squad.leader == null:
-			continue
-		if squad.leader.get_faction() != viewer or squad.action_queue.is_empty():
-			continue
-		# resolve_hypothetical with NO candidate resolves the squad's real queue and deliberately
-		# does not write the plan cache, which resolve_plan would -- the queue panel's "already
-		# queued prefix" must not become a preview's by-product. _undress' own resolve at the end of
-		# preview_turn is what satisfies that function's finish-with-a-real-resolve contract.
-		var none: Array[BaseAction] = []
-		var plan := sm.resolve_hypothetical(squad, none, board)
+	for plan in plans:
 		for unit: Unit in plan.hypo:
 			if not is_instance_valid(unit) or not Team.is_enemy(viewer, unit.get_faction()):
 				continue
 			if not PlanResolver.actor_is_live(unit, plan.hypo) and not doomed.has(unit):
 				doomed.append(unit)
 	return doomed
+
+
+# THE VIEWER'S PENDING TURN: every squad of theirs holding orders, each resolved from its real queue.
+# Callers read it on the LIVE board, before anybody is stood on a projected cell, because that is the
+# board every other resolve runs on (a walk reads its own stored path, so this is the convention
+# rather than a measured necessity). Two readers: _felled_by_viewer, and the danger field's pending
+# soak (#1197, through pending_hypo), so both tiers ask one door.
+#
+# resolve_hypothetical with NO candidate resolves the real queue and differs from resolve_plan only
+# in never writing the cache -- the queue panel's "already queued prefix" must not become a preview's
+# by-product. NOT the cache itself either: game.gd drops the field on an order BEFORE the refresh
+# resolves it, so the cache is one order stale exactly when a wade has just been queued.
+#
+# THE ACTIVE SQUAD RESOLVES LAST, which is what lets game.threat_field() call this with no undress:
+# every resolve republishes its own plan's shoves, so the last one is what the board is left wearing,
+# and the active squad's plan is the one that was published to begin with.
+static func viewer_plans(viewer: Team.Faction, sm: SquadManager) -> Array[ResolvedPlan]:
+	var plans: Array[ResolvedPlan] = []
+	var board: BoardContext = sm.board_source.call()
+	var holding: Array[Squad] = []
+	for squad: Squad in sm.squads.duplicate():
+		if not is_instance_valid(squad) or squad.leader == null:
+			continue
+		if squad.leader.get_faction() != viewer or squad.action_queue.is_empty():
+			continue
+		if squad == sm.active_squad:
+			holding.push_back(squad)
+		else:
+			holding.push_front(squad)
+	var none: Array[BaseAction] = []
+	for squad in holding:
+		plans.append(sm.resolve_hypothetical(squad, none, board))
+	return plans
+
+
+# The hypo the danger field reads wetness through: the ACTIVE squad's, i.e. the last plan. One plan,
+# because one squad holds orders at a time -- MainActionMenu._can_take_main_action refuses a squad
+# while another is mid-activation -- so it is the viewer's whole pending turn.
+static func pending_hypo(plans: Array[ResolvedPlan]) -> Dictionary:
+	if plans.is_empty():
+		return {}
+	return plans.back().hypo
 
 
 static func _dropping(intents: Array[ThreatIntent], doomed: Array[Unit]) -> Array[ThreatIntent]:
@@ -227,7 +259,12 @@ static func _preview_squad(squad: Squad, board: BoardContext, sm: SquadManager, 
 
 	AIController.plan_squad(squad, board, sm)
 	var plan: ResolvedPlan = sm.resolve_plan(squad, board)
-	for attack: AttackAction in plan.attacks:
+	# The watch shots as well: a watch armed over somebody fires on the spot (#1003), and that shot
+	# lands in watch_shots, never in attacks (#1197).
+	var rows: Array[AttackAction] = []
+	rows.append_array(plan.attacks)
+	rows.append_array(plan.watch_shots)
+	for attack: AttackAction in rows:
 		var intent := _intent_for(attack, plan, saved)
 		if intent != null:
 			out.append(intent)

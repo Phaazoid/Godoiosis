@@ -518,6 +518,73 @@ func test_the_range_tones_read_the_board_the_plan_will_leave() -> void:
 			).is_equal([landing])
 
 
+# Building the field resolves your pending plan for its soak (#1197), and a resolve republishes that
+# plan's shoves -- which has to be exactly what was published already, or the board is left dressed
+# for something else. So the landing survives a rebuild.
+func test_building_the_field_leaves_your_plans_shove_where_it_was() -> void:
+	var enemy := _shoved_enemy()
+	var landing: Vector2i = enemy.get_projected_destination()
+	assert_that(landing).override_failure_message(
+			"fixture is vacuous: the shove published no landing").is_not_equal(enemy.movement.cell)
+	game.drop_threat_field()
+	var _field: ThreatField = game.threat_field()
+	assert_that(enemy.get_projected_destination()).override_failure_message(
+			"building the field moved the shove your plan published").is_equal(landing)
+
+
+# A shallow-water tile, FOUND rather than named (the content razor): the first tile the board's own
+# tileset authors as WATER that a unit may stand in. [source id, atlas coords], or empty.
+func _shallow_water() -> Array:
+	var grid: BoardGrid = game.grid
+	var tile_set: TileSet = grid.tile_set
+	for i in tile_set.get_source_count():
+		var id: int = tile_set.get_source_id(i)
+		var atlas := tile_set.get_source(id) as TileSetAtlasSource
+		if atlas == null:
+			continue
+		for t in atlas.get_tiles_count():
+			var coords: Vector2i = atlas.get_tile_id(t)
+			var data: TileData = atlas.get_tile_data(coords, 0)
+			if GridUtils.terrain_kind_of(data) == Terrain.Kind.WATER and GridUtils.walkable_of(data):
+				return [id, coords]
+	return []
+
+
+# THE PENDING SOAK through the real game (dev, 2026-10-03): queue a wade through the shallows onto dry
+# ground beside a shock enemy's water, and the field names that enemy for the shore -- before Execute,
+# while the unit is still dry. Queued through queue_action so game.gd's own drop-and-rebuild runs,
+# which is the moment the plan cache is one order stale.
+func test_a_wade_you_have_queued_reads_as_wet_beside_a_shock_enemy() -> void:
+	var water := _shallow_water()
+	assert_bool(water.is_empty()).override_failure_message(
+			"fixture is vacuous: the tileset authors no shallow water").is_false()
+	var source_id: int = water[0]
+	var coords: Vector2i = water[1]
+	var lane := _clear_lane()
+	assert_that(lane).override_failure_message(
+			"fixture is vacuous: the boot board has no clear four-cell lane").is_not_equal(Vector2i.MAX)
+	var grid: BoardGrid = game.grid
+	for step: int in [1, 2]:
+		grid.paint(lane + Vector2i(step, 0), source_id, coords)
+	var shocker: Unit = _spawn(ENEMY, lane)
+	(shocker.equipped_weapon as WeaponInstance).template.main_attack.elemental_damage_type = Elemental.Element.SHOCK
+	var wader: Unit = _spawn(PLAYER, lane + Vector2i(1, 0))   # standing in the shallows, still dry
+	var ashore := lane + Vector2i(3, 0)
+	assert_bool(game.threat_field().attackers_of(ashore).has(shocker)).override_failure_message(
+			"fixture is vacuous: the dry shore is lit before anybody wades").is_false()
+
+	var path: Array[Vector2i] = [wader.movement.cell, lane + Vector2i(2, 0), ashore]
+	var move := MoveAction.new()
+	move.init(wader, path, null)
+	var sm: SquadManager = game.squad_manager
+	assert_bool(sm.queue_action(wader.squad, move)).override_failure_message(
+			"the fixture's own wade was refused -- the case would prove nothing").is_true()
+	assert_bool(wader.element_states.has(Elemental.State.WET)).override_failure_message(
+			"the wader is wet already, so the case cannot see the pending read").is_false()
+	assert_bool(game.threat_field().attackers_of(ashore).has(shocker)).override_failure_message(
+			"the shore your queued wade leaves you on was painted safe beside a shock enemy").is_true()
+
+
 # The snapshot writes `position` through MovementComponent.set_cell, and a walk is a tween ON that
 # property -- so it must not run while a pass is playing back. HoverPresenter._process carries no
 # board lock, which is the path that reaches this.
