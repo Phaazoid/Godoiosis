@@ -164,7 +164,12 @@ static func _engageable_enemies(leader: Unit, board: BoardContext, within, allow
 # PURSUIT wants a body (it is an ordinary target, #720); a WATCH cannot use one, because a corpse
 # never enters anything and _watch_triggered_by refuses a non-ACTIVE entrant outright. Left false so
 # every existing caller is unchanged.
-static func nearest_enemy(from_unit: Unit, board: BoardContext, within = null, active_only := false) -> Unit:
+#
+# `hypo` is the squad's plan so far, for the WATCH caller (#1209): it runs after the squad's attacks
+# are queued, so "standing" has to mean standing once those land. Empty is the live board, which is
+# every other caller -- the movement layer runs before the squad queues anything.
+static func nearest_enemy(from_unit: Unit, board: BoardContext, within = null, active_only := false,
+		hypo: Dictionary = {}) -> Unit:
 	var route := _approach_distances(from_unit, board)
 	var nearest: Unit = null
 	var best_hops := 0
@@ -173,7 +178,9 @@ static func nearest_enemy(from_unit: Unit, board: BoardContext, within = null, a
 	for unit in board.units:
 		if not is_instance_valid(unit):
 			continue
-		if not (unit.is_active() or (unit.is_downed() and not active_only)):
+		var life := PlanResolver.projected_lifecycle(unit, hypo)
+		var standing := life == Unit.LifecycleState.ACTIVE
+		if not (standing or (life == Unit.LifecycleState.DOWNED and not active_only)):
 			continue
 		if not Team.is_enemy(from_unit.get_faction(), unit.get_faction()):
 			continue
@@ -182,7 +189,6 @@ static func nearest_enemy(from_unit: Unit, board: BoardContext, within = null, a
 		if within != null and not within.has(unit.movement.cell):
 			continue
 		var hops: int = route.get(unit, RulesService.UNREACHABLE)
-		var standing := unit.is_active()
 		var d := GridUtils.manhattan_distance(from_unit.movement.cell, unit.movement.cell)
 		if nearest == null or _pursuit_beats(hops, standing, d, best_hops, best_standing, best_dist):
 			nearest = unit
@@ -635,17 +641,25 @@ static func _try_burrow(unit: Unit, squad_manager: SquadManager) -> bool:
 # BODY as an ordinary target, but `PlanResolver._watch_triggered_by` refuses a non-ACTIVE entrant and
 # a corpse never moves -- so a watcher beside a downed enemy would aim at its "approach" every quiet
 # turn for the rest of the battle, watching something that can never arrive.
+#
+# ON THE BOARD THE SQUAD'S PLAN LEAVES (#1209). This runs after the squad's attacks are queued, so the
+# live board is the wrong one: an enemy a squadmate fells is no target, and one a squadmate shoves
+# comes from where it lands. Every unit is stood on its planned cell for the decision (#710's
+# snapshot) and put back before the queue, which must never see a teleported board.
 static func _try_overwatch(unit: Unit, board: BoardContext, squad_manager: SquadManager) -> bool:
 	var attack := watch_attack_for(unit)
 	if attack == null:
 		return false
-	var enemy := nearest_enemy(unit, board, null, true)
-	if enemy == null:
-		return false
 	var origin := unit.get_projected_destination()   # the fallback walk runs AFTER the group move is queued
-	var aim := _watch_aim(unit, origin, attack, enemy, board)
+	var plan := squad_manager.resolve_plan(unit.squad, board)
+	var saved := AIController.stand_on_projected(squad_manager)
+	var aim := origin
+	var enemy := nearest_enemy(unit, board, null, true, plan.hypo)
+	if enemy != null:
+		aim = _watch_aim(unit, origin, attack, enemy, board)
+	AIController.restore_cells(saved)
 	if aim == origin:
-		return false   # no facing covers a cell the enemy can reach -- see _watch_aim
+		return false   # nobody left to watch for, or no facing covers a cell the enemy can reach -- see _watch_aim
 	var action := OverwatchAction.new()
 	action.init(unit, aim, attack)
 	return squad_manager.queue_action(unit.squad, action)
@@ -793,11 +807,17 @@ static func _lane_can_be_entered(lane: Array[Vector2i], enemy: Unit, board: Boar
 # rescue adjacency IS the guard range, so a body is normally carried before this is asked.
 #
 # Ties keep guard_candidates' own order (Law #1), which walks cells_within_manhattan_range.
+#
+# Exposure is counted on the board the squad's plan leaves (#1209), _try_overwatch's reason: an enemy a
+# squadmate fells this turn reaches nobody, and one it shoves reaches from where it lands.
 static func _try_guard(unit: Unit, board: BoardContext, squad_manager: SquadManager) -> bool:
 	var candidates := RulesService.guard_candidates(unit, board)
 	if candidates.is_empty():
 		return false
-	var exposure := _exposure_counts(candidates, board, unit.get_faction())
+	var plan := squad_manager.resolve_plan(unit.squad, board)
+	var saved := AIController.stand_on_projected(squad_manager)
+	var exposure := _exposure_counts(candidates, board, unit.get_faction(), plan.hypo)
+	AIController.restore_cells(saved)
 	var ward: Unit = null
 	var most := 0
 	for ally in candidates:
@@ -815,15 +835,16 @@ static func _try_guard(unit: Unit, board: BoardContext, squad_manager: SquadMana
 # How many enemies could reach AND hit each of these allies -- one move-range search per enemy,
 # reused across every candidate, rather than one per pair.
 #
-# DECLARED APPROXIMATIONS, both inherited from the seams this composes: the search reads LIVE
-# occupancy (a squadmate about to move still blocks it) and honours the enemy's own cohesion leash,
-# so an enemy that could only reach the ally by breaking formation does not count. The cost is one
-# search per ACTIVE enemy, paid only once a unit has reached GUARD in the walk -- second to last, so
-# after every other verb has declined.
-static func _exposure_counts(allies: Array[Unit], board: BoardContext, faction: Team.Faction) -> Dictionary:
+# DECLARED APPROXIMATION, inherited from the seam this composes: the search honours the enemy's own
+# cohesion leash, so an enemy that could only reach the ally by breaking formation does not count.
+# Occupancy is whatever board the caller stood up -- _try_guard's is the plan's (#1209). The cost is
+# one search per enemy left ACTIVE by `hypo`, paid only once a unit has reached GUARD in the walk --
+# second to last, so after every other verb has declined.
+static func _exposure_counts(allies: Array[Unit], board: BoardContext, faction: Team.Faction,
+		hypo: Dictionary = {}) -> Dictionary:
 	var counts := {}
 	for other in board.units:
-		if not is_instance_valid(other) or not other.is_active():
+		if not PlanResolver.actor_is_live(other, hypo):
 			continue
 		if not Team.is_enemy(faction, other.get_faction()):
 			continue
@@ -919,7 +940,7 @@ static func seek_positions(squad: Squad, default_destination: Vector2i, board: B
 		if member != leader and _can_seek(member):
 			waiting.append(member)
 	while not waiting.is_empty():
-		_restore_cells(live)
+		AIController.restore_cells(live)
 		var placed := _formation(squad, out.destination, board, allowed, out.pins)
 		var options := {}
 		for member in waiting:
@@ -937,7 +958,7 @@ static func seek_positions(squad: Squad, default_destination: Vector2i, board: B
 		wins.append(best.action)
 		waiting.erase(best.unit)
 
-	_restore_cells(live)
+	AIController.restore_cells(live)
 	squad_manager.resolve_plan(squad, board, reactions, terrain)
 	return out
 
@@ -1022,11 +1043,6 @@ static func _stand(squad: Squad, leader: Unit, leader_destination: Vector2i, pla
 	for member in squad.get_members():
 		member.movement.set_cell(placed.get(member, member.movement.cell))
 	leader.movement.set_cell(leader_destination)
-
-
-static func _restore_cells(saved: Dictionary) -> void:
-	for unit: Unit in saved:
-		unit.movement.set_cell(saved[unit])
 
 
 # The first cell in `cells` from which `unit` takes a removal, else the first that breaks a squad.
