@@ -130,12 +130,42 @@ func test_an_unarmed_patrol_gets_no_counter_rim() -> void:
 	var board: Dictionary = _build_board()
 	var zones: ZoneManager = _make_zone_manager()
 	# No weapon: attack_source_can_counter() is false, which is the gate the rim borrows rather than
-	# restating -- so a dry or unarmed enemy adds nothing, exactly as it counters with nothing.
+	# restating -- so a dry or unarmed enemy adds nothing, exactly as it counters with nothing. And
+	# since #1215 it fires nothing either, so the WHOLE reach is empty, not just the rim.
 	var sentry: Unit = _spawn(board, Team.Faction.ENEMY, Vector2i(3, 1), false)
 	_bind(sentry, AIArchetype.Type.SENTRY, ZONE)
 	var field := ThreatField.build(_context(board, zones), Team.Faction.PLAYER)
 	assert_bool(field.cells.has(Vector2i(4, 1))).override_failure_message(
 			"a unit that cannot counter still painted a counter rim").is_false()
+	assert_array(field.reach_of(sentry)).override_failure_message(
+			"a patrol with nothing to fire still painted reach").is_empty()
+
+
+# NOTHING TO FIRE, NOTHING THREATENED (#1215): the player's ring offers an empty hand no attack, so
+# the field may not draw the bare-fist reach the resolver would give a null pick.
+func test_an_enemy_with_nothing_to_fire_marks_no_reach() -> void:
+	var board: Dictionary = _build_board()
+	var bare: Unit = _spawn(board, Team.Faction.ENEMY, Vector2i(3, 1), false)
+	_bind(bare, AIArchetype.Type.RUSHDOWN)
+	var field := ThreatField.build(_context(board), Team.Faction.PLAYER)
+	assert_array(field.reach_of(bare)).override_failure_message(
+			"an enemy with nothing to fire was drawn threatening its neighbours").is_empty()
+	assert_bool(field.cells.is_empty()).override_failure_message(
+			"the field marked cells nobody on the board can hit").is_true()
+
+
+# Your own red goes through the same walk, so an unarmed unit of yours is shown no reach either.
+func test_reach_from_an_unarmed_unit_is_empty() -> void:
+	var board: Dictionary = _build_board()
+	var mine: Unit = _spawn(board, Team.Faction.PLAYER, Vector2i(3, 1), false)
+	var context := _context(board)
+	var here: Array[Vector2i] = [mine.movement.cell]
+	assert_array(ThreatField.reach_from(mine, context, here)).override_failure_message(
+			"an empty hand was shown red it cannot attack into").is_empty()
+	mine.equipped_weapon = H.make_weapon()
+	assert_array(ThreatField.reach_from(mine, context, here)).override_failure_message(
+			"fixture: armed, the same cell should reach its neighbours -- the empty read proves nothing"
+			).is_not_empty()
 
 
 func test_the_counter_rim_adds_nothing_to_a_rushdown() -> void:
@@ -231,7 +261,10 @@ func test_a_sentry_with_no_zone_holds_its_ground() -> void:
 
 func test_a_ledge_above_the_melee_rule_is_unmarked() -> void:
 	var board: Dictionary = _build_board()
-	var brawler: Unit = _spawn(board, Team.Faction.ENEMY, Vector2i(3, 1), false)   # bare fists = melee
+	var brawler: Unit = _spawn(board, Team.Faction.ENEMY, Vector2i(3, 1), false)
+	var club: WeaponInstance = H.make_weapon()   # a bare WeaponAttackData is RANGED by default
+	club.template.main_attack.vertical_rule = AttackData.VerticalRule.MELEE
+	brawler.equipped_weapon = club
 	_bind(brawler, AIArchetype.Type.HOLD)
 	board.board_heights.set_cell(Vector2i(4, 1), 2 * Terrain.UNITS_PER_LEVEL)   # a sheer two-level rise
 	var field := ThreatField.build(_context(board), Team.Faction.PLAYER)

@@ -408,7 +408,9 @@ func test_the_threat_preview_does_not_move_it() -> void:
 	var enemy_only: Array[Team.Faction] = [Team.Faction.ENEMY]
 	game.ai_controller.set_ai_factions(enemy_only)
 	_spawn(Team.Faction.PLAYER, Vector2i(2, 2))
-	_spawn(Team.Faction.ENEMY, Vector2i(3, 2))
+	# ARMED: the preview skips a squad that can reach nobody, and an empty hand reaches nobody (#1215).
+	var foe := _spawn(Team.Faction.ENEMY, Vector2i(3, 2))
+	foe.equipped_weapon = H.make_weapon()
 	game.refresh_end_turn_button()
 	assert_bool(game.end_turn_button.visible).is_true()
 	var seen := _record_visibility()

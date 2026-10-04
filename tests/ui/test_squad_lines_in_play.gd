@@ -220,11 +220,20 @@ func test_a_leaders_stranding_tile_strains_exactly_the_members_it_strands() -> v
 # An enemy placed so its field covers tiles a squad's move can reach, and blocks none of them: the
 # reach LINES are drawn only where an enemy's field covers the hovered tile, so without one the
 # "no reach lines" half of the cases below could not fail.
+# ARMED, because a unit with nothing to fire reaches nothing (#1215): these cases need an enemy whose
+# reach covers a tile, and a unit of yours whose red can be seen. The pattern-less fixture weapon is
+# adjacency, the same geometry the bare fist used to stand in for, and weighs nothing, so no MOV moves.
 func _enemy_at(cell: Vector2i) -> Unit:
 	var enemy: Unit = game.spawn_unit(H.make_unit_data({}, Team.Faction.ENEMY), cell)
 	assert_object(enemy).is_not_null()
+	enemy.equipped_weapon = H.make_weapon()
 	game.drop_threat_field()
 	return enemy
+
+
+func _arm(unit: Unit) -> void:
+	unit.equipped_weapon = H.make_weapon()
+	game.drop_threat_field()
 
 
 func _red() -> Array:
@@ -238,6 +247,7 @@ func _red() -> Array:
 func test_a_tile_past_the_leaders_range_draws_the_ghost_and_the_tether_and_nothing_else() -> void:
 	var board: Dictionary = await _squad(5, [{"dex": DEX_FAST, "cell": Vector2i(-1, 0)}])
 	var member: Unit = board.members[0]
+	_arm(member)
 	_enemy_at(Vector2i(-9, 0))
 	await await_idle_frame()
 	var reach: Dictionary = game.compute_move_range(member)
@@ -278,6 +288,7 @@ func test_a_tile_past_the_leaders_range_draws_the_ghost_and_the_tether_and_nothi
 func test_a_leaders_stranding_tile_draws_no_reach_and_no_reach_lines() -> void:
 	var board: Dictionary = await _squad(DEX_FAST, [{"dex": DEX_SLOW, "cell": Vector2i(-3, 0)}])
 	var leader: Unit = board.leader
+	_arm(leader)
 	_enemy_at(Vector2i(10, 0))
 	await await_idle_frame()
 	game.selected_unit = leader
@@ -311,6 +322,7 @@ func test_a_leaders_stranding_tile_draws_no_reach_and_no_reach_lines() -> void:
 func test_a_group_moves_stranding_tile_clears_the_red_the_last_tile_drew() -> void:
 	var board: Dictionary = await _squad(DEX_FAST, [{"dex": DEX_SLOW, "cell": Vector2i(-3, 0)}])
 	var leader: Unit = board.leader
+	_arm(leader)
 	game.selected_unit = leader
 	game.enter_group_move_mode(leader)
 	var followable := GridUtils.NO_CELL
@@ -340,6 +352,7 @@ func test_a_group_moves_stranding_tile_clears_the_red_the_last_tile_drew() -> vo
 func test_hovering_off_the_range_puts_the_red_back_where_move_opened_it() -> void:
 	var board: Dictionary = await _squad(5, [{"dex": 5, "cell": Vector2i(-1, 0)}])
 	var member: Unit = board.members[0]
+	_arm(member)
 	game.selected_unit = member
 	game.enter_move_mode(member)
 	var opened := _red()

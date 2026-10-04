@@ -600,6 +600,9 @@ func _fire_pick(unit: Unit, handle: String, attack_name: String) -> Dictionary:
 		if attack == null:
 			return {"ok": false, "error": "%s has no attack named '%s' (can fire: %s)" % [
 				handle, attack_name, _names_of(unit.get_selectable_attacks())]}
+	elif attack == null:
+		# The ring offers no row here either (#1215); a null pick would resolve as bare fists.
+		return {"ok": false, "error": "%s has nothing it can fire" % handle}
 	var reason := unit.attack_block_reason(attack)
 	if reason != "":
 		return {"ok": false, "error": "%s can't fire %s: %s" % [handle, _attack_label(attack), reason]}

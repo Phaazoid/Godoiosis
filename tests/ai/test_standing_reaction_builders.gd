@@ -328,6 +328,23 @@ func test_a_guard_refuses_when_nobody_can_be_reached() -> void:
 	assert_object(_queued_guard(guard)).is_null()
 
 
+# AN ENEMY WITH NOTHING TO FIRE THREATENS NOBODY (#1215). The exposure count aimed with the enemy's
+# fired attack, which is null for an empty hand, and Reach reads a null as bare-fist adjacency -- so
+# an unarmed foe one step from the ally counted as a threat the player's own rules say it is not.
+func test_a_guard_ignores_an_enemy_with_nothing_to_fire() -> void:
+	var board := _board_of()
+	var guard: Unit = _spawn(board, PLAYER, Vector2i(4, 4))
+	var ally: Unit = _spawn(board, PLAYER, Vector2i(4, 3))
+	board.squad_manager.join_squad(ally, guard.squad)
+	var bare: Unit = _spawn(board, ENEMY, Vector2i(4, 1), false)   # one step from standing beside the ally
+	assert_bool(bare.can_fire_default_attack()).override_failure_message(
+			"fixture: an empty hand should have nothing to fire").is_false()
+
+	assert_bool(AITactics.queue_main_action(guard, _context(board), board.squad_manager, GUARD_ONLY)) \
+		.override_failure_message("the guard warded an ally against an enemy with nothing to fire").is_false()
+	assert_object(_queued_guard(guard)).is_null()
+
+
 # --- #946: the approach field, and the fallback's dud guard ---------------------------------------
 
 # A BODY ON A CHOKEPOINT IS NOT A SEALED BOARD. The approach walk used to run with occupancy ON, so
