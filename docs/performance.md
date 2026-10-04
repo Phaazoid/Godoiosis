@@ -525,7 +525,8 @@ per cell, not per frame, since the hover only repaints when the hovered cell mov
 foes a chain reaches much faster than with its size on empty ground, because each hit is a resolve.
 The Attack Editor already warns past a fan-out of 16. If a payload hover ever feels sticky, the first
 things to measure are the restore resolve (it re-resolves the whole real queue, which is empty here
-and will not be in play) and the per-call `ReactionCatalog.get_all()` default arguments.
+and will not be in play) and the per-call `ReactionCatalog.get_all()` default arguments (cached since
+#1213, below).
 
 ## 2026-10-03 — the AI's seek for a removal or a squad break (#760)
 
@@ -567,6 +568,29 @@ this branch against `main`'s versions of the same four files.
   (`ReactionCatalog.get_all()` + `TerrainReactionCatalog.get_all()`, measured alone). They scan
   their folders on every call, as `resolve_hypothetical`'s default arguments. The resolve itself is
   about 2.3 ms. `refresh_action_queue`'s own resolve pays the same scans on every order, so caching
-  those two catalogs would cut both.
+  those two catalogs would cut both. #1213 did, below.
 - **It runs once per plan change, never per frame.** The field is cached and dropped only when the
   plan or the board moves; with no orders queued, `viewer_plans` resolves nothing.
+
+## 2026-10-04 — the reaction catalogs cache their scan (#1213)
+
+`ReactionCatalog.get_all()` and `TerrainReactionCatalog.get_all()` read their folders once a session
+now and hand out a copy, `JobCatalog`'s shape. Both are default arguments of every resolve, so the
+scan had been paid by every queue refresh, every danger-field rebuild with a plan, and every resolve
+the AI scores. Measured with #1197's scratch tool (extended to time the two calls alone) and
+`tools/profile_ai_turn.gd`, `main`'s two catalogs and Tiles page against this branch:
+
+| What | `main` | #1213 |
+|---|---|---|
+| The two `get_all()` calls together | 7.6 / 7.3 ms | ~0 ms |
+| Castle Assault, danger-field rebuild with one player move queued | 11.1 / 12.2 ms | 4.1 / 4.1 / 4.1 ms |
+| Castle Assault, whole board (every AI squad decides once) | 1206 / 1203 ms | 1045 / 1068 / 1003 ms |
+
+- **The rebuild with a plan is back near the no-plan cost** (3.5–4.4 ms both sides); the build alone
+  and The Quarry, which queued no plan, did not move.
+- **The AI decision is about 14% faster**, and its decision record is byte-identical — the cache
+  changes when the folder is read, never what is in it.
+- **`scans` on each catalog counts real folder reads**, the cache's one observable, because "faster"
+  has no behaviour a case can see (#710 slice 2's law). The Tiles page's burnable tick is the one
+  runtime writer that adds or removes a reaction file, and it calls `refresh()` before it re-wires
+  the board.
