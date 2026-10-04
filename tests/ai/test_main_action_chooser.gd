@@ -77,19 +77,37 @@ func test_ai_rune_attack_fires_the_carving_not_fists() -> void:
 	assert_int(plan.attacks[0].resolved.damage).is_equal(9)
 
 
-func test_unarmed_falls_back_to_fists_like_the_player() -> void:
-	# No weapon at all: the null pick IS the honest path (player parity -- _begin_attack with
-	# no choices leaves active_attack null and punches at Manhattan 1).
+# --- nothing to fire, nothing queued (#1215) ---
+#
+# The player's ring offers no attack row to a unit with nothing selectable, so the AI may not
+# punch either. Each case asks the player's own gate first, so parity is checked, not assumed.
+
+func test_an_unarmed_unit_queues_no_attack_like_the_player() -> void:
 	var attacker: Unit = H.spawn_solo(self, _sm, ENEMY, Vector2i(0, 0), {}, false)
 	var victim: Unit = H.spawn_solo(self, _sm, PLAYER, Vector2i(1, 0), { Stats.Stat.MHP: 50 })
+	assert_bool(attacker.can_fire_default_attack()).override_failure_message(
+		"fixture: an empty hand should get no attack row from the player's ring").is_false()
 
 	var units: Array[Unit] = [attacker, victim]
-	assert_bool(AITactics.queue_main_action(attacker, _board(units), _sm, ATTACK_ONLY)).is_true()
-	var aim: AttackAction = attacker.squad.action_queue[0] as AttackAction
-	assert_object(aim.fired_attack).is_null()
+	assert_bool(AITactics.queue_main_action(attacker, _board(units), _sm, ATTACK_ONLY)).override_failure_message(
+		"the AI attacked with an empty hand -- a null pick, which resolves as a bare-fist punch").is_false()
+	assert_array(attacker.squad.action_queue).is_empty()
 
-	var plan: ResolvedPlan = _resolve_aim(attacker, aim, units)
-	assert_int(plan.attacks[0].resolved.damage).is_equal(attacker.get_effective_stat(Stats.Stat.STR))
+
+# The shipped shape: an alchemist whose aura no longer arms its rune (The Quarry's maim tax).
+func test_an_aura_dry_alchemist_queues_no_attack_like_the_player() -> void:
+	var alch: Unit = _rune_alchemist(ENEMY, Vector2i(0, 0), _fireball(5))
+	alch.unit_instance.aura = {}
+	var victim: Unit = H.spawn_solo(self, _sm, PLAYER, Vector2i(1, 0), { Stats.Stat.MHP: 50 })
+	assert_array(alch.get_selectable_attacks()).override_failure_message(
+		"fixture: the rune should have nothing channelable once the aura is gone").is_empty()
+	assert_bool(alch.can_fire_default_attack()).override_failure_message(
+		"fixture: a dry rune should get no attack row from the player's ring").is_false()
+
+	var units: Array[Unit] = [alch, victim]
+	assert_bool(AITactics.queue_main_action(alch, _board(units), _sm, ATTACK_ONLY)).override_failure_message(
+		"the AI attacked with a dry rune -- a null pick, which resolves as a bare-fist punch").is_false()
+	assert_array(alch.squad.action_queue).is_empty()
 
 
 # --- attack selection (net-damage scoring, dev call 2026-07-22) ---

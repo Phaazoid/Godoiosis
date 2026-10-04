@@ -359,10 +359,9 @@ static func _candidates_by_member(members: Array[Unit], board: BoardContext, bas
 static func _attack_candidates(unit: Unit, board: BoardContext, origin: Vector2i,
 		base_hypo: Dictionary) -> Array[AttackAction]:
 	var out: Array[AttackAction] = []
-	var candidates: Array[AttackData] = unit.get_selectable_attacks()
-	if candidates.is_empty():
-		candidates = [null]   # unarmed (or aura-dry rune): null pick = bare-fist Manhattan-1, the resolver's STR fallback
-	for attack in candidates:
+	# Nothing selectable (unarmed, an aura-dry rune) means no candidate, as the player's ring offers
+	# none (#1215) -- never a null pick, which the resolver would read as bare fists.
+	for attack in unit.get_selectable_attacks():
 		if not unit.is_attack_fireable(attack):
 			continue
 		# The candidate is passed straight to the geometry (#102) -- active_attack is written only
@@ -848,6 +847,8 @@ static func _exposure_counts(allies: Array[Unit], board: BoardContext, faction: 
 			continue
 		if not Team.is_enemy(faction, other.get_faction()):
 			continue
+		if other.get_selectable_attacks().is_empty():
+			continue   # it can fire nothing, so it threatens nobody (#1215)
 		var walk: Dictionary = RulesService.compute_move_range(other, board)
 		var reachable: Dictionary = walk["reachable"]
 		var aiming := other.get_fired_attack()

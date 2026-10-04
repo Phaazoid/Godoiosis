@@ -201,13 +201,12 @@ static func _threat_of(unit: Unit, board: BoardContext, origins: Array[Vector2i]
 	return out
 
 
-# KEYED BY ATTACK (null = bare fists), because the current depends on the element of the attack that
-# made the hit -- a non-shock swing that reaches the lake must not light it (#1197).
+# KEYED BY ATTACK, because the current depends on the element of the attack that made the hit -- a
+# non-shock swing that reaches the lake must not light it (#1197). Nothing selectable (unarmed, an
+# aura-dry rune) reaches nothing, as it can fire nothing (#1215).
 static func _reach_by_attack(unit: Unit, board: BoardContext, origins: Array[Vector2i], zone: Dictionary) -> Dictionary:
 	var by_attack := {}
 	var attacks: Array[AttackData] = unit.get_selectable_attacks()
-	if attacks.is_empty():
-		attacks = [null]   # unarmed: bare-fist Manhattan-1, Reach's own fallback
 	for origin in origins:
 		for attack in attacks:
 			if not unit.is_attack_fireable(attack):

@@ -119,6 +119,30 @@ func test_an_attack_that_cannot_fire_is_refused_in_the_menus_own_words() -> void
 	assert_int(_queued(BaseAction.ActionType.ATTACK).size()).is_equal(0)
 
 
+# NOTHING TO FIRE, NOTHING FIRED (#1215). A rune whose wielder cannot channel any carving has no
+# default attack, the ring offers it no row, and attack_block_reason(null) answers "" -- so the
+# unnamed pick used to sail through as a null stamp, which the resolver reads as a bare-fist punch.
+func test_a_rune_with_nothing_channelable_fires_nothing() -> void:
+	var carving := TransmutationData.new()
+	carving.display_name = "Spark"
+	carving.power = 3
+	carving.sigils.assign([Elemental.Element.FIRE])
+	carving.targets = EquippableData.TargetMode.UNIT
+	var rune := RuneData.new()
+	rune.size = RuneData.Size.MEDIUM
+	rune.inscribe(carving)
+	_hero.equipped_weapon = rune
+	_hero.unit_instance.aura = {}   # no aura at all, so the carving cannot be channelled
+	assert_bool(_hero.can_fire_default_attack()).override_failure_message(
+		"fixture: the hero can still fire, so this case proves nothing").is_false()
+
+	var r: Dictionary = _sess.queue_attack("A", Vector2i(1, 0))
+	assert_bool(r.ok).override_failure_message("a dry rune fired a null pick headlessly").is_false()
+	assert_int(_queued(BaseAction.ActionType.ATTACK).size()).is_equal(0)
+	assert_bool((_sess.legal_targets("A") as Dictionary).ok).override_failure_message(
+		"legal_targets listed aims for a unit with nothing to fire").is_false()
+
+
 # #590's split, from the fire side: a watch-only attack is not something `attack` can fire.
 func test_a_watch_cannot_be_fired_as_an_attack() -> void:
 	assert_bool((_sess.queue_attack("A", Vector2i(1, 0), "Watch") as Dictionary).ok).is_false()
