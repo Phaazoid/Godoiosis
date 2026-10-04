@@ -55,6 +55,22 @@ func apply(effect: ResolvedCellEffect) -> void:
 		add_level(effect.cell, kind, effect.gas_added[kind])
 
 
+# The cell as it will stand once these deposits land, written nowhere -- TerrainStateManager's
+# projected_states_at twin, so the end-of-turn forecast sees the steam its own pass makes. The same
+# add-and-cap as add_level; the resolver has already dropped gas a cell cannot hold.
+func projected_packed_at(cell: Vector2i, effects: Array[ResolvedCellEffect]) -> int:
+	var packed: int = _cells.get(cell, 0)
+	for effect in effects:
+		if effect.cell != cell:
+			continue
+		for kind: Gas.Kind in effect.gas_added:
+			if effect.gas_added[kind] <= 0:
+				continue
+			var level := mini(Gas.level_in(packed, kind) + effect.gas_added[kind], Gas.MAX_LEVEL)
+			packed = Gas.with_level(packed, kind, level)
+	return packed
+
+
 # What the field WILL hold after the next round, written nowhere -- the forecast's read, and the
 # tick's, so the two cannot disagree.
 func next_round(board: BoardContext) -> Dictionary[Vector2i, int]:

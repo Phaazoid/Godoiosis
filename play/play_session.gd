@@ -119,7 +119,7 @@ func reserve_units() -> Array[Unit]:
 	return result
 
 func _board() -> BoardContext:
-	return BoardContext.new(grid, live_units(), squad_manager, terrain_states, null, board_heights)
+	return BoardContext.new(grid, live_units(), squad_manager, terrain_states, null, board_heights, gas_field)
 
 func active_faction() -> Team.Faction:
 	return turn_manager.active_faction()
@@ -1219,7 +1219,7 @@ func end_turn() -> Dictionary:
 
 	# The side that just played burns BEFORE it hands off, and a burn that ends the mission does not
 	# hand off at all -- both mirror game.end_turn (#898).
-	var log: Array[String] = _burn(turn_manager.active_faction())
+	var log: Array[String] = _end_of_turn_tiles(turn_manager.active_faction())
 	if mission_tag() != "":
 		return _turn_result(log)
 
@@ -1254,7 +1254,7 @@ func end_turn() -> Dictionary:
 		if mission_tag() != "":
 			break
 		# The AI's own end of turn burns too -- AIController.take_faction_turn ends on game.end_turn.
-		log.append_array(_burn(acting))
+		log.append_array(_end_of_turn_tiles(acting))
 		if mission_tag() != "":
 			break
 		turn_manager.end_turn(_board().present_factions())
@@ -1277,14 +1277,20 @@ func _turn_result(events: Array[String]) -> Dictionary:
 	return result
 
 
-# One faction's end-of-turn burn (#898): the hits OrderExecutor.apply_burning_tile_damage plays, minus
-# the camera. TileHitAction.execute is synchronous, so the real one runs.
-func _burn(faction: Team.Faction) -> Array[String]:
+# One faction's end-of-turn tiles (#898, the soak since #508): the hits
+# OrderExecutor.apply_end_of_turn_tiles plays, minus the camera. TileHitAction.execute is synchronous,
+# so the real one runs.
+func _end_of_turn_tiles(faction: Team.Faction) -> Array[String]:
 	var events: Array[String] = []
 	if terrain_states == null:
 		return events
-	for hit in TurnBoundary.tile_hits(live_units(), terrain_states, faction):
+	for hit in TurnBoundary.tile_hits(live_units(), terrain_states, gas_field, faction):
 		hit.execute()
+		if hit.gas >= 0:
+			for gained in hit.resolved.states_added:
+				events.append("%s gains %s from %s" % [handle_for(hit.actor),
+						Elemental.state_display_name(gained), Gas.display_name(hit.gas as Gas.Kind)])
+			continue
 		events.append("%s takes %d from %s%s" % [handle_for(hit.actor), hit.resolved.damage,
 				Terrain.tile_state_display_name(hit.state), _lethality_tag(hit.resolved.lethality)])
 	_process_downed_pending()

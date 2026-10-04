@@ -363,6 +363,28 @@ func test_burning_ground_is_recorded_as_turn_effects() -> void:
 	assert_int(hits.size()).is_equal(1)
 	assert_str(str((hits[0] as Dictionary).get("state"))).is_equal("BURNING")
 	assert_int(int((hits[0] as Dictionary).get("damage", 0))).is_equal(before - hero.get_current_hp())
+	assert_bool((hits[0] as Dictionary).has("gas")).override_failure_message(
+			"a burn's row grew the soak's keys -- old runs no longer compare").is_false()
+
+
+# A soak rides the same event (#508 PR 3), naming its gas and what it gave, with no damage.
+func test_a_steam_soak_is_recorded_as_turn_effects() -> void:
+	var rules := GasRules.for_kind(Gas.Kind.STEAM)
+	var hero := _spawn(Team.Faction.PLAYER, Vector2i(0, 0))
+	_spawn(Team.Faction.ENEMY, Vector2i(7, 2))
+	mc._begin_turn()
+	game.gas_field.set_level(hero.movement.cell, Gas.Kind.STEAM, Gas.MAX_LEVEL)
+	await game.end_turn()
+
+	var effects := _of("turn_effects")
+	assert_int(effects.size()).override_failure_message(
+		"a soak is in no pass and on no signal -- the executor must write it").is_equal(1)
+	var hits: Array = effects[0].get("hits", [])
+	assert_int(hits.size()).is_equal(1)
+	var row := hits[0] as Dictionary
+	assert_str(str(row.get("gas"))).is_equal(Gas.Kind.keys()[Gas.Kind.STEAM])
+	assert_array(row.get("states", []) as Array).contains_exactly([Elemental.State.keys()[rules.state]])
+	assert_int(int(row.get("damage", -1))).is_equal(0)
 
 
 func test_a_capture_is_recorded() -> void:
