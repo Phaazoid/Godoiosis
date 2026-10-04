@@ -105,6 +105,20 @@ static func valid_entries(scenario: ScenarioData) -> Array[ScenarioUnitEntry]:
 		result.append(entry)
 	return result
 
+# Armed Guards (#414), after every spawn: a pair cannot be re-linked until both ends exist. A ward
+# whose entry never spawned (blocked cell, off-map) simply loses the Guard rather than failing the
+# load, matching how a squad saved without a leader degrades to solos. Static so both loaders call
+# it (#46); unit_of_entry maps each ScenarioUnitEntry to the Unit it spawned.
+static func relink_guards(scenario: ScenarioData, unit_of_entry: Dictionary) -> void:
+	for entry: ScenarioUnitEntry in unit_of_entry:
+		if entry.guard_ward_index < 0 or entry.guard_ward_index >= scenario.unit_entries.size():
+			continue
+		var ward_entry: ScenarioUnitEntry = scenario.unit_entries[entry.guard_ward_index]
+		if not unit_of_entry.has(ward_entry):
+			continue
+		var guarding_unit: Unit = unit_of_entry[entry]
+		guarding_unit.arm_guard(unit_of_entry[ward_entry], guarding_unit.get_guard_range(), entry.guard_spent)
+
 # The write itself is DevWidgets.save_over -- dir creation, the take_over_path cache claim, and
 # the error path (mirrored into status_label when given, #168) all live there, not here.
 func save_scenario(scenario_name: String, status_label: Label = null, authored := false):
@@ -302,11 +316,8 @@ func apply_scenario(scenario: ScenarioData, path := "") -> void:
 	for entry in valid_entries(scenario):
 		# Handed WITHOUT the old outer duplicate (#177): UnitFactory copies anyway, and the copy
 		# here was destroying resource_path — the provenance a reference entry exists to keep.
-		# The saved lifecycle is passed, not looked up (#116): a DOWNED entry may lie on ground
-		# nothing may STAND on -- deep water -- and without this the load would silently drop it.
-		# A reference entry (state_saved false) is authored cast, never mid-drown, so ACTIVE is right.
-		var unit: Unit = game.spawn_unit(entry.unit_data, entry.cell,
-			entry.state_saved and entry.lifecycle_state == Unit.LifecycleState.DOWNED)
+		# The saved lifecycle is passed, not looked up (#116): a body may lie in deep water.
+		var unit: Unit = game.spawn_unit(entry.unit_data, entry.cell, entry.spawns_as_body())
 		if unit == null:
 			push_warning("Could not spawn unit at %s (blocked or off-map)" % entry.cell)
 			continue
@@ -344,17 +355,7 @@ func apply_scenario(scenario: ScenarioData, path := "") -> void:
 		if acted_leader != null:
 			squad_manager.set_has_acted(acted_leader.squad, true)
 
-	# Armed Guards (#414), after every spawn: a pair cannot be re-linked until both ends exist. A ward
-	# whose entry never spawned (blocked cell, off-map) simply loses the Guard rather than failing the
-	# load, matching how a squad saved without a leader degrades to solos above.
-	for entry in unit_of_entry:
-		if entry.guard_ward_index < 0 or entry.guard_ward_index >= scenario.unit_entries.size():
-			continue
-		var ward_entry: ScenarioUnitEntry = scenario.unit_entries[entry.guard_ward_index]
-		if not unit_of_entry.has(ward_entry):
-			continue
-		var guarding_unit: Unit = unit_of_entry[entry]
-		guarding_unit.arm_guard(unit_of_entry[ward_entry], guarding_unit.get_guard_range(), entry.guard_spent)
+	relink_guards(scenario, unit_of_entry)   # armed Guards (#414), after every spawn
 	game.refresh_guard_markers()
 	game.refresh_watch_markers()   # a loaded watch is telegraphed the moment the board is up (#413)
 

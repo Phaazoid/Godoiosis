@@ -122,7 +122,8 @@ static func paint_rect(grid: BoardGrid, rect: Rect2i) -> void:
 static func paint_cell(grid: BoardGrid, cell: Vector2i, atlas: Vector2i) -> void:
 	grid.paint(cell, GRASS_SOURCE, atlas)
 
-# Spawn a unit onto the board in its own solo squad (mirrors game.spawn_unit's contract).
+# Spawn a unit onto the board in its own solo squad (game.spawn_unit's contract minus its gate, which
+# apply_scenario asks first -- fixtures place freely).
 static func spawn(board: Dictionary, data: UnitData, cell: Vector2i) -> Unit:
 	var unit := UnitFactory.create_unit(data, board.grid, cell)
 	board.units_root.add_child(unit)     # triggers _ready -> unit_instance + movement wired to grid
@@ -164,18 +165,22 @@ static func apply_scenario(board: Dictionary, scenario: ScenarioData) -> Array[U
 		board.zone_manager.load_dict(scenario.zones)   # every zone: the phase's deployment, a Sentry's patrol, the mission's own (#46)
 
 	var spawned: Array[Unit] = []
-	var entry_by_unit := {}            # Unit -> ScenarioUnitEntry
+	var unit_of_entry := {}            # ScenarioUnitEntry -> the Unit it spawned, ScenarioManager's map
 	var leaders := {}                  # squad_id -> Unit
 	var members := {}                  # squad_id -> Array[Unit]
 
-	for entry in scenario.unit_entries:
-		if entry.unit_data == null:
-			push_warning("Play: scenario entry with null unit_data; skipping")
+	for entry in ScenarioManager.valid_entries(scenario):
+		# The game's spawn gate (#46), asked BEFORE spawn() builds: spawn itself stays ungated so
+		# fixtures place freely, and a refused entry is dropped with a warning, as the game drops it.
+		var here: BoardContext = board.squad_manager.board_source.call()
+		if not RulesService.can_spawn_at(here, entry.cell, entry.spawns_as_body()):
+			push_warning("Play: could not spawn unit at %s (blocked or off-map)" % entry.cell)
 			continue
-		var unit := spawn(board, entry.unit_data.duplicate(true), entry.cell)
+		# Un-duplicated, as the game hands it (#177): UnitFactory copies, and keeps the provenance.
+		var unit := spawn(board, entry.unit_data, entry.cell)
 		entry.apply_placement(unit)   # the VIP flag and a leader's AI squad fields -- ScenarioManager's own call (#46)
 		spawned.append(unit)
-		entry_by_unit[unit] = entry
+		unit_of_entry[entry] = unit
 		if entry.squad_id != -1:
 			if entry.is_leader:
 				leaders[entry.squad_id] = unit
@@ -187,8 +192,8 @@ static func apply_scenario(board: Dictionary, scenario: ScenarioData) -> Array[U
 	# Nodes added this frame haven't run _ready yet; wait one so unit_instance/inventory exist.
 	await board.root.get_tree().process_frame
 
-	for unit in spawned:
-		var entry: ScenarioUnitEntry = entry_by_unit[unit]
+	for entry: ScenarioUnitEntry in unit_of_entry:
+		var unit: Unit = unit_of_entry[entry]
 		# The whole UnitInstance-side snapshot — stats/HP/inventory/limbs/proficiency/
 		# aura/jobs (#83); mirrors ScenarioManager.load_scenario, including the reference
 		# gate (#177): a reference entry captured nothing, so the spawn's initialize + kit stand.
@@ -204,10 +209,12 @@ static func apply_scenario(board: Dictionary, scenario: ScenarioData) -> Array[U
 
 	# has_acted after the rebuild, same order ScenarioManager.apply_scenario uses (#87). Mirrored
 	# here so the two loaders cannot disagree about whether a spent squad reloads spent.
-	for unit in spawned:
-		var entry: ScenarioUnitEntry = entry_by_unit[unit]
+	for entry: ScenarioUnitEntry in unit_of_entry:
+		var unit: Unit = unit_of_entry[entry]
 		if entry.is_leader and entry.squad_has_acted:
 			board.squad_manager.set_has_acted(unit.squad, true)
+
+	ScenarioManager.relink_guards(scenario, unit_of_entry)   # armed Guards (#414), the game's own door and moment
 
 	board.turn_manager.set_active_faction(scenario.active_faction)
 	board["scenario"] = scenario
