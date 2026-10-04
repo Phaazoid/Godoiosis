@@ -1044,6 +1044,7 @@ func test_a_ground_change_makes_the_terrain_catalog_read_its_folder_again() -> v
 		"a tick's create or delete left the catalog answering from the list it cached before the file "
 		+ "changed, so the board and the page go on seeing the old ground until a relaunch"
 		).is_greater(before)
+	await await_idle_frame()   # the rebuild's detached rows, or they read as orphans
 
 
 func _paint_a_grass_cell(game: Node2D) -> Vector2i:
