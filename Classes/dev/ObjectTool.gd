@@ -33,9 +33,9 @@ var _picked := 0                       # survives the rebuild every field write 
 var _save_button: Button
 var _globals_button: Button
 var _rules_button: Button
-# The authored terrain reactions, re-read per rebuild. TerrainReactionCatalog.get_all() caches
-# nothing and Godot serves the loads out of its own cache, so this is a directory scan, not six
-# reads -- and re-reading is what makes a tick's create or delete visible in the same breath.
+# The authored terrain reactions, re-read per rebuild. The catalog CACHES its scan (#1213), so a
+# tick's create or delete is visible in the same breath only because _after_ground_change refreshes
+# it first -- this page is the one runtime writer that changes which reaction files exist.
 var _reactions: Array[TerrainReaction] = []
 # Every "inherits X" label now on the page, with the field it speaks for. A GLOBAL write cannot
 # rebuild the page (see _write_global), so these are refreshed by hand instead of going stale.
@@ -302,8 +302,9 @@ func _rewire_fuel() -> void:
 
 
 func _after_ground_change(message: String) -> void:
+	TerrainReactionCatalog.refresh()   # the folder just gained or lost a file
 	_rewire_fuel()
-	_rebuild()   # re-reads the directory, so the tick and the file agree again
+	_rebuild()   # re-reads the refreshed catalog, so the tick and the file agree again
 	_status.text = message
 
 
