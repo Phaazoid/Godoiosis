@@ -147,6 +147,35 @@ func test_a_recorded_watch_replays_with_its_own_attack() -> void:
 	assert_str(armed.display_name if armed != null else "(none)").is_equal("Watch")
 
 
+# A gear act recorded off the dock's own handler replays through GearVerbs (#46), the rule the dock
+# asks -- and one the replayed board refuses is a disagreement with the run, never a silent no-op.
+func test_a_recorded_wear_replays_through_the_shared_door() -> void:
+	var run := ReplayRun.load_run(await _record_a_wear())
+	assert_bool(driver.seed(run)).is_true()
+	await driver.play()
+	var wearer := _player_unit()
+	assert_object(wearer).is_not_null()
+	assert_object(wearer.worn_armor).override_failure_message("the replay never wore the recorded plate").is_not_null()
+	assert_str(wearer.worn_armor.display_name).is_equal(REPLAY_PLATE)
+	assert_int(driver.divergences.size()).override_failure_message(
+		"the replay diverged from the run: %s" % str(driver.divergences)).is_equal(0)
+
+
+func test_a_refused_gear_act_is_reported_as_a_divergence() -> void:
+	var run := ReplayRun.load_run(await _record_a_wear())
+	var doctored := false
+	for e: Dictionary in run.events:
+		if str(e.get("event", "")) == "gear":
+			e["index"] = Unit.MAX_INVENTORY_SIZE - 1   # an empty slot on the replayed board
+			doctored = true
+	assert_bool(doctored).override_failure_message("fixture: the run recorded no gear act").is_true()
+	assert_bool(driver.seed(run)).is_true()
+	await driver.play()
+	assert_array(driver.divergences.filter(func(d: String) -> bool: return d.contains("was refused"))
+		).override_failure_message("a refused gear act went unreported: %s" % str(driver.divergences)
+		).is_not_empty()
+
+
 # THE STAND-DOWN IS AFTER THE SEED, and that ordering is the whole of it: apply_scenario REPLACES
 # the AI set from the board it loads (#150), so a stand-down written first is overwritten by the
 # very next line. Every faction's orders are in the log, so the driver plays them; letting the AI
@@ -507,6 +536,36 @@ func _record_a_watch() -> String:
 	await game.end_turn()
 	mission_log.seal(MissionLog.Ending.ABANDONED)
 	return run_id
+
+
+const REPLAY_PLATE := "Replay Test Plate"
+
+
+# A mission whose one act is WEARING a plate, taken through the dock's own handler so MissionLog
+# records it off the real signal.
+func _record_a_wear() -> String:
+	var hero := _spawn(Team.Faction.PLAYER, Vector2i(0, 0))
+	_spawn(Team.Faction.ENEMY, Vector2i(5, 0))
+	var plate := ArmorData.new()
+	plate.display_name = REPLAY_PLATE
+	hero.add_item(plate)
+	mc._begin_turn()
+	var run_id: String = mission_log.run_id()
+
+	game.unit_info_panel.set_unit(hero, true)
+	game.unit_info_panel.inventory_panel._do_wear(hero.inventory.find(plate))
+	assert_object(hero.worn_armor).override_failure_message("fixture: the dock never wore the plate").is_same(plate)
+
+	await game.end_turn()
+	mission_log.seal(MissionLog.Ending.ABANDONED)
+	return run_id
+
+
+func _player_unit() -> Unit:
+	for live: Unit in game.units_root.get_children():
+		if live.get_faction() == Team.Faction.PLAYER:
+			return live
+	return null
 
 
 static func _carbine_shaped_weapon() -> WeaponInstance:
