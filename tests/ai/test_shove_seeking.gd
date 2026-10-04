@@ -148,9 +148,10 @@ func test_a_cell_that_breaks_a_squad_is_sought() -> void:
 		.override_failure_message("the AI did not go to the cell that breaks the squad").is_equal(Vector2i(3, 0))
 
 
-# The counter is priced from the cell the unit would shoot from, because the unit is STOOD there.
-# N drops the target in the hole, but the target's squadmate is beside N and its counter would fell
-# the attacker: one removal each, net zero, so the detour is not taken.
+# A removal paid for with one of ours is no removal: the score is NET. N drops the target in the
+# hole, but the target's squadmate stands beside N and its counter fells the attacker -- one each,
+# net zero, so the detour is not taken. (The counter is seen at all only because the attacker is
+# stood on N while N is scored; without that, nothing is scored from N, which case 1 catches.)
 func test_a_cell_whose_counter_fells_us_is_not_sought() -> void:
 	var board := _hole_board()
 	var attacker: Unit = board.attacker

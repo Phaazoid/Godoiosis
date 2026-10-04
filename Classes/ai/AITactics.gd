@@ -41,11 +41,11 @@ class_name AITactics
 # every comparison it entered. Ordered this way it wins only what nobody upright is competing for.
 #
 # The exchange term is a BOOLEAN -- can they answer me from the cell I would attack from -- and not
-# a scored one, because scoring an attack from a cell nobody has moved to is structurally
-# impossible today (SquadManager._resolve_actions reads positions off the LIVE queue, so a
-# hypothetical move moves nobody). That is why this layer and the ATTACK pick judge an exchange
-# differently: this one cannot resolve, _score_plan can and would be throwing information away.
-# Declared in ai-tactics.md rather than left to be discovered.
+# a scored one. A hypothetical MOVE moves nobody (SquadManager._resolve_actions reads positions off
+# the LIVE queue), so this layer cannot resolve the fight it is choosing; the ATTACK pick can, and
+# would be throwing information away. Scoring a cell IS possible by standing the unit on it, which
+# is what seek_positions does (#760) -- but only for a removal or a squad break, by ruling, so who
+# to fight stays this boolean. Declared in ai-tactics.md rather than left to be discovered.
 static func choose_engagement_target(leader: Unit, board: BoardContext, squad_manager: SquadManager,
 		within = null, allowed = null) -> Unit:
 	var engageable := _engageable_enemies(leader, board, within, allowed)
@@ -852,10 +852,12 @@ static func engage(squad: Squad, target: Unit, board: BoardContext, squad_manage
 # removal ends its search; a squad break is only kept while a removal is still being looked for.
 #
 # A CELL IS SCORED BY STANDING THERE -- the positional snapshot the threat preview opens, through the
-# same teleport door. With the queue empty a unit set on a cell projects to it, so the counters, the
-# watches and the lethality all read the cell it would really fire from. Every cell is put back and
-# the real plan re-resolved before anything is queued. The attack itself is still the joint pass's
-# to choose; this decides only where people stand.
+# same teleport door -- and it is the only way: the resolve re-expands every aim from its ACTOR's
+# projected cell (#15), not from the origin the aim was declared with, so an aim "from" a cell its
+# actor is not on resolves as nothing. With the queue empty a unit set on a cell projects to it, so
+# the volley, the counters and the lethality all read the cell it would really fire from. Every cell
+# is put back and the real plan re-resolved before anything is queued. The attack itself is still
+# the joint pass's to choose; this decides only where people stand.
 class SeekResult:
 	var destination: Vector2i
 	var pins := {}   # Unit -> cell, for GroupMoveSolver.plan
