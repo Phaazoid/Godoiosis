@@ -66,6 +66,7 @@ view**, not raw JSON — see *State representation*. Command vocabulary:
 | `overwatch(unit_id, aim_cell, attack?)` | stand watch with the NAMED watch attack, else the unit's first (a weapon normally carries one) |
 | `deploy(unit, cell)` / `undeploy(unit)` / `reposition(unit, cell)` / `begin()` | the PRE-MISSION phase (#46) -- see *Pre-mission* below |
 | `give(from, slot, to)` / `job(unit, job)` / `fit(unit, slot, mod, space)` / `unfit(unit, slot, mod)` / `kit(unit)` | the pre-mission loadout: gear, jobs and mods, and the view that reads them back (#46) -- see *Pre-mission* below |
+| `equip / wear / use / toss (unit, slot)` / `unequip / remove_armor (unit)` | the inspect dock's verbs, in either phase (#46) -- see *The inspect dock* below |
 | `rescue / reload / rev / burrow / guard` | the side-channel main actions, one verb each — the argument-taking ones (`rescue(a, b)`, `guard(a, ward)`) stay separate from the argument-free ones for the reason `game.queue_simple_action` does. Each gates on the same `RulesService` query the menu's row is built from. *(Still missing: `capture` — see Known gaps.)* |
 | `cancel(unit_id)` / `wait(unit_id)` | updated plan |
 | `preview()` | `resolve_plan(active_squad)` outcomes **without applying** (damage, state deltas, deaths, counters) |
@@ -125,11 +126,26 @@ next stash `slot`. All four are pre-mission only (fitting is read-only in battle
 
 `kit {unit}` reads it back: each slot with `(E)` / `(W)`, why this unit cannot use a piece, each
 weapon's spaces (`1 [1/2: Line Sniper]`, `off` past the wielder's proficiency), and while the phase
-is open the offered jobs and mods. `kit stash` lists the stash. Equip and wear (the inspect dock's
-verbs) are slice 2b; a restart that keeps the loadout is slice 3.
+is open the offered jobs and mods. `kit stash` lists the stash. A restart that keeps the loadout is
+slice 3.
 
 ```bash
 play/send.sh --batch '[{"cmd":"kit","args":{"unit":"stash"}},{"cmd":"give","args":{"from":"stash","slot":0,"to":"A"}},{"cmd":"kit","args":{"unit":"A"}}]'
+```
+
+**The inspect dock (#46 slice 2b).** The dock's six buttons, named as a run records them:
+`equip`, `wear`, `use` (a vial) and `toss` take `{unit, slot}`; `unequip` and `remove_armor` take
+`{unit}`, being about the unit rather than a slot. They work in **either phase**, as the dock does.
+Each goes through `GearVerbs`, the one rule the dock's buttons and the replay viewer ask, and refuses
+in the gate's own words (`can_equip_reason`, `use_block_reason`, `remove_block_reason`).
+
+Who may use it is `game.can_control`'s rule, `RulesService.command_block_reason`: a standing unit on
+the side whose turn it is. A reserve unit is refused, because the dock is reached from the board.
+A change re-resolves an open plan (game.gd's `loadout_changed` wire), so with orders queued the
+reply carries the preview.
+
+```bash
+play/send.sh --batch '[{"cmd":"give","args":{"from":"stash","slot":0,"to":"G"}},{"cmd":"wear","args":{"unit":"G","slot":1}},{"cmd":"kit","args":{"unit":"G"}}]'
 ```
 
 ### 3. Transport hosts — "are 1 and 3 exclusive?" → no

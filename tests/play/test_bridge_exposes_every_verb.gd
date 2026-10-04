@@ -63,6 +63,8 @@ const NOT_COMMANDS := {
 	"offered_jobs_for": "read by the view, not ordered",
 	"offered_mods_for": "read by the view, not ordered",
 	"mod_key": "read by the view and by `unfit`, not ordered",
+	# ...and the inspect dock (#46 slice 2b).
+	"gear": "dispatched as the six dock verbs (equip, unequip, wear, remove_armor, use, toss)",
 }
 
 

@@ -958,9 +958,7 @@ func can_control(unit: Unit) -> bool:
 		return false
 	if game_state == GameState.DEV_MODE:
 		return true
-	if not unit.is_active():        # downed/dead units can't be commanded (will-and-death.md)
-		return false
-	return unit.get_faction() == turn_manager.active_faction()
+	return RulesService.command_block_reason(unit, turn_manager.active_faction()) == ""
 
 # Bring the view back to `unit` (#471). The action ring does NOT lock the board, so the player can
 # pan anywhere while it is open — and a COMMITTED order is about the unit, not about wherever the
