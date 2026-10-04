@@ -126,8 +126,7 @@ next stash `slot`. All four are pre-mission only (fitting is read-only in battle
 
 `kit {unit}` reads it back: each slot with `(E)` / `(W)`, why this unit cannot use a piece, each
 weapon's spaces (`1 [1/2: Line Sniper]`, `off` past the wielder's proficiency), and while the phase
-is open the offered jobs and mods. `kit stash` lists the stash. A restart that keeps the loadout is
-slice 3.
+is open the offered jobs and mods. `kit stash` lists the stash.
 
 ```bash
 play/send.sh --batch '[{"cmd":"kit","args":{"unit":"stash"}},{"cmd":"give","args":{"from":"stash","slot":0,"to":"A"}},{"cmd":"kit","args":{"unit":"A"}}]'
@@ -146,6 +145,23 @@ reply carries the preview.
 
 ```bash
 play/send.sh --batch '[{"cmd":"give","args":{"from":"stash","slot":0,"to":"G"}},{"cmd":"wear","args":{"unit":"G","slot":1}},{"cmd":"kit","args":{"unit":"G"}}]'
+```
+
+**Restart keeps the loadout (#46 slice 3).** `restart` reloads the loaded mission back into its
+pre-mission phase, the game's Restart (#763):
+- **after `begin`**, the last loadout stands again: who stood where, the squads, and every unit's
+  gear, jobs and mods, plus the stash they came out of;
+- **from inside the phase** it is *Reset Loadout*: the buffer is dropped and the mission's own draw
+  stands.
+
+The buffer is what the last `begin` captured, and the bridge keeps it across boards, as the game
+keeps it across a board swap. `load` replays it too when it was taken on the same mission, as
+re-entering a mission from the title does in the game, and the reply says so. Which buffer a load
+replays and what a restart leaves of it are `PreMissionPhase.replay_for` and `kept_by_restart`, the
+two rules the game's own doors ask. A `new` board has nothing to reload, so `restart` refuses there.
+
+```bash
+play/send.sh --batch '[{"cmd":"undeploy","args":{"unit":"C"}},{"cmd":"deploy","args":{"unit":"F","x":29,"y":3}},{"cmd":"begin"},{"cmd":"restart"}]'
 ```
 
 ### 3. Transport hosts — "are 1 and 3 exclusive?" → no
