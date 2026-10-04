@@ -97,15 +97,20 @@ func _open_both() -> void:
 	await await_idle_frame()
 
 
-# Per roster entry, in entry order: standing or not, where, and which entry leads its squad.
+# Per roster entry, in entry order: standing or not, where, which entry leads its squad, and what it
+# carries (#46 slice 3 -- a restart replays gear as well as placement).
 static func _picture(units: Array[Unit], deployed: Callable) -> Array:
 	var rows: Array = []
 	for unit: Unit in units:
+		var carried: Array[String] = []
+		for item: Item in unit.inventory:
+			if item != null:
+				carried.append(item.shown_name())
 		if not deployed.call(unit):
-			rows.append(["reserve"])
+			rows.append(["reserve", carried])
 			continue
 		var leader: Unit = unit.squad.get_leader() if unit.squad != null else null
-		rows.append(["standing", unit.movement.cell, units.find(leader)])
+		rows.append(["standing", unit.movement.cell, units.find(leader), carried])
 	return rows
 
 
@@ -162,3 +167,100 @@ func test_the_same_decisions_leave_the_same_board() -> void:
 	assert_bool(mc.reposition(g_units[1], target)).is_true()
 	assert_bool((_sess.reposition(_sess.handle_for(p_units[1]), target) as Dictionary).ok).is_true()
 	_agree("after a reposition")
+
+
+# ==============================================================================
+# A RESTART (#46 slice 3). The game restarts through MissionController.restart_mission; the headless
+# host has no restart of its own below the bridge, so _restart_headless is the bridge's sequence --
+# a fresh board, and the draw handed the buffer PreMissionPhase's two rules choose.
+
+const PROBE := "Two Hosts Probe"
+
+
+# The same decisions on both hosts -- one unit off, the first waiting one on, a test-authored piece out
+# of the stash to it -- then the commit on each. Returns false (having failed) when the fixture cannot
+# make them.
+func _decide_and_commit() -> bool:
+	var g_units: Array[Unit] = mc.roster_units()
+	var p_units: Array[Unit] = _sess.roster_units()
+	if g_units.size() <= CAP:
+		fail("fixture: the largest shipped roster is not larger than the cap (%d)" % CAP)
+		return false
+	game.undeploy_unit(g_units[0])
+	assert_bool((_sess.undeploy(_sess.handle_for(p_units[0])) as Dictionary).ok).is_true()
+	var open_cells: Array[Vector2i] = mc.open_deployment_cells()
+	assert_bool(game.deploy_unit(g_units[CAP], open_cells[0])).is_true()
+	assert_bool((_sess.deploy(_sess.handle_for(p_units[CAP]), open_cells[0]) as Dictionary).ok).is_true()
+
+	var g_piece := Item.new()
+	g_piece.display_name = PROBE
+	mc.loadout().stash.append(g_piece)
+	assert_str(mc.loadout().move(g_piece, null, g_units[CAP])).is_empty()
+	var p_piece := Item.new()
+	p_piece.display_name = PROBE
+	(_sess.stash() as Array).append(p_piece)
+	var given: Dictionary = _sess.give("stash", (_sess.stash() as Array).find(p_piece), _sess.handle_for(p_units[CAP]))
+	assert_bool(given.ok).override_failure_message(str(given.get("error", ""))).is_true()
+	_agree("after the decisions")
+
+	assert_bool(mc.commit_deployment()).is_true()
+	assert_bool((_sess.begin() as Dictionary).ok).is_true()
+	return true
+
+
+func _restart_headless(buffer: PreMissionSnapshot, from_inside_phase: bool) -> PreMissionSnapshot:
+	var kept := PreMissionPhase.kept_by_restart(buffer, from_inside_phase)
+	var board := BoardBuilder.build(self, "TwoHostsRestart_%d" % Time.get_ticks_usec())
+	auto_free(board.root)
+	await BoardBuilder.load_scenario(board, SCRATCH)
+	_sess = PlaySession.new(board)
+	_sess.start_pre_mission(PreMissionPhase.replay_for(kept, SCRATCH))
+	await await_idle_frame()
+	return kept
+
+
+static func _carries(unit: Unit, piece_name: String) -> bool:
+	for item: Item in unit.inventory:
+		if item != null and item.shown_name() == piece_name:
+			return true
+	return false
+
+
+func test_a_restart_replays_the_same_loadout_on_both_hosts() -> void:
+	await _open_both()
+	if not _decide_and_commit():
+		return
+	var buffer: PreMissionSnapshot = _sess.staged
+
+	mc.restart_mission()
+	await await_idle_frame()
+	await _restart_headless(buffer, false)
+	assert_bool(mc.is_deploying()).override_failure_message("the game's restart did not reopen the phase").is_true()
+	assert_bool(_sess.is_deploying()).override_failure_message("the headless restart did not reopen the phase").is_true()
+	_agree("after a restart")
+	# Not vacuous: the probe the decisions handed out came back, on the unit it went to.
+	var g_units: Array[Unit] = mc.roster_units()
+	assert_bool(_carries(g_units[CAP], PROBE)).override_failure_message(
+		"the restart dropped the piece the loadout gave out").is_true()
+	var taken_off_stands: bool = game.is_deployed(g_units[0])
+	assert_bool(taken_off_stands).override_failure_message(
+		"the restart stood the unit the player took off").is_false()
+
+
+func test_a_restart_from_inside_the_phase_stands_the_authored_draw_on_both_hosts() -> void:
+	await _open_both()
+	var authored := _game_picture()
+	if not _decide_and_commit():
+		return
+	var buffer: PreMissionSnapshot = _sess.staged
+	mc.restart_mission()
+	await await_idle_frame()
+	buffer = await _restart_headless(buffer, false)
+
+	# Now inside the replayed phase: Reset Loadout on both.
+	mc.restart_mission()
+	await await_idle_frame()
+	await _restart_headless(buffer, true)
+	_agree("after Reset Loadout")
+	assert_str(str(_game_picture())).override_failure_message(
+		"Reset Loadout did not stand the mission's own draw").is_equal(str(authored))

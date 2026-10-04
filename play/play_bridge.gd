@@ -30,6 +30,8 @@ extends SceneTree
 #   kit   {"unit": "C"}          - a unit's slots, job and mods, or "stash"
 #   equip | wear | use | toss {"unit": "C", "slot": 0} | unequip | remove_armor {"unit": "C"}
 #                                - the inspect dock's verbs (#46), in either phase, for a unit on the board
+#   restart                      - the loaded mission again, back in its pre-mission phase with the last
+#                                  Begin's loadout; from inside the phase it is Reset Loadout (#46)
 #   execute | endturn            - resolve+apply the plan / pass the turn
 #   quit                         - shut the bridge down
 
@@ -45,6 +47,10 @@ const FRAMES_DIR := "res://playrun/frames"
 
 var _session
 var _board: Dictionary = {}
+# The restart buffer (#46, #763): what the last Begin captured, kept across boards the way
+# MissionController._staged survives reset(). Which loads replay it is PreMissionPhase's rule.
+var _staged: PreMissionSnapshot = null
+var _loaded_path := ""   # the mission `restart` reloads; "" on a `new` board
 var _last_id := 0
 var _quitting := false
 var _frames   # FrameLog; every state write also lands as a numbered frame
@@ -109,6 +115,8 @@ func _run_one(cmd: String, args) -> Dictionary:
 		"load":
 			return {"ok": true, "text": await _cmd_load(str((args as Dictionary).get("path", "")),
 					bool((args as Dictionary).get("resume", false)))}
+		"restart":
+			return await _cmd_restart()
 	if _session == null:
 		return {"ok": false, "text": "no board - send {\"cmd\":\"new\"} or a load command first"}
 	return _dispatch(cmd, args as Dictionary)
@@ -182,6 +190,8 @@ func _dispatch(cmd: String, args: Dictionary) -> Dictionary:
 			return {"ok": r.ok, "text": _ack(r)}
 		"begin":
 			var r = _session.begin()
+			if r.ok:
+				_staged = _session.staged   # the buffer outlives this board, as the game's does
 			return {"ok": r.ok, "text": _ack(r)}
 		# ...and its writes (#46 slice 2a): gear, jobs and mods, read back through `kit`.
 		"give":
@@ -263,11 +273,15 @@ func _cmd_new() -> String:
 	BoardBuilder.arm(p, 6)
 	BoardBuilder.arm(e, 4)
 	_session = PlaySession.new(_board)
+	_loaded_path = ""   # nothing on disk to reload
 	return "New board (2 units)\n\n" + BoardView.render_overview(_session)
 
 # A load is a mission STARTING, the game's fresh-start door, so a board naming a roster opens the
 # pre-mission phase (#46). `resume` is the other door: a mid-battle snapshot records `roster` too, and
 # drawing it would stand a second force on top of the one the snapshot restored.
+#
+# Like begin_mission, it replays the last Begin's loadout when that was taken on THIS mission (#763
+# ruling 1, PreMissionPhase.replay_for), and says so.
 func _cmd_load(path: String, resume := false) -> String:
 	if path == "":
 		return "load needs a path, e.g. {\"cmd\":\"load\",\"args\":{\"path\":\"res://Scenarios/Castle Assault.tres\"}}"
@@ -275,12 +289,29 @@ func _cmd_load(path: String, resume := false) -> String:
 	_board = BoardBuilder.build(root, "PlayRoot_%d" % Time.get_ticks_msec())
 	var loaded: Array = await BoardBuilder.load_scenario(_board, path)
 	_session = PlaySession.new(_board)
-	var drawn: int = 0 if resume else _session.start_pre_mission()
+	_loaded_path = path
+	var replay: PreMissionSnapshot = null if resume else PreMissionPhase.replay_for(_staged, path)
+	var drawn: int = 0 if resume else _session.start_pre_mission(replay)
 	await process_frame   # the drawn units' _ready, as load_scenario waits for its own spawns
 	var head := "Loaded %s (%d units)" % [path, loaded.size()]
 	if drawn > 0:
 		head += "; pre-mission: %d of the roster stood up" % drawn
+		var roster: Array[Unit] = _session.roster_units()
+		if replay != null and replay.fits(roster):
+			head += " -- your last loadout for this mission stands again"
 	return "%s\n\n%s" % [head, BoardView.render_overview(_session)]
+
+# The game's Restart (#763): the same mission again, back in its pre-mission phase. Taken from inside
+# the phase it is Reset Loadout and drops the buffer; otherwise the last Begin's loadout replays.
+# Asked BEFORE the reload, while the session still knows it was in the phase (PreMissionPhase.kept_by_restart).
+func _cmd_restart() -> Dictionary:
+	if _session == null or _loaded_path == "":
+		return {"ok": false, "text": "restart reloads a loaded mission -- load one first"}
+	var from_inside_phase: bool = _session.is_deploying()
+	_staged = PreMissionPhase.kept_by_restart(_staged, from_inside_phase)
+	var text := await _cmd_load(_loaded_path)
+	var kind := "Reset Loadout -- the mission's own draw" if from_inside_phase else "Restarted"
+	return {"ok": true, "text": "%s\n%s" % [kind, text]}
 
 func _reset_board() -> void:
 	if _board.has("root") and is_instance_valid(_board.root):

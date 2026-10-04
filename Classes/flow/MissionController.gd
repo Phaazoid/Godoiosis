@@ -315,7 +315,7 @@ func begin_mission(path: String, armed := true) -> void:
 	# Staged against the path we were HANDED, not last_loaded_path: same value here, but this one
 	# cannot be read before the load has set it (#763 ruling 1 -- the buffer belongs to a mission,
 	# not to the button that got us here, so coming back through Mission Select restores it too).
-	var drawn := deploy_roster(_staged_for(path))   # BEFORE the arm, and it matters -- see the function
+	var drawn := deploy_roster(PreMissionPhase.replay_for(_staged, path))   # BEFORE the arm, and it matters -- see the function
 	# A PLAYER is what the phase is for (#739). armed=false is the watch-only boot (#375) -- nobody
 	# there to answer it -- so the draw stands as the answer and the mission starts, which is #731
 	# ruling 8's "both auto-deploy". (The headless Play API answers the phase itself since #46.) A board that drew NOBODY (no
@@ -530,15 +530,6 @@ func deploy_roster(staged: PreMissionSnapshot = null) -> int:
 	return deployed
 
 
-# The buffer, but only if it describes THIS board -- the reason no mission door has to remember to
-# clear one. Both fresh-start doors ask; the answer for a mission the player has not committed once
-# in this session is null, which is the authored draw.
-func _staged_for(path: String) -> PreMissionSnapshot:
-	if _staged == null or _staged.mission_path != path or path == "":
-		return null
-	return _staged
-
-
 func _on_sandbox_chosen() -> void:
 	_close_mission_select()
 	game.spawn_sandbox()                        # also routes through clear_board() -> reset()
@@ -583,10 +574,10 @@ func restart_mission() -> void:
 	# routes through clear_board -> reset(), and reset() clears the flag -- so the same question asked
 	# one line lower answers "no" every time, and a restart taken from inside the phase would replay
 	# the buffer it exists to drop. A restart from a phase that has not started means the mission as
-	# the author wrote it; the pause menu renames its own row there to say so.
-	if _deploying:
-		_staged = null
-	var staged: PreMissionSnapshot = _staged_for(game.scenario_manager.last_loaded_path)
+	# the author wrote it; the pause menu renames its own row there to say so. The rule itself is
+	# PreMissionPhase's, shared with the headless Play API's restart (#46).
+	_staged = PreMissionPhase.kept_by_restart(_staged, _deploying)
+	var staged: PreMissionSnapshot = PreMissionPhase.replay_for(_staged, game.scenario_manager.last_loaded_path)
 	game.mission_log.seal(MissionLog.Ending.RESTARTED)   # a retry is its own metric (#53)
 	game.scenario_manager.reload_current()
 	# ...and returns to the PHASE, so a retry is a chance to place differently (#739) -- with what
