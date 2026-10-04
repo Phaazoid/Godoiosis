@@ -173,9 +173,10 @@ static func _felled_by_viewer(viewer: Team.Faction, plans: Array[ResolvedPlan]) 
 
 
 # THE VIEWER'S PENDING TURN: every squad of theirs holding orders, each resolved from its real queue.
-# Read on the LIVE board, before anybody is stood on a projected cell -- a move resolved from its own
-# destination walks nowhere. Two readers: _felled_by_viewer, and the danger field's pending soak
-# (#1197, through pending_hypo), so both tiers ask one door.
+# Callers read it on the LIVE board, before anybody is stood on a projected cell, because that is the
+# board every other resolve runs on (a walk reads its own stored path, so this is the convention
+# rather than a measured necessity). Two readers: _felled_by_viewer, and the danger field's pending
+# soak (#1197, through pending_hypo), so both tiers ask one door.
 #
 # resolve_hypothetical with NO candidate resolves the real queue and differs from resolve_plan only
 # in never writing the cache -- the queue panel's "already queued prefix" must not become a preview's

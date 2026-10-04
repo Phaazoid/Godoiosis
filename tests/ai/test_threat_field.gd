@@ -3,11 +3,28 @@
 # move range -- under the same fireable + vertical filters the AI's own candidate builder applies.
 # Each case discriminates one rule; the last is the WIRE: every attack the real AI queues lands
 # inside the field it was built against. Real managers + TestTiles via board_builder.
+#
+# #1197 added two mechanisms the field used to paint safe -- the lanes a watcher could arm, and where a
+# SHOCK hit's current runs -- and a second wire over every VICTIM the AI's resolved plan hits.
 extends GdUnitTestSuite
 
 const H := preload("res://tests/support/squad_fixtures.gd")
 const BB := preload("res://play/board_builder.gd")
+const P := preload("res://tests/support/shape_fixtures.gd")
 const ZONE := "post"
+const PLAYER := Team.Faction.PLAYER
+const ENEMY := Team.Faction.ENEMY
+
+
+# Water is AUTHORED per cell (the content razor, test_conduction.gd's idiom) on top of the real grid,
+# so heights, zones and walkability stay the board's own.
+class _WaterContext extends BoardContext:
+	var water := {}
+	func _init(grid_layer: TileMapLayer, unit_list: Array[Unit], manager: SquadManager,
+			board_heights: BoardHeights) -> void:
+		super(grid_layer, unit_list, manager, null, null, board_heights)
+	func terrain_kind_at(cell: Vector2i) -> Terrain.Kind:
+		return Terrain.Kind.WATER if water.has(cell) else super.terrain_kind_at(cell)
 
 
 func _build_board() -> Dictionary:
@@ -278,3 +295,261 @@ func test_every_attack_the_ai_queues_lands_inside_the_field() -> void:
 			assert_bool(field.by_unit.get(aim.actor, {}).has(aim.target_cell)).override_failure_message(
 					"%s aimed at %s, which the field never marked" % [aim.actor.get_unit_name(), aim.target_cell]).is_true()
 	assert_int(aimed).override_failure_message("no attack was queued -- the wire was never exercised").is_greater(0)
+
+
+# --- #1197: the lanes a watcher could arm --------------------------------------------------------
+
+# A weapon carrying a watchable extra -- what a Carbine is, without depending on that content (the
+# builders suite's fixture). `shot_range` makes the main attack fire at exactly that distance, the
+# Carbine's own shape; 0 leaves it the bare Manhattan-1.
+func _watch_weapon(length: int, shot_range := 0) -> WeaponInstance:
+	var template := WeaponData.new()
+	template.weapon_type = WeaponData.WeaponType.CARBINE
+	template.main_attack = WeaponAttackData.new()
+	template.main_attack.power = 3
+	if shot_range > 0:
+		P.point(template.main_attack, shot_range, shot_range)
+	var watch := WeaponAttackData.new()
+	watch.display_name = "Watch"
+	watch.power = 3
+	watch.can_overwatch = true
+	P.line(watch, length)
+	var extras: Array[WeaponAttackData] = [watch]
+	template.extra_attacks = extras
+	return WeaponInstance.make(template)
+
+
+func _watcher(board: Dictionary, cell: Vector2i, archetype: AIArchetype.Type) -> Unit:
+	var unit: Unit = _spawn(board, ENEMY, cell)
+	unit.equipped_weapon = _watch_weapon(3)
+	_bind(unit, archetype)
+	return unit
+
+
+# THE CARBINE'S SHAPE: a watch armed over somebody fires on the spot (#1003), so a lane it could arm is
+# somewhere it can hit. The main attack here reaches the four neighbours only, so the far lane cells
+# are the watch's alone.
+func test_a_hold_watcher_marks_the_lane_its_attack_cannot_reach() -> void:
+	var board: Dictionary = _build_board()
+	var watcher := _watcher(board, Vector2i(3, 1), AIArchetype.Type.HOLD)
+	var field := ThreatField.build(_context(board), PLAYER)
+	for cell: Vector2i in [Vector2i(5, 1), Vector2i(6, 1), Vector2i(1, 1), Vector2i(0, 1)]:
+		assert_bool(field.attackers_of(cell).has(watcher)).override_failure_message(
+				"%s lies in a lane this watcher could arm, and the field called it safe" % cell).is_true()
+
+
+# OVERWATCH is NEVER for Rushdown, read off the archetype's own declared list -- so the same weapon in
+# a rusher's hands marks exactly what its attacks reach and not one lane cell more.
+func test_a_rushdown_never_marks_a_watch_lane() -> void:
+	var board: Dictionary = _build_board()
+	var rusher := _watcher(board, Vector2i(0, 1), AIArchetype.Type.RUSHDOWN)
+	var ctx := _context(board)
+	var field := ThreatField.build(ctx, PLAYER)
+	var origins: Array[Vector2i] = field.move_of(rusher)
+	var attacks := {}
+	for cell in ThreatField.reach_from(rusher, ctx, origins):
+		attacks[cell] = true
+	var lane_only := {}
+	var watch := AITactics.watch_attack_for(rusher)
+	for origin in origins:
+		var lanes := AITactics.watch_lanes(rusher, origin, watch, ctx)
+		for dir in lanes:
+			for cell: Vector2i in lanes[dir]:
+				if not attacks.has(cell):
+					lane_only[cell] = true
+	assert_int(lane_only.size()).override_failure_message(
+			"fixture is vacuous: every lane cell is already in the rusher's attack reach").is_greater(0)
+	assert_array(_sorted(field.reach_of(rusher))).override_failure_message(
+			"a rusher's field gained the lanes of a watch it will never arm").is_equal(_sorted(_keys(attacks)))
+
+
+# A dry watcher cannot arm (Overwatch needs readiness), so it marks no lane -- and refilled, the same
+# watcher does, which is what stops the first half passing on an empty fixture.
+func test_a_dry_watcher_marks_no_lane() -> void:
+	var board: Dictionary = _build_board()
+	var watcher := _watcher(board, Vector2i(3, 1), AIArchetype.Type.HOLD)
+	var carbine := watcher.equipped_weapon as CarbineWeaponInstance
+	(carbine.template.extra_attacks[0] as WeaponAttackData).requires_readiness = true
+	carbine.shots_remaining = 0
+	var ctx := _context(board)
+	assert_bool(ThreatField.build(ctx, PLAYER).cells.has(Vector2i(5, 1))).override_failure_message(
+			"a watcher with an empty magazine still painted its lane").is_false()
+	carbine.shots_remaining = CarbineWeaponInstance.MAGAZINE_SIZE
+	assert_bool(ThreatField.build(ctx, PLAYER).cells.has(Vector2i(5, 1))).override_failure_message(
+			"fixture is vacuous: the loaded watcher marks no lane either").is_true()
+
+
+# NOT ZONE-CLIPPED: the shot takes anyone in the lane, and a sentry at its post aims at the nearest
+# enemy wherever that enemy stands. The counter rim reaches one cell past the zone; the lane, three.
+func test_a_sentrys_lane_runs_past_its_zone() -> void:
+	var board: Dictionary = _build_board()
+	var zones: ZoneManager = _make_zone_manager()
+	var sentry: Unit = _spawn(board, ENEMY, Vector2i(3, 1))   # zone edge, at its post
+	sentry.equipped_weapon = _watch_weapon(3)
+	_bind(sentry, AIArchetype.Type.SENTRY, ZONE)
+	var field := ThreatField.build(_context(board, zones), PLAYER)
+	assert_bool(field.cells.has(Vector2i(6, 1))).override_failure_message(
+			"a sentry's lane stopped at its leash, though the shot it fires does not").is_true()
+
+
+# YOUR OWN red is a permission, not a prediction (#1066): reach_from walks fire and counter only, so a
+# watch weapon in your hands shows what it can FIRE at, not the lanes it could arm.
+func test_reach_from_draws_no_watch_lane() -> void:
+	var board: Dictionary = _build_board()
+	var unit := _watcher(board, Vector2i(3, 1), AIArchetype.Type.HOLD)
+	var here: Array[Vector2i] = [unit.movement.cell]
+	assert_that(_sorted(ThreatField.reach_from(unit, _context(board), here))).override_failure_message(
+			"your own reach gained a prediction's watch lanes").is_equal(_neighbours(unit.movement.cell))
+
+
+# --- #1197: where the current runs ---------------------------------------------------------------
+
+func _water_board() -> Dictionary:
+	var board: Dictionary = BB.build(self)
+	auto_free(board.root)
+	BB.paint_rect(board.grid, Rect2i(0, 0, 12, 3))
+	return board
+
+
+func _water_context(board: Dictionary, water: Array[Vector2i]) -> _WaterContext:
+	var units: Array[Unit] = []
+	for child in board.units_root.get_children():
+		units.append(child as Unit)
+	var ctx := _WaterContext.new(board.grid, units, board.squad_manager, board.board_heights)
+	for cell in water:
+		ctx.water[cell] = true
+	return ctx
+
+
+func _shocker(board: Dictionary, cell: Vector2i) -> Unit:
+	var unit: Unit = _spawn(board, ENEMY, cell)
+	(unit.equipped_weapon as WeaponInstance).template.main_attack.elemental_damage_type = Elemental.Element.SHOCK
+	_bind(unit, AIArchetype.Type.HOLD)
+	return unit
+
+
+func _row(from: Vector2i, length: int) -> Array[Vector2i]:
+	var cells: Array[Vector2i] = []
+	for i in length:
+		cells.append(from + Vector2i(i, 0))
+	return cells
+
+
+# A SHOCK hit runs on through the water it lands in. Measured RELATIVE to SHOCK_ARC_RANGE, never the
+# number 3: the last cell the current reaches is marked and the one past it is not.
+func test_a_shock_attack_marks_the_water_its_current_reaches() -> void:
+	var board := _water_board()
+	var reach := Conduction.SHOCK_ARC_RANGE
+	assert_int(3 + reach).override_failure_message("the arc outgrew this fixture's board").is_less(12)
+	_shocker(board, Vector2i(1, 1))   # its own reach ends on (2, 1), the first cell of the water
+	var ctx := _water_context(board, _row(Vector2i(2, 1), reach + 2))
+	var field := ThreatField.build(ctx, PLAYER)
+	assert_bool(field.cells.has(Vector2i(2 + reach, 1))).override_failure_message(
+			"the water the current runs through was painted safe").is_true()
+	assert_bool(field.cells.has(Vector2i(3 + reach, 1))).override_failure_message(
+			"the current ran past its own reach").is_false()
+
+
+# A WET unit conducts wherever it stands, dry ground included -- so the current reaches it off the
+# end of the water, while the same unit dry is left alone.
+func test_a_wet_unit_beside_the_water_relays_the_current() -> void:
+	var board := _water_board()
+	_shocker(board, Vector2i(1, 1))
+	var soaked: Unit = _spawn(board, PLAYER, Vector2i(4, 1))   # dry ground, one past the water
+	var ctx := _water_context(board, _row(Vector2i(2, 1), 2))
+	assert_bool(ThreatField.build(ctx, PLAYER).cells.has(Vector2i(4, 1))).override_failure_message(
+			"a dry unit on dry ground was painted as in the current").is_false()
+	soaked.add_element_state(Elemental.State.WET)
+	assert_bool(ThreatField.build(ctx, PLAYER).cells.has(Vector2i(4, 1))).override_failure_message(
+			"a wet unit beside the lit water was painted safe").is_true()
+
+
+# THE CURRENT IS THE ATTACK'S OWN: only a shock attack's cells seed it, so a plain swing that reaches
+# the lake lights nothing. The same swing turned SHOCK lights the water past it -- the twin that proves
+# the fixture can.
+func test_only_a_shock_attacks_own_cells_seed_the_current() -> void:
+	var board := _water_board()
+	var unit: Unit = _spawn(board, ENEMY, Vector2i(1, 1))
+	_bind(unit, AIArchetype.Type.HOLD)
+	var template := WeaponData.new()
+	template.weapon_type = WeaponData.WeaponType.CHAINSWORD
+	template.main_attack = WeaponAttackData.new()
+	template.main_attack.power = 3
+	template.main_attack.elemental_damage_type = Elemental.Element.SHOCK
+	P.point(template.main_attack, 3, 3)   # its ring never lands on the water
+	var swing := WeaponAttackData.new()
+	swing.power = 3   # Manhattan-1, so it reaches (0, 1)
+	var extras: Array[WeaponAttackData] = [swing]
+	template.extra_attacks = extras
+	unit.equipped_weapon = WeaponInstance.make(template)
+	var water: Array[Vector2i] = [Vector2i(0, 0), Vector2i(0, 1), Vector2i(0, 2)]
+	var ctx := _water_context(board, water)
+	var field := ThreatField.build(ctx, PLAYER)
+	assert_bool(field.cells.has(Vector2i(0, 1))).override_failure_message(
+			"fixture is vacuous: the plain swing never reaches the water").is_true()
+	assert_bool(field.cells.has(Vector2i(0, 0))).override_failure_message(
+			"a plain swing lit the water it reached").is_false()
+	swing.elemental_damage_type = Elemental.Element.SHOCK
+	assert_bool(ThreatField.build(ctx, PLAYER).cells.has(Vector2i(0, 0))).override_failure_message(
+			"fixture is vacuous: even a shock swing lights nothing here").is_true()
+
+
+# THE PENDING SOAK (dev, 2026-10-03): a unit your own queued plan wades through the water conducts as
+# if it already were wet, read through AIController's own door. The same board with no pending hypo
+# paints the cell safe, because the unit is dry until the plan runs.
+func test_a_soaking_still_pending_in_your_plan_is_seen() -> void:
+	var board := _water_board()
+	_shocker(board, Vector2i(1, 1))
+	var wader: Unit = _spawn(board, PLAYER, Vector2i(3, 2))
+	var ctx := _water_context(board, _row(Vector2i(2, 1), 2))
+	board.squad_manager.board_source = func() -> BoardContext: return ctx
+	var path: Array[Vector2i] = [Vector2i(3, 2), Vector2i(3, 1), Vector2i(4, 1)]   # through (3, 1)
+	var move := MoveAction.new()
+	move.init(wader, path, null)
+	assert_bool(board.squad_manager.queue_action(wader.squad, move)).override_failure_message(
+			"the fixture's own wade was refused -- the case would prove nothing").is_true()
+
+	var pending := AIController.pending_hypo(AIController.viewer_plans(PLAYER, board.squad_manager))
+	assert_bool(PlanResolver.projected_states(wader, pending).has(Elemental.State.WET)).override_failure_message(
+			"fixture is vacuous: the resolver never soaked the wader").is_true()
+	assert_bool(ThreatField.build(ctx, PLAYER, pending).cells.has(Vector2i(4, 1))).override_failure_message(
+			"the cell your own wade leaves you on, beside the lit water, was painted safe").is_true()
+	assert_bool(ThreatField.build(ctx, PLAYER).cells.has(Vector2i(4, 1))).override_failure_message(
+			"fixture is vacuous: the cell is lit with nobody wet").is_false()
+
+
+# THE VICTIM WIRE (#1197). The field promises safety; the real AI then plans and resolves through the
+# real SquadManager, and every PLAYER unit the plan hits -- by an ordinary attack, by a watch armed
+# over it, or by the current running through the water -- must stand on a cell the field marked. The
+# aim wire above checks where attacks POINT; this one checks who they HIT, which is the promise.
+func test_every_unit_the_ai_would_hit_stands_inside_the_field() -> void:
+	var board := _water_board()
+	# Carbine-shaped: its Shot fires at exactly 2, so the neighbour is the watch's to take.
+	var watcher: Unit = _spawn(board, ENEMY, Vector2i(9, 1))
+	watcher.equipped_weapon = _watch_weapon(3, 2)
+	_bind(watcher, AIArchetype.Type.HOLD)
+	var beside: Unit = _spawn(board, PLAYER, Vector2i(10, 1))
+	# A shocker hitting a wader, with a second wader one cell further along the same water.
+	var shocker := _shocker(board, Vector2i(0, 0))
+	var _near: Unit = _spawn(board, PLAYER, Vector2i(1, 0))
+	var far: Unit = _spawn(board, PLAYER, Vector2i(2, 0))
+	var ctx := _water_context(board, _row(Vector2i(1, 0), 2))
+	var field := ThreatField.build(ctx, PLAYER)
+
+	var hit := {}
+	for squad: Squad in [watcher.squad, shocker.squad]:
+		AIController.plan_squad(squad, ctx, board.squad_manager)
+		var plan: ResolvedPlan = board.squad_manager.resolve_plan(squad, ctx)
+		var rows: Array[AttackAction] = []
+		rows.append_array(plan.attacks)
+		rows.append_array(plan.watch_shots)
+		for row in rows:
+			var victim: Unit = row.target
+			if victim == null or not is_instance_valid(victim) or victim.get_faction() != PLAYER:
+				continue
+			hit[victim] = true
+			assert_bool(field.cells.has(victim.movement.cell)).override_failure_message(
+					"%s is hit at %s, which the field called safe" % [victim.get_unit_name(), victim.movement.cell]).is_true()
+	for victim: Unit in [beside, far]:
+		assert_bool(hit.has(victim)).override_failure_message(
+				"fixture is vacuous: %s was never hit, so its mechanism went unexercised" % victim.get_unit_name()).is_true()

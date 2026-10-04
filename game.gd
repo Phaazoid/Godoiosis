@@ -2008,9 +2008,9 @@ func refresh_watch_markers(plan: ResolvedPlan = null) -> void:
 # said was out of reach, with the line telling the truth. The cache is what bounds the cost: this
 # runs once per plan change, never per frame.
 #
-# The PENDING SOAK (#1197) is read first, on the live board: who your own queued plan will leave wet,
-# so a wade through the ford reads as wet before it has happened. Not mid-pass, for
-# refresh_action_queue's reason -- a resolve then counts the hits that already landed twice.
+# The PENDING SOAK (#1197) is read first, on the live board as every resolve is: who your own queued
+# plan will leave wet, so a wade through the ford reads as wet before it has happened. Not mid-pass,
+# for refresh_action_queue's reason -- a resolve then counts the hits that already landed twice.
 func threat_field() -> ThreatField:
 	if _threat_field == null:
 		var pending: Dictionary = {}
