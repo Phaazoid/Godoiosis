@@ -91,6 +91,13 @@ is refused in `attack_block_reason`'s words, the reason the menu greys its row w
 play/send.sh attack '{"unit":"A","x":23,"y":15,"attack":"Splash"}'
 ```
 
+**Refusals name their reason (#662).** The order verbs (`move`, `attack`, `overwatch`, `rescue`,
+`guard`, `reload`, `rev`, `burrow`) are refused in the words of the gate that refused them, through
+`SquadManager.try_queue_action`, the one order chokepoint the game, the AI and the replay viewer use.
+So a move after a queued main action says so, rather than blaming another squad. **One squad plans
+at a time**, as in the game: while one squad holds orders, ordering another squad's unit is refused
+until those orders are executed or cancelled.
+
 **Pre-mission (#46).** Loading a mission that names a Roster opens the same pre-mission phase the
 game opens: the whole roster is drawn, as many as the cap allows stand on the DEPLOYMENT zone (the
 authored walk), and the rest wait in reserve with handles of their own. The overview shows
