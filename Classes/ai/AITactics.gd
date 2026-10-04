@@ -626,19 +626,19 @@ static func _try_burrow(unit: Unit, squad_manager: SquadManager) -> bool:
 # preparation is a legible sentence, and the predictability contract prefers one to a score term.
 # What the change is worth knowing for is that `_watch_aim` floods FROM the enemy's own cell, so a
 # lane containing it scores zero hops and wins -- the AI already prefers aiming where the enemy is
-# standing, and that aim is now a shot. ATTACK sitting above this is what keeps it rare.
+# standing, and that aim is now a shot. ATTACK sitting above this keeps it rare ONLY where the two
+# cover the same cells, which since #590 they need not: the Carbine's Shot is range exactly 2 and its
+# watch lane runs 1 to 4, so the watch is that unit's shot at 1, 3 and 4 (#1197; whether it should
+# be is #752's). ThreatField draws these lanes for that reason.
 #
 # THE AIM MUST BE ACTIVE-ONLY, and this is #720's pathology one door over. `nearest_enemy` ranks a
 # BODY as an ordinary target, but `PlanResolver._watch_triggered_by` refuses a non-ACTIVE entrant and
 # a corpse never moves -- so a watcher beside a downed enemy would aim at its "approach" every quiet
 # turn for the rest of the battle, watching something that can never arrive.
 static func _try_overwatch(unit: Unit, board: BoardContext, squad_manager: SquadManager) -> bool:
-	var watchable := unit.overwatch_attacks()
-	if watchable.is_empty():
+	var attack := watch_attack_for(unit)
+	if attack == null:
 		return false
-	var attack: AttackData = watchable[0]   # one watch per weapon (dev, 2026-08-26); first is the deterministic pick
-	if unit.attack_block_reason(attack) != "":
-		return false   # the menu's own gate -- a dry Carbine cannot watch either, Overwatch requires readiness
 	var enemy := nearest_enemy(unit, board, null, true)
 	if enemy == null:
 		return false
@@ -649,6 +649,31 @@ static func _try_overwatch(unit: Unit, board: BoardContext, squad_manager: Squad
 	var action := OverwatchAction.new()
 	action.init(unit, aim, attack)
 	return squad_manager.queue_action(unit.squad, action)
+
+
+# The attack this unit would watch with right now, or null. One watch per weapon (dev, 2026-08-26),
+# so the first is the deterministic pick; and the menu's own gate, so a dry Carbine cannot watch
+# either -- Overwatch requires readiness. ThreatField asks this too (#1197), so the lanes it draws
+# are the lanes this builder could arm.
+static func watch_attack_for(unit: Unit) -> AttackData:
+	var watchable := unit.overwatch_attacks()
+	if watchable.is_empty():
+		return null
+	var attack: AttackData = watchable[0]
+	if unit.attack_block_reason(attack) != "":
+		return null
+	return attack
+
+
+# The cells each facing's watch would cover from `origin` (dir -> cells), truncation included
+# (#756). A facing that covers nothing is absent. _watch_aim ranks these; ThreatField unions them.
+static func watch_lanes(unit: Unit, origin: Vector2i, attack: AttackData, board: BoardContext) -> Dictionary:
+	var lanes := {}
+	for dir in GridUtils.CARDINAL_DIRECTIONS:
+		var cells := Reach.get_affected_cells_from(unit, origin, origin + dir, attack, board)
+		if not cells.is_empty():
+			lanes[dir] = cells
+	return lanes
 
 
 # Which cell to aim the watch at -- a FACING for a directional attack (Overwatch.tres is
@@ -703,14 +728,10 @@ static func _try_overwatch(unit: Unit, board: BoardContext, squad_manager: Squad
 # WHO STANDS IN THE LANE IS NOT ASKED (dev, 2026-09-05: "the overwatch is an attack"). An
 # ally-hitting watch shoots its own squad, and that is the attack behaving as authored.
 static func _watch_aim(unit: Unit, origin: Vector2i, attack: AttackData, enemy: Unit, board: BoardContext) -> Vector2i:
-	var footprints := {}   # dir -> the cells that facing actually covers, truncation included
+	var footprints := watch_lanes(unit, origin, attack, board)
 	var wanted := {}       # their union, and the hop field's `until`
-	for dir in GridUtils.CARDINAL_DIRECTIONS:
-		var cells := Reach.get_affected_cells_from(unit, origin, origin + dir, attack, board)
-		if cells.is_empty():
-			continue
-		footprints[dir] = cells
-		for cell in cells:
+	for dir in footprints:
+		for cell: Vector2i in footprints[dir]:
 			wanted[cell] = true
 	if footprints.is_empty():
 		return origin
