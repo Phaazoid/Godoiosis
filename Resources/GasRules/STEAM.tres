@@ -1,0 +1,6 @@
+[gd_resource type="Resource" script_class="GasRules" format=3]
+
+[ext_resource type="Script" uid="uid://c0cd3i8n60dry" path="res://Classes/terrain/GasRules.gd" id="1_gasrl"]
+
+[resource]
+script = ExtResource("1_gasrl")

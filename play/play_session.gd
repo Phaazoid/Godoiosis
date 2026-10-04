@@ -1054,7 +1054,7 @@ func _apply_cell_effects(cell_effects: Array[ResolvedCellEffect], events: Array[
 		if gas_field != null:
 			gas_field.apply(effect)
 		for kind: Gas.Kind in effect.gas_added:
-			events.append("%s gains %d %s" % [str(effect.cell), effect.gas_added[kind], Gas.name_of(kind)])
+			events.append("%s gains %s %s" % [str(effect.cell), Gas.Level.keys()[effect.gas_added[kind]], Gas.name_of(kind)])
 
 
 func _apply_sinks(sinks: Array[SinkAction], events: Array[String]) -> void:
@@ -1292,6 +1292,8 @@ func _burn(faction: Team.Faction) -> Array[String]:
 func _on_round_completed() -> void:
 	if terrain_states != null:
 		terrain_states.tick_states()
+	if gas_field != null:
+		gas_field.tick(_board())   # game._on_round_completed's twin (#508)
 
 
 func _on_turn_started(faction: Team.Faction) -> void:

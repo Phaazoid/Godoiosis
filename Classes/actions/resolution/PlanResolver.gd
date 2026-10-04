@@ -1418,13 +1418,13 @@ static func _resolve_cell_effects(action: AttackAction, board: BoardContext, ter
 	if attacker == null or not is_instance_valid(attacker):
 		return effects
 	# Two halves with different gates. The ELEMENT reacts with the ground only on a map-hitting attack;
-	# the attack's own GAS (#508) lands whatever Targets says (AttackData.gas_amount's note).
+	# the attack's own GAS (#508) lands whatever Targets says (AttackData.gas_level's note).
 	var elements: Array[Elemental.Element] = []
 	if _source_hits_map(action):
 		elements = _source_elements(action)
 	var fired := action.fired_attack
-	var gas_amount: int = fired.gas_amount if fired != null else 0
-	if elements.is_empty() and gas_amount <= 0:
+	var gas_level: int = fired.gas_level if fired != null else Gas.Level.NONE
+	if elements.is_empty() and gas_level == Gas.Level.NONE:
 		return effects
 	# The deposit lands on the tiles the attack STRUCK -- every one, occupied or not -- as stamped by
 	# whoever built the volley (#1057). Not re-derived from Reach: a single-target swing stops at its
@@ -1434,12 +1434,17 @@ static func _resolve_cell_effects(action: AttackAction, board: BoardContext, ter
 		var effect: ResolvedCellEffect = null
 		if not elements.is_empty():
 			effect = _resolve_cell_effect_at(cell, elements, board, terrain_reactions)
-		# Gas needs ground: GasField refuses it, so the preview must not promise it (Law #2).
-		if gas_amount > 0 and GridUtils.has_ground(board.grid, cell):
+		if gas_level != Gas.Level.NONE:
 			if effect == null:
 				effect = ResolvedCellEffect.new()
 				effect.cell = cell
-			effect.add_gas(fired.gas, gas_amount)
+			effect.add_gas(fired.gas, gas_level)
+		# Gas lies only where it could travel (GasSpread.holds_gas), whoever released it -- so the
+		# preview never promises gas the board would not hold (Law #2).
+		if effect != null and not effect.gas_added.is_empty() and not GasSpread.holds_gas(cell, board):
+			effect.gas_added.clear()
+			if effect.states_added.is_empty() and effect.states_removed.is_empty():
+				effect = null
 		if effect != null:
 			effect.cause = action
 			effects.append(effect)
@@ -1468,7 +1473,7 @@ static func _resolve_cell_effect_at(cell: Vector2i, elements: Array[Elemental.El
 		for s in reaction.remove_tile_states:
 			if not effect.states_removed.has(s):
 				effect.states_removed.append(s)
-		effect.add_gas(reaction.gas, reaction.gas_amount)
+		effect.add_gas(reaction.gas, reaction.gas_level)
 		if reaction.popup != "":
 			effect.popups.append(reaction.popup)
 		if reaction.icon != null:

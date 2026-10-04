@@ -87,7 +87,7 @@ func test_the_cards_list_names_the_gas_an_attack_leaves() -> void:
 	var none: Array[Elemental.Element] = []
 	var steam := Gas.display_name(Gas.Kind.STEAM)
 	var steamer := _attack(null)
-	steamer.gas_amount = 3
+	steamer.gas_level = Gas.Level.MEDIUM
 	var named := false
 	for line: String in AttackChannelText.lines(steamer, 0, none, false, false):
 		named = named or line.contains(steam)

@@ -7,6 +7,6 @@ script = ExtResource("1_dseb")
 incoming_element = 2
 required_tile_state = 1
 remove_tile_states = Array[int]([1])
-gas_amount = 6
+gas_level = 3
 popup = "Doused!"
 metadata/_custom_type_script = "uid://dxskrhe0srgid"

@@ -13,7 +13,7 @@ const GRASS_ATLAS := Vector2i(5, 0)
 const PLAYER := Team.Faction.PLAYER
 const ENEMY := Team.Faction.ENEMY
 const FOE_CELL := Vector2i(3, 1)
-const AMOUNT := 5
+const LEVEL := Gas.Level.MEDIUM
 
 var _main: Node
 var game: Node2D
@@ -50,7 +50,7 @@ func _spawn(faction: Team.Faction, cell: Vector2i) -> Unit:
 func _steaming_swing() -> Unit:
 	_spawn(ENEMY, FOE_CELL)
 	var hero := _spawn(PLAYER, FOE_CELL + Vector2i.LEFT)
-	(hero.get_equipped_weapon() as WeaponInstance).template.main_attack.gas_amount = AMOUNT
+	(hero.get_equipped_weapon() as WeaponInstance).template.main_attack.gas_level = LEVEL
 	game.squad_manager.active_squad = hero.squad
 	var action := AttackAction.declare(hero, hero.movement.cell, FOE_CELL)
 	assert_bool(game.squad_manager.queue_action(hero.squad, action)).override_failure_message(
@@ -61,7 +61,7 @@ func _steaming_swing() -> Unit:
 
 func _steam_at(cell: Vector2i) -> int:
 	var field: GasField = game.gas_field
-	return field.amount_at(cell, Gas.Kind.STEAM)
+	return field.level_at(cell, Gas.Kind.STEAM)
 
 
 func test_the_board_shows_where_the_steam_will_land_before_execute() -> void:
@@ -82,4 +82,21 @@ func test_the_board_shows_where_the_steam_will_land_before_execute() -> void:
 func test_after_the_pass_the_steam_is_on_the_board() -> void:
 	var hero := _steaming_swing()
 	await game.order_executor.execute_orders(hero)
-	assert_int(_steam_at(FOE_CELL)).is_equal(AMOUNT)
+	assert_int(_steam_at(FOE_CELL)).is_equal(LEVEL)
+
+
+# The round's wire: TurnManager.round_completed -> game._on_round_completed -> GasField.tick. The
+# expectation is the store's own forecast of the round, so no level or timing is pinned here. One
+# present faction wraps the cycle on a single hand-off (test_fire_wire.gd's arrangement).
+func test_ending_the_round_spreads_the_steam() -> void:
+	_spawn(PLAYER, Vector2i(0, 0))
+	var field: GasField = game.gas_field
+	field.set_level(Vector2i(4, 2), Gas.Kind.STEAM, Gas.Level.THICK)
+	var board: BoardContext = game._board()
+	var expected := field.next_round(board)
+	assert_int(expected.size()).override_failure_message("fixture: the round would spread nothing").is_greater(1)
+	await game.end_turn()
+	await await_idle_frame()
+	assert_int(field.cells().size()).override_failure_message("the round never ticked the gas").is_equal(expected.size())
+	for cell: Vector2i in expected:
+		assert_int(field.packed_at(cell)).is_equal(expected[cell])

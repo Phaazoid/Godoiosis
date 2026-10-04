@@ -22,18 +22,19 @@ const PUFF_SHADER := "res://Classes/presentation/gas_puff.gdshader"
 const PIXEL_SIZE := 1.0 / 32.0      # one art pixel, in world units -- the sprites' density
 const ART_PIXELS_PER_CELL := 32.0
 const FLOOR_ACTION := &"show_gas_floor"
-# A cell's puff slots: which way it leans, the least gas that shows it, its biggest size, its lift in
+# A cell's puff slots: which way it leans, the least LEVEL that shows it (summed over a mixed cell's
+# gases -- so thin shows one puff, medium three, thick all of them), its biggest size, its lift in
 # world units, and its rise as a share of the gas's column height.
 const FIELD_SLOTS := [
 	[Vector2(0, 0), 1, 2, 0.0, 0.0],
-	[Vector2(-1, -1), 6, 1, 0.0, 0.0], [Vector2(1, 1), 6, 1, 0.0, 0.0],
-	[Vector2(1, -1), 9, 1, 0.0, 0.0], [Vector2(-1, 1), 9, 1, 0.0, 0.0],
-	[Vector2(0, 0), 12, 1, 0.36, 0.0],
+	[Vector2(-1, -1), 2, 1, 0.0, 0.0], [Vector2(1, 1), 2, 1, 0.0, 0.0],
+	[Vector2(1, -1), 3, 1, 0.0, 0.0], [Vector2(-1, 1), 3, 1, 0.0, 0.0],
+	[Vector2(0, 0), 3, 1, 0.36, 0.0],
 ]
 const CLOUD_SLOTS := [
 	[Vector2(0, 0), 1, 2, 0.0, 0.1],
-	[Vector2(1, -1), 5, 1, 0.0, 0.45],
-	[Vector2(-1, 1), 10, 1, 0.0, 0.75],
+	[Vector2(1, -1), 2, 1, 0.0, 0.45],
+	[Vector2(-1, 1), 3, 1, 0.0, 0.75],
 ]
 # The Gas style experiment's options, in its order. Each differs from the first in one way: the slot
 # table, how far a puff wanders (world units), or the volume's height and density.
@@ -277,8 +278,8 @@ func _build_textures(shown: Dictionary[Vector2i, int]) -> void:
 			var lifted := 255 if staged and BoardSpace.is_staged(cell) else 0
 			cells.set_pixel(x, y, Color8(Gas.kind_mask(own), near, neighbours, lifted))
 			for kind in Gas.kinds_in(own):
-				var amount := float(Gas.amount_in(own, kind)) / Gas.MAX_AMOUNT
-				amounts[kind].set_pixel(x, y, Color(amount, 0, 0))
+				var density := float(Gas.level_in(own, kind)) / Gas.MAX_LEVEL
+				amounts[kind].set_pixel(x, y, Color(density, 0, 0))
 				masks[kind].set_pixel(x, y, Color(1, 0, 0))
 	for mask in masks:
 		mask.resize(size.x * MASK_SCALE, size.y * MASK_SCALE, Image.INTERPOLATE_CUBIC)
@@ -306,9 +307,9 @@ func _column_top(packed: int) -> float:
 
 
 # How tall a kind's volume stands over a cell holding this much of it, as the march draws it.
-func _column_at(kind: Gas.Kind, amount: int) -> float:
+func _column_at(kind: Gas.Kind, level: int) -> float:
 	var look := GasLook.for_kind(kind)
-	var a := maxf(float(amount) / Gas.MAX_AMOUNT, thin_floor)
+	var a := maxf(float(level) / Gas.MAX_LEVEL, thin_floor)
 	return (look.base_height + look.column_height * a) * float(_mix().height)
 
 
@@ -642,7 +643,7 @@ func _build_puffs(shown: Dictionary[Vector2i, int]) -> void:
 		var kinds := Gas.kinds_in(packed)
 		var total := 0
 		for kind in kinds:
-			total += Gas.amount_in(packed, kind)
+			total += Gas.level_in(packed, kind)
 		var rng := RandomNumberGenerator.new()
 		rng.seed = hash(cell)
 		var offset := BoardSpace.staged_offset(cell)
@@ -661,17 +662,17 @@ func _build_puffs(shown: Dictionary[Vector2i, int]) -> void:
 			var variant := rng.randi() % 3
 			if total < int(slot[1]):
 				continue
-			var size := mini(0 if total < 4 else (1 if total < 9 else 2), int(slot[2]))
-			var lift := float(slot[3]) + float(slot[4]) * _column_at(kind, Gas.amount_in(packed, kind))
+			var size := mini(clampi(total - 1, 0, 2), int(slot[2]))
+			var lift := float(slot[3]) + float(slot[4]) * _column_at(kind, Gas.level_in(packed, kind))
 			var x := cell.x + 0.5 + off.x
 			var z := cell.y + 0.5 + off.y
 			var at := Vector3(x, BoardSpace.surface_height_at(cell, x, z, heights) + lift, z) + offset
 			instances.append([at, kind, 0, phase, size * 3 + variant, _cluster_of(cell)])
-		if total < 3:
+		if total < Gas.Level.MEDIUM:
 			continue
 		var lead: Gas.Kind = kinds[0]
 		for kind in kinds:
-			if Gas.amount_in(packed, kind) > Gas.amount_in(packed, lead):
+			if Gas.level_in(packed, kind) > Gas.level_in(packed, lead):
 				lead = kind
 		var extra := GasLook.for_kind(lead).extra
 		if extra == GasLook.Extra.BOLT:
@@ -713,7 +714,7 @@ static func _cluster_of(cell: Vector2i) -> Vector2i:
 static func _weighted_kind(packed: int, kinds: Array[Gas.Kind], total: int, rng: RandomNumberGenerator) -> Gas.Kind:
 	var pick := rng.randf() * total
 	for kind in kinds:
-		pick -= Gas.amount_in(packed, kind)
+		pick -= Gas.level_in(packed, kind)
 		if pick < 0.0:
 			return kind
 	return kinds[kinds.size() - 1]

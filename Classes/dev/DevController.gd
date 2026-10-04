@@ -775,17 +775,24 @@ func _prune_groundless_stores() -> void:
 		_refresh_height_readout()
 	game.gas_field.prune_groundless(has_ground)
 
-# Gas painting (#508's look harness). ABSOLUTE like the corner tool: every cell a drag crosses goes to
-# the picked amount of the picked gas, so a stroke repaints idempotently. The store refuses a
-# groundless cell (GasField.ground_source) and marks nothing when the value is unchanged.
+# Gas painting (#508). ABSOLUTE like the corner tool: every cell a drag crosses goes to the picked
+# level of the picked gas, so a stroke repaints idempotently. The store refuses a groundless cell
+# (GasField.ground_source) and marks nothing when the value is unchanged.
 func _paint_gas(cell: Vector2i) -> void:
 	var brush: TileBrushTool = game.dev_overlay.tile_brush
-	game.gas_field.set_amount(cell, brush.selected_gas_kind(), brush.selected_gas_amount())
+	game.gas_field.set_level(cell, brush.selected_gas_kind(), brush.selected_gas_level())
 
 # Right-drag takes away the PICKED gas only, the zone brush's scoping: a cell can hold several.
 func _erase_gas(cell: Vector2i) -> void:
 	var brush: TileBrushTool = game.dev_overlay.tile_brush
-	game.gas_field.set_amount(cell, brush.selected_gas_kind(), 0)
+	game.gas_field.set_level(cell, brush.selected_gas_kind(), Gas.Level.NONE)
+
+# The brush's Step Gas: exactly the round's gas step (GasField.tick), bracketed as one undo step.
+func step_gas() -> void:
+	_begin_stroke()
+	var board: BoardContext = game._board()
+	game.gas_field.tick(board)
+	_end_stroke()
 
 # The board-wide gas wipe, bracketed as one undo step like clear_tile_states.
 func clear_gas() -> void:

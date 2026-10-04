@@ -47,12 +47,14 @@ var _state_row: HBoxContainer
 var _clear_states_button: Button
 var _state_labels: Array[String] = []
 var _state_values: Array[Terrain.TileState] = []
-# GAS mode (#508): which gas the next stroke lays and how much of it. Absolute like the corner tool --
-# every cell a drag crosses goes TO the amount, so a stroke repaints idempotently.
+# GAS mode (#508): which gas the next stroke lays and how thick. Absolute like the corner tool --
+# every cell a drag crosses goes TO the level, so a stroke repaints idempotently.
+const GAS_LEVEL_LABELS: Array[String] = ["Thin", "Medium", "Thick"]
 var _gas_kind := Gas.Kind.STEAM
-var _gas_amount := 8
+var _gas_level: Gas.Level = Gas.Level.THICK
 var _gas_row: HBoxContainer
-var _gas_amount_row: HBoxContainer
+var _gas_level_row: HBoxContainer
+var _step_gas_button: Button
 var _clear_gas_button: Button
 
 # The terrain brush's elevation half (#260, merged in by #340): the height the next click places at,
@@ -383,11 +385,16 @@ func _build_extra_controls() -> void:
 		gas_labels.append(kind_name.capitalize())
 	_gas_row = DevWidgets.add_option(self, "Gas", gas_labels, gas_labels[0],
 		func(label: String): _gas_kind = gas_labels.find(label) as Gas.Kind)
-	var amount_spin := DevWidgets.add_spinbox(self, "Amount", _gas_amount,
-		func(value: float): _gas_amount = int(value))
-	amount_spin.min_value = 1
-	amount_spin.max_value = Gas.MAX_AMOUNT
-	_gas_amount_row = amount_spin.get_parent() as HBoxContainer
+	_gas_level_row = DevWidgets.add_option(self, "Level", GAS_LEVEL_LABELS,
+		GAS_LEVEL_LABELS[_gas_level - 1],
+		func(label: String): _gas_level = (GAS_LEVEL_LABELS.find(label) + 1) as Gas.Level)
+	# Exactly the round's gas step and nothing else of the round, so spreading can be watched without
+	# ending turns. One undo step, like a stroke.
+	_step_gas_button = Button.new()
+	_step_gas_button.text = "Step Gas"
+	_step_gas_button.tooltip_text = "Spread and thin every gas once, as the end of a round does. Ctrl+Z takes it back."
+	_step_gas_button.pressed.connect(func(): game.dev_controller.step_gas())
+	add_child(_step_gas_button)
 	_clear_gas_button = Button.new()
 	_clear_gas_button.text = "Clear All Gas"
 	_clear_gas_button.tooltip_text = "Take every gas off the board. Unsaved paint is lost."
@@ -666,8 +673,8 @@ func update_zone_highlight() -> void:
 func selected_gas_kind() -> Gas.Kind:
 	return _gas_kind
 
-func selected_gas_amount() -> int:
-	return _gas_amount
+func selected_gas_level() -> Gas.Level:
+	return _gas_level
 
 func selected_tile_state() -> Terrain.TileState:
 	return _tile_state
@@ -681,7 +688,8 @@ func _set_paint_mode(mode: PaintMode) -> void:
 	_state_row.visible = mode == PaintMode.STATE
 	_clear_states_button.visible = mode == PaintMode.STATE
 	_gas_row.visible = mode == PaintMode.GAS
-	_gas_amount_row.visible = mode == PaintMode.GAS
+	_gas_level_row.visible = mode == PaintMode.GAS
+	_step_gas_button.visible = mode == PaintMode.GAS
 	_clear_gas_button.visible = mode == PaintMode.GAS
 	# Level and rise ride the TERRAIN brush rather than a mode of their own (#340): a tile is painted
 	# AT a height, so asking how high is part of asking which tile, not a separate question.

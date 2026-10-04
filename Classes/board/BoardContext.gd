@@ -98,6 +98,11 @@ func terrain_kind_at(cell: Vector2i) -> Terrain.Kind:
 func is_void_at(cell: Vector2i) -> bool:
 	return GridUtils.is_void_at(grid, cell)
 
+# Is there a tile here at all -- GridUtils.has_ground for this board, beside is_void_at for the same
+# reason: a rule that asks the board can be handed one that answers differently (#508's gas).
+func has_ground(cell: Vector2i) -> bool:
+	return GridUtils.has_ground(grid, cell)
+
 # The rules' single read-point for a cell's terrain DEF (#84): a Burrow-dug COVER tile shelters
 # whoever stands on it. Sibling of terrain_kind_at, same rationale — the resolver's mitigation
 # stage and the inspect panel's DEF readout both come through here, so they can't drift.

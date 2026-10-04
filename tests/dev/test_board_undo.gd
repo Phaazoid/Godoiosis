@@ -355,24 +355,24 @@ func test_the_undo_row_greys_until_there_is_something_to_undo() -> void:
 
 # ---- the gas brush (#508) ----
 
-func _gas_mode(kind: Gas.Kind, amount: int) -> void:
+func _gas_mode(kind: Gas.Kind, level: Gas.Level) -> void:
 	_brush._set_paint_mode(TileBrushTool.PaintMode.GAS)
 	_brush._gas_kind = kind
-	_brush._gas_amount = amount
+	_brush._gas_level = level
 
 
-func test_a_gas_stroke_paints_the_picked_amount_and_undoes_as_one_step() -> void:
+func test_a_gas_stroke_paints_the_picked_level_and_undoes_as_one_step() -> void:
 	var cells: Array[Vector2i] = [Vector2i(1, 5), Vector2i(2, 5), Vector2i(3, 5)]
 	_paint_stroke(cells)   # the ground the gas needs
-	_gas_mode(Gas.Kind.SMOKE, 6)
+	_gas_mode(Gas.Kind.SMOKE, Gas.Level.THICK)
 	_paint_stroke(cells)
 	for cell in cells:
-		assert_int(game.gas_field.amount_at(cell, Gas.Kind.SMOKE)).is_equal(6)
+		assert_int(game.gas_field.level_at(cell, Gas.Kind.SMOKE)).is_equal(Gas.Level.THICK)
 
 	_dc.undo_board()
 
 	for cell in cells:
-		assert_int(game.gas_field.amount_at(cell, Gas.Kind.SMOKE)).override_failure_message(
+		assert_int(game.gas_field.level_at(cell, Gas.Kind.SMOKE)).override_failure_message(
 				"the gas survived the undo -- the snapshot is missing GasField").is_equal(0)
 		assert_bool(_has_ground(cell)).override_failure_message(
 				"undo took back the GROUND stroke: the gas stroke recorded no step of its own, so "
@@ -382,20 +382,20 @@ func test_a_gas_stroke_paints_the_picked_amount_and_undoes_as_one_step() -> void
 func test_right_drag_takes_away_only_the_picked_gas() -> void:
 	var cell := Vector2i(4, 6)
 	_paint_stroke([cell] as Array[Vector2i])
-	_gas_mode(Gas.Kind.STEAM, 5)
+	_gas_mode(Gas.Kind.STEAM, Gas.Level.MEDIUM)
 	_paint_stroke([cell] as Array[Vector2i])
-	_gas_mode(Gas.Kind.POISON, 3)
+	_gas_mode(Gas.Kind.POISON, Gas.Level.THIN)
 	_paint_stroke([cell] as Array[Vector2i])
 
 	_erase_stroke([cell] as Array[Vector2i])
 
-	assert_int(game.gas_field.amount_at(cell, Gas.Kind.POISON)).is_equal(0)
-	assert_int(game.gas_field.amount_at(cell, Gas.Kind.STEAM)).override_failure_message(
-			"erasing poison took the steam with it").is_equal(5)
+	assert_int(game.gas_field.level_at(cell, Gas.Kind.POISON)).is_equal(0)
+	assert_int(game.gas_field.level_at(cell, Gas.Kind.STEAM)).override_failure_message(
+			"erasing poison took the steam with it").is_equal(Gas.Level.MEDIUM)
 
 
 func test_gas_is_refused_on_a_cell_with_no_ground() -> void:
-	_gas_mode(Gas.Kind.FROST, 9)
+	_gas_mode(Gas.Kind.FROST, Gas.Level.MEDIUM)
 	_paint_stroke([Vector2i(9, 9)] as Array[Vector2i])
 	assert_bool(game.gas_field.is_empty()).is_true()
 
@@ -403,14 +403,37 @@ func test_gas_is_refused_on_a_cell_with_no_ground() -> void:
 func test_erasing_the_ground_takes_its_gas_and_undo_brings_both_back() -> void:
 	var cell := Vector2i(5, 7)
 	_paint_stroke([cell] as Array[Vector2i])
-	_gas_mode(Gas.Kind.THUNDER, 4)
+	_gas_mode(Gas.Kind.THUNDER, Gas.Level.MEDIUM)
 	_paint_stroke([cell] as Array[Vector2i])
 	_brush._set_paint_mode(TileBrushTool.PaintMode.TERRAIN)
 
 	_erase_stroke([cell] as Array[Vector2i])
-	assert_int(game.gas_field.amount_at(cell, Gas.Kind.THUNDER)).override_failure_message(
+	assert_int(game.gas_field.level_at(cell, Gas.Kind.THUNDER)).override_failure_message(
 			"gas outlived its ground").is_equal(0)
 
 	_dc.undo_board()
 	assert_bool(_has_ground(cell)).is_true()
-	assert_int(game.gas_field.amount_at(cell, Gas.Kind.THUNDER)).is_equal(4)
+	assert_int(game.gas_field.level_at(cell, Gas.Kind.THUNDER)).is_equal(Gas.Level.MEDIUM)
+
+
+# The brush's Step Gas runs exactly the round's gas step -- checked against the store's own forecast,
+# so the rule is not restated here -- and comes back off the stack as one step like a stroke.
+func test_step_gas_spreads_as_a_round_would_and_undoes_as_one_step() -> void:
+	var cells: Array[Vector2i] = [Vector2i(1, 2), Vector2i(2, 2), Vector2i(3, 2)]
+	_paint_stroke(cells)
+	_gas_mode(Gas.Kind.STEAM, Gas.Level.THICK)
+	_paint_stroke([Vector2i(2, 2)] as Array[Vector2i])
+	var field: GasField = game.gas_field
+	var board: BoardContext = game._board()
+	var expected := field.next_round(board)
+	assert_int(expected.size()).override_failure_message("fixture: a step would spread nothing").is_greater(1)
+	var before := field.to_dict()
+
+	_dc.step_gas()
+	assert_int(field.cells().size()).is_equal(expected.size())
+	for cell: Vector2i in expected:
+		assert_int(field.packed_at(cell)).is_equal(expected[cell])
+
+	_dc.undo_board()
+	assert_bool(field.to_dict() == before).override_failure_message(
+			"undo did not put the gas back as it was before the step").is_true()

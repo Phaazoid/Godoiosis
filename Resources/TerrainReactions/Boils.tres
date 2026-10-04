@@ -7,6 +7,6 @@ script = ExtResource("1_b0ils")
 incoming_element = 1
 required_kind = 5
 forbidden_tile_state = 2
-gas_amount = 4
+gas_level = 2
 popup = "Boils!"
 metadata/_custom_type_script = "uid://dxskrhe0srgid"

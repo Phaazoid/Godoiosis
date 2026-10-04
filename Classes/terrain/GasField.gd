@@ -1,11 +1,11 @@
 extends RefCounted
 class_name GasField
 
-# The atmosphere store (#508): how much of each gas every cell holds. The DECLARED second per-cell
-# store beside TerrainStateManager, which the ticket asked for -- tile states are booleans with a
-# clock, and an amount that spreads and thins is not a state (#508 ruling 1).
+# The atmosphere store (#508): which gas lies on every cell, and how thick. The DECLARED second
+# per-cell store beside TerrainStateManager, which the ticket asked for -- tile states are booleans
+# with a clock, and a level that spreads and thins is not a state (#508 ruling 1).
 #
-# Sparse, one packed int per cell (Gas.with_amount); a cell absent holds no gas. BoardHeights' shape:
+# Sparse, one packed int per cell (Gas.with_level); a cell absent holds no gas. BoardHeights' shape:
 # RefCounted, no signals, a DirtyCells whose non-consuming `version` is how a renderer learns that
 # anything moved. Nothing consumes the cell LIST yet.
 #
@@ -13,6 +13,7 @@ class_name GasField
 # ground for this purpose), so the writer refuses a groundless cell and erasing a tile prunes it.
 # The refusal is the STORE's, through ground_source -- TerrainStateManager's shape, wired at the same
 # two build sites with the same predicate, so a brush stroke and an attack's deposit cannot disagree.
+# Where gas may lie and TRAVEL is the stricter GasSpread.holds_gas, asked by the rule and the deposit.
 
 var _cells: Dictionary[Vector2i, int] = {}
 var dirty := DirtyCells.new()
@@ -21,22 +22,58 @@ var dirty := DirtyCells.new()
 var ground_source: Callable
 
 
-func amount_at(cell: Vector2i, kind: Gas.Kind) -> int:
-	return Gas.amount_in(_cells.get(cell, 0), kind)
+func level_at(cell: Vector2i, kind: Gas.Kind) -> int:
+	return Gas.level_in(_cells.get(cell, 0), kind)
 
 
 func packed_at(cell: Vector2i) -> int:
 	return _cells.get(cell, 0)
 
 
-# Clamped to 0..MAX; zero erases. Marks the cell only when its value actually changed, so a drag
-# repainting what is already there costs a renderer nothing. A positive amount on a groundless cell is
-# refused; taking gas away never is.
-func set_amount(cell: Vector2i, kind: Gas.Kind, amount: int) -> void:
-	if amount > 0 and not _has_ground(cell):
+# Clamped to 0..MAX_LEVEL with a fresh hold; zero erases. Marks the cell only when its value actually
+# changed, so a drag repainting what is already there costs a renderer nothing. A level on a groundless
+# cell is refused; taking gas away never is.
+func set_level(cell: Vector2i, kind: Gas.Kind, level: int) -> void:
+	if level > 0 and not _has_ground(cell):
 		return
 	var before: int = _cells.get(cell, 0)
-	var after := Gas.with_amount(before, kind, amount)
+	_write(cell, Gas.with_level(before, kind, level))
+
+
+# A deposit ADDS levels to what the cell holds, capped at thick, and starts the hold over: a second
+# douse makes thicker steam.
+func add_level(cell: Vector2i, kind: Gas.Kind, levels: int) -> void:
+	if levels <= 0:
+		return
+	set_level(cell, kind, level_at(cell, kind) + levels)
+
+
+# Play one resolved cell effect's gas into the store -- terrain_states.apply's twin, called beside it
+# by both executors.
+func apply(effect: ResolvedCellEffect) -> void:
+	for kind: Gas.Kind in effect.gas_added:
+		add_level(effect.cell, kind, effect.gas_added[kind])
+
+
+# What the field WILL hold after the next round, written nowhere -- the forecast's read, and the
+# tick's, so the two cannot disagree.
+func next_round(board: BoardContext) -> Dictionary[Vector2i, int]:
+	return GasSpread.next(_cells, board)
+
+
+# The round's gas step (#508): GasSpread's answer for this board, written back cell by cell so only
+# what moved is marked. Called once per round by both stacks, and by the dev Step gas button.
+func tick(board: BoardContext) -> void:
+	var next := next_round(board)
+	for cell: Vector2i in _cells.keys():
+		if not next.has(cell):
+			_write(cell, 0)
+	for cell: Vector2i in next:
+		_write(cell, next[cell])
+
+
+func _write(cell: Vector2i, after: int) -> void:
+	var before: int = _cells.get(cell, 0)
 	if after == before:
 		return
 	if after == 0:
@@ -44,20 +81,6 @@ func set_amount(cell: Vector2i, kind: Gas.Kind, amount: int) -> void:
 	else:
 		_cells[cell] = after
 	dirty.mark(cell)
-
-
-# A deposit ADDS to what the cell holds, clamped at MAX: a second douse makes more steam.
-func add_amount(cell: Vector2i, kind: Gas.Kind, amount: int) -> void:
-	if amount <= 0:
-		return
-	set_amount(cell, kind, amount_at(cell, kind) + amount)
-
-
-# Play one resolved cell effect's gas into the store -- terrain_states.apply's twin, called beside it
-# by both executors.
-func apply(effect: ResolvedCellEffect) -> void:
-	for kind: Gas.Kind in effect.gas_added:
-		add_amount(effect.cell, kind, effect.gas_added[kind])
 
 
 func _has_ground(cell: Vector2i) -> bool:

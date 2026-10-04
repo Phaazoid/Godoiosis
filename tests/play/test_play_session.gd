@@ -109,13 +109,26 @@ func test_end_turn_hands_over_control() -> void:
 # applied would have the Play API and the game disagree about the board after a pass.
 func test_an_attack_that_leaves_gas_leaves_it_on_the_headless_board_too() -> void:
 	var attacker: Unit = _session.unit_by_handle("A")
-	(attacker.get_equipped_weapon() as WeaponInstance).template.main_attack.gas_amount = 5
+	(attacker.get_equipped_weapon() as WeaponInstance).template.main_attack.gas_level = Gas.Level.MEDIUM
 	_session.queue_move("A", Vector2i(1, 0))
 	_session.queue_attack("A", Vector2i(2, 0))
 	var res: Dictionary = _session.execute()
 	assert_bool(res.ok).is_true()
 	var field: GasField = _board.gas_field
-	assert_int(field.amount_at(Vector2i(2, 0), Gas.Kind.STEAM)).is_equal(5)
+	assert_int(field.level_at(Vector2i(2, 0), Gas.Kind.STEAM)).is_equal(Gas.Level.MEDIUM)
+
+# ...and its round spreads it as the game's does: game._on_round_completed's twin, checked against
+# the store's own forecast so nothing about the rule is pinned here.
+func test_the_headless_round_spreads_the_gas_too() -> void:
+	var field: GasField = _board.gas_field
+	field.set_level(Vector2i(5, 5), Gas.Kind.STEAM, Gas.Level.THICK)
+	var expected := field.next_round(_session._board())
+	assert_int(expected.size()).override_failure_message("fixture: the round would spread nothing").is_greater(1)
+	_session.end_turn()   # PLAYER -> ENEMY
+	_session.end_turn()   # ENEMY -> PLAYER: the round wraps
+	assert_int(field.cells().size()).override_failure_message("the headless round never ticked the gas").is_equal(expected.size())
+	for cell: Vector2i in expected:
+		assert_int(field.packed_at(cell)).is_equal(expected[cell])
 
 # The headless scenario loader: an in-memory ScenarioData round-trips onto a fresh board
 # (file-independent, so it survives scenario renames).
@@ -126,7 +139,7 @@ func test_apply_scenario_restores_units_terrain_and_turn() -> void:
 	var scenario := ScenarioData.new()
 	scenario.tile_data = src.grid.tile_map_data
 	scenario.active_faction = ENEMY
-	scenario.gas = {Vector2i(1, 1): Gas.with_amount(0, Gas.Kind.STEAM, 7)}   # the atmosphere rides the third load path too (#508)
+	scenario.gas = {Vector2i(1, 1): Gas.with_level(0, Gas.Kind.STEAM, Gas.Level.THICK)}   # the atmosphere rides the third load path too (#508)
 	var entry := ScenarioUnitEntry.new()
 	entry.unit_data = _data("Loaded", PLAYER)
 	entry.cell = Vector2i(2, 3)
@@ -145,8 +158,8 @@ func test_apply_scenario_restores_units_terrain_and_turn() -> void:
 	assert_str(sess.terrain_at(Vector2i(2, 3)).type).is_equal("grass")
 	assert_int(sess.active_faction()).is_equal(ENEMY)
 	var gas: GasField = dst.gas_field
-	assert_int(gas.amount_at(Vector2i(1, 1), Gas.Kind.STEAM)).override_failure_message(
-		"the headless loader dropped the gas field -- #103 one store along").is_equal(7)
+	assert_int(gas.level_at(Vector2i(1, 1), Gas.Kind.STEAM)).override_failure_message(
+		"the headless loader dropped the gas field -- #103 one store along").is_equal(Gas.Level.THICK)
 
 # #33 rescue loop: a unit picks up an ADJACENT DOWNED ally (a main action). After execute the
 # ally is ACTIVE again at 1 HP — the other half of the down/rescue cycle the bridge now exposes.
