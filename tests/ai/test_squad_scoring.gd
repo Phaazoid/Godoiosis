@@ -4,7 +4,8 @@
 # What that buys, one case each below: focus fire (nobody re-spends on a body the plan already
 # downed), finishing (the second member secures a down the first started), opening a combo (a
 # damageless set-up is priced by the swing behind it), counter awareness (a candidate handing the
-# enemy a lethal reply is refused), and the board being left as a REAL resolve left it.
+# enemy a lethal reply is refused), the board being left as a REAL resolve left it, and a shove that
+# knocks somebody out of their squad outranking any amount of damage (#761).
 #
 # Fixture conventions follow tests/ai/test_ai_tactics.gd: the Play API's headless board_builder over
 # real TestTiles terrain, pattern-less weapons so Reach falls back to Manhattan 1 (adjacency IS
@@ -748,3 +749,138 @@ func test_a_healed_body_is_still_priced_at_one_beside_a_standing_enemy() -> void
 			"the AI took the healed body over somebody still on their feet -- #720's ranking, "
 			+ "broken by the HP a heal put on a corpse").is_equal(1)
 	assert_int(_aim_count(attacker.squad, body.movement.cell)).is_equal(0)
+
+
+# --- Squad breaks (#761): above damage, below a removal ------------------------------------------
+#
+# Cohesion holds at path distance 4 and breaks at 5 (tests/squad/test_split_forecast.gd lays out the
+# same bound), so every fixture below stands a squad member 4 cells from its leader along row 0 and
+# shoves it one cell further. Each checks first, through the forecast itself, that its shove really
+# splits -- a case whose fixture never splits passes against the old score for the wrong reason.
+
+# A shove that does no damage at all and only knocks its victim out of the squad.
+func _breaking_weapon() -> WeaponInstance:
+	var weapon := _shoving_weapon()
+	(weapon.template.main_attack as WeaponAttackData).deals_no_damage = true
+	return weapon
+
+
+# An enemy squad of two along row 0: its leader at (0,0), the member at (4,0), at the edge of range.
+func _stretched_enemy_pair(board: Dictionary) -> Array[Unit]:
+	var lead: Unit = _spawn(board, ENEMY, Vector2i(0, 0))
+	var edge: Unit = _spawn(board, ENEMY, Vector2i(4, 0))
+	board.squad_manager.join_squad(edge, lead.squad)
+	var pair: Array[Unit] = [lead, edge]
+	return pair
+
+
+# Who `aim` would knock out of a squad, asked of the forecast directly so the answer does not depend
+# on the scoring path under test. Ends on a real resolve, as every hypothetical must.
+func _leavers_of(aim: AttackAction, ctx: BoardContext, manager: SquadManager) -> Array[Unit]:
+	var one: Array[BaseAction] = [aim]
+	var plan := manager.resolve_hypothetical(aim.actor.squad, one, ctx)
+	SplitForecast.stamp(plan, ctx)
+	var out := SplitForecast.leavers(plan)
+	manager.resolve_plan(aim.actor.squad, ctx)
+	return out
+
+
+# Our squad: a plain hitter LISTED FIRST, standing over a solo enemy, and a zero-damage breaker beside
+# the stretched member. Under the old score the hit wins on damage and the member order agrees with
+# it, so only the split term can put the shove first.
+func _hitter_and_breaker(board: Dictionary) -> Array[Unit]:
+	var hitter: Unit = _spawn(board, PLAYER, Vector2i(3, 2))
+	var breaker: Unit = _spawn(board, PLAYER, Vector2i(3, 0))
+	breaker.equipped_weapon = _breaking_weapon()
+	board.squad_manager.join_squad(breaker, hitter.squad)
+	var ours: Array[Unit] = [hitter, breaker]
+	return ours
+
+
+func test_a_zero_damage_shove_that_breaks_a_squad_outranks_a_hit() -> void:
+	var board: Dictionary = _build_board()
+	var enemies := _stretched_enemy_pair(board)
+	var ours := _hitter_and_breaker(board)
+	var _solo: Unit = _spawn(board, ENEMY, Vector2i(3, 3))   # the hitter's only target
+	var ctx := _context(board)
+
+	var shove := AttackAction.declare(ours[1], ours[1].movement.cell, enemies[1].movement.cell)
+	assert_bool(_leavers_of(shove, ctx, board.squad_manager).has(enemies[1])).override_failure_message(
+			"fixture: the shove does not carry the member out of its leader's range").is_true()
+
+	AITactics.queue_main_actions_for_squad(ours[0].squad, ctx, board.squad_manager)
+
+	var queued := _attacks_in_order(ours[0].squad)
+	assert_int(queued.size()).is_equal(2)
+	assert_object(queued[0].actor).override_failure_message(
+			"the hit was queued first -- the split scored nothing, or less than damage: %s"
+			% str(_attack_aims(ours[0].squad))).is_same(ours[1])
+
+
+func test_a_removal_still_outranks_a_split() -> void:
+	var board: Dictionary = _build_board()
+	var enemies := _stretched_enemy_pair(board)
+	var ours := _hitter_and_breaker(board)
+	var solo: Unit = _spawn(board, ENEMY, Vector2i(3, 3))
+	solo.set_current_hp(3)                                    # one hit downs it
+	var ctx := _context(board)
+
+	var shove := AttackAction.declare(ours[1], ours[1].movement.cell, enemies[1].movement.cell)
+	assert_bool(_leavers_of(shove, ctx, board.squad_manager).has(enemies[1])).override_failure_message(
+			"fixture: the shove does not carry the member out of its leader's range").is_true()
+
+	AITactics.queue_main_actions_for_squad(ours[0].squad, ctx, board.squad_manager)
+
+	var queued := _attacks_in_order(ours[0].squad)
+	assert_int(queued.size()).is_equal(2)
+	assert_object(queued[0].actor).override_failure_message(
+			"the split was queued ahead of a down: %s" % str(_attack_aims(ours[0].squad))) \
+		.is_same(ours[0])
+
+
+# A down EJECTS its victim, so the forecast lists a downed member as leaving its squad. The removal
+# already paid for that unit; counting the ejection too would make every down worth a split as well.
+func test_a_down_is_scored_once() -> void:
+	var board: Dictionary = _build_board()
+	var enemies := _stretched_enemy_pair(board)
+	enemies[1].set_current_hp(3)                              # one hit downs it
+	var attacker: Unit = _spawn(board, PLAYER, Vector2i(3, 0))
+	var ctx := _context(board)
+	var manager: SquadManager = board.squad_manager
+	manager.active_squad = attacker.squad
+	assert_bool(manager.queue_action(attacker.squad,
+			AttackAction.declare(attacker, attacker.movement.cell, enemies[1].movement.cell))).is_true()
+
+	var plan := manager.resolve_plan(attacker.squad, ctx)
+	assert_bool(SplitForecast.leavers(plan).has(enemies[1])).override_failure_message(
+			"fixture: the forecast does not list the downed member, so the exclusion is untested") \
+		.is_true()
+
+	var score := AITactics._score_plan(attacker.get_faction(), plan)
+	assert_int(score.x).override_failure_message("fixture: the hit is not a down").is_equal(1)
+	assert_int(score.y).override_failure_message(
+			"a down was counted as a split as well as a removal").is_equal(0)
+
+
+# Our own member stretched to the edge of OUR leader's range, attacking an enemy that stands between
+# the two. The enemy's counter shoves it outward and out of the squad -- a cost the score must carry.
+func test_breaking_our_own_squad_counts_against_us() -> void:
+	var board: Dictionary = _build_board()
+	var leader: Unit = _spawn(board, PLAYER, Vector2i(0, 0))
+	var member: Unit = _spawn(board, PLAYER, Vector2i(4, 0))
+	board.squad_manager.join_squad(member, leader.squad)
+	var foe: Unit = _spawn(board, ENEMY, Vector2i(3, 0))
+	foe.equipped_weapon = _shoving_weapon()                   # its counter shoves
+	var ctx := _context(board)
+	var manager: SquadManager = board.squad_manager
+	manager.active_squad = leader.squad
+	assert_bool(manager.queue_action(leader.squad,
+			AttackAction.declare(member, member.movement.cell, foe.movement.cell))).is_true()
+
+	var plan := manager.resolve_plan(leader.squad, ctx)
+	assert_bool(SplitForecast.leavers(plan).has(member)).override_failure_message(
+			"fixture: the counter does not carry our member out of range").is_true()
+
+	var score := AITactics._score_plan(member.get_faction(), plan)
+	assert_int(score.y).override_failure_message(
+			"breaking our own squad was not counted against us").is_equal(-1)

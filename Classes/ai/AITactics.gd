@@ -398,9 +398,16 @@ static func _attack_candidates(unit: Unit, board: BoardContext, origin: Vector2i
 	return out
 
 
-# Score a whole RESOLVED PLAN -> Vector3i(x = net removals, y = net damage dealt, z = -damage taken
-# from reactions); compared lexicographically (_beats). The MARGINAL a candidate adds is what ranks
-# it, and since #711 there is no bar it has to clear -- the score orders, it never gates.
+# Score a whole RESOLVED PLAN -> Vector4i(x = net removals, y = net squad breaks, z = net damage
+# dealt, w = -damage taken from reactions); compared lexicographically (_beats). The MARGINAL a
+# candidate adds is what ranks it, and since #711 there is no bar it has to clear -- the score
+# orders, it never gates.
+#
+# A SQUAD BREAK SITS ABOVE DAMAGE AND BELOW A REMOVAL (#761, dev 2026-10-03), so a shove that knocks
+# somebody out of their squad beats a harder hit that does not. Counted off SplitForecast -- the
+# forecast behind the queue's Split chip, so the AI prices the settle execution runs -- per unit,
+# enemy +1 and ours -1. A unit the plan also REMOVES is skipped: splits lists a downed unit's
+# ejection, and the removal already paid for it.
 #
 # The rule is #78's, widened from one throwaway volley to the squad's whole plan, and the widening
 # is what buys squad play: the plan holds every squadmate's queued swing (so a finishing blow is
@@ -413,18 +420,18 @@ static func _attack_candidates(unit: Unit, board: BoardContext, origin: Vector2i
 # contribute nothing: heal_amount is not damage, and scoring it would start AI healers healing,
 # which is its own behaviour and its own ticket.
 #
-# A REACTION'S DAMAGE NEVER JOINS y -- ONLY ITS REMOVALS (dev ruling, 2026-09-02). Priced at par
+# A REACTION'S DAMAGE NEVER JOINS z -- ONLY ITS REMOVALS (dev ruling, 2026-09-02). Priced at par
 # it cancels exactly: two units with the same weapon trade 3 for 3, every even exchange scores
 # (0,0), and an AI facing mirror-statted enemies declines every attack and reloads instead. That is
 # not caution, it is a parked squad, and it is the common matchup. So a counter that FELLS one of
 # ours is a real loss and lands in x, while chip damage taken is the price of engaging.
 #
-# ...BUT IT IS THE TIE-BREAK z (dev, 2026-09-02, from playtest): "when all else is even, they
+# ...BUT IT IS THE TIE-BREAK w (dev, 2026-09-02, from playtest): "when all else is even, they
 # should go for optimal exchanges." Sitting strictly BELOW damage dealt is what keeps it from
-# reviving the parked squad -- a mirror matchup still scores (0, 8, -8) and beats (0,0,0), because
-# z only ever speaks when both higher terms tie exactly. It is also what stops the ATTACK pick
-# undoing the TARGET pick: once the squad has walked to the harmless target, the dangerous one may
-# still be in reach from the settled cell, and without z that choice ties on damage and falls to
+# reviving the parked squad -- a mirror matchup still scores (0, 0, 8, -8) and beats (0,0,0,0),
+# because w only ever speaks when every higher term ties exactly. It is also what stops the ATTACK
+# pick undoing the TARGET pick: once the squad has walked to the harmless target, the dangerous one
+# may still be in reach from the settled cell, and without w that choice ties on damage and falls to
 # board order. See choose_engagement_target for the other half.
 #
 # THE AI IS BLIND TO CRISIS (dev ruling, 2026-09-04, explicitly provisional): a hit the ladder
@@ -441,9 +448,9 @@ static func _attack_candidates(unit: Unit, board: BoardContext, origin: Vector2i
 # definition. The removal comes from _plan_removes asking PlanResolver.plan_fells.
 #
 # BLIND TO THE GAMBIT, SIGHTED TO WHAT IT DRAWS (dev, same day). A Crisis'd defender is still ACTIVE
-# and so COUNTERS where a downed one cannot, and that counter's damage still lands in z -- so
+# and so COUNTERS where a downed one cannot, and that counter's damage still lands in w -- so
 # between two otherwise identical targets the AI prefers the one that cannot answer. Declared rather
-# than accidental: blinding z too is a different edit in the reaction loop, and "it takes the
+# than accidental: blinding w too is a different edit in the reaction loop, and "it takes the
 # finishing blow, even into a Crisis" is the sentence the predictability contract wants.
 
 #
@@ -463,7 +470,7 @@ static func _attack_candidates(unit: Unit, board: BoardContext, origin: Vector2i
 # outrank a real swing -- and _plan_removes answers false for a body, so it cannot earn a removal
 # either. That +1 came from the body CLINGING at 1 HP until #1002 let a heal raise one, and the
 # clamp now caps a body at 1 outright so the ruling survives the state that would have broken it.
-static func _score_plan(faction: Team.Faction, plan: ResolvedPlan) -> Vector3i:
+static func _score_plan(faction: Team.Faction, plan: ResolvedPlan) -> Vector4i:
 	var dealt := {}   # Unit -> damage this plan lands on them, before the overkill clamp
 	for a in plan.attacks:
 		var victim: Unit = a.target
@@ -472,9 +479,9 @@ static func _score_plan(faction: Team.Faction, plan: ResolvedPlan) -> Vector3i:
 		dealt[victim] = int(dealt.get(victim, 0)) + a.resolved.damage
 
 	# The REACTIONS this plan draws -- counters and any watch shots it sets off. Their victims join
-	# the removal ledger, and what they land on OUR side accumulates as the z tie-break. Damage a
+	# the removal ledger, and what they land on OUR side accumulates as the w tie-break. Damage a
 	# reaction deals to an ENEMY (an AoE counter splashing its own party) is deliberately outside
-	# the term rather than counted as a bonus, so z means exactly one thing: what engaging costs us.
+	# the term rather than counted as a bonus, so w means exactly one thing: what engaging costs us.
 	var taken := 0
 	for a in _reaction_rows(plan):
 		var victim: Unit = a.target
@@ -514,7 +521,13 @@ static func _score_plan(faction: Team.Faction, plan: ResolvedPlan) -> Vector3i:
 		if not _plan_removes(victim, plan):
 			continue
 		removals += 1 if Team.is_enemy(faction, victim.get_faction()) else -1
-	return Vector3i(removals, net, -taken)
+
+	var splits := 0
+	for unit: Unit in SplitForecast.leavers(plan):
+		if _plan_removes(unit, plan):
+			continue
+		splits += 1 if Team.is_enemy(faction, unit.get_faction()) else -1
+	return Vector4i(removals, splits, net, -taken)
 
 
 # The DERIVED rows: counters the plan drew, plus any watch shots it set off. Deliberately NOT
@@ -537,16 +550,18 @@ static func _plan_removes(victim: Unit, plan: ResolvedPlan) -> bool:
 	return PlanResolver.plan_fells(victim, plan.hypo)
 
 
-# Lexicographic, and the ORDER is the design: removals are the currency, damage dealt is the
-# tie-break, and damage taken from reactions only speaks when both of those tie exactly -- which is
-# what "when all else is even, go for optimal exchanges" means, and what keeps a counter from ever
-# talking the AI out of a trade.
-static func _beats(a: Vector3i, b: Vector3i) -> bool:
+# Lexicographic, and the ORDER is the design: removals are the currency, a squad break comes next
+# (#761), damage dealt is the tie-break, and damage taken from reactions only speaks when all of
+# those tie exactly -- which is what "when all else is even, go for optimal exchanges" means, and
+# what keeps a counter from ever talking the AI out of a trade.
+static func _beats(a: Vector4i, b: Vector4i) -> bool:
 	if a.x != b.x:
 		return a.x > b.x
 	if a.y != b.y:
 		return a.y > b.y
-	return a.z > b.z
+	if a.z != b.z:
+		return a.z > b.z
+	return a.w > b.w
 
 # Fallback builders -- each mirrors MainActionMenu's gate for its verb, then picks a
 # deterministic target (Law #1: explicit tie-break, first-in-order wins).
@@ -908,7 +923,7 @@ static func _queue_attacks_jointly(squad: Squad, board: BoardContext, squad_mana
 
 class _Scored:
 	var action: AttackAction
-	var score: Vector3i
+	var score: Vector4i
 
 
 # One member's best candidate, or null when it has nothing it can legally aim.
@@ -929,7 +944,7 @@ class _Scored:
 #
 # The one corner where the two rulings disagree is a body in reach beside a standing target whose
 # counter would FELL the attacker, and the score decides it (dev, 2026-09-03): a free finish at
-# (0,+1,0) beats a suicidal swing at (-1,d,-x). That is the only comparison a body wins.
+# (0,0,+1,0) beats a suicidal swing at (-1,0,d,-x). That is the only comparison a body wins.
 #
 # THE SCORE ORDERS, IT NEVER GATES (#711, dev ruling 2026-09-02): "the AI should ALWAYS attack if
 # there is an option to, and if all the options are weighed bad, it has to pick its least bad
@@ -960,7 +975,7 @@ static func _best_candidate_for(member: Unit, squad: Squad, board: BoardContext,
 		# combo. One step of lookahead prices it by what a squadmate could then do (dev call,
 		# pairs in v1, 2026-09-02), FLOORED AT ITS OWN SOLO SCORE -- see _lookahead for why
 		# inventing a zero there inverts the ranking now that a negative score can still win.
-		if not _beats(score, Vector3i.ZERO) and allow_lookahead and _applies_state_to_an_enemy(member.get_faction(), plan):
+		if not _beats(score, Vector4i.ZERO) and allow_lookahead and _applies_state_to_an_enemy(member.get_faction(), plan):
 			score = _lookahead(member, candidate, score, squad, board, base_plan, squad_manager, reactions, terrain, refused, by_member)
 		# A DEFERRED candidate is the family's own last resort (#726): it loses to every candidate
 		# this member has NOT deferred and is still taken when it has nothing else, so #711 stays
@@ -978,7 +993,7 @@ static func _best_candidate_for(member: Unit, squad: Squad, board: BoardContext,
 	return last_resort
 
 
-static func _scored(action: AttackAction, score: Vector3i) -> _Scored:
+static func _scored(action: AttackAction, score: Vector4i) -> _Scored:
 	var out := _Scored.new()
 	out.action = action
 	out.score = score
@@ -992,15 +1007,15 @@ static func _scored(action: AttackAction, score: Vector3i) -> _Scored:
 # Bounded by its trigger rather than by a depth counter: only a candidate that scores nothing alone
 # AND applies a state to an enemy gets here, so a squad of plain weapons pays nothing at all.
 #
-# THE ACCUMULATOR STARTS AT THE SET-UP'S OWN SOLO SCORE, never at Vector3i.ZERO (#711). A zero floor
+# THE ACCUMULATOR STARTS AT THE SET-UP'S OWN SOLO SCORE, never at Vector4i.ZERO (#711). A zero floor
 # was invisible while a candidate had to BEAT zero to queue -- it only ever turned a refusal into a
 # refusal. With no bar it LAUNDERS: a set-up really worth (-1, 0, -5) came back (0,0,0) and then
 # outranked an honest plain swing at (-1, 8, -4) on the first term, so a member facing a lethal
 # counter soaked instead of hitting and died dealing nothing. A set-up is worth the better of what
 # it does alone and what it enables; zero is not one of those two and must not be invented here.
-static func _lookahead(setup_unit: Unit, setup: AttackAction, solo: Vector3i, squad: Squad, board: BoardContext,
+static func _lookahead(setup_unit: Unit, setup: AttackAction, solo: Vector4i, squad: Squad, board: BoardContext,
 		base_plan: ResolvedPlan, squad_manager: SquadManager, reactions: Array[ElementalReaction],
-		terrain: Array[TerrainReaction], refused: Dictionary, by_member: Dictionary) -> Vector3i:
+		terrain: Array[TerrainReaction], refused: Dictionary, by_member: Dictionary) -> Vector4i:
 	var base := _score_plan(setup_unit.get_faction(), base_plan)
 	var best := solo
 	for mate in squad.get_members():

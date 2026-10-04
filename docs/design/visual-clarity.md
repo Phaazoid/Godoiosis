@@ -4132,7 +4132,7 @@ The dev's playtest of part 1 found the queue silent about exactly this: *"when I
 
 **What counts.** A unit that leaves a squad of two or more because of the blow: the victim going down, anyone the successor cannot hold (range or capacity), a shove out of range. **So every blow that downs a squadded unit also wears Split.** A death is never counted: it is not a split, and its tether plays a look of its own (#1104). Nor is leaving a squad of one.
 
-**The forecast is `SplitForecast` (`squads/`), stamped into `ResolvedOutcome.splits` by `SquadManager.resolve_plan`** (not by `resolve_hypothetical`: AI scoring reads no Split). It replays the live settle in its live order:
+**The forecast is `SplitForecast` (`squads/`), stamped into `ResolvedOutcome.splits` by `SquadManager.resolve_plan`** (and, since [#761](https://github.com/Phaazoid/Godoiosis/issues/761), by `resolve_hypothetical` too: the AI's score reads it, see `ai-tactics.md` → *Attack scoring*). It replays the live settle in its live order:
 - a death settles at once, mid-pass, so a killed leader's successor is judged where everyone stands at that blow;
 - at pass end, the downed leave in the order they went down, skipping one finished off later in the pass, and a downed leader hands over;
 - then the contact sweep.

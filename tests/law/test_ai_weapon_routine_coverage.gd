@@ -30,7 +30,7 @@ func test_the_base_routine_never_says_no() -> void:
 	var board := BoardContext.new(sm.grid, units, sm)
 	for verb in AIWeaponRoutine.WEAPON_VERBS:
 		assert_bool(routine.allows_preparation(unit, verb, board)).is_true()
-	assert_bool(routine.defers_candidate(unit, null, null, Vector3i.ZERO)).is_false()
+	assert_bool(routine.defers_candidate(unit, null, null, Vector4i.ZERO)).is_false()
 
 
 func test_a_slot_with_no_family_resolves_to_the_base() -> void:

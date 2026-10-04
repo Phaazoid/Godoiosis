@@ -4,8 +4,9 @@ class_name SplitForecast
 # WHO A PASS WILL KNOCK OUT OF A SQUAD, AND WHICH BLOW DOES IT (#367). The plan-time mirror of the
 # settle that runs after a pass, so the queue can say "Split" on the row that causes one (Law #2)
 # and the tether break can play at that same blow. Stamped once per resolve, by
-# SquadManager.resolve_plan, into ResolvedOutcome.splits (who leaves) and .relinks (which links end
-# and begin -- a handover names its successor once, here, for the presenter and the stage to read).
+# SquadManager.resolve_plan and resolve_hypothetical (the AI scores a split, #761), into
+# ResolvedOutcome.splits (who leaves) and .relinks (which links end and begin -- a handover names its
+# successor once, here, for the presenter and the stage to read).
 #
 # THE ORDER IT REPLAYS is the live one, and it is the only thing here that is not shared code:
 #   - a DEATH settles at once, mid-pass (game._on_unit_died -> handle_unit_death), so a killed
@@ -49,10 +50,7 @@ class _Handover:
 
 static func stamp(plan: ResolvedPlan, board: BoardContext) -> void:
 	var blows := playback(plan)
-	var hits: Array[BaseAction] = []
-	hits.append_array(blows)
-	hits.append_array(plan.tile_hits)
-	hits.append_array(plan.sinks)
+	var hits := _hits(plan)
 	for hit in hits:
 		var outcome := hit.resolved_outcome()
 		if outcome != null:
@@ -126,6 +124,29 @@ static func playback(plan: ResolvedPlan) -> Array[AttackAction]:
 		order.append(counter)
 	order.append_array(plan.coda_shots())
 	return order
+
+
+# Every row a stamp can write a split onto: the blows, then the end-of-turn burn and the sinkings.
+static func _hits(plan: ResolvedPlan) -> Array[BaseAction]:
+	var hits: Array[BaseAction] = []
+	hits.append_array(playback(plan))
+	hits.append_array(plan.tile_hits)
+	hits.append_array(plan.sinks)
+	return hits
+
+
+# Who a STAMPED plan knocks out of a squad, each once -- the AI's split term (#761). A downed unit's
+# ejection is in here too; the caller decides whether a removal already paid for it.
+static func leavers(plan: ResolvedPlan) -> Array[Unit]:
+	var out: Array[Unit] = []
+	for hit in _hits(plan):
+		var outcome := hit.resolved_outcome()
+		if outcome == null:
+			continue
+		for unit in outcome.splits:
+			if is_instance_valid(unit) and not out.has(unit):
+				out.append(unit)
+	return out
 
 
 static func _landed(outcome: ResolvedOutcome) -> bool:
