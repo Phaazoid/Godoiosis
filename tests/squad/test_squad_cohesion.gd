@@ -12,9 +12,9 @@
 # queued a ghost order: the tile was green, the plan was authored, the validator refused it, the
 # rollback undid it, and the squad was left active on a queue of hold rows.
 #
-# The real game scene, not play/board_builder.gd: the hold-position filler is queued by game.gd's
-# squad_became_active handler, and `active_squad` — what keeps the queue panel open — is state a
-# headless board never grows. Fixture is tests/ui/test_game_scene_smoke.gd's; the instanced root
+# The real game scene, not play/board_builder.gd: the overlay and the queue panel are the game's.
+# (The hold-position filler is no longer a reason -- SquadManager queues it for every host since
+# #46.) Fixture is tests/ui/test_game_scene_smoke.gd's; the instanced root
 # MUST be named "Main" under /root or game.gd's absolute /root/Main/DevOverlay lookup is null (#114).
 extends GdUnitTestSuite
 

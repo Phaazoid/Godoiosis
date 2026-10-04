@@ -85,7 +85,7 @@ func _hold(unit: Unit) -> Squad:
 
 func _types(squad: Squad) -> Array[int]:
 	var out: Array[int] = []
-	for action in squad.action_queue:
+	for action in H.given_orders(squad):   # the orders given, not the hold fillers (#46)
 		out.append(action.action_type)
 	return out
 

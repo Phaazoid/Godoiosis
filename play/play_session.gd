@@ -106,7 +106,8 @@ func _process_downed_pending() -> void:
 		squad_manager.handle_unit_downed(unit)
 	_downed_pending.clear()
 
-# game._on_unit_action_queued's rule half: a batch is judged once, when queue_batch re-emits at its close.
+# game._on_unit_action_queued's rule half: a batch's orders are judged once, when queue_batch re-emits
+# at its close. A hold filler a batch move displaces is a cancel, and re-resolves as in the game.
 func _on_order_queued(squad: Squad, _action: BaseAction) -> void:
 	if not squad_manager.batching:
 		_refresh_plan(squad)
@@ -206,13 +207,37 @@ func legal_moves(handle: String) -> Dictionary:
 	# THE set queue_move indexes -- not a copy of it. Both come back as Dictionaries keyed by cell
 	# (which is why the gate spells it `.has(dest)`), so the keys ARE the answer.
 	var range_info := RulesService.compute_move_range(unit, _board())
+	var reachable: Array[Vector2i] = []
+	reachable.assign(range_info.reachable.keys())
+	# A leader's destinations a squadmate could not follow to are held out the way queue_move refuses
+	# them (#1069) -- one sweep over the whole range, as the game's move mode paints it.
+	var stranded := _stranding(unit, reachable)
 	var cells: Array[Vector2i] = []
-	cells.assign(range_info.reachable.keys())
+	var stranding: Array[Vector2i] = []
+	for cell: Vector2i in reachable:
+		if (stranded.get(cell, []) as Array).is_empty():
+			cells.append(cell)
+		else:
+			stranding.append(cell)
 	# Reported separately rather than merged: these are reachable on foot and refused by cohesion,
 	# and "your leader is too far" is a different fix from "that is too far to walk".
 	var leashed: Array[Vector2i] = []
 	leashed.assign(range_info.squad_unreachable.keys())
-	return {"ok": true, "unit": handle, "from": unit.movement.cell, "cells": cells, "leashed": leashed}
+	return {"ok": true, "unit": handle, "from": unit.movement.cell, "cells": cells, "leashed": leashed,
+			"stranding": stranding}
+
+# Who a LEADER's move to each of `dests` would leave behind -- GroupMoveSolver.stranding, the sweep the
+# game's move modes grey out (#1069). Empty for anyone else: a member's leash is compute_move_range's.
+func _stranding(unit: Unit, dests: Array[Vector2i]) -> Dictionary:
+	if not (unit.is_leader() and unit.has_squad()):
+		return {}
+	return GroupMoveSolver.stranding(unit.squad, _board(), dests)
+
+func _handles(units: Array) -> String:
+	var names: Array[String] = []
+	for u: Unit in units:
+		names.append(handle_for(u))
+	return ", ".join(names)
 
 
 func legal_targets(handle: String, attack_name := "") -> Dictionary:
@@ -272,11 +297,19 @@ func status() -> Dictionary:
 	return {
 		"faction": _faction_name(active_faction()),
 		"active_squad": -1 if active == null else _squad_id(active),
-		"queued": 0 if active == null else active.action_queue.size(),
+		"queued": 0 if active == null else _given_count(active),
 		"acted": acted,
 		"free": free,
 		"pre_mission": _deploying,
 	}
+
+# The orders somebody gave: the hold-position fillers a squad grows when its plan opens are nobody's.
+func _given_count(squad: Squad) -> int:
+	var count := 0
+	for action: BaseAction in squad.action_queue:
+		if not (action is MoveAction and (action as MoveAction).is_hold_position):
+			count += 1
+	return count
 
 
 # ---- the pre-mission phase (#46) ----
@@ -657,6 +690,12 @@ func queue_move(handle: String, dest: Vector2i) -> Dictionary:
 	if not range_info.reachable.has(dest):
 		var hint := " (reachable but outside leader range)" if range_info.squad_unreachable.has(dest) else ""
 		return {"ok": false, "error": "%s cannot reach %s%s" % [handle, str(dest), hint]}
+	# A leader may not take a destination its squad cannot follow to -- the game refuses the click
+	# (game._click_choosing_move, #1069), so this refuses the order, naming who would be left behind.
+	var one: Array[Vector2i] = [dest]
+	var stranded: Array = _stranding(unit, one).get(dest, [])
+	if not stranded.is_empty():
+		return {"ok": false, "error": "%s can't move to %s: %s could not follow" % [handle, str(dest), _handles(stranded)]}
 	var path := RulesService.reconstruct_path(range_info.came_from, unit.movement.cell, dest)
 	var move := MoveAction.new()
 	move.init(unit, path, GridUtils.get_terrain_icon_at_cell(grid, dest))
@@ -664,6 +703,40 @@ func queue_move(handle: String, dest: Vector2i) -> Dictionary:
 	if refusal != "":
 		return {"ok": false, "error": "%s can't move to %s: %s" % [handle, str(dest), refusal]}
 	return {"ok": true, "summary": "%s -> move %s" % [handle, str(dest)], "valid": move.is_valid}
+
+# Group Move (#46): the leader picks a destination and the squad follows in formation, through the
+# game's door -- MainActionMenu._can_group_move, then begin_group_move_planning's cancel, then
+# _click_choosing_group_move's two questions. Every gate is asked BEFORE anything is cancelled, so a
+# refusal leaves the plan as it was; queue_group_move's own rollback answers for a batch it refuses.
+func group_move(handle: String, dest: Vector2i) -> Dictionary:
+	var unit := unit_by_handle(handle)
+	var gate := _controllable(unit, handle)
+	if not gate.ok:
+		return gate
+	if not (unit.is_leader() and unit.has_squad()):
+		return {"ok": false, "error": "%s does not lead a squad" % handle}
+	var members: Array[Unit] = unit.squad.get_members()
+	for member: Unit in members:
+		if member.has_main_action_queued():
+			return {"ok": false, "error": "%s has a main action queued, and a move must come before it" % handle_for(member)}
+	if dest == unit.movement.cell:
+		return {"ok": false, "error": "%s is already at %s" % [handle, str(dest)]}
+	if not RulesService.compute_move_range(unit, _board()).reachable.has(dest):
+		return {"ok": false, "error": "%s cannot reach %s" % [handle, str(dest)]}
+	var one: Array[Vector2i] = [dest]
+	var stranded: Array = _stranding(unit, one).get(dest, [])
+	if not stranded.is_empty():
+		return {"ok": false, "error": "%s can't lead the squad to %s: %s could not follow" % [handle, str(dest), _handles(stranded)]}
+	for member: Unit in members:
+		if member.has_action_type_queued(BaseAction.ActionType.MOVE):
+			squad_manager.cancel_squad_moves(unit.squad)
+			break
+	if not squad_manager.queue_group_move(unit.squad, dest, _board()):
+		return {"ok": false, "error": "%s's squad could not take up a formation around %s" % [handle, str(dest)]}
+	var heading: Array[String] = []
+	for member: Unit in members:
+		heading.append("%s %s" % [handle_for(member), str(member.get_projected_destination())])
+	return {"ok": true, "summary": "%s -> group move %s (%s)" % [handle, str(dest), ", ".join(heading)]}
 
 func queue_attack(handle: String, aim: Vector2i, attack_name := "") -> Dictionary:
 	var unit := unit_by_handle(handle)

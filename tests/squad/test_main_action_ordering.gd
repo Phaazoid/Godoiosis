@@ -40,7 +40,7 @@ func test_move_is_refused_after_an_attack_is_queued() -> void:
 
 	var move := _make_move(a)
 	assert_bool(_sm.queue_action(a.squad, move)).is_false()
-	assert_int(a.squad.action_queue.size()).is_equal(1)   # only the attack; the move was rejected
+	assert_int(H.given_orders(a.squad).size()).is_equal(1)   # only the attack; the move was rejected
 
 # The rule keys on "main action", not specifically attack: a queued rescue locks out move too.
 func test_move_is_refused_after_a_rescue_is_queued() -> void:
@@ -54,4 +54,4 @@ func test_move_is_refused_after_a_rescue_is_queued() -> void:
 
 	var move := _make_move(a)
 	assert_bool(_sm.queue_action(a.squad, move)).is_false()
-	assert_int(a.squad.action_queue.size()).is_equal(1)   # only the rescue; the move was rejected
+	assert_int(H.given_orders(a.squad).size()).is_equal(1)   # only the rescue; the move was rejected

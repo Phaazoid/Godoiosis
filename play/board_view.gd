@@ -386,6 +386,9 @@ static func render_legal_moves(session, handle: String) -> String:
 	if not res.leashed.is_empty():
 		# Named, because "too far to walk" and "your leader is too far" want different fixes.
 		body += "\n  outside leader range (%d): %s" % [res.leashed.size(), _cell_rows(res.leashed).strip_edges()]
+	if not res.stranding.is_empty():
+		# A leader's: walkable, and refused because a squadmate could not follow there (#1069).
+		body += "\n  would strand a squadmate (%d): %s" % [res.stranding.size(), _cell_rows(res.stranding).strip_edges()]
 	return head + "\n" + body
 
 

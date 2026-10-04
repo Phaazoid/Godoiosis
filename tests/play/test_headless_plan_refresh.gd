@@ -136,8 +136,12 @@ func test_a_second_order_is_judged_against_the_first_orders_shove() -> void:
 		"B's aim at the cell the Blowback lands the foe on was refused (%s) -- the shove was never published, so the gate judged it against the board before A's order" % str(res.get("error", ""))).is_true()
 
 
-# A formation is one decision: judged once, when queue_batch closes, never per member.
-func test_a_batch_is_judged_once_when_it_closes() -> void:
+# A formation is one decision: its ORDERS are judged once, when queue_batch closes, never per member --
+# the queued handler sits a batch out, as game._on_unit_action_queued does. What a member's move
+# DISPLACES is another signal: the hold filler it replaces (#46) is a cancel, and a cancel re-resolves
+# in the game too (game._on_unit_action_cancelled). So each in-batch order is compared with the plan
+# as the last signal left it, not with the plan from before the batch.
+func test_a_batchs_orders_are_judged_once_when_it_closes() -> void:
 	var leader: Unit = BoardBuilder.spawn(_board, _leader_data("Lead"), Vector2i(0, 0))   # -> A
 	var second: Unit = BoardBuilder.spawn(_board, _data("Two", PLAYER), Vector2i(0, 1))   # -> B
 	BoardBuilder.spawn(_board, _data("Three", PLAYER), Vector2i(1, 0))                    # -> C
@@ -152,17 +156,25 @@ func test_a_batch_is_judged_once_when_it_closes() -> void:
 	var before: ResolvedPlan = sm.resolved_plan_for(squad)
 	assert_object(before).override_failure_message("C's order resolved no plan").is_not_null()
 
-	var mid_batch: Array[ResolvedPlan] = []
+	# Connected AFTER the session's handlers, so each probe reads the plan the session left.
+	var seen: Array[ResolvedPlan] = [before]
+	var heard: Array[int] = [0]
+	var judged_alone: Array[int] = [0]
+	sm.squad_action_cancelled.connect(func(s: Squad, _u: Unit, _t: BaseAction.ActionType) -> void:
+		seen[0] = sm.resolved_plan_for(s))
 	sm.squad_action_queued.connect(func(s: Squad, _a: BaseAction) -> void:
-		if sm.batching:
-			mid_batch.append(sm.resolved_plan_for(s)))
+		if not sm.batching:
+			return
+		heard[0] += 1
+		if sm.resolved_plan_for(s) != seen[0]:
+			judged_alone[0] += 1
+		seen[0] = sm.resolved_plan_for(s))
 	var moves: Array[MoveAction] = [_move(leader, Vector2i(0, -1)), _move(second, Vector2i(-1, 1))]
 	assert_bool(sm.queue_batch(squad, moves)).override_failure_message("fixture: the batch was refused").is_true()
 
-	assert_int(mid_batch.size()).override_failure_message(
-		"fixture: the probe heard %d in-batch orders, not 2" % mid_batch.size()).is_equal(2)
-	for seen: ResolvedPlan in mid_batch:
-		assert_object(seen).override_failure_message(
-			"the plan was re-resolved mid-batch -- a formation must be judged once, at its close").is_same(before)
+	assert_int(heard[0]).override_failure_message(
+		"fixture: the probe heard %d in-batch orders, not 2" % heard[0]).is_equal(2)
+	assert_int(judged_alone[0]).override_failure_message(
+		"%d in-batch orders were re-resolved on their own -- a formation must be judged once, at its close" % judged_alone[0]).is_equal(0)
 	assert_object(sm.resolved_plan_for(squad)).override_failure_message(
-		"the batch closed and the plan was never re-resolved").is_not_same(before)
+		"the batch closed and the plan was never re-resolved").is_not_same(seen[0])

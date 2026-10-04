@@ -1622,7 +1622,6 @@ func _on_squad_became_active(squad: Squad, action: BaseAction):
 		for unit in icons_to_draw.keys():
 			for icontype in icons_to_draw[unit]:
 				overlay_manager.create_unit_icon(unit, icontype)
-	squad_manager.setup_hold_move_actions(squad)
 	refresh_action_queue(squad)
 
 func _on_squad_has_no_actions(squad: Squad):

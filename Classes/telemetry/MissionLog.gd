@@ -388,7 +388,7 @@ func _on_turn_started(faction: Team.Faction) -> void:
 func _on_order_queued(squad: Squad, action: BaseAction) -> void:
 	# A HOLD-POSITION FILLER IS NOT AN ORDER ANYBODY GAVE, and batch_id is the project's own answer
 	# to that -- stamped only by queue_action, the Law #3 chokepoint, so 0 means a filler that
-	# game.gd's own signal handler queued direct. Counting them would put one phantom order per
+	# SquadManager queued direct when the squad activated. Counting them would put one phantom order per
 	# squadmate per plan into the churn metric this event exists FOR.
 	#
 	# Nothing is lost by dropping them here: the `pass` record writes the whole queue, fillers

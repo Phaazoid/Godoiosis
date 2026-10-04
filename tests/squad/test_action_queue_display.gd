@@ -40,12 +40,17 @@ func test_side_channel_sections_follow_registry_order() -> void:
 	var plan: ResolvedPlan = manager.resolve_plan(hero.squad, context)
 	var entries: Array[ActionQueueDisplayEntry] = ActionQueueDisplayEntry.build_for(hero.squad, plan)
 
+	# The hold-position fillers the squad grows when its plan opens (#46) are a MOVE section of their
+	# own; this case is about the side channel, so they are read past.
 	var headers: Array[String] = []
 	var rows: Array = []
 	for entry in entries:
 		if entry.entry_type == ActionQueueDisplayEntry.EntryType.HEADER:
-			headers.append(entry.label)
+			if entry.label != "MOVE":
+				headers.append(entry.label)
 		elif entry.entry_type == ActionQueueDisplayEntry.EntryType.ACTION:
+			if not H.given_orders(hero.squad).has(entry.action):
+				continue
 			rows.append(entry.action)
 
 	assert_array(headers).contains_exactly(["RESCUE", "REV"])
