@@ -25,7 +25,8 @@ var _next_enemy := 0
 var _downed_pending: Array[Unit] = []   # units downed mid-execute; ejected AFTER the pass (mirrors OrderExecutor._downed_pending)
 var _mission_contested := false         # "both sides were up at once" latch (mirrors MissionController._contested)
 # The pre-mission phase (#46): the shared PreMissionPhase with this session as its host, whether the
-# phase is still open, and what the last Begin captured (kept for slice 3's restart).
+# phase is still open, and what the last Begin captured. A session lives as long as its board, so the
+# bridge takes `staged` from here and keeps it across boards (MissionController._staged's twin).
 var _phase: PreMissionPhase = null
 var _deploying := false
 var staged: PreMissionSnapshot = null
@@ -295,13 +296,16 @@ func is_deploying() -> bool:
 # The phase every load of a mission opens on (the bridge's `load` is the fresh-start door). Draws the
 # roster the scenario names; returns how many stood up, and the phase stays open only if someone did
 # -- a phase nobody stands in could never be committed, which is the game's own rule.
-func start_pre_mission() -> int:
+#
+# `staged` is a buffer to replay instead of the authored walk (#763), MissionController.deploy_roster's
+# shape: the caller decides which buffer, through PreMissionPhase.replay_for / kept_by_restart.
+func start_pre_mission(staged_buffer: PreMissionSnapshot = null) -> int:
 	if scenario_data == null or scenario_data.roster == "":
 		return 0
 	var scenario := scenario_data
 	_phase = PreMissionPhase.new(self, zone_manager, squad_manager,
 			func() -> int: return scenario.deployment_cap)
-	var drawn := _phase.draw(scenario.roster)
+	var drawn := _phase.draw(scenario.roster, staged_buffer)
 	_deploying = drawn > 0
 	return drawn
 
