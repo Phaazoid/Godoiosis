@@ -105,6 +105,9 @@ func test_steam_spares_the_faction_whose_turn_is_not_ending() -> void:
 
 
 # Chilled keeps Wet off (#1092); the soak asks the same Elemental.is_blocked every other door asks.
+# The ROWS are the half with teeth: Unit.add_element_state refuses a blocked state on its own, so the
+# unit comes out right either way, while a row the builder failed to refuse would forecast a soak
+# that never lands and take the camera to a unit to show it nothing.
 func test_a_state_that_keeps_the_soak_off_wins_and_stays() -> void:
 	var blocker := _blocker_of(rules.state)
 	assert_int(blocker).override_failure_message(
@@ -112,6 +115,14 @@ func test_a_state_that_keeps_the_soak_off_wins_and_stays() -> void:
 	var unit := _spawn(CELL, Team.Faction.PLAYER)
 	unit.add_element_state(blocker)
 	_steam(CELL, Gas.MAX_LEVEL)
+
+	var plan: ResolvedPlan = game.squad_manager.resolve_plan(unit.squad, game._board())
+	var live := TurnBoundary.tile_hits(game._all_units(), game.terrain_states, game.gas_field,
+			Team.Faction.PLAYER)
+	assert_int(_soaks_of(plan).size()).override_failure_message(
+			"the queue forecast a soak a held state keeps off").is_equal(0)
+	assert_int(live.size()).override_failure_message(
+			"the turn end would visit a unit a held state keeps dry").is_equal(0)
 
 	await game.order_executor.apply_end_of_turn_tiles(Team.Faction.PLAYER)
 
