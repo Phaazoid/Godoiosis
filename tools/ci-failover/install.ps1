@@ -1,5 +1,6 @@
 <#
-  install.ps1 - starts the CI failover watcher (watch.ps1) at every logon, hidden. -Uninstall removes it.
+  install.ps1 - starts the CI failover watcher (watch.ps1) at every logon, with no window. -Uninstall
+  removes it.
 
   THE DEV RUNS THIS, never an agent: it is the step that lets this machine take CI work on its own.
 
@@ -7,24 +8,35 @@
   checkout cannot change or delete the script a running watcher is executing. Re-run this after
   pulling a new watch.ps1 to pick it up.
 
+  It also rewrites the keepalive task's ACTION to launch headless (watch.ps1 says why), leaving its
+  trigger, settings and enabled state alone. That makes this file the keepalive's definition too.
+
     powershell -ExecutionPolicy Bypass -File tools\ci-failover\install.ps1
     powershell -ExecutionPolicy Bypass -File tools\ci-failover\install.ps1 -Uninstall
 #>
 param([switch]$Uninstall)
 
-$TaskName = 'Iosis CI failover watcher'
-$KeepaliveTask = 'Iosis CI runners (WSL)'
-$InstallDir = Join-Path $env:LOCALAPPDATA 'Iosis\ci-failover'
-$Installed = Join-Path $InstallDir 'watch.ps1'
-$StatePath = Join-Path $InstallDir 'state.json'
 $Source = Join-Path $PSScriptRoot 'watch.ps1'
+if (-not (Test-Path $Source)) { throw "watch.ps1 not found beside this script ($Source)." }
+# The keepalive's name and loop, the state folder and the headless launcher are watch.ps1's.
+# Dot-sourcing defines them here and stops before its loop.
+. $Source
+
+$TaskName = 'Iosis CI failover watcher'
+$Installed = Join-Path $StateDir 'watch.ps1'
+
+# Stopping a headless task kills conhost only, so the watcher's own PowerShell is ended by name too.
+function Stop-Watcher {
+	Stop-ScheduledTask -TaskName $TaskName -ErrorAction SilentlyContinue
+	Stop-PowerShellMatching "*$Installed*"
+}
 
 if ($Uninstall) {
 	$task = Get-ScheduledTask -TaskName $TaskName -ErrorAction SilentlyContinue
+	Stop-Watcher
 	if ($null -eq $task) {
 		Write-Host "'$TaskName' is not installed."
 	} else {
-		Stop-ScheduledTask -TaskName $TaskName -ErrorAction SilentlyContinue
 		Unregister-ScheduledTask -TaskName $TaskName -Confirm:$false
 		Write-Host "Removed '$TaskName'."
 	}
@@ -37,15 +49,14 @@ if ($Uninstall) {
 		if ($state.up_by_watcher) {
 			Disable-ScheduledTask -TaskName $KeepaliveTask -ErrorAction SilentlyContinue | Out-Null
 			Write-Warning ("The watcher had the local runners up. '$KeepaliveTask' is now disabled so they " +
-				"will not return at logon, but it is still running. Once no CI job is running, stop it with:`n" +
-				"  Stop-ScheduledTask -TaskName '$KeepaliveTask'")
+				"will not return at logon, but it is still running. Once no CI job is running, take them down with:`n" +
+				"  . '$Source'; Stop-Runners")
 		}
 	}
-	Write-Host "The log and state stay in $InstallDir."
+	Write-Host "The log and state stay in $StateDir."
 	return
 }
 
-if (-not (Test-Path $Source)) { throw "watch.ps1 not found beside this script ($Source)." }
 if ($null -eq (Get-Command gh -ErrorAction SilentlyContinue)) {
 	throw 'gh is not on PATH. The watcher needs the GitHub CLI, signed in as an account that can dispatch Tests.'
 }
@@ -56,29 +67,38 @@ $keepalive = Get-ScheduledTask -TaskName $KeepaliveTask -ErrorAction SilentlyCon
 if ($null -eq $keepalive) {
 	Write-Warning ("'$KeepaliveTask' does not exist, so the watcher cannot bring the runners up. It would " +
 		"still notice a stuck run and dispatch it, but the local run would wait for runners that never come.")
-} elseif ("$($keepalive.State)" -ne 'Disabled') {
-	Write-Warning ("'$KeepaliveTask' is $($keepalive.State), not Disabled, so the runners come up at every logon " +
-		"whether or not there is failover work. The watcher only takes down runners it brought up itself.")
+} else {
+	try {
+		Set-ScheduledTask -TaskName $KeepaliveTask -ErrorAction Stop `
+			-Action (New-HeadlessAction "-NoProfile -ExecutionPolicy Bypass -Command `"$KeepaliveLoop`"") | Out-Null
+		Write-Host "'$KeepaliveTask' now launches with no window."
+	} catch {
+		Write-Warning "Could not update '$KeepaliveTask' to launch headless: $($_.Exception.Message)"
+	}
+	$keepalive = Get-ScheduledTask -TaskName $KeepaliveTask
+	if ("$($keepalive.State)" -ne 'Disabled') {
+		Write-Warning ("'$KeepaliveTask' is $($keepalive.State), not Disabled, so the runners come up at every logon " +
+			"whether or not there is failover work. The watcher only takes down runners it brought up itself.")
+	}
 }
 
-New-Item -ItemType Directory -Force -Path $InstallDir | Out-Null
+New-Item -ItemType Directory -Force -Path $StateDir | Out-Null
+# A re-install replaces the task, so the old loop stops first or it keeps running the old copy.
+Stop-Watcher
 Copy-Item -Force $Source $Installed
 
-$action = New-ScheduledTaskAction -Execute 'powershell.exe' `
-	-Argument "-NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -File `"$Installed`""
+$action = New-HeadlessAction "-NoProfile -ExecutionPolicy Bypass -File `"$Installed`""
 $trigger = New-ScheduledTaskTrigger -AtLogOn -User "$env:USERDOMAIN\$env:USERNAME"
 $principal = New-ScheduledTaskPrincipal -UserId "$env:USERDOMAIN\$env:USERNAME" -LogonType Interactive -RunLevel Limited
 $settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries `
 	-RestartCount 999 -RestartInterval (New-TimeSpan -Minutes 1) -ExecutionTimeLimit ([TimeSpan]::Zero) `
 	-MultipleInstances IgnoreNew -StartWhenAvailable
 
-# A re-install replaces the task, so stop the old loop first or it keeps running the old copy.
-Stop-ScheduledTask -TaskName $TaskName -ErrorAction SilentlyContinue
 Register-ScheduledTask -TaskName $TaskName -Action $action -Trigger $trigger -Principal $principal `
 	-Settings $settings -Force `
 	-Description 'Iosis: when GitHub''s hosted runners stall on Tests, re-runs it on the local WSL runners (tools/ci-failover).' |
 	Out-Null
 Start-ScheduledTask -TaskName $TaskName
 
-Write-Host "Installed '$TaskName' and started it. It checks GitHub every 2 minutes."
-Write-Host "Log: $(Join-Path $InstallDir 'watch.log')"
+Write-Host "Installed '$TaskName' and started it. It checks GitHub every 2 minutes, with no window."
+Write-Host "Log: $LogPath"

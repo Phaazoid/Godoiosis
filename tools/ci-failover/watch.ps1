@@ -49,6 +49,9 @@ param(
 )
 
 $KeepaliveTask = 'Iosis CI runners (WSL)'
+# The keepalive's loop: one wsl.exe client held open, started again on any exit. install.ps1 writes
+# it into the task, and Stop-Runners finds the loop by it.
+$KeepaliveLoop = 'while ($true) { & wsl.exe -d Ubuntu -- sleep infinity; Start-Sleep -Seconds 10 }'
 $StateDir = Join-Path $env:LOCALAPPDATA 'Iosis\ci-failover'
 $StatePath = Join-Path $StateDir 'state.json'
 $LogPath = Join-Path $StateDir 'watch.log'
@@ -329,6 +332,23 @@ function Test-KeepaliveRunning {
 	return $null -ne $task -and "$($task.State)" -eq 'Running'
 }
 
+# BOTH TASKS LAUNCH POWERSHELL THROUGH `conhost --headless` (2026-10-05). Windows 11 hosts a console in
+# Windows Terminal by default, and Terminal ignores -WindowStyle Hidden, so a plain launch shows a
+# window anyone would close. The watcher and the keepalive both died that way. Headless conhost draws
+# no window at all (measured: no new visible window).
+#
+# The cost: stopping such a task kills conhost and LEAVES THE POWERSHELL INSIDE RUNNING (measured). So
+# whoever stops one of these tasks also ends its PowerShell, by command line.
+function New-HeadlessAction([string]$powershellArguments) {
+	return New-ScheduledTaskAction -Execute 'conhost.exe' -Argument "--headless powershell.exe $powershellArguments"
+}
+
+function Stop-PowerShellMatching([string]$commandLinePattern) {
+	Get-CimInstance Win32_Process -Filter "Name = 'powershell.exe'" -ErrorAction SilentlyContinue |
+		Where-Object { $_.ProcessId -ne $PID -and $_.CommandLine -like $commandLinePattern } |
+		ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }
+}
+
 function Start-Runners {
 	Enable-ScheduledTask -TaskName $KeepaliveTask | Out-Null
 	Start-ScheduledTask -TaskName $KeepaliveTask
@@ -337,8 +357,9 @@ function Start-Runners {
 function Stop-Runners {
 	Stop-ScheduledTask -TaskName $KeepaliveTask -ErrorAction SilentlyContinue
 	Disable-ScheduledTask -TaskName $KeepaliveTask | Out-Null
-	# Stopping the task ends its PowerShell loop, but the wsl.exe client that loop started can outlive
-	# it, and that client is what keeps the distro up. So it goes too.
+	# The loop first, or it starts wsl.exe again within 10 s. Then the wsl.exe client it left, which is
+	# what keeps the distro up.
+	Stop-PowerShellMatching "*$KeepaliveLoop*"
 	Get-CimInstance Win32_Process -Filter "Name = 'wsl.exe'" -ErrorAction SilentlyContinue |
 		Where-Object { $_.CommandLine -like '*sleep infinity*' } |
 		ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }

@@ -20,6 +20,8 @@ It does three things:
 
 Re-run it after pulling a new `watch.ps1`. `-Uninstall` removes the task.
 
+Both tasks, the watcher and the keepalive, launch PowerShell through `conhost.exe --headless`, and the installer rewrites the keepalive's action to match. On Windows 11 a console opens in Windows Terminal by default, and Terminal ignores PowerShell's `-WindowStyle Hidden`. A plain launch therefore shows a window, and closing it kills the task: both tasks died that way on 2026-10-05. Stopping a headless task kills only conhost, so the watcher and the installer also end the PowerShell inside it by name.
+
 It needs `gh` on PATH, signed in as an account that can dispatch workflows, and the existing **Iosis CI runners (WSL)** task. That task should stay **Disabled**: the watcher enables it when it needs the runners.
 
 ## What a failover looks like
