@@ -869,17 +869,20 @@ func _on_turn_started(faction: Team.Faction):
 	turn_banner.show_label("%s Turn" % Team.faction_name(faction))
 	start_faction_turn(faction)
 
+# An AI faction claims the board BEFORE the hand-off beat, because its first squad plans INSIDE it
+# (#1220 ruling 7): the costliest decision of the turn hides behind the banner, and orders queued on
+# an unlocked board would be the player's to click. The lock is not negotiable.
 func start_faction_turn(faction: Team.Faction):
-	game_state = GameState.BETWEEN_TURNS
-	await Pacing.beat(self, Pacing.TURN_HANDOFF)
-	game_state = _base_state()   # AI_TURN below still overrides -- the lock is not negotiable
-
 	if ai_controller.is_ai_faction(faction):
 		game_state = GameState.AI_TURN
 		camera_controller.set_playback_locked(true)
-		await ai_controller.take_faction_turn(faction)
+		await ai_controller.take_faction_turn(faction, Pacing.TURN_HANDOFF)
 		camera_controller.set_playback_locked(false)
 		return
+
+	game_state = GameState.BETWEEN_TURNS
+	await Pacing.beat(self, Pacing.TURN_HANDOFF)
+	game_state = _base_state()
 
 	#TODO This should probably be it's own game state - IN_MENU or something.
 	#Can call an end menu function from the popup hide that calls update visuals instead.
