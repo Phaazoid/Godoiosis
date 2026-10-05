@@ -581,11 +581,24 @@ static func render_legal_targets(session, handle: String, attack_name := "") -> 
 	var res: Dictionary = session.legal_targets(handle, attack_name)
 	if not res.ok:
 		return "> ERROR: " + str(res.error)
+	var verb := "watch spots for" if res.get("watch", false) else "targets"
 	if res.aims.is_empty():
-		return "targets %s with %s from (%d,%d): none" % [res.unit, res.attack, res.from.x, res.from.y]
-	var lines: Array[String] = ["targets %s with %s from (%d,%d): %d aims" % [res.unit, res.attack, res.from.x, res.from.y, res.aims.size()]]
+		return "%s %s with %s from (%d,%d): none" % [verb, res.unit, res.attack, res.from.x, res.from.y]
+	var lines: Array[String] = ["%s %s with %s from (%d,%d): %d aims" % [verb, res.unit, res.attack, res.from.x, res.from.y, res.aims.size()]]
 	for aim: Dictionary in res.aims:
-		lines.append("  (%d,%d) hits %s" % [aim.cell.x, aim.cell.y, ", ".join(aim.victims)])
+		var where := "(%d,%d)" % [aim.cell.x, aim.cell.y]
+		if aim.has("facing"):
+			where += " facing %s" % aim.facing
+		if res.get("watch", false):
+			var footprint: Array[Vector2i] = []
+			footprint.assign(aim.footprint)
+			var now: String = ("fires at once on " + ", ".join(aim.standing)) if not aim.standing.is_empty() \
+					else "nobody in it now"
+			lines.append("  %s watches %s; %s" % [where, _format_cells(footprint), now])
+		elif aim.ground_only:
+			lines.append("  %s hits no unit, only the ground" % where)
+		else:
+			lines.append("  %s hits %s" % [where, ", ".join(aim.victims)])
 	return "\n".join(lines)
 
 

@@ -280,6 +280,12 @@ func legal_targets(handle: String, attack_name := "") -> Dictionary:
 		return gate
 	if not unit.has_equipped_weapon():
 		return {"ok": false, "error": "%s has no equipped weapon" % handle}
+	# A watch attack's name is answered too (#46), through the overwatch verb's own lookup: a watch
+	# attack is never in the fire view (#590), so the fire pick below would call it unknown.
+	if attack_name != "" and unit.fire_attack_named(attack_name) == null:
+		var watch := unit.watch_attack_named(attack_name)
+		if watch != null:
+			return _legal_watch_aims(unit, handle, watch)
 	var pick := _fire_pick(unit, handle, attack_name)
 	if not pick.ok:
 		return pick
@@ -304,9 +310,50 @@ func legal_targets(handle: String, attack_name := "") -> Dictionary:
 		var names: Array[String] = []
 		for v: Unit in victims:
 			names.append(handle_for(v))
-		out.append({"cell": aim, "victims": names})
+		# No victims and not a whiff is an aim that lands on the ground alone, and says so (#46).
+		out.append(_with_facing({"cell": aim, "victims": names, "ground_only": names.is_empty()},
+				aiming, origin))
 	unit.active_attack = null
 	return {"ok": true, "unit": handle, "attack": _attack_label(aiming), "from": origin, "aims": out}
+
+
+# Where a watch may be set (#46), by overwatch's own click gate, each with the cells it would watch
+# (OverwatchAction.watched_paths_from, the resolver's footprint rule) and the hostiles standing in
+# them now -- who it would fire on the moment it is armed (#1003).
+func _legal_watch_aims(unit: Unit, handle: String, watch: AttackData) -> Dictionary:
+	var reason := AttackAction.fire_block_reason(unit, watch)
+	if reason != "":
+		return {"ok": false, "error": "%s can't watch with %s: %s" % [handle, _attack_label(watch), reason]}
+	var origin := unit.get_projected_destination()
+	var board := _board()
+	var out: Array[Dictionary] = []
+	for aim: Vector2i in Reach.get_all_attack_cells_from(unit, origin, watch):
+		if not Reach.can_aim_at(unit, origin, aim, watch, board):
+			continue
+		var probe := OverwatchAction.new()
+		probe.init(unit, aim, watch)
+		var footprint: Array[Vector2i] = []
+		for path: Array in probe.watched_paths_from(origin, board):
+			for cell: Vector2i in path:
+				if not footprint.has(cell):
+					footprint.append(cell)
+		var standing: Array[String] = []
+		for cell in footprint:
+			var occupant := board.projected_unit_at_cell(cell)
+			if occupant != null and Team.is_enemy(unit.get_faction(), occupant.get_faction()):
+				standing.append(handle_for(occupant))
+		out.append(_with_facing({"cell": aim, "footprint": footprint, "standing": standing}, watch, origin))
+	return {"ok": true, "unit": handle, "attack": _attack_label(watch), "from": origin, "aims": out, "watch": true}
+
+
+# A directional aim is a FACING, whichever of its cells is named (#46): labelled N/E/S/W by
+# Reach.placement_dir, the rule that turns the stamp.
+static func _with_facing(entry: Dictionary, attack: AttackData, origin: Vector2i) -> Dictionary:
+	if attack != null and attack.is_directional():
+		entry["facing"] = FACING_NAMES.get(Reach.placement_dir(attack, origin, entry.cell), "?")
+	return entry
+
+const FACING_NAMES := {Vector2i.UP: "N", Vector2i.RIGHT: "E", Vector2i.DOWN: "S", Vector2i.LEFT: "W"}
 
 
 # The game's enemy ranges, the V key (#46), through the builder game.threat_field() calls. The viewer
