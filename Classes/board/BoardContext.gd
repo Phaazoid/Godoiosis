@@ -17,6 +17,9 @@ var gas: GasField
 # Terrain deposits not yet in the store, read as if they had landed (with_deposits). Empty on every
 # board the game builds.
 var deposits: Array[ResolvedCellEffect] = []
+# The mission being played (#1220), for the AI's one mission-shaped question: would this plan kill a
+# unit the mission says must survive. Null on a sandbox or fixture board, which has no such stake.
+var mission: MissionState
 
 # A unit whose death has RESOLVED is not on this board, and the filter lives HERE rather than in
 # any one builder because there are three of them -- game.gd's _board(), play/board_builder.gd and
@@ -30,7 +33,7 @@ var deposits: Array[ResolvedCellEffect] = []
 # below has excluded the dead by this exact test since it was written; this is that belief applied
 # to the list itself rather than re-stated per reader -- and `unit_at_cell` is what proves it was
 # needed, since it never asked about lifecycle and so let a corpse go on blocking its own tile.
-func _init(grid_layer: TileMapLayer, unit_list: Array[Unit], manager: SquadManager, states: TerrainStateManager = null, zone_manager: ZoneManager = null, board_heights: BoardHeights = null, gas_field: GasField = null) -> void:
+func _init(grid_layer: TileMapLayer, unit_list: Array[Unit], manager: SquadManager, states: TerrainStateManager = null, zone_manager: ZoneManager = null, board_heights: BoardHeights = null, gas_field: GasField = null, mission_state: MissionState = null) -> void:
 	grid = grid_layer
 	units = []
 	for unit in unit_list:
@@ -41,6 +44,7 @@ func _init(grid_layer: TileMapLayer, unit_list: Array[Unit], manager: SquadManag
 	zones = zone_manager
 	heights = board_heights
 	gas = gas_field
+	mission = mission_state
 
 func unit_at_cell(cell: Vector2i) -> Unit:
 	for unit in units:
@@ -140,7 +144,7 @@ func has_tile_state(cell: Vector2i, state: Terrain.TileState) -> bool:
 # reads (TerrainStateManager.projected_states_at). Every board the game and the Play API build has
 # none; SplitForecast asks for one, because the pass settles on ground its own attacks changed.
 func with_deposits(effects: Array[ResolvedCellEffect]) -> BoardContext:
-	var board := BoardContext.new(grid, units, squad_manager, terrain_states, zones, heights, gas)
+	var board := BoardContext.new(grid, units, squad_manager, terrain_states, zones, heights, gas, mission)
 	board.deposits = effects.duplicate()
 	return board
 

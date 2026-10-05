@@ -225,36 +225,32 @@ func test_hotseat_enemy_squad_keeps_its_refused_plan() -> void:
 #  Defect 1 — the AI must not author a plan it cannot run.
 # ==============================================================================
 
-# Giving up the ADVANCE, not the turn: nobody is ordered outside cohesion, and the leader does not
-# charge off alone. Cohesion is strict again as of 2026-08-04 — a member the leader cannot bring
-# with it refuses the destination — so what this pins is that the refusal costs the squad its step
-# and nothing else. Note the shape changed with revert_if_only_hold: a rolled-back group move now
-# CLEARS the queue rather than leaving all-holds, so "no advance" means no real move exists at all.
-#
-# The player-facing half of the same rule (the destination is painted red before the click) lives in
-# tests/squad/test_squad_cohesion.gd; the AI does not consult that overlay and just gets refused.
-func test_rushdown_gives_up_the_advance_rather_than_stranding_a_member() -> void:
+# The leader advances only where its squad can follow (#1220), so the jam costs the squad nothing but
+# the cells it could not have reached anyway: the plan is legal and nobody is stranded. Until #1220
+# the approach was the leader's own unclamped range, it picked a cell the member could not follow,
+# and queue_group_move's rollback (#103) took the whole advance back -- that rollback still guards
+# every caller, and the player-facing half lives in tests/squad/test_squad_cohesion.gd.
+func test_rushdown_advances_only_as_far_as_its_squad_can_follow() -> void:
 	var board: Dictionary = await _jam_board()
 	var squad: Squad = board.squad
+	var leader: Unit = board.leader
 
 	RushdownArchetype.take_squad_turn(squad, game._board(), game.squad_manager)
 	game.squad_manager.validate_squad_plan(squad)
 
-	assert_bool(game.squad_manager.squad_has_invalid_actions(squad)) \
-		.override_failure_message("Rushdown authored a plan the validator refuses").is_false()
+	assert_bool(game.squad_manager.squad_has_invalid_actions(squad)) 		.override_failure_message("Rushdown authored a plan the validator refuses").is_false()
+	var destination: Vector2i = leader.get_projected_destination()
+	if destination != leader.movement.cell:
+		var cells: Array = [destination]
+		assert_bool(GroupMoveSolver.followable_destinations(squad, game._board(), cells).has(destination)) 			.override_failure_message("the leader advanced to %s, where its squad cannot follow" % [destination]) 			.is_true()
 
-	for action in squad.action_queue:
-		if action.action_type != BaseAction.ActionType.MOVE:
-			continue
-		assert_bool(action.is_hold_position) \
-			.override_failure_message("%s kept an advance its squad cannot follow" % action.actor.get_unit_name()) \
-			.is_true()
-
-	# The premise, or the assertion above passes on a board where nothing was ever infeasible.
-	var charge: Vector2i = AITactics.best_attack_destination(board.leader, board.enemy, game._board())
-	assert_int(RulesService.compute_move_range(board.member, game._board(), charge).reachable.size()) \
-		.override_failure_message("fixture: the member CAN follow — this jam no longer jams") \
-		.is_equal(0)
+	# The premise: the leader's UNCLAMPED approach is a cell the member cannot follow, or the case
+	# passes on a board where nothing was ever infeasible.
+	var aiming := leader.get_fired_attack()
+	var enemy: Unit = board.enemy
+	var route := AITactics._nearest_standable_attack_cell(leader, enemy.movement.cell, aiming, game._board())
+	var charge: Vector2i = AITactics._best_approach(leader, enemy.movement.cell, game._board(), null, true, route)
+	assert_int(RulesService.compute_move_range(board.member, game._board(), charge).reachable.size()) 		.override_failure_message("fixture: the member CAN follow — this jam no longer jams") 		.is_equal(0)
 
 
 func test_ai_turn_from_a_jam_terminates_every_turn() -> void:
@@ -268,7 +264,13 @@ func test_ai_turn_from_a_jam_terminates_every_turn() -> void:
 	# other squads had already moved). It used to be load-bearing for RUNTIME too -- AIController
 	# pans the camera to every squad it plans for, and that pan cost 2 real seconds each -- but
 	# since #118 the pan and the plan-read beat are both free headless, so this is fidelity only.
+	#
+	# The faction is made ACTIVE each turn before the AI takes it. The turn's own end_turn hands play on,
+	# and handing it back to an AI-controlled PLAYER starts that faction's next turn by itself, in the
+	# background -- invisible while the jam refused every plan, since an empty plan finishes in the same
+	# frame, and a race once the squad advances legally (#1220) and its walk spans frames.
 	for turn in range(3):
+		game.turn_manager.set_active_faction(Team.Faction.PLAYER)
 		for s in game.squad_manager.squads:
 			game.squad_manager.set_has_acted(s, s != squad)
 		await game.ai_controller.take_faction_turn(Team.Faction.PLAYER)

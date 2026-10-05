@@ -117,7 +117,7 @@ func test_a_shove_that_only_hurts_is_not_worth_a_detour() -> void:
 	attacker.equipped_weapon = _shover()
 
 	var score := _score_from(board, attacker, N, T)
-	assert_bool(score.z > 0 and score.x == 0 and score.y == 0) \
+	assert_bool(score.damage > 0 and score.removals == 0 and score.splits == 0) \
 		.override_failure_message("fixture: the shove from N must hurt and remove nothing, scored %s" % score).is_true()
 
 	_plan(attacker, board)
@@ -298,11 +298,11 @@ func _follow_board(legless: bool) -> Dictionary:
 
 
 # What `unit`'s attack on the unit at `at` scores when fired from `cell`, by standing it there.
-func _score_from(board: Dictionary, unit: Unit, cell: Vector2i, at: Vector2i) -> Vector4i:
+func _score_from(board: Dictionary, unit: Unit, cell: Vector2i, at: Vector2i) -> AIScore:
 	var ctx := _context(board)
 	var start := unit.movement.cell
 	unit.movement.set_cell(cell)
-	var score := Vector4i.ZERO
+	var score := AIScore.zero()
 	for candidate in AITactics._attack_candidates(unit, ctx, cell, {}):
 		if candidate.target_cell == at:
 			var one: Array[BaseAction] = [candidate]

@@ -772,7 +772,7 @@ func _click_choosing_move(cell: Vector2i) -> void:
 		return
 	# Physical reach is the click's business; whether the SQUAD permits landing there is queue_action's.
 	if moverange.reachable.keys().has(cell) or moverange.squad_unreachable.keys().has(cell):
-		var path := RulesService.reconstruct_path(moverange.came_from, unit.movement.cell, cell)
+		var path := route_to(unit, moverange, cell)
 		var move := MoveAction.new()
 		move.init(unit, path, GridUtils.get_terrain_icon_at_cell(grid, path.back()))
 		if squad_manager.queue_action(unit.squad, move):
@@ -869,17 +869,20 @@ func _on_turn_started(faction: Team.Faction):
 	turn_banner.show_label("%s Turn" % Team.faction_name(faction))
 	start_faction_turn(faction)
 
+# An AI faction claims the board BEFORE the hand-off beat, because its first squad plans INSIDE it
+# (#1220 ruling 7): the costliest decision of the turn hides behind the banner, and orders queued on
+# an unlocked board would be the player's to click. The lock is not negotiable.
 func start_faction_turn(faction: Team.Faction):
-	game_state = GameState.BETWEEN_TURNS
-	await Pacing.beat(self, Pacing.TURN_HANDOFF)
-	game_state = _base_state()   # AI_TURN below still overrides -- the lock is not negotiable
-
 	if ai_controller.is_ai_faction(faction):
 		game_state = GameState.AI_TURN
 		camera_controller.set_playback_locked(true)
-		await ai_controller.take_faction_turn(faction)
+		await ai_controller.take_faction_turn(faction, Pacing.TURN_HANDOFF)
 		camera_controller.set_playback_locked(false)
 		return
+
+	game_state = GameState.BETWEEN_TURNS
+	await Pacing.beat(self, Pacing.TURN_HANDOFF)
+	game_state = _base_state()
 
 	#TODO This should probably be it's own game state - IN_MENU or something.
 	#Can call an end menu function from the popup hide that calls update visuals instead.
@@ -1434,8 +1437,8 @@ func refresh_mission_status() -> void:
 func refresh_end_turn_button() -> void:
 	var faction: Team.Faction = turn_manager.active_faction()
 	var ai_turn: bool = ai_controller.is_ai_faction(faction)
-	# #541: not on an AI faction's turn -- read off the ACTIVE FACTION, which switches at the handoff,
-	# ahead of the TURN_HANDOFF beat that playback_owns_board() would miss -- and not while a squad's
+	# #541: not on an AI faction's turn -- read off the ACTIVE FACTION, which names whose turn it is from
+	# the handoff on (an AI faction also claims the board before its beat since #1220) -- and not while a squad's
 	# plan is open, where it sits under Execute and reads as the same red button. A cinematic (#722)
 	# and the pre-mission phase hide it too, through set_battle_hud_hidden below.
 	end_turn_button.set_offered(not ai_turn and squad_manager.active_squad == null)
@@ -2188,7 +2191,8 @@ func _leash_cells_of(subjects: Array[Unit]) -> Array[Vector2i]:
 # ==============================================================================
 
 func _board() -> BoardContext:
-	return BoardContext.new(grid, _all_units(), squad_manager, terrain_states, zone_manager, board_heights, gas_field)
+	return BoardContext.new(grid, _all_units(), squad_manager, terrain_states, zone_manager, board_heights, gas_field,
+			mission_controller.mission if mission_controller != null else null)
 
 func _all_units() -> Array[Unit]:
 	var result: Array[Unit] = []
@@ -2218,6 +2222,10 @@ func unit_at_pointer(cell: Vector2i) -> Unit:
 
 func compute_move_range(unit: Unit) -> Dictionary:
 	return RulesService.compute_move_range(unit, _board())
+
+# The path a move to `cell` walks (#920): the arrow and the click both ask this, so they cannot differ.
+func route_to(unit: Unit, moverange: Dictionary, cell: Vector2i) -> Array[Vector2i]:
+	return RulesService.route_to(unit, moverange, cell, _board())
 
 # The reachable cells worth DRAWING: everything the unit can reach except where it already is.
 func get_move_range(result: Dictionary, unit: Unit) -> Array[Vector2i]:

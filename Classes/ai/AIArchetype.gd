@@ -8,6 +8,7 @@ enum Type {
 	RUSHDOWN,
 	HOLD,
 	SENTRY,
+	BALANCED,   # #1220
 }
 
 const DEFAULT := Type.RUSHDOWN
@@ -16,6 +17,7 @@ static var _implementations := {
 	Type.RUSHDOWN: Callable(RushdownArchetype, "take_squad_turn"),
 	Type.HOLD: Callable(HoldArchetype, "take_squad_turn"),
 	Type.SENTRY: Callable(SentryArchetype, "take_squad_turn"),
+	Type.BALANCED: Callable(BalancedArchetype, "take_squad_turn"),
 }
 
 # (The per-archetype Crisis stance table lived here until #158: with Crisis an equipped ability
@@ -45,6 +47,11 @@ const MAIN_ACTION_PRIORITY := {
 	Type.SENTRY: [BaseAction.ActionType.ATTACK, BaseAction.ActionType.RESCUE,
 			BaseAction.ActionType.OVERWATCH, BaseAction.ActionType.RELOAD, BaseAction.ActionType.REV,
 			BaseAction.ActionType.BURROW, BaseAction.ActionType.GUARD],
+	# Hold's and Sentry's whole list (#1220 ruling 18): a squad that weighs its fights also rescues,
+	# watches and guards.
+	Type.BALANCED: [BaseAction.ActionType.ATTACK, BaseAction.ActionType.RESCUE,
+			BaseAction.ActionType.OVERWATCH, BaseAction.ActionType.RELOAD, BaseAction.ActionType.REV,
+			BaseAction.ActionType.BURROW, BaseAction.ActionType.GUARD],
 }
 
 # CAPTURE everywhere (#96 slice 3): not deferred like the others — there is nothing for an AI
@@ -69,6 +76,7 @@ const MAIN_ACTION_NEVER := {
 			BaseAction.ActionType.OVERWATCH],
 	Type.HOLD: [BaseAction.ActionType.CAPTURE],
 	Type.SENTRY: [BaseAction.ActionType.CAPTURE],
+	Type.BALANCED: [BaseAction.ActionType.CAPTURE],
 }
 
 static func main_action_priority(t: Type) -> Array:

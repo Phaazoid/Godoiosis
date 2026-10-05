@@ -2,7 +2,7 @@
 
 **Status: ALL FOUR SLICES BUILT 2026-07-28 ([#96](https://github.com/Phaazoid/Godoiosis/issues/96)).** Filed 2026-07-27, when the project acquired a win condition for the first time. Before this, Iosis had ten interlocking systems and no way to finish a battle — which meant a design question could be answered *"is this coherent?"* but never *"does this improve play?"*
 
-**Canon checked through #1160 (2026-09-29); #120's body weight and its authored table, and #1174's WIL tombstone, folded in 2026-10-01; #46's shared pre-mission phase and its job door (`Loadout.set_job`) folded in 2026-10-03; #46's restart buffer rules (`PreMissionPhase.replay_for`/`kept_by_restart`) folded in 2026-10-03; #46's `MissionState` (mission scoring slice 1: the state both hosts own) folded in 2026-10-04; #46 slice 2 (the headless session owns one, and `apply_placement`) folded in 2026-10-04; #46's parity PR (the `capture` verb, `CaptureAction` stamping a `MissionState`) folded in 2026-10-04.**
+**Canon checked through #1160 (2026-09-29); #1220's fourth archetype folded in 2026-10-05; #120's body weight and its authored table, and #1174's WIL tombstone, folded in 2026-10-01; #46's shared pre-mission phase and its job door (`Loadout.set_job`) folded in 2026-10-03; #46's restart buffer rules (`PreMissionPhase.replay_for`/`kept_by_restart`) folded in 2026-10-03; #46's `MissionState` (mission scoring slice 1: the state both hosts own) folded in 2026-10-04; #46 slice 2 (the headless session owns one, and `apply_placement`) folded in 2026-10-04; #46's parity PR (the `capture` verb, `CaptureAction` stamping a `MissionState`) folded in 2026-10-04.**
 
 ## What a mission is
 
@@ -651,7 +651,7 @@ The end-of-mission banner offers **Retry** (hidden when the board wasn't loaded 
 
 ## The AI and CAPTURE
 
-`CAPTURE` sits in `AIArchetype.MAIN_ACTION_NEVER` for all three archetypes, and `tests/law/test_ai_action_coverage.gd` forced that to be an explicit decision.
+`CAPTURE` sits in `AIArchetype.MAIN_ACTION_NEVER` for every archetype (four since Balanced joined with #1220), and `tests/law/test_ai_action_coverage.gd` forced that to be an explicit decision.
 
 **This is not the Burrow-style drift** (Rev shipped for Rushdown 2026-08-06; Burrow followed in
 [#726](https://github.com/Phaazoid/Godoiosis/issues/726), 2026-09-03 — the drift is closed, and

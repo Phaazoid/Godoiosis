@@ -7,7 +7,7 @@ its child [#49 Action Queue UX](https://github.com/Phaazoid/Godoiosis/issues/49)
 This is a *guidelines* doc, not a spec — it captures the principles we're holding the work to,
 plus the running order of the queue-UX checklist. Update it as items land.
 
-**Canon checked through #1171 (2026-09-29); #1174 (Will retired, the limb icons) folded in 2026-10-01; #1197 (the danger field draws the watch shot and the current) folded in 2026-10-03; #508's soak rename folded in 2026-10-04; #46's shared execute steps folded in 2026-10-04.**
+**Canon checked through #1171 (2026-09-29); #1207 (the field covers a placed blast's splash) folded in 2026-10-05; #1174 (Will retired, the limb icons) folded in 2026-10-01; #1197 (the danger field draws the watch shot and the current) folded in 2026-10-03; #508's soak rename folded in 2026-10-04; #46's shared execute steps folded in 2026-10-04.**
 
 ## Principles
 
@@ -1341,7 +1341,9 @@ should not appear while queuing orders… the buttons are easily confused. It sh
 during the enemy turn."*): not while the ACTIVE FACTION is an AI faction, and not while a squad's plan
 is open (`squad_manager.active_squad`), where it sat under Execute as the same red rectangle. The
 AI's turn is read off the active faction rather than `playback_owns_board()`, because the faction
-switches at the handoff, a whole `TURN_HANDOFF` beat before the lock is claimed; and "the AI's turn"
+switches at the handoff, a whole `TURN_HANDOFF` beat before the lock was claimed (since #1220 an AI
+faction claims it before the beat, to plan its first squad there, and the faction stays the read that
+names whose turn it is); and "the AI's turn"
 rather than "not the player's", so a hotseat faction keeps its door. `active_squad` got a SETTER for
 it, since its null writes land after `squad_became_empty` or with no signal at all. The HIDE term is
 one mechanism answering two questions. [#722](https://github.com/Phaazoid/Godoiosis/issues/722) stands
@@ -3602,7 +3604,7 @@ So the prediction reach (`ThreatField._threat_of`) now has four parts:
 The red grows modestly everywhere.
 
 **Declared limits:**
-- **Placed-blast splash and payload landings.** For an attack placed at range, `Reach.get_all_attack_cells_from` answers the range ring, not the blast area around each aim. No shipped enemy carries either; filed as [#1207](https://github.com/Phaazoid/Godoiosis/issues/1207).
+- ~~**Placed-blast splash and payload landings.**~~ **Closed by [#1207](https://github.com/Phaazoid/Godoiosis/issues/1207) inside #1220 (2026-10-05).** For an attack placed at range, `Reach.get_all_attack_cells_from` answers the range ring, not the blast area around each aim, so `ThreatField._add_splash` dilates the ring by the stamp (and a payload by its knockback, then its own footprint). It had to land with #1220's candidate aims: the AI now drops a blast beside a target, and `_squad_can_reach_anyone` relies on the field covering every aim the AI can take.
 - **A wet unit HOVERING a dry destination beside lit water reads safe until the move is queued.** The field is per cell, not per unit; queued, the field rebuilds with the unit standing there.
 - **A soaking from the enemy's own turn is not chained** (their Splash, then their Zap). No shipped squad pairs the two.
 - **The dormant plan preview's AI still plans against live states**, the positions-only snapshot from #1001. The field it gates is a superset either way.

@@ -291,7 +291,7 @@ func _build_move(unit: Unit, dest: Vector2i) -> MoveAction:
 	var reachable: Dictionary = range_info.reachable
 	if not reachable.has(dest):
 		return null
-	var path: Array[Vector2i] = RulesService.reconstruct_path(range_info.came_from, unit.movement.cell, dest)
+	var path: Array[Vector2i] = RulesService.route_to(unit, range_info, dest, board)
 	var move := MoveAction.new()
 	move.init(unit, path, GridUtils.get_terrain_icon_at_cell(game.grid, dest))
 	return move

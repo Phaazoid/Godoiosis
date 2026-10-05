@@ -262,7 +262,7 @@ func _draw_stranding(leader: Unit, cell: Vector2i, moverange: Dictionary) -> voi
 # A ghost of `unit` standing on `cell` and nothing else -- no arrow, no re-validation -- for a tile the
 # player may look at but not take. The typed local is required through the untyped `game` ref.
 func _show_stand_in(unit: Unit, cell: Vector2i, moverange: Dictionary) -> void:
-	var path := RulesService.reconstruct_path(moverange.came_from, unit.movement.cell, cell)
+	var path: Array[Vector2i] = game.route_to(unit, moverange, cell)
 	var ghost := MoveAction.new()
 	ghost.init(unit, path, GridUtils.get_terrain_icon_at_cell(game.grid, path.back()))
 	var one: Array[MoveAction] = [ghost]
@@ -406,7 +406,7 @@ func _hover_choosing_move(cell: Vector2i) -> void:
 
 	# Live preview: build the move this click WOULD queue and validate the plan against it, so
 	# the arrow and the queue panel show the real consequence before anything is committed.
-	var path := RulesService.reconstruct_path(moverange.came_from, unit.movement.cell, cell)
+	var path: Array[Vector2i] = game.route_to(unit, moverange, cell)
 	var move := MoveAction.new()
 	move.init(unit, path, GridUtils.get_terrain_icon_at_cell(game.grid, path.back()))
 

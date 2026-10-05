@@ -161,7 +161,8 @@ func reserve_units() -> Array[Unit]:
 	return result
 
 func _board() -> BoardContext:
-	return BoardContext.new(grid, live_units(), squad_manager, terrain_states, zone_manager, board_heights, gas_field)
+	return BoardContext.new(grid, live_units(), squad_manager, terrain_states, zone_manager, board_heights, gas_field,
+			mission)
 
 func active_faction() -> Team.Faction:
 	return turn_manager.active_faction()
@@ -817,7 +818,7 @@ func queue_move(handle: String, dest: Vector2i) -> Dictionary:
 	var stranded: Array = _stranding(unit, one).get(dest, [])
 	if not stranded.is_empty():
 		return {"ok": false, "error": "%s can't move to %s: %s could not follow" % [handle, str(dest), _handles(stranded)]}
-	var path := RulesService.reconstruct_path(range_info.came_from, unit.movement.cell, dest)
+	var path := RulesService.route_to(unit, range_info, dest, _board())
 	var move := MoveAction.new()
 	move.init(unit, path, GridUtils.get_terrain_icon_at_cell(grid, dest))
 	var refusal := squad_manager.try_queue_action(unit.squad, move)
