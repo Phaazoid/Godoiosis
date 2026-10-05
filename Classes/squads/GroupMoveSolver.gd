@@ -27,14 +27,14 @@ static func plan(squad: Squad, leader_destination: Vector2i, board: BoardContext
 		return moves
 
 	var leader_reach := RulesService.compute_move_range(leader, board)
-	# Both player callers check this first, but an unreachable goal makes reconstruct_path walk a
+	# Both player callers check this first, but an unreachable goal makes route_to walk a
 	# came_from that has no entry for it — a cascade of engine errors and a null destination.
 	if not stays and not leader_reach.reachable.has(leader_destination):
 		return moves
 
 	if not stays:
 		var leader_move := MoveAction.new()
-		leader_move.init(leader, RulesService.reconstruct_path(leader_reach.came_from, leader_start, leader_destination),
+		leader_move.init(leader, RulesService.route_to(leader, leader_reach, leader_destination, board),
 			GridUtils.get_terrain_icon_at_cell(board.grid, leader_destination))
 		moves.append(leader_move)
 
@@ -104,7 +104,7 @@ static func plan(squad: Squad, leader_destination: Vector2i, board: BoardContext
 		if best == here:
 			continue
 		var member_move := MoveAction.new()
-		member_move.init(member, RulesService.reconstruct_path(reaches[member].came_from, here, best),
+		member_move.init(member, RulesService.route_to(member, reaches[member], best, board),
 			GridUtils.get_terrain_icon_at_cell(board.grid, best))
 		member_move.is_trailing = GridUtils.manhattan_distance(best, leader_destination) \
 			> GridUtils.manhattan_distance(here, leader_start)

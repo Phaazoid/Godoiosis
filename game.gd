@@ -772,7 +772,7 @@ func _click_choosing_move(cell: Vector2i) -> void:
 		return
 	# Physical reach is the click's business; whether the SQUAD permits landing there is queue_action's.
 	if moverange.reachable.keys().has(cell) or moverange.squad_unreachable.keys().has(cell):
-		var path := RulesService.reconstruct_path(moverange.came_from, unit.movement.cell, cell)
+		var path := route_to(unit, moverange, cell)
 		var move := MoveAction.new()
 		move.init(unit, path, GridUtils.get_terrain_icon_at_cell(grid, path.back()))
 		if squad_manager.queue_action(unit.squad, move):
@@ -2239,6 +2239,10 @@ func unit_at_pointer(cell: Vector2i) -> Unit:
 
 func compute_move_range(unit: Unit) -> Dictionary:
 	return RulesService.compute_move_range(unit, _board())
+
+# The path a move to `cell` walks (#920): the arrow and the click both ask this, so they cannot differ.
+func route_to(unit: Unit, moverange: Dictionary, cell: Vector2i) -> Array[Vector2i]:
+	return RulesService.route_to(unit, moverange, cell, _board())
 
 # The reachable cells worth DRAWING: everything the unit can reach except where it already is.
 func get_move_range(result: Dictionary, unit: Unit) -> Array[Vector2i]:
