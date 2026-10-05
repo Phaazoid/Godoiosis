@@ -87,16 +87,16 @@ static func _engagement_beats(standing: bool, safe: bool, hops: int,
 # an enemy standing OUTSIDE its zone because a cell inside the zone can reach it, i.e. a lured
 # sentry, which is the one thing that archetype exists to refuse.
 #
-# OPTIMISTIC for a leader with squadmates, and declared rather than fixed: this is the leader's own
-# unclamped move range, but cohesion (V3) can refuse the group move to a cell the leader alone
-# could stand on, in which case the squad stays put. best_attack_destination has carried the
-# identical optimism since #29, so nothing new is introduced here.
+# A leader with squadmates engages only from a cell its squad can FOLLOW it to (#1220) -- the same
+# refusal the player's Move overlay paints grey (#1069). It was optimistic until then: the leader's
+# unclamped range, so cohesion could refuse the group move and the squad stood still.
 class _Engagement:
 	var from: Vector2i   # the cell we would attack from -- the same one the approach will route to
 	var hops: int        # route to it, the tie-break
 
 
 static func _engageable_enemies(leader: Unit, board: BoardContext, within, allowed) -> Dictionary:
+	allowed = _leader_allowed(leader, board, allowed)
 	var aiming := leader.get_fired_attack()
 	var reach_set: Dictionary = RulesService.compute_move_range(leader, board).reachable.duplicate()
 	reach_set[leader.movement.cell] = true   # standing still counts; compute_move_range omits the start cell
@@ -781,11 +781,14 @@ static func _rescue_urgency(body: Unit) -> int:
 	return body.downed_turns_remaining
 
 
+# A body the squad's own pass is about to make counts (#1220): asked of the plan as it stands, so a
+# squadmate a counter fells this pass is rescued in the same pass -- the player's rule (#124).
 static func _try_rescue(unit: Unit, board: BoardContext, squad_manager: SquadManager) -> bool:
 	if not unit.can_rescue_carry():
 		return false
 	var target: Unit = null
-	for ally in RulesService.adjacent_downed_allies(unit, board):
+	var plan := squad_manager.resolve_plan(unit.squad, board)
+	for ally in RulesService.adjacent_downed_allies(unit, board, plan):
 		if target == null or _rescue_urgency(ally) < _rescue_urgency(target):
 			target = ally   # most urgent clock first; ties keep the earliest
 	if target == null:
@@ -1065,11 +1068,50 @@ static func _exposure_counts(allies: Array[Unit], board: BoardContext, faction: 
 # Where the leader should stand to fight `enemy`: a cell it can already attack from, else the cell
 # furthest along the ROUTE to it. The route targets the nearest STANDABLE firing position, not
 # enemy.movement.cell itself (#127) -- see _nearest_standable_attack_cell for why that distinction
-# is load-bearing.
+# is load-bearing. Only cells its squad can follow it to (#1220).
 static func best_attack_destination(leader: Unit, enemy: Unit, board: BoardContext, allowed = null) -> Vector2i:
 	var aiming := leader.get_fired_attack()
 	var route_target := _nearest_standable_attack_cell(leader, enemy.movement.cell, aiming, board)
-	return _best_approach(leader, enemy.movement.cell, board, allowed, true, route_target)
+	return _best_approach(leader, enemy.movement.cell, board, _leader_allowed(leader, board, allowed), true, route_target)
+
+
+# The leader cells a squad can follow to, as `allowed` narrowed by them; `allowed` itself for a squad
+# of one, which can stand anywhere its leader can.
+static func _leader_allowed(leader: Unit, board: BoardContext, allowed):
+	var follow = _followable(leader.squad, board)
+	if follow == null:
+		return allowed
+	if allowed == null:
+		return follow
+	var both := {}
+	for cell: Vector2i in follow:
+		if allowed.has(cell):
+			both[cell] = true
+	return both
+
+
+# GroupMoveSolver.followable_destinations over the leader's whole range, plus where it stands -- asked
+# ONCE per squad decision and shared by the engagement pick, the approach and the seek, since it is
+# a sweep per member. Kept for the board it was asked on and the cells the squad stood on; a squad of
+# one answers null.
+static var _follow_key := ""
+static var _follow_cells := {}
+
+
+static func _followable(squad: Squad, board: BoardContext):
+	if squad == null or squad.get_members().size() <= 1:
+		return null
+	var leader := squad.get_leader()
+	var key := "%d|%d" % [squad.get_instance_id(), board.get_instance_id()]
+	for member in squad.get_members():
+		key += "|%s" % [member.movement.cell]
+	if key != _follow_key:
+		var cells: Array = RulesService.compute_move_range(leader, board).reachable.keys()
+		cells.append(leader.movement.cell)
+		_follow_cells = GroupMoveSolver.followable_destinations(squad, board, cells)
+		_follow_cells[leader.movement.cell] = true
+		_follow_key = key
+	return _follow_cells
 
 
 # Fights `target`: destination pick -> the seek -> conditional group move -> every member tries a
@@ -1195,9 +1237,9 @@ static func _leader_cells(squad: Squad, leader: Unit, default_destination: Vecto
 		if occupant != null and occupant != leader:
 			continue
 		cells.append(cell)
-	if squad.get_members().size() > 1:
-		var followable := GroupMoveSolver.followable_destinations(squad, board, cells)
-		cells = cells.filter(func(c: Vector2i) -> bool: return followable.has(c) or c == leader.movement.cell)
+	var followable = _followable(squad, board)
+	if followable != null:
+		cells = cells.filter(func(c: Vector2i) -> bool: return followable.has(c))
 	return _search_order(cells, costs, default_destination)
 
 
