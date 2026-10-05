@@ -1,10 +1,10 @@
 # Guard (#414) through the headless Play API, on a REAL painted board.
 #
 # Two things only this surface pins. The `guard` verb itself — every other side-channel main action
-# has one, and without it the AI-facing API cannot express the mechanic at all. And the SPEND in
-# play_session._apply_attack, which is a hand-copied twin of AttackAction.execute's: two
-# implementations of one rule, so the twin needs its own case or it drifts the first time either
-# side is edited (the went_downed trap, CLAUDE.md's execution-order bullet).
+# has one, and without it the AI-facing API cannot express the mechanic at all. And the SPEND on
+# the headless path: play_session._apply_attack calls AttackAction.land for it since #46, the step
+# the game's execute() calls, but only a headless case can see that the headless path reaches it
+# (the went_downed trap, CLAUDE.md's execution-order bullet).
 extends GdUnitTestSuite
 
 const BoardBuilder := preload("res://play/board_builder.gd")

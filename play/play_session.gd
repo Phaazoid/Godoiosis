@@ -3,9 +3,11 @@ extends RefCounted
 # Owns the player's turn vocabulary, driving the REAL SquadManager / TurnManager /
 # PlanResolver / RulesService. No side channels (Law #3). Commands return structured
 # Dictionaries; play/board_view.gd renders them. The headless executor applies the
-# resolved plan's EFFECTS (move = teleport, attack = AttackAction's own state steps, #46;
-# side-channel actions run their REAL execute() — it's pure synchronous logic) —
-# i.e. game.gd.execute_orders minus the animation awaits, so preview == execution (Law #2).
+# resolved plan's EFFECTS through the game's own state code (#46): a move teleports, the walk
+# phase plays ResolvedPlan.walk_moments, an attack runs AttackAction's state steps, the pass end
+# runs SquadManager.settle_downed and enforce_contact, and side-channel actions run their REAL
+# execute() — it's pure synchronous logic. OrderExecutor.execute_orders minus the animation
+# awaits, so preview == execution (Law #2); a shoved body teleports where the game slides it.
 # A mission is scored through the same MissionState the game's MissionController holds (#46).
 
 var grid: TileMapLayer

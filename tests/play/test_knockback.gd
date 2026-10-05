@@ -138,8 +138,8 @@ func test_shoved_enemy_out_of_range_does_not_counter() -> void:
 # --- #259: the void, end to end through the headless executor ---------------------------------
 
 # A shove that ENDS on a VOID tile removes the unit outright -- KILLED in the preview, and the
-# play executor's die() door (the hand-mirrored twin of AttackAction.execute's) actually takes
-# the unit off the board. Falsified against that door being dropped.
+# play executor actually takes the unit off the board, through AttackAction.remove, the die() door
+# the game's execute() calls too (#46). Falsified against that door being dropped.
 func test_a_shove_into_the_void_removes_the_unit() -> void:
 	var s := _mace_board(Vector2i(0, 0), Vector2i(1, 0))
 	var sess = s.sess
