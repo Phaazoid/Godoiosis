@@ -24,10 +24,13 @@ static var _implementations := {
 # that always fires on an unwounded unit, there is no accept/decline left to answer. An enemy gets
 # Crisis by carrying the ability — author it onto the units that should have it.)
 
-# FACTION_DEFAULT resolves to DEFAULT -- it's a sentinel, not an implementation of its own.
+# FACTION_DEFAULT resolves to DEFAULT -- it's a sentinel, not an implementation of its own. The one
+# spelling of that rule: two squads play the same archetype when their effective types match.
+static func effective(t: Type) -> Type:
+	return t if t != Type.FACTION_DEFAULT else DEFAULT
+
 static func resolve(t: Type) -> Callable:
-	var key: Type = t if t != Type.FACTION_DEFAULT else DEFAULT
-	return _implementations[key]
+	return _implementations[effective(t)]
 	
 # Main-action policy (#78): per archetype, an ordered try-list the shared chooser walks --
 # first type that yields a buildable candidate wins -- plus an explicit NEVER set. Every
@@ -68,8 +71,8 @@ const MAIN_ACTION_PRIORITY := {
 # Two of the five items #117 filed came off that list without code: defended-target deprioritization
 # turned out to be REPRICING the resolver already does (an armed ward retargets the hit, so the AI
 # cannot kill through an intact shield and already sees that), and the Sentry watch stance falls out
-# of the fallback walk #726 gave a sentry at its post. Watch-aware pathing and crossing-order smarts
-# are still open -- the first is the same `_approach_beats` danger term the fire/cover work wants.
+# of the fallback walk #726 gave a sentry at its post. Watch-aware pathing closed with #920 and
+# #1220; crossing-order smarts is still open (#117).
 const MAIN_ACTION_NEVER := {
 	Type.RUSHDOWN: [BaseAction.ActionType.RESCUE, BaseAction.ActionType.BURROW,
 			BaseAction.ActionType.CAPTURE, BaseAction.ActionType.GUARD,
@@ -80,5 +83,4 @@ const MAIN_ACTION_NEVER := {
 }
 
 static func main_action_priority(t: Type) -> Array:
-	var key: Type = t if t != Type.FACTION_DEFAULT else DEFAULT
-	return MAIN_ACTION_PRIORITY[key]
+	return MAIN_ACTION_PRIORITY[effective(t)]

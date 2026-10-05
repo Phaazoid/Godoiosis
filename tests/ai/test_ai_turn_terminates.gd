@@ -36,6 +36,7 @@ var game: Node2D
 
 
 func before_test() -> void:
+	AIProfiles.use_fixtures({"": AIProfile.new()})   # #1230: this suite owns its AI profile
 	_main = (load(MAIN_SCENE) as PackedScene).instantiate()
 	_main.name = "Main"
 	get_tree().root.add_child(_main)
@@ -47,6 +48,7 @@ func before_test() -> void:
 
 
 func after_test() -> void:
+	AIProfiles.clear_fixtures()
 	get_tree().root.remove_child(_main)
 	_main.free()
 

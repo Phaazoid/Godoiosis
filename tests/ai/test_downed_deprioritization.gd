@@ -23,6 +23,14 @@ const BB := preload("res://play/board_builder.gd")
 const ATTACK_ONLY: Array = [BaseAction.ActionType.ATTACK]
 
 
+func before_test() -> void:
+	AIProfiles.use_fixtures({"": AIProfile.new()})   # #1230: this suite owns its AI profile
+
+
+func after_test() -> void:
+	AIProfiles.clear_fixtures()
+
+
 func _build_board(size := Rect2i(0, 0, 8, 3)) -> Dictionary:
 	var board: Dictionary = BB.build(self)
 	auto_free(board.root)

@@ -2,7 +2,7 @@
 
 **Status: THE ARC IS COMPLETE ([#53](https://github.com/Phaazoid/Godoiosis/issues/53), closed 2026-09-09).** Five slices, all merged: the recorder + replay-grade capture (#831), the notice (#840), the replay viewer (#843), the quit record (#845), and transport + storage (#848, with #849 and #850 behind it). Filed 2026-07-14, parked, and unparked by the dev 2026-09-07 with *"now that we've started to close the loop of a player playing a mission, we can start on it."* The polish it deliberately left is [#856](https://github.com/Phaazoid/Godoiosis/issues/856).
 
-**Canon checked through [#1160](https://github.com/Phaazoid/Godoiosis/issues/1160) (2026-09-29); #46's replayed gear acts folded in 2026-10-04; #508's soak rows folded in 2026-10-04.**
+**Canon checked through [#1160](https://github.com/Phaazoid/Godoiosis/issues/1160) (2026-09-29); #1230's roster `ai_profile` and recorded AI joins folded in 2026-10-05; #46's replayed gear acts folded in 2026-10-04; #508's soak rows folded in 2026-10-04.**
 
 **Not to be confused with [`playtest-experiments.md`](../playtest-experiments.md)**, whose name is one word away and whose subject is different: that one is how to drive an AI agent through the headless bridge and get a measurement you can believe. This one is the record a HUMAN's played mission leaves behind. Neither reads the other's data.
 
@@ -93,7 +93,7 @@ The law above has exactly one exception and it is drawn where **there is nothing
 
 ## What is recorded, and what is deliberately not
 
-Recorded: the mission's start (roster, scenario, build, install and session ids, **and `player_name` since [#1049](https://github.com/Phaazoid/Godoiosis/issues/1049) — see *Who a run is from* below**), every turn's pre-tick vitals, every resolution pass with its committed queue and its per-hit outcomes, the four decision channels a replay needs (a rescue's chosen `haul_to`, the squad verbs, mid-battle gear changes, a `dev_touched` flag), the lifecycle events, and the ending.
+Recorded: the mission's start (roster -- each unit's AI profile among it since [#1230](https://github.com/Phaazoid/Godoiosis/issues/1230), `""` meaning unassigned, which plays Hard -- scenario, build, install and session ids, **and `player_name` since [#1049](https://github.com/Phaazoid/Godoiosis/issues/1049) — see *Who a run is from* below**), every turn's pre-tick vitals, every resolution pass with its committed queue and its per-hit outcomes, the four decision channels a replay needs (a rescue's chosen `haul_to`, the squad verbs -- an AI unit regrouping included since #1230, which a replay has to see because it plays with the AI off -- mid-battle gear changes, a `dev_touched` flag), the lifecycle events, and the ending.
 
 **A PAYLOAD hit carries `payload_depth`** ([#1058](https://github.com/Phaazoid/Godoiosis/issues/1058), 2026-09-23): 1 for a payload a fired attack dropped, 2 for that payload's own, absent on every hit a unit fired. Nothing else on the hit record can tell the two apart -- a payload shares its thrower as `actor` and its parent's list as `kind` -- so without the field "how much damage do payloads do" would be a question needing a new build and a new cohort, which is the one thing this record exists to avoid.
 

@@ -11,6 +11,8 @@ class_name BalancedArchetype
 # turn. The action list is Hold's and Sentry's whole list, so it rescues, watches and guards.
 static func take_squad_turn(squad: Squad, board: BoardContext, squad_manager: SquadManager) -> void:
 	var leader := squad.get_leader()
+	if AITactics.regroup_walk(squad, board, squad_manager):   # #1230: a stray with nobody to fight
+		return
 	var enemy := AITactics.choose_balanced_target(leader, board, squad_manager)
 	if enemy != null:
 		AITactics.engage(squad, enemy, board, squad_manager, null, null, true)

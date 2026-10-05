@@ -210,6 +210,7 @@ func eject(unit: Unit, cause: LeaveCause):
 	if unit.squad != null:
 		archetype = unit.squad.archetype
 		zone_name = unit.squad.zone_name
+		unit.left_squad = unit.squad   # #1230: an AI stray rejoins this one first
 	_detach_from_current_squad(unit, cause)
 	create_squad(unit, archetype, zone_name)
 
@@ -1289,8 +1290,8 @@ func _plan_has_invalid_move(squad: Squad) -> bool:
 	return false
 
 func queue_group_move(squad: Squad, leader_destination: Vector2i, board: BoardContext, allowed_cells = null,
-		pinned: Dictionary = {}, hazards: Dictionary = {}) -> bool:
-	var moves := GroupMoveSolver.plan(squad, leader_destination, board, allowed_cells, pinned, hazards)
+		pinned: Dictionary = {}, hazards: Dictionary = {}, direct: Dictionary = {}) -> bool:
+	var moves := GroupMoveSolver.plan(squad, leader_destination, board, allowed_cells, pinned, hazards, direct)
 
 	# Nothing to author -- plan() refuses to path a leader to a goal it cannot reach. Bail BEFORE the
 	# batch opens rather than falling into the rollback below, which would cancel moves this call

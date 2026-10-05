@@ -1,0 +1,11 @@
+[gd_resource type="Resource" script_class="AIProfile" format=3 uid="uid://bvpg7e0w2dytb"]
+
+[ext_resource type="Script" uid="uid://72t3flp0oier" path="res://Classes/ai/AIProfile.gd" id="1_2nh8t"]
+
+[resource]
+script = ExtResource("1_2nh8t")
+values_splits = false
+sets_up_combos = false
+seeks = 1
+sees_crisis = false
+values_limbs = false

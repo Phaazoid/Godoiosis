@@ -99,6 +99,7 @@ func _author() -> String:
 	_spawn(Team.Faction.PLAYER, Vector2i(0, 2))
 	var sentry := _spawn(Team.Faction.ENEMY, Vector2i(WIDTH - 1, 1))
 	var lookout := _spawn(Team.Faction.ENEMY, Vector2i(WIDTH - 1, 2))
+	lookout.ai_profile = "TwoHostsBand"   # #1230: carried verbatim, whether or not the file exists
 	game.squad_manager.join_squad(lookout, sentry.squad)
 	assert_bool(sentry.is_leader()).override_failure_message("precondition: the sentry does not lead its squad").is_true()
 	sentry.squad.squad_name = "Watch"
@@ -143,7 +144,7 @@ static func _placement_picture(units: Array[Unit]) -> Array:
 	var by_cell := {}
 	for unit: Unit in units:
 		var squad: Squad = unit.squad
-		by_cell[unit.movement.cell] = [unit.movement.cell, unit.must_survive, unit.is_leader(),
+		by_cell[unit.movement.cell] = [unit.movement.cell, unit.must_survive, unit.ai_profile, unit.is_leader(),
 				squad.squad_name, AIArchetype.Type.keys()[squad.archetype], squad.zone_name, squad.home_cell]
 	var cells: Array = by_cell.keys()
 	cells.sort()

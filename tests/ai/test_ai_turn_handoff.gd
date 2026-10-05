@@ -18,6 +18,7 @@ var game: Node2D
 
 
 func before_test() -> void:
+	AIProfiles.use_fixtures({"": AIProfile.new()})   # #1230: this suite owns its AI profile
 	_main = (load(MAIN_SCENE) as PackedScene).instantiate()
 	_main.name = "Main"
 	get_tree().root.add_child(_main)
@@ -29,6 +30,7 @@ func before_test() -> void:
 
 
 func after_test() -> void:
+	AIProfiles.clear_fixtures()
 	get_tree().root.remove_child(_main)
 	_main.free()
 
@@ -41,12 +43,13 @@ func _spawn(faction: Team.Faction, cell: Vector2i) -> Unit:
 
 
 # Two enemy squads a corridor's length from the player, the enemy AI-controlled and its turn begun
-# through the real door.
+# through the real door. Five cells apart, past a leader's reach, so the turn's regroup pass (#1230)
+# leaves them two squads.
 func _enemy_turn() -> Array[Squad]:
 	for x in range(14):
 		game.grid.set_cell(Vector2i(x, 0), GRASS_SOURCE, GRASS_ATLAS)
 	_spawn(Team.Faction.PLAYER, Vector2i(0, 0))
-	var first := _spawn(Team.Faction.ENEMY, Vector2i(11, 0))
+	var first := _spawn(Team.Faction.ENEMY, Vector2i(8, 0))
 	var second := _spawn(Team.Faction.ENEMY, Vector2i(13, 0))
 	game.ai_controller.set_ai_factions([Team.Faction.ENEMY] as Array[Team.Faction])
 	game.turn_manager.set_active_faction(Team.Faction.ENEMY)
@@ -85,3 +88,20 @@ func test_every_order_of_an_ai_turn_is_queued_on_a_locked_board() -> void:
 	assert_int(queued[0]).override_failure_message("fixture: the enemy turn queued nothing").is_greater(0)
 	assert_int(unlocked.size()).override_failure_message(
 			"orders were queued while the board was the player's: %s" % [unlocked]).is_equal(0)
+
+
+# #1230: the game's turn regroups before any squad plans -- two loose enemies in each other's reach
+# go into the turn as one squad.
+func test_the_faction_turn_regroups_loose_units_before_planning() -> void:
+	for x in range(14):
+		game.grid.set_cell(Vector2i(x, 0), GRASS_SOURCE, GRASS_ATLAS)
+	_spawn(Team.Faction.PLAYER, Vector2i(0, 0))
+	var a := _spawn(Team.Faction.ENEMY, Vector2i(11, 0))
+	var b := _spawn(Team.Faction.ENEMY, Vector2i(12, 0))
+	game.ai_controller.set_ai_factions([Team.Faction.ENEMY] as Array[Team.Faction])
+	game.turn_manager.set_active_faction(Team.Faction.ENEMY)
+	await await_idle_frame()
+
+	await game.start_faction_turn(Team.Faction.ENEMY)
+
+	assert_object(b.squad).override_failure_message("the turn never regrouped its loose units").is_same(a.squad)

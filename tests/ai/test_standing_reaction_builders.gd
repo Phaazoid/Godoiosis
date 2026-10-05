@@ -21,6 +21,14 @@ const WATCH_ONLY: Array = [BaseAction.ActionType.OVERWATCH]
 const GUARD_ONLY: Array = [BaseAction.ActionType.GUARD]
 
 
+func before_test() -> void:
+	AIProfiles.use_fixtures({"": AIProfile.new()})   # #1230: this suite owns its AI profile
+
+
+func after_test() -> void:
+	AIProfiles.clear_fixtures()
+
+
 func _board_of(size := Rect2i(0, 0, 8, 8)) -> Dictionary:
 	var board: Dictionary = BB.build(self)
 	auto_free(board.root)

@@ -36,6 +36,14 @@ const A_CELL := Vector2i(0, 0)
 const B_CELL := Vector2i(1, 1)
 
 
+func before_test() -> void:
+	AIProfiles.use_fixtures({"": AIProfile.new()})   # #1230: this suite owns its AI profile
+
+
+func after_test() -> void:
+	AIProfiles.clear_fixtures()
+
+
 func _build_board(size := Rect2i(0, 0, 6, 6)) -> Dictionary:
 	var board: Dictionary = BB.build(self)
 	auto_free(board.root)
@@ -263,6 +271,27 @@ func test_a_damageless_soak_is_queued_first_because_the_shock_behind_it_electroc
 			"the shock landed dry (%d) -- the soak did not reach it" % wet).is_greater(dry)
 
 
+# #1230: with combos off the soak is worth nothing on its own, so the shock goes first, dry.
+func test_a_squad_that_does_not_set_up_combos_fires_the_shock_first() -> void:
+	var plain := AIProfile.new()
+	plain.sets_up_combos = false
+	AIProfiles.use_fixtures({"": plain})
+	var board: Dictionary = _build_board()
+	var pair := _pair(board)
+	pair[0].equipped_weapon = _elemental_weapon(Elemental.Element.WATER, 0, true)
+	pair[1].equipped_weapon = _elemental_weapon(Elemental.Element.SHOCK, 3)
+	var _foe: Unit = _spawn(board, ENEMY, A_CELL, false)
+
+	AITactics.queue_main_actions_for_squad(pair[0].squad, _context(board), board.squad_manager)
+
+	var ordered := _attacks_in_order(pair[0].squad)
+	assert_bool(ordered.is_empty()).override_failure_message("fixture: the squad queued no attack").is_false()
+	if ordered.is_empty():
+		return
+	assert_object(ordered[0].actor).override_failure_message(
+			"a squad that does not set up combos still opened with the soak").is_same(pair[1])
+
+
 # --- Law #1: the tie-break is declared, not incidental -------------------------------------------
 
 # Every candidate scores alike here, so the ORDER is the whole answer, and it has to be declared
@@ -438,6 +467,24 @@ func test_between_equal_targets_the_one_that_cannot_answer_is_chosen() -> void:
 	assert_int(_aim_count(attacker.squad, harmless.movement.cell)).override_failure_message(
 			"the attack pick took the target that hits back, on an otherwise even trade").is_equal(1)
 	assert_int(_aim_count(attacker.squad, answerer.movement.cell)).is_equal(0)
+
+
+# #1230: a unit whose profile does not weigh counters treats the two as equal, so the tie falls to
+# the declared order -- the answerer, which stands first.
+func test_a_unit_that_does_not_weigh_counters_lets_the_order_decide() -> void:
+	var reckless := AIProfile.new()
+	reckless.weighs_counters = false
+	AIProfiles.use_fixtures({"": reckless})
+	var board: Dictionary = _build_board()
+	var attacker: Unit = _spawn(board, PLAYER, M1_CELL)
+	var answerer: Unit = _spawn(board, ENEMY, A_CELL)
+	var harmless: Unit = _spawn(board, ENEMY, Vector2i(2, 0), false)
+
+	AITactics.queue_main_actions_for_squad(attacker.squad, _context(board), board.squad_manager)
+
+	assert_int(_aim_count(attacker.squad, answerer.movement.cell)).override_failure_message(
+			"a unit that ignores counters still avoided the one that hits back").is_equal(1)
+	assert_int(_aim_count(attacker.squad, harmless.movement.cell)).is_equal(0)
 
 
 # --- No floor: the score ORDERS, it never gates (#711, dev 2026-09-02) ---------------------------
@@ -665,7 +712,7 @@ func test_a_candidate_list_is_built_against_the_plan_not_a_rejected_hypothetical
 			% str(_attack_aims(a.squad))).is_equal(1)
 
 
-# --- Crisis, which the AI does not see (#708) ---------------------------------------------------
+# --- Crisis: blind by profile (#708), or seen (#1230) -------------------------------------------
 
 # Arm the gambit the way content does, mirroring tests/rules/test_crisis_preview.gd's helper: the
 # Berserker job's pool carries the ability, so this exercises jobs -> JobCatalog -> ability kit
@@ -676,10 +723,10 @@ func _arm_crisis(unit: Unit) -> void:
 		.override_failure_message("fixture: the Berserker job did not arm Crisis").is_true()
 
 
-# THE AI IS BLIND TO CRISIS (dev ruling, 2026-09-04): a hit the ladder sentences to CRISIS is priced
-# at the damage it WOULD have done, and at the removal it WOULD have earned, if the gambit did not
-# exist. His words: "the ai simply won't see crisis mode until they have to react to a unit
-# currently in it."
+# A UNIT BLIND TO CRISIS (#708, dev 2026-09-04; a profile notch since #1230) prices a hit the ladder
+# sentences to CRISIS at the damage it WOULD have done, and at the removal it WOULD have earned, if
+# the gambit did not exist. His words: "the ai simply won't see crisis mode until they have to react
+# to a unit currently in it."
 #
 # It scored (0,0,0) before -- the damage was skipped outright and CRISIS threads ACTIVE, so no
 # removal either -- which under #711's no-bar rule is not a refusal but a losing candidate: any
@@ -694,7 +741,10 @@ func _arm_crisis(unit: Unit) -> void:
 # The armed one is spawned FIRST so it leads board order: after the fix both candidates score
 # identically and the tie falls to that order, so the assertion can only pass if the scores really
 # tie -- it cannot be satisfied by a preference that happens to point the right way.
-func test_a_crisis_armed_target_is_priced_like_any_other_kill() -> void:
+func test_a_unit_blind_to_crisis_prices_the_berserker_like_any_other_kill() -> void:
+	var blind := AIProfile.new()
+	blind.sees_crisis = false
+	AIProfiles.use_fixtures({"": blind})
 	var board: Dictionary = _build_board()
 	var attacker: Unit = _spawn(board, PLAYER, M1_CELL)
 	attacker.equipped_weapon = H.make_weapon(5)   # power 5 + fixture STR 5 = MHP 10: fells exactly, no overkill
@@ -723,6 +773,80 @@ func test_a_crisis_armed_target_is_priced_like_any_other_kill() -> void:
 	assert_that(rung).override_failure_message(
 			"fixture: the queued hit sentenced the Berserker to %s, not CRISIS -- this measured an ordinary kill"
 			% ResolvedOutcome.Lethality.keys()[rung]).is_equal(ResolvedOutcome.Lethality.CRISIS)
+
+
+# A UNIT THAT SEES CRISIS (#1230, dev 2026-10-05) prices the same hit truthfully: the Berserker stands
+# straight back up, so the hit is the HP it takes and NO removal. The other target is sturdy, so it is
+# no removal either and only the damage separates them -- the full hit on it beats the few HP the
+# gambit gives up. A unit counting the gambit as a removal would take the Berserker.
+func test_a_unit_that_sees_crisis_does_not_count_the_gambit_as_a_removal() -> void:
+	var board: Dictionary = _build_board()
+	var attacker: Unit = _spawn(board, PLAYER, M1_CELL)
+	attacker.equipped_weapon = H.make_weapon(5)
+	var armed: Unit = BB.spawn(board, H.make_unit_data({}, ENEMY), A_CELL)
+	_arm_crisis(armed)
+	var sturdy: Unit = BB.spawn(board, H.make_unit_data({Stats.Stat.MHP: 40}, ENEMY), B_CELL)
+
+	AITactics.queue_main_actions_for_squad(attacker.squad, _context(board), board.squad_manager)
+
+	assert_int(_aim_count(attacker.squad, B_CELL)).override_failure_message(
+			"a unit that sees Crisis still swung into the gambit over the full hit at %s; aims were %s" % [
+				str(sturdy.movement.cell), str(_attack_aims(attacker.squad))]).is_equal(1)
+	assert_int(_aim_count(attacker.squad, A_CELL)).is_equal(0)
+
+
+# What a counter that sets OUR unit's Crisis off costs us is the HP it really takes, the same pricing
+# as a hit we land: the attacker is armed, and the defender's reply would down it.
+func test_a_counter_that_sets_off_our_crisis_costs_the_hp_it_takes() -> void:
+	var board: Dictionary = _build_board()
+	var attacker: Unit = BB.spawn(board, H.make_unit_data({Stats.Stat.MHP: 10}, PLAYER), M1_CELL)
+	attacker.equipped_weapon = H.make_weapon()
+	_arm_crisis(attacker)
+	var defender: Unit = BB.spawn(board, H.make_unit_data({Stats.Stat.MHP: 40}, ENEMY), A_CELL)
+	defender.equipped_weapon = H.make_weapon(5)
+	var ctx := _context(board)
+	var swing: Array[BaseAction] = [H.stamped_attack(attacker, defender)]
+	var plan: ResolvedPlan = board.squad_manager.resolve_hypothetical(attacker.squad, swing, ctx)
+
+	var reply: CounterAttackAction = null
+	for c in plan.counters:
+		if c.target == attacker and c.resolved != null:
+			reply = c
+	assert_object(reply).override_failure_message("fixture: the defender did not counter").is_not_null()
+	if reply == null:
+		return
+	assert_that(reply.resolved.lethality).override_failure_message(
+			"fixture: the counter must set the attacker's Crisis off").is_equal(ResolvedOutcome.Lethality.CRISIS)
+	var lost := reply.resolved.hp_before - reply.resolved.target_hp_after
+	assert_int(reply.resolved.damage).override_failure_message(
+			"fixture: the raw damage must differ from the HP lost, or this measures nothing").is_not_equal(lost)
+
+	var seen := AITactics._score_plan(PLAYER, plan, null, AIProfile.new())
+	assert_int(seen.taken).is_equal(lost)
+	var blind_profile := AIProfile.new()
+	blind_profile.sees_crisis = false
+	assert_int(AITactics._score_plan(PLAYER, plan, null, blind_profile).taken).is_equal(reply.resolved.damage)
+
+
+# A drowning that sets Crisis off is priced the same way. The row is built by hand: the arithmetic is
+# what is under test, and a melt that drowns a Crisis-armed unit is a long way to walk for one sum.
+func test_a_drowning_that_sets_off_crisis_is_priced_at_the_hp_it_takes() -> void:
+	var board: Dictionary = _build_board()
+	var victim: Unit = BB.spawn(board, H.make_unit_data({Stats.Stat.MHP: 20}, ENEMY), A_CELL)
+	var sink := SinkAction.new()
+	sink.actor = victim
+	sink.resolved = ResolvedOutcome.new()
+	sink.resolved.lethality = ResolvedOutcome.Lethality.CRISIS
+	sink.resolved.hp_before = 20
+	sink.resolved.target_hp_after = Abilities.CRISIS_REVIVE_HP
+	sink.resolved.damage = 25
+	var plan := ResolvedPlan.new()
+	plan.sinks.append(sink)
+
+	assert_int(AITactics._score_plan(PLAYER, plan, null, AIProfile.new()).damage) 		.is_equal(20 - Abilities.CRISIS_REVIVE_HP)
+	var blind_profile := AIProfile.new()
+	blind_profile.sees_crisis = false
+	assert_int(AITactics._score_plan(PLAYER, plan, null, blind_profile).damage) 		.override_failure_message("a blind unit prices the raw damage, capped at the HP the victim had").is_equal(20)
 
 
 # A HEALED body is still worth +1 (#1002, keeping #720's ruling literal). That "+1" was never a
@@ -815,6 +939,26 @@ func test_a_zero_damage_shove_that_breaks_a_squad_outranks_a_hit() -> void:
 	assert_object(queued[0].actor).override_failure_message(
 			"the hit was queued first -- the split scored nothing, or less than damage: %s"
 			% str(_attack_aims(ours[0].squad))).is_same(ours[1])
+
+
+# #1230: a squad that does not value splits takes the hit first; the shove is worth nothing to it.
+func test_a_squad_that_does_not_value_splits_takes_the_hit_first() -> void:
+	var blunt := AIProfile.new()
+	blunt.values_splits = false
+	AIProfiles.use_fixtures({"": blunt})
+	var board: Dictionary = _build_board()
+	var _enemies := _stretched_enemy_pair(board)
+	var ours := _hitter_and_breaker(board)
+	var _solo: Unit = _spawn(board, ENEMY, Vector2i(3, 3))
+
+	AITactics.queue_main_actions_for_squad(ours[0].squad, _context(board), board.squad_manager)
+
+	var queued := _attacks_in_order(ours[0].squad)
+	assert_bool(queued.is_empty()).is_false()
+	if queued.is_empty():
+		return
+	assert_object(queued[0].actor).override_failure_message(
+			"a squad that ignores splits still opened with the shove").is_same(ours[0])
 
 
 func test_a_removal_still_outranks_a_split() -> void:

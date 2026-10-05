@@ -17,6 +17,14 @@ const ENEMY := Team.Faction.ENEMY
 const ZONE := "post"
 
 
+func before_test() -> void:
+	AIProfiles.use_fixtures({"": AIProfile.new()})   # #1230: this suite owns its AI profile
+
+
+func after_test() -> void:
+	AIProfiles.clear_fixtures()
+
+
 func _build_board(size: Rect2i) -> Dictionary:
 	var board: Dictionary = BB.build(self)
 	auto_free(board.root)
@@ -137,6 +145,32 @@ func test_a_member_with_nobody_to_hit_walks_beside_a_body_and_rescues_it() -> vo
 	assert_bool(rescued).override_failure_message("the healer walked to the body and did not rescue it").is_true()
 
 
+# #1230: a member whose profile does not walk to rescue stays where the formation puts it.
+func test_a_member_that_does_not_rescue_walk_leaves_the_body() -> void:
+	var cold := AIProfile.new()
+	cold.rescue_walk = false
+	AIProfiles.use_fixtures({"": cold})
+	var board := _build_board(Rect2i(0, 0, 8, 6))
+	for x in range(0, 7):
+		for y in range(0, 5):
+			(board.zone_manager as ZoneManager).paint_cell(ZONE, ZoneManager.Kind.PATROL, Vector2i(x, y))
+	var leader := _spawn(board, ENEMY, Vector2i(1, 1))
+	var healer := _spawn(board, ENEMY, Vector2i(1, 2))
+	healer.equipped_weapon = _healer_weapon()
+	board.squad_manager.join_squad(healer, leader.squad)
+	leader.squad.archetype = AIArchetype.Type.SENTRY
+	leader.squad.zone_name = ZONE
+	leader.squad.home_cell = leader.movement.cell
+	var body := _spawn(board, ENEMY, Vector2i(3, 4))
+	body.force_down()
+	_spawn(board, PLAYER, Vector2i(5, 1), {Stats.Stat.MHP: 40})
+
+	_plan(leader.squad, board)
+
+	assert_bool(_adjacent(healer.get_projected_destination(), body.get_projected_destination())) \
+		.override_failure_message("a member that does not rescue-walk still walked to the body").is_false()
+
+
 # --- Ruling 5: nothing to fire ---------------------------------------------------------------------
 
 # A lone unit with nothing to fire used to walk up to an enemy and stand there. It falls back to a
@@ -172,6 +206,42 @@ func test_a_dry_member_falls_back_to_a_cell_nobody_threatens() -> void:
 
 	assert_bool(field.cells.has(dry.get_projected_destination())).override_failure_message(
 			"the dry member ended at %s, beside the enemy" % [dry.get_projected_destination()]).is_false()
+
+
+# #1230: a unit whose profile does not back off walks up to the enemy anyway.
+func test_a_lone_unit_that_does_not_back_off_walks_into_reach() -> void:
+	var bold := AIProfile.new()
+	bold.backs_off_when_dry = false
+	AIProfiles.use_fixtures({"": bold})
+	var board := _build_board(Rect2i(0, 0, 16, 3))
+	var dry := _spawn(board, ENEMY, Vector2i(6, 1))
+	dry.equipped_weapon = null
+	_spawn(board, PLAYER, Vector2i(2, 1))
+	var field := ThreatField.build(_ctx(board), ENEMY)
+
+	_plan(dry.squad, board)
+
+	assert_bool(field.cells.has(dry.get_projected_destination())).override_failure_message(
+			"a unit that does not back off still kept out of reach, at %s" % [dry.get_projected_destination()]).is_true()
+
+
+func test_a_dry_member_that_does_not_back_off_keeps_its_formation_cell() -> void:
+	var bold := AIProfile.new()
+	bold.backs_off_when_dry = false
+	AIProfiles.use_fixtures({"": bold})
+	var board := _build_board(Rect2i(0, 0, 14, 6))
+	var leader := _spawn(board, ENEMY, Vector2i(2, 2), {Stats.Stat.DEX: 30})
+	var dry := _spawn(board, ENEMY, Vector2i(3, 3), {Stats.Stat.DEX: 30})
+	dry.equipped_weapon = null
+	board.squad_manager.join_squad(dry, leader.squad)
+	var target := _spawn(board, PLAYER, Vector2i(7, 2), {Stats.Stat.MHP: 40})
+	target.squad.archetype = AIArchetype.Type.HOLD
+	var field := ThreatField.build(_ctx(board), ENEMY)
+
+	_plan(leader.squad, board)
+
+	assert_bool(field.cells.has(dry.get_projected_destination())).override_failure_message(
+			"a dry member that does not back off still left its formation cell").is_true()
 
 
 # --- Rulings 15 and 19: hazards ---------------------------------------------------------------------
@@ -240,3 +310,103 @@ func test_a_member_is_never_placed_on_a_burning_formation_cell() -> void:
 
 	assert_that(healer.get_projected_destination()).override_failure_message(
 			"the healer was placed on the burning tile").is_not_equal(Vector2i(5, 2))
+
+
+# --- #1230: avoids_hazards off -- the hazard is ordinary ground ------------------------------------
+
+func _heedless() -> void:
+	var heedless := AIProfile.new()
+	heedless.avoids_hazards = false
+	AIProfiles.use_fixtures({"": heedless})
+
+
+func test_a_leader_that_ignores_hazards_ends_on_the_burning_tile() -> void:
+	_heedless()
+	var board := _build_board(Rect2i(0, 0, 12, 5))
+	var leader := _spawn(board, ENEMY, Vector2i(2, 2), {Stats.Stat.DEX: 30})
+	_spawn(board, PLAYER, Vector2i(6, 2), {Stats.Stat.MHP: 40})
+	_burn(board, Vector2i(5, 2))
+
+	_plan(leader.squad, board)
+
+	assert_that(leader.get_projected_destination()).override_failure_message(
+			"a leader that ignores hazards still stepped round the fire").is_equal(Vector2i(5, 2))
+
+
+func test_a_leader_that_ignores_hazards_ends_in_the_watch_lane() -> void:
+	_heedless()
+	var board := _build_board(Rect2i(0, 0, 12, 5))
+	var leader := _spawn(board, ENEMY, Vector2i(2, 2), {Stats.Stat.DEX: 30})
+	var watcher := _spawn(board, PLAYER, Vector2i(6, 2), {Stats.Stat.MHP: 40})
+	var lane: Array[Vector2i] = [Vector2i(5, 2)]
+	var attack: AttackData = (watcher.get_equipped_weapon() as WeaponInstance).template.main_attack
+	watcher.watch = Watch.arm(watcher, watcher.movement.cell, Vector2i(5, 2), lane, attack)
+
+	_plan(leader.squad, board)
+
+	assert_that(leader.get_projected_destination()).override_failure_message(
+			"a leader that ignores hazards still stepped round the watch").is_equal(Vector2i(5, 2))
+
+
+func test_a_member_that_ignores_hazards_takes_its_burning_formation_cell() -> void:
+	_heedless()
+	var board := _build_board(Rect2i(0, 0, 14, 5))
+	var leader := _spawn(board, ENEMY, Vector2i(2, 2), {Stats.Stat.DEX: 30})
+	var healer := _spawn(board, ENEMY, Vector2i(1, 2), {Stats.Stat.DEX: 30})
+	healer.equipped_weapon = _healer_weapon()
+	board.squad_manager.join_squad(healer, leader.squad)
+	_spawn(board, PLAYER, Vector2i(7, 2), {Stats.Stat.MHP: 40})
+	_burn(board, Vector2i(5, 2))
+
+	_plan(leader.squad, board)
+
+	assert_that(healer.get_projected_destination()).override_failure_message(
+			"a member that ignores hazards still stepped off its formation cell").is_equal(Vector2i(5, 2))
+
+
+# --- #1230: routes_around_watches -- the AI's walk goes round a watch, or straight through it -------
+
+# The only enemy stands at the end of a corridor and watches the cell the straight walk crosses; one
+# row over is a detour that still fits in the leader's move. It fights from (6, 2) either way -- what
+# differs is the path.
+const LANE_CELL := Vector2i(4, 2)
+
+func _watched_corridor() -> Dictionary:
+	var board := _build_board(Rect2i(0, 0, 10, 5))
+	var leader := _spawn(board, ENEMY, Vector2i(2, 2), {Stats.Stat.DEX: 30})
+	var target := _spawn(board, PLAYER, Vector2i(7, 2), {Stats.Stat.MHP: 40})
+	target.squad.archetype = AIArchetype.Type.HOLD
+	var lane: Array[Vector2i] = [LANE_CELL]
+	var attack: AttackData = (target.get_equipped_weapon() as WeaponInstance).template.main_attack
+	target.watch = Watch.arm(target, target.movement.cell, LANE_CELL, lane, attack)
+	return {"board": board, "leader": leader}
+
+
+func _walked(leader: Unit) -> Array[Vector2i]:
+	for action in leader.squad.action_queue:
+		if action is MoveAction and action.actor == leader:
+			return (action as MoveAction).path
+	var none: Array[Vector2i] = []
+	return none
+
+
+func test_an_ai_walk_routes_round_a_watch() -> void:
+	var s := _watched_corridor()
+	var leader: Unit = s.leader
+	_plan(leader.squad, s.board)
+	var path := _walked(leader)
+	assert_bool(path.is_empty()).override_failure_message("fixture: the leader did not move").is_false()
+	assert_bool(path.has(LANE_CELL)).override_failure_message(
+			"the AI walked through the watch with a detour in reach: %s" % [path]).is_false()
+
+
+func test_an_ai_walk_that_ignores_watches_takes_the_short_way_through() -> void:
+	var direct := AIProfile.new()
+	direct.routes_around_watches = false
+	AIProfiles.use_fixtures({"": direct})
+	var s := _watched_corridor()
+	var leader: Unit = s.leader
+	_plan(leader.squad, s.board)
+	var path := _walked(leader)
+	assert_bool(path.has(LANE_CELL)).override_failure_message(
+			"a unit that ignores watches still detoured: %s" % [path]).is_true()

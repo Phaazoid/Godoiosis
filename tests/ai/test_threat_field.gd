@@ -27,6 +27,14 @@ class _WaterContext extends BoardContext:
 		return Terrain.Kind.WATER if water.has(cell) else super.terrain_kind_at(cell)
 
 
+func before_test() -> void:
+	AIProfiles.use_fixtures({"": AIProfile.new()})   # #1230: this suite owns its AI profile
+
+
+func after_test() -> void:
+	AIProfiles.clear_fixtures()
+
+
 func _build_board() -> Dictionary:
 	var board: Dictionary = BB.build(self)
 	auto_free(board.root)

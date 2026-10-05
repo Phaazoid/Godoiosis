@@ -29,6 +29,14 @@ const HOLE := Vector2i(4, 5)
 const A_START := Vector2i(2, 4)
 
 
+func before_test() -> void:
+	AIProfiles.use_fixtures({"": AIProfile.new()})   # #1230: this suite owns its AI profile
+
+
+func after_test() -> void:
+	AIProfiles.clear_fixtures()
+
+
 func _board(size := Rect2i(0, 0, 8, 8), hole := HOLE) -> Dictionary:
 	var board: Dictionary = BB.build(self)
 	auto_free(board.root)
@@ -103,6 +111,30 @@ func test_a_leader_steps_to_the_cell_that_shoves_its_target_into_a_hole() -> voi
 		.override_failure_message("the plan does not remove the target").is_true()
 
 
+# #1230: a leader whose profile never seeks stays on the cell the approach gives it.
+func test_a_leader_that_never_seeks_keeps_the_approach_cell() -> void:
+	var still := AIProfile.new()
+	still.seeks = AIProfile.Seek.NONE
+	AIProfiles.use_fixtures({"": still})
+	var board := _hole_board()
+	var attacker: Unit = board.attacker
+	_plan(attacker, board)
+	assert_that(attacker.get_projected_destination()) \
+		.override_failure_message("a leader that never seeks still walked to the shove cell").is_equal(W)
+
+
+# ...and the KILLS notch still goes looking for a removal.
+func test_a_leader_that_seeks_only_kills_still_walks_to_the_removal() -> void:
+	var killer := AIProfile.new()
+	killer.seeks = AIProfile.Seek.KILLS
+	AIProfiles.use_fixtures({"": killer})
+	var board := _hole_board()
+	var attacker: Unit = board.attacker
+	_plan(attacker, board)
+	assert_that(attacker.get_projected_destination()) \
+		.override_failure_message("the KILLS notch stopped seeking a removal").is_equal(N)
+
+
 # The rule's other half: a cell that only adds DAMAGE never pulls anyone off their cell. Here the
 # shove from N drops the target off a ledge -- it hurts, it does not remove.
 func test_a_shove_that_only_hurts_is_not_worth_a_detour() -> void:
@@ -146,6 +178,24 @@ func test_a_cell_that_breaks_a_squad_is_sought() -> void:
 
 	assert_that(attacker.get_projected_destination()) \
 		.override_failure_message("the AI did not go to the cell that breaks the squad").is_equal(Vector2i(3, 0))
+
+
+# #1230: the KILLS notch does not go looking for a squad break.
+func test_a_unit_that_seeks_only_kills_does_not_seek_a_break() -> void:
+	var killer := AIProfile.new()
+	killer.seeks = AIProfile.Seek.KILLS
+	AIProfiles.use_fixtures({"": killer})
+	var board := _board(Rect2i(0, 0, 8, 4), GridUtils.NO_CELL)
+	var lead := _spawn(board, PLAYER, Vector2i(0, 0))
+	var edge := _spawn(board, PLAYER, Vector2i(4, 0))
+	board.squad_manager.join_squad(edge, lead.squad)
+	var attacker := _spawn(board, ENEMY, Vector2i(4, 2))
+	attacker.equipped_weapon = _shover()
+
+	_plan(attacker, board)
+
+	assert_that(attacker.get_projected_destination()) \
+		.override_failure_message("the KILLS notch still sought the squad break").is_equal(Vector2i(4, 1))
 
 
 # A removal paid for with one of ours is no removal: the score is NET. N drops the target in the

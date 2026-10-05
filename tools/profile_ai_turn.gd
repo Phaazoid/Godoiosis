@@ -63,6 +63,11 @@ func _run() -> void:
 
 	var grand_total := 0
 	for faction in game.ai_controller.ai_factions():
+		# The regroup pass runs first, as take_faction_turn does (#1230), so its joins are on the record.
+		var t_regroup := Time.get_ticks_usec()
+		var joins := AIController.regroup(faction, sm, game._board())
+		grand_total += Time.get_ticks_usec() - t_regroup
+		print("regroup   = %d join(s)" % joins)
 		var squads: Array[Squad] = AIController.actable_squads(faction, sm)
 		print("\n%s -- %d actable squad(s)" % [Team.Faction.keys()[faction], squads.size()])
 		for squad in squads:

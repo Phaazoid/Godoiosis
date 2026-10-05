@@ -79,10 +79,11 @@ func _ready() -> void:
 	# Every spawn makes a solo squad (tools/replay_battle.gd's trick), so the unit hooks attach here
 	# without a second walk over the board -- reinforcements included.
 	game.squad_manager.squad_created.connect(_on_squad_created)
-	# THE PLAYER'S SQUAD DECISION (#53 slice 2). Squad Up and Join BOTH commit through
-	# SquadManager.join_squad, and this signal is clean MID-RUN precisely because its other callers
-	# -- the #763 staged rejoin and ScenarioManager's load rebuild -- both run BEFORE begin() opens
-	# a run, so _record drops them for free.
+	# A SQUAD DECISION (#53 slice 2) -- the player's Squad Up and Join, and since #1230 an AI unit
+	# regrouping, all commit through SquadManager.join_squad. Recording the AI's is REQUIRED, not
+	# incidental: a replay turns the AI off and replays the log, so a join it never saw never happens.
+	# The signal is clean MID-RUN because its other callers -- the #763 staged rejoin and
+	# ScenarioManager's load rebuild -- both run BEFORE begin() opens a run, so _record drops them.
 	#
 	# `squad_created` is NOT the twin of this and must never be used as one: create_squad has six
 	# callers (spawn, deploy, leave, disband-per-member, the squad-up verb, the headless builder),
@@ -560,6 +561,7 @@ func _roster_entry(unit: Unit, deployed: bool) -> Dictionary:
 		"items": items,
 		"stats": stats,
 		"hp_max": unit.get_max_hp(),
+		"ai_profile": unit.ai_profile,   # #1230: "" = unassigned, which plays Hard
 	})
 	return entry
 

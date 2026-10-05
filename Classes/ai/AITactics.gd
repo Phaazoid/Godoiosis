@@ -10,10 +10,9 @@ class_name AITactics
 # forecast), so a candidate is priced by what it adds to what the squad is already doing (#117).
 #
 # (_REMOVAL_TIERS -- the DOWNED/MAIMED/KILLED rung list -- is gone with that change: a removal is
-# now a CHANGE OF STANDING across the plan, read off LethalityRules.lifecycle_for's own threading
-# via PlanResolver.plan_fells, which covers the same three rungs and cannot double-count
-# a second hit on the same body -- and, since #708, the fresh CRISIS the ladder does not move a
-# lifecycle for. See _score_plan.)
+# now a CHANGE OF STANDING across the plan, read off LethalityRules.lifecycle_for's own threading,
+# which covers the same three rungs and cannot double-count a second hit on the same body. Whether a
+# fresh CRISIS counts as one is the acting unit's profile since #1230. See _score_plan.)
 
 # WHO THE SQUAD FIGHTS -- and it is TWO SYSTEMS, forked on one question: is anybody attackable
 # this turn? (Dev ruling, 2026-09-02, from playtest.)
@@ -62,12 +61,14 @@ static func _best_exchange(leader: Unit, engageable: Dictionary, board: BoardCon
 	var best_standing := false
 	var best_safe := false
 	var best_hops := 0
+	# #1230: with picks_best_trade off, nobody is "safe", so the key never speaks and the closest wins.
+	var weighs_answers := AIProfiles.of(leader).picks_best_trade
 	for enemy: Unit in engageable:
 		var plan: _Engagement = engageable[enemy]
 		# Asked at the cell we would attack FROM, so this layer and the approach cannot disagree
 		# about where the fight happens.
 		var standing := enemy.is_active()
-		var safe := not squad_manager.can_counter(enemy, leader, board, plan.from)
+		var safe := weighs_answers and not squad_manager.can_counter(enemy, leader, board, plan.from)
 		if best == null or _engagement_beats(standing, safe, plan.hops, best_standing, best_safe, best_hops):
 			best = enemy
 			best_standing = standing
@@ -419,6 +420,7 @@ static func _attack_candidates(unit: Unit, board: BoardContext, origin: Vector2i
 	var seen := {}
 	var hostiles := {}   # cell -> true where a hostile the plan has not killed stands
 	var patients := {}   # cell -> true where a heal target stands
+	var stabilise := AIProfiles.of(unit).stabilises_bodies
 	for other in board.units:
 		if not is_instance_valid(other):
 			continue
@@ -426,7 +428,7 @@ static func _attack_candidates(unit: Unit, board: BoardContext, origin: Vector2i
 		if Team.is_enemy(unit.get_faction(), other.get_faction()):
 			if PlanResolver.projected_lifecycle(other, base_hypo) != Unit.LifecycleState.DEAD:
 				hostiles[at] = true
-		elif _is_heal_target(other, base_hypo, stakes):
+		elif _is_heal_target(other, base_hypo, stakes, stabilise):
 			patients[at] = true
 	# Nothing selectable (unarmed, an aura-dry rune) means no candidate, as the player's ring offers
 	# none (#1215) -- never a null pick, which the resolver would read as bare fists.
@@ -438,7 +440,7 @@ static func _attack_candidates(unit: Unit, board: BoardContext, origin: Vector2i
 			continue
 		for aim in _aim_cells(unit, origin, attack, board, marks):
 			var sweep := Conduction.sweep(unit, origin, aim, attack, board)
-			var paying := _paying_victims(unit, attack, sweep, base_hypo, stakes)
+			var paying := _paying_victims(unit, attack, sweep, base_hypo, stakes, stabilise)
 			if paying.is_empty() and not _map_pays(unit, attack, sweep, board, base_hypo):
 				continue
 			var key := _aim_key(attack, sweep)
@@ -455,13 +457,14 @@ static func _attack_candidates(unit: Unit, board: BoardContext, origin: Vector2i
 
 
 # Who a heal may be aimed for: our side, and either standing below full HP or a body the clock is
-# still running on that nobody can rescue this turn (ruling 16).
-static func _is_heal_target(other: Unit, hypo: Dictionary, stakes: _Stakes) -> bool:
+# still running on that nobody can rescue this turn (ruling 16) -- the second only for a healer whose
+# profile stabilises bodies (#1230).
+static func _is_heal_target(other: Unit, hypo: Dictionary, stakes: _Stakes, stabilise := true) -> bool:
 	match PlanResolver.projected_lifecycle(other, hypo):
 		Unit.LifecycleState.ACTIVE:
 			return PlanResolver.projected_hp(other, hypo) < other.get_max_hp()
 		Unit.LifecycleState.DOWNED:
-			return other.is_downed() and other.downed_turns_remaining >= 0 \
+			return stabilise and other.is_downed() and other.downed_turns_remaining >= 0 \
 					and (stakes == null or not stakes.rescuable.has(other))
 	return false
 
@@ -518,13 +521,13 @@ static func _near_a_mark(cell: Vector2i, marks: Dictionary, radius: int) -> bool
 # The victims that make this aim worth anything: hostiles the plan has not killed, or for a heal the
 # heal targets it reaches.
 static func _paying_victims(unit: Unit, attack: AttackData, sweep: Conduction.Sweep, hypo: Dictionary,
-		stakes: _Stakes) -> Array[Unit]:
+		stakes: _Stakes, stabilise := true) -> Array[Unit]:
 	var out: Array[Unit] = []
 	for victim in sweep.victims:
 		if not is_instance_valid(victim) or out.has(victim):
 			continue
 		if attack.heals:
-			if not Team.is_enemy(unit.get_faction(), victim.get_faction()) and _is_heal_target(victim, hypo, stakes):
+			if not Team.is_enemy(unit.get_faction(), victim.get_faction()) and _is_heal_target(victim, hypo, stakes, stabilise):
 				out.append(victim)
 		elif Team.is_enemy(unit.get_faction(), victim.get_faction()) \
 				and PlanResolver.projected_lifecycle(victim, hypo) != Unit.LifecycleState.DEAD:
@@ -622,18 +625,17 @@ static func _aim_key(attack: AttackData, sweep: Conduction.Sweep) -> String:
 # may still be in reach from the settled cell, and without w that choice ties on damage and falls to
 # board order. See choose_engagement_target for the other half.
 #
-# THE AI IS BLIND TO CRISIS (dev ruling, 2026-09-04, explicitly provisional): a hit the ladder
-# sentences to CRISIS is priced at the damage AND the removal it would have earned if the gambit did
-# not exist. His words: "the ai simply won't see crisis mode until they have to react to a unit
-# currently in it." It counted as NOTHING before -- the damage was skipped here and CRISIS threads
-# ACTIVE so no removal followed -- which under #711's no-bar rule is not a refusal but a LOSING
-# candidate, so an armed Berserker was the last thing an AI would swing at. (#708, whose own
-# "a neutral verdict means never" reading died with the bar.)
+# CRISIS, BY PROFILE (#1230, reversing #708's blindness, which was a scope call at the time). A unit
+# that SEES Crisis prices a hit that sets the gambit off as what it really does: the HP it takes
+# (hp_before - target_hp_after, the revive HP), and no removal, since the target stands straight back
+# up. A unit already IN Crisis stays an ordinary target -- its next drop is a kill, and a kill is a
+# removal (dev, 2026-10-05). The same pricing reaches every list, counters and sinks included, so
+# what a counter costs us is measured the same way.
 #
-# Neither half needs new arithmetic. The damage is the raw pre-Crisis number (the resolver fixes
-# outcome.damage before the rung is named and the Crisis branch rewrites only hp/in_crisis),
-# and the overkill clamp below caps it at the HP they had going in -- which a would-be-down met by
-# definition. The removal comes from _plan_removes asking PlanResolver.plan_fells.
+# A unit BLIND to it (#708, dev 2026-09-04: "the ai simply won't see crisis mode until they have to
+# react to a unit currently in it") prices the hit at the damage AND the removal it would have
+# earned if the gambit did not exist -- the raw pre-Crisis number, capped by the overkill clamp, and
+# the removal from PlanResolver.plan_fells, which counts a fresh Crisis as a fall.
 #
 # BLIND TO THE GAMBIT, SIGHTED TO WHAT IT DRAWS (dev, same day). A Crisis'd defender is still ACTIVE
 # and so COUNTERS where a downed one cannot, and that counter's damage still lands in w -- so
@@ -658,7 +660,14 @@ static func _aim_key(attack: AttackData, sweep: Conduction.Sweep) -> String:
 # outrank a real swing -- and _plan_removes answers false for a body, so it cannot earn a removal
 # either. That +1 came from the body CLINGING at 1 HP until #1002 let a heal raise one, and the
 # clamp now caps a body at 1 outright so the ruling survives the state that would have broken it.
-static func _score_plan(faction: Team.Faction, plan: ResolvedPlan, stakes: _Stakes = null) -> AIScore:
+#
+# THE ACTING UNIT'S PROFILE DECIDES WHICH TERMS SPEAK (#1230): a term its profile switches off scores
+# zero, so a marginal measured against a base scored the same way never sees it. Null is the full AI.
+static func _score_plan(faction: Team.Faction, plan: ResolvedPlan, stakes: _Stakes = null,
+		profile: AIProfile = null) -> AIScore:
+	if profile == null:
+		profile = AIProfile.new()
+	var sees_crisis := profile.sees_crisis
 	var dealt := {}   # Unit -> damage this plan lands on them, before the overkill clamp
 	var restored := {}   # Unit -> HP a heal actually gave them (a standing unit; a body is a save)
 	var stabilised := {}   # body -> true
@@ -674,12 +683,12 @@ static func _score_plan(faction: Team.Faction, plan: ResolvedPlan, stakes: _Stak
 					and (stakes == null or not stakes.rescuable.has(victim)):
 				stabilised[victim] = true
 			continue
-		dealt[victim] = int(dealt.get(victim, 0)) + a.resolved.damage
+		dealt[victim] = int(dealt.get(victim, 0)) + _hp_cost(a.resolved, sees_crisis)
 	for sink in plan.sinks:
 		var drowned: Unit = sink.actor
 		if drowned == null or sink.resolved == null or not is_instance_valid(drowned):
 			continue
-		dealt[drowned] = int(dealt.get(drowned, 0)) + sink.resolved.damage
+		dealt[drowned] = int(dealt.get(drowned, 0)) + _hp_cost(sink.resolved, sees_crisis)
 
 	# The REACTIONS this plan draws -- counters and any watch shots it sets off. Their victims join
 	# the removal ledger, and what they land on OUR side accumulates as the w tie-break. Damage a
@@ -691,7 +700,7 @@ static func _score_plan(faction: Team.Faction, plan: ResolvedPlan, stakes: _Stak
 		if victim == null or a.resolved == null or not is_instance_valid(victim):
 			continue
 		if not Team.is_enemy(faction, victim.get_faction()):
-			taken += a.resolved.damage
+			taken += _hp_cost(a.resolved, sees_crisis)
 		if not dealt.has(victim):
 			dealt[victim] = 0
 
@@ -716,8 +725,9 @@ static func _score_plan(faction: Team.Faction, plan: ResolvedPlan, stakes: _Stak
 		var gained: int = restored[patient]
 		net += -gained if Team.is_enemy(faction, patient.get_faction()) else gained
 	var saves := 0
-	for body: Unit in stabilised:
-		saves += -1 if Team.is_enemy(faction, body.get_faction()) else 1
+	if profile.stabilises_bodies:
+		for body: Unit in stabilised:
+			saves += -1 if Team.is_enemy(faction, body.get_faction()) else 1
 
 	# A REMOVAL IS PER VICTIM, NOT PER HIT, and that is the whole of squad focus-fire. Counting the
 	# lethality rung of each row instead double-pays: the ladder answers KILLED on a body once the
@@ -727,23 +737,44 @@ static func _score_plan(faction: Team.Faction, plan: ResolvedPlan, stakes: _Stak
 	# off them after -- so it is the plan's effect on a person, which is what a removal means.
 	var removals := 0
 	for victim: Unit in dealt:
-		if not _plan_removes(victim, plan):
+		if not _plan_removes(victim, plan, profile):
 			continue
 		removals += 1 if Team.is_enemy(faction, victim.get_faction()) else -1
 
 	var splits := 0
-	for unit: Unit in SplitForecast.leavers(plan):
-		if _plan_removes(unit, plan):
-			continue
-		splits += 1 if Team.is_enemy(faction, unit.get_faction()) else -1
+	if profile.values_splits:
+		for unit: Unit in SplitForecast.leavers(plan):
+			if _plan_removes(unit, plan, profile):
+				continue
+			splits += 1 if Team.is_enemy(faction, unit.get_faction()) else -1
+
+	if not profile.weighs_counters:
+		taken = 0
+
+	# LIMBS (#1230, dev 2026-10-05): a hit that takes a limb ranks above damage, and a counter or watch
+	# shot that takes one of OURS counts against the plan. Only a victim STANDING at plan start counts:
+	# a body takes a limb at a Wounded 8, and a limb on a body must not outrank damage on someone still
+	# standing (#720) -- while a freshly downed one clings at 1 HP, so any further hit is a kill, which
+	# severs nothing. A kill never severs (LethalityRules.severs); a Crisis entry that severs does.
+	var limbs := 0
+	if profile.values_limbs:
+		var rows: Array[AttackAction] = []
+		rows.append_array(plan.attacks)
+		rows.append_array(_reaction_rows(plan))
+		for a in rows:
+			if a.resolved == null or a.resolved.severed_limb < 0 or a.target == null or not is_instance_valid(a.target):
+				continue
+			if not a.target.is_active():
+				continue
+			limbs += 1 if Team.is_enemy(faction, a.target.get_faction()) else -1
 
 	var mission := 0
-	if stakes != null and stakes.protected_counts:
+	if stakes != null and stakes.protected_counts and profile.goes_for_mission_kill:
 		for victim: Unit in dealt:
 			if victim.must_survive and not victim.is_dead() \
 					and PlanResolver.projected_lifecycle(victim, plan.hypo) == Unit.LifecycleState.DEAD:
 				mission += 1 if Team.is_enemy(faction, Team.Faction.PLAYER) else -1
-	return AIScore.of(mission, removals, splits, saves, net, taken)
+	return AIScore.of(mission, removals, splits, saves, limbs, net, taken)
 
 
 # The DERIVED rows: counters the plan drew, plus any watch shots it set off. Deliberately NOT
@@ -758,12 +789,24 @@ static func _reaction_rows(plan: ResolvedPlan) -> Array[AttackAction]:
 
 
 # Does this plan take `victim` off its feet? Standing now (the live board IS plan-start) and not
-# standing once the plan resolves. A CRISIS prediction lands ACTIVE, so the gambit falls out here
-# too rather than needing a clause of its own.
-static func _plan_removes(victim: Unit, plan: ResolvedPlan) -> bool:
+# standing once the plan resolves. For a unit that sees Crisis that is a change of LIFECYCLE alone, so a
+# fresh Crisis -- which lands ACTIVE -- is no removal, while killing a unit already in Crisis is. A unit
+# blind to it asks PlanResolver.plan_fells, which counts a fresh Crisis as the fall it would have been.
+static func _plan_removes(victim: Unit, plan: ResolvedPlan, profile: AIProfile = null) -> bool:
 	if not victim.is_active():
 		return false
+	if profile == null or profile.sees_crisis:
+		return PlanResolver.projected_lifecycle(victim, plan.hypo) != Unit.LifecycleState.ACTIVE
 	return PlanResolver.plan_fells(victim, plan.hypo)
+
+
+# What a row really takes off its victim. A hit that sets Crisis off leaves the target at the revive
+# HP, so for a unit that sees the gambit its cost is the HP it actually removes -- never below zero,
+# since a unit under the revive HP comes back HIGHER. Every other row is its damage.
+static func _hp_cost(outcome: ResolvedOutcome, sees_crisis: bool) -> int:
+	if sees_crisis and outcome.lethality == ResolvedOutcome.Lethality.CRISIS:
+		return maxi(0, outcome.hp_before - outcome.target_hp_after)
+	return outcome.damage
 
 
 # What a squad's scoring knows beyond the plan itself (#1220), built once per squad decision: whether
@@ -792,18 +835,24 @@ static func _stakes_for(squad: Squad, board: BoardContext, plan: ResolvedPlan) -
 # own)? Its own rows are the volley it derived and any unit its deposits drowned; a COUNTER it draws is
 # not its work, so "a free finish beats a suicidal swing" stands. Measured against `base` -- the plan
 # without it -- so a squadmate a counter was already going to fell is not laid at this candidate's
-# door. A predicted CRISIS counts as the fall it would have been: the AI is blind to the gambit.
-static func _fells_own(aims: Array, faction: Team.Faction, base: ResolvedPlan, plan: ResolvedPlan) -> bool:
+# door. A predicted CRISIS on our own counts as a fall whatever the profile sees: knocking a
+# squadmate into the gambit spends its one safety net.
+#
+# The notch is the acting unit's profile (#1230): NEVER_KILLS refuses only a unit it would KILL, so a
+# sloppier unit may down a squadmate. Knocking one of its own into Crisis is refused at every notch.
+static func _fells_own(aims: Array, faction: Team.Faction, base: ResolvedPlan, plan: ResolvedPlan,
+		friendly_fire := AIProfile.FriendlyFire.NEVER_DOWNS) -> bool:
+	var kills_only := friendly_fire == AIProfile.FriendlyFire.NEVER_KILLS
 	for a in plan.attacks:
 		if not aims.has(a.source_aim) or a.resolved == null:
 			continue
-		if _newly_felled(a.target, faction, base, plan) \
+		if _newly_felled(a.target, faction, base, plan, kills_only) \
 				or (a.resolved.lethality == ResolvedOutcome.Lethality.CRISIS and _own_side(a.target, faction)):
 			return true
 	for sink in plan.sinks:
 		if sink.cause == null or not (aims.has(sink.cause) or aims.has(sink.cause.source_aim)):
 			continue
-		if _newly_felled(sink.actor, faction, base, plan):
+		if _newly_felled(sink.actor, faction, base, plan, kills_only):
 			return true
 	return false
 
@@ -812,10 +861,15 @@ static func _own_side(unit: Unit, faction: Team.Faction) -> bool:
 	return unit != null and is_instance_valid(unit) and not Team.is_enemy(faction, unit.get_faction())
 
 
-static func _newly_felled(unit: Unit, faction: Team.Faction, base: ResolvedPlan, plan: ResolvedPlan) -> bool:
+static func _newly_felled(unit: Unit, faction: Team.Faction, base: ResolvedPlan, plan: ResolvedPlan,
+		kills_only := false) -> bool:
 	if not _own_side(unit, faction):
 		return false
-	return PlanResolver.projected_lifecycle(unit, plan.hypo) > PlanResolver.projected_lifecycle(unit, base.hypo)
+	var after := PlanResolver.projected_lifecycle(unit, plan.hypo)
+	var before := PlanResolver.projected_lifecycle(unit, base.hypo)
+	if kills_only:
+		return after == Unit.LifecycleState.DEAD and before != Unit.LifecycleState.DEAD
+	return after > before
 
 # Fallback builders -- each mirrors MainActionMenu's gate for its verb, then picks a
 # deterministic target (Law #1: explicit tie-break, first-in-order wins).
@@ -1175,8 +1229,108 @@ static func engage(squad: Squad, target: Unit, board: BoardContext, squad_manage
 	var seek := seek_positions(squad, best_attack_destination(leader, target, board, allowed, weigh_safety), board,
 			squad_manager, allowed, within)
 	if seek.destination != leader.movement.cell or not seek.pins.is_empty():
-		squad_manager.queue_group_move(squad, seek.destination, board, allowed, seek.pins, seek.hazards)
+		group_move(squad, seek.destination, board, squad_manager, allowed, seek.pins, seek.hazards)
 	queue_main_actions_for_squad(squad, board, squad_manager)
+
+
+# --- Regrouping (#1230) -----------------------------------------------------------------------------
+#
+# Which squad a LOOSE unit would join (dev rulings, 2026-10-05): its old squad first, else the nearest
+# with room, by route. Same archetype unless its profile joins any. Joining another lone unit's squad
+# FORMS one, which both units' profiles must allow and the higher leadership leads -- board order
+# breaking a tie, so two strays never pick each other. With `in_range` it is the join itself, asked
+# through the player's own formation gate (SquadManager.can_squad_up); without, the squad a stray
+# walks back towards. Candidates come from the LIVE squad list, which a squad leaves the moment its last
+# member does (destroy_empty_squad erases before it frees) -- so a stray remembering a dying squad is
+# never offered it, though the instance stays valid until the frame ends.
+static func regroup_target(stray: Unit, squad_manager: SquadManager, board: BoardContext, in_range: bool) -> Squad:
+	if stray.squad == null or stray.squad.get_members().size() != 1 or not stray.is_active():
+		return null
+	var profile := AIProfiles.of(stray)
+	var eligible: Array[Squad] = []
+	for squad: Squad in squad_manager.squads:
+		if _may_regroup_into(stray, profile, squad, squad_manager, board, in_range):
+			eligible.append(squad)
+	if eligible.is_empty():
+		return null
+	var old: Variant = stray.left_squad
+	if is_instance_valid(old) and eligible.has(old):
+		return old as Squad
+	var leaders := {}
+	for squad in eligible:
+		leaders[squad.get_leader().movement.cell] = true
+	var hops := RulesService.path_hops(stray.movement.cell, board, stray, -1, leaders)
+	var best: Squad = null
+	var best_hops := RulesService.UNREACHABLE
+	for squad in eligible:
+		var h: int = hops.get(squad.get_leader().movement.cell, RulesService.UNREACHABLE)
+		if best == null or h < best_hops:
+			best = squad
+			best_hops = h
+	return best
+
+
+static func _may_regroup_into(stray: Unit, profile: AIProfile, squad: Squad, squad_manager: SquadManager,
+		board: BoardContext, in_range: bool) -> bool:
+	if not is_instance_valid(squad) or squad == stray.squad:
+		return false
+	var members := squad.get_members()
+	if members.size() >= squad.max_size():
+		return false
+	var leader := squad.get_leader()
+	if leader == null or not leader.is_active() or leader.get_faction() != stray.get_faction():
+		return false
+	if not profile.joins_any_archetype \
+			and AIArchetype.effective(squad.archetype) != AIArchetype.effective(stray.squad.archetype):
+		return false
+	if members.size() == 1:
+		if not profile.squads_up or not AIProfiles.of(leader).squads_up or not _leads_over(leader, stray, board):
+			return false
+	elif not profile.regroups:
+		return false
+	return not in_range or squad_manager.can_squad_up(stray, squad)
+
+
+# Would `a` lead a squad formed with `b`? successor_among's rule: the higher effective leadership, and
+# board order on a tie.
+static func _leads_over(a: Unit, b: Unit, board: BoardContext) -> bool:
+	if a.get_effective_ldr() != b.get_effective_ldr():
+		return a.get_effective_ldr() > b.get_effective_ldr()
+	return board.units.find(a) < board.units.find(b)
+
+
+# The walk back: a loose unit with nobody it can fight this turn heads for the squad it would join, then
+# takes its fallback actions. A stray that can attack still attacks -- this answers only when
+# _engageable_enemies is empty. The moving archetypes ask it in place of pursuit; true when it acted.
+static func regroup_walk(squad: Squad, board: BoardContext, squad_manager: SquadManager) -> bool:
+	var stray := squad.get_leader()
+	if stray == null or squad.get_members().size() != 1:
+		return false
+	var profile := AIProfiles.of(stray)
+	if not profile.regroups and not profile.squads_up:
+		return false
+	if not _engageable_enemies(stray, board, null, null).is_empty():
+		return false
+	var target := regroup_target(stray, squad_manager, board, false)
+	if target == null:
+		return false
+	var destination := closest_reachable_cell_to(stray, target.get_leader().movement.cell, board)
+	if destination != stray.movement.cell:
+		group_move(squad, destination, board, squad_manager)
+	queue_main_actions_for_squad(squad, board, squad_manager)
+	return true
+
+
+# THE AI's ONE GROUP-MOVE DOOR (#1230). Every archetype's move goes through here so each member's
+# route follows its own profile: one that does not route around watches walks the shortest path,
+# leader included. The player's group move never comes here, so its routes stay safe.
+static func group_move(squad: Squad, destination: Vector2i, board: BoardContext, squad_manager: SquadManager,
+		allowed = null, pins: Dictionary = {}, hazards: Dictionary = {}) -> bool:
+	var direct := {}
+	for member in squad.get_members():
+		if not AIProfiles.of(member).routes_around_watches:
+			direct[member] = true
+	return squad_manager.queue_group_move(squad, destination, board, allowed, pins, hazards, direct)
 
 
 # WHERE THE SQUAD STANDS TO TAKE A REMOVAL OR A SQUAD BREAK it can reach this turn (#760; dev rulings
@@ -1246,7 +1400,7 @@ static func seek_positions(squad: Squad, default_destination: Vector2i, board: B
 	var claimed := {}        # body -> true: one rescuer walks to each
 
 	var lead_cells := _leader_cells(squad, leader, default_destination, board, allowed, out.hazards[leader])
-	if _is_dry(leader) and not _squad_armed(squad):
+	if _is_dry(leader) and not _squad_armed(squad) and AIProfiles.of(leader).backs_off_when_dry:
 		var fallback := _rescue_cell(leader, squad, lead_cells, board, claimed)
 		if fallback == GridUtils.NO_CELL:
 			fallback = _least_threatened(leader, lead_cells, board, threat, out.hazards[leader])
@@ -1302,7 +1456,7 @@ static func seek_positions(squad: Squad, default_destination: Vector2i, board: B
 				out.pins[member] = step
 				continue
 		var fallback := _rescue_cell(member, squad, cells, board, claimed)
-		if fallback == GridUtils.NO_CELL and _is_dry(member):
+		if fallback == GridUtils.NO_CELL and _is_dry(member) and AIProfiles.of(member).backs_off_when_dry:
 			fallback = _least_threatened(member, cells, board, threat, out.hazards[member])
 		if fallback != GridUtils.NO_CELL and fallback != at:
 			out.pins[member] = fallback
@@ -1339,7 +1493,7 @@ static func _hits_from(unit: Unit, cell: Vector2i, board: BoardContext, within) 
 # The rescue walk (ruling 12): the first of `cells` beside the most urgent body nobody else is walking
 # to, for a unit whose archetype rescues and who can carry. NO_CELL otherwise.
 static func _rescue_cell(unit: Unit, squad: Squad, cells: Array, board: BoardContext, claimed: Dictionary) -> Vector2i:
-	if not unit.can_rescue_carry() \
+	if not AIProfiles.of(unit).rescue_walk or not unit.can_rescue_carry() \
 			or not AIArchetype.main_action_priority(squad.archetype).has(BaseAction.ActionType.RESCUE):
 		return GridUtils.NO_CELL
 	var bodies: Array[Unit] = []
@@ -1389,8 +1543,11 @@ static func _hostile_watches(faction: Team.Faction, board: BoardContext) -> Arra
 	return out
 
 
-# Every cell `unit` could end on that would hurt it there (rulings 15, 19).
+# Every cell `unit` could end on that would hurt it there (rulings 15, 19) -- none for a unit whose
+# profile does not avoid hazards (#1230), so every reader of this set treats all ground alike.
 static func _hazards_of(unit: Unit, board: BoardContext, watches: Array[Watch]) -> Dictionary:
+	if not AIProfiles.of(unit).avoids_hazards:
+		return {}
 	var walk: Dictionary = RulesService.compute_move_range(unit, board)
 	var cells: Array = (walk["reachable"] as Dictionary).keys()
 	cells.append_array((walk["squad_unreachable"] as Dictionary).keys())
@@ -1516,12 +1673,15 @@ static func _stand(squad: Squad, leader: Unit, leader_destination: Vector2i, pla
 static func _first_opportunity(unit: Unit, cells: Array, squad: Squad, board: BoardContext,
 		squad_manager: SquadManager, wins: Array[BaseAction], within,
 		reactions: Array[ElementalReaction], terrain: Array[TerrainReaction], stakes: _Stakes) -> _Opportunity:
+	var profile := AIProfiles.of(unit)
+	if profile.seeks == AIProfile.Seek.NONE:
+		return null
 	var start := unit.movement.cell
 	var faction := unit.get_faction()
 	var base_plan := squad_manager.resolve_hypothetical(squad, wins, board, reactions, terrain)
 	var stale := false
 	var dead := {}
-	var top: Tier = Tier.MISSION if stakes.protected_counts else Tier.REMOVAL
+	var top: Tier = Tier.MISSION if stakes.protected_counts and profile.goes_for_mission_kill else Tier.REMOVAL
 	var found: _Opportunity = null
 	for entry: Array in cells:
 		var cell: Vector2i = entry[0]
@@ -1537,7 +1697,7 @@ static func _first_opportunity(unit: Unit, cells: Array, squad: Squad, board: Bo
 		var candidates := _attack_candidates(unit, board, cell, base_plan.hypo, stakes, paying)
 		if candidates.is_empty():
 			continue
-		var base := _score_plan(faction, base_plan, stakes)
+		var base := _score_plan(faction, base_plan, stakes, profile)
 		for candidate in candidates:
 			if within != null and not _reaches_into(paying.get(candidate, []), within, base_plan.hypo):
 				continue
@@ -1548,11 +1708,13 @@ static func _first_opportunity(unit: Unit, cells: Array, squad: Squad, board: Bo
 			trial.append(candidate)
 			var plan := squad_manager.resolve_hypothetical(squad, trial, board, reactions, terrain)
 			stale = true
-			if _fells_own([candidate], faction, base_plan, plan):
+			if _fells_own([candidate], faction, base_plan, plan, profile.friendly_fire):
 				continue
-			var tier := _tier_of(_score_plan(faction, plan, stakes).minus(base))
+			var tier := _tier_of(_score_plan(faction, plan, stakes, profile).minus(base))
+			if tier == Tier.BREAK and profile.seeks == AIProfile.Seek.KILLS:
+				continue
 			if tier < 0:
-				if not _fate_can_pay(candidate, plan):
+				if not _fate_can_pay(candidate, plan, profile):
 					dead[key] = true
 				continue
 			if found == null or tier > found.tier:
@@ -1617,14 +1779,14 @@ static func _group_key(candidate: AttackAction, board: BoardContext) -> String:
 # Could another cell of this candidate's group still pay? Only a single-victim volley is shareable --
 # a wider one's other victims are shoved in directions the key does not pin -- and then only if that
 # victim was removed or knocked out of its squad here.
-static func _fate_can_pay(candidate: AttackAction, plan: ResolvedPlan) -> bool:
+static func _fate_can_pay(candidate: AttackAction, plan: ResolvedPlan, profile: AIProfile) -> bool:
 	var victims: Array[Unit] = []
 	for a in plan.attacks:
 		if a.source_aim == candidate and a.target != null and is_instance_valid(a.target) and not victims.has(a.target):
 			victims.append(a.target)
 	if victims.size() != 1:
 		return true
-	return _plan_removes(victims[0], plan) or SplitForecast.leavers(plan).has(victims[0])
+	return _plan_removes(victims[0], plan, profile) or SplitForecast.leavers(plan).has(victims[0])
 
 
 # Every member takes a main action. The tail of engage() and the whole of HoldArchetype's turn --
@@ -1745,7 +1907,8 @@ static func _best_candidate_for(member: Unit, squad: Squad, board: BoardContext,
 	if not by_member.has(member):
 		return null   # the eligibility gate ran when the table was built -- _candidates_by_member
 	var faction := member.get_faction()
-	var base := _score_plan(faction, base_plan, stakes)
+	var profile := AIProfiles.of(member)
+	var base := _score_plan(faction, base_plan, stakes, profile)
 	var routine := AIWeaponRoutine.for_unit(member)
 	var best: _Scored = null
 	var last_resort: _Scored = null   # the best of what the family DEFERRED -- see below
@@ -1755,15 +1918,16 @@ static func _best_candidate_for(member: Unit, squad: Squad, board: BoardContext,
 			continue
 		var one: Array[BaseAction] = [candidate]
 		var plan := squad_manager.resolve_hypothetical(squad, one, board, reactions, terrain)
-		if _fells_own([candidate], faction, base_plan, plan):
+		if _fells_own([candidate], faction, base_plan, plan, profile.friendly_fire):
 			continue
-		var score := _score_plan(faction, plan, stakes).minus(base)
+		var score := _score_plan(faction, plan, stakes, profile).minus(base)
 		# A SET-UP is worth nothing by itself and everything to the swing behind it: Splash deals
 		# no damage, so soaking a target scores (0,0) and a greedy chooser could never OPEN a
 		# combo. One step of lookahead prices it by what a squadmate could then do (dev call,
 		# pairs in v1, 2026-09-02), FLOORED AT ITS OWN SOLO SCORE -- see _lookahead for why
 		# inventing a zero there inverts the ranking now that a negative score can still win.
-		if not score.beats(AIScore.zero()) and allow_lookahead and _applies_state_to_an_enemy(faction, plan):
+		if not score.beats(AIScore.zero()) and allow_lookahead and profile.sets_up_combos \
+				and _applies_state_to_an_enemy(faction, plan):
 			score = _lookahead(member, candidate, score, squad, board, base_plan, squad_manager, reactions, terrain, refused, by_member, stakes)
 		# A DEFERRED candidate is the family's own last resort (#726): it loses to every candidate
 		# this member has NOT deferred and is still taken when it has nothing else, so #711 stays
@@ -1805,7 +1969,8 @@ static func _lookahead(setup_unit: Unit, setup: AttackAction, solo: AIScore, squ
 		base_plan: ResolvedPlan, squad_manager: SquadManager, reactions: Array[ElementalReaction],
 		terrain: Array[TerrainReaction], refused: Dictionary, by_member: Dictionary, stakes: _Stakes) -> AIScore:
 	var faction := setup_unit.get_faction()
-	var base := _score_plan(faction, base_plan, stakes)
+	var profile := AIProfiles.of(setup_unit)   # the pair is the set-up's idea, so it is scored its way
+	var base := _score_plan(faction, base_plan, stakes, profile)
 	var best := solo
 	for mate in squad.get_members():
 		if mate == setup_unit or not by_member.has(mate):
@@ -1816,9 +1981,9 @@ static func _lookahead(setup_unit: Unit, setup: AttackAction, solo: AIScore, squ
 				continue
 			var pair: Array[BaseAction] = [setup, follow]
 			var plan := squad_manager.resolve_hypothetical(squad, pair, board, reactions, terrain)
-			if _fells_own(pair, faction, base_plan, plan):
+			if _fells_own(pair, faction, base_plan, plan, profile.friendly_fire):
 				continue
-			var score := _score_plan(faction, plan, stakes).minus(base)
+			var score := _score_plan(faction, plan, stakes, profile).minus(base)
 			if score.beats(best):
 				best = score
 	return best
@@ -1948,7 +2113,8 @@ static func _best_approach(unit: Unit, goal: Vector2i, board: BoardContext, allo
 	var best := here
 	var best_can_attack: bool = prefer_attack and Reach.get_all_attack_cells_from(unit, here, aiming).has(goal) \
 		and Reach.vertical_aim_ok(aiming, here, goal, board)
-	var best_safe := not _is_hazard(unit, here, board, watches)
+	var avoids := AIProfiles.of(unit).avoids_hazards   # #1230: off, every cell reads as safe
+	var best_safe := not avoids or not _is_hazard(unit, here, board, watches)
 	var best_hops: int = route.get(here, RulesService.UNREACHABLE)
 	var best_threat: int = danger.attackers_of(here).size() if danger != null else 0
 	if danger != null and best_can_attack:
@@ -1961,7 +2127,7 @@ static func _best_approach(unit: Unit, goal: Vector2i, board: BoardContext, allo
 			continue
 		var can_attack: bool = prefer_attack and Reach.get_all_attack_cells_from(unit, cell, aiming).has(goal) \
 			and Reach.vertical_aim_ok(aiming, cell, goal, board)
-		var safe := not _is_hazard(unit, cell, board, watches)
+		var safe := not avoids or not _is_hazard(unit, cell, board, watches)
 		var hops: int = route.get(cell, RulesService.UNREACHABLE)
 		var threat: int = danger.attackers_of(cell).size() if danger != null else 0
 		if danger != null and can_attack:

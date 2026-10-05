@@ -151,11 +151,12 @@ func _on_queued(squad: Squad, action: BaseAction) -> void:
 		if a.source_aim == aim and a.target != null and a.resolved != null:
 			rows.append("%s dmg%d %s after%d" % [a.target.get_unit_name(), a.resolved.damage,
 					ResolvedOutcome.Lethality.keys()[a.resolved.lethality], a.resolved.target_hp_after])
-	var score: Vector4i = AITactics._score_plan(actor.get_faction(), plan)
-	var prev: Vector4i = last_score.get(squad, Vector4i.ZERO)
+	var score: AIScore = AITactics._score_plan(actor.get_faction(), plan, null, AIProfiles.of(actor))
+	var prev: AIScore = last_score.get(squad, AIScore.zero())
 	last_score[squad] = score
 	_log("Q %s ATTACK %s @%s from %s | in footprint: %s | rows: %s | plan %s marginal %s" % [
-			_u(actor), atk_name, str(aim.target_cell), str(origin), str(occupants), str(rows), str(score), str(score - prev)])
+			_u(actor), atk_name, str(aim.target_cell), str(origin), str(occupants), str(rows), str(score),
+			str(score.minus(prev))])
 
 func _run() -> void:
 	var main: Node = load("res://Scenes/Main.tscn").instantiate()

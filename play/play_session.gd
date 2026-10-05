@@ -1674,6 +1674,7 @@ func _is_ai_faction(faction: Team.Faction) -> bool:
 # no pacing beat, and execute() rather than the animated OrderExecutor.
 func _take_ai_turn(faction: Team.Faction) -> Array[String]:
 	var events: Array[String] = []
+	AIController.regroup(faction, squad_manager, _board())   # #1230: the game's walk does the same
 	for squad: Squad in AIController.actable_squads(faction, squad_manager):
 		if mission_tag() != "":
 			break

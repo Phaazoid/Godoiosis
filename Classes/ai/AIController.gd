@@ -49,6 +49,36 @@ func set_ai_factions(factions: Array[Team.Faction]) -> void:
 #
 # The caller must STILL revalidate inside its loop: acting with one squad can kill another's
 # leader or disband it outright, so this is the starting list, not a promise about later.
+# REGROUPING (#1230): before any squad of this faction plans, each loose unit whose profile regroups
+# joins the squad AITactics.regroup_target names, in range only, through the player's own join door.
+# Repeated until a pass joins nobody, since every join changes which squads have room. Called at the
+# head of BOTH walks -- take_faction_turn and the Play API's -- after the hand-off reset that clears
+# has_acted; mission start and resume enter take_faction_turn directly, which is why it is not hung
+# off the turn signal. Returns how many joined.
+static func regroup(faction: Team.Faction, squad_manager: SquadManager, board: BoardContext) -> int:
+	var joins := 0
+	var joined := true
+	while joined:
+		joined = false
+		for squad: Squad in squad_manager.squads.duplicate():
+			if not is_instance_valid(squad) or squad.get_members().size() != 1:
+				continue
+			var stray := squad.get_leader()
+			if stray == null or stray.get_faction() != faction:
+				continue
+			var profile := AIProfiles.of(stray)
+			if not profile.regroups and not profile.squads_up:
+				continue
+			var target := AITactics.regroup_target(stray, squad_manager, board, true)
+			if target == null:
+				continue
+			squad_manager.join_squad(stray, target)
+			joins += 1
+			joined = true
+			break
+	return joins
+
+
 static func actable_squads(faction: Team.Faction, squad_manager: SquadManager) -> Array[Squad]:
 	var out: Array[Squad] = []
 	for squad: Squad in squad_manager.squads.duplicate():
@@ -369,6 +399,7 @@ var handoff_squad: Squad = null
 func take_faction_turn(faction: Team.Faction, handoff := 0.0) -> void:
 	planned_squad_count = 0
 	handoff_squad = null
+	regroup(faction, game.squad_manager, game._board())
 	var planned: Squad = null
 	if handoff > 0.0:
 		planned = await _plan_during_handoff(faction, handoff)
