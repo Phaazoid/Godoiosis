@@ -415,13 +415,23 @@ static func _watch_triggered_by(entrant: Unit, plan: ResolvedPlan, hypo: Diction
 # five clauses asked of one NAMED watch rather than searched for across the list — Watch.is_armed()'s
 # shape, one question up.
 static func _watch_fires_on(watch: Watch, entrant: Unit, hypo: Dictionary) -> bool:
+	if entrant == null or not is_instance_valid(entrant):
+		return false
+	return watch_fires_at(watch, entrant, projected_position(entrant, hypo), hypo)
+
+
+# The same five clauses, asked of a CELL the entrant would stand in rather than the one the pass has
+# it in. Public because two readers ask it ahead of any resolve (#1220): the safe route, which must
+# avoid exactly the watches a walk would spend, and the AI's hazard destinations. One predicate, so
+# the arrow and the resolver cannot disagree about which cells a watch makes dangerous.
+static func watch_fires_at(watch: Watch, entrant: Unit, cell: Vector2i, hypo: Dictionary) -> bool:
 	if watch == null or entrant == null or not is_instance_valid(entrant):
 		return false
 	# A downed body does not trip a watch (the doc's accepted cut: you cannot spend a watch by
 	# throwing a corpse through it), and neither does the watcher's own side.
 	if projected_lifecycle(entrant, hypo) != Unit.LifecycleState.ACTIVE:
 		return false
-	if not watch.is_armed() or not watch.covers(projected_position(entrant, hypo)):
+	if not watch.is_armed() or not watch.covers(cell):
 		return false
 	if not Team.is_enemy(watch.watcher.get_faction(), entrant.get_faction()):
 		return false
