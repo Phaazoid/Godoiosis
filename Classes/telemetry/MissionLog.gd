@@ -560,6 +560,7 @@ func _roster_entry(unit: Unit, deployed: bool) -> Dictionary:
 		"items": items,
 		"stats": stats,
 		"hp_max": unit.get_max_hp(),
+		"ai_profile": unit.ai_profile,   # #1230: "" = unassigned, which plays Hard
 	})
 	return entry
 

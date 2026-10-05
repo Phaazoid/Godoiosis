@@ -18,7 +18,12 @@ var _sm: SquadManager
 
 
 func before_test() -> void:
+	AIProfiles.use_fixtures({"": AIProfile.new()})   # #1230: this suite owns its AI profile
 	_sm = H.make_manager(self)
+
+
+func after_test() -> void:
+	AIProfiles.clear_fixtures()
 
 
 func _board(units: Array[Unit]) -> BoardContext:

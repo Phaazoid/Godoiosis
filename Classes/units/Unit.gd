@@ -44,6 +44,11 @@ var drawn_from_roster := false
 # ScenarioUnitEntry at spawn and written back on save. Not @export'd, for drawn_from_roster's reason:
 # a Unit is never serialized directly, and ScenarioManager is the one writer and one reader.
 var must_survive := false
+# The AI profile this unit plays when its faction is AI-controlled (#1230): a FILE NAME under
+# AIProfiles.PROFILE_DIR, "" = unassigned (plays Hard). must_survive's shape and must_survive's
+# reason -- authored per placement, carried here at spawn, written back on save; and per UNIT, so it
+# survives joining and leaving squads.
+var ai_profile := ""
 var inventory : Array[Item] = []
 var squad: Squad
 var pending_grid : TileMapLayer

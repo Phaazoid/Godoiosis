@@ -22,6 +22,7 @@ var _faction: Team.Faction = Team.Faction.PLAYER
 var _squad_name := ""
 var _unit_name := ""
 var _must_survive := false   # #572: does the mission end if this one dies?
+var _ai_profile := ""   # #1230: which AI profile it plays, by file name ("" = Hard)
 var _jobs: Array[String] = []
 var _limb_states: Dictionary[UnitInstance.LimbSlot, UnitInstance.LimbState] = {}
 var _limb_prosthetics: Dictionary[UnitInstance.LimbSlot, int] = {}   # slot -> _inventory index, or -1 (placeholder)
@@ -77,6 +78,7 @@ func _capture(unit: Unit) -> void:
 	_squad_name = unit.squad.squad_name
 	_unit_name = unit.get_unit_name()
 	_must_survive = unit.must_survive
+	_ai_profile = unit.ai_profile
 	_jobs = inst.jobs.duplicate()
 	_affinity = inst.affinity.duplicate()
 	_alkahest = inst.is_alkahest_affine
@@ -147,6 +149,7 @@ func _apply(unit: Unit) -> void:
 		unit.change_faction(_faction)
 	unit.squad.squad_name = _squad_name
 	unit.must_survive = _must_survive
+	unit.ai_profile = _ai_profile
 	var trimmed_name := _unit_name.strip_edges()
 	if trimmed_name != "":
 		unit.unit_data.display_name = trimmed_name
@@ -342,6 +345,10 @@ func _add_stats_section(page: VBoxContainer) -> void:
 	DevWidgets.add_lineedit(page, "Squad Name", _squad_name, func(s): _stage_squad_name(s))
 	DevWidgets.add_checkbox(page, "Must survive", _must_survive, func(v): _stage_must_survive(v),
 		"#572: the mission is LOST if this unit dies. Declare PROTECTED_UNIT_LOST on the Scenario tab too -- this flag is the geometry, that list is the rule.")
+	var band_row := DevWidgets.add_option(page, "AI band", ai_profile_options(), _ai_profile_label(_ai_profile),
+		func(s): _stage_ai_profile(s))
+	DevWidgets.apply_tooltip(band_row,
+		"#1230: how well this unit plays when its side is AI-controlled. Default plays Hard. Bands are few and fixed on purpose -- a bespoke profile (a boss) is its own file in Resources/AIProfiles/.")
 	DevWidgets.add_checkbox(page, "Wounded", _wounded, func(v): _stage_wounded(v),
 		"#1174: went down this battle, so a smaller blow takes a limb and Crisis cannot fire.")
 
@@ -387,6 +394,24 @@ func _stage_faction(faction_name: String) -> void:
 
 func _stage_must_survive(value: bool) -> void:
 	_must_survive = value
+	_touch()
+
+# The AI band dropdown's rows: the default, then every profile on disk (bands first), plus a stale
+# name this unit still carries -- so opening the editor never silently rewrites it.
+const DEFAULT_PROFILE_LABEL := "Default (Hard)"
+
+func ai_profile_options() -> Array:
+	var rows: Array = [DEFAULT_PROFILE_LABEL]
+	rows.append_array(AIProfiles.names())
+	if _ai_profile != "" and not rows.has(_ai_profile):
+		rows.append(_ai_profile)
+	return rows
+
+func _ai_profile_label(profile_name: String) -> String:
+	return DEFAULT_PROFILE_LABEL if profile_name == "" else profile_name
+
+func _stage_ai_profile(label: String) -> void:
+	_ai_profile = "" if label == DEFAULT_PROFILE_LABEL else label
 	_touch()
 
 

@@ -201,6 +201,22 @@ func test_a_roster_that_does_not_exist_blocks_the_board() -> void:
 	_assert_silent(BoardLint.Severity.BLOCKS, "does not exist")
 
 
+func test_a_unit_naming_an_ai_profile_that_does_not_exist_blocks_the_board() -> void:
+	# The roster's tier, for the roster's reason (#1230): the unit would quietly play Hard, which is
+	# a different mission from the one authored.
+	var unit := _spawn(Team.Faction.PLAYER, 0)
+	unit.ai_profile = "NoSuchProfileEverExisted"
+	_assert_reports(BoardLint.Severity.BLOCKS, "NoSuchProfileEverExisted")
+
+	# Non-vacuous against a profile that DOES resolve -- otherwise this passes on any non-empty name.
+	var real: Array[String] = AIProfiles.names()
+	if real.is_empty():   # content-absent: warn, never fail (tests/README.md rule 9)
+		push_warning("no AI profiles are shipped, so the resolving twin cannot be shown")
+		return
+	unit.ai_profile = real[0]
+	_assert_silent(BoardLint.Severity.BLOCKS, "AI profile")
+
+
 func test_a_board_naming_no_roster_says_nothing_about_rosters() -> void:
 	# The ordinary board, and the case that would catch a rule that forgot its empty-name guard --
 	# every scenario shipped before #735 names no roster, so a missing early-return would BLOCK

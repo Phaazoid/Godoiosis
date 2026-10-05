@@ -16,6 +16,7 @@ var _scout: JobData
 var _scout_snap: Dictionary
 
 func before_test() -> void:
+	AIProfiles.use_fixtures({"": AIProfile.new()})   # #1230: this suite owns its AI profile
 	_scout = JobCatalog.get_job("scout")
 	_scout_snap = F.snapshot(_scout)
 	var ability := AbilityData.new()
@@ -23,6 +24,7 @@ func before_test() -> void:
 	_scout.ability_pool = [ability]
 
 func after_test() -> void:
+	AIProfiles.clear_fixtures()
 	F.restore(_scout, _scout_snap)
 
 

@@ -29,6 +29,14 @@ const HOLE := Vector2i(4, 5)
 const A_START := Vector2i(2, 4)
 
 
+func before_test() -> void:
+	AIProfiles.use_fixtures({"": AIProfile.new()})   # #1230: this suite owns its AI profile
+
+
+func after_test() -> void:
+	AIProfiles.clear_fixtures()
+
+
 func _board(size := Rect2i(0, 0, 8, 8), hole := HOLE) -> Dictionary:
 	var board: Dictionary = BB.build(self)
 	auto_free(board.root)

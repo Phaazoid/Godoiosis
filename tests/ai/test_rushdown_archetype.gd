@@ -8,6 +8,14 @@ const H := preload("res://tests/support/squad_fixtures.gd")
 const BB := preload("res://play/board_builder.gd")
 
 
+func before_test() -> void:
+	AIProfiles.use_fixtures({"": AIProfile.new()})   # #1230: this suite owns its AI profile
+
+
+func after_test() -> void:
+	AIProfiles.clear_fixtures()
+
+
 func _build_board() -> Dictionary:
 	var board: Dictionary = BB.build(self)
 	auto_free(board.root)

@@ -18,6 +18,14 @@ const ATTACK_ONLY: Array = [BaseAction.ActionType.ATTACK]
 const PLUS: Array[Vector2i] = [Vector2i(0, 0), Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 1), Vector2i(0, -1)]
 
 
+func before_test() -> void:
+	AIProfiles.use_fixtures({"": AIProfile.new()})   # #1230: this suite owns its AI profile
+
+
+func after_test() -> void:
+	AIProfiles.clear_fixtures()
+
+
 func _build_board(size := Rect2i(0, 0, 8, 8)) -> Dictionary:
 	var board: Dictionary = BB.build(self)
 	auto_free(board.root)

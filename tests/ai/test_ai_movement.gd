@@ -17,6 +17,14 @@ const ENEMY := Team.Faction.ENEMY
 const ZONE := "post"
 
 
+func before_test() -> void:
+	AIProfiles.use_fixtures({"": AIProfile.new()})   # #1230: this suite owns its AI profile
+
+
+func after_test() -> void:
+	AIProfiles.clear_fixtures()
+
+
 func _build_board(size: Rect2i) -> Dictionary:
 	var board: Dictionary = BB.build(self)
 	auto_free(board.root)

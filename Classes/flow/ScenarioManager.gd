@@ -253,6 +253,7 @@ func capture_scenario(scenario_name: String, authored := false) -> ScenarioData:
 			entry.unit_data = unit.unit_data.duplicate(true)
 		entry.cell = unit.movement.cell
 		entry.must_survive = unit.must_survive   # #572: authored, and outside the #177 fork above
+		entry.ai_profile = unit.ai_profile   # #1230: the same, verbatim -- a stale name survives to be linted
 		entry.squad_id = squad_manager.squads.find(unit.squad)
 		entry.is_leader = unit.is_leader()
 		if entry.is_leader:

@@ -49,6 +49,7 @@ static func check(game) -> Array[Dictionary]:
 	_check_fittings(board, found)
 	_check_look_preset(game, found)
 	_check_roster(game, found)
+	_check_ai_profiles(board, found)
 	_check_deployment(game, found)
 	_check_dialog(game, board, found)
 	_check_repaired_content(found)
@@ -240,6 +241,20 @@ static func _check_roster(game, found: Array[Dictionary]) -> void:
 	_add(found, Severity.BLOCKS,
 		("This board names roster '%s', which does not exist -- the pre-mission phase has no units "
 		+ "to offer.") % roster)
+
+
+# A unit naming an AI profile that no longer resolves (#1230). BLOCKS, the roster rule one field
+# along: AIProfiles.of falls back to Hard, and substituting Hard for a band (or a boss's bespoke
+# profile) hands the player a different mission. names() rather than resolve(), so the dropdown and
+# the lint ask one question.
+static func _check_ai_profiles(board: BoardContext, found: Array[Dictionary]) -> void:
+	var known := AIProfiles.names()
+	for unit in board.units:
+		if not is_instance_valid(unit) or unit.ai_profile == "" or known.has(unit.ai_profile):
+			continue
+		_add(found, Severity.BLOCKS,
+			"%s names AI profile '%s', which does not exist -- it would play Hard."
+				% [unit.get_unit_name(), unit.ai_profile])
 
 
 # The roster's other half (#736): a board that offers a pool has to say where that pool may stand,

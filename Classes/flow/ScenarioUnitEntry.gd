@@ -32,6 +32,10 @@ class_name ScenarioUnitEntry
 # Read through apply_placement, OUTSIDE the #177 reference/snapshot fork -- a reference entry
 # (state_saved = false) never calls apply_unit_state, and a VIP must survive that.
 @export var must_survive := false
+# Which AI profile this unit plays (#1230), by FILE NAME under AIProfiles.PROFILE_DIR; "" = Hard.
+# A name, never a reference: ScenarioData.look_preset's two reasons. Outside the #177 fork with
+# must_survive, so a reference entry keeps it.
+@export var ai_profile := ""
 @export var jobs: Array[String] = []
 
 # --- UnitInstance state (#83). All additive: a pre-#83 save reads defaults, and every
@@ -93,12 +97,13 @@ class_name ScenarioUnitEntry
 @export var watch_spent := false
 @export var watch_cancelled := false   # #810: broken by a blow -- a third ending beside spent
 
-# What this entry says about the unit's place in the MISSION -- the VIP flag, and a leader's squad
-# name, AI archetype, zone and post. The ONE writer for both loaders (#46): the headless one never
+# What this entry says about the unit's place in the MISSION -- the VIP flag, the AI profile, and a
+# leader's squad name, AI archetype, zone and post. The ONE writer for both loaders (#46): the headless one never
 # copied these, so every saved Sentry rushed and no escort could be lost. Outside the #177 fork,
 # since a VIP or a sentry is usually cast. Called right after the spawn, which made the solo squad.
 func apply_placement(unit: Unit) -> void:
 	unit.must_survive = must_survive
+	unit.ai_profile = ai_profile
 	if squad_id == -1 or not is_leader:
 		return
 	unit.squad.squad_name = squad_name

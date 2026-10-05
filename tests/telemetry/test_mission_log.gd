@@ -220,6 +220,19 @@ func test_the_roster_names_what_each_unit_brought() -> void:
 	assert_int(int(row.get("hp_max", 0))).is_equal(hero.get_max_hp())
 
 
+# #1230: a run says which AI profile each unit played, so a band can be judged from recorded play.
+func test_the_roster_names_each_units_ai_profile() -> void:
+	var foe := _spawn(Team.Faction.ENEMY, Vector2i(0, 0))
+	foe.ai_profile = "Easy"
+	_spawn(Team.Faction.PLAYER, Vector2i(2, 0))
+	mc._begin_turn()
+	var by_profile := {}
+	for row: Dictionary in _of("mission_start")[0].get("roster", []):
+		by_profile[String(row.get("faction", ""))] = row.get("ai_profile")
+	assert_that(by_profile.get("ENEMY")).is_equal("Easy")
+	assert_that(by_profile.get("PLAYER")).is_equal("")
+
+
 func test_every_line_carries_seq_time_and_round() -> void:
 	_spawn(Team.Faction.PLAYER, Vector2i(0, 0))
 	mc._begin_turn()

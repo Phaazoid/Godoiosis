@@ -1,0 +1,22 @@
+[gd_resource type="Resource" script_class="AIProfile" format=3 uid="uid://bh74igrm1baac"]
+
+[ext_resource type="Script" uid="uid://72t3flp0oier" path="res://Classes/ai/AIProfile.gd" id="1_d2dhq"]
+
+[resource]
+script = ExtResource("1_d2dhq")
+picks_best_trade = false
+goes_for_mission_kill = false
+friendly_fire = 1
+weighs_counters = false
+values_splits = false
+sets_up_combos = false
+stabilises_bodies = false
+seeks = 2
+rescue_walk = false
+backs_off_when_dry = false
+avoids_hazards = false
+routes_around_watches = false
+sees_crisis = false
+values_limbs = false
+regroups = false
+squads_up = false
