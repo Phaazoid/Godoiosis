@@ -312,6 +312,37 @@ func test_overwatch_takes_a_name_and_refuses_one_it_cannot_watch_with() -> void:
 	assert_int(_queued(BaseAction.ActionType.OVERWATCH).size()).is_equal(0)
 
 
+# A watch facing off the board's edge watches no cell with a surface, so it is neither offered nor
+# accepted (#1228): The Dry Field's west-edge Carbine could arm one that could never fire.
+func test_a_watch_facing_off_the_board_is_neither_offered_nor_accepted() -> void:
+	var b := BoardBuilder.build(self, "EdgeWatchRoot")
+	auto_free(b.root)
+	BoardBuilder.paint_rect(b.grid, Rect2i(0, 0, 5, 5))
+	var edge := Vector2i(0, 2)
+	var hero: Unit = BoardBuilder.spawn(b, _data("Hero", PLAYER), edge)
+	var lane := P.line(_attack("Lane", 3, 0, 0), 3)
+	lane.can_overwatch = true
+	var t := WeaponData.new()
+	t.weapon_type = WeaponData.WeaponType.CARBINE
+	t.main_attack = _attack("Shot", 3, 1, 1)
+	t.extra_attacks.assign([lane])
+	hero.add_item(WeaponInstance.make(t))
+	var sess = PlaySession.new(b)
+	var h: String = sess.handle_for(hero)
+
+	var offered: Dictionary = sess.legal_targets(h, "Lane")
+	assert_bool(offered.ok).override_failure_message(str(offered.get("error", ""))).is_true()
+	assert_int((offered.aims as Array).size()).override_failure_message(
+		"fixture: no facing onto the board was offered either").is_greater(0)
+	for aim: Dictionary in offered.aims:
+		assert_str(str(aim.get("facing", ""))).override_failure_message(
+				"a facing off the board was offered: %s" % str(aim)).is_not_equal("W")
+	var off: Dictionary = sess.overwatch(h, edge + Vector2i.LEFT, "Lane")
+	assert_bool(off.ok).override_failure_message("a watch facing off the board was accepted").is_false()
+	var on: Dictionary = sess.overwatch(h, edge + Vector2i.RIGHT, "Lane")
+	assert_bool(on.ok).override_failure_message(str(on.get("error", ""))).is_true()
+
+
 # ==============================================================================
 #  The view: the names the verbs take are on the board a driver reads
 # ==============================================================================

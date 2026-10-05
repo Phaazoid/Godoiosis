@@ -87,10 +87,15 @@ static func can_hit_cell_from(unit: Unit, origin_cell: Vector2i, target_cell: Ve
 # gate (#756; three inline copies before it). A directional attack aims a DIRECTION, so the clicked
 # cell need not be in the spread, but a facing whose spread truncates to nothing is a dud order
 # (the AI's own refusal in AITactics._watch_aim). A point aim must hit the cell itself.
+#
+# Either kind is a dud when its footprint holds no SURFACE (#1228): a watch facing off the board's
+# edge, a shot into a hole. For a point aim only the headless API can name such a cell -- a click
+# cannot land on one -- but the rule is one rule, so it is asked here.
 static func can_aim_at(unit: Unit, origin_cell: Vector2i, cell: Vector2i, attack: AttackData, board: BoardContext) -> bool:
 	if is_directional_attack(attack):
 		return not get_affected_cells_from(unit, origin_cell, cell, attack, board).is_empty()
-	return can_hit_cell_from(unit, origin_cell, cell, attack, board)
+	return can_hit_cell_from(unit, origin_cell, cell, attack, board) \
+		and not get_affected_cells_from(unit, origin_cell, cell, attack, board).is_empty()
 
 # The sightline's height above a shooter's feet. A RULE constant, not a knob: it defines what a
 # wall is, and the #218 purpose survives (standing ON a cliff edge still shoots down past it).
@@ -246,7 +251,9 @@ static func blocked_cells_from(unit: Unit, origin_cell: Vector2i, attack: Attack
 			for cell in get_affected_cells_from(unit, origin_cell, origin_cell + dir, attack, board):
 				reachable[cell] = true
 		for cell in union:
-			if not reachable.has(cell):
+			# A cell with no surface is no facing's (#1228), but it is not the terrain cutting a
+			# lane short either, so it is left out of the hatch and the overlay keeps its look.
+			if not reachable.has(cell) and (board == null or board.has_surface(cell)):
 				blocked.append(cell)
 		return blocked
 	for cell in union:
@@ -292,7 +299,27 @@ static func get_all_attack_cells_from(unit: Unit, origin_cell: Vector2i, attack:
 # that dropped it was going, and `facing` carries it: non-zero, it turns the shape whichever anchor
 # it has, so a placed payload turns too (ruling 38). ZERO means no facing was given and keeps every
 # rule below exactly as it was -- placement_dir is the one place that tells the two apart.
+#
+# A FOOTPRINT LISTS ONLY CELLS WITH A SURFACE (#1228, dev 2026-10-05): off the map, an erased cell and
+# a hole are dropped, so nothing reticles, deposits on or drops a payload into the void. The trim runs
+# on the FINISHED list, after the propagation, so a line still crosses a chasm to the far bank and the
+# survivors keep emission order. A null board cannot judge and trims nothing.
 static func get_affected_cells_from(_unit: Unit, origin_cell: Vector2i, target_cell: Vector2i, attack: AttackData, board: BoardContext, facing := Vector2i.ZERO) -> Array[Vector2i]:
+	var cells := _footprint(_unit, origin_cell, target_cell, attack, board, facing)
+	return cells if board == null else surfaced(cells, board)
+
+
+# The cells of `cells` that have a surface (GridUtils.has_surface), in their own order.
+static func surfaced(cells: Array[Vector2i], board: BoardContext) -> Array[Vector2i]:
+	var out: Array[Vector2i] = []
+	for cell in cells:
+		if board.has_surface(cell):
+			out.append(cell)
+	return out
+
+
+# get_affected_cells_from before the surface trim: the four paths above.
+static func _footprint(_unit: Unit, origin_cell: Vector2i, target_cell: Vector2i, attack: AttackData, board: BoardContext, facing := Vector2i.ZERO) -> Array[Vector2i]:
 	if attack == null:
 		return [target_cell]
 	if attack.is_directional():

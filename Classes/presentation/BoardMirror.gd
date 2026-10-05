@@ -1892,7 +1892,7 @@ func lip_key(grid: TileMapLayer, cell: Vector2i, heights: BoardHeights, floor_ro
 		# another hole is contiguous shaft and is left open, which is what makes a wide chasm one
 		# pit (dev ruling 6) -- the same mask as slice 1, applied below the board rather than at
 		# the neighbour's own surface.
-		if GridUtils.is_void_at(grid, near) or not GridUtils.has_ground(grid, near):
+		if not GridUtils.has_surface(grid, near):
 			continue
 		# THE DIRECTION AND THE NEIGHBOUR'S TWO CORNER HEIGHTS AS ONE ENTRY, never two arrays kept
 		# side by side: the shaft reads the direction and the rim reads the heights, and a pair that

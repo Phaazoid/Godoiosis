@@ -58,7 +58,7 @@ static func next(cells: Dictionary[Vector2i, int], board: BoardContext) -> Dicti
 static func holds_gas(cell: Vector2i, board: BoardContext) -> bool:
 	if board.grid == null:
 		return true   # no board to judge: GridUtils' own permissive answer for a gridless context
-	if not board.has_ground(cell) or board.is_void_at(cell):
+	if not board.has_surface(cell):
 		return false
 	return board.is_walkable(cell) or board.terrain_kind_at(cell) == Terrain.Kind.WATER
 

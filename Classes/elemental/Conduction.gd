@@ -296,14 +296,20 @@ static func sweep_paths(actor: Unit, attack: AttackData, paths: Array[Array], bo
 	var struck_paths: Array[Array] = []
 	for hit in hits:
 		struck_paths.append(hit.cells)
-	result.struck = _tiles_of(struck_paths)
+	# A tile with no surface is walked but never struck (#1228): it takes no deposit and drops no
+	# payload. The PATHS keep it, because a path's step is its index -- see _path_steps.
+	result.struck = Reach.surfaced(_tiles_of(struck_paths), board)
 	result.struck_facings = _path_facings(struck_paths, arrival)
 	var current := flood(actor, attack, result.struck, board, hypo, thrown)
 	_add_caught(result, caught(current.cells, board, hypo, result.victims))
 	result.cells = widened(result.struck, current.cells)
 	result.links = current.links
 	# Timed off the CUT paths: a tile past a victim was never reached, so it has no step.
-	_time(result, _path_steps(struck_paths))
+	var landed := _path_steps(struck_paths)
+	for cell: Vector2i in landed.keys():
+		if not board.has_surface(cell):
+			landed.erase(cell)
+	_time(result, landed)
 	return result
 
 
