@@ -1824,8 +1824,7 @@ func _on_unit_died(unit: Unit):
 		selected_unit = null
 	drop_threat_field()   # ahead of the pin release, so its repaint reads a field without the corpse
 	drop_enemy_pin(unit)   # a pin outlives the pointer, so it has to be released here (#710)
-	overlay_manager.handle_unit_death(unit)
-	squad_manager.handle_unit_death(unit)
+	squad_manager.handle_unit_death(unit)   # its overlays go first, inside (#46)
 	refresh_action_queue(squad_manager.active_squad)
 
 # ==============================================================================

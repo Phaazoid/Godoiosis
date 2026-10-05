@@ -514,7 +514,8 @@ func _walk_interrupts(plan: ResolvedPlan, actions: Array) -> Array[Dictionary]:
 # of the pass standing underneath a translucent copy of itself.
 #
 # A walker a watch shot KILLED is already freed by the time its walk completes; its markup went with
-# it (OverlayManager.handle_unit_death), and a freed unit cannot pass the typed parameter.
+# it (OverlayManager.handle_unit_death, through SquadManager's removal), and a freed unit cannot
+# pass the typed parameter.
 func _retire_move_markup(action: BaseAction) -> void:
 	if is_instance_valid(action.actor):
 		game.overlay_manager.clear_move_markup(action.actor)
@@ -987,8 +988,7 @@ func _process_downed_pending() -> void:
 	for unit in _downed_pending:
 		if not is_instance_valid(unit) or unit.is_queued_for_deletion():
 			continue   # finished off later in the same pass -- the death path already cleaned it up
-		game.overlay_manager.handle_unit_death(unit)   # clear its planning overlays (not its board presence)
-		game.squad_manager.settle_downed(unit)   # eject, and spend one rescued this same pass -- safe now, execution is over
+		game.squad_manager.settle_downed(unit)   # clear its overlays, eject, and spend one rescued this same pass -- safe now, execution is over
 	_downed_pending.clear()
 	game.refresh_action_queue(game.squad_manager.active_squad)
 

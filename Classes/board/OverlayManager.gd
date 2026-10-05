@@ -2248,8 +2248,16 @@ func clear_projected_unit(unit: Unit):
 		
 	projected_unit_sprites.erase(unit)
 	
+# A key can be a unit freed since its ghost was drawn, which clear_projected_unit's typed parameter
+# cannot take, so a freed key is dropped here (_purge_unit_entry's shape).
 func clear_all_projected_sprites():
 	for unit in projected_unit_sprites.keys().duplicate():
+		if not is_instance_valid(unit):
+			var sprite: Variant = projected_unit_sprites[unit]
+			if is_instance_valid(sprite):
+				(sprite as Node).queue_free()
+			projected_unit_sprites.erase(unit)
+			continue
 		clear_projected_unit(unit)
 		
 func redraw_projected_units():

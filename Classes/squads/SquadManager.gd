@@ -1164,10 +1164,14 @@ func settle_downed(unit: Unit) -> void:
 	if unit.is_active():
 		unit.squad.has_acted = true
 
-# Shared cleanup: silently drop the unit's planned orders (a death/down is not an order
-# cancellation, and the cancel handlers would restore squad badges), pull it out of its squad,
-# then re-validate whatever's left behind.
+# Shared cleanup: clear the unit's planning overlays (its icons, path, ghost -- not its board
+# presence), silently drop its planned orders (a death/down is not an order cancellation, and the
+# cancel handlers would restore squad badges), pull it out of its squad, then re-validate whatever's
+# left behind. The overlays are cleared HERE so every host does it (#46): the game used to clear them
+# at its two callers, and the headless host never did, so a dead unit's ghost outlived it.
 func _remove_from_squad_and_revalidate(unit: Unit, keep_on_board: bool) -> void:
+	if overlay_manager != null:
+		overlay_manager.handle_unit_death(unit)
 	var squad := unit.squad
 	if squad == null or not is_instance_valid(squad):
 		return

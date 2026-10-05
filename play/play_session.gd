@@ -90,6 +90,7 @@ func _register(unit: Unit) -> void:
 func _on_unit_died(unit: Unit) -> void:
 	mission.note_unit_died(unit)   # FIRST, as game._on_unit_died: the mission may be protecting this one
 	squad_manager.handle_unit_death(unit)
+	_refresh_plan(squad_manager.active_squad)   # game._on_unit_died's last line, refresh_action_queue
 
 func _on_unit_downed(unit: Unit) -> void:
 	# The down fires INSIDE the attack/counter pass (take_damage -> _go_downed). Defer the
