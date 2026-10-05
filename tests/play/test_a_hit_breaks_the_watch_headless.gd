@@ -1,7 +1,8 @@
 # The HEADLESS half of #810's cancel, and the reason it needs its own file: play_session._apply_attack
-# is a HAND-COPIED TWIN of AttackAction.execute (it says so in its own comments), so a spend or a
-# mark added to one and not the other hands the Play API -- which is what the AI drives, Law #3 -- a
-# board the game does not have. #697 shipped exactly that bug and only a play-level case caught it.
+# is the Play API's own executor. Since #46 it calls AttackAction's state steps rather than copying
+# them, but which steps it calls, and in what order, is still its own, so a mark the game makes and
+# it skips hands the Play API -- which is what the AI drives, Law #3 -- a board the game does not
+# have. #697 shipped exactly that bug and only a play-level case caught it.
 #
 # Also pins the Law #3 gate #810 part 1 left standing: play_session.overwatch checked only that the
 # attack CAN watch, so a dry Carbine could arm a watch here that the menu greys out.
@@ -99,7 +100,7 @@ func test_the_play_api_refuses_a_dry_carbines_watch() -> void:
 
 
 # THE OTHER TWIN (#1003). An Overwatch armed onto a cell an enemy already occupies fires in the
-# side-channel tail, and play_session.execute is the hand-copied mirror of that phase. A partition
+# side-channel tail, and play_session.execute plays that phase in a loop of its own. A partition
 # added to the executor and not to the twin is a shot the Play API resolves and never applies --
 # the AI drives this surface (Law #3), so it would plan against damage that never lands.
 func test_the_headless_executor_plays_an_arm_fired_shot_too() -> void:

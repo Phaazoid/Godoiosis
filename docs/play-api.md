@@ -72,7 +72,7 @@ view**, not raw JSON — see *State representation*. Command vocabulary:
 | `ranges(unit?)` | the game's enemy-ranges view (the V key, #46): where the enemy can stand and where it can strike, through the same `ThreatField.for_viewer` the game builds its field with, and for every one of your units at its PLANNED cell, who can hit it. `unit` narrows it to one enemy. The viewer is whoever's turn it is; the game always draws the player's, which differs only in hotseat |
 | `cancel(unit_id)` / `wait(unit_id)` | updated plan |
 | `preview()` | `resolve_plan(active_squad)` outcomes **without applying** (damage, state deltas, deaths, counters) |
-| `execute()` | apply the resolved plan headlessly; return the event log — plus a `mission` key the pass that ends the mission (#96) |
+| `execute()` | apply the resolved plan headlessly, through the game's own state steps (#46 — see *Headless executes a pass the way the game does* below); return the event log — plus a `mission` key the pass that ends the mission (#96) |
 | `end_turn()` | new turn/faction, through the whole turn boundary the game runs (the burn, the round's tile tick, the turn-start ticks — see *The turn boundary* below); refuses once the mission is over |
 | `mission_outcome()` / `mission_tag()` | won / lost / ongoing — the session's own `MissionState`, the object the game's `MissionController` holds (#46): every objective, the clock and every lose condition, with the ending latched on the first answer that is not ongoing |
 
@@ -370,6 +370,16 @@ progress in the words the player does. Both loaders also apply each unit's place
 `ScenarioUnitEntry.apply_placement`, so a saved Sentry or Hold squad plays its own archetype here and
 the board contexts carry the zone store a Sentry's patrol is read from. `tests/flow/test_mission_two_hosts.gd`
 loads one mission in both hosts and requires them to agree.
+
+**Headless executes a pass the way the game does (#46).** `execute()` used to hand-copy the game's
+attack code, and the copy had drifted: a heal restored nothing, a counter the pass skipped still
+spent its ammo, a wader was never soaked, squads never split at pass end, and a unit rescued in the
+same pass stood up unspent. Now it calls what the game calls: an attack is `AttackAction`'s
+`open_playback`, `land`, `remove` and `settle`; the walk phase is `ResolvedPlan.walk_moments`, a
+walk's soaking included; the pass end is `SquadManager.settle_downed` per downed unit, then
+`enforce_contact`. The one declared difference is that a shoved body TELEPORTS to its landing where
+the game slides it. `tests/flow/test_execute_two_hosts.gd` runs one board through both executors and
+requires every unit to come out the same.
 
 **Every verb the game offers in battle, the API has (#46).** `capture`, `group_move` and a rescue's
 bank pick closed the last gaps, so every shipped mission can be won or lost headlessly. Three

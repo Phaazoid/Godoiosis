@@ -56,7 +56,7 @@
 >
 > **The dial's floor is ONE** (dev, 2026-09-12). An absent clock is legal `.tres` and means *burns forever* — but `tests/terrain/test_fire_clock.gd` refuses one on a shipped fuel, because a grass field that never goes out would ship silently. Forever is already spelled, and better: **ground that is not fuel never runs out**, which is what Prolog's braziers on flagstone have always been. So the TICK is how you say forever, and the dial cannot author a file CI reds.
 
-**Canon checked through #902 (2026-09-12); #508's gas store folded in 2026-10-01, its sources and its round tick 2026-10-03, its soak 2026-10-04; #1174 (the water takes no limb) folded in 2026-10-01; #1092's Chilled-beats-Wet rule folded in 2026-09-29; #1135's map-only rule folded in 2026-09-28; #922's melt-sinking folded in 2026-09-27; the burn-rule surface folded in 2026-09-12; the #895 firebreak measurement and fireproofing #892 folded in 2026-09-11; shallow water re-costed 2026-09-10; #120's swim drop folded in 2026-10-01; #1213's catalog cache folded in 2026-10-04.**
+**Canon checked through #902 (2026-09-12); #508's gas store folded in 2026-10-01, its sources and its round tick 2026-10-03, its soak 2026-10-04; #1174 (the water takes no limb) folded in 2026-10-01; #1092's Chilled-beats-Wet rule folded in 2026-09-29; #1135's map-only rule folded in 2026-09-28; #922's melt-sinking folded in 2026-09-27; the burn-rule surface folded in 2026-09-12; the #895 firebreak measurement and fireproofing #892 folded in 2026-09-11; shallow water re-costed 2026-09-10; #120's swim drop folded in 2026-10-01; #1213's catalog cache folded in 2026-10-04; #46's soak moment folded in 2026-10-04.**
 
 ## The tile model (implemented — [LOCKED shape])
 
@@ -222,6 +222,11 @@ bottom is what separates shallow water from ICE, which is what the first pass at
   genuinely missing was a terrain SOURCE, which is a much smaller thing, and #884 built it:
   **`RulesService.wets_in` — WATER kind, not FROZEN, no Waterwalk** — asked at the two places a unit
   comes to occupy a water cell, `PlanResolver.resolve_move`'s per-cell walk and a shove's LANDING.
+  The walk's soaking is stamped with its STEP (`MoveAction.resolved_soak_step`) and plays there
+  when a shot lands on the walker after it ([#46](https://github.com/Phaazoid/Godoiosis/issues/46),
+  2026-10-04 -- it went on at the walk's end until then, so a shock watch over a ford left the
+  crosser wet where the preview said dry; `standing-reactions.md` -> *A TRIGGERED SHOT PLAYS AT THE
+  MOMENT IT WAS TRIGGERED*).
   **Shallow and deep soak identically**, because depth is walkability and being wet does not read it,
   so a drowning body comes up wet -- unless it is CHILLED, which beats WET since
   [#1092](https://github.com/Phaazoid/Godoiosis/issues/1092) (each caller asks `Elemental.is_blocked`

@@ -1,6 +1,6 @@
-# A PAYLOAD through the headless Play API (#1058). play_session._apply_attack is the hand-copied twin
-# of AttackAction.execute and the play path never runs execute() at all, so the payload's blow
-# landing -- and its spending nothing -- has to be asked of the twin separately.
+# A PAYLOAD through the headless Play API (#1058). The play path never runs execute() at all:
+# play_session._apply_attack calls AttackAction's state steps itself (#46), so the payload's blow
+# landing -- and its spending nothing -- has to be asked of the headless path separately.
 extends GdUnitTestSuite
 
 const P := preload("res://tests/support/shape_fixtures.gd")

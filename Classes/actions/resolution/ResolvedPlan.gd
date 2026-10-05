@@ -59,6 +59,43 @@ func mid_walk_shots() -> Array[AttackAction]:
 	return shots
 
 
+# The walk phase as both hosts play it (#567, #46): one entry per moment a walk halts at, in the order
+# the resolve made them -- the walk, the step, whether the walk's own soaking lands there, and every
+# shot that halt set off (a pinball chain included, since the cascade shares the moment that started
+# it). `moves` is the squad's moves in queue order, which IS that order: resolve_move walks the queue
+# one move at a time, and every shot a walk sets off is stamped during its own walk.
+#
+# A SOAKING (#884) is a moment only when a walk-phase shot lands on that walker: its order against
+# those shots is then the outcome, so it plays where the resolve soaked it, before that step's shots.
+# A soaking nothing lands on keeps to the walk's end, so a ford nobody fires at walks as it always has.
+func walk_moments(moves: Array) -> Array[Dictionary]:
+	var shots := mid_walk_shots()
+	var struck: Dictionary[Unit, bool] = {}
+	for shot in shots:
+		if shot.target != null:
+			struck[shot.target] = true
+	var moments: Array[Dictionary] = []
+	for action in moves:
+		var move := action as MoveAction
+		if move == null:
+			continue
+		var soak := move.resolved_soak_step if struck.has(move.actor) else -1
+		for shot in shots:
+			if shot.triggered_during != move:
+				continue
+			var step: int = shot.triggered_at_step
+			if soak >= 0 and step >= soak:
+				moments.append({"move": move, "step": soak, "soak": true, "shots": []})
+				soak = -1
+			if not moments.is_empty() and moments[-1]["move"] == move and int(moments[-1]["step"]) == step:
+				(moments[-1]["shots"] as Array).append(shot)
+				continue
+			moments.append({"move": move, "step": step, "soak": false, "shots": [shot]})
+		if soak >= 0:
+			moments.append({"move": move, "step": soak, "soak": true, "shots": []})
+	return moments
+
+
 # ...and the shots an order in the SIDE-CHANNEL TAIL set off (#1003) — today an Overwatch arming
 # onto a cell an enemy already occupies. They play in the tail, after the counters, because that is
 # where the order that fired them plays; splitting them out of attack_playback() is what keeps the

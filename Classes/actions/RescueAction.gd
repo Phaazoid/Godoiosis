@@ -39,8 +39,8 @@ func execute() -> void:
 			target.revive()
 			# Spent the turn it's rescued — no actions; resets next turn. A SAME-PASS rescue (#124) reaches here before the ejection
 			# sweep has built the target's solo squad — target.squad is still the ACTING squad, and
-			# marking it would spend the whole squad early — so OrderExecutor._process_downed_pending
-			# marks that case after it ejects.
+			# marking it would spend the whole squad early — so SquadManager.settle_downed marks that
+			# case after the pass-end sweep ejects it.
 			if target.squad != actor.squad:
 				target.squad.has_acted = true
 		else:

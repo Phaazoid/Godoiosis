@@ -7,7 +7,7 @@ its child [#49 Action Queue UX](https://github.com/Phaazoid/Godoiosis/issues/49)
 This is a *guidelines* doc, not a spec — it captures the principles we're holding the work to,
 plus the running order of the queue-UX checklist. Update it as items land.
 
-**Canon checked through #1171 (2026-09-29); #1174 (Will retired, the limb icons) folded in 2026-10-01; #1197 (the danger field draws the watch shot and the current) folded in 2026-10-03; #508's soak rename folded in 2026-10-04.**
+**Canon checked through #1171 (2026-09-29); #1174 (Will retired, the limb icons) folded in 2026-10-01; #1197 (the danger field draws the watch shot and the current) folded in 2026-10-03; #508's soak rename folded in 2026-10-04; #46's shared execute steps folded in 2026-10-04.**
 
 ## Principles
 
@@ -844,8 +844,9 @@ on the first frame HP moves — so this is two retimings, and only one of them t
   completes (a `lunge_peaked` signal off a tween callback between the two legs) while the return leg
   plays on; `AttackAction.execute` then emits `impact` and applies the payload there. The bodyguard's
   block lunge is the same function, so a guarded hit lands at the BLOCK's peak — consistent, and
-  stated. Only *when* a resolved number lands moved (Law #2 intact). The headless twin
-  (`play_session._apply_attack`) has no animation and needed nothing.
+  stated. Only *when* a resolved number lands moved (Law #2 intact). The headless executor
+  (`play_session._apply_attack`, which calls the same state steps back to back since #46) has no
+  animation and needed nothing.
 - **A fall's cubes wait for the landing — in the READOUT only.** `ResolvedOutcome.fall_damage` is
   folded into `damage` and stays so: ONE `take_damage` at the hit, because splitting it would change
   the lethality ladder's overkill arithmetic and break preview == execution. What moved is the burst.

@@ -144,7 +144,7 @@ func test_heal_execution_matches_preview() -> void:
 	plan.attacks.append(attack)
 	PlanResolver.resolve(plan)
 
-	target.heal(attack.resolved.heal_amount)
+	attack.land()   # the playback step both hosts land a blow through (#46)
 	assert_int(target.get_current_hp()).is_equal(attack.resolved.target_hp_after)
 
 

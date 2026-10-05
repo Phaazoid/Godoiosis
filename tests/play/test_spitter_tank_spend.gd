@@ -1,14 +1,13 @@
 # #97's tank end to end on a REAL board, through the same queue -> resolve -> execute path the game
 # runs. tests/weapons/test_spitter_tank.gd pins the rule in isolation; this pins the WIRING, and it
-# exists because of what #697's own play suite found: play_session._apply_attack is a declared
-# HAND-COPIED TWIN of AttackAction.execute, so a spend written in one place only leaves the headless
-# path handing back a stronger unit than the game does. No unit test can see that.
+# exists because of what #697's own play suite found: play_session._apply_attack was a HAND-COPIED
+# TWIN of AttackAction.execute, so a spend written in one place only left the headless path handing
+# back a stronger unit than the game does. No unit test can see that.
 #
-# The two mutants this file is falsified against are therefore DIFFERENT mutants:
-#   - delete the twin's spend  -> test_a_fired_charged_shot_empties_one_tank_slot reds HERE;
-#   - delete execute()'s spend -> this file stays GREEN, because the play path never calls
-#     execute() at all. That half needs a real-scene case, which is why one lives in
-#     tests/ui/test_game_scene_smoke.gd rather than here.
+# Since #46 both executors spend through one step, AttackAction.settle, so deleting the spend there
+# reds this file and the game's alike. What each host's own suite still guards is that its executor
+# REACHES the step: this file for _apply_attack, and tests/flow/test_spitter_tank_execute_wire.gd for
+# execute(), which the play path never calls.
 extends GdUnitTestSuite
 
 const P := preload("res://tests/support/shape_fixtures.gd")
