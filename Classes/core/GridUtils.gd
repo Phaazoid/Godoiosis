@@ -133,6 +133,14 @@ static func is_void_at(grid: TileMapLayer, cell: Vector2i) -> bool:
 	return not has_ground(grid, cell) and grid.get_used_rect().has_point(cell)
 
 
+# Does this cell have a SURFACE (#1228): a tile, and not a hole. Off the map, an erased cell and an
+# authored hole have none; water does. The one answer to "could anything ever be here", read by an
+# attack's footprint (Reach), the gas a cell may hold (GasSpread) and the walls a hole's lip needs
+# (BoardMirror). A null grid cannot judge, so it answers true, as has_ground does.
+static func has_surface(grid: TileMapLayer, cell: Vector2i) -> bool:
+	return has_ground(grid, cell) and not is_void_at(grid, cell)
+
+
 # The kind a TileData carries. Split out of get_terrain_kind_at_cell (#250) so a caller
 # holding a tile rather than a placed cell -- the meshlib generator walks the TILESET, which
 # has no board -- reads the same rule instead of copying it. Same shape as the
