@@ -2,7 +2,7 @@
 
 **Status: ALL FOUR SLICES BUILT 2026-07-28 ([#96](https://github.com/Phaazoid/Godoiosis/issues/96)).** Filed 2026-07-27, when the project acquired a win condition for the first time. Before this, Iosis had ten interlocking systems and no way to finish a battle — which meant a design question could be answered *"is this coherent?"* but never *"does this improve play?"*
 
-**Canon checked through #1160 (2026-09-29); #1220's fourth archetype folded in 2026-10-05; #120's body weight and its authored table, and #1174's WIL tombstone, folded in 2026-10-01; #46's shared pre-mission phase and its job door (`Loadout.set_job`) folded in 2026-10-03; #46's restart buffer rules (`PreMissionPhase.replay_for`/`kept_by_restart`) folded in 2026-10-03; #46's `MissionState` (mission scoring slice 1: the state both hosts own) folded in 2026-10-04; #46 slice 2 (the headless session owns one, and `apply_placement`) folded in 2026-10-04; #46's parity PR (the `capture` verb, `CaptureAction` stamping a `MissionState`) folded in 2026-10-04.**
+**Canon checked through #1160 (2026-09-29); #1220's fourth archetype folded in 2026-10-05; #120's body weight and its authored table, and #1174's WIL tombstone, folded in 2026-10-01; #46's shared pre-mission phase and its job door (`Loadout.set_job`) folded in 2026-10-03; #46's restart buffer rules (`PreMissionPhase.replay_for`/`kept_by_restart`) folded in 2026-10-03; #46's `MissionState` (mission scoring slice 1: the state both hosts own) folded in 2026-10-04; #46 slice 2 (the headless session owns one, and `apply_placement`) folded in 2026-10-04; #46's parity PR (the `capture` verb, `CaptureAction` stamping a `MissionState`) folded in 2026-10-04; #46's Pre-mission screen box folded in 2026-10-05.**
 
 ## What a mission is
 
@@ -48,6 +48,18 @@ The whole roster spawns as real `Unit` nodes, into **`game.reserve_root`** — b
 **And it runs BEFORE the arm.** `spawn_unit` creates a solo squad per unit, which emits `squad_created`, which an armed `ScenarioDirector` answers by firing `SQUAD_FORMED` beats and advancing the lesson — so a three-unit draw would play its payoff three times before the player had touched anything. The director's own contract says it: a loading board must never trip a lesson or a beat.
 
 **An authored save skips the drawn units.** `Unit.drawn_from_roster` is a transient flag read at exactly one place, `capture_scenario`'s `authored` branch: a roster draw is authored by the *roster*, so writing it into the board's own `unit_entries` would make the next boot draw a second force on top of the one it just recorded — reachable by playing a mission, pressing F1, tweaking a zone and hitting Update. A full capture (a save slot, a bug report) keeps them, because it is restoring a battle rather than re-authoring a board.
+
+### A mission may offer no screen (#46)
+
+**Whether a board opens the phase is authored.** It used to be implied: any board whose roster stood somebody up opened it. The dev's ruling (2026-10-05) was *"a standard checkbox or something whether or not a mission allows the pre missions screen"*, so it is `ScenarioData.offers_pre_mission`, the *Pre-mission screen* box on the Scenario tab's roster row, beside the cap.
+
+**Unticked, the draw still runs and its authored placement is the answer.** The battle begins through the fall-through a board that drew nobody already takes, `scenario_director.mission_started()` then `_begin_turn()`, so the mission's dialog is ARMED. The `armed=false` path would disarm it; that is the watch-only boot's answer, not this one's. `PreMissionPhase.opens(offered, drawn)` is the one rule, asked by `begin_mission`, `restart_mission` and the headless `PlaySession.start_pre_mission`.
+
+**TRUE by default**, for `offers_every_job`'s reason. Every board saved before the box existed opened the screen whenever it drew somebody, so a false default would be this field switching the screen off on the demo's own missions. An absent key in a saved file reads true. `clear_board` resets the store to TRUE as well, unlike `in_demo`'s false, so a board authored after a clear opens its phase as before.
+
+**A loadout committed while the box was ticked does not replay once it is unticked.** `PreMissionPhase.replay_for` takes `offered` as a required argument, since otherwise the restart buffer would stand a loadout again, silently, on a board whose player can no longer see or change it. `restart_mission` asks for the buffer after its reload, so the answer is the reloaded board's.
+
+**A briefing on a board with no screen never plays.** `PRE_MISSION_START` fires when the phase opens. `BoardLint` reports such a beat as DEGRADES on a board with no roster or with the box unticked.
 
 ### The phase the player stands in (#739)
 
