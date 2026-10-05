@@ -68,6 +68,18 @@ func is_walkable(cell: Vector2i) -> bool:
 	# stays here: it is the half that needs a cell.
 	return GridUtils.walkable_of(grid.get_cell_tile_data(cell))
 
+# What entering this cell costs, is_walkable's state-aware twin (#1223): ice is ice whatever lies
+# under it, so a FROZEN cell costs Terrain.FROZEN_MOVE_COST however slow its tile is authored. Asked
+# by the rule (RulesService.movement_cost) and by both readouts that print a cost, so none of them
+# re-reads the tile's custom data. An undeclared cost reads 0, as movement_cost always did.
+func move_cost_at(cell: Vector2i) -> int:
+	if has_tile_state(cell, Terrain.TileState.FROZEN):
+		return Terrain.FROZEN_MOVE_COST
+	var data := grid.get_cell_tile_data(cell)
+	if data == null or not data.has_custom_data("move_cost"):
+		return 0
+	return int(data.get_custom_data("move_cost"))
+
 # Which unit ends up here once the plan resolves — the inverse of Unit.get_projected_destination,
 # derived from it (#105). Reads THIS board's own unit list, so the rules never resolve a cell
 # against a different roster than the one they were handed.

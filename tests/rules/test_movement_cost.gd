@@ -130,3 +130,78 @@ func test_waterwalk_move_range_stays_within_mov_budget_across_water() -> void:
 
 	assert_bool(result.reachable.has(Vector2i(mov, 0))).is_true()
 	assert_bool(result.reachable.has(Vector2i(mov + 1, 0))).is_false()
+
+# --- a frozen cell costs the ice, not the tile (#1223) ----------------------------------------------
+
+# A flat, walkable tile the tileset authors as slow, found rather than named: which tile that is, and
+# how slow, are content (tests/README.md #9). Empty when nothing is authored that way.
+func _slow_tile(grid: BoardGrid) -> Dictionary:
+	var tiles := grid.tile_set
+	for s in tiles.get_source_count():
+		var source_id := tiles.get_source_id(s)
+		var source := tiles.get_source(source_id) as TileSetAtlasSource
+		if source == null:
+			continue
+		for i in source.get_tiles_count():
+			var coords := source.get_tile_id(i)
+			var data := source.get_tile_data(coords, 0)
+			if GridUtils.prop_shape_of(data) != GridUtils.PropShape.FLAT \
+					or not GridUtils.walkable_of(data) or not data.has_custom_data("move_cost"):
+				continue
+			var cost: int = data.get_custom_data("move_cost")
+			if cost > Terrain.FROZEN_MOVE_COST:
+				return {"source": source_id, "coords": coords, "cost": cost}
+	return {}
+
+func _freeze(board: Dictionary, cell: Vector2i) -> void:
+	var freeze := ResolvedCellEffect.new()
+	freeze.cell = cell
+	freeze.states_added.assign([Terrain.TileState.FROZEN])
+	(board.terrain_states as TerrainStateManager).apply(freeze)
+
+func _stateful_board(board: Dictionary, unit: Unit) -> BoardContext:
+	var units: Array[Unit] = [unit]
+	return BoardContext.new(board.grid, units, board.squad_manager, board.terrain_states)
+
+func test_a_frozen_cell_costs_the_ice_whatever_its_tile_authors() -> void:
+	var board := _board()
+	var slow := _slow_tile(board.grid)
+	assert_bool(slow.is_empty()).override_failure_message(
+		"no flat walkable tile is authored slower than ice, so the case would pass vacuously").is_false()
+	if slow.is_empty():
+		return
+	var cell := Vector2i(1, 0)
+	(board.grid as BoardGrid).paint(cell, slow.source, slow.coords)
+	var unit := _spawn(board, Vector2i(0, 0), false)
+
+	assert_int(RulesService.movement_cost(Vector2i(0, 0), cell, unit, _stateful_board(board, unit))) \
+		.override_failure_message("an unfrozen slow tile stopped costing what it authors") \
+		.is_equal(slow.cost)
+	_freeze(board, cell)
+	var frozen := _stateful_board(board, unit)
+	assert_int(RulesService.movement_cost(Vector2i(0, 0), cell, unit, frozen)) \
+		.override_failure_message("a FROZEN cell still costs its tile's authored move cost") \
+		.is_equal(Terrain.FROZEN_MOVE_COST)
+	assert_int(frozen.move_cost_at(cell)).is_equal(Terrain.FROZEN_MOVE_COST)
+
+func test_a_move_range_reaches_further_across_ice() -> void:
+	var board := _board()
+	var slow := _slow_tile(board.grid)
+	if slow.is_empty():
+		push_warning("no flat walkable tile is authored slower than ice")
+		return
+	for x in range(1, 12):
+		(board.grid as BoardGrid).paint(Vector2i(x, 0), slow.source, slow.coords)
+	var unit := _spawn(board, Vector2i(0, 0), false)
+	if unit.get_mov() < 2:
+		push_warning("the fixture unit moves less than two, so the ice cannot buy it a cell")
+		return
+
+	var before: Dictionary = RulesService.compute_move_range(unit, _stateful_board(board, unit)).reachable
+	for x in range(1, 12):
+		_freeze(board, Vector2i(x, 0))
+	var after: Dictionary = RulesService.compute_move_range(unit, _stateful_board(board, unit)).reachable
+
+	assert_int(after.size()).override_failure_message(
+		"freezing a slow row bought the unit no further reach (%d before, %d after)" % [before.size(), after.size()]
+		).is_greater(before.size())

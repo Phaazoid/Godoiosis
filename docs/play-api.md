@@ -126,7 +126,8 @@ each refused in its words:
   offer plus whatever the unit already holds -- the list the card's picker shows.
 - `fit {unit, slot, mod, space}` / `unfit {unit, slot, mod}` fit and remove weapon mods. The mod is
   named by its catalogue key and must be in the fitting card's own library
-  (`WeaponModCatalog.offerable_for` with the mission's pool); every refusal is
+  (`WeaponModCatalog.offerable_for` with the mission's pool, where an empty pool offers none since
+  #1222); every refusal is
   `WeaponInstance.fit_block_reason`'s. `unit` may be `"stash"` for a stash weapon.
 
 `slot` counts from 0, as the recorded gear `index` does; `space` counts from 1, as every
@@ -214,7 +215,8 @@ shallow / deep water (split on walkability, so deep water no longer draws as roc
 other impassable tile, `T` tree, blank a hole or off the map. **A tile state draws over its ground**:
 `^` burning, `_` frozen, `;` scorched, `n` cover, so a fire spreading toward you and a frozen-over
 river are on the board. A `Ground:` line under the board names only the glyphs it holds. Walkability
-is still the board's (`BoardContext.is_walkable`, #109), so the view and the rules cannot disagree
+is still the board's (`BoardContext.is_walkable`, #109), and so is a cell's move cost
+(`BoardContext.move_cost_at`, #1223, which charges ice 1), so the view and the rules cannot disagree
 about a frozen cell. Height does not fit in a 3-char cell: when the board has relief or gas the
 overview says so and the `terrain` view draws it. A legend table carries what a glyph can't (name,
 hp, squad/leader, weapon). Unit handles are session-stable ids

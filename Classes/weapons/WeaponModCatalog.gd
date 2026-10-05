@@ -27,10 +27,10 @@ static func get_mods() -> Dictionary:
 # #4's own clause -- the card cannot reach a Roster, and a second family-filtering walk beside this
 # one would drift the first time the rule gained a clause.
 #
-# An EMPTY pool means the whole catalogue, which is what every caller outside the pre-mission phase
-# wants: the Item Editor authors against everything on disk, since it is not playing a mission.
+# An EMPTY pool offers nothing (#1222): a roster that names no mods offers none. A caller that wants
+# the whole catalogue says so with all_mods(), as the Item Editor and a roster's every-mod flag do.
 static func offerable_for(weapon_type: WeaponData.WeaponType,
-		pool: Array[WeaponModData] = []) -> Dictionary:
+		pool: Array[WeaponModData]) -> Dictionary:
 	var offerable := {}
 	# ONE walk over ONE scan, with the pool as an extra filter rather than a second source -- so both
 	# branches key identically by construction and a caller cannot tell them apart by their keys.
@@ -43,6 +43,14 @@ static func offerable_for(weapon_type: WeaponData.WeaponType,
 		var mod: WeaponModData = mods[key]
 		if not mod.fits_family(weapon_type):
 			continue
-		if pool.is_empty() or allowed.has(mod.resource_path):
+		if allowed.has(mod.resource_path):
 			offerable[key] = mod
 	return offerable
+
+
+# Every authored mod, as a pool -- the one spelling of "offer everything".
+static func all_mods() -> Array[WeaponModData]:
+	var pool: Array[WeaponModData] = []
+	for mod: WeaponModData in get_mods().values():
+		pool.append(mod)
+	return pool

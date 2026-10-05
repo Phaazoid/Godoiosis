@@ -187,9 +187,7 @@ func terrain_at(cell: Vector2i) -> Dictionary:
 		# rules about where a hole is -- the same reason `walkable` below comes from is_walkable.
 		var absent := "void" if _board().is_void_at(cell) else "offmap"
 		return {"exists": false, "walkable": false, "cost": 0, "type": absent}
-	var cost := 0
-	if data.has_custom_data("move_cost"):
-		cost = int(data.get_custom_data("move_cost"))
+	var cost := _board().move_cost_at(cell)   # ice included, as the rules charge it (#1223)
 	var kind := GridUtils.get_terrain_kind_at_cell(grid, cell)
 	var kind_name: String = Terrain.Kind.keys()[kind]
 	# Walkability comes from the board, never from a second read of the tile (#109). This used to

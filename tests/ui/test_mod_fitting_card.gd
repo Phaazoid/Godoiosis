@@ -96,7 +96,7 @@ func _weapon() -> WeaponInstance:
 
 
 func _open(weapon: WeaponInstance, wielder: Unit = null) -> ModFittingCard:
-	var card := ModFittingCard.open(game, weapon, wielder)
+	var card := ModFittingCard.open(game, weapon, wielder, WeaponModCatalog.all_mods())
 	await await_idle_frame()
 	return card
 
@@ -124,8 +124,9 @@ func _space_zones(card: ModFittingCard) -> Array[GearDropZone]:
 # An empty space that would take a mod from the library, and the mod -- so a case can fit something
 # without asserting anything about which shipped mod it happened to be.
 func _fittable(weapon: WeaponInstance) -> Array:
-	for key in WeaponModCatalog.offerable_for(weapon.template.weapon_type):
-		var mod: WeaponModData = WeaponModCatalog.offerable_for(weapon.template.weapon_type)[key]
+	var offerable := WeaponModCatalog.offerable_for(weapon.template.weapon_type, WeaponModCatalog.all_mods())
+	for key in offerable:
+		var mod: WeaponModData = offerable[key]
 		for i in range(weapon.space_count()):
 			if weapon.can_fit(i, mod):
 				return [i, mod]
@@ -281,7 +282,7 @@ func test_the_list_offers_exactly_what_the_family_allows() -> void:
 	var weapon := _weapon()
 	if weapon == null:
 		return
-	var offerable := WeaponModCatalog.offerable_for(weapon.template.weapon_type)
+	var offerable := WeaponModCatalog.offerable_for(weapon.template.weapon_type, WeaponModCatalog.all_mods())
 	if offerable.is_empty():
 		push_warning("nothing authored fits this family, so the list has nothing to check")
 		return
@@ -466,7 +467,7 @@ func test_the_screen_hands_the_card_the_missions_mod_pool() -> void:
 	if weapon == null:
 		push_warning("no weapon with mod spaces is reachable in this phase")
 		return
-	var everything := WeaponModCatalog.offerable_for(weapon.template.weapon_type)
+	var everything := WeaponModCatalog.offerable_for(weapon.template.weapon_type, WeaponModCatalog.all_mods())
 	if everything.size() < 2:
 		push_warning("fewer than two authored mods fit this family, so a narrowing cannot be seen")
 		return
@@ -484,6 +485,35 @@ func test_the_screen_hands_the_card_the_missions_mod_pool() -> void:
 	assert_int(_library_rows(card).size()).override_failure_message(
 		"the card offered the whole catalogue -- the mission's pool never reached it"
 		).is_equal(1)
+
+
+# The same wire with NOTHING on it (#1222): a mission whose roster names no mods offers none, and the
+# card says so rather than falling back to every mod on disk.
+func test_an_empty_mission_pool_offers_the_card_no_mods() -> void:
+	if not await _enter_phase():
+		return
+	var weapon := _weapon()
+	if weapon == null:
+		push_warning("no weapon with mod spaces is reachable in this phase")
+		return
+	var everything := WeaponModCatalog.offerable_for(weapon.template.weapon_type, WeaponModCatalog.all_mods())
+	if everything.is_empty():
+		push_warning("no authored mod fits this family, so an empty offer proves nothing")
+		return
+
+	var none: Array[WeaponModData] = []
+	mc.loadout().available_mods = none
+	_screen()._on_detail_requested(weapon, null)
+	await await_idle_frame()
+
+	var card: ModFittingCard = null
+	for child in game.card_layer.get_children():
+		if child is ModFittingCard:
+			card = child
+	assert_object(card).override_failure_message("the screen opened no card").is_not_null()
+	assert_int(_library_rows(card).size()).override_failure_message(
+		"an empty mission pool offered mods -- a roster naming none must offer none"
+		).is_equal(0)
 
 
 # --- the readout's channels (#1017) ---------------------------------------------------------------

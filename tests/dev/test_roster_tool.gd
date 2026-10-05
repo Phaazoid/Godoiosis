@@ -281,14 +281,15 @@ func test_the_loadout_carries_the_missions_mods_by_reference() -> void:
 
 
 # The family rule stays a fact about the WEAPON and the pool a fact about the mission, so the two
-# compose rather than replacing each other.
-func test_the_pool_filters_the_offer_and_an_empty_pool_means_the_catalogue() -> void:
+# compose rather than replacing each other. An empty pool offers NOTHING (#1222): a roster that
+# names no mods offers none, and "everything" is asked for by name with all_mods().
+func test_the_pool_filters_the_offer_and_an_empty_pool_offers_no_mods() -> void:
 	var mods := WeaponModCatalog.get_mods()
 	if mods.size() < 2:
 		push_warning("fewer than two mods are authored, so a filter cannot be observed")
 		return
 	var family := WeaponData.WeaponType.CARBINE
-	var everything := WeaponModCatalog.offerable_for(family)
+	var everything := WeaponModCatalog.offerable_for(family, WeaponModCatalog.all_mods())
 	if everything.size() < 2:
 		push_warning("fewer than two mods fit this family")
 		return
@@ -299,8 +300,8 @@ func test_the_pool_filters_the_offer_and_an_empty_pool_means_the_catalogue() -> 
 	assert_int(narrowed.size()).override_failure_message(
 		"the pool did not narrow what the card offers").is_equal(1)
 	assert_int(WeaponModCatalog.offerable_for(family, [] as Array[WeaponModData]).size()) \
-		.override_failure_message("an empty pool stopped meaning the whole catalogue"
-		).is_equal(everything.size())
+		.override_failure_message("an empty pool offered mods -- a roster naming none offers none"
+		).is_equal(0)
 
 # --- jobs (#964) ---
 

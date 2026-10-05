@@ -185,11 +185,10 @@ static func ground_lines(game, cell: Vector2i) -> Array[String]:
 		# what makes a FROZEN cell read as the shallow line for free, since is_walkable knows state.
 		lines.append(Glossary.short(Glossary.Term.WATER_TILE if not board.is_walkable(cell)
 			else Glossary.Term.SHALLOW_WATER))
-	var data: TileData = game.grid.get_cell_tile_data(cell)
-	if data != null and data.has_custom_data("move_cost"):
-		var cost: int = data.get_custom_data("move_cost")
-		if cost > 1:
-			lines.append("Slow going — costs %d movement to enter." % cost)
+	# The cost the rules charge, ice included (#1223), never a second read of the tile.
+	var cost: int = board.move_cost_at(cell)
+	if cost > 1:
+		lines.append("Slow going — costs %d movement to enter." % cost)
 	# Elevation (#257). Only spoken when it is non-default, so a flat board's card reads exactly as
 	# it did before verticality existed — the same rule the move_cost line above follows.
 	var elevation: int = board.elevation_at(cell)

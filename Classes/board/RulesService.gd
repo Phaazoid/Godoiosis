@@ -170,14 +170,10 @@ static func movement_cost(from: Vector2i, cell: Vector2i, unit: Unit, board: Boa
 	if not board.grid.get_used_rect().has_point(cell):
 		return OUT_OF_MAP_TILE
 
-	var cost: int = 0
-	if data.has_custom_data("move_cost"):
-		cost += data.get_custom_data("move_cost")
-
 	if blocks_passage(unit, board.unit_at_cell(cell)):
 		return CANNOT_WALK_TILE
 
-	return cost
+	return board.move_cost_at(cell)
 
 # The two occupancy questions, split because they have DIFFERENT answers and both already existed
 # inline (#127 pulled them out so AITactics can ask them instead of re-deriving them; each still has
