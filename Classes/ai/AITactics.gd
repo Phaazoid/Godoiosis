@@ -226,6 +226,17 @@ static func _pursuit_beats(hops: int, standing: bool, dist: int,
 # no route to one) is absent -> UNREACHABLE -> it falls to the distance tie-break, the same
 # degradation the sealed-room case has always had.
 static func _approach_distances(from_unit: Unit, board: BoardContext) -> Dictionary:
+	var result := {}
+	var firing := _approach_firing(from_unit, board)
+	for unit: Unit in firing:
+		result[unit] = firing[unit][0]
+	return result
+
+
+# _approach_distances with the firing cell kept beside the hops: enemy -> [hops, cell], the cell being
+# the nearest one it could be fought from (GridUtils.NO_CELL when it has none). Balanced asks whether
+# the enemy could answer it from THAT cell (#1220).
+static func _approach_firing(from_unit: Unit, board: BoardContext) -> Dictionary:
 	# One hoisted pick, matching _best_approach's own v1 approximation (docs/design/ai-tactics.md).
 	var aiming := from_unit.get_fired_attack()
 	var per_enemy := {}
@@ -245,12 +256,42 @@ static func _approach_distances(from_unit: Unit, board: BoardContext) -> Diction
 	var result := {}
 	for unit in per_enemy:
 		var best := RulesService.UNREACHABLE
+		var from := GridUtils.NO_CELL
 		for cell in per_enemy[unit]:
 			var hops: int = field.get(cell, RulesService.UNREACHABLE)
 			if hops < best:
 				best = hops
-		result[unit] = best
+				from = cell
+		result[unit] = [best, from]
 	return result
+
+
+# BALANCED's target (#1220, rulings 13 and 14): with anybody in reach, the best exchange -- the same
+# pick Rushdown makes. With nobody, the nearest enemy that could NOT answer it from the cell it would
+# fight from; only when every enemy could, the nearest at all. Asked fresh every turn.
+static func choose_balanced_target(leader: Unit, board: BoardContext, squad_manager: SquadManager) -> Unit:
+	if not _engageable_enemies(leader, board, null, null).is_empty():
+		return choose_engagement_target(leader, board, squad_manager)
+	var firing := _approach_firing(leader, board)
+	var best: Unit = null
+	var best_hops := 0
+	var best_standing := false
+	var best_dist := 0
+	for unit in board.units:
+		if not is_instance_valid(unit) or not firing.has(unit) or not (unit.is_active() or unit.is_downed()):
+			continue
+		var hops: int = firing[unit][0]
+		var from: Vector2i = firing[unit][1]
+		if hops >= RulesService.UNREACHABLE or squad_manager.can_counter(unit, leader, board, from):
+			continue
+		var standing := unit.is_active()
+		var d := GridUtils.manhattan_distance(leader.movement.cell, unit.movement.cell)
+		if best == null or _pursuit_beats(hops, standing, d, best_hops, best_standing, best_dist):
+			best = unit
+			best_hops = hops
+			best_standing = standing
+			best_dist = d
+	return best if best != null else nearest_enemy(leader, board)
 
 # Walks the archetype's priority list (AIArchetype.MAIN_ACTION_PRIORITY); first type that
 # yields a buildable candidate queues and wins. Everything funnels through queue_action,
@@ -1069,10 +1110,12 @@ static func _exposure_counts(allies: Array[Unit], board: BoardContext, faction: 
 # furthest along the ROUTE to it. The route targets the nearest STANDABLE firing position, not
 # enemy.movement.cell itself (#127) -- see _nearest_standable_attack_cell for why that distinction
 # is load-bearing. Only cells its squad can follow it to (#1220).
-static func best_attack_destination(leader: Unit, enemy: Unit, board: BoardContext, allowed = null) -> Vector2i:
+static func best_attack_destination(leader: Unit, enemy: Unit, board: BoardContext, allowed = null,
+		weigh_safety := false) -> Vector2i:
 	var aiming := leader.get_fired_attack()
 	var route_target := _nearest_standable_attack_cell(leader, enemy.movement.cell, aiming, board)
-	return _best_approach(leader, enemy.movement.cell, board, _leader_allowed(leader, board, allowed), true, route_target)
+	return _best_approach(leader, enemy.movement.cell, board, _leader_allowed(leader, board, allowed), true,
+			route_target, weigh_safety)
 
 
 # The leader cells a squad can follow to, as `allowed` narrowed by them; `allowed` itself for a squad
@@ -1117,11 +1160,12 @@ static func _followable(squad: Squad, board: BoardContext):
 # Fights `target`: destination pick -> the seek -> conditional group move -> every member tries a
 # main action. The shared shape behind Rushdown's whole turn and Sentry's intruder branch -- was
 # hand-duplicated in both files with no third caller (AI generalization sweep, finding #2).
-# `within` is a Sentry's zone: the seek only goes looking for an intruder.
+# `within` is a Sentry's zone: the seek only goes looking for an intruder. `weigh_safety` is Balanced's
+# tie-break on the approach (#1220 ruling 11).
 static func engage(squad: Squad, target: Unit, board: BoardContext, squad_manager: SquadManager, allowed = null,
-		within = null) -> void:
+		within = null, weigh_safety := false) -> void:
 	var leader := squad.get_leader()
-	var seek := seek_positions(squad, best_attack_destination(leader, target, board, allowed), board,
+	var seek := seek_positions(squad, best_attack_destination(leader, target, board, allowed, weigh_safety), board,
 			squad_manager, allowed, within)
 	if seek.destination != leader.movement.cell or not seek.pins.is_empty():
 		squad_manager.queue_group_move(squad, seek.destination, board, allowed, seek.pins, seek.hazards)
@@ -1868,7 +1912,8 @@ static func _standable_attack_cells(unit: Unit, goal: Vector2i, aiming: AttackDa
 # gets fooled by a body parked on the nearest geometric firing position. Defaults to `goal`, so
 # closest_reachable_cell_to (a post is a plain cell, no firing-position question to ask) is unchanged.
 # The can_attack / straight-line terms below still test against the real `goal` either way.
-static func _best_approach(unit: Unit, goal: Vector2i, board: BoardContext, allowed, prefer_attack: bool, route_target = null) -> Vector2i:
+static func _best_approach(unit: Unit, goal: Vector2i, board: BoardContext, allowed, prefer_attack: bool,
+		route_target = null, weigh_safety := false) -> Vector2i:
 	var range := RulesService.compute_move_range(unit, board)
 	var here: Vector2i = unit.movement.cell
 	# Read once, like a player's aim -- destination-per-candidate-attack is still the #78 v1
@@ -1889,12 +1934,18 @@ static func _best_approach(unit: Unit, goal: Vector2i, board: BoardContext, allo
 	# corridor), which is why this is unconditional rather than keyed off route_target.
 	var route := RulesService.path_hops(hop_target, board, unit, -1, wanted, true)
 	var watches := _hostile_watches(unit.get_faction(), board)
+	# Balanced's tie-break (#1220): how many enemies could attack the cell next turn, from the
+	# viewer's own danger field. Zero for everyone else, so it never speaks for them.
+	var danger: ThreatField = ThreatField.build(board, unit.get_faction()) if weigh_safety else null
 
 	var best := here
 	var best_can_attack: bool = prefer_attack and Reach.get_all_attack_cells_from(unit, here, aiming).has(goal) \
 		and Reach.vertical_aim_ok(aiming, here, goal, board)
 	var best_safe := not _is_hazard(unit, here, board, watches)
 	var best_hops: int = route.get(here, RulesService.UNREACHABLE)
+	var best_threat: int = danger.attackers_of(here).size() if danger != null else 0
+	if danger != null and best_can_attack:
+		best_hops = 0
 	var best_dist: int = GridUtils.manhattan_distance(here, goal)
 	var best_cost := 0
 
@@ -1905,14 +1956,18 @@ static func _best_approach(unit: Unit, goal: Vector2i, board: BoardContext, allo
 			and Reach.vertical_aim_ok(aiming, cell, goal, board)
 		var safe := not _is_hazard(unit, cell, board, watches)
 		var hops: int = route.get(cell, RulesService.UNREACHABLE)
+		var threat: int = danger.attackers_of(cell).size() if danger != null else 0
+		if danger != null and can_attack:
+			hops = 0   # nothing left to walk once it can attack, so safety speaks before the route
 		var dist: int = GridUtils.manhattan_distance(cell, goal)
 		var cost: int = range.reachable[cell]
-		if _approach_beats(can_attack, safe, hops, dist, cost, best_can_attack, best_safe, best_hops, best_dist,
-				best_cost):
+		if _approach_beats(can_attack, safe, hops, threat, dist, cost, best_can_attack, best_safe, best_hops,
+				best_threat, best_dist, best_cost):
 			best = cell
 			best_can_attack = can_attack
 			best_safe = safe
 			best_hops = hops
+			best_threat = threat
 			best_dist = dist
 			best_cost = cost
 
@@ -1920,20 +1975,23 @@ static func _best_approach(unit: Unit, goal: Vector2i, board: BoardContext, allo
 
 
 # Ranked, best first: can I attack from here > safe ground (#1220: a hazard only when no safe cell
-# offers the same) > fewer hops of route left > nearer in a straight line > cheaper to reach. Ties keep
-# the earlier cell (Law #1: reachable's key order is the move-range search's own, so it is stable).
+# offers the same) > fewer hops of route left > fewer enemies able to reach it (Balanced only; zero
+# for everyone else) > nearer in a straight line > cheaper to reach. Ties keep the earlier cell (Law
+# #1: reachable's key order is the move-range search's own, so it is stable).
 #
 # The straight-line term earns its place in exactly one case: when the goal is sealed off entirely,
 # every candidate scores UNREACHABLE and the ladder falls through to it -- so the squad crowds the
 # nearest shore instead of reading "no route" as "stay home".
-static func _approach_beats(can_attack: bool, safe: bool, hops: int, dist: int, cost: int,
-		b_can_attack: bool, b_safe: bool, b_hops: int, b_dist: int, b_cost: int) -> bool:
+static func _approach_beats(can_attack: bool, safe: bool, hops: int, threat: int, dist: int, cost: int,
+		b_can_attack: bool, b_safe: bool, b_hops: int, b_threat: int, b_dist: int, b_cost: int) -> bool:
 	if can_attack != b_can_attack:
 		return can_attack
 	if safe != b_safe:
 		return safe
 	if hops != b_hops:
 		return hops < b_hops
+	if threat != b_threat:
+		return threat < b_threat
 	if dist != b_dist:
 		return dist < b_dist
 	return cost < b_cost
