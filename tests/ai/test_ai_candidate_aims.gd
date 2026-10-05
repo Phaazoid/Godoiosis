@@ -280,3 +280,20 @@ func test_a_map_only_fire_that_drowns_an_enemy_beats_a_clean_shot() -> void:
 	assert_object(aim.fired_attack).override_failure_message(
 			"the AI took a scratch over melting the ice under an enemy").is_same(fire)
 	assert_that(aim.target_cell).is_equal(swimmer.movement.cell)
+
+
+# The builder's half of ruling 16, with nothing else on offer: a healer whose only move would be the
+# rescuable body leaves it to the squadmate and spends its turn some other way.
+func test_a_healer_with_nothing_else_still_leaves_a_rescuable_body_alone() -> void:
+	var s := _body_board(true)
+	var board: Dictionary = s.board
+	var healer: Unit = s.healer
+	var body: Unit = s.body
+	(healer.get_equipped_weapon() as WeaponInstance).template.main_attack = _heal(8)
+	var none: Array[WeaponAttackData] = []
+	(healer.get_equipped_weapon() as WeaponInstance).template.extra_attacks = none
+	AITactics.queue_main_actions_for_squad(healer.squad, _ctx(board), board.squad_manager)
+
+	var aim := _queued_attack(healer)
+	assert_bool(aim != null and aim.target_cell == body.movement.cell).override_failure_message(
+			"the healer healed a body its squadmate rescues because it had nothing else").is_false()
