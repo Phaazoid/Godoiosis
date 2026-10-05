@@ -117,11 +117,13 @@ func test_a_heal_ignores_an_ally_at_full_health() -> void:
 	assert_bool(queued).override_failure_message("the healer spent its turn healing nobody").is_false()
 
 
-# A body with its clock running, beside the healer's reach. Who can rescue it decides the heal.
+# A body with its clock running, in the healer's reach, and an enemy beside the healer to swing at
+# instead. Who can rescue the body decides which: a save outranks damage, a rescuable body is no save.
 func _body_board(rescuer: bool) -> Dictionary:
 	var board := _build_board()
-	var healer := _spawn(board, ENEMY, Vector2i(2, 2))
-	(healer.get_equipped_weapon() as WeaponInstance).template.main_attack = _heal(8)
+	var healer := _spawn(board, ENEMY, Vector2i(2, 2), {}, 1)   # its main: a weak swing
+	_give_extra(healer, _heal(8))
+	_spawn(board, PLAYER, Vector2i(3, 2), {Stats.Stat.MHP: 30})
 	var body := _spawn(board, ENEMY, Vector2i(2, 4))
 	body.force_down()
 	if rescuer:
@@ -150,8 +152,9 @@ func test_a_heal_leaves_a_body_a_squadmate_will_rescue() -> void:
 	var body: Unit = s.body
 	AITactics.queue_main_actions_for_squad(healer.squad, _ctx(s.board), (s.board as Dictionary).squad_manager)
 
-	assert_object(_queued_attack(healer)).override_failure_message(
-			"the healer spent its turn on a body its squadmate rescues").is_null()
+	var aim := _queued_attack(healer)
+	assert_bool(aim != null and aim.target_cell == body.movement.cell).override_failure_message(
+			"the healer spent its turn on a body its squadmate rescues").is_false()
 	var rescued := false
 	for action in healer.squad.action_queue:
 		rescued = rescued or (action is RescueAction and (action as RescueAction).target == body)
