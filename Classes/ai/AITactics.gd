@@ -440,7 +440,15 @@ static func _aim_cells(unit: Unit, origin: Vector2i, attack: AttackData, board: 
 	if attack.attack_shape != null:
 		for offset in attack.attack_shape.tiles():
 			radius = maxi(radius, absi(offset.x) + absi(offset.y))
-	for cell in Reach.get_all_attack_cells_from(unit, origin, attack):
+	var ring := Reach.get_all_attack_cells_from(unit, origin, attack)
+	if narrow and radius == 0:
+		# A one-cell attack pays only ON a mark, so it is aimed at the marks in board order -- the order
+		# this builder always offered them in, which is what equal candidates fall back to.
+		for mark: Vector2i in marks:
+			if ring.has(mark) and Reach.vertical_aim_ok(attack, origin, mark, board):
+				out.append(mark)
+		return out
+	for cell in ring:
 		if narrow and not _near_a_mark(cell, marks, radius):
 			continue
 		# The player's vertical gate, mirrored (#258): an aim the click would refuse is never authored.
