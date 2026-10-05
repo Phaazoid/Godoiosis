@@ -129,8 +129,9 @@ func test_the_toggle_lets_a_stray_join_another_archetype() -> void:
 	assert_object((s.m as Unit).squad).is_same(other)
 
 
+# squads_up stays on, so the pass still asks about this stray and only regroups refuses the old squad.
 func test_a_unit_that_does_not_regroup_stays_alone() -> void:
-	AIProfiles.use_fixtures({"": _profile_off(["regroups", "squads_up"])})
+	AIProfiles.use_fixtures({"": _profile_off(["regroups"])})
 	var board := _board()
 	var s := _old_squad_and_stray(board, Vector2i(3, 0))
 	assert_int(_regroup(board)).is_equal(0)
