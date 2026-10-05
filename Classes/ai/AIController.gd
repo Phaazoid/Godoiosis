@@ -61,7 +61,7 @@ static func regroup(faction: Team.Faction, squad_manager: SquadManager, board: B
 	while joined:
 		joined = false
 		for squad: Squad in squad_manager.squads.duplicate():
-			if not is_instance_valid(squad) or squad.is_queued_for_deletion() or squad.get_members().size() != 1:
+			if not is_instance_valid(squad) or squad.get_members().size() != 1:
 				continue
 			var stray := squad.get_leader()
 			if stray == null or stray.get_faction() != faction:

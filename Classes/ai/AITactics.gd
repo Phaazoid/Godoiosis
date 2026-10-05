@@ -1240,8 +1240,9 @@ static func engage(squad: Squad, target: Unit, board: BoardContext, squad_manage
 # FORMS one, which both units' profiles must allow and the higher leadership leads -- board order
 # breaking a tie, so two strays never pick each other. With `in_range` it is the join itself, asked
 # through the player's own formation gate (SquadManager.can_squad_up); without, the squad a stray
-# walks back towards. Squads are read LIVE and a dying one is skipped: destroy_empty_squad frees on
-# the frame's end, so is_instance_valid alone would offer a squad nobody is in.
+# walks back towards. Candidates come from the LIVE squad list, which a squad leaves the moment its last
+# member does (destroy_empty_squad erases before it frees) -- so a stray remembering a dying squad is
+# never offered it, though the instance stays valid until the frame ends.
 static func regroup_target(stray: Unit, squad_manager: SquadManager, board: BoardContext, in_range: bool) -> Squad:
 	if stray.squad == null or stray.squad.get_members().size() != 1 or not stray.is_active():
 		return null
@@ -1271,10 +1272,10 @@ static func regroup_target(stray: Unit, squad_manager: SquadManager, board: Boar
 
 static func _may_regroup_into(stray: Unit, profile: AIProfile, squad: Squad, squad_manager: SquadManager,
 		board: BoardContext, in_range: bool) -> bool:
-	if not is_instance_valid(squad) or squad.is_queued_for_deletion() or squad == stray.squad:
+	if not is_instance_valid(squad) or squad == stray.squad:
 		return false
 	var members := squad.get_members()
-	if members.is_empty() or members.size() >= squad.max_size():
+	if members.size() >= squad.max_size():
 		return false
 	var leader := squad.get_leader()
 	if leader == null or not leader.is_active() or leader.get_faction() != stray.get_faction():
