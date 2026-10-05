@@ -273,6 +273,8 @@ static func compute_move_range(unit: Unit, board: BoardContext, leader_cell = nu
 		"squad_unreachable": squad_unreachable
 	}
 
+# The one cheapest-route tree's walk back from `goal`. Production asks route_to, which falls back to
+# this when no watch is in play; a law keeps every other production caller off it (#920).
 static func reconstruct_path(came_from: Dictionary, start: Vector2i, goal: Vector2i) -> Array[Vector2i]:
 	var path: Array[Vector2i] = []
 	var current := goal
@@ -283,6 +285,109 @@ static func reconstruct_path(came_from: Dictionary, start: Vector2i, goal: Vecto
 
 	path.push_front(start)
 	return path
+
+
+# THE ROUTE A MOVE WALKS (#920; ruling 8 on #117): the fewest hostile watches set off, then the
+# cheapest, then a fixed order -- over exactly the steps and the MOV budget compute_move_range
+# searched, so every cell it reached (`range_info`, its answer) has a route here and the range a unit
+# is shown never changes. A watch fires once, so what a route costs is WHICH watches it wakes, a fact
+# about the route and not about any step on it: the search runs over (cell, watches spent so far).
+# Entering a cell spends the first unspent watch that would fire on the mover there, in arm order --
+# PlanResolver.watch_fires_at, the resolve's own predicate -- and the start cell spends nothing. With
+# no watch able to fire anywhere in the range, it is the range's own tree, today's route exactly.
+#
+# Asked of the LIVE watches: a watch a squadmate's earlier walk in the same pass would spend still
+# counts here, so the route errs toward the detour. Whatever it picks, the resolve walks the path the
+# move stores, so the preview and the walk cannot disagree (Law #2).
+static func route_to(unit: Unit, range_info: Dictionary, goal: Vector2i, board: BoardContext) -> Array[Vector2i]:
+	var start := unit.movement.cell
+	var came_from: Dictionary = range_info.came_from
+	var fires := _watch_entries(unit, came_from, board)
+	if fires.is_empty() or goal == start or not came_from.has(goal):
+		return reconstruct_path(came_from, start, goal)
+
+	var mov := unit.get_mov()
+	var bounds := board.grid.get_used_rect()
+	var origin := Vector3i(start.x, start.y, 0)
+	var best := {origin: 0}
+	var parent := {}
+	var at_goal := {}   # spent mask -> true, for the states that reached the goal
+	var frontier: Array[Vector3i] = [origin]
+	while not frontier.is_empty():
+		var state: Vector3i = frontier.pop_front()
+		var cell := Vector2i(state.x, state.y)
+		for dir in NEIGHBOURS:
+			var next: Vector2i = cell + dir
+			var step: int = movement_cost(cell, next, unit, board)
+			if step > CANNOT_WALK_TILE or not bounds.has_point(next):
+				continue
+			var cost: int = best[state] + step
+			if cost > mov:
+				continue
+			var spent: int = state.z
+			for bit: int in fires.get(next, []):
+				if spent & bit == 0:
+					spent |= bit
+					break
+			var key := Vector3i(next.x, next.y, spent)
+			if best.has(key) and cost >= best[key]:
+				continue
+			best[key] = cost
+			parent[key] = state
+			frontier.append(key)
+			if next == goal:
+				at_goal[spent] = true
+
+	var pick := -1
+	for spent: int in at_goal:
+		if pick < 0 or _route_beats(spent, best[Vector3i(goal.x, goal.y, spent)], pick,
+				best[Vector3i(goal.x, goal.y, pick)]):
+			pick = spent
+	var path: Array[Vector2i] = []
+	var at := Vector3i(goal.x, goal.y, pick)
+	while at != origin:
+		path.push_front(Vector2i(at.x, at.y))
+		at = parent[at]
+	path.push_front(start)
+	return path
+
+
+# Fewer watches set off > cheaper > the lower mask (Law #1: a fixed order, nothing else).
+static func _route_beats(spent: int, cost: int, b_spent: int, b_cost: int) -> bool:
+	var count := _bit_count(spent)
+	var b_count := _bit_count(b_spent)
+	if count != b_count:
+		return count < b_count
+	if cost != b_cost:
+		return cost < b_cost
+	return spent < b_spent
+
+
+static func _bit_count(bits: int) -> int:
+	var count := 0
+	while bits != 0:
+		bits &= bits - 1
+		count += 1
+	return count
+
+
+# Cell -> the watches that would fire on `unit` there, as bits in arm order (Watch.standing's order,
+# the order a resolve searches them in). Only the watches that can fire somewhere in the range get a
+# bit, so a board of watches the mover never meets costs nothing; empty means none can.
+static func _watch_entries(unit: Unit, cells: Dictionary, board: BoardContext) -> Dictionary:
+	var entries := {}
+	var bit := 1
+	for watch in Watch.standing(board.units):
+		var hit := false
+		for cell: Vector2i in cells:
+			if PlanResolver.watch_fires_at(watch, unit, cell, {}):
+				if not entries.has(cell):
+					entries[cell] = []
+				(entries[cell] as Array).append(bit)
+				hit = true
+		if hit:
+			bit <<= 1
+	return entries
 
 # `occupant_at` is gather_path_victims' parameter, for its reason: empty is the board's projected
 # answer, which every aim site wants, and a PAYLOAD (#1058) passes the resolver's threaded one,

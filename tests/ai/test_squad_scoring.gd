@@ -857,8 +857,8 @@ func test_a_down_is_scored_once() -> void:
 		.is_true()
 
 	var score := AITactics._score_plan(attacker.get_faction(), plan)
-	assert_int(score.x).override_failure_message("fixture: the hit is not a down").is_equal(1)
-	assert_int(score.y).override_failure_message(
+	assert_int(score.removals).override_failure_message("fixture: the hit is not a down").is_equal(1)
+	assert_int(score.splits).override_failure_message(
 			"a down was counted as a split as well as a removal").is_equal(0)
 
 
@@ -882,5 +882,5 @@ func test_breaking_our_own_squad_counts_against_us() -> void:
 			"fixture: the counter does not carry our member out of range").is_true()
 
 	var score := AITactics._score_plan(member.get_faction(), plan)
-	assert_int(score.y).override_failure_message(
+	assert_int(score.splits).override_failure_message(
 			"breaking our own squad was not counted against us").is_equal(-1)

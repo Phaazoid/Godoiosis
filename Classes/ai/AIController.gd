@@ -345,6 +345,14 @@ static func _undress(sm: SquadManager) -> void:
 		sm.resolve_plan(sm.active_squad, sm.board_source.call())
 
 
+# How many squads the LAST faction turn planned, and which one it planned inside the hand-off. The
+# hand-off plan's only headless observables: it changes WHEN the first squad decides and never WHAT
+# (a headless beat lasts no time), so without these a mutant that unwires it, or plans that squad a
+# second time, passes every behavioural case -- and brings the hitch back.
+var planned_squad_count := 0
+var handoff_squad: Squad = null
+
+
 # THE BOARD IS RE-DERIVED PER SQUAD, and it takes no board parameter for exactly that reason (#714).
 # This used to build one BoardContext for the whole turn while `execute_orders` between squads spans
 # frames, so a unit an earlier squad KILLED was genuinely freed by the time a later squad planned --
@@ -355,7 +363,16 @@ static func _undress(sm: SquadManager) -> void:
 # `play_session._take_ai_turn` has always called `_board()` inside its own loop, which is why the
 # headless API never reproduced it -- two live implementations of one walk, and the crash lived in
 # whichever one was not the model. This is now the same shape.
-func take_faction_turn(faction: Team.Faction) -> void:
+#
+# `handoff` is the turn hand-off beat (#1220 ruling 7). The first squad plans INSIDE it, one frame
+# after the banner draws, and the beat waits out whatever the planning left; zero is the plain loop.
+func take_faction_turn(faction: Team.Faction, handoff := 0.0) -> void:
+	planned_squad_count = 0
+	handoff_squad = null
+	var planned: Squad = null
+	if handoff > 0.0:
+		planned = await _plan_during_handoff(faction, handoff)
+		handoff_squad = planned
 	for squad in actable_squads(faction, game.squad_manager):
 		# The mission can end mid-turn -- this squad's pass may have wiped the player. Stop
 		# issuing orders behind the end-of-mission card (#96).
@@ -379,10 +396,32 @@ func take_faction_turn(faction: Team.Faction) -> void:
 		#
 		# board_source is the wired seam for "the board as it stands", the same Callable
 		# SquadManager's own validators resolve fresh per query.
-		var board: BoardContext = game.squad_manager.board_source.call()
-		plan_squad(squad, board, game.squad_manager)
+		if squad == planned:
+			planned = null
+		else:
+			var board: BoardContext = game.squad_manager.board_source.call()
+			plan_squad(squad, board, game.squad_manager)
+			planned_squad_count += 1
 		await game.order_executor.execute_orders(squad.get_leader())
 
 	if game.mission_controller.is_over():
 		return
 	await game.end_turn()
+
+
+# The first actable squad's plan, made while the hand-off banner is up; the squad it planned, or null.
+# The frame wait is what lets the banner draw before the planning stalls the frame.
+func _plan_during_handoff(faction: Team.Faction, handoff: float) -> Squad:
+	var started := Time.get_ticks_msec()
+	if DisplayServer.get_name() != "headless":
+		await get_tree().process_frame
+	var first: Squad = null
+	for squad in actable_squads(faction, game.squad_manager):
+		if is_squad_actable(squad, faction):
+			first = squad
+			break
+	if first != null:
+		plan_squad(first, game.squad_manager.board_source.call(), game.squad_manager)
+		planned_squad_count += 1
+	await Pacing.beat(game, maxf(0.0, handoff - (Time.get_ticks_msec() - started) / 1000.0))
+	return first

@@ -76,6 +76,18 @@ func copy() -> Watch:
 	return w
 
 
+# The watches standing on a board, oldest arm first: the order a resolve searches them in, which is
+# what decides WHICH watch an entry spends (PlanResolver._watch_triggered_by). The live objects, not
+# copies -- a pass copies them itself, a reader asking ahead of a resolve only looks.
+static func standing(units: Array[Unit]) -> Array[Watch]:
+	var out: Array[Watch] = []
+	for unit in units:
+		if unit != null and is_instance_valid(unit) and unit.watch != null and unit.watch.is_armed():
+			out.append(unit.watch)
+	out.sort_custom(func(a: Watch, b: Watch) -> bool: return a.sequence < b.sequence)
+	return out
+
+
 # The watcher is still on the board and still pointing at something. Says nothing about position or
 # lifecycle — those are the caller's stage, the same split GuardWard.is_intact() makes.
 func is_intact() -> bool:

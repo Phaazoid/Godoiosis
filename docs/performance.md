@@ -594,3 +594,28 @@ the AI scores. Measured with #1197's scratch tool (extended to time the two call
   has no behaviour a case can see (#710 slice 2's law). The Tiles page's burnable tick is the one
   runtime writer that adds or removes a reaction file, and it calls `refresh()` before it re-wires
   the board.
+
+## 2026-10-05 — the AI batch (#1220), and planning the first squad behind the banner
+
+`tools/profile_ai_turn.gd`, Castle Assault, `main` (`a6f87623`) in a scratch worktree against the
+branch, two runs each, alternating:
+
+| What | `main` | #1220 |
+|---|---|---|
+| A Rushdown squad's decision (5 members), each of two | 338–366 ms | 484–511 ms |
+| The Sentry squad's decision (5 members) | 293 / 318 ms | 240 / 247 ms |
+| Whole board (every AI squad decides once) | 975 / 1026 ms | 1234 / 1268 ms |
+
+- **About +25% on the whole board**, against the plan's line of flagging anything that doubles it.
+  The moving squads pay for it: every directional attack now tries four facings and every point
+  attack its ring, and a member with nobody to hit asks the follow cells around it. The Sentry got
+  cheaper, because the followable sweep is asked once per squad decision and shared.
+- **The decision record changes in two explained ways.** A directional aim names the facing cell
+  rather than the enemy (same footprint), and two members that had nobody to hit from their
+  formation cell step one cell to land a Spring (#1220 ruling 9).
+- **The first squad's cost is hidden** (ruling 7): an AI faction plans its first squad inside the
+  1.0 s hand-off beat, so on this board 240–510 ms of decision lands behind the banner. Every LATER
+  squad still decides between passes, which is the hitch left to see in play.
+- **The safe route costs nothing without a watch in reach**: `RulesService.route_to` falls straight
+  back to the range's own tree, so the boards above, which have no armed watch at decision time, do
+  not run its search at all.

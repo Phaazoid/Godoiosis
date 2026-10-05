@@ -832,12 +832,8 @@ func _resolve_actions(squad: Squad, actions: Array[BaseAction], board: BoardCont
 	# Standing watches armed in an EARLIER pass (#413) — the enemy-phase case, and the whole point of
 	# the mechanic. Same two-sources-one-list shape the wards above have; watches queued in THIS plan
 	# join at their own slot in the walk below, which is what makes a shove combo sequence-able.
-	var live_watches: Array[Watch] = []
-	for unit in board.units:
-		if unit.watch != null and unit.watch.is_armed():
-			live_watches.append(unit.watch.copy())
-	live_watches.sort_custom(func(a: Watch, b: Watch) -> bool: return a.sequence < b.sequence)
-	plan.watches.append_array(live_watches)
+	for watch in Watch.standing(board.units):
+		plan.watches.append(watch.copy())
 	var watch_orders: Dictionary = {}   # Watch (this pass's copy) -> the OverwatchAction that armed it
 	# ...and the same watches in QUEUE ORDER, for the arm-fire pass in the tail (#1003). Its own
 	# array rather than a walk of watch_orders' keys: the order a Dictionary happens to iterate in
@@ -1267,8 +1263,8 @@ func _plan_has_invalid_move(squad: Squad) -> bool:
 	return false
 
 func queue_group_move(squad: Squad, leader_destination: Vector2i, board: BoardContext, allowed_cells = null,
-		pinned: Dictionary = {}) -> bool:
-	var moves := GroupMoveSolver.plan(squad, leader_destination, board, allowed_cells, pinned)
+		pinned: Dictionary = {}, hazards: Dictionary = {}) -> bool:
+	var moves := GroupMoveSolver.plan(squad, leader_destination, board, allowed_cells, pinned, hazards)
 
 	# Nothing to author -- plan() refuses to path a leader to a goal it cannot reach. Bail BEFORE the
 	# batch opens rather than falling into the rollback below, which would cancel moves this call

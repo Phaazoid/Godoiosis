@@ -208,6 +208,7 @@ static func _threat_of(unit: Unit, board: BoardContext, origins: Array[Vector2i]
 		pending: Dictionary) -> Dictionary:
 	var by_attack := _reach_by_attack(unit, board, origins, zone)
 	_add_watch_reach(unit, board, origins, by_attack)
+	_add_splash(by_attack)
 	var out := {}
 	for attack: AttackData in by_attack:
 		var cells: Dictionary = by_attack[attack]
@@ -286,6 +287,49 @@ static func _add_watch_reach(unit: Unit, board: BoardContext, origins: Array[Vec
 		for dir in lanes:
 			for cell: Vector2i in lanes[dir]:
 				out[cell] = true
+
+
+# WHERE A PLACED BLAST AND ITS PAYLOADS LAND (#1207). The ring is where an attack may be AIMED; a
+# shaped attack placed at range also strikes the cells around each aim, and a payload goes off
+# wherever the hit leaves its victim. The AI aims BESIDE a target since #1220, and this field must
+# stay a superset of every aim it can take (AIController._squad_can_reach_anyone reads a false as a
+# proof), so each ring is dilated as an upper bound: by the shape as drawn (a placed shape never
+# turns), then for payloads by the parent's shove and each payload's shape under every facing.
+static func _add_splash(by_attack: Dictionary) -> void:
+	for attack: AttackData in by_attack.keys():
+		if attack == null:
+			continue
+		var cells: Dictionary = by_attack[attack]
+		if not attack.is_directional() and attack.attack_shape != null:
+			cells.merge(_dilated(cells, attack.attack_shape.place(Vector2i.ZERO, AttackShape.FORWARD)))
+		if attack.payload == null:
+			continue
+		var landed := cells
+		if attack.knockback > 0:
+			landed = _dilated(landed, GridUtils.cells_within_manhattan_range(Vector2i.ZERO, attack.knockback))
+		for payload in attack.payload_chain():
+			landed = _dilated(landed, _any_facing(payload))
+			cells.merge(landed)
+
+
+static func _dilated(cells: Dictionary, offsets: Array[Vector2i]) -> Dictionary:
+	var out := {}
+	for cell: Vector2i in cells:
+		for offset in offsets:
+			out[cell + offset] = true
+	return out
+
+
+# A payload's footprint about the cell it went off on, under every facing it could be turned to.
+static func _any_facing(payload: AttackData) -> Array[Vector2i]:
+	var out: Array[Vector2i] = [Vector2i.ZERO]
+	if payload.attack_shape == null:
+		return out
+	for dir in GridUtils.CARDINAL_DIRECTIONS:
+		for offset in payload.attack_shape.place(Vector2i.ZERO, dir):
+			if not out.has(offset):
+				out.append(offset)
+	return out
 
 
 # WHERE THE CURRENT RUNS (#1197): Conduction's own flood, seeded with every cell this attack reaches.
