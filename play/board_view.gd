@@ -161,23 +161,67 @@ static func render_preview(session) -> String:
 		return msg
 	var plan: Dictionary = res.plan
 	var lines: Array[String] = ["Plan preview (squad %d):" % session._squad_id(session.squad_manager.active_squad)]
-	for m in plan.moves:
-		lines.append("  MOVE   %s -> %s" % [m.actor, str(m.dest)])
-	for a in plan.attacks:
-		lines.append("  ATTACK %s -> %s (%s): %d dmg%s" % [a.actor, a.target, a.attack, a.dmg, _hp_tag(a)])
-	for c in plan.counters:
-		if c.skipped:
-			lines.append("    ctr  %s : none (downed/killed before it could strike back)" % c.actor)
-		else:
-			lines.append("    ctr  %s -> %s (%s): %d dmg%s" % [c.actor, c.target, c.attack, c.dmg, _hp_tag(c)])
-	for s in plan.side_actions:
-		if s.has("target"):
-			lines.append("  %-6s %s -> %s" % [s.type, s.actor, s.target])
-		else:
-			lines.append("  %-6s %s" % [s.type, s.actor])
-	if plan.attacks.is_empty() and plan.counters.is_empty() and plan.moves.is_empty() and plan.side_actions.is_empty():
+	# The game's queue panel, section by section (#46) -- nested rows are what the order above them
+	# set off -- then what the pass leaves on the ground, which the board ghosts.
+	var section := ""
+	for row: Dictionary in plan.rows:
+		if row.section != section:
+			section = row.section
+			lines.append("  " + section)
+		lines.append("    " + "  ".repeat(row.depth) + _row_line(row))
+	if not plan.terrain.is_empty():
+		lines.append("  TERRAIN")
+		for deposit: Dictionary in plan.terrain:
+			lines.append("    %s becomes %s" % [str(deposit.cell), deposit.what])
+	if plan.rows.is_empty() and plan.terrain.is_empty():
 		lines.append("  (empty plan)")
 	return "\n".join(lines)
+
+# One queue row as text: who does what to whom, the HP readout the panel shows, then its chips.
+static func _row_line(row: Dictionary) -> String:
+	var text: String
+	if row.has("dest"):
+		text = ("%s holds" % row.actor) if row.hold else ("%s -> %s" % [row.actor, str(row.dest)])
+	elif row.has("attack"):
+		var at: String = row.target if row.has("target") else "cell %s" % str(row.cell)
+		text = "%s -> %s (%s)" % [row.actor, at, row.attack]
+		if row.has("guarding"):
+			text += " guarding %s" % row.guarding
+	elif row.has("source"):
+		text = "%s: %s" % [row.actor, row.source]
+	elif row.has("cell"):
+		text = "%s goes under at %s" % [row.actor, str(row.cell)]
+	elif row.has("target"):
+		text = "%s %s -> %s" % [row.type, row.actor, row.target]
+	else:
+		text = "%s %s" % [row.type, row.actor]
+	if row.has("healed"):
+		text += ": +%d hp (%d -> %d)" % [row.healed, row.hp_before, row.hp_after]
+	elif row.has("dmg"):
+		text += ": %d dmg (%d -> %d)%s" % [row.dmg, row.hp_before, row.hp_after, _rung_tag(row.lethality)]
+	var chips: Array[String] = []
+	for state: String in row.get("gains", []):
+		chips.append("+" + state)
+	for state: String in row.get("loses", []):
+		chips.append("-" + state)
+	chips.append_array(row.get("events", []))
+	if not chips.is_empty():
+		text += "  [%s]" % ", ".join(chips)
+	if row.refused:
+		text += "  REFUSED"
+	elif row.inert:
+		text += "  (will not happen: its actor goes down first)"
+	return text
+
+static func _rung_tag(lethality: ResolvedOutcome.Lethality) -> String:
+	match lethality:
+		ResolvedOutcome.Lethality.KILLED:
+			return " DIES"
+		ResolvedOutcome.Lethality.DOWNED:
+			return " DOWNED"
+		ResolvedOutcome.Lethality.CRISIS:
+			return " CRISIS"
+	return ""
 
 static func render_result(events: Array) -> String:
 	if events.is_empty():
@@ -188,15 +232,6 @@ static func render_result(events: Array) -> String:
 	return "\n".join(lines)
 
 # ---- internals ----
-
-static func _hp_tag(a: Dictionary) -> String:
-	if a.lethality == ResolvedOutcome.Lethality.KILLED:
-		return " -> DIES"
-	if a.lethality == ResolvedOutcome.Lethality.DOWNED:
-		return " -> DOWNED (clings at 1 hp)"
-	if a.hp_after >= 0:
-		return " -> %d hp" % a.hp_after
-	return ""
 
 static func _content_bounds(session) -> Rect2i:
 	var rect: Rect2i = session.grid.get_used_rect()

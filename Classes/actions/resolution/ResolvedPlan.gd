@@ -186,6 +186,28 @@ func attack_playback() -> Array[AttackAction]:
 	played.append_array(trailing)
 	return played
 
+# What this pass leaves on the ground, one entry per cell AND state ({"cell", "state"}) or cell AND
+# gas kind ({"cell", "gas"}), so two attacks igniting one cell count once while a cell gaining two
+# states counts twice. The board ghosts exactly this (game._preview_plan_effects) and the Play API's
+# preview prints it (#46): one answer to what the plan deposits.
+func pending_deposits() -> Array[Dictionary]:
+	var deposits: Array[Dictionary] = []
+	var seen := {}
+	for effect in cell_effects:
+		for state in effect.states_added:
+			var key := Vector3i(effect.cell.x, effect.cell.y, state)
+			if seen.has(key):
+				continue
+			seen[key] = true
+			deposits.append({"cell": effect.cell, "state": state})
+		for kind: Gas.Kind in effect.gas_added:
+			var gas_key := "%s/%s/gas%d" % [effect.cell.x, effect.cell.y, kind]
+			if seen.has(gas_key):
+				continue
+			seen[gas_key] = true
+			deposits.append({"cell": effect.cell, "gas": kind})
+	return deposits
+
 # The threaded hypothetical the pass resolved through (Unit -> PlanResolver._Hypo), kept on the
 # plan instead of dying as a resolver local (#124): "what state does this pass LEAVE a unit in?"
 # is a question the resolver already answered, and re-deriving it from outcomes would be a second

@@ -125,10 +125,11 @@ func test_sub_ceiling_lethal_hit_downs_and_skips_counter() -> void:
 	assert_int(prev.plan.counters.size()).is_greater(0)
 	assert_bool(prev.plan.counters[0].skipped).is_true()   # a downed target can't strike back
 
-	# the rendered view must say DOWNED (not "DIES") and label the skipped counter, not show junk
+	# the rendered view must say DOWNED (not "DIES"), and leaves the skipped counter out the way the
+	# queue panel does (#46) -- the structured `counters` key above is where it still shows
 	var pv: String = BoardView.render_preview(_session)
 	assert_str(pv).contains("DOWNED")
-	assert_str(pv).contains("none (")
+	assert_str(pv).override_failure_message("a skipped counter was rendered:\n%s" % pv).not_contains("REACTION")
 
 	var attacker: Unit = _session.unit_by_handle("A")
 	var attacker_hp: int = attacker.get_current_hp()

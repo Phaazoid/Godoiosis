@@ -1132,7 +1132,104 @@ func _describe_plan(squad: Squad, plan: ResolvedPlan) -> Dictionary:
 		sinks.append({"actor": handle_for(sink.actor), "description": sink.get_description(),
 				"lethality": lethality})
 	return {"moves": moves, "attacks": attacks, "counters": counters,
-			"side_actions": side_actions, "tile_hits": tile_hits, "sinks": sinks}
+			"side_actions": side_actions, "tile_hits": tile_hits, "sinks": sinks,
+			"rows": _plan_rows(squad, plan), "terrain": _describe_deposits(plan)}
+
+# The plan as the game's queue panel lays it out (#46): ActionQueueDisplayEntry.build_for's sections
+# and nesting -- the watch shots an order sets off under it, a payload under its hit, a sinking under
+# what melted the ice -- one dict per row, units by handle. What the panel hides (a skipped counter or
+# watch shot) is hidden here too; the structured keys above still carry it for code.
+func _plan_rows(squad: Squad, plan: ResolvedPlan) -> Array:
+	var rows: Array = []
+	var section := ""
+	for entry in ActionQueueDisplayEntry.build_for(squad, plan):
+		match entry.entry_type:
+			ActionQueueDisplayEntry.EntryType.HEADER:
+				section = entry.label
+			ActionQueueDisplayEntry.EntryType.ACTION:
+				rows.append(_describe_row(section, entry.action, entry.indent_level))
+	return rows
+
+# One row, read the way ActionQueueRow reads it: the HP readout only when the outcome READ hp, the
+# number through LethalityRules.displayed_hp, a heal as what it gave back.
+func _describe_row(section: String, action: BaseAction, depth: int) -> Dictionary:
+	var row := {"section": section, "depth": depth, "type": action.get_action_name(),
+			"actor": handle_for(action.actor), "refused": action.is_refused(), "inert": action.is_inert()}
+	var aimed := action.aimed_at()
+	if aimed != null and aimed != action.actor:
+		row["target"] = handle_for(aimed)
+	if action is MoveAction:
+		row["hold"] = (action as MoveAction).is_hold_position
+		row["dest"] = (action as MoveAction).get_destination()
+	elif action is AttackAction:
+		var attack := action as AttackAction
+		row["attack"] = _attack_label(attack.fired_attack)
+		row["cell"] = attack.target_cell
+		if attack.blocked_for != null and is_instance_valid(attack.blocked_for):
+			row["guarding"] = handle_for(attack.blocked_for)
+	elif action is TileHitAction:
+		var hit := action as TileHitAction
+		row["source"] = Gas.display_name(hit.gas as Gas.Kind) if hit.gas >= 0 \
+				else Terrain.tile_state_display_name(hit.state)
+	elif action is SinkAction:
+		row["cell"] = (action as SinkAction).cell
+	var r := action.resolved_outcome()
+	if r == null:
+		return row
+	if r.reads_hp:
+		var heals := action is AttackAction and (action as AttackAction).fired_attack != null \
+				and (action as AttackAction).fired_attack.heals
+		if heals:
+			row["healed"] = r.hp_restored()
+		else:
+			row["dmg"] = r.damage
+		row["hp_before"] = r.hp_before
+		row["hp_after"] = LethalityRules.displayed_hp(r.target_hp_after, LethalityRules.lifecycle_for(r.lethality))
+	row["lethality"] = r.lethality
+	var gained: Array[String] = []
+	for state in r.states_added:
+		if state != Elemental.State.NONE:
+			gained.append(Elemental.state_display_name(state))
+	var lost: Array[String] = []
+	for state in r.states_removed:
+		if state != Elemental.State.NONE:
+			lost.append(Elemental.state_display_name(state))
+	row["gains"] = gained
+	row["loses"] = lost
+	var events: Array[String] = []
+	if r.knockback_applied:
+		events.append("shoved to %s" % str(r.knockback_to))
+	if r.knockback_held > 0:
+		events.append("holds %d" % r.knockback_held)
+	if r.fall_levels > 0:
+		events.append("falls %d" % r.fall_levels)
+	if r.drown_damage > 0:
+		events.append("drowns")
+	if r.removed:
+		events.append("into the void")
+	if r.insulated:
+		events.append("insulated")
+	if r.burned_vial != null:
+		events.append("burns %s" % r.burned_vial.display_name)
+	if r.charge_spent:
+		events.append("spends a charge")
+	for reaction: ElementalReaction in r.fired_reactions:
+		if reaction.is_combo() and reaction.badge_name() != "":
+			events.append(reaction.badge_name())
+	for unit in r.splits:
+		if is_instance_valid(unit):
+			events.append("splits %s" % handle_for(unit))
+	row["events"] = events
+	return row
+
+# The pass's terrain deposits, as the board ghosts them (ResolvedPlan.pending_deposits).
+static func _describe_deposits(plan: ResolvedPlan) -> Array:
+	var out: Array = []
+	for deposit: Dictionary in plan.pending_deposits():
+		var what: String = Gas.display_name(deposit["gas"]) if deposit.has("gas") \
+				else Terrain.tile_state_display_name(deposit["state"])
+		out.append({"cell": deposit["cell"], "what": what})
+	return out
 
 func _describe_attack(atk: AttackAction) -> Dictionary:
 	var r := atk.resolved
