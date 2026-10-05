@@ -99,3 +99,32 @@ func test_a_crosser_shocked_mid_ford_ends_the_pass_as_the_preview_said() -> void
 	assert_array(_sorted(crosser.element_states)).override_failure_message(
 			"the crosser ended the pass %s where the preview said %s" % [str(crosser.element_states), str(predicted)]) \
 		.is_equal(predicted)
+
+
+# The other side of the same order: a shot the walk took BEFORE the water lands before the soaking.
+# The walker starts Chilled, which keeps a soaking off (#1092), and a fire watch short of the ford
+# thaws it -- so the resolve soaks it at the ford and the preview ends WET. Soaking it any earlier
+# meets the Chill still standing, and it walks off dry.
+func test_a_soaking_lands_after_a_shot_the_walk_took_before_the_water() -> void:
+	var thaw: Array[ElementalReaction] = [H.stripping(Elemental.Element.FIRE, Elemental.State.CHILLED)]
+	H.only_reactions(thaw)
+	var f := _ford("HeadlessThawedFordRoot")
+	var crosser: Unit = f.crosser
+	crosser.add_element_state(Elemental.State.CHILLED, 3)
+	var short_of_the_ford := Vector2i(1, 0)
+	var watcher: Unit = BoardBuilder.spawn(f.board, _data("Watcher", ENEMY), Vector2i(1, 3))
+	watcher.equipped_weapon = H.make_weapon(4)
+	(watcher.get_equipped_weapon() as WeaponInstance).template.main_attack.elemental_damage_type = \
+		Elemental.Element.FIRE
+	var footprint: Array[Vector2i] = [short_of_the_ford]
+	watcher.arm_watch(watcher.movement.cell, short_of_the_ford, footprint, watcher.get_default_attack())
+	assert_object(watcher.watch).override_failure_message("fixture: the watch did not arm").is_not_null()
+	var sess = PlaySession.new(f.board)
+
+	var predicted := _cross(sess, crosser)
+
+	assert_bool(predicted.has(Elemental.State.WET)).override_failure_message(
+			"fixture: the preview does not soak the thawed walker").is_true()
+	assert_array(_sorted(crosser.element_states)).override_failure_message(
+			"the walker ended the pass %s where the preview said %s" % [str(crosser.element_states), str(predicted)]) \
+		.is_equal(predicted)

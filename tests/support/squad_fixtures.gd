@@ -186,14 +186,22 @@ static func stamp_struck(action: AttackAction, board: BoardContext) -> AttackAct
 	return action
 
 
-# The catalog every resolve reads by default, the executor's included, holding one reaction: a SHOCK
-# hit on a WET unit strips the soaking -- the shape of the shipped electrocution, authored here so no
-# retune of Resources/Reactions can empty a fixture that leans on it. A suite calling this must call
-# ReactionCatalog.refresh() in after_test, or the next suite resolves with this one reaction.
-static func only_electrocution() -> void:
-	var reaction := ElementalReaction.new()
-	reaction.incoming_element = Elemental.Element.SHOCK
-	reaction.required_state = Elemental.State.WET
-	reaction.remove_states.assign([Elemental.State.WET])
-	ReactionCatalog._cache.assign([reaction])
+# The catalog every resolve reads by default, the executor's included, holding exactly these reactions,
+# authored in the test so no retune of Resources/Reactions can empty a fixture that leans on one. A
+# suite calling this must call ReactionCatalog.refresh() in after_test, or the next suite resolves
+# with these.
+static func only_reactions(reactions: Array[ElementalReaction]) -> void:
+	ReactionCatalog._cache.assign(reactions)
 	ReactionCatalog._scanned = true
+
+# A reaction an `incoming` hit sets off on a unit holding `required`, stripping that state.
+static func stripping(incoming: Elemental.Element, required: Elemental.State) -> ElementalReaction:
+	var reaction := ElementalReaction.new()
+	reaction.incoming_element = incoming
+	reaction.required_state = required
+	reaction.remove_states.assign([required])
+	return reaction
+
+# A SHOCK hit on a WET unit strips the soaking: the shape of the shipped electrocution.
+static func only_electrocution() -> void:
+	only_reactions([stripping(Elemental.Element.SHOCK, Elemental.State.WET)])
