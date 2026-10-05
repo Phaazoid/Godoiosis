@@ -59,9 +59,24 @@ func init(watching_unit: Unit, aim_cell: Vector2i, attack: AttackData) -> void:
 # attack its whole footprint as ONE path, nearest first -- Reach emits a self-anchored shape near to
 # far along the facing, and a lone cell is a path of one. So a mod that turns a cleave into a watch
 # attack is single-target too, and a watch never needs to ask what kind of attack it holds.
+#
+# A watch watches only cells with a SURFACE (#1228), so its footprint, which the reticle draws and the
+# Play API prints, never reaches past the board's edge or into a hole. Paths and footprint are one
+# store (AttackShape.joined_cells / joined_lengths), so the paths are trimmed here and a path left
+# empty is dropped; the other branch is trimmed by get_affected_cells_from itself.
 func watched_paths_from(origin: Vector2i, board: BoardContext) -> Array[Array]:
 	if fired_attack != null and fired_attack.is_single_target_swing():
-		return Reach.get_paths_from(actor, origin, target_cell, fired_attack, board)
+		var walked := Reach.get_paths_from(actor, origin, target_cell, fired_attack, board)
+		if board == null:
+			return walked
+		var kept: Array[Array] = []
+		for path: Array in walked:
+			var cells: Array[Vector2i] = []
+			cells.assign(path)
+			var surfaced := Reach.surfaced(cells, board)
+			if not surfaced.is_empty():
+				kept.append(surfaced)
+		return kept
 	var one: Array[Array] = []
 	var cells := Reach.get_affected_cells_from(actor, origin, target_cell, fired_attack, board)
 	if not cells.is_empty():

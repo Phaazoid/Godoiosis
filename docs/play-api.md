@@ -64,7 +64,7 @@ view**, not raw JSON — see *State representation*. Command vocabulary:
 | `squad_up / join / leave / disband` | new squad state |
 | `queue_move(unit_id, dest)` / `queue_attack(unit_id, aim_cell, attack?)` | validity + updated plan. `attack` names which attack fires — see *Choosing an attack* below. A squad LEADER's move that would leave a squadmate unable to follow is refused, naming who, as the game's move mode greys it (#46); `legal_moves` reports those cells under `stranding` rather than offering them |
 | `group_move(unit, x, y)` | the game's Group Move (#46): the leader's destination, and `queue_group_move` places the whole formation. Every gate is asked BEFORE the squad's queued moves are cancelled, so a refused formation leaves the plan as it was |
-| `overwatch(unit_id, aim_cell, attack?)` | stand watch with the NAMED watch attack, else the unit's first (a weapon normally carries one) |
+| `overwatch(unit_id, aim_cell, attack?)` | stand watch with the NAMED watch attack, else the unit's first (a weapon normally carries one). A facing that watches no cell with a surface, off the board's edge or only over a hole, is refused and is not offered by `legal_targets` (#1228) |
 | `deploy(unit, cell)` / `undeploy(unit)` / `reposition(unit, cell)` / `begin()` | the PRE-MISSION phase (#46) -- see *Pre-mission* below |
 | `give(from, slot, to)` / `job(unit, job)` / `fit(unit, slot, mod, space)` / `unfit(unit, slot, mod)` / `kit(unit)` | the pre-mission loadout: gear, jobs and mods, and the view that reads them back (#46) -- see *Pre-mission* below |
 | `equip / wear / use / toss (unit, slot)` / `unequip / remove_armor (unit)` | the inspect dock's verbs, in either phase (#46) -- see *The inspect dock* below |
