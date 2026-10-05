@@ -403,7 +403,8 @@ function Invoke-Check {
 	if ($dispatched.Count -gt 0) { $why = 'failover' } elseif ($decision.Heartbeat) { $why = 'heartbeat' }
 	if ($null -ne $why -and -not $keepalive) {
 		$acted = $true
-		Write-Log "bringing the local runners up ($why)"
+		if ($DryRun) { Write-Log "would bring the local runners up ($why)" }
+		else { Write-Log "bringing the local runners up ($why)" }
 		if (-not $DryRun) {
 			Start-Runners
 			$next.up_by_watcher = $true
@@ -418,7 +419,8 @@ function Invoke-Check {
 
 	if ($null -ne $decision.BringDown) {
 		$acted = $true
-		Write-Log "taking the local runners offline: $($decision.BringDown)"
+		if ($DryRun) { Write-Log "would take the local runners offline: $($decision.BringDown)" }
+		else { Write-Log "taking the local runners offline: $($decision.BringDown)" }
 		if (-not $DryRun) {
 			$wasFailover = $next.up_reason -ne 'heartbeat'
 			Stop-Runners
