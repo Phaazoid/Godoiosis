@@ -24,6 +24,7 @@ var _handle_by_unit := {}      # Unit -> String (stable display handle)
 var _next_player := 0
 var _next_enemy := 0
 var _downed_pending: Array[Unit] = []   # units downed mid-execute; ejected AFTER the pass (mirrors OrderExecutor._downed_pending)
+var _executing := false   # true while execute() plays the pass, up to its order clear: a running pass owns its plan (#361)
 # This mission's state and rules (#46) -- the SAME object the game's MissionController holds, so a
 # headless run scores objectives, the clock and every latch exactly as the game does.
 var mission: MissionState
@@ -59,6 +60,16 @@ func _init(board: Dictionary) -> void:
 		turn_manager.round_completed.connect(_on_round_completed)
 	if not turn_manager.turn_started.is_connected(_on_turn_started):
 		turn_manager.turn_started.connect(_on_turn_started)
+	# Every change to a plan re-resolves it, off the queue signals game._wire_signals hangs
+	# refresh_action_queue on (#46): the next order is judged against the plan as it stands.
+	if not squad_manager.squad_action_queued.is_connected(_on_order_queued):
+		squad_manager.squad_action_queued.connect(_on_order_queued)
+	if not squad_manager.squad_action_cancelled.is_connected(_on_order_cancelled):
+		squad_manager.squad_action_cancelled.connect(_on_order_cancelled)
+	if not squad_manager.squad_became_active.is_connected(_on_plan_opened):
+		squad_manager.squad_became_active.connect(_on_plan_opened)
+	if not squad_manager.squad_became_empty.is_connected(_refresh_plan):
+		squad_manager.squad_became_empty.connect(_refresh_plan)
 
 func _register(unit: Unit) -> void:
 	if _handle_by_unit.has(unit):
@@ -94,6 +105,27 @@ func _process_downed_pending() -> void:
 			continue
 		squad_manager.handle_unit_downed(unit)
 	_downed_pending.clear()
+
+# game._on_unit_action_queued's rule half: a batch's orders are judged once, when queue_batch re-emits
+# at its close. A hold filler a batch move displaces is a cancel, and re-resolves as in the game.
+func _on_order_queued(squad: Squad, _action: BaseAction) -> void:
+	if not squad_manager.batching:
+		_refresh_plan(squad)
+
+func _on_order_cancelled(squad: Squad, _unit: Unit, _type: BaseAction.ActionType) -> void:
+	_refresh_plan(squad)
+
+func _on_plan_opened(squad: Squad, _action: BaseAction) -> void:
+	_refresh_plan(squad)
+
+# game.refresh_action_queue's rule half (#46). Refused while a pass executes (#361: a re-derive
+# mid-pass re-simulates attacks that already landed), and while the AI's threat preview queues and
+# rolls back, which every game handler on these signals sits out.
+func _refresh_plan(squad: Squad) -> void:
+	if squad == null or not is_instance_valid(squad) or _executing or squad_manager.previewing:
+		return
+	var plan := squad_manager.resolve_plan(squad, _board())
+	squad_manager.validate_squad_plan(squad, plan)
 
 # ---- queries ----
 
@@ -175,13 +207,37 @@ func legal_moves(handle: String) -> Dictionary:
 	# THE set queue_move indexes -- not a copy of it. Both come back as Dictionaries keyed by cell
 	# (which is why the gate spells it `.has(dest)`), so the keys ARE the answer.
 	var range_info := RulesService.compute_move_range(unit, _board())
+	var reachable: Array[Vector2i] = []
+	reachable.assign(range_info.reachable.keys())
+	# A leader's destinations a squadmate could not follow to are held out the way queue_move refuses
+	# them (#1069) -- one sweep over the whole range, as the game's move mode paints it.
+	var stranded := _stranding(unit, reachable)
 	var cells: Array[Vector2i] = []
-	cells.assign(range_info.reachable.keys())
+	var stranding: Array[Vector2i] = []
+	for cell: Vector2i in reachable:
+		if (stranded.get(cell, []) as Array).is_empty():
+			cells.append(cell)
+		else:
+			stranding.append(cell)
 	# Reported separately rather than merged: these are reachable on foot and refused by cohesion,
 	# and "your leader is too far" is a different fix from "that is too far to walk".
 	var leashed: Array[Vector2i] = []
 	leashed.assign(range_info.squad_unreachable.keys())
-	return {"ok": true, "unit": handle, "from": unit.movement.cell, "cells": cells, "leashed": leashed}
+	return {"ok": true, "unit": handle, "from": unit.movement.cell, "cells": cells, "leashed": leashed,
+			"stranding": stranding}
+
+# Who a LEADER's move to each of `dests` would leave behind -- GroupMoveSolver.stranding, the sweep the
+# game's move modes grey out (#1069). Empty for anyone else: a member's leash is compute_move_range's.
+func _stranding(unit: Unit, dests: Array[Vector2i]) -> Dictionary:
+	if not (unit.is_leader() and unit.has_squad()):
+		return {}
+	return GroupMoveSolver.stranding(unit.squad, _board(), dests)
+
+func _handles(units: Array) -> String:
+	var names: Array[String] = []
+	for u: Unit in units:
+		names.append(handle_for(u))
+	return ", ".join(names)
 
 
 func legal_targets(handle: String, attack_name := "") -> Dictionary:
@@ -220,6 +276,47 @@ func legal_targets(handle: String, attack_name := "") -> Dictionary:
 	return {"ok": true, "unit": handle, "attack": _attack_label(aiming), "from": origin, "aims": out}
 
 
+# The game's enemy ranges, the V key (#46), through the builder game.threat_field() calls. The viewer
+# is the ACTIVE faction, where the game hardcodes PLAYER: the two differ only in hotseat, when the side
+# on the move is the one asking. Subjects are every hostile unit, or the one named; each viewer unit is
+# judged where its plan leaves it, and with a subject named only that subject counts as a hitter.
+func ranges(enemy_handle := "") -> Dictionary:
+	var phase := _battle_gate()
+	if not phase.ok:
+		return phase
+	var viewer := active_faction()
+	var subjects: Array[Unit] = []
+	if enemy_handle != "":
+		var enemy := unit_by_handle(enemy_handle)
+		if enemy == null:
+			return {"ok": false, "error": "no unit '%s'" % enemy_handle}
+		if not is_deployed(enemy) or not Team.is_enemy(viewer, enemy.get_faction()):
+			return {"ok": false, "error": "%s is not a unit hostile to %s on the board" % [enemy_handle, _faction_name(viewer)]}
+		subjects.append(enemy)
+	var field := ThreatField.for_viewer(squad_manager, viewer, not _executing)
+	var named: Array[Unit] = subjects.duplicate()
+	if named.is_empty():
+		named.assign(field.by_unit.keys())   # the field's own store: every hostile unit still standing
+	var rows: Array[Dictionary] = []
+	for unit: Unit in live_units():
+		if unit.get_faction() != viewer:
+			continue
+		var cell := unit.get_projected_destination()
+		var hitters: Array[String] = []
+		for attacker: Unit in field.attackers_of(cell):
+			if named.has(attacker):
+				hitters.append(handle_for(attacker))
+		hitters.sort()
+		rows.append({"unit": handle_for(unit), "cell": cell, "attackers": hitters})
+	var subject_names: Array[String] = []
+	for unit: Unit in named:
+		subject_names.append(handle_for(unit))
+	subject_names.sort()
+	# An empty list is every enemy, ThreatField's own union convention.
+	return {"ok": true, "viewer": _faction_name(viewer), "subjects": subject_names,
+			"move": field.move_cells_of(subjects), "reach": field.reach_cells_of(subjects), "units": rows}
+
+
 # The turn's own state, which the rendered board has never carried: whose turn it is, which squad
 # holds the activation, what it has queued, and which squads are spent. 43 of the refusals were
 # "another squad is already active" / "already acted" / "not the active faction" and 34 more were
@@ -241,11 +338,19 @@ func status() -> Dictionary:
 	return {
 		"faction": _faction_name(active_faction()),
 		"active_squad": -1 if active == null else _squad_id(active),
-		"queued": 0 if active == null else active.action_queue.size(),
+		"queued": 0 if active == null else _given_count(active),
 		"acted": acted,
 		"free": free,
 		"pre_mission": _deploying,
 	}
+
+# The orders somebody gave: the hold-position fillers a squad grows when its plan opens are nobody's.
+func _given_count(squad: Squad) -> int:
+	var count := 0
+	for action: BaseAction in squad.action_queue:
+		if not (action is MoveAction and (action as MoveAction).is_hold_position):
+			count += 1
+	return count
 
 
 # ---- the pre-mission phase (#46) ----
@@ -523,9 +628,7 @@ func gear(handle: String, verb_name: String, slot: int) -> Dictionary:
 	var refusal := GearVerbs.perform(unit, verb as GearVerbs.Verb, slot)
 	if refusal != "":
 		return {"ok": false, "error": refusal}
-	var squad := squad_manager.active_squad
-	if squad != null:
-		squad_manager.validate_squad_plan(squad, squad_manager.resolve_plan(squad, _board()))
+	_refresh_plan(squad_manager.active_squad)
 	return {"ok": true, "summary": "%s: %s" % [handle, verb_name]}
 
 # STASH or a roster unit's handle -> {ok, unit}, the unit null for the stash. The screen's cards are
@@ -628,6 +731,12 @@ func queue_move(handle: String, dest: Vector2i) -> Dictionary:
 	if not range_info.reachable.has(dest):
 		var hint := " (reachable but outside leader range)" if range_info.squad_unreachable.has(dest) else ""
 		return {"ok": false, "error": "%s cannot reach %s%s" % [handle, str(dest), hint]}
+	# A leader may not take a destination its squad cannot follow to -- the game refuses the click
+	# (game._click_choosing_move, #1069), so this refuses the order, naming who would be left behind.
+	var one: Array[Vector2i] = [dest]
+	var stranded: Array = _stranding(unit, one).get(dest, [])
+	if not stranded.is_empty():
+		return {"ok": false, "error": "%s can't move to %s: %s could not follow" % [handle, str(dest), _handles(stranded)]}
 	var path := RulesService.reconstruct_path(range_info.came_from, unit.movement.cell, dest)
 	var move := MoveAction.new()
 	move.init(unit, path, GridUtils.get_terrain_icon_at_cell(grid, dest))
@@ -635,6 +744,40 @@ func queue_move(handle: String, dest: Vector2i) -> Dictionary:
 	if refusal != "":
 		return {"ok": false, "error": "%s can't move to %s: %s" % [handle, str(dest), refusal]}
 	return {"ok": true, "summary": "%s -> move %s" % [handle, str(dest)], "valid": move.is_valid}
+
+# Group Move (#46): the leader picks a destination and the squad follows in formation, through the
+# game's door -- MainActionMenu._can_group_move, then begin_group_move_planning's cancel, then
+# _click_choosing_group_move's two questions. Every gate is asked BEFORE anything is cancelled, so a
+# refusal leaves the plan as it was; queue_group_move's own rollback answers for a batch it refuses.
+func group_move(handle: String, dest: Vector2i) -> Dictionary:
+	var unit := unit_by_handle(handle)
+	var gate := _controllable(unit, handle)
+	if not gate.ok:
+		return gate
+	if not (unit.is_leader() and unit.has_squad()):
+		return {"ok": false, "error": "%s does not lead a squad" % handle}
+	var members: Array[Unit] = unit.squad.get_members()
+	for member: Unit in members:
+		if member.has_main_action_queued():
+			return {"ok": false, "error": "%s has a main action queued, and a move must come before it" % handle_for(member)}
+	if dest == unit.movement.cell:
+		return {"ok": false, "error": "%s is already at %s" % [handle, str(dest)]}
+	if not RulesService.compute_move_range(unit, _board()).reachable.has(dest):
+		return {"ok": false, "error": "%s cannot reach %s" % [handle, str(dest)]}
+	var one: Array[Vector2i] = [dest]
+	var stranded: Array = _stranding(unit, one).get(dest, [])
+	if not stranded.is_empty():
+		return {"ok": false, "error": "%s can't lead the squad to %s: %s could not follow" % [handle, str(dest), _handles(stranded)]}
+	for member: Unit in members:
+		if member.has_action_type_queued(BaseAction.ActionType.MOVE):
+			squad_manager.cancel_squad_moves(unit.squad)
+			break
+	if not squad_manager.queue_group_move(unit.squad, dest, _board()):
+		return {"ok": false, "error": "%s's squad could not take up a formation around %s" % [handle, str(dest)]}
+	var heading: Array[String] = []
+	for member: Unit in members:
+		heading.append("%s %s" % [handle_for(member), str(member.get_projected_destination())])
+	return {"ok": true, "summary": "%s -> group move %s (%s)" % [handle, str(dest), ", ".join(heading)]}
 
 func queue_attack(handle: String, aim: Vector2i, attack_name := "") -> Dictionary:
 	var unit := unit_by_handle(handle)
@@ -690,7 +833,11 @@ func cancel(handle: String) -> Dictionary:
 
 # ---- rescue + squad management (drives the same SquadManager / RescueAction as the player) ----
 
-func rescue(rescuer_handle: String, target_handle: String) -> Dictionary:
+# Rescue (#33): the same RescueAction the menu queues, gated on the menu's own candidate query with the
+# squad's last resolve, so a squadmate this pass will drop is a legal pickup (#124). A body that cannot
+# stand where it lies is hauled to a bank (#116): `landing` names one of rescue_landings (null or a
+# Vector2i); omitted, the first, like the AI -- and the summary names the others, since the game asks.
+func rescue(rescuer_handle: String, target_handle: String, landing: Variant = null) -> Dictionary:
 	var rescuer := unit_by_handle(rescuer_handle)
 	var gate := _controllable(rescuer, rescuer_handle)
 	if not gate.ok:
@@ -698,16 +845,54 @@ func rescue(rescuer_handle: String, target_handle: String) -> Dictionary:
 	var target := unit_by_handle(target_handle)
 	if target == null:
 		return {"ok": false, "error": "no unit '%s'" % target_handle}
-	if not RulesService.adjacent_downed_allies(rescuer, _board()).has(target):
+	var board := _board()
+	if not RulesService.adjacent_downed_allies(rescuer, board, squad_manager.resolved_plan_for(rescuer.squad)).has(target):
 		return {"ok": false, "error": "%s is not an adjacent downed ally of %s" % [target_handle, rescuer_handle]}
-	# The headless API has no tile pick either, so it takes the first landing like the AI (#116) --
-	# the deterministic answer the rule gave before the player was handed the choice.
+	# Read BEFORE queueing: the queue's resolve publishes the haul, and the body then reads as standing.
+	var banks := RulesService.rescue_landings(rescuer, target, board)
+	var hauled := RulesService.rescue_needs_a_pick(target, board)
+	var bank: Vector2i = banks[0]
+	if landing != null:
+		if not (landing is Vector2i and banks.has(landing)):
+			return {"ok": false, "error": "%s can't be put down at %s (legal: %s)" % [target_handle, str(landing), _cells_text(banks)]}
+		bank = landing
 	var action := RescueAction.new()
-	action.init(rescuer, target, RulesService.rescue_landings(rescuer, target, _board())[0])
+	action.init(rescuer, target, bank)
 	var refusal := squad_manager.try_queue_action(rescuer.squad, action)
 	if refusal != "":
 		return {"ok": false, "error": "%s can't rescue %s: %s" % [rescuer_handle, target_handle, refusal]}
-	return {"ok": true, "summary": "%s -> rescue %s" % [rescuer_handle, target_handle]}
+	var summary := "%s -> rescue %s" % [rescuer_handle, target_handle]
+	if hauled:
+		summary += " to %s" % str(bank)
+		if landing == null and banks.size() > 1:
+			var others: Array[Vector2i] = []
+			for cell: Vector2i in banks:
+				if cell != bank:
+					others.append(cell)
+			summary += " (other banks: %s)" % _cells_text(others)
+	return {"ok": true, "summary": summary}
+
+func _cells_text(cells: Array[Vector2i]) -> String:
+	var parts: Array[String] = []
+	for cell: Vector2i in cells:
+		parts.append(str(cell))
+	return ", ".join(parts)
+
+# Capture (#46): claim the unclaimed CAPTURE zone the unit will stand in -- the same CaptureAction the
+# menu queues, stamped with this session's mission, gated on the menu's own capturable_zone_at read
+# at the PROJECTED destination, so a capture queued behind a move claims where the move ends.
+func capture(handle: String) -> Dictionary:
+	var unit := unit_by_handle(handle)
+	var gate := _controllable(unit, handle)
+	if not gate.ok:
+		return gate
+	# No pre-check of its own: CaptureAction.actor_block_reason is the one answer, read at the chokepoint.
+	var action := CaptureAction.new()
+	action.init(unit, unit.get_projected_destination(), mission)
+	var refusal := squad_manager.try_queue_action(unit.squad, action)
+	if refusal != "":
+		return {"ok": false, "error": "%s can't capture: %s" % [handle, refusal]}
+	return {"ok": true, "summary": "%s -> capture %s" % [handle, action.zone_name]}
 
 # Guard (#414): become a nearby ally's bodyguard — the same GuardAction the menu queues, gated on the
 # same RulesService.guard_candidates query the menu's row is built from. Its own verb rather than a
@@ -980,6 +1165,7 @@ func execute() -> Dictionary:
 	if squad_manager.squad_has_invalid_actions(squad):
 		return {"ok": false, "error": "plan has invalid actions; fix before executing"}
 
+	_executing = true
 	var events: Array[String] = []
 
 	# 1) moves — teleport, the headless stand-in for tweened MoveAction.execute()
@@ -1037,6 +1223,9 @@ func execute() -> Dictionary:
 	# 5) eject units downed during the pass into solo squads (mirrors OrderExecutor._process_downed_pending)
 	_process_downed_pending()
 
+	# The pass is over before its orders clear, as OrderExecutor drops executing_plan before
+	# _end_squad_turn: the clear's own refreshes re-resolve the emptied plan.
+	_executing = false
 	# clear the squad's orders + mark acted (mirrors execute_orders' tail)
 	if is_instance_valid(squad):
 		for action in squad.action_queue.duplicate():

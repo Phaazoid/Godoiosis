@@ -559,7 +559,7 @@ func test_the_move_beat_opens_on_the_leader_when_the_leader_walks() -> void:
 		.is_same(leader)
 
 
-# A hold-position filler is inserted by a game.gd signal handler for every member that is NOT
+# A hold-position filler is inserted by SquadManager, on activation, for every member that is NOT
 # moving, so almost every real squad move carries some. They are not moves: nobody ordered one and
 # nothing travels, so framing one parks the camera on a unit standing still.
 func test_a_hold_position_filler_is_not_a_mover() -> void:

@@ -8,7 +8,7 @@
 
 > **Range became a per-unit STAT — 2026-08-06 ([#142](https://github.com/Phaazoid/Godoiosis/issues/142)).** `Squad.SQUAD_RANGE` is **deleted**. Cohesion radius is now **`Stats.Stat.COH`**, an ordinary per-unit stat (default 3 then; 4 since #151, `Stats.STAT_DEFAULTS`) read off the **leader** — `get_max_squad_range()` returns `leader.get_effective_stat(COH)`, the same shape `max_size()` already used for effective LDR. That buys the whole stat pipeline for free: job `stat_nudges`, `StatEffect`s, and gear modifiers can all move a captain's leash per unit. **#63's actual call survives** — COH is still fully decoupled from LDR, no band feeds either into the other; what changed is that the number is per-unit rather than global. Leader-derived on purpose: squads churn (`leave_squad` destroys and rebuilds one), units persist, so a leader swap re-derives the leash for free and a member's own COH never widens the squad. Editable from the Unit Editor with no new widget — that tab generates one spinbox per live stat.
 
-**Canon checked through #1080 (2026-09-22); #1196 (a unit leaving its squad keeps its archetype) folded in 2026-10-03; #662 (a refusal says why) folded in 2026-10-03.**
+**Canon checked through #1080 (2026-09-22); #46 (the hold filler is SquadManager's, for every host) folded in 2026-10-04; #1196 (a unit leaving its squad keeps its archetype) folded in 2026-10-03; #662 (a refusal says why) folded in 2026-10-03.**
 
 ## Purpose
 
@@ -48,7 +48,7 @@ Run on every queue change; actions carry `is_valid` + error strings rather than 
 
 - **V1.** Two units may not plan moves to the same destination.
 - **V2.** A move may not target a cell occupied by a squadmate who isn't moving away.
-- **V3.** Non-leader moves must land inside the leader's cohesion bubble measured from the leader's **projected** cell (the leader's own planned destination counts, not their current cell — range itself no longer derives from LDR, banner). `SquadCohesion.in_range` is the single copy of this test (I6 — path-based, per-member, board-fed since #151; the validator's old `cohesion_ok` delegator is deleted), and it is **strict for every move whatever authored it** — an individually ordered one, a Group Move placement, or the hold-position filler alike. A leader therefore cannot walk out of range of its own squadmates, by group move or alone.
+- **V3.** Non-leader moves must land inside the leader's cohesion bubble measured from the leader's **projected** cell (the leader's own planned destination counts, not their current cell — range itself no longer derives from LDR, banner). `SquadCohesion.in_range` is the single copy of this test (I6 — path-based, per-member, board-fed since #151; the validator's old `cohesion_ok` delegator is deleted), and it is **strict for every move whatever authored it** — an individually ordered one, a Group Move placement, or the hold-position filler alike (the filler is queued by `SquadManager` the moment a plan opens, for every host, since #46). A leader therefore cannot walk out of range of its own squadmates, by group move or alone.
 
   **Group Move splits into two outcomes around V3** (2026-08-04, after the rule was briefly relaxed and put back the same day):
   - **Case 1 — falls behind, stays in range.** The leader outruns a member, so it can't hold its formation offset, but it still lands inside the bubble. Legal. `MoveAction.is_trailing` marks it (set by `GroupMoveSolver` when the member ends *further* from the leader than it started) and `OverlayManager._arrow_modulate` draws its path arrow **green**.

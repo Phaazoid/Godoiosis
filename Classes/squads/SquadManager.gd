@@ -44,8 +44,9 @@ var board_source: Callable
 # The last resolve, kept for candidate gating and the rescue candidate list (#124). Derived data,
 # never read back by the resolver itself; read only through resolved_plan_for, which guards squad
 # identity. Freshness rides the synchronous queue -> repaint -> resolve chain, the same guarantee
-# published knockback leans on -- a caller that queues twice with no resolve between (headless
-# drivers, tests) judges the second order against the first's prefix, exactly like an aim.
+# published knockback leans on -- both hosts ride it (the Play API re-resolves on the queue signals
+# too, #46), so only a caller that queues twice with no resolve between (a test driving the manager
+# bare) judges the second order against the first's prefix, exactly like an aim.
 var _last_resolved_plan: ResolvedPlan = null
 var _last_resolved_squad: Squad = null
 
@@ -1335,7 +1336,12 @@ func _on_squad_action_queued(squad: Squad, action: BaseAction):
 func _on_squad_action_cancelled(squad: Squad, unit: Unit, actiontype: BaseAction.ActionType):
 	squad_action_cancelled.emit(squad, unit, actiontype)
 
+# The hold-position fillers are a RULE, so they are queued here for every host (#46), BEFORE the
+# re-emit: a listener that reads the plan sees the whole of it. The threat preview draws nothing and
+# rolls every order back, so it queues none.
 func _on_squad_became_active(squad: Squad, action: BaseAction):
+	if not previewing:
+		setup_hold_move_actions(squad)
 	squad_became_active.emit(squad, action)
 
 func _on_squad_became_empty(squad: Squad):

@@ -183,7 +183,7 @@ static func _felled_by_viewer(viewer: Team.Faction, plans: Array[ResolvedPlan]) 
 # by-product. NOT the cache itself either: game.gd drops the field on an order BEFORE the refresh
 # resolves it, so the cache is one order stale exactly when a wade has just been queued.
 #
-# THE ACTIVE SQUAD RESOLVES LAST, which is what lets game.threat_field() call this with no undress:
+# THE ACTIVE SQUAD RESOLVES LAST, which is what lets ThreatField.for_viewer call this with no undress:
 # every resolve republishes its own plan's shoves, so the last one is what the board is left wearing,
 # and the active squad's plan is the one that was published to begin with.
 static func viewer_plans(viewer: Team.Faction, sm: SquadManager) -> Array[ResolvedPlan]:

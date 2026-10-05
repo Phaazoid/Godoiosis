@@ -84,6 +84,16 @@ static func stamped_attack(attacker: Unit, target: Unit) -> AttackAction:
 	action.fired_attack = attacker.get_fired_attack()
 	return action
 
+# The orders somebody GAVE, in queue order: the queue minus the hold-position fillers a squad grows
+# when its plan opens (SquadManager.setup_hold_move_actions -- every host since #46). For a suite that
+# counts or indexes orders; read the raw queue when the fillers are the point.
+static func given_orders(squad: Squad) -> Array[BaseAction]:
+	var orders: Array[BaseAction] = []
+	for action: BaseAction in squad.action_queue:
+		if not (action is MoveAction and (action as MoveAction).is_hold_position):
+			orders.append(action)
+	return orders
+
 # Instance a real Unit, register it for cleanup, add it to the tree (so _ready
 # builds unit_instance and resolves the @onready components), then place it.
 # We set equipped_weapon directly: has_equipped_weapon()/get_equipped_weapon()

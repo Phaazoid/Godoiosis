@@ -117,6 +117,95 @@ func test_the_overview_shows_the_briefing() -> void:
 
 
 # ==============================================================================
+#  The capture verb (#46)
+# ==============================================================================
+
+func test_capturing_the_only_zone_wins_through_the_verb() -> void:
+	var scenario := _scenario()
+	_zone(scenario, "Point", ZoneManager.Kind.CAPTURE, Rect2i(4, 4, 1, 1))
+	var capture: Array[MissionRules.Objective] = [MissionRules.Objective.CAPTURE]
+	scenario.objectives = capture
+	_place(scenario, "P1", PLAYER, Vector2i(4, 4))
+	_place(scenario, "E1", ENEMY, Vector2i(8, 0))
+	var loaded: Array = await _load(scenario)
+	var sess = loaded[0]
+	var handle: String = sess.handle_for(loaded[1][0])
+	_contest(sess)
+
+	var queued: Dictionary = sess.capture(handle)
+	assert_bool(bool(queued.get("ok"))).override_failure_message(
+		"capture was refused on a capture zone: %s" % str(queued)).is_true()
+	var result: Dictionary = sess.execute()
+	assert_bool(bool(result.get("ok"))).override_failure_message(
+		"the pass holding the capture did not execute: %s" % str(result)).is_true()
+	assert_bool(sess.mission.is_zone_captured("Point")).override_failure_message(
+		"the queued capture executed and the zone is still unclaimed").is_true()
+	assert_bool(MissionRules.has_active_hostiles(sess._board())).override_failure_message(
+		"precondition: the enemy still stands, so only the capture can have won").is_true()
+	assert_str(str(result.get("mission", ""))).override_failure_message(
+		"the pass that claimed the only capture zone did not report the win: %s" % str(result)).is_equal("VICTORY")
+
+
+# The verb reads the PROJECTED cell, as the menu does: off every zone it is refused, and a move
+# queued onto one makes it legal before the unit has gone anywhere.
+func test_capture_is_refused_off_a_capture_zone_and_follows_a_queued_move_onto_one() -> void:
+	var scenario := _scenario()
+	_zone(scenario, "Point", ZoneManager.Kind.CAPTURE, Rect2i(4, 4, 1, 1))
+	_place(scenario, "P1", PLAYER, Vector2i(3, 4))
+	_place(scenario, "E1", ENEMY, Vector2i(8, 0))
+	var loaded: Array = await _load(scenario)
+	var sess = loaded[0]
+	var unit: Unit = loaded[1][0]
+	var handle: String = sess.handle_for(unit)
+
+	var refused: Dictionary = sess.capture(handle)
+	assert_bool(bool(refused.get("ok"))).override_failure_message(
+		"capture was queued by a unit standing on no capture zone").is_false()
+	assert_bool(unit.has_main_action_queued()).override_failure_message(
+		"a refused capture still queued an order").is_false()
+
+	var moved: Dictionary = sess.queue_move(handle, Vector2i(4, 4))
+	assert_bool(bool(moved.get("ok"))).override_failure_message(
+		"precondition: the one step onto the point was refused: %s" % str(moved)).is_true()
+	var queued: Dictionary = sess.capture(handle)
+	assert_bool(bool(queued.get("ok"))).override_failure_message(
+		"capture behind a move onto the point was refused -- the verb read the live cell: %s" % str(queued)).is_true()
+	assert_bool(bool(sess.execute().get("ok"))).is_true()
+	assert_bool(sess.mission.is_zone_captured("Point")).override_failure_message(
+		"the capture queued behind the move did not claim the point").is_true()
+
+
+func test_a_zone_already_claimed_cannot_be_captured_again() -> void:
+	var scenario := _scenario()
+	_zone(scenario, "North", ZoneManager.Kind.CAPTURE, Rect2i(4, 4, 2, 1))
+	_place(scenario, "P1", PLAYER, Vector2i(4, 4))
+	_place(scenario, "P2", PLAYER, Vector2i(5, 4))
+	_place(scenario, "E1", ENEMY, Vector2i(8, 0))
+	var loaded: Array = await _load(scenario)
+	var sess = loaded[0]
+	var first: String = sess.handle_for(loaded[1][0])
+	var second_unit: Unit = loaded[1][1]
+	var second: String = sess.handle_for(second_unit)
+
+	assert_bool(bool(sess.capture(first).get("ok"))).is_true()
+	assert_bool(bool(sess.execute().get("ok"))).is_true()
+	assert_bool(sess.mission.is_zone_captured("North")).override_failure_message(
+		"precondition: the first capture did not claim the zone").is_true()
+	assert_bool(sess.zone_manager.contains("North", second_unit.movement.cell)).override_failure_message(
+		"precondition: the second unit is not standing in the claimed zone").is_true()
+	assert_object(sess.squad_manager.active_squad).override_failure_message(
+		"precondition: a squad is still mid-plan, so a refusal would be the turn rule's").is_null()
+	assert_bool(second_unit.squad.has_acted).override_failure_message(
+		"precondition: the second unit's squad has acted, so a refusal would be the turn rule's").is_false()
+
+	var again: Dictionary = sess.capture(second)
+	assert_bool(bool(again.get("ok"))).override_failure_message(
+		"a zone already claimed was captured a second time: %s" % str(again)).is_false()
+	assert_bool(second_unit.has_main_action_queued()).override_failure_message(
+		"a refused capture still queued an order").is_false()
+
+
+# ==============================================================================
 #  Lose conditions
 # ==============================================================================
 

@@ -82,6 +82,37 @@ static func render_focus(session, handle: String) -> String:
 	lines.append("  " + _unit_line(session, unit))
 	return "\n".join(lines)
 
+# The enemy ranges view (#46): the game's V key as text. Its two glyphs are its own, unused by the
+# overview and focus overlays, and the strike glyph wins a cell both mark.
+const STRIKE_GLYPH := "%"
+const STAND_GLYPH := "="
+
+static func render_ranges(session, handle := "") -> String:
+	var res: Dictionary = session.ranges(handle)
+	if not res.ok:
+		return "> ERROR: " + str(res.error)
+	var overlay := {}
+	for cell in res.move:
+		overlay[cell] = STAND_GLYPH
+	for cell in res.reach:
+		overlay[cell] = STRIKE_GLYPH
+	var subjects: Array = res.subjects
+	var lines: Array[String] = []
+	lines.append("ranges of %s, seen by %s" % [", ".join(subjects) if not subjects.is_empty() else "nobody", res.viewer])
+	lines.append("  %s an enemy can strike here   %s an enemy can stand here but not strike" % [STRIKE_GLYPH, STAND_GLYPH])
+	lines.append(_grid_block(session, _content_bounds(session), overlay))
+	lines.append("")
+	for row: Dictionary in res.units:
+		var unit: Unit = session.unit_by_handle(row.unit)
+		var cell: Vector2i = row.cell
+		var at := "(%d,%d)" % [cell.x, cell.y]
+		if unit != null and unit.movement.cell != cell:
+			at += " planned, from (%d,%d)" % [unit.movement.cell.x, unit.movement.cell.y]
+		var attackers: Array = row.attackers
+		var verdict: String = ("hit by " + ", ".join(attackers)) if not attackers.is_empty() else "out of reach"
+		lines.append("  %s at %s: %s" % [row.unit, at, verdict])
+	return "\n".join(lines)
+
 static func render_preview(session) -> String:
 	var res: Dictionary = session.preview()
 	if not res.ok:
@@ -386,6 +417,9 @@ static func render_legal_moves(session, handle: String) -> String:
 	if not res.leashed.is_empty():
 		# Named, because "too far to walk" and "your leader is too far" want different fixes.
 		body += "\n  outside leader range (%d): %s" % [res.leashed.size(), _cell_rows(res.leashed).strip_edges()]
+	if not res.stranding.is_empty():
+		# A leader's: walkable, and refused because a squadmate could not follow there (#1069).
+		body += "\n  would strand a squadmate (%d): %s" % [res.stranding.size(), _cell_rows(res.stranding).strip_edges()]
 	return head + "\n" + body
 
 

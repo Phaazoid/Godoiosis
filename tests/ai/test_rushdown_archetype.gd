@@ -47,7 +47,7 @@ func _unready_springspear() -> SpringspearWeaponInstance:
 
 func _move_destinations(squad: Squad) -> Array[Vector2i]:
 	var result: Array[Vector2i] = []
-	for action in squad.action_queue:
+	for action in H.given_orders(squad):   # a hold filler (#46) goes nowhere
 		if action is MoveAction:
 			result.append((action as MoveAction).destination)
 	return result
@@ -60,8 +60,8 @@ func test_no_enemy_revs_a_rev_capable_weapon() -> void:
 
 	RushdownArchetype.take_squad_turn(squad, _context(board), board.squad_manager)
 
-	assert_int(squad.action_queue.size()).is_equal(1)
-	assert_int(squad.action_queue[0].action_type).is_equal(BaseAction.ActionType.REV)
+	assert_int(H.given_orders(squad).size()).is_equal(1)
+	assert_int(H.given_orders(squad)[0].action_type).is_equal(BaseAction.ActionType.REV)
 
 
 func test_no_enemy_reloads_an_unready_weapon() -> void:
@@ -72,8 +72,8 @@ func test_no_enemy_reloads_an_unready_weapon() -> void:
 
 	RushdownArchetype.take_squad_turn(squad, _context(board), board.squad_manager)
 
-	assert_int(squad.action_queue.size()).is_equal(1)
-	assert_int(squad.action_queue[0].action_type).is_equal(BaseAction.ActionType.RELOAD)
+	assert_int(H.given_orders(squad).size()).is_equal(1)
+	assert_int(H.given_orders(squad)[0].action_type).is_equal(BaseAction.ActionType.RELOAD)
 
 
 func test_no_enemy_and_nothing_valid_queues_nothing() -> void:

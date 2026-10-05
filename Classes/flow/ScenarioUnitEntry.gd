@@ -106,6 +106,13 @@ func apply_placement(unit: Unit) -> void:
 	unit.squad.zone_name = squad_zone
 	unit.squad.home_cell = cell
 
+# Does this entry spawn as a BODY, RulesService.can_spawn_at's is_body (#116)? A saved DOWNED unit may
+# lie on ground nothing may STAND on -- deep water -- and without this a load would silently drop it.
+# A reference entry (state_saved false) is authored cast, never mid-drown, so ACTIVE is right. The ONE
+# answer both loaders pass to their spawn gate (#46).
+func spawns_as_body() -> bool:
+	return state_saved and lifecycle_state == Unit.LifecycleState.DOWNED
+
 # Snapshot the unit's persistent side of the seam. Inventory copies via copy_for_grant()
 # — never duplicate(true), which would fork a WeaponInstance off its shared template. An
 # installed prosthetic saves as the INDEX of its carried instance so load can re-link.

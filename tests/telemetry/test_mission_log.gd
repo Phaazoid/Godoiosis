@@ -252,7 +252,7 @@ func test_a_queued_order_and_its_cancel_are_recorded_with_faction_and_pass_state
 	assert_bool(order.has("target")).override_failure_message(
 		"a queued attack has no victim yet -- recording one would write id 0 forever").is_false()
 
-	# The hold filler game.gd queues alongside it is NOT in this stream -- see _on_order_queued.
+	# The hold filler SquadManager queues alongside it is NOT in this stream -- see _on_order_queued.
 	# Read off the RAW queue: has_action_type_queued answers false for a hold on purpose.
 	var holds := 0
 	for queued_action: BaseAction in hero.squad.action_queue:

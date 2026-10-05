@@ -8,7 +8,7 @@
 # enum, so being listed in SIDE_CHANNEL_ORDER passes it automatically.
 #
 # What makes that a gap worth closing rather than a formality: this action exists to hold a FROZEN
-# STAMP. Its cell, zone name and controller are captured at queue time precisely so a re-planned
+# STAMP. Its cell, zone name and mission are captured at queue time precisely so a re-planned
 # move cannot quietly capture somewhere else (Law #2 — the queue previewed THIS cell). That is the
 # same shape as AttackAction.fired_attack, and #102 is the record of what happens when a stored
 # order and a live lookup disagree about which thing an order refers to.
@@ -67,7 +67,7 @@ func _stand_on_a_point() -> Unit:
 
 func _capture_order(unit: Unit, cell: Vector2i) -> CaptureAction:
 	var action := CaptureAction.new()
-	action.init(unit, cell, mc)
+	action.init(unit, cell, mc.mission)
 	return action
 
 
@@ -79,7 +79,7 @@ func test_init_stamps_the_zone_under_the_target_cell() -> void:
 
 	assert_str(action.zone_name).is_equal(POINT)
 	assert_that(action.cell).is_equal(POINT_CELL)
-	assert_object(action.controller).is_same(mc)
+	assert_object(action.mission).is_same(mc.mission)
 	assert_that(action.action_type).is_equal(BaseAction.ActionType.CAPTURE)
 
 
@@ -139,8 +139,8 @@ func test_an_already_captured_zone_cannot_be_captured_again() -> void:
 	assert_bool(action.actor_can_perform()).is_false()   # the order is now pointless, not illegal
 
 
-func test_a_capture_with_no_controller_cannot_be_performed() -> void:
-	# Defensive: the controller is stamped because an action has no game ref of its own. If that
+func test_a_capture_with_no_mission_cannot_be_performed() -> void:
+	# Defensive: the mission is stamped because an action has no game ref of its own. If that
 	# stamp is ever missed, the gate must refuse rather than execute() null-checking its way to a
 	# silent no-op that still consumes the unit's main action.
 	var unit := _stand_on_a_point()
@@ -202,6 +202,63 @@ func test_execute_claims_the_zone_the_order_named_even_after_the_actor_moved() -
 
 	assert_bool(mc.is_zone_captured(POINT)).is_true()
 	assert_bool(mc.is_zone_captured("Bravo Point")).is_false()
+
+
+# The game's three reactions to a claim -- the telemetry event, the zone leaving the board, the HUD --
+# hang off MissionState.zone_captured since the order stopped holding the controller (#46). This
+# drives the real ORDER, never mc.capture, so a dropped connect leaves the zone claimed and all
+# three silent, and reds here.
+func test_executing_a_capture_logs_it_hides_the_zone_and_refreshes_the_hud() -> void:
+	var unit := _stand_on_a_point()
+	var objectives: Array[MissionRules.Objective] = [MissionRules.Objective.CAPTURE]
+	mc.set_objectives(objectives)   # the HUD draws a capture row only for a declared objective
+	game.mission_log.begin(false)   # an in-memory run for the event to land in
+	game.overlay_manager.redraw_zones(game.zone_manager, mc.hidden_zone_names())
+	assert_bool(_drawn_zone_names().has(POINT)).override_failure_message(
+		"precondition: the unclaimed point is not drawn, so it going away would prove nothing").is_true()
+	var hud_before := _hud_rows()
+
+	_capture_order(unit, POINT_CELL).execute()
+
+	assert_int(_logged_captures(POINT)).override_failure_message(
+		"executing a CaptureAction did not record exactly one zone_captured event").is_equal(1)
+	assert_bool(_drawn_zone_names().has(POINT)).override_failure_message(
+		"executing a CaptureAction left the claimed zone drawn -- the overlay never redrew").is_false()
+	var hud_after := _hud_rows()
+	assert_array(hud_after).override_failure_message(
+		"executing a CaptureAction left the HUD reading %s -- it never refreshed" % [hud_before]).is_not_equal(hud_before)
+	game.refresh_mission_status()
+	assert_array(hud_after).override_failure_message(
+		"the HUD after the capture %s is not what the settled state draws %s" % [hud_after, _hud_rows()]).is_equal(_hud_rows())
+
+
+func _logged_captures(zone_name: String) -> int:
+	var events: Array[Dictionary] = game.mission_log.events()
+	var count := 0
+	for event: Dictionary in events:
+		if event.get("event") == "zone_captured" and str(event.get("zone")) == zone_name:
+			count += 1
+	return count
+
+
+func _drawn_zone_names() -> Array[String]:
+	var names: Array[String] = []
+	var drawn: Array[Dictionary] = game.overlay_manager.drawn_zones
+	for zone: Dictionary in drawn:
+		names.append(str(zone["name"]))
+	return names
+
+
+# The mission HUD's row labels as drawn; a zone row holds its label beside its emblem.
+func _hud_rows() -> Array[String]:
+	var texts: Array[String] = []
+	var panel: MissionStatusPanel = game.mission_status_panel
+	for child in panel._rows.get_children():
+		var label := child as Label
+		if label == null:
+			label = child.find_children("*", "Label", true, false)[0] as Label
+		texts.append(label.text)
+	return texts
 
 
 # --- the action registry ---

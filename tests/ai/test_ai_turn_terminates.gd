@@ -19,9 +19,9 @@
 # destinations red before the click (tests/squad/test_squad_cohesion.gd). The AI does not read that
 # overlay, so it still authors the refusal and still has to survive it.
 #
-# Why the game scene and not the headless board: the hold-position filler is queued by game.gd's
-# squad_became_active handler, so a board built by play/board_builder.gd never grows the orders
-# whose validity is the whole bug. That is exactly why the Play API never reproduced #103. Fixture
+# Why the game scene: the terminal state is OrderExecutor's, which only the game runs. The
+# hold-position filler is no longer the reason -- SquadManager queues it for every host since #46,
+# so the headless board grows the same orders; before that, the Play API never reproduced #103. Fixture
 # is tests/ui/test_game_scene_smoke.gd's — the instanced root MUST be named "Main" under /root or
 # game.gd's absolute /root/Main/DevOverlay lookup returns null (#114, tests/README.md).
 extends GdUnitTestSuite

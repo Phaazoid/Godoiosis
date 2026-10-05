@@ -198,7 +198,7 @@ func test_sprung_weapon_falls_through_to_reload() -> void:
 	var units: Array[Unit] = [attacker, _victim]
 	var priority: Array = [BaseAction.ActionType.ATTACK, BaseAction.ActionType.RELOAD]
 	assert_bool(AITactics.queue_main_action(attacker, _board(units), _sm, priority)).is_true()
-	assert_int(attacker.squad.action_queue.size()).is_equal(1)
+	assert_int(H.given_orders(attacker.squad).size()).is_equal(1)
 	assert_int(attacker.squad.action_queue[0].action_type).is_equal(BaseAction.ActionType.RELOAD)
 
 
@@ -210,7 +210,7 @@ func test_rev_capable_weapon_revs_when_nothing_else_applies() -> void:
 	var units: Array[Unit] = [attacker]
 	var priority: Array = [BaseAction.ActionType.ATTACK, BaseAction.ActionType.RELOAD, BaseAction.ActionType.REV]
 	assert_bool(AITactics.queue_main_action(attacker, _board(units), _sm, priority)).is_true()
-	assert_int(attacker.squad.action_queue.size()).is_equal(1)
+	assert_int(H.given_orders(attacker.squad).size()).is_equal(1)
 	assert_int(attacker.squad.action_queue[0].action_type).is_equal(BaseAction.ActionType.REV)
 
 
@@ -236,7 +236,7 @@ func test_burrow_capable_weapon_burrows_when_nothing_else_applies() -> void:
 	var units: Array[Unit] = [attacker]
 	var priority: Array = [BaseAction.ActionType.ATTACK, BaseAction.ActionType.RELOAD, BaseAction.ActionType.REV, BaseAction.ActionType.BURROW]
 	assert_bool(AITactics.queue_main_action(attacker, _board(units), _sm, priority)).is_true()
-	assert_int(attacker.squad.action_queue.size()).is_equal(1)
+	assert_int(H.given_orders(attacker.squad).size()).is_equal(1)
 	assert_int(attacker.squad.action_queue[0].action_type).is_equal(BaseAction.ActionType.BURROW)
 
 

@@ -62,12 +62,14 @@ view**, not raw JSON — see *State representation*. Command vocabulary:
 | `legal_moves(unit_id)` / `legal_targets(unit_id, attack?)` | reachable cells / hittable cells + victims, the latter for the NAMED attack (else the default) and saying which. **Each calls the predicate its own gate calls** — `compute_move_range` for moves, `can_hit_cell_from` + `gather_attack_victims` for aims — so a cell offered can never be one the queue refuses. A second derivation here would be Law #4 with a silent failure mode, and `tests/play/test_affordances.gd` drives both sides to keep them honest |
 | `status()` | whose turn, which squad holds the activation and what it has queued, which squads are spent. Rides every frame rather than being asked for |
 | `squad_up / join / leave / disband` | new squad state |
-| `queue_move(unit_id, dest)` / `queue_attack(unit_id, aim_cell, attack?)` | validity + updated plan. `attack` names which attack fires — see *Choosing an attack* below |
+| `queue_move(unit_id, dest)` / `queue_attack(unit_id, aim_cell, attack?)` | validity + updated plan. `attack` names which attack fires — see *Choosing an attack* below. A squad LEADER's move that would leave a squadmate unable to follow is refused, naming who, as the game's move mode greys it (#46); `legal_moves` reports those cells under `stranding` rather than offering them |
+| `group_move(unit, x, y)` | the game's Group Move (#46): the leader's destination, and `queue_group_move` places the whole formation. Every gate is asked BEFORE the squad's queued moves are cancelled, so a refused formation leaves the plan as it was |
 | `overwatch(unit_id, aim_cell, attack?)` | stand watch with the NAMED watch attack, else the unit's first (a weapon normally carries one) |
 | `deploy(unit, cell)` / `undeploy(unit)` / `reposition(unit, cell)` / `begin()` | the PRE-MISSION phase (#46) -- see *Pre-mission* below |
 | `give(from, slot, to)` / `job(unit, job)` / `fit(unit, slot, mod, space)` / `unfit(unit, slot, mod)` / `kit(unit)` | the pre-mission loadout: gear, jobs and mods, and the view that reads them back (#46) -- see *Pre-mission* below |
 | `equip / wear / use / toss (unit, slot)` / `unequip / remove_armor (unit)` | the inspect dock's verbs, in either phase (#46) -- see *The inspect dock* below |
-| `rescue / reload / rev / burrow / guard` | the side-channel main actions, one verb each — the argument-taking ones (`rescue(a, b)`, `guard(a, ward)`) stay separate from the argument-free ones for the reason `game.queue_simple_action` does. Each gates on the same `RulesService` query the menu's row is built from. *(Still missing: `capture` — see *Limits*.)* |
+| `rescue / reload / rev / burrow / guard / capture` | the side-channel main actions, one verb each — the argument-taking ones (`rescue(a, b, x?, y?)`, `guard(a, ward)`) stay separate from the argument-free ones for the reason `game.queue_simple_action` does. Each gates on the same `RulesService` query the menu's row is built from. A rescue may name the bank to haul the body to (`x`/`y`, checked against `RulesService.rescue_landings`); without one it takes the first, and the reply lists the others. `capture(unit)` queues the real `CaptureAction` for the zone under the unit's projected cell, refused in that action's own words (#46) |
+| `ranges(unit?)` | the game's enemy-ranges view (the V key, #46): where the enemy can stand and where it can strike, through the same `ThreatField.for_viewer` the game builds its field with, and for every one of your units at its PLANNED cell, who can hit it. `unit` narrows it to one enemy. The viewer is whoever's turn it is; the game always draws the player's, which differs only in hotseat |
 | `cancel(unit_id)` / `wait(unit_id)` | updated plan |
 | `preview()` | `resolve_plan(active_squad)` outcomes **without applying** (damage, state deltas, deaths, counters) |
 | `execute()` | apply the resolved plan headlessly; return the event log — plus a `mission` key the pass that ends the mission (#96) |
@@ -369,9 +371,15 @@ progress in the words the player does. Both loaders also apply each unit's place
 the board contexts carry the zone store a Sentry's patrol is read from. `tests/flow/test_mission_two_hosts.gd`
 loads one mission in both hosts and requires them to agree.
 
-**Still missing: the `capture` command.** Nothing can queue a `CaptureAction` headlessly yet (the
-action itself would execute fine: `SIDE_CHANNEL_ORDER` gives it a phase for free), so a capture
-map is scored correctly and cannot be won out here. That is #46's next slice.
+**Every verb the game offers in battle, the API has (#46).** `capture`, `group_move` and a rescue's
+bank pick closed the last gaps, so every shipped mission can be won or lost headlessly. Three
+things keep a headless plan the game's plan rather than a lookalike. The plan **re-resolves after
+every order**, on the same `SquadManager` signals the game's queue panel hangs its refresh on
+(`PlaySession._refresh_plan`), so the next order is judged against the shoves and downs the plan
+already publishes. **Hold orders** are queued by `SquadManager` itself the moment a squad's plan
+opens, for every host, so the headless plan carries the same filler the game's does. And the
+**loader** goes through the game's own doors (`valid_entries`, the spawn gate, `apply_placement`,
+`relink_guards`), so armed Guards and cast provenance survive a headless load.
 
 ## Open questions
 

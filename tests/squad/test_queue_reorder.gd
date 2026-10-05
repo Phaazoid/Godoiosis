@@ -112,9 +112,11 @@ func test_reordering_one_type_leaves_every_other_order_where_it_was() -> void:
 	squad.reorder_by_actor(BaseAction.ActionType.MOVE, [units[1], units[0]])
 
 	assert_array(_actors_of(squad, BaseAction.ActionType.MOVE)).is_equal([units[1], units[0]])
-	# The Guard neither moved nor was swallowed by the re-inserted move block.
-	assert_int(squad.action_queue.size()).is_equal(3)
-	assert_object(squad.action_queue[2]).is_same(guard)
+	# The Guard neither moved nor was swallowed by the re-inserted move block. Counted over the orders
+	# GIVEN: the third member's hold filler (#46) sits in the queue too, and is not this case's.
+	var given := H.given_orders(squad)
+	assert_int(given.size()).is_equal(3)
+	assert_object(given[2]).is_same(guard)
 
 
 # The hold-position fillers are not orders anybody gave (BaseAction.batch_id 0), cross nothing, and
@@ -122,10 +124,14 @@ func test_reordering_one_type_leaves_every_other_order_where_it_was() -> void:
 func test_a_hold_position_filler_never_moves() -> void:
 	var units := _trio()
 	var squad: Squad = units[0].squad
-	var hold := _hold(units[1])
-	squad._queue_action(hold)
+	squad._queue_action(_hold(units[1]))
 	squad._queue_action(_move(units[0]))
 	squad._queue_action(_move(units[2]))
+	# The hold that opened the plan is replaced by the one the squad grows for that member (#46), at
+	# the head of the queue, so the filler under test is read off the queue rather than the fixture.
+	var hold: MoveAction = squad.action_queue[0] as MoveAction
+	assert_bool(hold != null and hold.is_hold_position and hold.actor == units[1]).override_failure_message(
+		"fixture: the queue does not open on units[1]'s hold").is_true()
 
 	squad.reorder_by_actor(BaseAction.ActionType.MOVE, [units[2], units[0]])
 

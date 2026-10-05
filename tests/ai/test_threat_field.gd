@@ -586,3 +586,93 @@ func test_every_unit_the_ai_would_hit_stands_inside_the_field() -> void:
 	for victim: Unit in [beside, far]:
 		assert_bool(hit.has(victim)).override_failure_message(
 				"fixture is vacuous: %s was never hit, so its mechanism went unexercised" % victim.get_unit_name()).is_true()
+
+
+# --- #46: the one builder both hosts call --------------------------------------------------------
+#
+# ThreatField.for_viewer is what game.threat_field() and the Play API's `ranges` both call, so a fault
+# inside it moves the two hosts together and no comparison between them can see it. These pin it
+# directly.
+
+func _queue_wade(board: Dictionary, unit: Unit, path: Array[Vector2i]) -> void:
+	var move := MoveAction.new()
+	move.init(unit, path, null)
+	assert_bool(board.squad_manager.queue_action(unit.squad, move)).override_failure_message(
+			"the fixture's own move was refused -- the case would prove nothing").is_true()
+
+
+# A one-cell corridor, with a nook beside its second square. The player stands in the corridor,
+# blocking a rusher behind it, and queues one step away. Judged where the plan leaves it, the rusher
+# follows through the square it vacates; judged where it stands, the rusher is stuck.
+func test_for_viewer_judges_a_unit_where_its_plan_leaves_it_and_puts_everyone_back() -> void:
+	var board: Dictionary = BB.build(self)
+	auto_free(board.root)
+	BB.paint_rect(board.grid, Rect2i(0, 0, 8, 1))
+	BB.paint_cell(board.grid, Vector2i(1, 1), BB.GRASS_ATLAS)
+	var rusher: Unit = _spawn(board, ENEMY, Vector2i(0, 0))
+	_bind(rusher, AIArchetype.Type.RUSHDOWN)
+	var holder: Unit = _spawn(board, ENEMY, Vector2i(1, 1))   # reaches the corridor square the mover leaves
+	_bind(holder, AIArchetype.Type.HOLD)
+	var live := Vector2i(1, 0)
+	var dest := Vector2i(2, 0)
+	var mover: Unit = _spawn(board, PLAYER, live)
+	var step: Array[Vector2i] = [live, dest]
+	_queue_wade(board, mover, step)
+	var sm: SquadManager = board.squad_manager
+
+	var standing := ThreatField.build(sm.board_source.call() as BoardContext, PLAYER)
+	assert_bool(standing.attackers_of(dest).has(rusher)).override_failure_message(
+			"fixture is vacuous: the rusher reaches the destination past a body in its road").is_false()
+
+	var field := ThreatField.for_viewer(sm, PLAYER, true)
+	assert_bool(field.attackers_of(dest).has(rusher)).override_failure_message(
+			"the destination was judged with you still in the corridor -- the square you leave is the rusher's road"
+			).is_true()
+	assert_bool(field.attackers_of(live).has(holder)).override_failure_message(
+			"fixture is vacuous: the holder never reached the square the mover leaves").is_true()
+	assert_bool(field.attackers_of(dest).has(holder)).override_failure_message(
+			"the holder was drawn reaching the destination, so the two cells cannot be told apart").is_false()
+
+	assert_that(mover.movement.cell).override_failure_message(
+			"the build left the mover standing on its planned cell").is_equal(live)
+	assert_that(rusher.movement.cell).override_failure_message(
+			"the build moved a unit with no plan").is_equal(Vector2i(0, 0))
+	assert_that(mover.get_projected_destination()).override_failure_message(
+			"the build disturbed the plan it read").is_equal(dest)
+
+
+# with_pending is what game.threat_field() turns off mid-pass. The soak a queued wade will deal lights
+# the cell beside the water only when the pending plan is read.
+func test_for_viewer_reads_the_pending_soak_only_when_asked() -> void:
+	var board := _water_board()
+	_shocker(board, Vector2i(1, 1))
+	var wader: Unit = _spawn(board, PLAYER, Vector2i(3, 2))
+	var ctx := _water_context(board, _row(Vector2i(2, 1), 2))
+	board.squad_manager.board_source = func() -> BoardContext: return ctx
+	var path: Array[Vector2i] = [Vector2i(3, 2), Vector2i(3, 1), Vector2i(4, 1)]   # through (3, 1)
+	_queue_wade(board, wader, path)
+	var sm: SquadManager = board.squad_manager
+
+	assert_bool(ThreatField.for_viewer(sm, PLAYER, true).cells.has(Vector2i(4, 1))).override_failure_message(
+			"with the pending plan read, the cell your wade leaves you on beside the lit water was painted safe"
+			).is_true()
+	assert_bool(ThreatField.for_viewer(sm, PLAYER, false).cells.has(Vector2i(4, 1))).override_failure_message(
+			"the pending soak was read with with_pending off").is_false()
+	assert_that(wader.movement.cell).override_failure_message(
+			"the build left the wader on its planned cell").is_equal(Vector2i(3, 2))
+
+
+# The viewer names whose danger it is: asked for the enemy side, the field holds the player's units.
+func test_for_viewer_builds_the_field_the_named_side_faces() -> void:
+	var board: Dictionary = _build_board()
+	var foe: Unit = _spawn(board, ENEMY, Vector2i(1, 1))
+	_bind(foe, AIArchetype.Type.HOLD)
+	var mine: Unit = _spawn(board, PLAYER, Vector2i(5, 1))
+	_bind(mine, AIArchetype.Type.HOLD)
+	var sm: SquadManager = board.squad_manager
+	var theirs := ThreatField.for_viewer(sm, ENEMY, true)
+	assert_bool(theirs.by_unit.has(mine) and not theirs.by_unit.has(foe)).override_failure_message(
+			"asked for the enemy's view, the field was not the player's units").is_true()
+	var ours := ThreatField.for_viewer(sm, PLAYER, true)
+	assert_bool(ours.by_unit.has(foe) and not ours.by_unit.has(mine)).override_failure_message(
+			"asked for the player's view, the field was not the enemy's units").is_true()

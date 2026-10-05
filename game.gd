@@ -260,6 +260,8 @@ func _build_collaborators() -> void:
 	mission_controller = MissionController.new()
 	mission_controller.game = self
 	mission_controller.mission.zones = zone_manager   # the one zone store, built above (#46)
+	# A claim's game reactions hang off the state, which a CaptureAction holds in place of this node (#46).
+	mission_controller.mission.zone_captured.connect(mission_controller._on_zone_captured)
 	add_child(mission_controller)
 	# The pre-mission briefing's one wire (#882): the phase holds its loadout screen back until the
 	# director has stopped talking. Connected here rather than in either node's _ready, because the
@@ -1250,7 +1252,7 @@ func _make_simple_action(type: BaseAction.ActionType) -> BaseAction:
 # tile the move ends on (#96 slice 3).
 func queue_capture(unit: Unit):
 	var capture := CaptureAction.new()
-	capture.init(unit, unit.get_projected_destination(), mission_controller)
+	capture.init(unit, unit.get_projected_destination(), mission_controller.mission)
 	squad_manager.queue_action(unit.squad, capture)
 	clear_selection()
 
@@ -1622,7 +1624,6 @@ func _on_squad_became_active(squad: Squad, action: BaseAction):
 		for unit in icons_to_draw.keys():
 			for icontype in icons_to_draw[unit]:
 				overlay_manager.create_unit_icon(unit, icontype)
-	squad_manager.setup_hold_move_actions(squad)
 	refresh_action_queue(squad)
 
 func _on_squad_has_no_actions(squad: Squad):
@@ -2010,17 +2011,14 @@ func refresh_watch_markers(plan: ResolvedPlan = null) -> void:
 # said was out of reach, with the line telling the truth. The cache is what bounds the cost: this
 # runs once per plan change, never per frame.
 #
-# The PENDING SOAK (#1197) is read first, on the live board as every resolve is: who your own queued
-# plan will leave wet, so a wade through the ford reads as wet before it has happened. Not mid-pass,
-# for refresh_action_queue's reason -- a resolve then counts the hits that already landed twice.
+# The build itself is ThreatField.for_viewer, shared with the Play API's `ranges` (#46); this keeps
+# the cache and decides the PENDING SOAK (#1197): who your own queued plan will leave wet, so a wade
+# through the ford reads as wet before it has happened. Not mid-pass, for refresh_action_queue's
+# reason -- a resolve then counts the hits that already landed twice.
 func threat_field() -> ThreatField:
 	if _threat_field == null:
-		var pending: Dictionary = {}
-		if order_executor == null or order_executor.executing_plan == null:
-			pending = AIController.pending_hypo(AIController.viewer_plans(Team.Faction.PLAYER, squad_manager))
-		var saved := AIController.stand_on_projected(squad_manager)
-		_threat_field = ThreatField.build(_board(), Team.Faction.PLAYER, pending)
-		AIController.restore_cells(saved)
+		var with_pending: bool = order_executor == null or order_executor.executing_plan == null
+		_threat_field = ThreatField.for_viewer(squad_manager, Team.Faction.PLAYER, with_pending)
 	return _threat_field
 
 
