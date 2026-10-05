@@ -34,7 +34,7 @@ The watcher checks every 2 minutes. It looks at Tests runs from the last 3 hours
 
 After a successful dispatch, it enables and starts the keepalive task, which brings the runners up. They're ready about 75 seconds later, and the queued jobs start.
 
-Once nothing has run or waited locally for 10 minutes, and no runner is busy, the watcher stops and disables the keepalive. The WSL VM then shuts itself down about 15 seconds later. It never does this while a runner is busy, because shutting WSL down cancels the job in flight. It also only takes down runners it brought up itself: if you start the keepalive by hand, it's yours.
+Once nothing has run or waited locally for 10 minutes, and no runner is busy, the watcher stops and disables the keepalive. The runners go offline within about 45 seconds, and the WSL VM shuts itself down after another 30 to 45 (75 to 90 seconds in all, measured twice), once WSL's own idle timeout runs out. It never does this while a runner is busy, because shutting WSL down cancels the job in flight. It also only takes down runners it brought up itself: if you start the keepalive by hand, it's yours.
 
 The watcher shows a Windows notification:
 
