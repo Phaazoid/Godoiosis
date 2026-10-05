@@ -308,15 +308,20 @@ func _cmd_load(path: String, resume := false) -> String:
 	var loaded: Array = await BoardBuilder.load_scenario(_board, path)
 	_session = PlaySession.new(_board)
 	_loaded_path = path
-	var replay: PreMissionSnapshot = null if resume else PreMissionPhase.replay_for(_staged, path)
+	var offered: bool = _session.scenario_data != null and _session.scenario_data.offers_pre_mission
+	var replay: PreMissionSnapshot = null if resume else PreMissionPhase.replay_for(_staged, path, offered)
 	var drawn: int = 0 if resume else _session.start_pre_mission(replay)
 	await process_frame   # the drawn units' _ready, as load_scenario waits for its own spawns
 	var head := "Loaded %s (%d units)" % [path, loaded.size()]
-	if drawn > 0:
+	# Keyed on whether the phase OPENED (#46), not on the draw: a board with no pre-mission screen
+	# still draws its roster, and says so, because the force it starts with is the author's.
+	if _session.is_deploying():
 		head += "; pre-mission: %d of the roster stood up" % drawn
 		var roster: Array[Unit] = _session.roster_units()
 		if replay != null and replay.fits(roster):
 			head += " -- your last loadout for this mission stands again"
+	elif drawn > 0:
+		head += "; this mission has no pre-mission screen, so its roster's authored draw of %d stands and the battle has begun" % drawn
 	return "%s\n\n%s" % [head, BoardView.render_overview(_session)]
 
 # The game's Restart (#763): the same mission again, back in its pre-mission phase. Taken from inside

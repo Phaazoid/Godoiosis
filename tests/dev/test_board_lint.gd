@@ -454,6 +454,26 @@ func test_a_richly_authored_timeline_is_not_called_empty() -> void:
 	assert_bool(_mentions(BoardLint.Severity.DEGRADES, "no lines in it")).is_false()
 
 
+# A briefing plays when the pre-mission phase opens (#882), so on a board that opens none -- the
+# Pre-mission screen box unticked (#46) -- it never plays.
+func test_a_briefing_on_a_board_with_no_pre_mission_screen_degrades() -> void:
+	var rosters: Array[String] = RosterCatalog.saved_rosters()
+	if rosters.is_empty():
+		fail("precondition: no roster is shipped, so a board with a phase cannot be authored here")
+		return
+	var beat := DialogBeat.new()
+	beat.trigger = DialogBeat.Trigger.PRE_MISSION_START
+	beat.timeline = DialogicTimeline.new()
+	beat.timeline.from_text("torv: A line.")
+	game.scenario_manager.current_dialog_beats.append(beat)
+	game.scenario_manager.current_roster = rosters[0]
+	game.scenario_manager.current_offers_pre_mission = false
+	_assert_reports(BoardLint.Severity.DEGRADES, "never plays")
+	# Non-vacuous twin: tick the box and the finding goes.
+	game.scenario_manager.current_offers_pre_mission = true
+	_assert_silent(BoardLint.Severity.DEGRADES, "never plays")
+
+
 func test_a_step_naming_an_absent_unit_blocks() -> void:
 	var step := TutorialStep.new()
 	step.unit_name = "Torv"

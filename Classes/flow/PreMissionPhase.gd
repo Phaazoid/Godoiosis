@@ -171,11 +171,22 @@ func capture(mission_path: String) -> PreMissionSnapshot:
 	return snapshot
 
 
+# Does the phase OPEN (#46): the mission offers the screen (ScenarioData.offers_pre_mission) and the
+# draw stood somebody up. The one rule both hosts' fresh-start doors ask. Closed, the draw's authored
+# placement stands and the battle begins.
+static func opens(offered: bool, drawn: int) -> bool:
+	return offered and drawn > 0
+
+
 # The buffer, but only if it describes THIS board -- the reason no mission door has to remember to
 # clear one (#763 ruling 1). Every fresh start of a mission asks, on both hosts; the answer for a
 # mission not committed once in this session is null, which is the authored draw.
-static func replay_for(buffer: PreMissionSnapshot, path: String) -> PreMissionSnapshot:
-	if buffer == null or buffer.mission_path != path or path == "":
+#
+# And only if the board OFFERS the screen (#46): a loadout committed while the box was ticked would
+# otherwise stand again, silently, on a board whose player can no longer see or change it. Required
+# rather than defaulted, so no door can forget to ask.
+static func replay_for(buffer: PreMissionSnapshot, path: String, offered: bool) -> PreMissionSnapshot:
+	if not offered or buffer == null or buffer.mission_path != path or path == "":
 		return null
 	return buffer
 

@@ -101,7 +101,9 @@ at a time**, as in the game: while one squad holds orders, ordering another squa
 until those orders are executed or cancelled.
 
 **Pre-mission (#46).** Loading a mission that names a Roster opens the same pre-mission phase the
-game opens: the whole roster is drawn, as many as the cap allows stand on the DEPLOYMENT zone (the
+game opens, unless the mission's *Pre-mission screen* box is unticked: then its roster's authored
+draw stands, `load` says so, and the battle has begun (`PreMissionPhase.opens`, the rule both hosts
+ask). Otherwise: the whole roster is drawn, as many as the cap allows stand on the DEPLOYMENT zone (the
 authored walk), and the rest wait in reserve with handles of their own. The overview shows
 `deployed N/cap`, the open cells, the reserve, and the zone as `D`; the status line leads with
 `phase=PRE_MISSION`. Until `begin`, every battle verb refuses ("the mission has not begun") and a

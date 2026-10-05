@@ -290,13 +290,15 @@ func begin_mission(path: String, armed := true) -> void:
 	# Staged against the path we were HANDED, not last_loaded_path: same value here, but this one
 	# cannot be read before the load has set it (#763 ruling 1 -- the buffer belongs to a mission,
 	# not to the button that got us here, so coming back through Mission Select restores it too).
-	var drawn := deploy_roster(PreMissionPhase.replay_for(_staged, path))   # BEFORE the arm, and it matters -- see the function
+	var offered: bool = game.scenario_manager.current_offers_pre_mission
+	var drawn := deploy_roster(PreMissionPhase.replay_for(_staged, path, offered))   # BEFORE the arm, and it matters -- see the function
 	# A PLAYER is what the phase is for (#739). armed=false is the watch-only boot (#375) -- nobody
 	# there to answer it -- so the draw stands as the answer and the mission starts, which is #731
 	# ruling 8's "both auto-deploy". (The headless Play API answers the phase itself since #46.) A board that drew NOBODY (no
 	# roster, or a zone with no room, which Check board BLOCKS) also falls straight through: a phase
-	# with nothing in it is one you could never commit.
-	if armed and drawn > 0:
+	# with nothing in it is one you could never commit. A board whose box is unticked (#46) takes the
+	# same fall-through: the draw's authored placement stands, and the battle begins armed.
+	if armed and PreMissionPhase.opens(offered, drawn):
 		_open_deployment()
 		return
 	# armed=false is the watch-only boot (#375: a lesson needs a student -- demo mode has no player
@@ -552,14 +554,17 @@ func restart_mission() -> void:
 	# the author wrote it; the pause menu renames its own row there to say so. The rule itself is
 	# PreMissionPhase's, shared with the headless Play API's restart (#46).
 	_staged = PreMissionPhase.kept_by_restart(_staged, _deploying)
-	var staged: PreMissionSnapshot = PreMissionPhase.replay_for(_staged, game.scenario_manager.last_loaded_path)
 	game.mission_log.seal(MissionLog.Ending.RESTARTED)   # a retry is its own metric (#53)
 	game.scenario_manager.reload_current()
 	# ...and returns to the PHASE, so a retry is a chance to place differently (#739) -- with what
 	# was placed LAST attempt already standing there (#763), rather than five minutes of loadout to
-	# rebuild before one unit can move two tiles.
+	# rebuild before one unit can move two tiles. Whether the board offers the phase at all (#46) is
+	# the RELOADED board's answer, so the buffer is asked for after the reload.
+	var offered: bool = game.scenario_manager.current_offers_pre_mission
+	var staged: PreMissionSnapshot = PreMissionPhase.replay_for(_staged,
+			game.scenario_manager.last_loaded_path, offered)
 	var drawn := deploy_roster(staged)
-	if drawn > 0:
+	if PreMissionPhase.opens(offered, drawn):
 		_open_deployment()
 		return
 	game.scenario_director.mission_started()   # a restart is a fresh start (#182); arms before turn 1

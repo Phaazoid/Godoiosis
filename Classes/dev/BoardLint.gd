@@ -292,7 +292,17 @@ static func _check_deployment(game, found: Array[Dictionary]) -> void:
 # reachable from the surface that misbehaves -- a check against a saved file would miss the
 # unsaved edits the dev-tools page makes.
 static func _check_dialog(game, board: BoardContext, found: Array[Dictionary]) -> void:
-	for beat: DialogBeat in game.scenario_manager.current_dialog_beats:
+	var scenario_manager: ScenarioManager = game.scenario_manager
+	# A BRIEFING (#882) plays when the pre-mission phase opens, so a board with no phase -- no roster,
+	# or the screen box unticked (#46) -- has one that can never play. DEGRADES: the mission plays,
+	# minus the lines the author wrote for it.
+	var no_phase := scenario_manager.current_roster == "" or not scenario_manager.current_offers_pre_mission
+	for beat: DialogBeat in scenario_manager.current_dialog_beats:
+		if no_phase and beat.trigger == DialogBeat.Trigger.PRE_MISSION_START:
+			_add(found, Severity.DEGRADES,
+				"A briefing (PRE_MISSION_START) is authored, but this board opens no pre-mission screen "
+					+ "(no roster, or the Pre-mission screen box is unticked) -- it never plays.")
+	for beat: DialogBeat in scenario_manager.current_dialog_beats:
 		if beat.timeline == null:
 			_add(found, Severity.DEGRADES,
 				"A dialog beat (%s) has no timeline -- it fires into nothing."
