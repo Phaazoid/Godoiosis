@@ -71,7 +71,7 @@ static func _largest_roster() -> String:
 
 
 # One mission, authored through the game's own capture, saved where BOTH hosts can load it.
-func _author() -> String:
+func _author(offered := true) -> String:
 	for x in range(ROW_WIDTH):
 		game.grid.paint(Vector2i(x, 0), GRASS_SOURCE, GRASS_ATLAS)
 		game.grid.paint(Vector2i(x, 1), GRASS_SOURCE, GRASS_ATLAS)
@@ -81,12 +81,17 @@ func _author() -> String:
 		.override_failure_message("precondition: the authored enemy would not spawn").is_not_null()
 	sm.current_roster = _largest_roster()
 	sm.current_deployment_cap = CAP
-	assert_int(ResourceSaver.save(sm.capture_scenario("two_hosts", true), SCRATCH)).is_equal(OK)
+	sm.current_offers_pre_mission = offered
+	# Claimed before it is written (CLAUDE.md, the load() cache): a session left over from an earlier
+	# case still holds the last board's ScenarioData, so an unclaimed save loads back stale.
+	var scenario := sm.capture_scenario("two_hosts", true)
+	scenario.take_over_path(SCRATCH)
+	assert_int(ResourceSaver.save(scenario, SCRATCH)).is_equal(OK)
 	return SCRATCH
 
 
-func _open_both() -> void:
-	var path := _author()
+func _open_both(offered := true) -> void:
+	var path := _author(offered)
 	mc.begin_mission(path)
 	await await_idle_frame()
 	var board := BoardBuilder.build(self, "TwoHostsHeadless")
@@ -138,6 +143,15 @@ func test_the_draw_lands_the_same_on_both_hosts() -> void:
 	assert_bool(mc.is_deploying()).override_failure_message("the game did not open the phase").is_true()
 	assert_bool(_sess.is_deploying()).override_failure_message("the headless host did not open the phase").is_true()
 	_agree("after the draw")
+
+
+# A board whose Pre-mission screen box is unticked (#46): neither host opens the phase, and both stand
+# the same authored draw. PreMissionPhase.opens is the one rule both ask.
+func test_an_unticked_board_opens_no_phase_on_either_host() -> void:
+	await _open_both(false)
+	assert_bool(mc.is_deploying()).override_failure_message("the game opened the phase").is_false()
+	assert_bool(_sess.is_deploying()).override_failure_message("the headless host opened the phase").is_false()
+	_agree("an unticked board")
 
 
 func test_the_same_decisions_leave_the_same_board() -> void:
@@ -214,7 +228,7 @@ func _restart_headless(buffer: PreMissionSnapshot, from_inside_phase: bool) -> P
 	auto_free(board.root)
 	await BoardBuilder.load_scenario(board, SCRATCH)
 	_sess = PlaySession.new(board)
-	_sess.start_pre_mission(PreMissionPhase.replay_for(kept, SCRATCH))
+	_sess.start_pre_mission(PreMissionPhase.replay_for(kept, SCRATCH, true))
 	await await_idle_frame()
 	return kept
 

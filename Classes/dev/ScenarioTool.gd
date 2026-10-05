@@ -128,6 +128,19 @@ func refresh_roster_row() -> void:
 		+ "an army, and a narrow corridor must be able to take six.")
 	DevWidgets.apply_tooltip(cap_label, cap_tip)
 	DevWidgets.apply_tooltip(cap_spin, cap_tip)
+	# ...and whether the player gets a screen to choose them on (#46), the third half of the same thought,
+	# riding this row for the cap's reason.
+	var screen_box := CheckBox.new()
+	screen_box.text = "Pre-mission screen"
+	screen_box.button_pressed = scenario_manager.current_offers_pre_mission
+	screen_box.toggled.connect(_on_offers_pre_mission_toggled)
+	_roster_row.add_child(screen_box)
+	DevWidgets.apply_tooltip(screen_box, DevWidgets.wrap_tooltip(
+		"Whether this mission opens the pre-mission screen, where the player picks who deploys, "
+		+ "places them and sets their gear.\n\n"
+		+ "Unticked, the roster is still drawn, but its authored placement stands and the battle "
+		+ "starts at once. A restart does not open the screen either, and a loadout committed while "
+		+ "it was ticked is not replayed."))
 	move_child(_roster_row, 0)
 
 
@@ -138,6 +151,11 @@ func _on_roster_picked(picked: String) -> void:
 
 func _on_deployment_cap_changed(value: float) -> void:
 	scenario_manager.current_deployment_cap = int(value)
+	_mark()
+
+
+func _on_offers_pre_mission_toggled(pressed: bool) -> void:
+	scenario_manager.current_offers_pre_mission = pressed
 	_mark()
 
 

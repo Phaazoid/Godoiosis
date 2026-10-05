@@ -409,7 +409,7 @@ func is_deploying() -> bool:
 
 # The phase every load of a mission opens on (the bridge's `load` is the fresh-start door). Draws the
 # roster the scenario names; returns how many stood up, and the phase stays open only if someone did
-# -- a phase nobody stands in could never be committed, which is the game's own rule.
+# and the board offers the screen (PreMissionPhase.opens) -- the game's own rule.
 #
 # `staged` is a buffer to replay instead of the authored walk (#763), MissionController.deploy_roster's
 # shape: the caller decides which buffer, through PreMissionPhase.replay_for / kept_by_restart.
@@ -420,7 +420,8 @@ func start_pre_mission(staged_buffer: PreMissionSnapshot = null) -> int:
 	_phase = PreMissionPhase.new(self, zone_manager, squad_manager,
 			func() -> int: return scenario.deployment_cap)
 	var drawn := _phase.draw(scenario.roster, staged_buffer)
-	_deploying = drawn > 0
+	# The game's own rule (#46): a board whose box is unticked keeps the draw's placement and plays.
+	_deploying = PreMissionPhase.opens(scenario.offers_pre_mission, drawn)
 	return drawn
 
 func deployment_cells() -> Array[Vector2i]:

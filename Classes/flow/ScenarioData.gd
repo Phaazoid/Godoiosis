@@ -80,6 +80,18 @@ class_name ScenarioData
 # narrow corridor can never take six.
 @export var deployment_cap := 0
 
+# Does this mission OPEN the pre-mission screen (#46)? Ticked, a board whose roster stands somebody up
+# opens the phase, as every board with a roster always has. Unticked, the roster is still drawn but
+# its authored placement is the answer, and the battle begins at once -- the path the watch-only
+# boot (armed=false) has always taken. Dev, 2026-10-05: "a standard checkbox ... whether or not a
+# mission allows the pre missions screen".
+#
+# TRUE IS THE DEFAULT, for offers_every_job's reason: every board saved before the box existed opened
+# the screen whenever it drew somebody, so a false default would be this field switching the screen
+# off on the demo's own missions. An absent key in a saved file reads true, which is right for every
+# old save too.
+@export var offers_pre_mission := true
+
 # Where the camera OPENS on this board (#234). Null = derive it -- battle3d frames the player's own
 # units, which is the right default and the wrong authored answer for a handcrafted level. Authored
 # is AUTHORITATIVE; the derivation is the fallback for a board that says nothing (Law #4, same shape
