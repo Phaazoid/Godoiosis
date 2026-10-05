@@ -1437,8 +1437,8 @@ func refresh_mission_status() -> void:
 func refresh_end_turn_button() -> void:
 	var faction: Team.Faction = turn_manager.active_faction()
 	var ai_turn: bool = ai_controller.is_ai_faction(faction)
-	# #541: not on an AI faction's turn -- read off the ACTIVE FACTION, which switches at the handoff,
-	# ahead of the TURN_HANDOFF beat that playback_owns_board() would miss -- and not while a squad's
+	# #541: not on an AI faction's turn -- read off the ACTIVE FACTION, which names whose turn it is from
+	# the handoff on (an AI faction also claims the board before its beat since #1220) -- and not while a squad's
 	# plan is open, where it sits under Execute and reads as the same red button. A cinematic (#722)
 	# and the pre-mission phase hide it too, through set_battle_hud_hidden below.
 	end_turn_button.set_offered(not ai_turn and squad_manager.active_squad == null)
