@@ -137,6 +137,75 @@ func test_when_its_only_swing_would_fell_our_own_it_does_not_attack() -> void:
 			"the AI took a swing that fells its own because it was the only one it had").is_false()
 
 
+# #1230: the friendly-fire notch. The line DOWNS the squadmate here rather than killing it -- its HP is
+# set off what the line really deals, read through a resolve, so the fixture's scaling stays unpinned.
+func _line_that_downs_the_ally(board: Dictionary) -> Dictionary:
+	var s := _line_through(board, 99)
+	var attacker: Unit = s.attacker
+	var ally: Unit = s.ally
+	attacker.active_attack = s.line
+	var aim := AttackAction.declare(attacker, attacker.movement.cell, Vector2i(1, 0))
+	attacker.active_attack = null
+	var one: Array[BaseAction] = [aim]
+	var dealt := 0
+	for a in board.squad_manager.resolve_hypothetical(attacker.squad, one, _ctx(board)).attacks:
+		if a.target == ally and a.resolved != null:
+			dealt += a.resolved.damage
+	ally.set_current_hp(maxi(1, dealt - 2))
+	var plan: ResolvedPlan = board.squad_manager.resolve_hypothetical(attacker.squad, one, _ctx(board))
+	assert_int(PlanResolver.projected_lifecycle(ally, plan.hypo)).override_failure_message(
+			"fixture: the line must DOWN the squadmate, not kill it or leave it standing") \
+		.is_equal(Unit.LifecycleState.DOWNED)
+	board.squad_manager.resolve_plan(attacker.squad, _ctx(board))
+	return s
+
+
+func test_a_swing_that_would_down_our_own_is_refused_at_the_default_notch() -> void:
+	var board := _build_board()
+	var s := _line_that_downs_the_ally(board)
+	var attacker: Unit = s.attacker
+	AITactics.queue_main_action(attacker, _ctx(board), board.squad_manager, ATTACK_ONLY)
+	var aim := _queued_attack(attacker)
+	assert_object(aim).is_not_null()
+	if aim == null:
+		return
+	assert_object(aim.fired_attack).override_failure_message(
+			"the default notch downed its own squadmate for a removal").is_same(s.clean)
+
+
+func test_a_unit_that_only_refuses_kills_may_down_its_own() -> void:
+	var sloppy := AIProfile.new()
+	sloppy.friendly_fire = AIProfile.FriendlyFire.NEVER_KILLS
+	AIProfiles.use_fixtures({"": sloppy})
+	var board := _build_board()
+	var s := _line_that_downs_the_ally(board)
+	var attacker: Unit = s.attacker
+	AITactics.queue_main_action(attacker, _ctx(board), board.squad_manager, ATTACK_ONLY)
+	var aim := _queued_attack(attacker)
+	assert_object(aim).is_not_null()
+	if aim == null:
+		return
+	assert_object(aim.fired_attack).override_failure_message(
+			"a unit that only refuses KILLS still refused to down its own").is_same(s.line)
+
+
+# ...and it still never KILLS one: the same notch against the line that kills the squadmate outright.
+func test_a_unit_that_only_refuses_kills_still_never_kills_its_own() -> void:
+	var sloppy := AIProfile.new()
+	sloppy.friendly_fire = AIProfile.FriendlyFire.NEVER_KILLS
+	AIProfiles.use_fixtures({"": sloppy})
+	var board := _build_board()
+	var s := _line_through(board, 2)
+	var attacker: Unit = s.attacker
+	AITactics.queue_main_action(attacker, _ctx(board), board.squad_manager, ATTACK_ONLY)
+	var aim := _queued_attack(attacker)
+	assert_object(aim).is_not_null()
+	if aim == null:
+		return
+	assert_object(aim.fired_attack).override_failure_message(
+			"the NEVER_KILLS notch killed its own squadmate").is_same(s.clean)
+
+
 # The floor reads the candidate's DEPOSITS too: a fire that melts the ice under a squadmate it never
 # touched drowns them, and that is its work as surely as a blow.
 #
@@ -244,6 +313,24 @@ func test_without_the_lose_condition_the_body_loses_as_ever() -> void:
 		.is_equal((s.frail as Unit).movement.cell)
 
 
+# #1230: a unit whose profile does not go for the mission kill weighs the escort as any body.
+func test_a_unit_that_ignores_the_mission_kill_takes_the_removal() -> void:
+	var careless := AIProfile.new()
+	careless.goes_for_mission_kill = false
+	AIProfiles.use_fixtures({"": careless})
+	var board := _build_board()
+	var s := _escort_and_frail(board)
+	var attacker: Unit = s.attacker
+	AITactics.queue_main_action(attacker, _ctx(board, _protected_mission()), board.squad_manager, ATTACK_ONLY)
+
+	var aim := _queued_attack(attacker)
+	assert_object(aim).is_not_null()
+	if aim == null:
+		return
+	assert_that(aim.target_cell).override_failure_message(
+			"a unit that ignores the mission kill still went for the escort").is_equal((s.frail as Unit).movement.cell)
+
+
 # The control: the same fire with the squadmate on dry ground is the pick, so the case above is
 # measuring the drowning and nothing else.
 func test_the_same_fire_with_our_own_on_dry_ground_is_taken() -> void:
@@ -303,3 +390,21 @@ func test_without_the_stake_the_leader_takes_the_removal_on_the_way() -> void:
 		return
 	assert_that(aim.target_cell).override_failure_message(
 			"fixture: without the stake the leader must fight the frail enemy").is_equal((s.frail as Unit).movement.cell)
+
+
+# #1230: and the seek's top tier goes with it -- the leader takes the removal on the way.
+func test_a_leader_that_ignores_the_mission_kill_does_not_walk_to_the_escort() -> void:
+	var careless := AIProfile.new()
+	careless.goes_for_mission_kill = false
+	AIProfiles.use_fixtures({"": careless})
+	var s := _seek_board()
+	var board: Dictionary = s.board
+	var attacker: Unit = s.attacker
+	AIController.plan_squad(attacker.squad, _ctx(board, _protected_mission()), board.squad_manager)
+
+	var aim := _queued_attack(attacker)
+	assert_object(aim).is_not_null()
+	if aim == null:
+		return
+	assert_that(aim.target_cell).override_failure_message(
+			"a leader that ignores the mission kill still walked to the escort").is_equal((s.frail as Unit).movement.cell)

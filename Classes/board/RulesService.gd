@@ -295,9 +295,12 @@ static func reconstruct_path(came_from: Dictionary, start: Vector2i, goal: Vecto
 # Asked of the LIVE watches: a watch a squadmate's earlier walk in the same pass would spend still
 # counts here, so the route errs toward the detour. Whatever it picks, the resolve walks the path the
 # move stores, so the preview and the walk cannot disagree (Law #2).
-static func route_to(unit: Unit, range_info: Dictionary, goal: Vector2i, board: BoardContext) -> Array[Vector2i]:
+static func route_to(unit: Unit, range_info: Dictionary, goal: Vector2i, board: BoardContext,
+		safe := true) -> Array[Vector2i]:
 	var start := unit.movement.cell
 	var came_from: Dictionary = range_info.came_from
+	if not safe:   # #1230: an AI unit whose profile does not route around watches walks the shortest way
+		return reconstruct_path(came_from, start, goal)
 	var fires := _watch_entries(unit, came_from, board)
 	if fires.is_empty() or goal == start or not came_from.has(goal):
 		return reconstruct_path(came_from, start, goal)

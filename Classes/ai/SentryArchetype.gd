@@ -31,7 +31,7 @@ static func take_squad_turn(squad: Squad, board: BoardContext, squad_manager: Sq
 	if leader.movement.cell != squad.home_cell:
 		var destination := AITactics.closest_reachable_cell_to(leader, squad.home_cell, board, allowed)
 		if destination != leader.movement.cell:
-			squad_manager.queue_group_move(squad, destination, board, allowed)
+			AITactics.group_move(squad, destination, board, squad_manager, allowed)
 		return
 
 	# AT THE POST with nobody in the zone: the fallback verbs, never ATTACK -- an enemy in reach but

@@ -172,6 +172,24 @@ func test_a_heal_stabilises_a_body_nobody_can_rescue() -> void:
 	assert_that(aim.target_cell).is_equal((s.body as Unit).movement.cell)
 
 
+# #1230: a healer whose profile does not stabilise bodies swings at the enemy beside it instead.
+func test_a_healer_whose_profile_does_not_stabilise_leaves_the_body() -> void:
+	var blunt := AIProfile.new()
+	blunt.stabilises_bodies = false
+	AIProfiles.use_fixtures({"": blunt})
+	var s := _body_board(false)
+	var healer: Unit = s.healer
+	var body: Unit = s.body
+	AITactics.queue_main_actions_for_squad(healer.squad, _ctx(s.board), (s.board as Dictionary).squad_manager)
+
+	var aim := _queued_attack(healer)
+	assert_object(aim).override_failure_message("fixture: the healer must still swing at someone").is_not_null()
+	if aim == null:
+		return
+	assert_that(aim.target_cell).override_failure_message(
+			"a healer that does not stabilise still healed the body").is_not_equal(body.movement.cell)
+
+
 func test_a_heal_leaves_a_body_a_squadmate_will_rescue() -> void:
 	var s := _body_board(true)
 	var healer: Unit = s.healer

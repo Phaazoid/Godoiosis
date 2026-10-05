@@ -271,6 +271,27 @@ func test_a_damageless_soak_is_queued_first_because_the_shock_behind_it_electroc
 			"the shock landed dry (%d) -- the soak did not reach it" % wet).is_greater(dry)
 
 
+# #1230: with combos off the soak is worth nothing on its own, so the shock goes first, dry.
+func test_a_squad_that_does_not_set_up_combos_fires_the_shock_first() -> void:
+	var plain := AIProfile.new()
+	plain.sets_up_combos = false
+	AIProfiles.use_fixtures({"": plain})
+	var board: Dictionary = _build_board()
+	var pair := _pair(board)
+	pair[0].equipped_weapon = _elemental_weapon(Elemental.Element.WATER, 0, true)
+	pair[1].equipped_weapon = _elemental_weapon(Elemental.Element.SHOCK, 3)
+	var _foe: Unit = _spawn(board, ENEMY, A_CELL, false)
+
+	AITactics.queue_main_actions_for_squad(pair[0].squad, _context(board), board.squad_manager)
+
+	var ordered := _attacks_in_order(pair[0].squad)
+	assert_bool(ordered.is_empty()).override_failure_message("fixture: the squad queued no attack").is_false()
+	if ordered.is_empty():
+		return
+	assert_object(ordered[0].actor).override_failure_message(
+			"a squad that does not set up combos still opened with the soak").is_same(pair[1])
+
+
 # --- Law #1: the tie-break is declared, not incidental -------------------------------------------
 
 # Every candidate scores alike here, so the ORDER is the whole answer, and it has to be declared
@@ -446,6 +467,24 @@ func test_between_equal_targets_the_one_that_cannot_answer_is_chosen() -> void:
 	assert_int(_aim_count(attacker.squad, harmless.movement.cell)).override_failure_message(
 			"the attack pick took the target that hits back, on an otherwise even trade").is_equal(1)
 	assert_int(_aim_count(attacker.squad, answerer.movement.cell)).is_equal(0)
+
+
+# #1230: a unit whose profile does not weigh counters treats the two as equal, so the tie falls to
+# the declared order -- the answerer, which stands first.
+func test_a_unit_that_does_not_weigh_counters_lets_the_order_decide() -> void:
+	var reckless := AIProfile.new()
+	reckless.weighs_counters = false
+	AIProfiles.use_fixtures({"": reckless})
+	var board: Dictionary = _build_board()
+	var attacker: Unit = _spawn(board, PLAYER, M1_CELL)
+	var answerer: Unit = _spawn(board, ENEMY, A_CELL)
+	var harmless: Unit = _spawn(board, ENEMY, Vector2i(2, 0), false)
+
+	AITactics.queue_main_actions_for_squad(attacker.squad, _context(board), board.squad_manager)
+
+	assert_int(_aim_count(attacker.squad, answerer.movement.cell)).override_failure_message(
+			"a unit that ignores counters still avoided the one that hits back").is_equal(1)
+	assert_int(_aim_count(attacker.squad, harmless.movement.cell)).is_equal(0)
 
 
 # --- No floor: the score ORDERS, it never gates (#711, dev 2026-09-02) ---------------------------
@@ -823,6 +862,26 @@ func test_a_zero_damage_shove_that_breaks_a_squad_outranks_a_hit() -> void:
 	assert_object(queued[0].actor).override_failure_message(
 			"the hit was queued first -- the split scored nothing, or less than damage: %s"
 			% str(_attack_aims(ours[0].squad))).is_same(ours[1])
+
+
+# #1230: a squad that does not value splits takes the hit first; the shove is worth nothing to it.
+func test_a_squad_that_does_not_value_splits_takes_the_hit_first() -> void:
+	var blunt := AIProfile.new()
+	blunt.values_splits = false
+	AIProfiles.use_fixtures({"": blunt})
+	var board: Dictionary = _build_board()
+	var _enemies := _stretched_enemy_pair(board)
+	var ours := _hitter_and_breaker(board)
+	var _solo: Unit = _spawn(board, ENEMY, Vector2i(3, 3))
+
+	AITactics.queue_main_actions_for_squad(ours[0].squad, _context(board), board.squad_manager)
+
+	var queued := _attacks_in_order(ours[0].squad)
+	assert_bool(queued.is_empty()).is_false()
+	if queued.is_empty():
+		return
+	assert_object(queued[0].actor).override_failure_message(
+			"a squad that ignores splits still opened with the shove").is_same(ours[0])
 
 
 func test_a_removal_still_outranks_a_split() -> void:

@@ -15,9 +15,12 @@ class_name GroupMoveSolver
 #
 # `hazards` (#1220): Unit -> {cell: true} it should not end on while another candidate will do. Only
 # the AI passes it, so a player's formation is placed exactly as before.
+#
+# `direct` (#1230): Unit -> true for a unit whose AI profile does not route around watches, so its
+# walk is the shortest path. Only the AI passes it; every player route stays the safe one.
 
 static func plan(squad: Squad, leader_destination: Vector2i, board: BoardContext, allowed_cells = null,
-		pinned: Dictionary = {}, hazards: Dictionary = {}) -> Array[MoveAction]:
+		pinned: Dictionary = {}, hazards: Dictionary = {}, direct: Dictionary = {}) -> Array[MoveAction]:
 	var moves: Array[MoveAction] = []
 	var leader := squad.get_leader()
 	var leader_start := leader.movement.cell
@@ -34,7 +37,8 @@ static func plan(squad: Squad, leader_destination: Vector2i, board: BoardContext
 
 	if not stays:
 		var leader_move := MoveAction.new()
-		leader_move.init(leader, RulesService.route_to(leader, leader_reach, leader_destination, board),
+		leader_move.init(leader, RulesService.route_to(leader, leader_reach, leader_destination, board,
+				not direct.has(leader)),
 			GridUtils.get_terrain_icon_at_cell(board.grid, leader_destination))
 		moves.append(leader_move)
 
@@ -104,7 +108,8 @@ static func plan(squad: Squad, leader_destination: Vector2i, board: BoardContext
 		if best == here:
 			continue
 		var member_move := MoveAction.new()
-		member_move.init(member, RulesService.route_to(member, reaches[member], best, board),
+		member_move.init(member, RulesService.route_to(member, reaches[member], best, board,
+				not direct.has(member)),
 			GridUtils.get_terrain_icon_at_cell(board.grid, best))
 		member_move.is_trailing = GridUtils.manhattan_distance(best, leader_destination) \
 			> GridUtils.manhattan_distance(here, leader_start)
