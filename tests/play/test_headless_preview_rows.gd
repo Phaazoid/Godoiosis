@@ -75,9 +75,13 @@ func _row_where(rows: Array, keys: Dictionary) -> Dictionary:
 
 
 # A walk across a watch the enemy stands, into fire: the shot hangs under the walk that drew it and
-# the burn closes the plan, as on the panel.
+# the burn closes the plan, as on the panel. The board is a one-wide corridor, because a move routes
+# around a watch it can (#920): the crossing has to be the only way through.
 func test_a_crossing_shows_its_watch_shot_and_its_end_of_turn_burn() -> void:
-	var b := _board("CrossingPreviewRoot")
+	var b := BoardBuilder.build(self, "CrossingPreviewRoot")
+	auto_free(b.root)
+	BoardBuilder.paint_rect(b.grid, Rect2i(0, 0, 4, 1))
+	BoardBuilder.paint_cell(b.grid, Vector2i(1, 1), BoardBuilder.GRASS_ATLAS)   # where the watcher stands
 	var hero: Unit = BoardBuilder.spawn(b, _data("Hero", PLAYER), Vector2i(0, 0))
 	var watcher: Unit = BoardBuilder.spawn(b, _data("Watcher", ENEMY), Vector2i(1, 1))
 	watcher.add_item(_watch_weapon())
