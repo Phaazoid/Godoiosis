@@ -62,6 +62,9 @@ static func render_focus(session, handle: String) -> String:
 	var unit: Unit = session.unit_by_handle(handle)
 	if unit == null:
 		return "no unit '%s'" % handle
+	# A reserve unit stands nowhere, so it has no range to draw (#46); its gear is `kit`'s.
+	if not session.is_deployed(unit):
+		return "%s is in reserve -- see `kit %s` for its gear" % [handle, handle]
 	var overlay := {}
 	var range_info: Dictionary = RulesService.compute_move_range(unit, session._board())
 	for cell in range_info.reachable.keys():
@@ -80,7 +83,42 @@ static func render_focus(session, handle: String) -> String:
 	lines.append(_grid_block(session, _content_bounds(session), overlay))
 	lines.append("")
 	lines.append("  " + _unit_line(session, unit))
+	lines.append("  " + _stats_line(unit))
+	for line in _attack_lines(unit):
+		lines.append("    " + line)
 	return "\n".join(lines)
+
+
+# The unit's numbers as the game derives them, gear included (#46) -- what `focus` reads and the
+# compact unit line, which prints authored values, does not.
+static func _stats_line(unit: Unit) -> String:
+	var parts: Array[String] = [
+		"HP %d/%d" % [unit.get_current_hp(), unit.get_max_hp()],
+		"MOV %d" % unit.get_mov(),
+	]
+	for stat: Stats.Stat in [Stats.Stat.STR, Stats.Stat.DEX, Stats.Stat.PER, Stats.Stat.CON, Stats.Stat.BLD]:
+		parts.append("%s %d" % [Stats.Stat.keys()[stat], unit.get_effective_stat(stat)])
+	parts.append("DEF %d" % unit.get_effective_def())
+	parts.append("LDR %d" % unit.get_effective_ldr())
+	var squad := unit.squad
+	if squad != null:
+		parts.append("squad %d/%d" % [squad.members.size(), squad.max_size()])
+		parts.append("leash %d" % squad.get_max_squad_range())
+	return "  ".join(parts)
+
+
+# Each attack the unit could fire or stand watch with, in the game's own hover words
+# (Unit.attack_detail): the damage it really deals, mods and scaling included.
+static func _attack_lines(unit: Unit) -> Array[String]:
+	var lines: Array[String] = []
+	for attack in unit.get_selectable_attacks():
+		lines.append(_attack_line(unit, attack, ""))
+	for attack in unit.overwatch_attacks():
+		lines.append(_attack_line(unit, attack, "watch "))
+	return lines
+
+static func _attack_line(unit: Unit, attack: AttackData, prefix: String) -> String:
+	return "%s%s: %s" % [prefix, attack.display_name, unit.attack_detail(attack).replace("\n", " -- ")]
 
 # The enemy ranges view (#46): the game's V key as text. Its two glyphs are its own, unused by the
 # overview and focus overlays, and the strike glyph wins a cell both mark.
