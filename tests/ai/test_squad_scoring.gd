@@ -776,20 +776,22 @@ func test_a_unit_blind_to_crisis_prices_the_berserker_like_any_other_kill() -> v
 
 
 # A UNIT THAT SEES CRISIS (#1230, dev 2026-10-05) prices the same hit truthfully: the Berserker stands
-# straight back up, so the hit is the HP it takes and no removal, and the plain kill beside it wins.
-func test_a_unit_that_sees_crisis_takes_the_kill_that_stays_a_kill() -> void:
+# straight back up, so the hit is the HP it takes and NO removal. The other target is sturdy, so it is
+# no removal either and only the damage separates them -- the full hit on it beats the few HP the
+# gambit gives up. A unit counting the gambit as a removal would take the Berserker.
+func test_a_unit_that_sees_crisis_does_not_count_the_gambit_as_a_removal() -> void:
 	var board: Dictionary = _build_board()
 	var attacker: Unit = _spawn(board, PLAYER, M1_CELL)
 	attacker.equipped_weapon = H.make_weapon(5)
 	var armed: Unit = BB.spawn(board, H.make_unit_data({}, ENEMY), A_CELL)
 	_arm_crisis(armed)
-	var plain: Unit = _spawn(board, ENEMY, B_CELL, false)
+	var sturdy: Unit = BB.spawn(board, H.make_unit_data({Stats.Stat.MHP: 40}, ENEMY), B_CELL)
 
 	AITactics.queue_main_actions_for_squad(attacker.squad, _context(board), board.squad_manager)
 
 	assert_int(_aim_count(attacker.squad, B_CELL)).override_failure_message(
-			"a unit that sees Crisis still swung into the gambit over the kill at %s; aims were %s" % [
-				str(plain.movement.cell), str(_attack_aims(attacker.squad))]).is_equal(1)
+			"a unit that sees Crisis still swung into the gambit over the full hit at %s; aims were %s" % [
+				str(sturdy.movement.cell), str(_attack_aims(attacker.squad))]).is_equal(1)
 	assert_int(_aim_count(attacker.squad, A_CELL)).is_equal(0)
 
 
