@@ -1271,10 +1271,7 @@ func _apply_sinks(sinks: Array[SinkAction], events: Array[String]) -> void:
 # wall/unit/edge). execute()'s awaits -- the lunges, the slide, the hang and plummet -- have nothing
 # to stand for headless.
 func _apply_attack(atk: AttackAction, events: Array[String]) -> void:
-	if not atk.actor_gate():
-		return
-	atk.take_watch()
-	if not atk.playback_gate():
+	if not atk.open_playback():
 		return
 	var actor := atk.actor
 	var target := atk.target

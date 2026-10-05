@@ -140,13 +140,7 @@ func init(attacker: Unit, origin: Vector2i, target_unit: Unit, target_location: 
 # where it falls.
 func execute():
 	begin_execution()
-	if not actor_gate():
-		finish_execution()
-		return
-
-	take_watch()
-
-	if not playback_gate():
+	if not open_playback():
 		finish_execution()
 		return
 
@@ -210,26 +204,25 @@ func execute():
 # --- The state steps (#46) ------------------------------------------------------------------------
 #
 # Everything an attack's playback does to the board, as synchronous methods both hosts call in this
-# order: actor_gate, take_watch, playback_gate, land, remove, settle. execute() takes them between its
-# awaits; play_session._apply_attack back to back, with a teleport to the landing where execute()
-# slides -- the one declared per-host difference.
+# order: open_playback, land, remove, settle. execute() takes them between its awaits;
+# play_session._apply_attack back to back, with a teleport to the landing where execute() slides --
+# the one declared per-host difference.
 
-# The swinger must still be on the board to swing. (target may be null = a cell-targeted attack, #47.)
-func actor_gate() -> bool:
-	return actor != null and is_instance_valid(actor) and not actor.is_queued_for_deletion()
-
-# The watch absorbs exactly one trigger, and THIS was it (#413). The ACTOR is the watcher, and
-# only the LIVE watch is touched here — the resolver spent its own per-pass copy (R2). Taken
-# above every remaining early-out and outside the target block, because a triggered shot that
-# whiffs or lands on an empty cell has still been taken; lead volley member only.
-func take_watch() -> void:
+# Is there anything to play? False, and nothing more to do, when there is not. Its three clauses are
+# one method because their ORDER is the rule: the watch is spent between the two refusals.
+func open_playback() -> bool:
+	# The swinger must still be on the board to swing. (target may be null = a cell-targeted attack, #47.)
+	if actor == null or not is_instance_valid(actor) or actor.is_queued_for_deletion():
+		return false
+	# The watch absorbs exactly one trigger, and THIS was it (#413). The ACTOR is the watcher, and
+	# only the LIVE watch is touched here — the resolver spent its own per-pass copy (R2). Taken
+	# above the refusal below and outside the target block, because a triggered shot that whiffs
+	# or lands on an empty cell has still been taken; lead volley member only.
 	if is_watch_shot and not is_secondary_hit:
 		actor.spend_watch()
-
-# Is anything left to play? Not a UNIT attack whose target vanished this pass — nothing to hit, no
-# lunge (a null target is intentional, a cell attack, and plays on) — nor a skipped one, a counter-er
-# that went down/dead this pass (R7): no lunge, no damage, and nothing spent.
-func playback_gate() -> bool:
+	# Not a UNIT attack whose target vanished this pass — nothing to hit, no lunge (a null target is
+	# intentional, a cell attack, and plays on) — nor a skipped one, a counter-er that went down/dead
+	# this pass (R7): no lunge, no damage, and nothing spent.
 	if target != null and (not is_instance_valid(target) or target.is_queued_for_deletion()):
 		return false
 	return resolved == null or not resolved.skipped

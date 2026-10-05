@@ -116,7 +116,7 @@ func test_a_counter_spends_a_shot() -> void:
 # A counter the pass SKIPS spends nothing (#46). The foe's swing fells the hero first, so the hero's
 # counter is marked skipped (R7) and never fires. The headless executor spent firing costs ABOVE its
 # skipped check, so a felled carbine paid a round for a shot it never took; AttackAction.execute has
-# always returned before any spend, and both hosts now pass the same playback_gate.
+# always returned before any spend, and both hosts now pass the same open_playback.
 func test_a_counter_the_pass_skips_spends_no_round() -> void:
 	var s := _board(Vector2i(0, 0), Vector2i(2, 0))
 	var sess = s.sess
@@ -146,7 +146,7 @@ func test_a_counter_the_pass_skips_spends_no_round() -> void:
 
 
 # ...and the other side of that gate: a shot at open ground has no victim and STILL spends (#97,
-# kept by #46). A cell attack (target null, #47) passes playback_gate and lands on nobody, and what
+# kept by #46). A cell attack (target null, #47) passes open_playback and lands on nobody, and what
 # firing costs is paid hit or whiff.
 func test_a_shot_at_open_ground_still_spends_a_round() -> void:
 	var s := _board()
