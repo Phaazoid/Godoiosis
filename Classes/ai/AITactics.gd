@@ -751,13 +751,30 @@ static func _score_plan(faction: Team.Faction, plan: ResolvedPlan, stakes: _Stak
 	if not profile.weighs_counters:
 		taken = 0
 
+	# LIMBS (#1230, dev 2026-10-05): a hit that takes a limb ranks above damage, and a counter or watch
+	# shot that takes one of OURS counts against the plan. Only a victim STANDING at plan start counts:
+	# a body takes a limb at a Wounded 8, and a limb on a body must not outrank damage on someone still
+	# standing (#720) -- while a freshly downed one clings at 1 HP, so any further hit is a kill, which
+	# severs nothing. A kill never severs (LethalityRules.severs); a Crisis entry that severs does.
+	var limbs := 0
+	if profile.values_limbs:
+		var rows: Array[AttackAction] = []
+		rows.append_array(plan.attacks)
+		rows.append_array(_reaction_rows(plan))
+		for a in rows:
+			if a.resolved == null or a.resolved.severed_limb < 0 or a.target == null or not is_instance_valid(a.target):
+				continue
+			if not a.target.is_active():
+				continue
+			limbs += 1 if Team.is_enemy(faction, a.target.get_faction()) else -1
+
 	var mission := 0
 	if stakes != null and stakes.protected_counts and profile.goes_for_mission_kill:
 		for victim: Unit in dealt:
 			if victim.must_survive and not victim.is_dead() \
 					and PlanResolver.projected_lifecycle(victim, plan.hypo) == Unit.LifecycleState.DEAD:
 				mission += 1 if Team.is_enemy(faction, Team.Faction.PLAYER) else -1
-	return AIScore.of(mission, removals, splits, saves, net, taken)
+	return AIScore.of(mission, removals, splits, saves, limbs, net, taken)
 
 
 # The DERIVED rows: counters the plan drew, plus any watch shots it set off. Deliberately NOT
