@@ -300,8 +300,9 @@ function Invoke-GhJson([string]$path) {
 	return ($raw | Out-String | ConvertFrom-Json)
 }
 
+# "$_" turns a stderr ErrorRecord back into gh's own line, without PowerShell's NativeCommandError frame.
 function Invoke-Gh([string[]]$arguments) {
-	$out = & gh @arguments 2>&1 | Out-String
+	$out = (& gh @arguments 2>&1 | ForEach-Object { "$_" }) -join ' '
 	return @{ Ok = ($LASTEXITCODE -eq 0); Output = $out.Trim() }
 }
 
