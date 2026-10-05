@@ -91,6 +91,35 @@ func test_a_line_across_a_hole_still_reaches_the_far_bank() -> void:
 		[EDGE + EAST, EDGE + EAST * 3])
 
 
+# An AUTHORED hole is a painted tile, so has_ground alone would keep it: only is_void_at drops it,
+# which is the half of has_surface the erased cases above cannot see. The tile is found by its kind,
+# never named, because which tile is the hole is content.
+func test_an_authored_hole_tile_is_no_surface_either() -> void:
+	var tiles := (_board.grid as BoardGrid).tile_set
+	var found := false
+	for s in tiles.get_source_count():
+		var source_id := tiles.get_source_id(s)
+		var source := tiles.get_source(source_id) as TileSetAtlasSource
+		if source == null:
+			continue
+		for i in source.get_tiles_count():
+			var coords := source.get_tile_id(i)
+			if GridUtils.terrain_kind_of(source.get_tile_data(coords, 0)) == Terrain.Kind.VOID:
+				(_board.grid as BoardGrid).paint(EDGE + EAST * 2, source_id, coords)
+				found = true
+				break
+		if found:
+			break
+	assert_bool(found).override_failure_message("no tile authors the VOID kind, so this case proves nothing") \
+		.is_true()
+	if not found:
+		return
+	assert_bool(_rules().has_ground(EDGE + EAST * 2)).override_failure_message(
+		"fixture: the painted hole tile reads as no tile at all").is_true()
+	assert_array(_footprint(_line(3), EDGE, EDGE + EAST)).override_failure_message(
+		"a line across an authored hole tile listed it").contains_exactly([EDGE + EAST, EDGE + EAST * 3])
+
+
 # The point form (#1228's "shooting attacks too"): a one-cell aim at a hole hits nothing and is
 # refused, while a blast at the same hole still has ground to land on and keeps only that ground.
 func test_a_point_aim_at_a_hole_is_refused_unless_its_blast_reaches_ground() -> void:
