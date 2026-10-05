@@ -1253,8 +1253,8 @@ func _plan_has_invalid_move(squad: Squad) -> bool:
 	return false
 
 func queue_group_move(squad: Squad, leader_destination: Vector2i, board: BoardContext, allowed_cells = null,
-		pinned: Dictionary = {}) -> bool:
-	var moves := GroupMoveSolver.plan(squad, leader_destination, board, allowed_cells, pinned)
+		pinned: Dictionary = {}, hazards: Dictionary = {}) -> bool:
+	var moves := GroupMoveSolver.plan(squad, leader_destination, board, allowed_cells, pinned, hazards)
 
 	# Nothing to author -- plan() refuses to path a leader to a goal it cannot reach. Bail BEFORE the
 	# batch opens rather than falling into the rollback below, which would cancel moves this call

@@ -12,9 +12,12 @@ class_name GroupMoveSolver
 # everyone else. The AI's seek pins a member to the cell it found a removal or a squad break from;
 # no player caller passes any. A leader staying put moves only pinned members -- with nobody pinned
 # there is no formation to solve, exactly as before.
+#
+# `hazards` (#1220): Unit -> {cell: true} it should not end on while another candidate will do. Only
+# the AI passes it, so a player's formation is placed exactly as before.
 
 static func plan(squad: Squad, leader_destination: Vector2i, board: BoardContext, allowed_cells = null,
-		pinned: Dictionary = {}) -> Array[MoveAction]:
+		pinned: Dictionary = {}, hazards: Dictionary = {}) -> Array[MoveAction]:
 	var moves: Array[MoveAction] = []
 	var leader := squad.get_leader()
 	var leader_start := leader.movement.cell
@@ -85,7 +88,7 @@ static func plan(squad: Squad, leader_destination: Vector2i, board: BoardContext
 	for member in order:
 		if assigned.has(member):
 			continue
-		var best := _best_candidate(candidates[member], to_target[member], taken)
+		var best := _best_candidate(candidates[member], to_target[member], taken, hazards.get(member, {}))
 		if best == GridUtils.NO_CELL:
 			continue
 		taken[best] = true
@@ -212,24 +215,34 @@ static func _candidate_cells(reach: Dictionary, here: Vector2i, leader_field: Di
 
 # Closest to the member's ideal offset cell, then cheapest to reach, then row-major — a total order,
 # so the solver never depends on dictionary iteration luck. NO_CELL when every option is spoken for.
-static func _best_candidate(candidates: Dictionary, to_target: Dictionary, taken: Dictionary) -> Vector2i:
+#
+# Safe ground comes before all of that when the AI names `hazard` cells (#1220): one is taken only
+# when every other option is spoken for.
+static func _best_candidate(candidates: Dictionary, to_target: Dictionary, taken: Dictionary,
+		hazard: Dictionary = {}) -> Vector2i:
 	var have_best := false
 	var best: Vector2i = GridUtils.NO_CELL
+	var best_hazard := false
 	var best_to_target := 0
 	var best_cost := 0
 	for cell in candidates.keys():
 		if taken.has(cell):
 			continue
+		var h := hazard.has(cell)
 		var d: int = to_target.get(cell, RulesService.UNREACHABLE)
 		var cost: int = candidates[cell]
-		if not have_best \
-			or d < best_to_target \
-			or (d == best_to_target and cost < best_cost) \
-			or (d == best_to_target and cost == best_cost and _cell_before(cell, best)):
-			have_best = true
-			best = cell
-			best_to_target = d
-			best_cost = cost
+		if have_best and h != best_hazard:
+			if h:
+				continue
+		elif have_best and not (d < best_to_target \
+				or (d == best_to_target and cost < best_cost) \
+				or (d == best_to_target and cost == best_cost and _cell_before(cell, best))):
+			continue
+		have_best = true
+		best = cell
+		best_hazard = h
+		best_to_target = d
+		best_cost = cost
 	return best
 
 static func _cell_before(a: Vector2i, b: Vector2i) -> bool:

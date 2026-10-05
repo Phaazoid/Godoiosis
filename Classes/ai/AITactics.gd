@@ -1124,13 +1124,24 @@ static func engage(squad: Squad, target: Unit, board: BoardContext, squad_manage
 	var seek := seek_positions(squad, best_attack_destination(leader, target, board, allowed), board,
 			squad_manager, allowed, within)
 	if seek.destination != leader.movement.cell or not seek.pins.is_empty():
-		squad_manager.queue_group_move(squad, seek.destination, board, allowed, seek.pins)
+		squad_manager.queue_group_move(squad, seek.destination, board, allowed, seek.pins, seek.hazards)
 	queue_main_actions_for_squad(squad, board, squad_manager)
 
 
 # WHERE THE SQUAD STANDS TO TAKE A REMOVAL OR A SQUAD BREAK it can reach this turn (#760; dev rulings
-# 2026-10-03, on the issue). Only those two -- the terms the score ranks above damage -- pull anyone
-# off the cell the approach and the formation would give them, so all other positioning is today's.
+# 2026-10-03, on the issue) -- and, since #1220, a mission-ending kill above both.
+#
+# THEN THE MEMBERS NOBODY PLACED (#1220, rulings 5, 9, 12): formation plus pins. A member whose
+# formation cell gives it nobody to hit steps to the nearest follow cell that does -- DAMAGE MOVES A
+# MEMBER now, inside the leash only, judged by geometry with no resolve. One with nobody to hit from
+# any follow cell walks beside the most urgent body if its archetype rescues and it can carry. One
+# with NOTHING TO FIRE does that too, or else falls back to the follow cell the fewest enemies reach.
+# A leader with nothing to fire keeps leading an armed squad; leading nobody armed, it falls back the
+# same way. The leader is otherwise never moved by damage.
+#
+# NO CELL IS ENDED ON A HAZARD WHILE A SAFE ONE OFFERS THE SAME (rulings 15, 19): end-of-turn damage,
+# or a hostile watch the cell would trip. Safe cells are searched first, so a kill from a burning
+# tile still beats a scratch from safe ground, and the solver places the formation by the same rule.
 #
 # THE SQUAD IS ONE UNIT, and the priority is the search order: the leader first (its cell decides
 # everyone's cohesion), then in rounds the CLOSEST member that can do something, each scored against
@@ -1146,7 +1157,8 @@ static func engage(squad: Squad, target: Unit, board: BoardContext, squad_manage
 # the joint pass's to choose; this decides only where people stand.
 class SeekResult:
 	var destination: Vector2i
-	var pins := {}   # Unit -> cell, for GroupMoveSolver.plan
+	var pins := {}      # Unit -> cell, for GroupMoveSolver.plan
+	var hazards := {}   # Unit -> {cell: true} it avoids ending on, for GroupMoveSolver.plan
 
 
 # What a seeker found, best first: ending the mission (#1220), a removal, a squad break.
@@ -1174,12 +1186,24 @@ static func seek_positions(squad: Squad, default_destination: Vector2i, board: B
 	var live := {}
 	for member in squad.get_members():
 		live[member] = member.movement.cell
+	var watches := _hostile_watches(leader.get_faction(), board)
+	for member in squad.get_members():
+		out.hazards[member] = _hazards_of(member, board, watches)
 	var wins: Array[BaseAction] = []
 	var stakes := _stakes_for(null, board, null)
+	var threat: Array = []   # the ThreatField the dry fall-back reads, built the first time it is asked
+	var claimed := {}        # body -> true: one rescuer walks to each
 
-	if _can_seek(leader):
-		var lead := _first_opportunity(leader, _leader_cells(squad, leader, default_destination, board, allowed),
-				squad, board, squad_manager, wins, within, reactions, terrain, stakes)
+	var lead_cells := _leader_cells(squad, leader, default_destination, board, allowed, out.hazards[leader])
+	if _is_dry(leader) and not _squad_armed(squad):
+		var fallback := _rescue_cell(leader, squad, lead_cells, board, claimed)
+		if fallback == GridUtils.NO_CELL:
+			fallback = _least_threatened(leader, lead_cells, board, threat, out.hazards[leader])
+		if fallback != GridUtils.NO_CELL:
+			out.destination = fallback
+	elif _can_seek(leader):
+		var lead := _first_opportunity(leader, lead_cells, squad, board, squad_manager, wins, within, reactions,
+				terrain, stakes)
 		if lead != null:
 			out.destination = lead.cell
 			wins.append(lead.action)
@@ -1190,10 +1214,11 @@ static func seek_positions(squad: Squad, default_destination: Vector2i, board: B
 			waiting.append(member)
 	while not waiting.is_empty():
 		AIController.restore_cells(live)
-		var placed := _formation(squad, out.destination, board, allowed, out.pins)
+		var placed := _formation(squad, out.destination, board, allowed, out.pins, out.hazards)
 		var options := {}
 		for member in waiting:
-			options[member] = _member_cells(squad, member, out.destination, board, allowed, out.pins, placed)
+			options[member] = _member_cells(squad, member, out.destination, board, allowed, placed,
+					out.hazards[member])
 		_stand(squad, leader, out.destination, placed)
 		var best: _Opportunity = null
 		for member in waiting:
@@ -1208,8 +1233,137 @@ static func seek_positions(squad: Squad, default_destination: Vector2i, board: B
 		waiting.erase(best.unit)
 
 	AIController.restore_cells(live)
+	for member in squad.get_members():
+		if member == leader or not member.is_active() or out.pins.has(member):
+			continue
+		var placed := _formation(squad, out.destination, board, allowed, out.pins, out.hazards)
+		var cells := _member_cells(squad, member, out.destination, board, allowed, placed, out.hazards[member])
+		var at: Vector2i = placed.get(member, member.movement.cell)
+		if not _is_dry(member):
+			if _hits_from(member, at, board, within):
+				continue
+			var step := GridUtils.NO_CELL
+			for entry: Array in cells:
+				if _hits_from(member, entry[0], board, within):
+					step = entry[0]
+					break
+			if step != GridUtils.NO_CELL:
+				out.pins[member] = step
+				continue
+		var fallback := _rescue_cell(member, squad, cells, board, claimed)
+		if fallback == GridUtils.NO_CELL and _is_dry(member):
+			fallback = _least_threatened(member, cells, board, threat, out.hazards[member])
+		if fallback != GridUtils.NO_CELL and fallback != at:
+			out.pins[member] = fallback
+
+	AIController.restore_cells(live)
 	squad_manager.resolve_plan(squad, board, reactions, terrain)
 	return out
+
+
+static func _is_dry(unit: Unit) -> bool:
+	return unit.get_selectable_attacks().is_empty()
+
+
+# Does anyone but the leader carry something to fire? A dry leader of such a squad keeps leading.
+static func _squad_armed(squad: Squad) -> bool:
+	for member in squad.get_members():
+		if member != squad.get_leader() and member.is_active() and not _is_dry(member):
+			return true
+	return false
+
+
+# Would `unit` have a hostile to hit from `cell`? Geometry only: the candidate builder's own answer,
+# with no resolve. A Sentry asks only about intruders.
+static func _hits_from(unit: Unit, cell: Vector2i, board: BoardContext, within) -> bool:
+	var paying := {}
+	for candidate in _attack_candidates(unit, board, cell, {}, null, paying):
+		for victim: Unit in paying.get(candidate, []):
+			if Team.is_enemy(unit.get_faction(), victim.get_faction()) \
+					and (within == null or within.has(victim.movement.cell)):
+				return true
+	return false
+
+
+# The rescue walk (ruling 12): the first of `cells` beside the most urgent body nobody else is walking
+# to, for a unit whose archetype rescues and who can carry. NO_CELL otherwise.
+static func _rescue_cell(unit: Unit, squad: Squad, cells: Array, board: BoardContext, claimed: Dictionary) -> Vector2i:
+	if not unit.can_rescue_carry() \
+			or not AIArchetype.main_action_priority(squad.archetype).has(BaseAction.ActionType.RESCUE):
+		return GridUtils.NO_CELL
+	var bodies: Array[Unit] = []
+	for other in board.units:
+		if is_instance_valid(other) and other != unit and other.is_downed() and not claimed.has(other) \
+				and not Team.is_enemy(unit.get_faction(), other.get_faction()):
+			bodies.append(other)
+	bodies.sort_custom(func(a: Unit, b: Unit) -> bool: return _rescue_urgency(a) < _rescue_urgency(b))
+	for body in bodies:
+		var at := body.get_projected_destination()
+		for entry: Array in cells:
+			var cell: Vector2i = entry[0]
+			if GridUtils.manhattan_distance(cell, at) == 1:
+				claimed[body] = true
+				return cell
+	return GridUtils.NO_CELL
+
+
+# The dry fall-back (ruling 5): the cell the fewest enemies could attack next turn, safe ground first,
+# then the search order. The field is the viewer's own danger field, built once per squad decision.
+static func _least_threatened(unit: Unit, cells: Array, board: BoardContext, threat: Array,
+		hazards: Dictionary) -> Vector2i:
+	if threat.is_empty():
+		threat.append(ThreatField.build(board, unit.get_faction()))
+	var field: ThreatField = threat[0]
+	var best := GridUtils.NO_CELL
+	var best_hazard := false
+	var best_count := 0
+	for entry: Array in cells:
+		var cell: Vector2i = entry[0]
+		var hazard := hazards.has(cell)
+		var count := field.attackers_of(cell).size()
+		if best == GridUtils.NO_CELL or (hazard != best_hazard and not hazard) \
+				or (hazard == best_hazard and count < best_count):
+			best = cell
+			best_hazard = hazard
+			best_count = count
+	return best
+
+
+# The hostile watches standing on the board, in the order a resolve searches them.
+static func _hostile_watches(faction: Team.Faction, board: BoardContext) -> Array[Watch]:
+	var out: Array[Watch] = []
+	for watch in Watch.standing(board.units):
+		if Team.is_enemy(watch.watcher.get_faction(), faction):
+			out.append(watch)
+	return out
+
+
+# Every cell `unit` could end on that would hurt it there (rulings 15, 19).
+static func _hazards_of(unit: Unit, board: BoardContext, watches: Array[Watch]) -> Dictionary:
+	var walk: Dictionary = RulesService.compute_move_range(unit, board)
+	var cells: Array = (walk["reachable"] as Dictionary).keys()
+	cells.append_array((walk["squad_unreachable"] as Dictionary).keys())
+	cells.append(unit.movement.cell)
+	var out := {}
+	for cell: Vector2i in cells:
+		if _is_hazard(unit, cell, board, watches):
+			out[cell] = true
+	return out
+
+
+# A cell that hurts whoever ends on it: end-of-turn damage, or a hostile watch it would trip on the way
+# in (PlanResolver.watch_fires_at, the resolver's own trigger). The cell a unit already stands on trips
+# nothing -- a watch fires on ENTRY.
+static func _is_hazard(unit: Unit, cell: Vector2i, board: BoardContext, watches: Array[Watch]) -> bool:
+	if board.terrain_states != null \
+			and RulesService.occupant_damage_for(unit, board.terrain_states.states_at(cell)) > 0:
+		return true
+	if cell == unit.movement.cell:
+		return false
+	for watch in watches:
+		if PlanResolver.watch_fires_at(watch, unit, cell, {}):
+			return true
+	return false
 
 
 static func _can_seek(unit: Unit) -> bool:
@@ -1223,10 +1377,11 @@ static func _opportunity_beats(a: _Opportunity, b: _Opportunity) -> bool:
 	return a.cost < b.cost
 
 
-# The leader's cells in search order, as [cell, cost] pairs: the default destination, then cheapest,
-# then row-major. Only cells its squad can follow it to, inside the leash, and nobody else's.
+# The leader's cells in search order, as [cell, cost] pairs: safe ground first, then the default
+# destination, then cheapest, then row-major. Only cells its squad can follow it to, inside the leash,
+# and nobody else's.
 static func _leader_cells(squad: Squad, leader: Unit, default_destination: Vector2i, board: BoardContext,
-		allowed) -> Array:
+		allowed, hazards: Dictionary = {}) -> Array:
 	var costs: Dictionary = RulesService.compute_move_range(leader, board).reachable.duplicate()
 	costs[leader.movement.cell] = 0
 	var cells: Array = []
@@ -1240,13 +1395,14 @@ static func _leader_cells(squad: Squad, leader: Unit, default_destination: Vecto
 	var followable = _followable(squad, board)
 	if followable != null:
 		cells = cells.filter(func(c: Vector2i) -> bool: return followable.has(c))
-	return _search_order(cells, costs, default_destination)
+	return _search_order(cells, costs, default_destination, hazards)
 
 
-# A member's cells for this leader destination, as [cell, cost] pairs: its formation cell first, then
-# cheapest. Never the leader's cell, a pinned cell or another member's formation cell.
+# A member's cells for this leader destination, as [cell, cost] pairs: safe ground first, then its
+# formation cell, then cheapest. Never the leader's cell, a pinned cell or another member's formation
+# cell.
 static func _member_cells(squad: Squad, member: Unit, leader_destination: Vector2i, board: BoardContext,
-		allowed, pins: Dictionary, placed: Dictionary) -> Array:
+		allowed, placed: Dictionary, hazards: Dictionary = {}) -> Array:
 	var costs := GroupMoveSolver.follow_cells(squad, member, leader_destination, board, allowed)
 	var held := { leader_destination: true }
 	for other: Unit in placed:
@@ -1256,11 +1412,13 @@ static func _member_cells(squad: Squad, member: Unit, leader_destination: Vector
 	for cell: Vector2i in costs:
 		if not held.has(cell):
 			cells.append(cell)
-	return _search_order(cells, costs, placed.get(member, member.movement.cell))
+	return _search_order(cells, costs, placed.get(member, member.movement.cell), hazards)
 
 
-static func _search_order(cells: Array, costs: Dictionary, first: Vector2i) -> Array:
+static func _search_order(cells: Array, costs: Dictionary, first: Vector2i, hazards: Dictionary = {}) -> Array:
 	cells.sort_custom(func(a: Vector2i, b: Vector2i) -> bool:
+		if hazards.has(a) != hazards.has(b):
+			return hazards.has(b)
 		if (a == first) != (b == first):
 			return a == first
 		var ca: int = costs.get(a, 0)
@@ -1278,11 +1436,11 @@ static func _search_order(cells: Array, costs: Dictionary, first: Vector2i) -> A
 # a member it moves nowhere stays where it stands. Asked on the LIVE board -- the solver walks from
 # where members really are.
 static func _formation(squad: Squad, leader_destination: Vector2i, board: BoardContext, allowed,
-		pins: Dictionary) -> Dictionary:
+		pins: Dictionary, hazards: Dictionary = {}) -> Dictionary:
 	var placed := {}
 	for member in squad.get_members():
 		placed[member] = member.movement.cell
-	for move in GroupMoveSolver.plan(squad, leader_destination, board, allowed, pins):
+	for move in GroupMoveSolver.plan(squad, leader_destination, board, allowed, pins, hazards):
 		placed[move.actor] = move.destination
 	placed[squad.get_leader()] = leader_destination
 	return placed
@@ -1730,10 +1888,12 @@ static func _best_approach(unit: Unit, goal: Vector2i, board: BoardContext, allo
 	# the route the unit will really walk. Sentry's walk home has the same shape (an enemy holding a
 	# corridor), which is why this is unconditional rather than keyed off route_target.
 	var route := RulesService.path_hops(hop_target, board, unit, -1, wanted, true)
+	var watches := _hostile_watches(unit.get_faction(), board)
 
 	var best := here
 	var best_can_attack: bool = prefer_attack and Reach.get_all_attack_cells_from(unit, here, aiming).has(goal) \
 		and Reach.vertical_aim_ok(aiming, here, goal, board)
+	var best_safe := not _is_hazard(unit, here, board, watches)
 	var best_hops: int = route.get(here, RulesService.UNREACHABLE)
 	var best_dist: int = GridUtils.manhattan_distance(here, goal)
 	var best_cost := 0
@@ -1743,12 +1903,15 @@ static func _best_approach(unit: Unit, goal: Vector2i, board: BoardContext, allo
 			continue
 		var can_attack: bool = prefer_attack and Reach.get_all_attack_cells_from(unit, cell, aiming).has(goal) \
 			and Reach.vertical_aim_ok(aiming, cell, goal, board)
+		var safe := not _is_hazard(unit, cell, board, watches)
 		var hops: int = route.get(cell, RulesService.UNREACHABLE)
 		var dist: int = GridUtils.manhattan_distance(cell, goal)
 		var cost: int = range.reachable[cell]
-		if _approach_beats(can_attack, hops, dist, cost, best_can_attack, best_hops, best_dist, best_cost):
+		if _approach_beats(can_attack, safe, hops, dist, cost, best_can_attack, best_safe, best_hops, best_dist,
+				best_cost):
 			best = cell
 			best_can_attack = can_attack
+			best_safe = safe
 			best_hops = hops
 			best_dist = dist
 			best_cost = cost
@@ -1756,17 +1919,19 @@ static func _best_approach(unit: Unit, goal: Vector2i, board: BoardContext, allo
 	return best
 
 
-# Ranked, best first: can I attack from here > fewer hops of route left > nearer in a straight line
-# > cheaper to reach. Ties keep the earlier cell (Law #1: reachable's key order is the move-range
-# search's own, so it is stable).
+# Ranked, best first: can I attack from here > safe ground (#1220: a hazard only when no safe cell
+# offers the same) > fewer hops of route left > nearer in a straight line > cheaper to reach. Ties keep
+# the earlier cell (Law #1: reachable's key order is the move-range search's own, so it is stable).
 #
 # The straight-line term earns its place in exactly one case: when the goal is sealed off entirely,
 # every candidate scores UNREACHABLE and the ladder falls through to it -- so the squad crowds the
 # nearest shore instead of reading "no route" as "stay home".
-static func _approach_beats(can_attack: bool, hops: int, dist: int, cost: int,
-		b_can_attack: bool, b_hops: int, b_dist: int, b_cost: int) -> bool:
+static func _approach_beats(can_attack: bool, safe: bool, hops: int, dist: int, cost: int,
+		b_can_attack: bool, b_safe: bool, b_hops: int, b_dist: int, b_cost: int) -> bool:
 	if can_attack != b_can_attack:
 		return can_attack
+	if safe != b_safe:
+		return safe
 	if hops != b_hops:
 		return hops < b_hops
 	if dist != b_dist:
