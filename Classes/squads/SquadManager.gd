@@ -1150,6 +1150,16 @@ func handle_unit_death(unit: Unit) -> void:
 func handle_unit_downed(unit: Unit) -> void:
 	_remove_from_squad_and_revalidate(unit, true)
 
+# What a pass's end does with one unit downed during it, for both hosts' sweeps (#46). It is ejected
+# whatever happened next -- revive does NOT re-enlist -- and one standing again was rescued in the
+# SAME pass (#124): still SPENT the turn it is rescued, and its solo squad only exists as of the
+# eject, so the mark lands here rather than in RescueAction.execute. The caller skips a unit finished
+# off later in the pass; the death path already cleaned it up.
+func settle_downed(unit: Unit) -> void:
+	handle_unit_downed(unit)
+	if unit.is_active():
+		unit.squad.has_acted = true
+
 # Shared cleanup: silently drop the unit's planned orders (a death/down is not an order
 # cancellation, and the cancel handlers would restore squad badges), pull it out of its squad,
 # then re-validate whatever's left behind.
@@ -1193,7 +1203,7 @@ func can_join_any_squad(joining_unit: Unit) -> bool:
 # same faction, not already a member, and neither side has spent its turn.
 #
 # The lifecycle clause is FIRST and it is #1004: a downed unit is ejected into a fresh solo squad,
-# and _process_downed_pending only marks that squad spent when the unit is standing again (the
+# and settle_downed only marks that squad spent when the unit is standing again (the
 # same-pass rescue case), so a body sat there order-free and un-acted -- which every other clause
 # below reads as "available". Asked HERE because this is the one gate every formation verb routes
 # through, in both directions; the alternative of marking the ejected squad has_acted hides a body

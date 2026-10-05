@@ -410,14 +410,19 @@ func _execute_move_phase(actions: Array, plan: ResolvedPlan, sheet: BeatSheet,
 			# without its pause because its mover was removed mid-shot. Unreachable by design, and
 			# it plays the shot late rather than dropping it.
 			if mover.parked_at() == int(next["step"]) or all_complete:
-				await _execute_action_sequence(next["shots"], beat, holds, subjects, lines,
+				# The soaking lands first, as the resolve soaked the walker before this step's shots (#46).
+				if next["soak"]:
+					mover.apply_walk_states()
+				var shots: Array = next["shots"]
+				await _execute_action_sequence(shots, beat, holds, subjects, lines,
 						lingers, emphases, profiles)
 				mover.release()
 				pending.pop_front()
 				# The walk is still running, so the camera goes back to it (dev 2026-08-28). Skipped
 				# once nothing is left to watch, where the next phase's own pan takes over. It restores
 				# the walk's profile too, or the shot's cinematic would ride on through the rest of it.
-				if not all_complete:
+				# A soaking alone played nothing, so nothing left the walk to come back from.
+				if not all_complete and not shots.is_empty():
 					await _frame_the_walk(span, walk_profile, Pacing.PLAYBACK_PAN)
 				continue
 
@@ -484,36 +489,22 @@ func _frame_the_walk(span: Array[Vector2i], profile: Pacing.Profile, duration: f
 			duration)
 
 
-# The pass's mid-walk interrupts, in the order the resolve fired them (#567): one entry per moment,
-# each carrying the walk to halt, the step to halt at, and every shot that one entry set off --
-# a pinball chain included, since the cascade shares the moment that started it.
+# The pass's mid-walk interrupts (#567): ResolvedPlan.walk_moments, the one list both hosts play (#46),
+# each entry a walk to halt, the step to halt it at, and what plays there -- its shots, its soaking.
 #
 # The steps are handed to the walks here rather than stamped by the resolver: where a walk PAUSES is
 # playback's question, and the resolve already answered the only one it owns (when the shot fired).
 # Assigned to every mover, empty list included, so last pass's pauses can never survive into this one.
 func _walk_interrupts(plan: ResolvedPlan, actions: Array) -> Array[Dictionary]:
-	var moments: Array[Dictionary] = []
-	var by_move: Dictionary[MoveAction, Array] = {}
-	for shot in plan.mid_walk_shots():
-		var mover := shot.triggered_during as MoveAction
-		if mover == null or not actions.has(mover):
-			continue
-		var step: int = shot.triggered_at_step
-		if not moments.is_empty() and moments[-1]["move"] == mover and int(moments[-1]["step"]) == step:
-			(moments[-1]["shots"] as Array).append(shot)
-			continue
-		moments.append({"move": mover, "step": step, "shots": [shot]})
-		if not by_move.has(mover):
-			by_move[mover] = []
-		(by_move[mover] as Array).append(step)
-
+	var moments := plan.walk_moments(actions)
 	for action in actions:
 		var mover := action as MoveAction
 		if mover == null:
 			continue
 		var steps: Array[int] = []
-		if by_move.has(mover):
-			steps.assign(by_move[mover])
+		for moment in moments:
+			if moment["move"] == mover:
+				steps.append(int(moment["step"]))
 		mover.interrupt_steps = steps
 	return moments
 
@@ -997,13 +988,7 @@ func _process_downed_pending() -> void:
 		if not is_instance_valid(unit) or unit.is_queued_for_deletion():
 			continue   # finished off later in the same pass -- the death path already cleaned it up
 		game.overlay_manager.handle_unit_death(unit)   # clear its planning overlays (not its board presence)
-		game.squad_manager.handle_unit_downed(unit)    # eject into a solo squad -- safe now, execution is over
-		# A unit standing again at sweep time was rescued in the SAME pass (#124) -- Crisis accepts
-		# were erased from the list above. It is still ejected (the rule stands either way), and it
-		# is still SPENT the turn it's rescued -- but its solo squad only exists as of the eject, so
-		# the mark lands here rather than in RescueAction.execute.
-		if unit.is_active():
-			unit.squad.has_acted = true
+		game.squad_manager.settle_downed(unit)   # eject, and spend one rescued this same pass -- safe now, execution is over
 	_downed_pending.clear()
 	game.refresh_action_queue(game.squad_manager.active_squad)
 

@@ -26,7 +26,7 @@ var validation_errors: Array[String] = []
 #
 # WHY A STAMP AND NOT A FILTER IN OrderExecutor: six surfaces ask whether a queued rescue will
 # happen -- the haul projection, PlanResolver._rescued_this_pass' end-of-turn forecast, the queue
-# row, the validator, execute_orders' tail, and play_session's hand-copied twin. A filter at the
+# row, the validator, execute_orders' tail, and play_session's own tail loop. A filter at the
 # executor answers one of them and leaves the preview lying and the Play API diverging, which is
 # the exact shape of the went_downed wire bug (will-and-death.md). It is also the BREAK repeal:
 # execution applies what the resolve decided, it does not re-derive it.

@@ -3,9 +3,11 @@ extends RefCounted
 # Owns the player's turn vocabulary, driving the REAL SquadManager / TurnManager /
 # PlanResolver / RulesService. No side channels (Law #3). Commands return structured
 # Dictionaries; play/board_view.gd renders them. The headless executor applies the
-# resolved plan's EFFECTS (move = teleport, attack = apply_damage + element states;
-# side-channel actions run their REAL execute() — it's pure synchronous logic) —
-# i.e. game.gd.execute_orders minus the animation awaits, so preview == execution (Law #2).
+# resolved plan's EFFECTS through the game's own state code (#46): a move teleports, the walk
+# phase plays ResolvedPlan.walk_moments, an attack runs AttackAction's state steps, the pass end
+# runs SquadManager.settle_downed and enforce_contact, and side-channel actions run their REAL
+# execute() — it's pure synchronous logic. OrderExecutor.execute_orders minus the animation
+# awaits, so preview == execution (Law #2); a shoved body teleports where the game slides it.
 # A mission is scored through the same MissionState the game's MissionController holds (#46).
 
 var grid: TileMapLayer
@@ -24,7 +26,7 @@ var _handle_by_unit := {}      # Unit -> String (stable display handle)
 var _next_player := 0
 var _next_enemy := 0
 var _downed_pending: Array[Unit] = []   # units downed mid-execute; ejected AFTER the pass (mirrors OrderExecutor._downed_pending)
-var _executing := false   # true while execute() plays the pass, up to its order clear: a running pass owns its plan (#361)
+var _executing := false   # true while execute() plays the pass, up to its pass-end sweeps: a running pass owns its plan (#361)
 # This mission's state and rules (#46) -- the SAME object the game's MissionController holds, so a
 # headless run scores objectives, the clock and every latch exactly as the game does.
 var mission: MissionState
@@ -97,14 +99,15 @@ func _on_unit_downed(unit: Unit) -> void:
 		_downed_pending.append(unit)
 
 func _process_downed_pending() -> void:
-	# Twin of OrderExecutor._process_downed_pending: eject each survivor-but-downed unit into a solo
-	# squad. Skip any that got finished off (KILLED) later in the same pass — death already
-	# cleaned those up.
+	# OrderExecutor._process_downed_pending's loop, minus the overlays: each unit downed this pass goes
+	# through the one settle_downed both hosts call. Skip any that got finished off (KILLED) later in
+	# the same pass — death already cleaned those up.
 	for unit in _downed_pending:
 		if not is_instance_valid(unit) or unit.is_queued_for_deletion():
 			continue
-		squad_manager.handle_unit_downed(unit)
+		squad_manager.settle_downed(unit)
 	_downed_pending.clear()
+	_refresh_plan(squad_manager.active_squad)   # the sweep's last line in the game, refresh_action_queue
 
 # game._on_unit_action_queued's rule half: a batch's orders are judged once, when queue_batch re-emits
 # at its close. A hold filler a batch move displaces is a cancel, and re-resolves as in the game.
@@ -1170,18 +1173,29 @@ func execute() -> Dictionary:
 	var events: Array[String] = []
 
 	# 1) moves — teleport, the headless stand-in for tweened MoveAction.execute()
+	var moves: Array = []
 	for action in squad.action_queue.duplicate():
-		if action.action_type == BaseAction.ActionType.MOVE and action.is_valid and not action.is_hold_position:
+		if action.action_type != BaseAction.ActionType.MOVE:
+			continue
+		moves.append(action)
+		if action.is_valid and not action.is_hold_position:
 			var mv := action as MoveAction
 			mv.actor.movement.set_cell(mv.get_destination())
 			events.append("%s moves to %s" % [handle_for(mv.actor), str(mv.get_destination())])
 
-	# 1b) the watches those walks walked into (#413), in trigger order — the twin of the move phase's
-	# own interrupts. Only the MID-WALK ones: a shot a shove set off belongs after the volley that
-	# threw somebody into it, and attack_playback() below is where it lands (#567). Headless there is
-	# no walk to halt, so this is the event log's order and nothing else.
-	for shot in plan.mid_walk_shots():
-		_apply_attack(shot, events)
+	# 1b) what those walks walked into (#413), through the one moment list the game's move phase plays
+	# (ResolvedPlan.walk_moments, #46): a walk's soaking where the resolve soaked it, when a shot lands on
+	# that walker after, and every watch shot in trigger order. Only the MID-WALK shots: one a shove set
+	# off belongs after the volley that threw somebody into it, and attack_playback() below is where it
+	# lands (#567). Headless there is no walk to halt, so this is the order things land and nothing else.
+	for moment in plan.walk_moments(moves):
+		if moment["soak"]:
+			_apply_walk_states(moment["move"] as MoveAction, events)
+		for shot: AttackAction in moment["shots"]:
+			_apply_attack(shot, events)
+	# ...and every other walk's soaking, as the walk ends.
+	for move: MoveAction in moves:
+		_apply_walk_states(move, events)
 
 	# 2) attacks, then the terrain deposits they (and any Burrow order) produced, then 3) counters.
 	# Same order as OrderExecutor.execute_orders — a tile deposited this pass is live for the counters that
@@ -1221,12 +1235,13 @@ func execute() -> Dictionary:
 	# 4b) the melts only a counter or a tail shot made (#922) -- the pass has settled.
 	_apply_sinks(plan.sinks_at(SinkAction.Moment.PASS_END), events)
 
-	# 5) eject units downed during the pass into solo squads (mirrors OrderExecutor._process_downed_pending)
-	_process_downed_pending()
-
-	# The pass is over before its orders clear, as OrderExecutor drops executing_plan before
-	# _end_squad_turn: the clear's own refreshes re-resolve the emptied plan.
+	# The pass is over before the sweeps, as OrderExecutor drops executing_plan before them: the
+	# sweeps' and the clear's own refreshes re-resolve the plan.
 	_executing = false
+	# 5) eject units downed during the pass into solo squads, then the members a shove put out of
+	# contact (#151) -- execute_orders' two sweeps, in its order.
+	_process_downed_pending()
+	squad_manager.enforce_contact()
 	# clear the squad's orders + mark acted (mirrors execute_orders' tail)
 	if is_instance_valid(squad):
 		for action in squad.action_queue.duplicate():
@@ -1243,6 +1258,13 @@ func execute() -> Dictionary:
 # The event line a finished mission logs, shared by execute() and end_turn so the dedupe matches.
 func _mission_line(tag: String) -> String:
 	return "MISSION %s" % tag
+
+# A walk's own states (#884), through MoveAction.apply_walk_states as the game's walk applies them.
+func _apply_walk_states(move: MoveAction, events: Array[String]) -> void:
+	if not move.apply_walk_states():
+		return
+	for state in move.resolved.states_added:
+		events.append("%s gains %s" % [handle_for(move.actor), Elemental.state_display_name(state)])
 
 # Play the resolved terrain deposits into the live store (twin of OrderExecutor._apply_cell_effects, minus
 # the redraw). Preview and execution consume the SAME ResolvedCellEffect objects (R3).
@@ -1265,92 +1287,31 @@ func _apply_sinks(sinks: Array[SinkAction], events: Array[String]) -> void:
 		events.append(sink.get_description())
 
 
+# One attack's playback: AttackAction's own state steps, in the order execute() takes them (#46), so
+# a heal heals and a shot whose target vanished or that the pass skipped spends nothing, here as in
+# the game. This host's own are the event log and the knockback, which execute() slides along the
+# resolver's trail and this teleports to the landing the resolver picked (stopped at any
+# wall/unit/edge). execute()'s awaits -- the lunges, the slide, the hang and plummet -- have nothing
+# to stand for headless.
 func _apply_attack(atk: AttackAction, events: Array[String]) -> void:
+	if not atk.open_playback():
+		return
 	var actor := atk.actor
 	var target := atk.target
-	# The watch absorbs its one trigger (#413) — MIRRORS AttackAction.execute, including its
-	# position: above every early-out, because a shot that whiffs or lands on an empty cell has
-	# still been taken. Lead volley member only.
-	if atk.is_watch_shot and not atk.is_secondary_hit and actor != null and is_instance_valid(actor):
-		actor.spend_watch()
-	# Post-fire economy, ABOVE the early-outs because that is where the twin puts it: execute()
-	# gates only the UNIT consequence on a target, so a cell attack with no victim still spends what
-	# firing costs. Returning first (as this did until #97) meant a headless cell shot rearmed itself
-	# for free -- a real divergence the Carbine already had and nothing had asked about.
-	if actor != null and is_instance_valid(actor):
-		_spend_firing_costs(atk, actor)
-	if actor == null or target == null:
-		return
-	if not is_instance_valid(actor) or not is_instance_valid(target):
-		return
-	if actor.is_queued_for_deletion() or target.is_queued_for_deletion():
-		return
 	var r := atk.resolved
-	if r == null:
-		return
-	if r.skipped:
-		return   # counter-er was downed/killed earlier this pass — no-op (matches the preview)
-	# Guard (#414) — MIRRORS AttackAction.execute (the hand-copied twin): the resolver already moved
-	# the victim to the blocker, so the only thing left for execution is spending the live ward.
-	if atk.blocked_for != null:
-		target.spend_guard()
-	target.take_damage(r.damage, r.non_blow())   # routes through Unit.take_damage -> rung and limb
-	for s in r.states_removed:
-		target.remove_element_state(s)
-	for s in r.states_added:
-		target.add_element_state(s, r.state_turns.get(s, 0))
-	var dropped := " (payload)" if atk.dropped_by != null else ""
-	events.append("%s hits %s for %d%s%s" % [handle_for(actor), handle_for(target), r.damage, _lethality_tag(r.lethality), dropped])
-	# Knockback (#84): the headless stand-in for AttackAction.execute()'s shove — the resolver
-	# already picked the landing cell (stopped at any wall/unit/edge), so this just applies it.
-	if r.knockback_applied and is_instance_valid(target):
-		target.movement.set_cell(r.knockback_to)
-		events.append("%s is shoved to %s" % [handle_for(target), str(r.knockback_to)])
-	# The void door (#259) — MIRRORS AttackAction.execute exactly (the hand-copied twin): a
-	# 0-damage take_damage cannot kill an ACTIVE unit, so removal is applied here or nowhere.
-	# The ONE thing deliberately not copied is that twin's plummet (#431): a headless session has
-	# no sprite to fall, and the rule outcome is identical either way.
-	if r.removed and is_instance_valid(target):
-		events.append("%s falls into the void" % handle_for(target))
-		target.die()
-
-	# The watch this blow broke (#810) — MIRRORS AttackAction.execute (the hand-copied twin). Here
-	# rather than in _spend_firing_costs beside the other post-fire hooks, deliberately: those are
-	# the ATTACKER's costs and are gated on is_secondary_hit, while this is the TARGET's watch and
-	# every volley member has its own. MARKS, never lapses — Unit.cancel_watch says why.
-	if r.cancels_watch and is_instance_valid(target):
-		target.cancel_watch()
-
-# Post-fire economy (#73/#84/#697/#97): mirrors AttackAction.execute()'s readiness/charge/vial/tank
-# hooks — the headless executor bypasses that method entirely, so without this the play path
-# diverges from the game (a fired Spring stays sprung; a Blowback keeps its charge; a cast draws on
-# an attunement and never burns it; a supercharged spray never empties its tank). Lead volley member
-# only. Counters DO reach here — they stamp main (CounterAttackAction.create_counter_volley), so a
-# family whose main spends is charged for reactive fire too, while a Stab/Smash main with
-# consumes_readiness = false is the no-op it always was.
-#
-# Every one of these is a SPEND the resolver already decided: it records a burn only when the
-# attunement changed the damage, and a charge only when the pass still had one to give. There is
-# nothing to judge here.
-#
-# A PAYLOAD spends nothing (#1058) -- MIRRORS AttackAction.execute: it was never fired, the hit that
-# dropped it was.
-func _spend_firing_costs(atk: AttackAction, actor: Unit) -> void:
-	if atk.is_secondary_hit or atk.dropped_by != null:
-		return
-	var r := atk.resolved
-	if atk.fired_attack is WeaponAttackData:
-		var weapon := actor.get_equipped_weapon() as WeaponInstance
-		if weapon != null:
-			weapon.consume_readiness_for(atk.fired_attack as WeaponAttackData)
-	if r == null:
-		return
-	if r.burned_vial != null:
-		actor.attunement = null
-	if r.charge_spent:
-		var tank := actor.get_equipped_weapon() as WeaponInstance
-		if tank != null:
-			tank.spend_charge()
+	if atk.land():
+		var dropped := " (payload)" if atk.dropped_by != null else ""
+		if atk.fired_attack != null and atk.fired_attack.heals:
+			events.append("%s heals %s for %d%s" % [handle_for(actor), handle_for(target), r.heal_amount, dropped])
+		else:
+			events.append("%s hits %s for %d%s%s" % [handle_for(actor), handle_for(target), r.damage, _lethality_tag(r.lethality), dropped])
+		if r.knockback_applied and is_instance_valid(target):
+			target.movement.set_cell(r.knockback_to)
+			events.append("%s is shoved to %s" % [handle_for(target), str(r.knockback_to)])
+		if r.removed and is_instance_valid(target):
+			events.append("%s falls into the void" % handle_for(target))
+		atk.remove()
+	atk.settle()
 
 # ---- mission metadata & outcome (#96, #612) ----
 # Read off the mission and the zone store the scorer reads (#46), never the scenario a second time.

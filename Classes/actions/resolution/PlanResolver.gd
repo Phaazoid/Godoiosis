@@ -253,6 +253,7 @@ static func resolve_move(action: MoveAction, plan: ResolvedPlan, hypo: Dictionar
 		return
 	action.resolved_stop_index = -1   # a re-resolve must not inherit last pass's halt
 	action.resolved = null            # ...nor last pass's soaking, if the walk has left the water
+	action.resolved_soak_step = -1    # ...nor where it happened
 	var walk := action.path
 	# A hold crosses nothing and a one-cell path never leaves its origin: no entry either way.
 	if action.is_hold_position or walk.size() < 2:
@@ -281,7 +282,7 @@ static func resolve_move(action: MoveAction, plan: ResolvedPlan, hypo: Dictionar
 		# crosser mid-ford electrocutes them. The walk is already this pass's clock, which is what
 		# makes ONE cell-by-cell loop answer both.
 		if board != null and RulesService.wets_in(walk[i], mover, board):
-			_soak(mover, hypo, action)
+			_soak(mover, hypo, action, i)
 		# ...and THIS step is the moment the shot plays back at (#567): the walk halts here, the
 		# shot fires, the walk resumes. The moment is stamped where the shots are made because
 		# nothing downstream can recover it — a crosser who walks on leaves no trace of the step.
@@ -300,12 +301,12 @@ static func resolve_move(action: MoveAction, plan: ResolvedPlan, hypo: Dictionar
 # Soak the mover: threaded so a SHOCK hit later in this same pass sees it (E4, the whole of the
 # water-then-shock combo), and STAMPED on the order so execution applies it and the queue row shows
 # the chip. Both halves are required -- the hypo alone never reaches the board, the stamp alone never
-# reaches the preview.
+# reaches the preview. The step is stamped too, so playback can soak the mover where this did (#46).
 #
 # Idempotent, and that is the row's rule rather than an optimisation: a four-cell ford is one
 # soaking, and a mover who was ALREADY wet grows no chip at all, because the row says what CHANGED.
 # A Chilled mover is never soaked (#1092).
-static func _soak(mover: Unit, hypo: Dictionary, action: MoveAction) -> void:
+static func _soak(mover: Unit, hypo: Dictionary, action: MoveAction, step: int) -> void:
 	var mover_hypo := _hypo_for(mover, hypo)
 	if mover_hypo.states.has(Elemental.State.WET) \
 			or Elemental.is_blocked(mover_hypo.states, Elemental.State.WET):
@@ -315,6 +316,7 @@ static func _soak(mover: Unit, hypo: Dictionary, action: MoveAction) -> void:
 		action.resolved = ResolvedOutcome.new()
 		action.resolved.reads_hp = false   # a walk hits nobody; the row must not print an HP arrow
 	action.resolved.states_added.append(Elemental.State.WET)
+	action.resolved_soak_step = step
 
 
 # Every watch these entrants trigger, plus every watch the resulting shots' shoves trigger in turn.
