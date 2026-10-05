@@ -210,6 +210,7 @@ func eject(unit: Unit, cause: LeaveCause):
 	if unit.squad != null:
 		archetype = unit.squad.archetype
 		zone_name = unit.squad.zone_name
+		unit.left_squad = unit.squad   # #1230: an AI stray rejoins this one first
 	_detach_from_current_squad(unit, cause)
 	create_squad(unit, archetype, zone_name)
 

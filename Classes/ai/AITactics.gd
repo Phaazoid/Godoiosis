@@ -1233,6 +1233,93 @@ static func engage(squad: Squad, target: Unit, board: BoardContext, squad_manage
 	queue_main_actions_for_squad(squad, board, squad_manager)
 
 
+# --- Regrouping (#1230) -----------------------------------------------------------------------------
+#
+# Which squad a LOOSE unit would join (dev rulings, 2026-10-05): its old squad first, else the nearest
+# with room, by route. Same archetype unless its profile joins any. Joining another lone unit's squad
+# FORMS one, which both units' profiles must allow and the higher leadership leads -- board order
+# breaking a tie, so two strays never pick each other. With `in_range` it is the join itself, asked
+# through the player's own formation gate (SquadManager.can_squad_up); without, the squad a stray
+# walks back towards. Squads are read LIVE and a dying one is skipped: destroy_empty_squad frees on
+# the frame's end, so is_instance_valid alone would offer a squad nobody is in.
+static func regroup_target(stray: Unit, squad_manager: SquadManager, board: BoardContext, in_range: bool) -> Squad:
+	if stray.squad == null or stray.squad.get_members().size() != 1 or not stray.is_active():
+		return null
+	var profile := AIProfiles.of(stray)
+	var eligible: Array[Squad] = []
+	for squad: Squad in squad_manager.squads:
+		if _may_regroup_into(stray, profile, squad, squad_manager, board, in_range):
+			eligible.append(squad)
+	if eligible.is_empty():
+		return null
+	var old: Variant = stray.left_squad
+	if is_instance_valid(old) and eligible.has(old):
+		return old as Squad
+	var leaders := {}
+	for squad in eligible:
+		leaders[squad.get_leader().movement.cell] = true
+	var hops := RulesService.path_hops(stray.movement.cell, board, stray, -1, leaders)
+	var best: Squad = null
+	var best_hops := RulesService.UNREACHABLE
+	for squad in eligible:
+		var h: int = hops.get(squad.get_leader().movement.cell, RulesService.UNREACHABLE)
+		if best == null or h < best_hops:
+			best = squad
+			best_hops = h
+	return best
+
+
+static func _may_regroup_into(stray: Unit, profile: AIProfile, squad: Squad, squad_manager: SquadManager,
+		board: BoardContext, in_range: bool) -> bool:
+	if not is_instance_valid(squad) or squad.is_queued_for_deletion() or squad == stray.squad:
+		return false
+	var members := squad.get_members()
+	if members.is_empty() or members.size() >= squad.max_size():
+		return false
+	var leader := squad.get_leader()
+	if leader == null or not leader.is_active() or leader.get_faction() != stray.get_faction():
+		return false
+	if not profile.joins_any_archetype \
+			and AIArchetype.effective(squad.archetype) != AIArchetype.effective(stray.squad.archetype):
+		return false
+	if members.size() == 1:
+		if not profile.squads_up or not AIProfiles.of(leader).squads_up or not _leads_over(leader, stray, board):
+			return false
+	elif not profile.regroups:
+		return false
+	return not in_range or squad_manager.can_squad_up(stray, squad)
+
+
+# Would `a` lead a squad formed with `b`? successor_among's rule: the higher effective leadership, and
+# board order on a tie.
+static func _leads_over(a: Unit, b: Unit, board: BoardContext) -> bool:
+	if a.get_effective_ldr() != b.get_effective_ldr():
+		return a.get_effective_ldr() > b.get_effective_ldr()
+	return board.units.find(a) < board.units.find(b)
+
+
+# The walk back: a loose unit with nobody it can fight this turn heads for the squad it would join, then
+# takes its fallback actions. A stray that can attack still attacks -- this answers only when
+# _engageable_enemies is empty. The moving archetypes ask it in place of pursuit; true when it acted.
+static func regroup_walk(squad: Squad, board: BoardContext, squad_manager: SquadManager) -> bool:
+	var stray := squad.get_leader()
+	if stray == null or squad.get_members().size() != 1:
+		return false
+	var profile := AIProfiles.of(stray)
+	if not profile.regroups and not profile.squads_up:
+		return false
+	if not _engageable_enemies(stray, board, null, null).is_empty():
+		return false
+	var target := regroup_target(stray, squad_manager, board, false)
+	if target == null:
+		return false
+	var destination := closest_reachable_cell_to(stray, target.get_leader().movement.cell, board)
+	if destination != stray.movement.cell:
+		group_move(squad, destination, board, squad_manager)
+	queue_main_actions_for_squad(squad, board, squad_manager)
+	return true
+
+
 # THE AI's ONE GROUP-MOVE DOOR (#1230). Every archetype's move goes through here so each member's
 # route follows its own profile: one that does not route around watches walks the shortest path,
 # leader included. The player's group move never comes here, so its routes stay safe.

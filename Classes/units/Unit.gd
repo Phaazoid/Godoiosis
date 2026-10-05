@@ -49,6 +49,10 @@ var must_survive := false
 # reason -- authored per placement, carried here at spawn, written back on save; and per UNIT, so it
 # survives joining and leaving squads.
 var ai_profile := ""
+# The squad this unit last left while staying on the board (#1230): SquadManager.eject stamps it, and
+# an AI unit regrouping tries it first. Battle-scoped and never saved -- after a load a stray simply
+# joins the nearest squad. Untyped and checked with is_instance_valid, because the squad may be freed.
+var left_squad = null
 var inventory : Array[Item] = []
 var squad: Squad
 var pending_grid : TileMapLayer
