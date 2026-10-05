@@ -175,8 +175,13 @@ func test_clear_line_queues_the_same_attack() -> void:
 
 	var units: Array[Unit] = [attacker, victim]
 	assert_bool(AITactics.queue_main_action(attacker, _board(units), _sm, ATTACK_ONLY)).is_true()
-	var aim: AttackAction = attacker.squad.action_queue[0] as AttackAction
-	assert_that(aim.target_cell).is_equal(victim.movement.cell)
+	# A directional aim is a FACING (#1220): the queued cell is one step out the way it points, and
+	# what it must do is reach the victim down the line.
+	var plan := _sm.resolve_plan(attacker.squad, _board(units))
+	var hit := false
+	for a in plan.attacks:
+		hit = hit or a.target == victim
+	assert_bool(hit).override_failure_message("the line was not aimed down the victim's lane").is_true()
 
 
 # --- the priority walk + fallback builders ---

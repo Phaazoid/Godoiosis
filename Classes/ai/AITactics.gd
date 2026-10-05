@@ -300,8 +300,9 @@ static func _try_best_attack(unit: Unit, board: BoardContext, squad_manager: Squ
 	var squad := unit.squad
 	var base_plan := squad_manager.resolve_plan(squad, board, reactions, terrain)
 	var alone: Array[Unit] = [unit]
+	var stakes := _stakes_for(squad, board, base_plan)
 	var pick := _best_candidate_for(unit, squad, board, base_plan, squad_manager, reactions, terrain, {}, true,
-			_candidates_by_member(alone, board, base_plan), _stakes_for(squad, board, base_plan))
+			_candidates_by_member(alone, board, base_plan, stakes), stakes)
 	var queued := false
 	if pick != null:
 		unit.active_attack = pick.action.fired_attack   # the winner stays live, mirroring a player pick
@@ -329,78 +330,192 @@ static func _try_best_attack(unit: Unit, board: BoardContext, squad_manager: Squ
 # below cannot drift about who is still choosing. Rebuilt per ROUND by the caller, because
 # `has_main_action_queued` changes as the round queues and the entry must go with it; within a
 # round nothing is committed until the single queue, so no entry can go stale before it is used.
-static func _candidates_by_member(members: Array[Unit], board: BoardContext, base_plan: ResolvedPlan) -> Dictionary:
+static func _candidates_by_member(members: Array[Unit], board: BoardContext, base_plan: ResolvedPlan,
+		stakes: _Stakes = null) -> Dictionary:
 	var out := {}
 	for member in members:
 		if not member.is_active() or member.has_main_action_queued() or not member.can_wield_equipped():
 			continue
-		out[member] = _attack_candidates(member, board, member.get_projected_destination(), base_plan.hypo)
+		out[member] = _attack_candidates(member, board, member.get_projected_destination(), base_plan.hypo, stakes)
 	return out
 
 
-# Every attack `unit` could declare from `origin`: each selectable+fireable attack crossed with
-# every enemy it can reach and legally aim at. Built as REAL declared orders through
-# AttackAction.declare -- the one stamp factory (#78) -- so the thing scored and the thing queued
-# are the same object rather than two descriptions of one.
+# Every attack `unit` could declare from `origin`, built as REAL declared orders through
+# AttackAction.declare -- the one stamp factory (#78) -- so the thing scored and the thing queued are
+# the same object rather than two descriptions of one.
 #
-# ONE LIST, standing and downed alike (#720, dev 2026-09-03). It was two passes, a body offered only
-# once nothing upright had produced a candidate -- #57's precedence as a hard gate. The score already
-# says everything that rule was protecting: the overkill clamp prices finishing a body at exactly
-# +1, which loses to any real swing and wins only when nothing else is there. That +1 was the cling
-# at 1 HP until #1002 let a heal raise a body, and the clamp caps one at 1 outright now. The gate on
-# top of that was what made a body an ABSOLUTE last resort.
+# WHERE IT AIMS (#1220): a DIRECTIONAL attack tries all four facings, aimed one step out the way the
+# watch lanes are, because a facing is what the player picks -- aiming "at an enemy" asked the
+# cardinal between two cells, which named the wrong facing for a spread's side lane. A POINT attack
+# tries every cell of its ring, so a placed blast can be dropped beside a target rather than on it.
+# An aim is kept only when its sweep pays: a hostile victim, or for a HEAL a heal target (an ally
+# below full HP, or a body nobody can rescue this turn -- rulings 3 and 16). A heal is therefore
+# never AIMED at an enemy; an enemy its splash catches is priced against it by the score. Aims that
+# reach the same victims across the same cells are one candidate.
 #
-# WHAT THE PLAN HAS ALREADY KILLED IS NOT A TARGET (#719). Planning does not execute, so a unit a
-# squadmate felled THIS round is still standing on the live board -- the base plan's hypo is the only
-# honest answer, and the pass-2 filter never asked it. That is how a leader queued her 6-long line
-# through her own party at a corpse: it was the one candidate she had left, and with no bar (#711)
-# the one candidate is taken however bad it is. DOWNED in the hypo is still a target (finishing is
-# intended); DEAD is not, because there is nobody there to finish.
+# A MAP-ONLY attack hits no unit (#1135), so its aim is kept only for what it does THIS pass: the
+# current it carries, the payloads it drops, or the ice it melts under a hostile. Ground it merely
+# leaves burning or soaked for later is not priced, declared on #117.
+#
+# The sweep reads wetness LIVE, as the queue's whiff gate does (SquadPlanValidator.aim_finds_a_target),
+# so a candidate is never one the gate would refuse.
+#
+# ONE LIST, standing and downed alike (#720): the overkill clamp prices finishing a body at +1, so a
+# body wins only when nothing upright is offered. WHAT THE PLAN HAS ALREADY KILLED IS NOT A TARGET
+# (#719): planning does not execute, so a unit a squadmate felled this round is still on the live
+# board, and the base plan's hypo is the honest answer. DOWNED in the hypo is still a target; DEAD is
+# nobody. `victims_out`, when given, receives each candidate's paying victims.
 static func _attack_candidates(unit: Unit, board: BoardContext, origin: Vector2i,
-		base_hypo: Dictionary) -> Array[AttackAction]:
+		base_hypo: Dictionary, stakes: _Stakes = null, victims_out = null) -> Array[AttackAction]:
 	var out: Array[AttackAction] = []
+	var seen := {}
+	var hostiles := {}   # cell -> true where a hostile the plan has not killed stands
+	var patients := {}   # cell -> true where a heal target stands
+	for other in board.units:
+		if not is_instance_valid(other):
+			continue
+		var at := PlanResolver.projected_position(other, base_hypo)
+		if Team.is_enemy(unit.get_faction(), other.get_faction()):
+			if PlanResolver.projected_lifecycle(other, base_hypo) != Unit.LifecycleState.DEAD:
+				hostiles[at] = true
+		elif _is_heal_target(other, base_hypo, stakes):
+			patients[at] = true
 	# Nothing selectable (unarmed, an aura-dry rune) means no candidate, as the player's ring offers
 	# none (#1215) -- never a null pick, which the resolver would read as bare fists.
 	for attack in unit.get_selectable_attacks():
 		if not unit.is_attack_fireable(attack):
 			continue
-		# The candidate is passed straight to the geometry (#102) -- active_attack is written only
-		# for declare()'s stamp, immediately before it, and cleared again below.
-		var reach := Reach.get_all_attack_cells_from(unit, origin, attack)
-		for other in board.units:
-			if not is_instance_valid(other):
+		var marks: Dictionary = patients if attack.heals else hostiles
+		if marks.is_empty() and not _may_pay_unmarked(unit, attack):
+			continue
+		for aim in _aim_cells(unit, origin, attack, board, marks):
+			var sweep := Conduction.sweep(unit, origin, aim, attack, board)
+			var paying := _paying_victims(unit, attack, sweep, base_hypo, stakes)
+			if paying.is_empty() and not _map_pays(unit, attack, sweep, board, base_hypo):
 				continue
-			if not Team.is_enemy(unit.get_faction(), other.get_faction()):
+			var key := _aim_key(attack, sweep)
+			if seen.has(key):
 				continue
-			if not (other.is_active() or other.is_downed()):
-				continue
-			if PlanResolver.projected_lifecycle(other, base_hypo) == Unit.LifecycleState.DEAD:
-				continue   # a squadmate already finished them this pass -- see the header
-			# WHERE THE PLAN PUTS THEM, not where they stand (#709). Sibling of the lifecycle read
-			# directly above, answered off the same dict: a squadmate's queued shove has already
-			# moved this target, and gather_attack_victims below has resolved occupants through
-			# PROJECTED cells since #105 -- so a live aim did not merely mis-point, it built a
-			# footprint holding nobody and the candidate was dropped at that guard. The direction
-			# that was invisible is the other one: a shove that pulls a target INTO reach.
-			var at := PlanResolver.projected_position(other, base_hypo)
-			if not reach.has(at):
-				continue
-			# The player's vertical gate, mirrored (#258): a point aim above the attack's tolerance
-			# is refused at the click, so the AI must not author one. A DIRECTIONAL attack is judged
-			# by the footprint below instead (#756) — it aims a facing, so "is this cell too high"
-			# is answered per spread cell by the truncation, and asking it of the aim would refuse
-			# a whole spread over one unreachable target.
-			if not Reach.is_directional_attack(attack) and not Reach.vertical_aim_ok(attack, origin, at, board):
-				continue
-			# The current counts as reach: an aim into water whose only casualties arrive by the arc
-			# is a real candidate, and one that would fry the AI's own side is priced by the ordinary
-			# score, since the arc's victims resolve as volley members like any other.
-			if Conduction.sweep(unit, origin, at, attack, board).victims.is_empty():
-				continue
-			unit.active_attack = attack
-			out.append(AttackAction.declare(unit, origin, at))
+			seen[key] = true
+			unit.active_attack = attack   # declare()'s stamp only (#102)
+			var action := AttackAction.declare(unit, origin, aim)
+			out.append(action)
+			if victims_out != null:
+				victims_out[action] = paying
 	unit.active_attack = null   # no probe left behind (#102)
 	return out
+
+
+# Who a heal may be aimed for: our side, and either standing below full HP or a body the clock is
+# still running on that nobody can rescue this turn (ruling 16).
+static func _is_heal_target(other: Unit, hypo: Dictionary, stakes: _Stakes) -> bool:
+	match PlanResolver.projected_lifecycle(other, hypo):
+		Unit.LifecycleState.ACTIVE:
+			return PlanResolver.projected_hp(other, hypo) < other.get_max_hp()
+		Unit.LifecycleState.DOWNED:
+			return other.is_downed() and other.downed_turns_remaining >= 0 \
+					and (stakes == null or not stakes.rescuable.has(other))
+	return false
+
+
+# Can this aim pay FAR from anybody it could pay on? A payload goes off where the hit lands and a
+# current runs through water; everything else pays only on a body inside its own footprint.
+static func _may_pay_unmarked(unit: Unit, attack: AttackData) -> bool:
+	return attack.payload != null or PlanResolver.elements_of(unit, attack, false).has(Elemental.Element.SHOCK)
+
+
+# The cells worth sweeping. A facing for a directional attack; for a point attack the ring, narrowed
+# to cells near a mark whenever only a body in the footprint can pay: within the shape's own reach of
+# one, which is exact for a one-cell attack and a superset for a blast.
+static func _aim_cells(unit: Unit, origin: Vector2i, attack: AttackData, board: BoardContext,
+		marks: Dictionary) -> Array[Vector2i]:
+	var out: Array[Vector2i] = []
+	if Reach.is_directional_attack(attack):
+		for dir in GridUtils.CARDINAL_DIRECTIONS:
+			if Reach.can_aim_at(unit, origin, origin + dir, attack, board):
+				out.append(origin + dir)
+		return out
+	var narrow := not _may_pay_unmarked(unit, attack)
+	var radius := 0
+	if attack.attack_shape != null:
+		for offset in attack.attack_shape.tiles():
+			radius = maxi(radius, absi(offset.x) + absi(offset.y))
+	for cell in Reach.get_all_attack_cells_from(unit, origin, attack):
+		if narrow and not _near_a_mark(cell, marks, radius):
+			continue
+		# The player's vertical gate, mirrored (#258): an aim the click would refuse is never authored.
+		if not Reach.vertical_aim_ok(attack, origin, cell, board):
+			continue
+		out.append(cell)
+	return out
+
+
+static func _near_a_mark(cell: Vector2i, marks: Dictionary, radius: int) -> bool:
+	if radius == 0:
+		return marks.has(cell)
+	for mark: Vector2i in marks:
+		if absi(mark.x - cell.x) + absi(mark.y - cell.y) <= radius:
+			return true
+	return false
+
+
+# The victims that make this aim worth anything: hostiles the plan has not killed, or for a heal the
+# heal targets it reaches.
+static func _paying_victims(unit: Unit, attack: AttackData, sweep: Conduction.Sweep, hypo: Dictionary,
+		stakes: _Stakes) -> Array[Unit]:
+	var out: Array[Unit] = []
+	for victim in sweep.victims:
+		if not is_instance_valid(victim) or out.has(victim):
+			continue
+		if attack.heals:
+			if not Team.is_enemy(unit.get_faction(), victim.get_faction()) and _is_heal_target(victim, hypo, stakes):
+				out.append(victim)
+		elif Team.is_enemy(unit.get_faction(), victim.get_faction()) \
+				and PlanResolver.projected_lifecycle(victim, hypo) != Unit.LifecycleState.DEAD:
+			out.append(victim)
+	return out
+
+
+# What a map-only aim does this pass with no victim of its own: a payload that catches a hostile, or
+# a deposit that takes the ice from under one. Geometry only -- the resolve prices it.
+static func _map_pays(unit: Unit, attack: AttackData, sweep: Conduction.Sweep, board: BoardContext,
+		hypo: Dictionary) -> bool:
+	if not attack.hits_map():
+		return false
+	if attack.payload != null:
+		for cell in sweep.struck:
+			var drop := Conduction.sweep_payload(unit, cell, attack.payload, board, hypo,
+					sweep.struck_facings.get(cell, Vector2i.ZERO))
+			for victim in drop.victims:
+				if is_instance_valid(victim) and Team.is_enemy(unit.get_faction(), victim.get_faction()):
+					return true
+	var elements := PlanResolver.elements_of(unit, attack, false)
+	if elements.is_empty() or board.terrain_states == null:
+		return false
+	var terrain := TerrainReactionCatalog.get_all()
+	for cell in sweep.struck:
+		var standing := board.projected_unit_at_cell(cell)
+		if standing == null or not Team.is_enemy(unit.get_faction(), standing.get_faction()):
+			continue
+		var effect := PlanResolver._resolve_cell_effect_at(cell, elements, board, terrain)
+		if effect == null:
+			continue
+		var deposits: Array[ResolvedCellEffect] = [effect]
+		if RulesService.drowns_in(cell, standing, board.with_deposits(deposits)) \
+				and not RulesService.drowns_in(cell, standing, board):
+			return true
+	return false
+
+
+static func _aim_key(attack: AttackData, sweep: Conduction.Sweep) -> String:
+	var ids: Array[int] = []
+	for victim in sweep.victims:
+		if is_instance_valid(victim):
+			ids.append(victim.get_instance_id())
+	ids.sort()
+	var cells := sweep.cells.duplicate()
+	cells.sort()
+	return "%d|%s|%s" % [attack.get_instance_id(), str(ids), str(cells)]
 
 
 # Score a whole RESOLVED PLAN -> an AIScore: (mission, removals, squad breaks, saves, damage,
@@ -1159,12 +1274,13 @@ static func _first_opportunity(unit: Unit, cells: Array, squad: Squad, board: Bo
 		if stale or not wins.is_empty():
 			base_plan = squad_manager.resolve_hypothetical(squad, wins, board, reactions, terrain)
 			stale = false
-		var candidates := _attack_candidates(unit, board, cell, base_plan.hypo)
+		var paying := {}
+		var candidates := _attack_candidates(unit, board, cell, base_plan.hypo, stakes, paying)
 		if candidates.is_empty():
 			continue
 		var base := _score_plan(faction, base_plan, stakes)
 		for candidate in candidates:
-			if within != null and not within.has(candidate.target_cell):
+			if within != null and not _reaches_into(paying.get(candidate, []), within, base_plan.hypo):
 				continue
 			var key := _group_key(candidate, board)
 			if dead.has(key):
@@ -1188,6 +1304,14 @@ static func _first_opportunity(unit: Unit, cells: Array, squad: Squad, board: Bo
 			break
 	unit.movement.set_cell(start)
 	return found
+
+
+# A Sentry seeks only an intruder: does this candidate pay on somebody standing inside its zone?
+static func _reaches_into(victims: Array, within, hypo: Dictionary) -> bool:
+	for victim: Unit in victims:
+		if within.has(PlanResolver.projected_position(victim, hypo)):
+			return true
+	return false
 
 
 # Which seek tier a marginal reaches, or -1 when it reaches none. A removal or a mission win that a
@@ -1293,8 +1417,8 @@ static func _queue_attacks_jointly(squad: Squad, board: BoardContext, squad_mana
 		# a plan nobody gave. Rebuilt each round, which is what keeps it as fresh as the base plan:
 		# nothing is committed within a round, so no candidate can go stale before the single queue
 		# below, and the next round sees the commitment through its own base resolve.
-		var by_member := _candidates_by_member(squad.get_members(), board, base_plan)
 		var stakes := _stakes_for(squad, board, base_plan)
+		var by_member := _candidates_by_member(squad.get_members(), board, base_plan, stakes)
 		var best: _Scored = null
 		for member in squad.get_members():
 			var pick := _best_candidate_for(member, squad, board, base_plan, squad_manager, reactions, terrain, refused, true, by_member, stakes)

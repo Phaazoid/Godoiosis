@@ -676,3 +676,79 @@ func test_for_viewer_builds_the_field_the_named_side_faces() -> void:
 	var ours := ThreatField.for_viewer(sm, PLAYER, true)
 	assert_bool(ours.by_unit.has(foe) and not ours.by_unit.has(mine)).override_failure_message(
 			"asked for the player's view, the field was not the enemy's units").is_true()
+
+
+# --- #1207: a placed blast's splash and a payload's landing -------------------------------------
+#
+# The AI aims BESIDE a target since #1220 -- a blast dropped next to it, a carrier thrown for the
+# payload it leaves -- so the field must mark what those aims strike, not only where they may point.
+
+const PLUS: Array[Vector2i] = [Vector2i(0, 0), Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 1), Vector2i(0, -1)]
+
+
+func _blaster(board: Dictionary, cell: Vector2i) -> Unit:
+	var unit: Unit = _spawn(board, ENEMY, cell)
+	var blast: WeaponAttackData = (unit.equipped_weapon as WeaponInstance).template.main_attack
+	blast.power = 30
+	P.stamped(blast, 2, PLUS, 2)
+	_bind(unit, AIArchetype.Type.HOLD)
+	return unit
+
+
+func _bomber(board: Dictionary, cell: Vector2i) -> Unit:
+	var unit: Unit = _spawn(board, ENEMY, cell)
+	var carrier: WeaponAttackData = (unit.equipped_weapon as WeaponInstance).template.main_attack
+	carrier.targets = EquippableData.TargetMode.MAP
+	P.point(carrier, 1)
+	var bomb := WeaponAttackData.new()
+	bomb.power = 30
+	P.stamped(bomb, 1, PLUS)
+	carrier.payload = bomb
+	_bind(unit, AIArchetype.Type.HOLD)
+	return unit
+
+
+func test_a_placed_blast_marks_its_splash_past_the_ring() -> void:
+	var board := _water_board()
+	var blaster := _blaster(board, Vector2i(5, 1))
+	var field := ThreatField.build(_context(board), PLAYER)
+	assert_bool(field.by_unit.get(blaster, {}).has(Vector2i(8, 1))).override_failure_message(
+			"a cell inside the splash of an aim on the ring's edge was painted safe").is_true()
+	assert_bool(field.by_unit.get(blaster, {}).has(Vector2i(9, 1))).override_failure_message(
+			"fixture is vacuous: the splash reaches further than the shape").is_false()
+
+
+func test_a_payload_marks_where_it_lands() -> void:
+	var board := _water_board()
+	var bomber := _bomber(board, Vector2i(5, 1))
+	var field := ThreatField.build(_context(board), PLAYER)
+	assert_bool(field.by_unit.get(bomber, {}).has(Vector2i(7, 1))).override_failure_message(
+			"a cell the payload lands on was painted safe").is_true()
+
+
+# The victim wire, for both shapes: the real AI plans, and everybody its plan hits stands on a cell
+# the field marked. Each target can only be reached the new way -- one too close to aim the blast
+# at, one only the payload reaches.
+func test_every_unit_a_splash_or_payload_hits_stands_inside_the_field() -> void:
+	var board := _water_board()
+	var blaster := _blaster(board, Vector2i(8, 1))
+	var close: Unit = _spawn(board, PLAYER, Vector2i(9, 1))
+	var bomber := _bomber(board, Vector2i(1, 1))
+	var downrange: Unit = _spawn(board, PLAYER, Vector2i(3, 1))
+	var ctx := _context(board)
+	var field := ThreatField.build(ctx, PLAYER)
+
+	var hit := {}
+	for squad: Squad in [blaster.squad, bomber.squad]:
+		AIController.plan_squad(squad, ctx, board.squad_manager)
+		var plan: ResolvedPlan = board.squad_manager.resolve_plan(squad, ctx)
+		for row in plan.attacks:
+			var victim: Unit = row.target
+			if victim == null or not is_instance_valid(victim) or victim.get_faction() != PLAYER:
+				continue
+			hit[victim] = true
+			assert_bool(field.cells.has(victim.movement.cell)).override_failure_message(
+					"%s is hit at %s, which the field called safe" % [victim.get_unit_name(), victim.movement.cell]).is_true()
+	for victim: Unit in [close, downrange]:
+		assert_bool(hit.has(victim)).override_failure_message(
+				"fixture is vacuous: a target was never hit, so its shape went unexercised").is_true()
