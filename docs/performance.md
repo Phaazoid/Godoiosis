@@ -619,3 +619,20 @@ branch, two runs each, alternating:
 - **The safe route costs nothing without a watch in reach**: `RulesService.route_to` falls straight
   back to the range's own tree, so the boards above, which have no armed watch at decision time, do
   not run its search at all.
+
+## 2026-10-05 — AI difficulty bands (#1230)
+
+`tools/profile_ai_turn.gd`, Castle Assault, `main` (`5d9e75af`) in a scratch worktree against the
+branch, three runs each, alternating. The machine was noisy that evening: `main` alone spread
+1555–1673 ms.
+
+| What | `main` | #1230 |
+|---|---|---|
+| Whole board (every AI squad decides once) | 1601 / 1555 / 1673 ms | 1698 / 1649 / 1820 ms |
+
+- **About +6% on the whole board.** Every rule now asks its unit's profile (`AIProfiles.of`, a
+  cached dictionary read) at the site it governs, and a lone Rushdown or Balanced unit asks its
+  engageable set once more to decide whether it is idle. Nothing was restructured for speed.
+- **The decision record is byte-identical** to `main` with every unit unassigned (Hard): no
+  Crisis-armed unit, no hit reaching the limb threshold and no stray on turn 1 (the profiler now runs
+  the regroup pass first and prints `regroup = 0 join(s)` per faction).
