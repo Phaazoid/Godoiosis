@@ -6,7 +6,7 @@ grill-style. Every ruling below is his; the rationale is recorded because almost
 re-derivable from the code. Numbers (tolerances, drop damage, the 2D offset) are deliberately absent —
 they are feel values and get knobs, not guesses (`CLAUDE.md` → the tuning rule).
 
-**Canon checked through #969 (2026-09-15); #120's weight bands and authored table folded in 2026-10-01; #46's shared execute steps folded in 2026-10-04.**
+**Canon checked through #969 (2026-09-15); #120's weight bands and authored table folded in 2026-10-01; #46's shared execute steps folded in 2026-10-04; #1228's `has_surface` folded in 2026-10-05.**
 
 The one-line version: **a cell has a height, height changes only via ramps, ramps are chokepoints
 rather than tolls, and what height buys you is REACH — not damage, not to-hit.**
@@ -958,7 +958,9 @@ word.
 > `terrain_kind_at` is deliberately NOT widened: its other readers (`Materia.sources_at`,
 > `_resolve_cell_effect_at`, the tile card) ask what the AUTHOR wrote, and a derived VOID would leak
 > into terrain reactions and alchemy sources. Same split as `GridUtils.walkable_of` against
-> `is_walkable` — two questions, not two answers to one.
+> `is_walkable` — two questions, not two answers to one. **[#1228](https://github.com/Phaazoid/Godoiosis/issues/1228)
+> named the pair it makes with `has_ground`: `GridUtils.has_surface`, a tile that is not a hole**, the
+> question an attack's footprint, the gas a cell may hold and a hole's lip walls all ask.
 >
 > Measured before it shipped, by `tools/audit_groundless.gd`: **66 groundless cells inside
 > `used_rect` across the shipped scenarios, every one of them interior**, so no board has an outline
