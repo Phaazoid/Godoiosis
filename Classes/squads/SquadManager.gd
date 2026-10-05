@@ -703,7 +703,7 @@ func calculate_reactions_for_squad(attacking_squad: Squad, attacks: Array[Attack
 		# too, so a self-aimed heal falls out here rather than needing a clause of its own.
 		#
 		# ABOVE THE LEDGER, NOT BELOW: a friendly hit must not spend the squad's one reaction (C4).
-		# Unobservable through legal play -- _formation_basics_ok forbids a mixed-faction squad, so
+		# Unobservable through legal play -- formation_block_reason forbids a mixed-faction squad, so
 		# no squad can hold both a hostile and a non-hostile victim of the same plan -- but the
 		# ledger should record reactions that happened, and a scenario file can hand-build that board.
 		if attack.actor == null or not RulesService.can_target(attack.actor, defender):
@@ -1207,8 +1207,11 @@ func can_join_any_squad(joining_unit: Unit) -> bool:
 			return true
 	return false
 
-# Shared by both formation checks: both sides STANDING, in range of the leader, room in the squad,
-# same faction, not already a member, and neither side has spent its turn.
+# Why `unit` may not enter `squad`, or "" when it may: the clauses both formation verbs share, in
+# both directions -- both sides STANDING, same faction, not already a member, neither side spent, room
+# in the squad, and in range of the leader. A REASON since #46, so the Play API's `join` refuses in the
+# game's words; can_squad_up / can_join_squad are derived from it, and the order only decides which
+# reason a refusal names -- the cheap clauses first, the range check (a path search) last.
 #
 # The lifecycle clause is FIRST and it is #1004: a downed unit is ejected into a fresh solo squad,
 # and settle_downed only marks that squad spent when the unit is standing again (the
@@ -1219,33 +1222,52 @@ func can_join_any_squad(joining_unit: Unit) -> bool:
 #
 # is_active(), not is_downed(): a DEAD unit should never reach this (handle_unit_death detaches
 # without a replacement squad), but the predicate that means STANDING is the one to ask.
-func _formation_basics_ok(unit: Unit, squad: Squad) -> bool:
-	if not unit.is_active() or not squad.leader.is_active():
-		return false
-	if not SquadCohesion.in_range(squad, squad.leader.movement.cell, unit, unit.movement.cell, board_source.call()):
-		return false
-	if squad.members.size() >= squad.max_size():
-		return false
-	if squad.leader.get_faction() != unit.get_faction():
-		return false
+func formation_block_reason(unit: Unit, squad: Squad) -> String:
+	var leader := squad.leader
+	if not unit.is_active():
+		return "%s is down" % unit.get_unit_name()
+	if not leader.is_active():
+		return "%s is down" % leader.get_unit_name()
+	if leader.get_faction() != unit.get_faction():
+		return "different factions can't squad up"
 	if squad.get_members().has(unit):
-		return false
-	return not squad.has_acted and not unit.squad.has_acted
+		return "%s is already in %s's squad" % [unit.get_unit_name(), leader.get_unit_name()]
+	if squad.has_acted or unit.squad.has_acted:
+		return "a squad that has acted can't change this turn"
+	if squad.members.size() >= squad.max_size():
+		return "%s's squad is full (%d of %d)" % [leader.get_unit_name(), squad.members.size(), squad.max_size()]
+	if not SquadCohesion.in_range(squad, leader.movement.cell, unit, unit.movement.cell, board_source.call()):
+		return "%s is outside %s's leader range" % [unit.get_unit_name(), leader.get_unit_name()]
+	return ""
 
 # Pulling a loose unit INTO a squad being formed: the recruit must be solo and both sides must
 # still be order-free, since squad membership can't change once a plan exists.
+func squad_up_block_reason(joining_unit: Unit, squad: Squad) -> String:
+	var reason := formation_block_reason(joining_unit, squad)
+	if reason != "":
+		return reason
+	if joining_unit.has_squad():
+		return "%s already has squadmates" % joining_unit.get_unit_name()
+	if joining_unit.has_any_actions():
+		return "%s has orders queued" % joining_unit.get_unit_name()
+	if not squad.action_queue.is_empty():
+		return "%s's squad has orders queued" % squad.leader.get_unit_name()
+	return ""
+
 func can_squad_up(joining_unit: Unit, squad: Squad) -> bool:
-	if not _formation_basics_ok(joining_unit, squad):
-		return false
-	if joining_unit.has_squad() or joining_unit.has_any_actions():
-		return false
-	return squad.action_queue.is_empty()
+	return squad_up_block_reason(joining_unit, squad) == ""
 
 # Joining an ALREADY-FORMED squad — so the target's leader must actually have squadmates.
+func join_squad_block_reason(unit: Unit, squad: Squad) -> String:
+	var reason := formation_block_reason(unit, squad)
+	if reason != "":
+		return reason
+	if not squad.leader.has_squad():
+		return "%s leads no squad to join" % squad.leader.get_unit_name()
+	return ""
+
 func can_join_squad(unit: Unit, squad: Squad) -> bool:
-	if not _formation_basics_ok(unit, squad):
-		return false
-	return squad.leader.has_squad()
+	return join_squad_block_reason(unit, squad) == ""
 
 func _all_units() -> Array[Unit]:
 	# Every unit belongs to exactly one managed squad (solo units get a 1-member squad),

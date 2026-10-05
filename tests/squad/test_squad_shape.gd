@@ -147,7 +147,7 @@ func test_leader_departure_overflow_detaches_newest_first() -> void:
 	assert_bool(newest.squad != squad).is_true()     # newest detached into a solo squad
 	assert_bool(newest.squad.members.has(newest)).is_true()
 
-# #1004: a downed body is not a recruit. _formation_basics_ok is the ONE gate every formation verb
+# #1004: a downed body is not a recruit. formation_block_reason is the ONE gate every formation verb
 # routes through, so all four predicates are asked here -- the point of the clause living there is
 # that no verb can be fixed and another left behind.
 #

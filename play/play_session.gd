@@ -998,9 +998,10 @@ func burrow(handle: String) -> Dictionary:
 		return {"ok": false, "error": "%s can't burrow: %s" % [handle, refusal]}
 	return {"ok": true, "summary": "%s -> burrow" % handle}
 
-# member joins leader's squad — one join_squad call covers both "squad up" (leader was solo) and
-# "join squad", with the player's own eligibility: same faction, within the leader's LDR range,
-# nothing has committed to acting yet.
+# member joins leader's squad — one join_squad call covers both of the game's doors onto that act:
+# Squad Up from the leader (the member must be solo) and Join Squad from the member (the leader must
+# lead a squad). Either open is enough, and a refusal is the game's own reason (SquadManager's
+# formation reasons, #46). The turn-flow checks above them stay the caller's, as in the game's menu.
 func join(member_handle: String, leader_handle: String) -> Dictionary:
 	var member := unit_by_handle(member_handle)
 	var leader := unit_by_handle(leader_handle)
@@ -1012,22 +1013,18 @@ func join(member_handle: String, leader_handle: String) -> Dictionary:
 		return {"ok": false, "error": "no unit '%s'" % leader_handle}
 	if not is_deployed(leader):
 		return {"ok": false, "error": "%s is in reserve" % leader_handle}
-	if member == leader:
-		return {"ok": false, "error": "a unit can't join itself"}
-	if member.squad == leader.squad:
-		return {"ok": false, "error": "%s is already in %s's squad" % [member_handle, leader_handle]}
 	if leader.get_faction() != active_faction():
 		return {"ok": false, "error": "can only reorganize your own (%s) squads this turn" % _faction_name(active_faction())}
-	if member.get_faction() != leader.get_faction():
-		return {"ok": false, "error": "different factions can't squad up"}
 	var gate := _squad_change_gate(member.squad, leader.squad)
 	if not gate.ok:
 		return gate
 	if member.has_any_actions():
 		return {"ok": false, "error": "%s has queued orders — cancel them before squadding up" % member_handle}
-	var reach := leader.squad.get_max_squad_range()
-	if not SquadCohesion.in_range(leader.squad, leader.movement.cell, member, member.movement.cell, _board()):
-		return {"ok": false, "error": "%s is outside %s's leader range (%d)" % [member_handle, leader_handle, reach]}
+	var refusal := squad_manager.squad_up_block_reason(member, leader.squad)
+	if refusal != "" and leader.has_squad():
+		refusal = squad_manager.join_squad_block_reason(member, leader.squad)
+	if refusal != "":
+		return {"ok": false, "error": "%s can't join %s's squad: %s" % [member_handle, leader_handle, refusal]}
 	squad_manager.join_squad(member, leader.squad)
 	return {"ok": true, "summary": "%s joined %s's squad" % [member_handle, leader_handle]}
 
