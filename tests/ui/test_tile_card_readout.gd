@@ -274,6 +274,28 @@ func test_a_units_inspect_shows_its_burning_tile_beside_the_dock() -> void:
 	assert_str(_tile_block_text()).contains(Terrain.tile_state_display_name(Terrain.TileState.BURNING))
 
 
+func test_a_frozen_slow_tile_no_longer_reads_slow_going() -> void:
+	# The card prints the cost the RULES charge (#1223): ice costs Terrain.FROZEN_MOVE_COST whatever
+	# the tile underneath authors, so a frozen slow tile is not "slow going" any more.
+	var data: TileData = (game.grid.tile_set.get_source(_src_id) as TileSetAtlasSource) \
+		.get_tile_data(STONE_ATLAS, 0)
+	data.set_custom_data("move_cost", Terrain.FROZEN_MOVE_COST + 2)
+	var thawed := Vector2i(6, 0)
+	var frozen := Vector2i(7, 0)
+	game.grid.set_cell(thawed, _src_id, STONE_ATLAS)
+	game.grid.set_cell(frozen, _src_id, STONE_ATLAS)
+	_set_tile_state(frozen, Terrain.TileState.FROZEN)
+
+	await _click(thawed)
+	assert_str(_tile_block_text()) \
+		.override_failure_message("a slow tile's card lost its cost line: '%s'" % _tile_block_text()) \
+		.contains("Slow going")
+	await _click(frozen)
+	assert_str(_tile_block_text()) \
+		.override_failure_message("a FROZEN slow tile still reads slow: '%s'" % _tile_block_text()) \
+		.not_contains("Slow going")
+
+
 func test_a_fire_on_ground_that_is_not_fuel_shows_no_countdown() -> void:
 	# The BLAZE case re-aimed by #890, which retired that state: a fire's clock comes from its
 	# GROUND, and flagstones give it none, so the readout must not invent one. The counting half is
