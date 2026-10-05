@@ -2,7 +2,7 @@
 
 **Status: an idea wall plus two locked decisions.** Solicited by the dev on 2026-08-12, the day Stage 0 (#203) passed its GO gate: *"a full thought experiment, all ideas on the wall."* Nothing below the Decisions section is a commitment — it is the candidate pool for #176's stage 5 and beyond, kept so it can't evaporate from chat. The look-dev scene (`Scenes/LookDev/LookDev.tscn`) is the standing playground where any of it gets prototyped before it's real — and since #212 (2026-08-15) the **Moods tab** in the dev-tools window tunes the *shipping* view live, so a value on this wall can be judged on a real board rather than in the diorama. **It is a playground, not a scratch scene ([#393](https://github.com/Phaazoid/Godoiosis/issues/393), 2026-08-19)** — seven presentation suites fixture on it, `Battle3D.tscn` loads its MeshLibrary, and `BoardMirror`/`BoardOverlays` read textures out of `Art/LookDev/`, so it is edited with the same care as shipping code. Its four moods stopped being a second copy at the same time: `look_dev.gd` held them as a hardcoded `PRESETS` table, seeded from the same values four of the twelve `LookPreset` files now carry, and it resolves them by NAME through `LookKnobs` instead.
 
-**Canon checked through #1024 (2026-09-18); #508's gas look and #1184's dev search folded in 2026-10-01; #508's gas mixes folded in 2026-10-02; #508's gas preview ghost, levels and next-round outline folded in 2026-10-03.**
+**Canon checked through #1024 (2026-09-18); #508's gas look and #1184's dev search folded in 2026-10-01; #508's gas mixes folded in 2026-10-02; #508's gas preview ghost, levels and next-round outline folded in 2026-10-03; #46 (the deposit walk is ResolvedPlan.pending_deposits) folded in 2026-10-05.**
 
 ---
 
@@ -1250,7 +1250,8 @@ is a Game-tab row on a **Gas** tab; what one GAS looks like is its `GasLook` und
   stands down in it. **One exception since 2026-10-03, the plan preview's ghost** (below): it rides
   the shared deposit-preview layer, which is 2D-authored and mirrored, so it draws in both views
   while the gas it promises draws in one.
-- **Where a pass WILL leave gas is ghosted before Execute** (#508 PR 1, Law #2). `game._preview_plan_effects`
+- **Where a pass WILL leave gas is ghosted before Execute** (#508 PR 1, Law #2). `ResolvedPlan.pending_deposits`
+  (the walk `game._preview_plan_effects` hands the board, and the Play API's preview prints, since #46)
   adds a `{cell, gas}` entry per cell and kind beside the tile-state ones, `OverlayManager.show_terrain_preview`
   draws it at the same ghost modulate as a pending fire or cover, and `OverlayMirror` carries it into
   the diorama with every other deposit ghost. **The art is a PLACEHOLDER**: `GasPuffArt.icon(kind)`,

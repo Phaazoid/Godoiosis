@@ -522,7 +522,7 @@ func test_erased_ground_inside_the_board_reads_as_a_hole_not_as_off_the_map() ->
 
 
 # A hole is UNWALKABLE, so the glyph renderer's `#` branch used to swallow every VOID cell and draw
-# a chasm as MASONRY -- which left TERRAIN_GLYPH's own "void" entry unreachable from the day it was
+# a chasm as MASONRY -- which left the glyph table's own "void" entry unreachable from the day it was
 # written. Both spellings of a hole render as open space now; `#` keeps meaning "unwalkable tile
 # with no glyph of its own".
 func test_a_hole_renders_as_open_space_rather_than_as_a_wall() -> void:
