@@ -340,7 +340,8 @@ func test_frozen_water_reads_walkable_to_the_headless_view() -> void:
 	var cell := Vector2i(5, 5)
 	BoardBuilder.paint_cell(_board.grid, cell, BoardBuilder.WATER_ATLAS)
 	assert_bool(_session.terrain_at(cell).walkable).is_false()
-	assert_str(BoardView.render_overview(_session)).contains("#")
+	# Deep water draws as deep water (#46), no longer as rock.
+	assert_str(_glyph_at(cell)).is_equal(BoardView.GROUND["deep"][0])
 
 	# terrain_states.apply IS the production write path — play_session._apply_cell_effects and
 	# OrderExecutor both hand a resolved effect to exactly this call. Only the effect's source is
@@ -351,6 +352,7 @@ func test_frozen_water_reads_walkable_to_the_headless_view() -> void:
 	_board.terrain_states.apply(freeze)
 
 	assert_bool(_session.terrain_at(cell).walkable).is_true()
+	assert_str(_glyph_at(cell)).is_equal(BoardView.GROUND["frozen"][0])
 
 # #922: melting the ice under a unit drops it in, and the headless twin plays that where the game
 # does -- when the deposits land, before any counter -- with the preview naming it first (Law #2).

@@ -6,7 +6,18 @@ extends RefCounted
 
 const PlaySession := preload("res://play/play_session.gd")   # for STASH, the name `kit` shares with `give`
 
-const TERRAIN_GLYPH := {"grass": ".", "tall_grass": ",", "mud": "~", "rock": "#", "offmap": " ", "void": " "}   # offmap = past the board's rect; "void" = a hole, painted or erased (#875) -- both render as empty space; "," is the glyph #895's own map sketch already uses for tall grass
+# What a cell's ground draws as and what the legend calls it, keyed by _ground_key, in legend order.
+# A tile STATE draws over its ground (#46), fire first since it is the one that hurts. Water splits
+# on walkability, so deep water no longer draws as rock. "offmap" = past the board's rect and "void"
+# = a hole, painted or erased (#875): both are open space. "," is #895's own sketch glyph for tall grass.
+const GROUND := {
+	"burning": ["^", "burning"], "frozen": ["_", "frozen"], "scorched": [";", "scorched"],
+	"cover": ["n", "cover (dug in)"],
+	"grass": [".", "grass"], "tall_grass": [",", "tall grass"], "dirt": [":", "dirt"],
+	"none": ["'", "plain ground"], "mud": ["~", "mud"], "shallow": ["w", "shallow water"],
+	"deep": ["W", "deep water"], "rock": ["#", "rock"], "tree": ["T", "tree"], "wall": ["#", "impassable"],
+	"unknown": ["?", "unknown ground"], "void": [" ", "hole"], "offmap": [" ", ""],
+}
 
 # ---- public renders ----
 
@@ -15,6 +26,9 @@ static func render_overview(session) -> String:
 	var lines: Array[String] = []
 	lines.append("Turn: %s" % session._faction_name(session.active_faction()))
 	lines.append(_grid_block(session, bounds, _overview_overlay(session)))
+	lines.append(_ground_legend(session, bounds))
+	if _has_relief(session, bounds):
+		lines.append("Heights and gas: see `terrain`")
 	lines.append("")
 	lines.append(_legend(session))
 	var pre_mission := _pre_mission_block(session)
@@ -119,6 +133,39 @@ static func _attack_lines(unit: Unit) -> Array[String]:
 
 static func _attack_line(unit: Unit, attack: AttackData, prefix: String) -> String:
 	return "%s%s: %s" % [prefix, attack.display_name, unit.attack_detail(attack).replace("\n", " -- ")]
+
+# The ground's shape (#46), which the 3-char overview has no room for: each cell's height in the
+# rules' half-level units (Terrain.UNITS_PER_LEVEL to a level), then n/e/s/w for the side a ramp
+# rises toward or * for a corner form, blank for a hole or off the map. Then any gas lying on a cell.
+static func render_terrain(session) -> String:
+	var bounds := _content_bounds(session)
+	var lines: Array[String] = ["Terrain: height in half-levels (%d to a level); n/e/s/w = the side a ramp rises to, * = a corner slope"
+			% Terrain.UNITS_PER_LEVEL]
+	var header := "      "
+	for x in range(bounds.position.x, bounds.end.x):
+		header += "%3d" % x
+	lines.append(header)
+	for y in range(bounds.position.y, bounds.end.y):
+		var row := "y=%3d " % y
+		for x in range(bounds.position.x, bounds.end.x):
+			var cell := Vector2i(x, y)
+			if not session.terrain_at(cell).exists:
+				row += "   "
+				continue
+			var h: Dictionary = session.height_at(cell)
+			row += "%2d%s" % [h.elevation, h.slope if h.slope != "" else " "]
+		lines.append(row)
+	var gas: Array[String] = []
+	for y in range(bounds.position.y, bounds.end.y):
+		for x in range(bounds.position.x, bounds.end.x):
+			var here: Array[String] = session.gas_at(Vector2i(x, y))
+			if not here.is_empty():
+				gas.append("%s %s" % [str(Vector2i(x, y)), ", ".join(here)])
+	lines.append("")
+	lines.append("Gas: none" if gas.is_empty() else "Gas:")
+	for line in gas:
+		lines.append("  " + line)
+	return "\n".join(lines)
 
 # The enemy ranges view (#46): the game's V key as text. Its two glyphs are its own, unused by the
 # overview and focus overlays, and the strike glyph wins a cell both mark.
@@ -260,20 +307,54 @@ static func _cell_str(session, cell: Vector2i, overlay: Dictionary) -> String:
 	return actor + _terrain_glyph(session, cell) + str(overlay.get(cell, " "))
 
 static func _terrain_glyph(session, cell: Vector2i) -> String:
+	return GROUND[_ground_key(session, cell)][0]
+
+# Which GROUND row a cell draws: its tile state if it has one, else its ground kind.
+static func _ground_key(session, cell: Vector2i) -> String:
+	var states: Array[Terrain.TileState] = []
+	if session.terrain_states != null:
+		states = session.terrain_states.states_at(cell)
+	if Terrain.is_burning(states):
+		return "burning"
+	if states.has(Terrain.TileState.FROZEN):
+		return "frozen"
+	if states.has(Terrain.TileState.SCORCHED):
+		return "scorched"
+	if states.has(Terrain.TileState.COVER):
+		return "cover"
 	var t: Dictionary = session.terrain_at(cell)
-	# THE TABLE WINS, and it is consulted BEFORE walkability (#875). Both kinds of nothing live in
-	# it -- "offmap" past the board's rect and "void" a hole inside it, which terrain_at now tells
-	# apart -- and both are unwalkable, so the `#` branch used to swallow them whole: a painted
-	# chasm drew as MASONRY, and TERRAIN_GLYPH's own "void" entry had been unreachable since the
-	# day it was written. That is this ticket's confusion in the view the Play API reads.
-	#
-	# `#` keeps the meaning it always had underneath: the fallback for an unwalkable tile with no
-	# glyph of its own -- a wall, a boulder, deep water.
-	if TERRAIN_GLYPH.has(t.type):
-		return TERRAIN_GLYPH[t.type]
-	if not t.walkable:
-		return "#"
-	return "?"
+	# THE TABLE WINS, and it is consulted BEFORE walkability (#875): both kinds of nothing are
+	# unwalkable, and the `#` fallback used to swallow them, drawing a chasm as masonry.
+	var type: String = t.type
+	if type == "water":
+		return "shallow" if t.walkable else "deep"
+	if GROUND.has(type):
+		return type
+	return "unknown" if t.walkable else "wall"
+
+# The glyphs this board draws, named (#46) -- only the ones present, so a grass field costs one entry.
+static func _ground_legend(session, bounds: Rect2i) -> String:
+	var present := {}
+	for y in range(bounds.position.y, bounds.end.y):
+		for x in range(bounds.position.x, bounds.end.x):
+			present[_ground_key(session, Vector2i(x, y))] = true
+	var parts: Array[String] = []
+	for key: String in GROUND:
+		var word: String = GROUND[key][1]
+		if present.has(key) and word != "":
+			parts.append("%s %s" % ["' '" if GROUND[key][0] == " " else GROUND[key][0], word])
+	return "Ground: " + "  ".join(parts)
+
+# Does the board have anything only the `terrain` view shows: a raised or sloped cell, or gas?
+static func _has_relief(session, bounds: Rect2i) -> bool:
+	if session.gas_field != null and not session.gas_field.is_empty():
+		return true
+	for y in range(bounds.position.y, bounds.end.y):
+		for x in range(bounds.position.x, bounds.end.x):
+			var h: Dictionary = session.height_at(Vector2i(x, y))
+			if h.elevation != 0 or h.slope != "":
+				return true
+	return false
 
 static func _unit_at(session, cell: Vector2i) -> Unit:
 	for unit in session.live_units():

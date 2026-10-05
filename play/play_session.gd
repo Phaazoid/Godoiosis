@@ -192,6 +192,29 @@ func terrain_at(cell: Vector2i) -> Dictionary:
 	# headless RULES, which is exactly the Law #2 failure the Play API exists to catch.
 	return {"exists": true, "walkable": _board().is_walkable(cell), "cost": cost, "type": kind_name.to_lower()}
 
+# A cell's height as the rules read it (#46): its elevation in half-levels (BoardHeights' lowest
+# corner) and its slope -- "n"/"e"/"s"/"w" for the side a ramp rises toward, "*" for a corner form,
+# "" for flat. A board built without heights reads flat, as the rules do.
+func height_at(cell: Vector2i) -> Dictionary:
+	if board_heights == null:
+		return {"elevation": 0, "slope": ""}
+	var corners := board_heights.corners_at(cell)
+	var slope := ""
+	if Terrain.climb_of_corners(corners) > 0:
+		var rise := Terrain.rise_of_corners(corners)
+		slope = "*" if rise == Terrain.RampRise.NONE else Terrain.RampRise.keys()[rise].substr(0, 1).to_lower()
+	return {"elevation": board_heights.elevation_at(cell), "slope": slope}
+
+# The gas lying on a cell (#508), one "kind level" string per kind, e.g. "Steam medium".
+func gas_at(cell: Vector2i) -> Array[String]:
+	var out: Array[String] = []
+	if gas_field == null:
+		return out
+	var packed := gas_field.packed_at(cell)
+	for kind: Gas.Kind in Gas.kinds_in(packed):
+		out.append("%s %s" % [Gas.display_name(kind), Gas.Level.keys()[Gas.level_in(packed, kind)].to_lower()])
+	return out
+
 # ---- affordances: what may this unit do RIGHT NOW (#613) ----
 #
 # WHY THESE EXIST. Driving the bridge, a third to a half of every command came back refused --

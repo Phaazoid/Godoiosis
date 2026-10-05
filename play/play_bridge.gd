@@ -163,6 +163,9 @@ func _dispatch(cmd: String, args: Dictionary) -> Dictionary:
 			return {"ok": true, "text": BoardView.render_legal_targets(_session, str(args.get("unit", "")), str(args.get("attack", "")))}
 		"ranges":
 			return {"ok": true, "text": BoardView.render_ranges(_session, str(args.get("unit", "")))}
+		# Heights, ramps and gas (#46), which the 3-char overview has no room for.
+		"terrain":
+			return {"ok": true, "text": BoardView.render_terrain(_session)}
 		"move":
 			var r = _session.queue_move(str(args.get("unit", "")), _xy(args))
 			return {"ok": r.ok, "text": _ack(r) + "\n\n" + BoardView.render_preview(_session)}
