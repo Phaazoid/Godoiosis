@@ -54,16 +54,16 @@ static func resolve(name: String) -> AIProfile:
 	return _cache.get(name, null)
 
 
-# What `unit` plays: its named profile, else the unassigned fixture, else Hard.
+# What `unit` plays: its named profile, else what an unassigned unit plays (a test's "" fixture,
+# else Hard). A name that resolves to nothing plays the same as no name.
 static func of(unit: Unit) -> AIProfile:
-	var named := resolve(unit.ai_profile)
-	if named != null:
-		return named
-	if _fixtures.has(""):
-		return _fixtures[""]
-	_scan()
-	var hard: AIProfile = _cache.get(DEFAULT_NAME, null)
-	return hard if hard != null else AIProfile.new()
+	var profile := resolve(unit.ai_profile)
+	if profile == null:
+		profile = resolve("")
+	if profile == null:
+		_scan()
+		profile = _cache.get(DEFAULT_NAME, null)
+	return profile if profile != null else AIProfile.new()
 
 
 static func use_fixtures(fixtures: Dictionary) -> void:
