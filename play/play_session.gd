@@ -24,7 +24,7 @@ var _handle_by_unit := {}      # Unit -> String (stable display handle)
 var _next_player := 0
 var _next_enemy := 0
 var _downed_pending: Array[Unit] = []   # units downed mid-execute; ejected AFTER the pass (mirrors OrderExecutor._downed_pending)
-var _executing := false   # true while execute() plays the pass, up to its order clear: a running pass owns its plan (#361)
+var _executing := false   # true while execute() plays the pass, up to its pass-end sweeps: a running pass owns its plan (#361)
 # This mission's state and rules (#46) -- the SAME object the game's MissionController holds, so a
 # headless run scores objectives, the clock and every latch exactly as the game does.
 var mission: MissionState
@@ -97,14 +97,15 @@ func _on_unit_downed(unit: Unit) -> void:
 		_downed_pending.append(unit)
 
 func _process_downed_pending() -> void:
-	# Twin of OrderExecutor._process_downed_pending: eject each survivor-but-downed unit into a solo
-	# squad. Skip any that got finished off (KILLED) later in the same pass — death already
-	# cleaned those up.
+	# OrderExecutor._process_downed_pending's loop, minus the overlays: each unit downed this pass goes
+	# through the one settle_downed both hosts call. Skip any that got finished off (KILLED) later in
+	# the same pass — death already cleaned those up.
 	for unit in _downed_pending:
 		if not is_instance_valid(unit) or unit.is_queued_for_deletion():
 			continue
-		squad_manager.handle_unit_downed(unit)
+		squad_manager.settle_downed(unit)
 	_downed_pending.clear()
+	_refresh_plan(squad_manager.active_squad)   # the sweep's last line in the game, refresh_action_queue
 
 # game._on_unit_action_queued's rule half: a batch's orders are judged once, when queue_batch re-emits
 # at its close. A hold filler a batch move displaces is a cancel, and re-resolves as in the game.
@@ -1220,12 +1221,13 @@ func execute() -> Dictionary:
 	# 4b) the melts only a counter or a tail shot made (#922) -- the pass has settled.
 	_apply_sinks(plan.sinks_at(SinkAction.Moment.PASS_END), events)
 
-	# 5) eject units downed during the pass into solo squads (mirrors OrderExecutor._process_downed_pending)
-	_process_downed_pending()
-
-	# The pass is over before its orders clear, as OrderExecutor drops executing_plan before
-	# _end_squad_turn: the clear's own refreshes re-resolve the emptied plan.
+	# The pass is over before the sweeps, as OrderExecutor drops executing_plan before them: the
+	# sweeps' and the clear's own refreshes re-resolve the plan.
 	_executing = false
+	# 5) eject units downed during the pass into solo squads, then the members a shove put out of
+	# contact (#151) -- execute_orders' two sweeps, in its order.
+	_process_downed_pending()
+	squad_manager.enforce_contact()
 	# clear the squad's orders + mark acted (mirrors execute_orders' tail)
 	if is_instance_valid(squad):
 		for action in squad.action_queue.duplicate():
