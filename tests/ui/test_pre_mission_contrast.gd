@@ -120,7 +120,7 @@ func test_every_word_on_the_pre_mission_menus_can_be_read_in_both_palettes() -> 
 		# frame plus parchment's cream zones -- so it is where a role picked by weight alone shows.
 		var weapon := _a_stashed_weapon()
 		if weapon != null:
-			var card := ModFittingCard.open(game, weapon, null)
+			var card := ModFittingCard.open(game, weapon, null, WeaponModCatalog.all_mods())
 			await await_idle_frame()
 			found.append_array(PC.findings(card, PC.over(Color(0, 0, 0, 0.7), SCREEN_BASE),
 					"palette %d / fitting card" % palette))

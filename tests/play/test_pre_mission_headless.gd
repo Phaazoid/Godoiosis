@@ -334,7 +334,7 @@ func test_a_mod_goes_on_and_comes_off_by_the_name_the_kit_prints() -> void:
 	var slot: int = found[1]
 	var weapon: WeaponInstance = found[2]
 	# A mod some empty space would take, and a second mod to offer in its place.
-	var everything := WeaponModCatalog.offerable_for(weapon.template.weapon_type)
+	var everything := WeaponModCatalog.offerable_for(weapon.template.weapon_type, WeaponModCatalog.all_mods())
 	var key := ""
 	var mod: WeaponModData = null
 	var space := -1
@@ -368,6 +368,15 @@ func test_a_mod_goes_on_and_comes_off_by_the_name_the_kit_prints() -> void:
 	var unoffered: Dictionary = _sess.fit(holder, slot, key, space)
 	assert_bool(unoffered.ok).override_failure_message(
 		"a mod the mission does not offer was fitted").is_false()
+	assert_int(weapon.space_holding(mod)).is_equal(-1)
+
+	# An EMPTY pool offers nothing at all (#1222), never the whole catalogue.
+	var none: Array[WeaponModData] = []
+	_loadout().available_mods = none
+	var from_nothing: Dictionary = _sess.fit(holder, slot, key, space)
+	assert_bool(from_nothing.ok).override_failure_message(
+		"an empty mod pool offered a mod -- a roster naming none must offer none").is_false()
+	assert_str(str(from_nothing.get("error", ""))).contains("offers no mod")
 	assert_int(weapon.space_holding(mod)).is_equal(-1)
 
 	var just_this: Array[WeaponModData] = [mod]

@@ -335,7 +335,7 @@ func _populate_weapon_editor(weapon: WeaponInstance) -> void:
 	# The two are a different question each -- "is there any mod at all" and "which fit this family" --
 	# and the rows below say something different for each empty.
 	var mods := WeaponModCatalog.get_mods()
-	var offerable := WeaponModCatalog.offerable_for(template.weapon_type)
+	var offerable := WeaponModCatalog.offerable_for(template.weapon_type, WeaponModCatalog.all_mods())
 	for i in range(weapon.space_count()):
 		_populate_mod_space(weapon, i, mods, offerable)
 

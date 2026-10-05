@@ -69,7 +69,7 @@ var _hint: Label
 
 
 static func open(game_node: Node, weapon: WeaponInstance, wielder: Unit,
-		pool: Array[WeaponModData] = [], read_only := false) -> ModFittingCard:
+		pool: Array[WeaponModData], read_only := false) -> ModFittingCard:
 	var card := ModFittingCard.new()
 	card._weapon = weapon
 	card._pool = pool
@@ -473,11 +473,10 @@ func _refresh_offers() -> void:
 	var offerable := WeaponModCatalog.offerable_for(_weapon.template.weapon_type, _pool)
 	if offerable.is_empty():
 		var none := Label.new()
-		# The sentence forks on WHY there is nothing, because the two are different problems: an
-		# empty pool is what this MISSION offers; anything else is what exists at all.
+		# The pool is what this MISSION offers and an empty one offers nothing (#1222), so an empty
+		# offer is always the mission's answer.
 		var family: String = WeaponData.WeaponType.keys()[_weapon.template.weapon_type].capitalize()
-		none.text = ("This mission offers no mods for a %s." % family) if not _pool.is_empty() \
-			else ("Nothing authored fits a %s." % family)
+		none.text = "This mission offers no mods for a %s." % family
 		none.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 		none.add_theme_font_size_override("font_size", 10)
 		none.add_theme_color_override("font_color", QueueStyle.ink(QueueStyle.Role.HEADER_TEXT))

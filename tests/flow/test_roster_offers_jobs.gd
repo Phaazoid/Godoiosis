@@ -40,9 +40,8 @@ func test_a_curated_list_is_the_whole_offer() -> void:
 	assert_array(_curated(ids).offered_jobs()).contains_exactly(["one", "two"])
 
 
-# EMPTY MEANS NONE, and this is the case that says so at this layer. The mod list's own downstream
-# reader treats an empty pool as EVERY mod (WeaponModCatalog.offerable_for), which is the collapse
-# this path deliberately does not copy.
+# EMPTY MEANS NONE, and this is the case that says so at this layer. The mod list's downstream reader
+# used to treat an empty pool as EVERY mod; since #1222 neither path has that collapse.
 func test_an_empty_curated_list_offers_nothing_rather_than_everything() -> void:
 	assert_array(_curated([]).offered_jobs()).override_failure_message(
 			"a roster that offers no job handed back a list anyway -- empty has stopped meaning none"
