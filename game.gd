@@ -1489,25 +1489,9 @@ func set_battle_hud_hidden(hidden: bool) -> void:
 # Law #2 board preview: consequences of the active plan the queue panel also shows, derived from
 # the same resolver pass and ghosted as "pending" — terrain ignites (#50) + knockback shoves (#84).
 func _preview_plan_effects(plan: ResolvedPlan) -> void:
-	var deposits: Array = []
-	var seen := {}
-	for effect in plan.cell_effects:
-		for state in effect.states_added:
-			# Vector3i key = (cell.x, cell.y, state) — dedupes per cell-AND-state, so two
-			# attacks igniting one cell draw one icon but a cell gaining two states draws both.
-			var key := Vector3i(effect.cell.x, effect.cell.y, state)
-			if seen.has(key):
-				continue
-			seen[key] = true
-			deposits.append({"cell": effect.cell, "state": state})
-		# Gas the pass leaves (#508), one ghost per cell AND kind for the same reason.
-		for kind: Gas.Kind in effect.gas_added:
-			var gas_key := "%s/%s/gas%d" % [effect.cell.x, effect.cell.y, kind]
-			if seen.has(gas_key):
-				continue
-			seen[gas_key] = true
-			deposits.append({"cell": effect.cell, "gas": kind})
-	overlay_manager.show_terrain_preview(deposits)
+	# The pass's deposits (#50) and gas (#508), deduped per cell and state -- the plan's own answer,
+	# which the Play API's preview prints too (#46).
+	overlay_manager.show_terrain_preview(plan.pending_deposits())
 	# Attacks AND counters (#259 closed the gap: counter shoves were never previewed). The path
 	# is the trail's one source -- a landing tumble can bend it, so endpoints cannot describe it.
 	var all_hits: Array = []
@@ -1827,8 +1811,7 @@ func _on_unit_died(unit: Unit):
 		selected_unit = null
 	drop_threat_field()   # ahead of the pin release, so its repaint reads a field without the corpse
 	drop_enemy_pin(unit)   # a pin outlives the pointer, so it has to be released here (#710)
-	overlay_manager.handle_unit_death(unit)
-	squad_manager.handle_unit_death(unit)
+	squad_manager.handle_unit_death(unit)   # its overlays go first, inside (#46)
 	refresh_action_queue(squad_manager.active_squad)
 
 # ==============================================================================

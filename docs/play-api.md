@@ -59,8 +59,8 @@ view**, not raw JSON — see *State representation*. Command vocabulary:
 | Command | Returns |
 |---|---|
 | `describe_state()` | full board snapshot (rendered view — see below) |
-| `legal_moves(unit_id)` / `legal_targets(unit_id, attack?)` | reachable cells / hittable cells + victims, the latter for the NAMED attack (else the default) and saying which. **Each calls the predicate its own gate calls** — `compute_move_range` for moves, `can_hit_cell_from` + `gather_attack_victims` for aims — so a cell offered can never be one the queue refuses. A second derivation here would be Law #4 with a silent failure mode, and `tests/play/test_affordances.gd` drives both sides to keep them honest |
-| `status()` | whose turn, which squad holds the activation and what it has queued, which squads are spent. Rides every frame rather than being asked for |
+| `legal_moves(unit_id)` / `legal_targets(unit_id, attack?)` | reachable cells / hittable cells + victims, the latter for the NAMED attack (else the default) and saying which. **Each calls the predicate its own gate calls** — `compute_move_range` for moves, `can_hit_cell_from` + `gather_attack_victims` for aims — so a cell offered can never be one the queue refuses. A second derivation here would be Law #4 with a silent failure mode, and `tests/play/test_affordances.gd` drives both sides to keep them honest. Named a WATCH attack, `legal_targets` answers where the watch may be set (overwatch's own `Reach.can_aim_at` gate), each spot with the cells it would watch and the hostiles standing in them now, who it fires on the moment it is armed (#46). An aim that hits nobody but lands on the map says "only the ground", and a directional aim is labelled by its facing (N/E/S/W), printed once per facing with a count of the cells that aim the same way |
+| `status()` | whose turn, which squad holds the activation and what it has queued, which squads are spent. Rides every frame rather than being asked for. A squad is named `sq` + its leader's handle (#46): it was the squad's index in the manager's list, which renumbered every squad behind one that was destroyed |
 | `squad_up / join / leave / disband` | new squad state |
 | `queue_move(unit_id, dest)` / `queue_attack(unit_id, aim_cell, attack?)` | validity + updated plan. `attack` names which attack fires — see *Choosing an attack* below. A squad LEADER's move that would leave a squadmate unable to follow is refused, naming who, as the game's move mode greys it (#46); `legal_moves` reports those cells under `stranding` rather than offering them |
 | `group_move(unit, x, y)` | the game's Group Move (#46): the leader's destination, and `queue_group_move` places the whole formation. Every gate is asked BEFORE the squad's queued moves are cancelled, so a refused formation leaves the plan as it was |
@@ -71,7 +71,7 @@ view**, not raw JSON — see *State representation*. Command vocabulary:
 | `rescue / reload / rev / burrow / guard / capture` | the side-channel main actions, one verb each — the argument-taking ones (`rescue(a, b, x?, y?)`, `guard(a, ward)`) stay separate from the argument-free ones for the reason `game.queue_simple_action` does. Each gates on the same `RulesService` query the menu's row is built from. A rescue may name the bank to haul the body to (`x`/`y`, checked against `RulesService.rescue_landings`); without one it takes the first, and the reply lists the others. `capture(unit)` queues the real `CaptureAction` for the zone under the unit's projected cell, refused in that action's own words (#46) |
 | `ranges(unit?)` | the game's enemy-ranges view (the V key, #46): where the enemy can stand and where it can strike, through the same `ThreatField.for_viewer` the game builds its field with, and for every one of your units at its PLANNED cell, who can hit it. `unit` narrows it to one enemy. The viewer is whoever's turn it is; the game always draws the player's, which differs only in hotseat |
 | `cancel(unit_id)` / `wait(unit_id)` | updated plan |
-| `preview()` | `resolve_plan(active_squad)` outcomes **without applying** (damage, state deltas, deaths, counters) |
+| `preview()` | `resolve_plan(active_squad)` outcomes **without applying**, as the game's queue panel shows them (#46): `rows` walks `ActionQueueDisplayEntry.build_for`, the panel's own sections and nesting (a watch shot under the walk or the order that set it off, a payload under its hit, a sinking under what melted the ice, END OF TURN last), each row by handle with the HP readout the panel prints; `terrain` is what the pass leaves on the ground, `ResolvedPlan.pending_deposits`, which the board ghosts. The rendered text prints only those two, so it hides what the panel hides (a skipped counter or watch shot); the structured `attacks` / `counters` / `side_actions` / `tile_hits` / `sinks` keys still carry everything |
 | `execute()` | apply the resolved plan headlessly, through the game's own state steps (#46 — see *Headless executes a pass the way the game does* below); return the event log — plus a `mission` key the pass that ends the mission (#96) |
 | `end_turn()` | new turn/faction, through the whole turn boundary the game runs (the burn, the round's tile tick, the turn-start ticks — see *The turn boundary* below); refuses once the mission is over |
 | `mission_outcome()` / `mission_tag()` | won / lost / ongoing — the session's own `MissionState`, the object the game's `MissionController` holds (#46): every objective, the clock and every lose condition, with the ending latched on the first answer that is not ongoing |
@@ -207,17 +207,23 @@ the live bridge). A board is a picture made of tokens — render the picture.
 
 **Glyphs.** One char per cell. `UPPERCASE` = player unit, `lowercase` = enemy (digits = OTHER faction
 if it ever matters); each unit gets a unique letter handle used in commands. Terrain: `.` floor,
-`#` unwalkable, with a small per-scenario legend (water / cover, once terrain types land). `#` reflects
-**dynamic tile state, not just the authored flag** — `terrain_at` reads `BoardContext.is_walkable`
-since #109, so a frozen-over water tile renders passable exactly as the rules treat it. A legend
-table carries what a glyph can't (name, hp, squad/leader, weapon). Unit handles are session-stable ids
+`BoardView.GROUND` (#46): `.` grass, `,` tall grass, `:` dirt, `'` plain ground, `~` mud, `w` / `W`
+shallow / deep water (split on walkability, so deep water no longer draws as rock), `#` rock or any
+other impassable tile, `T` tree, blank a hole or off the map. **A tile state draws over its ground**:
+`^` burning, `_` frozen, `;` scorched, `n` cover, so a fire spreading toward you and a frozen-over
+river are on the board. A `Ground:` line under the board names only the glyphs it holds. Walkability
+is still the board's (`BoardContext.is_walkable`, #109), so the view and the rules cannot disagree
+about a frozen cell. Height does not fit in a 3-char cell: when the board has relief or gas the
+overview says so and the `terrain` view draws it. A legend table carries what a glyph can't (name,
+hp, squad/leader, weapon). Unit handles are session-stable ids
 assigned by `PlaySession` — units have no persistent id today.
 
 **Layered views — pull detail only where you act** (token discipline):
 - **Overview** (`describe_state`): ruled board + one-line-per-unit legend + turn / squad status. The default; small.
-- **Focus** (`focus(unit)`): board re-rendered with that unit's **move range** (`+`) and **attack range** (`×`) overlaid; the unit's full stats / weapon / states; its legal actions; and (if squadded) the leader LDR range.
+- **Focus** (`focus(unit)`): board re-rendered with that unit's **move range** (`+`) and **attack range** (`×`) overlaid, then the unit's numbers as the game derives them, gear and jobs included (HP, MOV, STR/DEX/PER/CON/BLD, DEF, LDR, squad size against capacity, leash), and each attack it can fire or watch with in `Unit.attack_detail`'s words, the game's own hover readout (#46). A unit still in reserve has no range to draw and answers in words, pointing at `kit`.
+- **Terrain** (`terrain`): each cell's height in the rules' half-level units (`Terrain.UNITS_PER_LEVEL` to a level), with `n`/`e`/`s`/`w` for the side a ramp rises toward or `*` for a corner form, then the gas lying on each cell and how thick (#46). Read through `PlaySession.height_at` / `gas_at`, i.e. `BoardHeights` and `GasField`.
 - **Preview** (`preview`): the **resolved** outcome of the current/hypothetical plan — exact damage, deaths, counters, net board change — as a concise diff, not a re-dump. The deterministic-engine payoff.
-- **Result** (`execute`): the event log (equals the preview, by Law #2). No overview — see below.
+- **Result** (`execute`): the event log (equals the preview, by Law #2). No overview — see below. A hit logs the states it gave and took (`b gains Wet`, `b loses Wet`); a side-channel order logs its actor, verb and target by handle ahead of the game's own words (`A GUARD -> B: Warden guards Warden`), so two units sharing a name stay apart (#46).
 - **Affordances** (`legal_moves(unit)` / `legal_targets(unit, attack?)`): where this unit may go, and
   which aims of a given attack hit whom. Cell lists grouped by row (`y=13: 19-23`), a few hundred bytes where the only way
   to ask used to be `focus`, which renders a 2 KB board to say it.
@@ -234,7 +240,7 @@ command — see below.
 wanted:
 
 ```
-[turn=PLAYER  active=sq4(2 queued)  free=sq5,sq6  acted=sq7]
+[turn=PLAYER  active=sqA(2 queued)  free=sqB,sqC  acted=sqD]
 ```
 
 Measured over five logged playthroughs before this existed, a third to a half of every command was
@@ -290,7 +296,7 @@ round completes the tile clocks tick, so fires spread, burn out and scorch; then
 faction's turn-start ticks run (downed clocks, stat effects, Crisis surge, weapon rev, Guard and
 watch lapse) and the cohesion sweep ejects anyone out of contact. Until #898 none of it ran
 headlessly: a fire never went out or hurt anybody, a downed body never bled out, a Guard never
-lapsed. A burn that ends the mission stops the turn there, and the result then carries a `mission`
+lapsed. A body whose clock runs out is logged `x bleeds out` in the hand-off that ran it (#46). A burn that ends the mission stops the turn there, and the result then carries a `mission`
 key and a `MISSION` line, as `execute` does. A burn is the only thing at the boundary that can end a
 headless mission today: a downed unit already counts as lost, so its clock running out changes
 nothing until #46 brings authored lose conditions (a protected unit's death) headless. The log is
@@ -322,10 +328,15 @@ b BaddyNumeroDos E hp?/?  solo (unarmed)
 `preview` of "A moves next to a, then attacks":
 
 ```
-A move (-1,-5)->(3,4);  A attack aim (4,4)
-  A -> a (BadGuy1): N dmg → dies/survives at H/M   [+SHOCK if applicable]
-  counter: a -> A : C dmg  (or none, if a is dead first)
-  net: <one-line board delta>
+Plan preview (sqA):
+  MOVE
+    A -> (3, 4)
+  ATTACK
+    A -> a (Chainsword): N dmg (H -> H')   [+Wet]
+  REACTION
+    a -> A (ChainSword): C dmg (H -> H')
+  TERRAIN
+    (4, 4) becomes Burning
 ```
 
 This is what "affordances so Claude can play properly" means concretely: I see the *shape* of the

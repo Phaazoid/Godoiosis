@@ -201,6 +201,82 @@ func test_and_every_aim_it_withholds_is_one_it_refuses() -> void:
 
 # Non-vacuity for the pair above: if BOTH sides ignored the name they would still agree, about the
 # default. On this fixture the two attacks' aims share no cell, so the answers must differ.
+# A watch attack's name is answered too (#46): where the watch may be set, by overwatch's own gate,
+# each spot with the cells it watches and the hostiles standing in them now -- who it fires on when
+# armed. It used to be refused as an unknown attack, the fire view never holding a watch (#590).
+func test_legal_targets_answers_for_a_watch_attack() -> void:
+	var offered: Dictionary = _sess.legal_targets("A", "Watch")
+	assert_bool(offered.ok).override_failure_message("a watch attack was refused: %s" % str(offered)).is_true()
+	assert_int(offered.aims.size()).override_failure_message(
+		"nothing was offered, so this case proves nothing").is_greater(0)
+	var near: Unit = null
+	for unit: Unit in _sess.live_units():
+		if unit.get_unit_name() == "Near":
+			near = unit
+	var refused: Array[String] = []
+	var over_near := {}
+	for aim: Dictionary in offered.aims:
+		if (aim.footprint as Array).has(near.movement.cell):
+			over_near = aim
+		var r: Dictionary = _sess.overwatch("A", aim.cell, "Watch")
+		if not r.ok:
+			refused.append("%s: %s" % [str(aim.cell), str(r.error)])
+		_sess.cancel("A")
+	assert_array(refused).override_failure_message(
+		"legal_targets offered watch spots overwatch then refused:\n  %s" % "\n  ".join(refused)).is_empty()
+	assert_bool(over_near.is_empty()).override_failure_message(
+		"no offered spot watches the cell an enemy stands on").is_false()
+	assert_bool((over_near.standing as Array).has(_sess.handle_for(near))).override_failure_message(
+		"the spot over an enemy did not name it: %s" % str(over_near)).is_true()
+
+
+# A directional aim is a facing, and each is labelled by it (#46).
+func test_a_directional_aim_is_named_by_its_facing() -> void:
+	var b := BoardBuilder.build(self, "FacingRoot")
+	auto_free(b.root)
+	BoardBuilder.paint_rect(b.grid, Rect2i(-3, -3, 7, 7))
+	var hero: Unit = BoardBuilder.spawn(b, _data("Hero", PLAYER), Vector2i(0, 0))
+	BoardBuilder.spawn(b, _data("East", ENEMY), Vector2i(2, 0))
+	var t := WeaponData.new()
+	t.weapon_type = WeaponData.WeaponType.CHAINSWORD
+	t.main_attack = P.line(_attack("Thrust", 3, 0, 0), 2)
+	hero.add_item(WeaponInstance.make(t))
+	var sess = PlaySession.new(b)
+
+	var res: Dictionary = sess.legal_targets(sess.handle_for(hero))
+
+	assert_int(res.aims.size()).override_failure_message("fixture: no aim reaches the enemy").is_greater(0)
+	for aim: Dictionary in res.aims:
+		assert_str(str(aim.get("facing", ""))).override_failure_message(
+				"an aim at the enemy to the east was not labelled E: %s" % str(aim)).is_equal("E")
+	var text: String = BoardView.render_legal_targets(sess, sess.handle_for(hero))
+	assert_str(text).contains("facing E hits")
+	# Every cell of a facing fires the same stamp, so the facing prints once with a count.
+	assert_int(text.count("facing E")).override_failure_message("a facing printed once per cell:\n%s" % text) \
+		.is_equal(1)
+
+
+# An aim that lands on the map and hits nobody says so, rather than "hits " and a blank (#46).
+func test_an_aim_at_open_ground_says_it_hits_only_the_ground() -> void:
+	var b := BoardBuilder.build(self, "GroundAimRoot")
+	auto_free(b.root)
+	BoardBuilder.paint_rect(b.grid, Rect2i(-3, -3, 7, 7))
+	var hero: Unit = BoardBuilder.spawn(b, _data("Hero", PLAYER), Vector2i(0, 0))
+	BoardBuilder.spawn(b, _data("Far", ENEMY), Vector2i(3, 3))
+	var t := WeaponData.new()
+	t.weapon_type = WeaponData.WeaponType.CHAINSWORD
+	t.main_attack = _attack("Scorch", 3, 1, 1)
+	t.main_attack.targets = EquippableData.TargetMode.MAP
+	hero.add_item(WeaponInstance.make(t))
+	var sess = PlaySession.new(b)
+
+	var res: Dictionary = sess.legal_targets(sess.handle_for(hero))
+
+	assert_int(res.aims.size()).override_failure_message("fixture: a map attack offered no aim").is_greater(0)
+	assert_bool(bool(res.aims[0].ground_only)).is_true()
+	assert_str(BoardView.render_legal_targets(sess, sess.handle_for(hero))).contains("only the ground")
+
+
 func test_the_named_answer_is_not_the_defaults() -> void:
 	var lob := _cells(_sess.legal_targets("A", "Lob"))
 	var jab := _cells(_sess.legal_targets("A"))

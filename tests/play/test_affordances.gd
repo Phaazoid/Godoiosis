@@ -121,14 +121,14 @@ func test_a_named_victim_is_the_unit_actually_standing_there() -> void:
 func test_status_names_the_faction_the_active_squad_and_what_is_queued() -> void:
 	var idle: Dictionary = _session.status()
 	assert_str(str(idle.faction)).is_equal("PLAYER")
-	assert_int(int(idle.active_squad)).override_failure_message(
-		"nothing is queued yet, so no squad should hold the activation").is_equal(-1)
+	assert_str(str(idle.active_squad)).override_failure_message(
+		"nothing is queued yet, so no squad should hold the activation").is_equal("")
 	assert_int(int(idle.queued)).is_equal(0)
 
 	_session.queue_move("A", Vector2i(1, 0))
 	var armed: Dictionary = _session.status()
-	assert_int(int(armed.active_squad)).override_failure_message(
-		"a queued order did not show up as an active squad").is_not_equal(-1)
+	assert_str(str(armed.active_squad)).override_failure_message(
+		"a queued order did not show up as an active squad").is_equal("sq" + _session.handle_for(_session.unit_by_handle("A").squad.get_leader()))
 	assert_int(int(armed.queued)).is_greater(0)
 
 
@@ -137,9 +137,31 @@ func test_status_lists_only_the_active_faction_s_squads() -> void:
 	# how "free=" stops meaning "squads you may still order".
 	var st: Dictionary = _session.status()
 	var enemy: Unit = _session.unit_by_handle("a")
-	var enemy_id: int = _session._squad_id(enemy.squad)
+	var enemy_id: String = _session._squad_label(enemy.squad)
 	assert_bool(st.free.has(enemy_id) or st.acted.has(enemy_id)).override_failure_message(
 		"an ENEMY squad appeared in the PLAYER turn's status").is_false()
+
+
+# A squad keeps its name when another one goes (#46). The name was the squad's index in the
+# manager's list, so a death renumbered every squad behind it and a driver's "sq1" became "sq0".
+func test_a_squad_keeps_its_name_when_another_squad_is_destroyed() -> void:
+	var b := BoardBuilder.build(self, "SquadNameRoot")
+	auto_free(b.root)
+	BoardBuilder.paint_rect(b.grid, Rect2i(-2, -2, 12, 12))
+	var first := BoardBuilder.spawn(b, _data("P1", PLAYER), Vector2i(0, 0))
+	var second := BoardBuilder.spawn(b, _data("P2", PLAYER), Vector2i(6, 6))
+	BoardBuilder.spawn(b, _data("E1", ENEMY), Vector2i(9, 9))
+	var sess = PlaySession.new(b)
+	var name_before: String = sess._squad_label(second.squad)
+	assert_bool(sess.squad_manager.squads.find(first.squad) < sess.squad_manager.squads.find(second.squad)) \
+		.override_failure_message("fixture: the doomed squad is not ahead of the survivor").is_true()
+
+	first.die()
+
+	var free: Array = sess.status().free
+	assert_bool(free.has(name_before)).override_failure_message(
+		"the survivor's name changed when another squad died: was %s, status now lists %s"
+		% [name_before, str(free)]).is_true()
 
 
 func test_the_rendered_status_says_the_same_thing_it_is_derived_from() -> void:
@@ -149,7 +171,7 @@ func test_the_rendered_status_says_the_same_thing_it_is_derived_from() -> void:
 	assert_str(line).contains("turn=PLAYER")
 	assert_str(line).override_failure_message(
 		"the rendered line does not name the squad status() reports as active"
-		).contains("active=sq%d" % int(st.active_squad))
+		).contains("active=%s" % str(st.active_squad))
 
 
 # ==============================================================================

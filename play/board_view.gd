@@ -6,7 +6,18 @@ extends RefCounted
 
 const PlaySession := preload("res://play/play_session.gd")   # for STASH, the name `kit` shares with `give`
 
-const TERRAIN_GLYPH := {"grass": ".", "tall_grass": ",", "mud": "~", "rock": "#", "offmap": " ", "void": " "}   # offmap = past the board's rect; "void" = a hole, painted or erased (#875) -- both render as empty space; "," is the glyph #895's own map sketch already uses for tall grass
+# What a cell's ground draws as and what the legend calls it, keyed by _ground_key, in legend order.
+# A tile STATE draws over its ground (#46), fire first since it is the one that hurts. Water splits
+# on walkability, so deep water no longer draws as rock. "offmap" = past the board's rect and "void"
+# = a hole, painted or erased (#875): both are open space. "," is #895's own sketch glyph for tall grass.
+const GROUND := {
+	"burning": ["^", "burning"], "frozen": ["_", "frozen"], "scorched": [";", "scorched"],
+	"cover": ["n", "cover (dug in)"],
+	"grass": [".", "grass"], "tall_grass": [",", "tall grass"], "dirt": [":", "dirt"],
+	"none": ["'", "plain ground"], "mud": ["~", "mud"], "shallow": ["w", "shallow water"],
+	"deep": ["W", "deep water"], "rock": ["#", "rock"], "tree": ["T", "tree"], "wall": ["#", "impassable"],
+	"unknown": ["?", "unknown ground"], "void": [" ", "hole"], "offmap": [" ", ""],
+}
 
 # ---- public renders ----
 
@@ -15,6 +26,9 @@ static func render_overview(session) -> String:
 	var lines: Array[String] = []
 	lines.append("Turn: %s" % session._faction_name(session.active_faction()))
 	lines.append(_grid_block(session, bounds, _overview_overlay(session)))
+	lines.append(_ground_legend(session, bounds))
+	if _has_relief(session, bounds):
+		lines.append("Heights and gas: see `terrain`")
 	lines.append("")
 	lines.append(_legend(session))
 	var pre_mission := _pre_mission_block(session)
@@ -62,6 +76,9 @@ static func render_focus(session, handle: String) -> String:
 	var unit: Unit = session.unit_by_handle(handle)
 	if unit == null:
 		return "no unit '%s'" % handle
+	# A reserve unit stands nowhere, so it has no range to draw (#46); its gear is `kit`'s.
+	if not session.is_deployed(unit):
+		return "%s is in reserve -- see `kit %s` for its gear" % [handle, handle]
 	var overlay := {}
 	var range_info: Dictionary = RulesService.compute_move_range(unit, session._board())
 	for cell in range_info.reachable.keys():
@@ -80,6 +97,74 @@ static func render_focus(session, handle: String) -> String:
 	lines.append(_grid_block(session, _content_bounds(session), overlay))
 	lines.append("")
 	lines.append("  " + _unit_line(session, unit))
+	lines.append("  " + _stats_line(unit))
+	for line in _attack_lines(unit):
+		lines.append("    " + line)
+	return "\n".join(lines)
+
+
+# The unit's numbers as the game derives them, gear included (#46) -- what `focus` reads and the
+# compact unit line, which prints authored values, does not.
+static func _stats_line(unit: Unit) -> String:
+	var parts: Array[String] = [
+		"HP %d/%d" % [unit.get_current_hp(), unit.get_max_hp()],
+		"MOV %d" % unit.get_mov(),
+	]
+	for stat: Stats.Stat in [Stats.Stat.STR, Stats.Stat.DEX, Stats.Stat.PER, Stats.Stat.CON, Stats.Stat.BLD]:
+		parts.append("%s %d" % [Stats.Stat.keys()[stat], unit.get_effective_stat(stat)])
+	parts.append("DEF %d" % unit.get_effective_def())
+	parts.append("LDR %d" % unit.get_effective_ldr())
+	var squad := unit.squad
+	if squad != null:
+		parts.append("squad %d/%d" % [squad.members.size(), squad.max_size()])
+		parts.append("leash %d" % squad.get_max_squad_range())
+	return "  ".join(parts)
+
+
+# Each attack the unit could fire or stand watch with, in the game's own hover words
+# (Unit.attack_detail): the damage it really deals, mods and scaling included.
+static func _attack_lines(unit: Unit) -> Array[String]:
+	var lines: Array[String] = []
+	for attack in unit.get_selectable_attacks():
+		lines.append(_attack_line(unit, attack, ""))
+	for attack in unit.overwatch_attacks():
+		lines.append(_attack_line(unit, attack, "watch "))
+	return lines
+
+static func _attack_line(unit: Unit, attack: AttackData, prefix: String) -> String:
+	return "%s%s: %s" % [prefix, attack.display_name, unit.attack_detail(attack).replace("\n", " -- ")]
+
+# The ground's shape (#46), which the 3-char overview has no room for: each cell's height in the
+# rules' half-level units (Terrain.UNITS_PER_LEVEL to a level), then n/e/s/w for the side a ramp
+# rises toward or * for a corner form, blank for a hole or off the map. Then any gas lying on a cell.
+static func render_terrain(session) -> String:
+	var bounds := _content_bounds(session)
+	var lines: Array[String] = ["Terrain: height in half-levels (%d to a level); n/e/s/w = the side a ramp rises to, * = a corner slope"
+			% Terrain.UNITS_PER_LEVEL]
+	var header := "      "
+	for x in range(bounds.position.x, bounds.end.x):
+		header += "%3d" % x
+	lines.append(header)
+	for y in range(bounds.position.y, bounds.end.y):
+		var row := "y=%3d " % y
+		for x in range(bounds.position.x, bounds.end.x):
+			var cell := Vector2i(x, y)
+			if not session.terrain_at(cell).exists:
+				row += "   "
+				continue
+			var h: Dictionary = session.height_at(cell)
+			row += "%2d%s" % [h.elevation, h.slope if h.slope != "" else " "]
+		lines.append(row)
+	var gas: Array[String] = []
+	for y in range(bounds.position.y, bounds.end.y):
+		for x in range(bounds.position.x, bounds.end.x):
+			var here: Array[String] = session.gas_at(Vector2i(x, y))
+			if not here.is_empty():
+				gas.append("%s %s" % [str(Vector2i(x, y)), ", ".join(here)])
+	lines.append("")
+	lines.append("Gas: none" if gas.is_empty() else "Gas:")
+	for line in gas:
+		lines.append("  " + line)
 	return "\n".join(lines)
 
 # The enemy ranges view (#46): the game's V key as text. Its two glyphs are its own, unused by the
@@ -122,24 +207,68 @@ static func render_preview(session) -> String:
 				msg += "\n  - " + str(e)
 		return msg
 	var plan: Dictionary = res.plan
-	var lines: Array[String] = ["Plan preview (squad %d):" % session._squad_id(session.squad_manager.active_squad)]
-	for m in plan.moves:
-		lines.append("  MOVE   %s -> %s" % [m.actor, str(m.dest)])
-	for a in plan.attacks:
-		lines.append("  ATTACK %s -> %s (%s): %d dmg%s" % [a.actor, a.target, a.attack, a.dmg, _hp_tag(a)])
-	for c in plan.counters:
-		if c.skipped:
-			lines.append("    ctr  %s : none (downed/killed before it could strike back)" % c.actor)
-		else:
-			lines.append("    ctr  %s -> %s (%s): %d dmg%s" % [c.actor, c.target, c.attack, c.dmg, _hp_tag(c)])
-	for s in plan.side_actions:
-		if s.has("target"):
-			lines.append("  %-6s %s -> %s" % [s.type, s.actor, s.target])
-		else:
-			lines.append("  %-6s %s" % [s.type, s.actor])
-	if plan.attacks.is_empty() and plan.counters.is_empty() and plan.moves.is_empty() and plan.side_actions.is_empty():
+	var lines: Array[String] = ["Plan preview (%s):" % session._squad_label(session.squad_manager.active_squad)]
+	# The game's queue panel, section by section (#46) -- nested rows are what the order above them
+	# set off -- then what the pass leaves on the ground, which the board ghosts.
+	var section := ""
+	for row: Dictionary in plan.rows:
+		if row.section != section:
+			section = row.section
+			lines.append("  " + section)
+		lines.append("    " + "  ".repeat(row.depth) + _row_line(row))
+	if not plan.terrain.is_empty():
+		lines.append("  TERRAIN")
+		for deposit: Dictionary in plan.terrain:
+			lines.append("    %s becomes %s" % [str(deposit.cell), deposit.what])
+	if plan.rows.is_empty() and plan.terrain.is_empty():
 		lines.append("  (empty plan)")
 	return "\n".join(lines)
+
+# One queue row as text: who does what to whom, the HP readout the panel shows, then its chips.
+static func _row_line(row: Dictionary) -> String:
+	var text: String
+	if row.has("dest"):
+		text = ("%s holds" % row.actor) if row.hold else ("%s -> %s" % [row.actor, str(row.dest)])
+	elif row.has("attack"):
+		var at: String = row.target if row.has("target") else "cell %s" % str(row.cell)
+		text = "%s -> %s (%s)" % [row.actor, at, row.attack]
+		if row.has("guarding"):
+			text += " guarding %s" % row.guarding
+	elif row.has("source"):
+		text = "%s: %s" % [row.actor, row.source]
+	elif row.has("cell"):
+		text = "%s goes under at %s" % [row.actor, str(row.cell)]
+	elif row.has("target"):
+		text = "%s %s -> %s" % [row.type, row.actor, row.target]
+	else:
+		text = "%s %s" % [row.type, row.actor]
+	if row.has("healed"):
+		text += ": +%d hp (%d -> %d)" % [row.healed, row.hp_before, row.hp_after]
+	elif row.has("dmg"):
+		text += ": %d dmg (%d -> %d)%s" % [row.dmg, row.hp_before, row.hp_after, _rung_tag(row.lethality)]
+	var chips: Array[String] = []
+	for state: String in row.get("gains", []):
+		chips.append("+" + state)
+	for state: String in row.get("loses", []):
+		chips.append("-" + state)
+	chips.append_array(row.get("events", []))
+	if not chips.is_empty():
+		text += "  [%s]" % ", ".join(chips)
+	if row.refused:
+		text += "  REFUSED"
+	elif row.inert:
+		text += "  (will not happen: its actor goes down first)"
+	return text
+
+static func _rung_tag(lethality: ResolvedOutcome.Lethality) -> String:
+	match lethality:
+		ResolvedOutcome.Lethality.KILLED:
+			return " DIES"
+		ResolvedOutcome.Lethality.DOWNED:
+			return " DOWNED"
+		ResolvedOutcome.Lethality.CRISIS:
+			return " CRISIS"
+	return ""
 
 static func render_result(events: Array) -> String:
 	if events.is_empty():
@@ -150,15 +279,6 @@ static func render_result(events: Array) -> String:
 	return "\n".join(lines)
 
 # ---- internals ----
-
-static func _hp_tag(a: Dictionary) -> String:
-	if a.lethality == ResolvedOutcome.Lethality.KILLED:
-		return " -> DIES"
-	if a.lethality == ResolvedOutcome.Lethality.DOWNED:
-		return " -> DOWNED (clings at 1 hp)"
-	if a.hp_after >= 0:
-		return " -> %d hp" % a.hp_after
-	return ""
 
 static func _content_bounds(session) -> Rect2i:
 	var rect: Rect2i = session.grid.get_used_rect()
@@ -187,20 +307,54 @@ static func _cell_str(session, cell: Vector2i, overlay: Dictionary) -> String:
 	return actor + _terrain_glyph(session, cell) + str(overlay.get(cell, " "))
 
 static func _terrain_glyph(session, cell: Vector2i) -> String:
+	return GROUND[_ground_key(session, cell)][0]
+
+# Which GROUND row a cell draws: its tile state if it has one, else its ground kind.
+static func _ground_key(session, cell: Vector2i) -> String:
+	var states: Array[Terrain.TileState] = []
+	if session.terrain_states != null:
+		states = session.terrain_states.states_at(cell)
+	if Terrain.is_burning(states):
+		return "burning"
+	if states.has(Terrain.TileState.FROZEN):
+		return "frozen"
+	if states.has(Terrain.TileState.SCORCHED):
+		return "scorched"
+	if states.has(Terrain.TileState.COVER):
+		return "cover"
 	var t: Dictionary = session.terrain_at(cell)
-	# THE TABLE WINS, and it is consulted BEFORE walkability (#875). Both kinds of nothing live in
-	# it -- "offmap" past the board's rect and "void" a hole inside it, which terrain_at now tells
-	# apart -- and both are unwalkable, so the `#` branch used to swallow them whole: a painted
-	# chasm drew as MASONRY, and TERRAIN_GLYPH's own "void" entry had been unreachable since the
-	# day it was written. That is this ticket's confusion in the view the Play API reads.
-	#
-	# `#` keeps the meaning it always had underneath: the fallback for an unwalkable tile with no
-	# glyph of its own -- a wall, a boulder, deep water.
-	if TERRAIN_GLYPH.has(t.type):
-		return TERRAIN_GLYPH[t.type]
-	if not t.walkable:
-		return "#"
-	return "?"
+	# THE TABLE WINS, and it is consulted BEFORE walkability (#875): both kinds of nothing are
+	# unwalkable, and the `#` fallback used to swallow them, drawing a chasm as masonry.
+	var type: String = t.type
+	if type == "water":
+		return "shallow" if t.walkable else "deep"
+	if GROUND.has(type):
+		return type
+	return "unknown" if t.walkable else "wall"
+
+# The glyphs this board draws, named (#46) -- only the ones present, so a grass field costs one entry.
+static func _ground_legend(session, bounds: Rect2i) -> String:
+	var present := {}
+	for y in range(bounds.position.y, bounds.end.y):
+		for x in range(bounds.position.x, bounds.end.x):
+			present[_ground_key(session, Vector2i(x, y))] = true
+	var parts: Array[String] = []
+	for key: String in GROUND:
+		var word: String = GROUND[key][1]
+		if present.has(key) and word != "":
+			parts.append("%s %s" % ["' '" if GROUND[key][0] == " " else GROUND[key][0], word])
+	return "Ground: " + "  ".join(parts)
+
+# Does the board have anything only the `terrain` view shows: a raised or sloped cell, or gas?
+static func _has_relief(session, bounds: Rect2i) -> bool:
+	if session.gas_field != null and not session.gas_field.is_empty():
+		return true
+	for y in range(bounds.position.y, bounds.end.y):
+		for x in range(bounds.position.x, bounds.end.x):
+			var h: Dictionary = session.height_at(Vector2i(x, y))
+			if h.elevation != 0 or h.slope != "":
+				return true
+	return false
 
 static func _unit_at(session, cell: Vector2i) -> Unit:
 	for unit in session.live_units():
@@ -427,11 +581,40 @@ static func render_legal_targets(session, handle: String, attack_name := "") -> 
 	var res: Dictionary = session.legal_targets(handle, attack_name)
 	if not res.ok:
 		return "> ERROR: " + str(res.error)
+	var verb := "watch spots for" if res.get("watch", false) else "targets"
 	if res.aims.is_empty():
-		return "targets %s with %s from (%d,%d): none" % [res.unit, res.attack, res.from.x, res.from.y]
-	var lines: Array[String] = ["targets %s with %s from (%d,%d): %d aims" % [res.unit, res.attack, res.from.x, res.from.y, res.aims.size()]]
+		return "%s %s with %s from (%d,%d): none" % [verb, res.unit, res.attack, res.from.x, res.from.y]
+	var lines: Array[String] = ["%s %s with %s from (%d,%d): %d aims" % [verb, res.unit, res.attack, res.from.x, res.from.y, res.aims.size()]]
+	# A directional attack's aim is its FACING: every cell of one facing fires the same stamp, so the
+	# facing prints once, at its first cell, with a count of the cells that aim the same way.
+	var order: Array[String] = []
+	var first: Dictionary = {}
+	var more: Dictionary = {}
 	for aim: Dictionary in res.aims:
-		lines.append("  (%d,%d) hits %s" % [aim.cell.x, aim.cell.y, ", ".join(aim.victims)])
+		var key: String = str(aim.facing) if aim.has("facing") else str(aim.cell)
+		if first.has(key):
+			more[key] += 1
+			continue
+		order.append(key)
+		first[key] = aim
+		more[key] = 0
+	for key in order:
+		var aim: Dictionary = first[key]
+		var where := "(%d,%d)" % [aim.cell.x, aim.cell.y]
+		if aim.has("facing"):
+			where += " facing %s" % aim.facing
+		var line: String
+		if res.get("watch", false):
+			var now: String = ("fires at once on " + ", ".join(aim.standing)) if not aim.standing.is_empty() \
+					else "nobody in it now"
+			line = "  %s watches %s; %s" % [where, _format_cells(aim.footprint), now]
+		elif aim.ground_only:
+			line = "  %s hits no unit, only the ground" % where
+		else:
+			line = "  %s hits %s" % [where, ", ".join(aim.victims)]
+		if more[key] > 0:
+			line += "  (+%d more cells aim this way)" % more[key]
+		lines.append(line)
 	return "\n".join(lines)
 
 
@@ -444,22 +627,15 @@ static func render_status(session) -> String:
 	var parts: Array[String] = ["turn=" + str(st.faction)]
 	if st.get("pre_mission", false):
 		parts.push_front("phase=PRE_MISSION")
-	if int(st.active_squad) < 0:
+	if str(st.active_squad) == "":
 		parts.append("active=none")
 	else:
-		parts.append("active=sq%d(%d queued)" % [int(st.active_squad), int(st.queued)])
+		parts.append("active=%s(%d queued)" % [str(st.active_squad), int(st.queued)])
 	if not st.free.is_empty():
-		parts.append("free=" + _squad_list(st.free))
+		parts.append("free=" + ",".join(st.free))
 	if not st.acted.is_empty():
-		parts.append("acted=" + _squad_list(st.acted))
+		parts.append("acted=" + ",".join(st.acted))
 	return "[" + "  ".join(parts) + "]"
-
-
-static func _squad_list(ids: Array) -> String:
-	var parts: Array[String] = []
-	for i in ids:
-		parts.append("sq%d" % int(i))
-	return ",".join(parts)
 
 
 # Grouped by row, contiguous runs collapsed: "y=13: 19-23 25".
@@ -498,7 +674,7 @@ static func _unit_line(session, unit: Unit) -> String:
 		fac = "O"
 	var squad_tag := "solo"
 	if unit.has_squad():
-		squad_tag = "sq%d%s" % [session._squad_id(unit.squad), "(lead)" if unit.is_leader() else ""]
+		squad_tag = "%s%s" % [session._squad_label(unit.squad), "(lead)" if unit.is_leader() else ""]
 	var wep := "(unarmed)"
 	if unit.has_equipped_weapon():
 		wep = _weapon_str(unit.get_equipped_weapon(), unit)

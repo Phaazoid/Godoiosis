@@ -76,6 +76,38 @@ func test_a_queued_heal_restores_the_hp_the_preview_promised() -> void:
 			"the headless executor left the healed ally at %d HP; the preview promised %d" % [hurt.get_current_hp(), promised]
 			).is_equal(promised)
 
+
+# A heal the max-HP cap clips says what it GAVE BACK, not what it was worth (#46). The log printed the
+# heal's whole size, so a medic topping up a scratched ally read as restoring HP nobody received.
+func test_a_capped_heal_logs_the_hp_it_restored() -> void:
+	var b: Dictionary = BoardBuilder.build(self, "CappedHealRoot")
+	auto_free(b.root)
+	BoardBuilder.paint_rect(b.grid, Rect2i(-2, -2, 8, 8))
+	var medic: Unit = BoardBuilder.spawn(b, _data("Medic", PLAYER), Vector2i(0, 0))
+	var hurt: Unit = BoardBuilder.spawn(b, _data("Hurt", PLAYER), Vector2i(1, 0))
+	BoardBuilder.spawn(b, _data("Foe", ENEMY), Vector2i(5, 5))
+	var template := WeaponData.new()
+	template.weapon_type = WeaponData.WeaponType.CHAINSWORD
+	template.main_attack = WeaponAttackData.new()
+	template.main_attack.power = 6
+	template.main_attack.heals = true
+	template.main_attack.hits_allies = true
+	medic.add_item(WeaponInstance.make(template))
+	hurt.set_current_hp(hurt.get_max_hp() - 2)
+	var sess = PlaySession.new(b)
+
+	assert_bool(sess.queue_attack(sess.handle_for(medic), hurt.movement.cell).ok).override_failure_message(
+			"fixture: the heal was refused").is_true()
+	var plan: ResolvedPlan = sess.squad_manager.resolved_plan_for(medic.squad)
+	var heal: AttackAction = plan.attacks[0]
+	assert_int(heal.resolved.heal_amount).override_failure_message(
+			"fixture: the heal fits under the cap, so the cap clips nothing").is_greater(2)
+
+	var events: Array = sess.execute().get("events", [])
+	var line := "%s heals %s for 2" % [sess.handle_for(medic), sess.handle_for(hurt)]
+	assert_bool(events.has(line)).override_failure_message(
+			"the log did not say the heal gave back 2: %s" % str(events)).is_true()
+
 # #33 lifecycle: a would-be-fatal hit UNDER the overkill ceiling DOWNS (not kills) — preview
 # must say DOWNED and execution must leave the target alive at 1 HP, with its counter skipped.
 # This is the exact gap the view layer had: it read hp<=0 as "DIES".
@@ -93,10 +125,11 @@ func test_sub_ceiling_lethal_hit_downs_and_skips_counter() -> void:
 	assert_int(prev.plan.counters.size()).is_greater(0)
 	assert_bool(prev.plan.counters[0].skipped).is_true()   # a downed target can't strike back
 
-	# the rendered view must say DOWNED (not "DIES") and label the skipped counter, not show junk
+	# the rendered view must say DOWNED (not "DIES"), and leaves the skipped counter out the way the
+	# queue panel does (#46) -- the structured `counters` key above is where it still shows
 	var pv: String = BoardView.render_preview(_session)
 	assert_str(pv).contains("DOWNED")
-	assert_str(pv).contains("none (")
+	assert_str(pv).override_failure_message("a skipped counter was rendered:\n%s" % pv).not_contains("REACTION")
 
 	var attacker: Unit = _session.unit_by_handle("A")
 	var attacker_hp: int = attacker.get_current_hp()
@@ -307,7 +340,8 @@ func test_frozen_water_reads_walkable_to_the_headless_view() -> void:
 	var cell := Vector2i(5, 5)
 	BoardBuilder.paint_cell(_board.grid, cell, BoardBuilder.WATER_ATLAS)
 	assert_bool(_session.terrain_at(cell).walkable).is_false()
-	assert_str(BoardView.render_overview(_session)).contains("#")
+	# Deep water draws as deep water (#46), no longer as rock.
+	assert_str(_glyph_at(cell)).is_equal(BoardView.GROUND["deep"][0])
 
 	# terrain_states.apply IS the production write path — play_session._apply_cell_effects and
 	# OrderExecutor both hand a resolved effect to exactly this call. Only the effect's source is
@@ -318,6 +352,7 @@ func test_frozen_water_reads_walkable_to_the_headless_view() -> void:
 	_board.terrain_states.apply(freeze)
 
 	assert_bool(_session.terrain_at(cell).walkable).is_true()
+	assert_str(_glyph_at(cell)).is_equal(BoardView.GROUND["frozen"][0])
 
 # #922: melting the ice under a unit drops it in, and the headless twin plays that where the game
 # does -- when the deposits land, before any counter -- with the preview naming it first (Law #2).
@@ -487,7 +522,7 @@ func test_erased_ground_inside_the_board_reads_as_a_hole_not_as_off_the_map() ->
 
 
 # A hole is UNWALKABLE, so the glyph renderer's `#` branch used to swallow every VOID cell and draw
-# a chasm as MASONRY -- which left TERRAIN_GLYPH's own "void" entry unreachable from the day it was
+# a chasm as MASONRY -- which left the glyph table's own "void" entry unreachable from the day it was
 # written. Both spellings of a hole render as open space now; `#` keeps meaning "unwalkable tile
 # with no glyph of its own".
 func test_a_hole_renders_as_open_space_rather_than_as_a_wall() -> void:

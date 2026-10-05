@@ -27,6 +27,7 @@ var _next_player := 0
 var _next_enemy := 0
 var _downed_pending: Array[Unit] = []   # units downed mid-execute; ejected AFTER the pass (mirrors OrderExecutor._downed_pending)
 var _executing := false   # true while execute() plays the pass, up to its pass-end sweeps: a running pass owns its plan (#361)
+var _boundary_events: Array[String] = []   # what a turn's start did (a bleed-out), drained by end_turn after each hand-off (#46)
 # This mission's state and rules (#46) -- the SAME object the game's MissionController holds, so a
 # headless run scores objectives, the clock and every latch exactly as the game does.
 var mission: MissionState
@@ -90,6 +91,7 @@ func _register(unit: Unit) -> void:
 func _on_unit_died(unit: Unit) -> void:
 	mission.note_unit_died(unit)   # FIRST, as game._on_unit_died: the mission may be protecting this one
 	squad_manager.handle_unit_death(unit)
+	_refresh_plan(squad_manager.active_squad)   # game._on_unit_died's last line, refresh_action_queue
 
 func _on_unit_downed(unit: Unit) -> void:
 	# The down fires INSIDE the attack/counter pass (take_damage -> _go_downed). Defer the
@@ -168,8 +170,13 @@ func active_faction() -> Team.Faction:
 func _faction_name(f: Team.Faction) -> String:
 	return Team.Faction.keys()[f]
 
-func _squad_id(squad: Squad) -> int:
-	return squad_manager.squads.find(squad)
+# What the text views call a squad (#46): "sq" + its leader's handle. It was the squad's index in
+# squad_manager.squads, which renumbered every squad behind one that was destroyed, so a driver's
+# "sq3" named a different squad a turn later. A declared second form beside BugReporter._squad_label,
+# which names a squad for a person; this one names it for a driver, and it CHANGES when a leader is
+# succeeded, which a squad's membership changing already tells the driver.
+func _squad_label(squad: Squad) -> String:
+	return "sq" + handle_for(squad.get_leader())
 
 func terrain_at(cell: Vector2i) -> Dictionary:
 	var data := grid.get_cell_tile_data(cell)
@@ -190,6 +197,29 @@ func terrain_at(cell: Vector2i) -> Dictionary:
 	# in board_view while queue_move happily pathed across it — the headless VIEW contradicting the
 	# headless RULES, which is exactly the Law #2 failure the Play API exists to catch.
 	return {"exists": true, "walkable": _board().is_walkable(cell), "cost": cost, "type": kind_name.to_lower()}
+
+# A cell's height as the rules read it (#46): its elevation in half-levels (BoardHeights' lowest
+# corner) and its slope -- "n"/"e"/"s"/"w" for the side a ramp rises toward, "*" for a corner form,
+# "" for flat. A board built without heights reads flat, as the rules do.
+func height_at(cell: Vector2i) -> Dictionary:
+	if board_heights == null:
+		return {"elevation": 0, "slope": ""}
+	var corners := board_heights.corners_at(cell)
+	var slope := ""
+	if Terrain.climb_of_corners(corners) > 0:
+		var rise := Terrain.rise_of_corners(corners)
+		slope = "*" if rise == Terrain.RampRise.NONE else Terrain.RampRise.keys()[rise].substr(0, 1).to_lower()
+	return {"elevation": board_heights.elevation_at(cell), "slope": slope}
+
+# The gas lying on a cell (#508), one "kind level" string per kind, e.g. "Steam medium".
+func gas_at(cell: Vector2i) -> Array[String]:
+	var out: Array[String] = []
+	if gas_field == null:
+		return out
+	var packed := gas_field.packed_at(cell)
+	for kind: Gas.Kind in Gas.kinds_in(packed):
+		out.append("%s %s" % [Gas.display_name(kind), Gas.Level.keys()[Gas.level_in(packed, kind)].to_lower()])
+	return out
 
 # ---- affordances: what may this unit do RIGHT NOW (#613) ----
 #
@@ -251,6 +281,12 @@ func legal_targets(handle: String, attack_name := "") -> Dictionary:
 		return gate
 	if not unit.has_equipped_weapon():
 		return {"ok": false, "error": "%s has no equipped weapon" % handle}
+	# A watch attack's name is answered too (#46), through the overwatch verb's own lookup: a watch
+	# attack is never in the fire view (#590), so the fire pick below would call it unknown.
+	if attack_name != "" and unit.fire_attack_named(attack_name) == null:
+		var watch := unit.watch_attack_named(attack_name)
+		if watch != null:
+			return _legal_watch_aims(unit, handle, watch)
 	var pick := _fire_pick(unit, handle, attack_name)
 	if not pick.ok:
 		return pick
@@ -275,9 +311,50 @@ func legal_targets(handle: String, attack_name := "") -> Dictionary:
 		var names: Array[String] = []
 		for v: Unit in victims:
 			names.append(handle_for(v))
-		out.append({"cell": aim, "victims": names})
+		# No victims and not a whiff is an aim that lands on the ground alone, and says so (#46).
+		out.append(_with_facing({"cell": aim, "victims": names, "ground_only": names.is_empty()},
+				aiming, origin))
 	unit.active_attack = null
 	return {"ok": true, "unit": handle, "attack": _attack_label(aiming), "from": origin, "aims": out}
+
+
+# Where a watch may be set (#46), by overwatch's own click gate, each with the cells it would watch
+# (OverwatchAction.watched_paths_from, the resolver's footprint rule) and the hostiles standing in
+# them now -- who it would fire on the moment it is armed (#1003).
+func _legal_watch_aims(unit: Unit, handle: String, watch: AttackData) -> Dictionary:
+	var reason := AttackAction.fire_block_reason(unit, watch)
+	if reason != "":
+		return {"ok": false, "error": "%s can't watch with %s: %s" % [handle, _attack_label(watch), reason]}
+	var origin := unit.get_projected_destination()
+	var board := _board()
+	var out: Array[Dictionary] = []
+	for aim: Vector2i in Reach.get_all_attack_cells_from(unit, origin, watch):
+		if not Reach.can_aim_at(unit, origin, aim, watch, board):
+			continue
+		var probe := OverwatchAction.new()
+		probe.init(unit, aim, watch)
+		var footprint: Array[Vector2i] = []
+		for path: Array in probe.watched_paths_from(origin, board):
+			for cell: Vector2i in path:
+				if not footprint.has(cell):
+					footprint.append(cell)
+		var standing: Array[String] = []
+		for cell in footprint:
+			var occupant := board.projected_unit_at_cell(cell)
+			if occupant != null and Team.is_enemy(unit.get_faction(), occupant.get_faction()):
+				standing.append(handle_for(occupant))
+		out.append(_with_facing({"cell": aim, "footprint": footprint, "standing": standing}, watch, origin))
+	return {"ok": true, "unit": handle, "attack": _attack_label(watch), "from": origin, "aims": out, "watch": true}
+
+
+# A directional aim is a FACING, whichever of its cells is named (#46): labelled N/E/S/W by
+# Reach.placement_dir, the rule that turns the stamp.
+static func _with_facing(entry: Dictionary, attack: AttackData, origin: Vector2i) -> Dictionary:
+	if attack != null and attack.is_directional():
+		entry["facing"] = FACING_NAMES.get(Reach.placement_dir(attack, origin, entry.cell), "?")
+	return entry
+
+const FACING_NAMES := {Vector2i.UP: "N", Vector2i.RIGHT: "E", Vector2i.DOWN: "S", Vector2i.LEFT: "W"}
 
 
 # The game's enemy ranges, the V key (#46), through the builder game.threat_field() calls. The viewer
@@ -328,20 +405,20 @@ func ranges(enemy_handle := "") -> Dictionary:
 # already exists. Nothing is stored; this is a read.
 func status() -> Dictionary:
 	var active: Squad = squad_manager.active_squad
-	var acted: Array[int] = []
-	var free: Array[int] = []
+	var acted: Array[String] = []
+	var free: Array[String] = []
 	for squad: Squad in squad_manager.squads:
 		if squad.members.is_empty():
 			continue
 		if squad.members[0].get_faction() != turn_manager.active_faction():
 			continue
 		if squad.has_acted:
-			acted.append(_squad_id(squad))
+			acted.append(_squad_label(squad))
 		else:
-			free.append(_squad_id(squad))
+			free.append(_squad_label(squad))
 	return {
 		"faction": _faction_name(active_faction()),
-		"active_squad": -1 if active == null else _squad_id(active),
+		"active_squad": "" if active == null else _squad_label(active),
 		"queued": 0 if active == null else _given_count(active),
 		"acted": acted,
 		"free": free,
@@ -693,8 +770,8 @@ func _controllable(unit: Unit, handle: String) -> Dictionary:
 	# One squad plans at a time -- the menu's own rule, which the order chokepoint leaves to its
 	# callers (SquadManager.try_queue_action). Without it a second squad silently took the activation.
 	if squad_manager.is_another_squad_active(unit.squad):
-		return {"ok": false, "error": "squad %d has orders queued -- execute or cancel them before ordering %s" % [
-			_squad_id(squad_manager.active_squad), handle]}
+		return {"ok": false, "error": "%s has orders queued -- execute or cancel them before ordering %s" % [
+			_squad_label(squad_manager.active_squad), handle]}
 	return {"ok": true}
 
 # WHICH attack an aim fires (#615): the one NAMED, else the default -- the menu's pick, made
@@ -998,9 +1075,10 @@ func burrow(handle: String) -> Dictionary:
 		return {"ok": false, "error": "%s can't burrow: %s" % [handle, refusal]}
 	return {"ok": true, "summary": "%s -> burrow" % handle}
 
-# member joins leader's squad — one join_squad call covers both "squad up" (leader was solo) and
-# "join squad", with the player's own eligibility: same faction, within the leader's LDR range,
-# nothing has committed to acting yet.
+# member joins leader's squad — one join_squad call covers both of the game's doors onto that act:
+# Squad Up from the leader (the member must be solo) and Join Squad from the member (the leader must
+# lead a squad). Either open is enough, and a refusal is the game's own reason (SquadManager's
+# formation reasons, #46). The turn-flow checks above them stay the caller's, as in the game's menu.
 func join(member_handle: String, leader_handle: String) -> Dictionary:
 	var member := unit_by_handle(member_handle)
 	var leader := unit_by_handle(leader_handle)
@@ -1012,22 +1090,18 @@ func join(member_handle: String, leader_handle: String) -> Dictionary:
 		return {"ok": false, "error": "no unit '%s'" % leader_handle}
 	if not is_deployed(leader):
 		return {"ok": false, "error": "%s is in reserve" % leader_handle}
-	if member == leader:
-		return {"ok": false, "error": "a unit can't join itself"}
-	if member.squad == leader.squad:
-		return {"ok": false, "error": "%s is already in %s's squad" % [member_handle, leader_handle]}
 	if leader.get_faction() != active_faction():
 		return {"ok": false, "error": "can only reorganize your own (%s) squads this turn" % _faction_name(active_faction())}
-	if member.get_faction() != leader.get_faction():
-		return {"ok": false, "error": "different factions can't squad up"}
 	var gate := _squad_change_gate(member.squad, leader.squad)
 	if not gate.ok:
 		return gate
 	if member.has_any_actions():
 		return {"ok": false, "error": "%s has queued orders — cancel them before squadding up" % member_handle}
-	var reach := leader.squad.get_max_squad_range()
-	if not SquadCohesion.in_range(leader.squad, leader.movement.cell, member, member.movement.cell, _board()):
-		return {"ok": false, "error": "%s is outside %s's leader range (%d)" % [member_handle, leader_handle, reach]}
+	var refusal := squad_manager.squad_up_block_reason(member, leader.squad)
+	if refusal != "" and leader.has_squad():
+		refusal = squad_manager.join_squad_block_reason(member, leader.squad)
+	if refusal != "":
+		return {"ok": false, "error": "%s can't join %s's squad: %s" % [member_handle, leader_handle, refusal]}
 	squad_manager.join_squad(member, leader.squad)
 	return {"ok": true, "summary": "%s joined %s's squad" % [member_handle, leader_handle]}
 
@@ -1135,7 +1209,104 @@ func _describe_plan(squad: Squad, plan: ResolvedPlan) -> Dictionary:
 		sinks.append({"actor": handle_for(sink.actor), "description": sink.get_description(),
 				"lethality": lethality})
 	return {"moves": moves, "attacks": attacks, "counters": counters,
-			"side_actions": side_actions, "tile_hits": tile_hits, "sinks": sinks}
+			"side_actions": side_actions, "tile_hits": tile_hits, "sinks": sinks,
+			"rows": _plan_rows(squad, plan), "terrain": _describe_deposits(plan)}
+
+# The plan as the game's queue panel lays it out (#46): ActionQueueDisplayEntry.build_for's sections
+# and nesting -- the watch shots an order sets off under it, a payload under its hit, a sinking under
+# what melted the ice -- one dict per row, units by handle. What the panel hides (a skipped counter or
+# watch shot) is hidden here too; the structured keys above still carry it for code.
+func _plan_rows(squad: Squad, plan: ResolvedPlan) -> Array:
+	var rows: Array = []
+	var section := ""
+	for entry in ActionQueueDisplayEntry.build_for(squad, plan):
+		match entry.entry_type:
+			ActionQueueDisplayEntry.EntryType.HEADER:
+				section = entry.label
+			ActionQueueDisplayEntry.EntryType.ACTION:
+				rows.append(_describe_row(section, entry.action, entry.indent_level))
+	return rows
+
+# One row, read the way ActionQueueRow reads it: the HP readout only when the outcome READ hp, the
+# number through LethalityRules.displayed_hp, a heal as what it gave back.
+func _describe_row(section: String, action: BaseAction, depth: int) -> Dictionary:
+	var row := {"section": section, "depth": depth, "type": action.get_action_name(),
+			"actor": handle_for(action.actor), "refused": action.is_refused(), "inert": action.is_inert()}
+	var aimed := action.aimed_at()
+	if aimed != null and aimed != action.actor:
+		row["target"] = handle_for(aimed)
+	if action is MoveAction:
+		row["hold"] = (action as MoveAction).is_hold_position
+		row["dest"] = (action as MoveAction).get_destination()
+	elif action is AttackAction:
+		var attack := action as AttackAction
+		row["attack"] = _attack_label(attack.fired_attack)
+		row["cell"] = attack.target_cell
+		if attack.blocked_for != null and is_instance_valid(attack.blocked_for):
+			row["guarding"] = handle_for(attack.blocked_for)
+	elif action is TileHitAction:
+		var hit := action as TileHitAction
+		row["source"] = Gas.display_name(hit.gas as Gas.Kind) if hit.gas >= 0 \
+				else Terrain.tile_state_display_name(hit.state)
+	elif action is SinkAction:
+		row["cell"] = (action as SinkAction).cell
+	var r := action.resolved_outcome()
+	if r == null:
+		return row
+	if r.reads_hp:
+		var heals := action is AttackAction and (action as AttackAction).fired_attack != null \
+				and (action as AttackAction).fired_attack.heals
+		if heals:
+			row["healed"] = r.hp_restored()
+		else:
+			row["dmg"] = r.damage
+		row["hp_before"] = r.hp_before
+		row["hp_after"] = LethalityRules.displayed_hp(r.target_hp_after, LethalityRules.lifecycle_for(r.lethality))
+	row["lethality"] = r.lethality
+	var gained: Array[String] = []
+	for state in r.states_added:
+		if state != Elemental.State.NONE:
+			gained.append(Elemental.state_display_name(state))
+	var lost: Array[String] = []
+	for state in r.states_removed:
+		if state != Elemental.State.NONE:
+			lost.append(Elemental.state_display_name(state))
+	row["gains"] = gained
+	row["loses"] = lost
+	var events: Array[String] = []
+	if r.knockback_applied:
+		events.append("shoved to %s" % str(r.knockback_to))
+	if r.knockback_held > 0:
+		events.append("holds %d" % r.knockback_held)
+	if r.fall_levels > 0:
+		events.append("falls %d" % r.fall_levels)
+	if r.drown_damage > 0:
+		events.append("drowns")
+	if r.removed:
+		events.append("into the void")
+	if r.insulated:
+		events.append("insulated")
+	if r.burned_vial != null:
+		events.append("burns %s" % r.burned_vial.display_name)
+	if r.charge_spent:
+		events.append("spends a charge")
+	for reaction: ElementalReaction in r.fired_reactions:
+		if reaction.is_combo() and reaction.badge_name() != "":
+			events.append(reaction.badge_name())
+	for unit in r.splits:
+		if is_instance_valid(unit):
+			events.append("splits %s" % handle_for(unit))
+	row["events"] = events
+	return row
+
+# The pass's terrain deposits, as the board ghosts them (ResolvedPlan.pending_deposits).
+static func _describe_deposits(plan: ResolvedPlan) -> Array:
+	var out: Array = []
+	for deposit: Dictionary in plan.pending_deposits():
+		var what: String = Gas.display_name(deposit["gas"]) if deposit.has("gas") \
+				else Terrain.tile_state_display_name(deposit["state"])
+		out.append({"cell": deposit["cell"], "what": what})
+	return out
 
 func _describe_attack(atk: AttackAction) -> Dictionary:
 	var r := atk.resolved
@@ -1224,7 +1395,7 @@ func execute() -> Dictionary:
 			if action.resolved_actor_felled:
 				continue
 			action.execute()
-			events.append(action.get_description())
+			events.append(_side_line(action))
 			# ...then the shots THIS order set off (#1003) -- MIRRORS execute_orders' own interleave,
 			# which is the third and last playback partition. An Overwatch armed onto a cell an
 			# enemy already occupies fires here, after the counters, because that is where the
@@ -1284,7 +1455,7 @@ func _apply_cell_effects(cell_effects: Array[ResolvedCellEffect], events: Array[
 func _apply_sinks(sinks: Array[SinkAction], events: Array[String]) -> void:
 	for sink in sinks:
 		sink.execute()
-		events.append(sink.get_description())
+		events.append("%s goes under at %s" % [handle_for(sink.actor), str(sink.cell)])
 
 
 # One attack's playback: AttackAction's own state steps, in the order execute() takes them (#46), so
@@ -1302,7 +1473,7 @@ func _apply_attack(atk: AttackAction, events: Array[String]) -> void:
 	if atk.land():
 		var dropped := " (payload)" if atk.dropped_by != null else ""
 		if atk.fired_attack != null and atk.fired_attack.heals:
-			events.append("%s heals %s for %d%s" % [handle_for(actor), handle_for(target), r.heal_amount, dropped])
+			events.append("%s heals %s for %d%s" % [handle_for(actor), handle_for(target), r.hp_restored(), dropped])
 		else:
 			events.append("%s hits %s for %d%s%s" % [handle_for(actor), handle_for(target), r.damage, _lethality_tag(r.lethality), dropped])
 		if r.knockback_applied and is_instance_valid(target):
@@ -1310,8 +1481,23 @@ func _apply_attack(atk: AttackAction, events: Array[String]) -> void:
 			events.append("%s is shoved to %s" % [handle_for(target), str(r.knockback_to)])
 		if r.removed and is_instance_valid(target):
 			events.append("%s falls into the void" % handle_for(target))
+		# What the hit did to its target's states (#46), which the preview's chips promised.
+		if target != null:
+			for state in r.states_added:
+				if state != Elemental.State.NONE:
+					events.append("%s gains %s" % [handle_for(target), Elemental.state_display_name(state)])
+			for state in r.states_removed:
+				if state != Elemental.State.NONE:
+					events.append("%s loses %s" % [handle_for(target), Elemental.state_display_name(state)])
 		atk.remove()
 	atk.settle()
+
+# A side-channel order's log line (#46): who and to whom by handle, then the game's own words, which
+# name units by name -- so "Warden guards Warden" says which Warden.
+func _side_line(action: BaseAction) -> String:
+	var aimed := action.aimed_at()
+	var whom := (" -> %s" % handle_for(aimed)) if aimed != null and aimed != action.actor else ""
+	return "%s %s%s: %s" % [handle_for(action.actor), action.get_action_name(), whom, action.get_description()]
 
 # ---- mission metadata & outcome (#96, #612) ----
 # Read off the mission and the zone store the scorer reads (#46), never the scenario a second time.
@@ -1370,12 +1556,13 @@ func end_turn() -> Dictionary:
 
 	# The side that just played burns BEFORE it hands off, and a burn that ends the mission does not
 	# hand off at all -- both mirror game.end_turn (#898).
+	_boundary_events.clear()
 	var log: Array[String] = _end_of_turn_tiles(turn_manager.active_faction())
 	if mission_tag() != "":
 		return _turn_result(log)
 
 	# The hand-off runs the round tick and the turn-start ticks through the handlers wired in _init.
-	turn_manager.end_turn(_board().present_factions())
+	log.append_array(_hand_off())
 	# Mirror the game's auto-skip: pass over factions with no commandable units (e.g. only
 	# downed), guarding against an all-downed board where this would loop with nothing to stop on.
 	# The board is re-read per pass, and the mission check mirrors game._on_turn_started's before it
@@ -1384,7 +1571,7 @@ func end_turn() -> Dictionary:
 		var board := _board()
 		if board.faction_has_active_units(turn_manager.active_faction()) or not board.has_active_units():
 			break
-		turn_manager.end_turn(board.present_factions())
+		log.append_array(_hand_off())
 	squad_manager.reset_faction_actions(turn_manager.active_faction())
 
 	# THE OPPONENT ACTS (#665). Until this existed, a headless "playthrough" was played against a
@@ -1407,12 +1594,21 @@ func end_turn() -> Dictionary:
 		log.append_array(_end_of_turn_tiles(acting))
 		if mission_tag() != "":
 			break
-		turn_manager.end_turn(_board().present_factions())
+		log.append_array(_hand_off())
 		var next := turn_manager.active_faction()
 		if next == acting:
 			break   # nobody else to hand to; do not spin
 		squad_manager.reset_faction_actions(next)
 	return _turn_result(log)
+
+
+# One hand-off, and what the incoming faction's turn start did (#46): the ticks run inside it, through
+# _on_turn_started, which buffers rather than logs because it is a signal handler with no log to hand.
+func _hand_off() -> Array[String]:
+	turn_manager.end_turn(_board().present_factions())
+	var events := _boundary_events.duplicate()
+	_boundary_events.clear()
+	return events
 
 
 # What end_turn hands back. A mission the boundary ended (headlessly, only a burn can) is reported
@@ -1458,7 +1654,15 @@ func _on_round_completed() -> void:
 
 
 func _on_turn_started(faction: Team.Faction) -> void:
+	# The downed whose clock this start may run out, by handle, since a body that bleeds out is freed.
+	var bodies := {}
+	for unit in live_units():
+		if unit.is_downed() and unit.get_faction() == faction:
+			bodies[unit] = handle_for(unit)
 	TurnBoundary.turn_start_ticks(live_units(), faction)
+	for unit in bodies.keys():   # untyped: a typed loop variable cannot hold a freed unit (#149)
+		if not is_instance_valid(unit) or (unit as Unit).is_dead():
+			_boundary_events.append("%s bleeds out" % bodies[unit])
 	squad_manager.enforce_contact()   # AFTER the ticks, as game._on_turn_started orders them
 
 

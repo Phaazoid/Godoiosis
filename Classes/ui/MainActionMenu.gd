@@ -507,7 +507,7 @@ func populate(unit: Unit) -> Array:
 #
 # The squad verbs come through their OWN gates, unchanged. Their outer condition in populate() --
 # no queued orders, squad not acted, no squad active -- is trivially true on a board where nothing
-# has moved, which is exactly why #731 never had to split _formation_basics_ok.
+# has moved, which is exactly why #731 never had to split formation_block_reason.
 #
 # UNDEPLOY is gated on drawn_from_roster: an authored unit belongs to the board, and enemies are
 # units_root children too, so an ungated arm would lift either of them off it.

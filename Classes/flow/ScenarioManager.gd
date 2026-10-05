@@ -349,7 +349,7 @@ func apply_scenario(scenario: ScenarioData, path := "") -> void:
 			squad_manager.join_squad(member, leader.squad)
 
 	# has_acted after the rebuild: join_squad is ungated, but assemble-then-mark-spent stays correct
-	# if the loader is ever routed through the player-facing gate (_formation_basics_ok).
+	# if the loader is ever routed through the player-facing gate (formation_block_reason).
 	for squad_id: int in acted_squad_ids:
 		var acted_leader: Unit = leaders_by_squad_id.get(squad_id)
 		if acted_leader != null:
