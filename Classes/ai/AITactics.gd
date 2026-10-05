@@ -51,7 +51,13 @@ static func choose_engagement_target(leader: Unit, board: BoardContext, squad_ma
 	var engageable := _engageable_enemies(leader, board, within, allowed)
 	if engageable.is_empty():
 		return nearest_enemy(leader, board, within)   # pursuit: nobody in reach, distance is the answer
+	return _best_exchange(leader, engageable, board, squad_manager)
 
+
+# The best exchange among the enemies this leader could fight this turn (`engageable`, from
+# _engageable_enemies) -- the ranking both moving archetypes and Balanced share.
+static func _best_exchange(leader: Unit, engageable: Dictionary, board: BoardContext,
+		squad_manager: SquadManager) -> Unit:
 	var best: Unit = null
 	var best_standing := false
 	var best_safe := false
@@ -270,8 +276,9 @@ static func _approach_firing(from_unit: Unit, board: BoardContext) -> Dictionary
 # pick Rushdown makes. With nobody, the nearest enemy that could NOT answer it from the cell it would
 # fight from; only when every enemy could, the nearest at all. Asked fresh every turn.
 static func choose_balanced_target(leader: Unit, board: BoardContext, squad_manager: SquadManager) -> Unit:
-	if not _engageable_enemies(leader, board, null, null).is_empty():
-		return choose_engagement_target(leader, board, squad_manager)
+	var engageable := _engageable_enemies(leader, board, null, null)
+	if not engageable.is_empty():
+		return _best_exchange(leader, engageable, board, squad_manager)
 	var firing := _approach_firing(leader, board)
 	var best: Unit = null
 	var best_hops := 0
