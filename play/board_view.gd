@@ -207,7 +207,7 @@ static func render_preview(session) -> String:
 				msg += "\n  - " + str(e)
 		return msg
 	var plan: Dictionary = res.plan
-	var lines: Array[String] = ["Plan preview (squad %d):" % session._squad_id(session.squad_manager.active_squad)]
+	var lines: Array[String] = ["Plan preview (%s):" % session._squad_label(session.squad_manager.active_squad)]
 	# The game's queue panel, section by section (#46) -- nested rows are what the order above them
 	# set off -- then what the pass leaves on the ground, which the board ghosts.
 	var section := ""
@@ -598,22 +598,15 @@ static func render_status(session) -> String:
 	var parts: Array[String] = ["turn=" + str(st.faction)]
 	if st.get("pre_mission", false):
 		parts.push_front("phase=PRE_MISSION")
-	if int(st.active_squad) < 0:
+	if str(st.active_squad) == "":
 		parts.append("active=none")
 	else:
-		parts.append("active=sq%d(%d queued)" % [int(st.active_squad), int(st.queued)])
+		parts.append("active=%s(%d queued)" % [str(st.active_squad), int(st.queued)])
 	if not st.free.is_empty():
-		parts.append("free=" + _squad_list(st.free))
+		parts.append("free=" + ",".join(st.free))
 	if not st.acted.is_empty():
-		parts.append("acted=" + _squad_list(st.acted))
+		parts.append("acted=" + ",".join(st.acted))
 	return "[" + "  ".join(parts) + "]"
-
-
-static func _squad_list(ids: Array) -> String:
-	var parts: Array[String] = []
-	for i in ids:
-		parts.append("sq%d" % int(i))
-	return ",".join(parts)
 
 
 # Grouped by row, contiguous runs collapsed: "y=13: 19-23 25".
@@ -652,7 +645,7 @@ static func _unit_line(session, unit: Unit) -> String:
 		fac = "O"
 	var squad_tag := "solo"
 	if unit.has_squad():
-		squad_tag = "sq%d%s" % [session._squad_id(unit.squad), "(lead)" if unit.is_leader() else ""]
+		squad_tag = "%s%s" % [session._squad_label(unit.squad), "(lead)" if unit.is_leader() else ""]
 	var wep := "(unarmed)"
 	if unit.has_equipped_weapon():
 		wep = _weapon_str(unit.get_equipped_weapon(), unit)

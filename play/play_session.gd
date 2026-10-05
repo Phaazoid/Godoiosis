@@ -169,8 +169,13 @@ func active_faction() -> Team.Faction:
 func _faction_name(f: Team.Faction) -> String:
 	return Team.Faction.keys()[f]
 
-func _squad_id(squad: Squad) -> int:
-	return squad_manager.squads.find(squad)
+# What the text views call a squad (#46): "sq" + its leader's handle. It was the squad's index in
+# squad_manager.squads, which renumbered every squad behind one that was destroyed, so a driver's
+# "sq3" named a different squad a turn later. A declared second form beside BugReporter._squad_label,
+# which names a squad for a person; this one names it for a driver, and it CHANGES when a leader is
+# succeeded, which a squad's membership changing already tells the driver.
+func _squad_label(squad: Squad) -> String:
+	return "sq" + handle_for(squad.get_leader())
 
 func terrain_at(cell: Vector2i) -> Dictionary:
 	var data := grid.get_cell_tile_data(cell)
@@ -352,20 +357,20 @@ func ranges(enemy_handle := "") -> Dictionary:
 # already exists. Nothing is stored; this is a read.
 func status() -> Dictionary:
 	var active: Squad = squad_manager.active_squad
-	var acted: Array[int] = []
-	var free: Array[int] = []
+	var acted: Array[String] = []
+	var free: Array[String] = []
 	for squad: Squad in squad_manager.squads:
 		if squad.members.is_empty():
 			continue
 		if squad.members[0].get_faction() != turn_manager.active_faction():
 			continue
 		if squad.has_acted:
-			acted.append(_squad_id(squad))
+			acted.append(_squad_label(squad))
 		else:
-			free.append(_squad_id(squad))
+			free.append(_squad_label(squad))
 	return {
 		"faction": _faction_name(active_faction()),
-		"active_squad": -1 if active == null else _squad_id(active),
+		"active_squad": "" if active == null else _squad_label(active),
 		"queued": 0 if active == null else _given_count(active),
 		"acted": acted,
 		"free": free,
@@ -717,8 +722,8 @@ func _controllable(unit: Unit, handle: String) -> Dictionary:
 	# One squad plans at a time -- the menu's own rule, which the order chokepoint leaves to its
 	# callers (SquadManager.try_queue_action). Without it a second squad silently took the activation.
 	if squad_manager.is_another_squad_active(unit.squad):
-		return {"ok": false, "error": "squad %d has orders queued -- execute or cancel them before ordering %s" % [
-			_squad_id(squad_manager.active_squad), handle]}
+		return {"ok": false, "error": "%s has orders queued -- execute or cancel them before ordering %s" % [
+			_squad_label(squad_manager.active_squad), handle]}
 	return {"ok": true}
 
 # WHICH attack an aim fires (#615): the one NAMED, else the default -- the menu's pick, made
