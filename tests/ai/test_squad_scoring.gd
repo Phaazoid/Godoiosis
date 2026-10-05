@@ -712,7 +712,7 @@ func test_a_candidate_list_is_built_against_the_plan_not_a_rejected_hypothetical
 			% str(_attack_aims(a.squad))).is_equal(1)
 
 
-# --- Crisis, which the AI does not see (#708) ---------------------------------------------------
+# --- Crisis: blind by profile (#708), or seen (#1230) -------------------------------------------
 
 # Arm the gambit the way content does, mirroring tests/rules/test_crisis_preview.gd's helper: the
 # Berserker job's pool carries the ability, so this exercises jobs -> JobCatalog -> ability kit
@@ -723,10 +723,10 @@ func _arm_crisis(unit: Unit) -> void:
 		.override_failure_message("fixture: the Berserker job did not arm Crisis").is_true()
 
 
-# THE AI IS BLIND TO CRISIS (dev ruling, 2026-09-04): a hit the ladder sentences to CRISIS is priced
-# at the damage it WOULD have done, and at the removal it WOULD have earned, if the gambit did not
-# exist. His words: "the ai simply won't see crisis mode until they have to react to a unit
-# currently in it."
+# A UNIT BLIND TO CRISIS (#708, dev 2026-09-04; a profile notch since #1230) prices a hit the ladder
+# sentences to CRISIS at the damage it WOULD have done, and at the removal it WOULD have earned, if
+# the gambit did not exist. His words: "the ai simply won't see crisis mode until they have to react
+# to a unit currently in it."
 #
 # It scored (0,0,0) before -- the damage was skipped outright and CRISIS threads ACTIVE, so no
 # removal either -- which under #711's no-bar rule is not a refusal but a losing candidate: any
@@ -741,7 +741,10 @@ func _arm_crisis(unit: Unit) -> void:
 # The armed one is spawned FIRST so it leads board order: after the fix both candidates score
 # identically and the tie falls to that order, so the assertion can only pass if the scores really
 # tie -- it cannot be satisfied by a preference that happens to point the right way.
-func test_a_crisis_armed_target_is_priced_like_any_other_kill() -> void:
+func test_a_unit_blind_to_crisis_prices_the_berserker_like_any_other_kill() -> void:
+	var blind := AIProfile.new()
+	blind.sees_crisis = false
+	AIProfiles.use_fixtures({"": blind})
 	var board: Dictionary = _build_board()
 	var attacker: Unit = _spawn(board, PLAYER, M1_CELL)
 	attacker.equipped_weapon = H.make_weapon(5)   # power 5 + fixture STR 5 = MHP 10: fells exactly, no overkill
@@ -770,6 +773,78 @@ func test_a_crisis_armed_target_is_priced_like_any_other_kill() -> void:
 	assert_that(rung).override_failure_message(
 			"fixture: the queued hit sentenced the Berserker to %s, not CRISIS -- this measured an ordinary kill"
 			% ResolvedOutcome.Lethality.keys()[rung]).is_equal(ResolvedOutcome.Lethality.CRISIS)
+
+
+# A UNIT THAT SEES CRISIS (#1230, dev 2026-10-05) prices the same hit truthfully: the Berserker stands
+# straight back up, so the hit is the HP it takes and no removal, and the plain kill beside it wins.
+func test_a_unit_that_sees_crisis_takes_the_kill_that_stays_a_kill() -> void:
+	var board: Dictionary = _build_board()
+	var attacker: Unit = _spawn(board, PLAYER, M1_CELL)
+	attacker.equipped_weapon = H.make_weapon(5)
+	var armed: Unit = BB.spawn(board, H.make_unit_data({}, ENEMY), A_CELL)
+	_arm_crisis(armed)
+	var plain: Unit = _spawn(board, ENEMY, B_CELL, false)
+
+	AITactics.queue_main_actions_for_squad(attacker.squad, _context(board), board.squad_manager)
+
+	assert_int(_aim_count(attacker.squad, B_CELL)).override_failure_message(
+			"a unit that sees Crisis still swung into the gambit over the kill at %s; aims were %s" % [
+				str(plain.movement.cell), str(_attack_aims(attacker.squad))]).is_equal(1)
+	assert_int(_aim_count(attacker.squad, A_CELL)).is_equal(0)
+
+
+# What a counter that sets OUR unit's Crisis off costs us is the HP it really takes, the same pricing
+# as a hit we land: the attacker is armed, and the defender's reply would down it.
+func test_a_counter_that_sets_off_our_crisis_costs_the_hp_it_takes() -> void:
+	var board: Dictionary = _build_board()
+	var attacker: Unit = BB.spawn(board, H.make_unit_data({Stats.Stat.MHP: 10}, PLAYER), M1_CELL)
+	attacker.equipped_weapon = H.make_weapon()
+	_arm_crisis(attacker)
+	var defender: Unit = BB.spawn(board, H.make_unit_data({Stats.Stat.MHP: 40}, ENEMY), A_CELL)
+	defender.equipped_weapon = H.make_weapon(5)
+	var ctx := _context(board)
+	var swing: Array[BaseAction] = [H.stamped_attack(attacker, defender)]
+	var plan: ResolvedPlan = board.squad_manager.resolve_hypothetical(attacker.squad, swing, ctx)
+
+	var reply: CounterAttackAction = null
+	for c in plan.counters:
+		if c.target == attacker and c.resolved != null:
+			reply = c
+	assert_object(reply).override_failure_message("fixture: the defender did not counter").is_not_null()
+	if reply == null:
+		return
+	assert_that(reply.resolved.lethality).override_failure_message(
+			"fixture: the counter must set the attacker's Crisis off").is_equal(ResolvedOutcome.Lethality.CRISIS)
+	var lost := reply.resolved.hp_before - reply.resolved.target_hp_after
+	assert_int(reply.resolved.damage).override_failure_message(
+			"fixture: the raw damage must differ from the HP lost, or this measures nothing").is_not_equal(lost)
+
+	var seen := AITactics._score_plan(PLAYER, plan, null, AIProfile.new())
+	assert_int(seen.taken).is_equal(lost)
+	var blind_profile := AIProfile.new()
+	blind_profile.sees_crisis = false
+	assert_int(AITactics._score_plan(PLAYER, plan, null, blind_profile).taken).is_equal(reply.resolved.damage)
+
+
+# A drowning that sets Crisis off is priced the same way. The row is built by hand: the arithmetic is
+# what is under test, and a melt that drowns a Crisis-armed unit is a long way to walk for one sum.
+func test_a_drowning_that_sets_off_crisis_is_priced_at_the_hp_it_takes() -> void:
+	var board: Dictionary = _build_board()
+	var victim: Unit = BB.spawn(board, H.make_unit_data({Stats.Stat.MHP: 20}, ENEMY), A_CELL)
+	var sink := SinkAction.new()
+	sink.actor = victim
+	sink.resolved = ResolvedOutcome.new()
+	sink.resolved.lethality = ResolvedOutcome.Lethality.CRISIS
+	sink.resolved.hp_before = 20
+	sink.resolved.target_hp_after = Abilities.CRISIS_REVIVE_HP
+	sink.resolved.damage = 25
+	var plan := ResolvedPlan.new()
+	plan.sinks.append(sink)
+
+	assert_int(AITactics._score_plan(PLAYER, plan, null, AIProfile.new()).damage) 		.is_equal(20 - Abilities.CRISIS_REVIVE_HP)
+	var blind_profile := AIProfile.new()
+	blind_profile.sees_crisis = false
+	assert_int(AITactics._score_plan(PLAYER, plan, null, blind_profile).damage) 		.override_failure_message("a blind unit prices the raw damage, capped at the HP the victim had").is_equal(20)
 
 
 # A HEALED body is still worth +1 (#1002, keeping #720's ruling literal). That "+1" was never a

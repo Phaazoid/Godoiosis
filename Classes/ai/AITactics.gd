@@ -10,10 +10,9 @@ class_name AITactics
 # forecast), so a candidate is priced by what it adds to what the squad is already doing (#117).
 #
 # (_REMOVAL_TIERS -- the DOWNED/MAIMED/KILLED rung list -- is gone with that change: a removal is
-# now a CHANGE OF STANDING across the plan, read off LethalityRules.lifecycle_for's own threading
-# via PlanResolver.plan_fells, which covers the same three rungs and cannot double-count
-# a second hit on the same body -- and, since #708, the fresh CRISIS the ladder does not move a
-# lifecycle for. See _score_plan.)
+# now a CHANGE OF STANDING across the plan, read off LethalityRules.lifecycle_for's own threading,
+# which covers the same three rungs and cannot double-count a second hit on the same body. Whether a
+# fresh CRISIS counts as one is the acting unit's profile since #1230. See _score_plan.)
 
 # WHO THE SQUAD FIGHTS -- and it is TWO SYSTEMS, forked on one question: is anybody attackable
 # this turn? (Dev ruling, 2026-09-02, from playtest.)
@@ -626,18 +625,17 @@ static func _aim_key(attack: AttackData, sweep: Conduction.Sweep) -> String:
 # may still be in reach from the settled cell, and without w that choice ties on damage and falls to
 # board order. See choose_engagement_target for the other half.
 #
-# THE AI IS BLIND TO CRISIS (dev ruling, 2026-09-04, explicitly provisional): a hit the ladder
-# sentences to CRISIS is priced at the damage AND the removal it would have earned if the gambit did
-# not exist. His words: "the ai simply won't see crisis mode until they have to react to a unit
-# currently in it." It counted as NOTHING before -- the damage was skipped here and CRISIS threads
-# ACTIVE so no removal followed -- which under #711's no-bar rule is not a refusal but a LOSING
-# candidate, so an armed Berserker was the last thing an AI would swing at. (#708, whose own
-# "a neutral verdict means never" reading died with the bar.)
+# CRISIS, BY PROFILE (#1230, reversing #708's blindness, which was a scope call at the time). A unit
+# that SEES Crisis prices a hit that sets the gambit off as what it really does: the HP it takes
+# (hp_before - target_hp_after, the revive HP), and no removal, since the target stands straight back
+# up. A unit already IN Crisis stays an ordinary target -- its next drop is a kill, and a kill is a
+# removal (dev, 2026-10-05). The same pricing reaches every list, counters and sinks included, so
+# what a counter costs us is measured the same way.
 #
-# Neither half needs new arithmetic. The damage is the raw pre-Crisis number (the resolver fixes
-# outcome.damage before the rung is named and the Crisis branch rewrites only hp/in_crisis),
-# and the overkill clamp below caps it at the HP they had going in -- which a would-be-down met by
-# definition. The removal comes from _plan_removes asking PlanResolver.plan_fells.
+# A unit BLIND to it (#708, dev 2026-09-04: "the ai simply won't see crisis mode until they have to
+# react to a unit currently in it") prices the hit at the damage AND the removal it would have
+# earned if the gambit did not exist -- the raw pre-Crisis number, capped by the overkill clamp, and
+# the removal from PlanResolver.plan_fells, which counts a fresh Crisis as a fall.
 #
 # BLIND TO THE GAMBIT, SIGHTED TO WHAT IT DRAWS (dev, same day). A Crisis'd defender is still ACTIVE
 # and so COUNTERS where a downed one cannot, and that counter's damage still lands in w -- so
@@ -669,6 +667,7 @@ static func _score_plan(faction: Team.Faction, plan: ResolvedPlan, stakes: _Stak
 		profile: AIProfile = null) -> AIScore:
 	if profile == null:
 		profile = AIProfile.new()
+	var sees_crisis := profile.sees_crisis
 	var dealt := {}   # Unit -> damage this plan lands on them, before the overkill clamp
 	var restored := {}   # Unit -> HP a heal actually gave them (a standing unit; a body is a save)
 	var stabilised := {}   # body -> true
@@ -684,12 +683,12 @@ static func _score_plan(faction: Team.Faction, plan: ResolvedPlan, stakes: _Stak
 					and (stakes == null or not stakes.rescuable.has(victim)):
 				stabilised[victim] = true
 			continue
-		dealt[victim] = int(dealt.get(victim, 0)) + a.resolved.damage
+		dealt[victim] = int(dealt.get(victim, 0)) + _hp_cost(a.resolved, sees_crisis)
 	for sink in plan.sinks:
 		var drowned: Unit = sink.actor
 		if drowned == null or sink.resolved == null or not is_instance_valid(drowned):
 			continue
-		dealt[drowned] = int(dealt.get(drowned, 0)) + sink.resolved.damage
+		dealt[drowned] = int(dealt.get(drowned, 0)) + _hp_cost(sink.resolved, sees_crisis)
 
 	# The REACTIONS this plan draws -- counters and any watch shots it sets off. Their victims join
 	# the removal ledger, and what they land on OUR side accumulates as the w tie-break. Damage a
@@ -701,7 +700,7 @@ static func _score_plan(faction: Team.Faction, plan: ResolvedPlan, stakes: _Stak
 		if victim == null or a.resolved == null or not is_instance_valid(victim):
 			continue
 		if not Team.is_enemy(faction, victim.get_faction()):
-			taken += a.resolved.damage
+			taken += _hp_cost(a.resolved, sees_crisis)
 		if not dealt.has(victim):
 			dealt[victim] = 0
 
@@ -738,14 +737,14 @@ static func _score_plan(faction: Team.Faction, plan: ResolvedPlan, stakes: _Stak
 	# off them after -- so it is the plan's effect on a person, which is what a removal means.
 	var removals := 0
 	for victim: Unit in dealt:
-		if not _plan_removes(victim, plan):
+		if not _plan_removes(victim, plan, profile):
 			continue
 		removals += 1 if Team.is_enemy(faction, victim.get_faction()) else -1
 
 	var splits := 0
 	if profile.values_splits:
 		for unit: Unit in SplitForecast.leavers(plan):
-			if _plan_removes(unit, plan):
+			if _plan_removes(unit, plan, profile):
 				continue
 			splits += 1 if Team.is_enemy(faction, unit.get_faction()) else -1
 
@@ -773,12 +772,24 @@ static func _reaction_rows(plan: ResolvedPlan) -> Array[AttackAction]:
 
 
 # Does this plan take `victim` off its feet? Standing now (the live board IS plan-start) and not
-# standing once the plan resolves. A CRISIS prediction lands ACTIVE, so the gambit falls out here
-# too rather than needing a clause of its own.
-static func _plan_removes(victim: Unit, plan: ResolvedPlan) -> bool:
+# standing once the plan resolves. For a unit that sees Crisis that is a change of LIFECYCLE alone, so a
+# fresh Crisis -- which lands ACTIVE -- is no removal, while killing a unit already in Crisis is. A unit
+# blind to it asks PlanResolver.plan_fells, which counts a fresh Crisis as the fall it would have been.
+static func _plan_removes(victim: Unit, plan: ResolvedPlan, profile: AIProfile = null) -> bool:
 	if not victim.is_active():
 		return false
+	if profile == null or profile.sees_crisis:
+		return PlanResolver.projected_lifecycle(victim, plan.hypo) != Unit.LifecycleState.ACTIVE
 	return PlanResolver.plan_fells(victim, plan.hypo)
+
+
+# What a row really takes off its victim. A hit that sets Crisis off leaves the target at the revive
+# HP, so for a unit that sees the gambit its cost is the HP it actually removes -- never below zero,
+# since a unit under the revive HP comes back HIGHER. Every other row is its damage.
+static func _hp_cost(outcome: ResolvedOutcome, sees_crisis: bool) -> int:
+	if sees_crisis and outcome.lethality == ResolvedOutcome.Lethality.CRISIS:
+		return maxi(0, outcome.hp_before - outcome.target_hp_after)
+	return outcome.damage
 
 
 # What a squad's scoring knows beyond the plan itself (#1220), built once per squad decision: whether
@@ -807,7 +818,8 @@ static func _stakes_for(squad: Squad, board: BoardContext, plan: ResolvedPlan) -
 # own)? Its own rows are the volley it derived and any unit its deposits drowned; a COUNTER it draws is
 # not its work, so "a free finish beats a suicidal swing" stands. Measured against `base` -- the plan
 # without it -- so a squadmate a counter was already going to fell is not laid at this candidate's
-# door. A predicted CRISIS counts as the fall it would have been: the AI is blind to the gambit.
+# door. A predicted CRISIS on our own counts as a fall whatever the profile sees: knocking a
+# squadmate into the gambit spends its one safety net.
 #
 # The notch is the acting unit's profile (#1230): NEVER_KILLS refuses only a unit it would KILL, so a
 # sloppier unit may down a squadmate. Knocking one of its own into Crisis is refused at every notch.
@@ -1597,7 +1609,7 @@ static func _first_opportunity(unit: Unit, cells: Array, squad: Squad, board: Bo
 			if tier == Tier.BREAK and profile.seeks == AIProfile.Seek.KILLS:
 				continue
 			if tier < 0:
-				if not _fate_can_pay(candidate, plan):
+				if not _fate_can_pay(candidate, plan, profile):
 					dead[key] = true
 				continue
 			if found == null or tier > found.tier:
@@ -1662,14 +1674,14 @@ static func _group_key(candidate: AttackAction, board: BoardContext) -> String:
 # Could another cell of this candidate's group still pay? Only a single-victim volley is shareable --
 # a wider one's other victims are shoved in directions the key does not pin -- and then only if that
 # victim was removed or knocked out of its squad here.
-static func _fate_can_pay(candidate: AttackAction, plan: ResolvedPlan) -> bool:
+static func _fate_can_pay(candidate: AttackAction, plan: ResolvedPlan, profile: AIProfile) -> bool:
 	var victims: Array[Unit] = []
 	for a in plan.attacks:
 		if a.source_aim == candidate and a.target != null and is_instance_valid(a.target) and not victims.has(a.target):
 			victims.append(a.target)
 	if victims.size() != 1:
 		return true
-	return _plan_removes(victims[0], plan) or SplitForecast.leavers(plan).has(victims[0])
+	return _plan_removes(victims[0], plan, profile) or SplitForecast.leavers(plan).has(victims[0])
 
 
 # Every member takes a main action. The tail of engage() and the whole of HoldArchetype's turn --
