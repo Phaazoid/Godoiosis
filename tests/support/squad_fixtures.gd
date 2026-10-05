@@ -184,3 +184,16 @@ static func stamp_struck(action: AttackAction, board: BoardContext) -> AttackAct
 	action.struck_cells = Reach.get_affected_cells_from(action.actor, action.origin_cell,
 			action.target_cell, action.fired_attack, board)
 	return action
+
+
+# The catalog every resolve reads by default, the executor's included, holding one reaction: a SHOCK
+# hit on a WET unit strips the soaking -- the shape of the shipped electrocution, authored here so no
+# retune of Resources/Reactions can empty a fixture that leans on it. A suite calling this must call
+# ReactionCatalog.refresh() in after_test, or the next suite resolves with this one reaction.
+static func only_electrocution() -> void:
+	var reaction := ElementalReaction.new()
+	reaction.incoming_element = Elemental.Element.SHOCK
+	reaction.required_state = Elemental.State.WET
+	reaction.remove_states.assign([Elemental.State.WET])
+	ReactionCatalog._cache.assign([reaction])
+	ReactionCatalog._scanned = true

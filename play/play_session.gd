@@ -1170,18 +1170,29 @@ func execute() -> Dictionary:
 	var events: Array[String] = []
 
 	# 1) moves — teleport, the headless stand-in for tweened MoveAction.execute()
+	var moves: Array = []
 	for action in squad.action_queue.duplicate():
-		if action.action_type == BaseAction.ActionType.MOVE and action.is_valid and not action.is_hold_position:
+		if action.action_type != BaseAction.ActionType.MOVE:
+			continue
+		moves.append(action)
+		if action.is_valid and not action.is_hold_position:
 			var mv := action as MoveAction
 			mv.actor.movement.set_cell(mv.get_destination())
 			events.append("%s moves to %s" % [handle_for(mv.actor), str(mv.get_destination())])
 
-	# 1b) the watches those walks walked into (#413), in trigger order — the twin of the move phase's
-	# own interrupts. Only the MID-WALK ones: a shot a shove set off belongs after the volley that
-	# threw somebody into it, and attack_playback() below is where it lands (#567). Headless there is
-	# no walk to halt, so this is the event log's order and nothing else.
-	for shot in plan.mid_walk_shots():
-		_apply_attack(shot, events)
+	# 1b) what those walks walked into (#413), through the one moment list the game's move phase plays
+	# (ResolvedPlan.walk_moments, #46): a walk's soaking where the resolve soaked it, when a shot lands on
+	# that walker after, and every watch shot in trigger order. Only the MID-WALK shots: one a shove set
+	# off belongs after the volley that threw somebody into it, and attack_playback() below is where it
+	# lands (#567). Headless there is no walk to halt, so this is the order things land and nothing else.
+	for moment in plan.walk_moments(moves):
+		if moment["soak"]:
+			_apply_walk_states(moment["move"] as MoveAction, events)
+		for shot: AttackAction in moment["shots"]:
+			_apply_attack(shot, events)
+	# ...and every other walk's soaking, as the walk ends.
+	for move: MoveAction in moves:
+		_apply_walk_states(move, events)
 
 	# 2) attacks, then the terrain deposits they (and any Burrow order) produced, then 3) counters.
 	# Same order as OrderExecutor.execute_orders — a tile deposited this pass is live for the counters that
@@ -1244,6 +1255,13 @@ func execute() -> Dictionary:
 # The event line a finished mission logs, shared by execute() and end_turn so the dedupe matches.
 func _mission_line(tag: String) -> String:
 	return "MISSION %s" % tag
+
+# A walk's own states (#884), through MoveAction.apply_walk_states as the game's walk applies them.
+func _apply_walk_states(move: MoveAction, events: Array[String]) -> void:
+	if not move.apply_walk_states():
+		return
+	for state in move.resolved.states_added:
+		events.append("%s gains %s" % [handle_for(move.actor), Elemental.state_display_name(state)])
 
 # Play the resolved terrain deposits into the live store (twin of OrderExecutor._apply_cell_effects, minus
 # the redraw). Preview and execution consume the SAME ResolvedCellEffect objects (R3).

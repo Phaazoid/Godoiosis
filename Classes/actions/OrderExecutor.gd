@@ -410,14 +410,19 @@ func _execute_move_phase(actions: Array, plan: ResolvedPlan, sheet: BeatSheet,
 			# without its pause because its mover was removed mid-shot. Unreachable by design, and
 			# it plays the shot late rather than dropping it.
 			if mover.parked_at() == int(next["step"]) or all_complete:
-				await _execute_action_sequence(next["shots"], beat, holds, subjects, lines,
+				# The soaking lands first, as the resolve soaked the walker before this step's shots (#46).
+				if next["soak"]:
+					mover.apply_walk_states()
+				var shots: Array = next["shots"]
+				await _execute_action_sequence(shots, beat, holds, subjects, lines,
 						lingers, emphases, profiles)
 				mover.release()
 				pending.pop_front()
 				# The walk is still running, so the camera goes back to it (dev 2026-08-28). Skipped
 				# once nothing is left to watch, where the next phase's own pan takes over. It restores
 				# the walk's profile too, or the shot's cinematic would ride on through the rest of it.
-				if not all_complete:
+				# A soaking alone played nothing, so nothing left the walk to come back from.
+				if not all_complete and not shots.is_empty():
 					await _frame_the_walk(span, walk_profile, Pacing.PLAYBACK_PAN)
 				continue
 
@@ -484,36 +489,22 @@ func _frame_the_walk(span: Array[Vector2i], profile: Pacing.Profile, duration: f
 			duration)
 
 
-# The pass's mid-walk interrupts, in the order the resolve fired them (#567): one entry per moment,
-# each carrying the walk to halt, the step to halt at, and every shot that one entry set off --
-# a pinball chain included, since the cascade shares the moment that started it.
+# The pass's mid-walk interrupts (#567): ResolvedPlan.walk_moments, the one list both hosts play (#46),
+# each entry a walk to halt, the step to halt it at, and what plays there -- its shots, its soaking.
 #
 # The steps are handed to the walks here rather than stamped by the resolver: where a walk PAUSES is
 # playback's question, and the resolve already answered the only one it owns (when the shot fired).
 # Assigned to every mover, empty list included, so last pass's pauses can never survive into this one.
 func _walk_interrupts(plan: ResolvedPlan, actions: Array) -> Array[Dictionary]:
-	var moments: Array[Dictionary] = []
-	var by_move: Dictionary[MoveAction, Array] = {}
-	for shot in plan.mid_walk_shots():
-		var mover := shot.triggered_during as MoveAction
-		if mover == null or not actions.has(mover):
-			continue
-		var step: int = shot.triggered_at_step
-		if not moments.is_empty() and moments[-1]["move"] == mover and int(moments[-1]["step"]) == step:
-			(moments[-1]["shots"] as Array).append(shot)
-			continue
-		moments.append({"move": mover, "step": step, "shots": [shot]})
-		if not by_move.has(mover):
-			by_move[mover] = []
-		(by_move[mover] as Array).append(step)
-
+	var moments := plan.walk_moments(actions)
 	for action in actions:
 		var mover := action as MoveAction
 		if mover == null:
 			continue
 		var steps: Array[int] = []
-		if by_move.has(mover):
-			steps.assign(by_move[mover])
+		for moment in moments:
+			if moment["move"] == mover:
+				steps.append(int(moment["step"]))
 		mover.interrupt_steps = steps
 	return moments
 
