@@ -27,6 +27,7 @@ var _next_player := 0
 var _next_enemy := 0
 var _downed_pending: Array[Unit] = []   # units downed mid-execute; ejected AFTER the pass (mirrors OrderExecutor._downed_pending)
 var _executing := false   # true while execute() plays the pass, up to its pass-end sweeps: a running pass owns its plan (#361)
+var _boundary_events: Array[String] = []   # what a turn's start did (a bleed-out), drained by end_turn after each hand-off (#46)
 # This mission's state and rules (#46) -- the SAME object the game's MissionController holds, so a
 # headless run scores objectives, the clock and every latch exactly as the game does.
 var mission: MissionState
@@ -1318,7 +1319,7 @@ func execute() -> Dictionary:
 			if action.resolved_actor_felled:
 				continue
 			action.execute()
-			events.append(action.get_description())
+			events.append(_side_line(action))
 			# ...then the shots THIS order set off (#1003) -- MIRRORS execute_orders' own interleave,
 			# which is the third and last playback partition. An Overwatch armed onto a cell an
 			# enemy already occupies fires here, after the counters, because that is where the
@@ -1378,7 +1379,7 @@ func _apply_cell_effects(cell_effects: Array[ResolvedCellEffect], events: Array[
 func _apply_sinks(sinks: Array[SinkAction], events: Array[String]) -> void:
 	for sink in sinks:
 		sink.execute()
-		events.append(sink.get_description())
+		events.append("%s goes under at %s" % [handle_for(sink.actor), str(sink.cell)])
 
 
 # One attack's playback: AttackAction's own state steps, in the order execute() takes them (#46), so
@@ -1404,8 +1405,23 @@ func _apply_attack(atk: AttackAction, events: Array[String]) -> void:
 			events.append("%s is shoved to %s" % [handle_for(target), str(r.knockback_to)])
 		if r.removed and is_instance_valid(target):
 			events.append("%s falls into the void" % handle_for(target))
+		# What the hit did to its target's states (#46), which the preview's chips promised.
+		if target != null:
+			for state in r.states_added:
+				if state != Elemental.State.NONE:
+					events.append("%s gains %s" % [handle_for(target), Elemental.state_display_name(state)])
+			for state in r.states_removed:
+				if state != Elemental.State.NONE:
+					events.append("%s loses %s" % [handle_for(target), Elemental.state_display_name(state)])
 		atk.remove()
 	atk.settle()
+
+# A side-channel order's log line (#46): who and to whom by handle, then the game's own words, which
+# name units by name -- so "Warden guards Warden" says which Warden.
+func _side_line(action: BaseAction) -> String:
+	var aimed := action.aimed_at()
+	var whom := (" -> %s" % handle_for(aimed)) if aimed != null and aimed != action.actor else ""
+	return "%s %s%s: %s" % [handle_for(action.actor), action.get_action_name(), whom, action.get_description()]
 
 # ---- mission metadata & outcome (#96, #612) ----
 # Read off the mission and the zone store the scorer reads (#46), never the scenario a second time.
@@ -1464,12 +1480,13 @@ func end_turn() -> Dictionary:
 
 	# The side that just played burns BEFORE it hands off, and a burn that ends the mission does not
 	# hand off at all -- both mirror game.end_turn (#898).
+	_boundary_events.clear()
 	var log: Array[String] = _end_of_turn_tiles(turn_manager.active_faction())
 	if mission_tag() != "":
 		return _turn_result(log)
 
 	# The hand-off runs the round tick and the turn-start ticks through the handlers wired in _init.
-	turn_manager.end_turn(_board().present_factions())
+	log.append_array(_hand_off())
 	# Mirror the game's auto-skip: pass over factions with no commandable units (e.g. only
 	# downed), guarding against an all-downed board where this would loop with nothing to stop on.
 	# The board is re-read per pass, and the mission check mirrors game._on_turn_started's before it
@@ -1478,7 +1495,7 @@ func end_turn() -> Dictionary:
 		var board := _board()
 		if board.faction_has_active_units(turn_manager.active_faction()) or not board.has_active_units():
 			break
-		turn_manager.end_turn(board.present_factions())
+		log.append_array(_hand_off())
 	squad_manager.reset_faction_actions(turn_manager.active_faction())
 
 	# THE OPPONENT ACTS (#665). Until this existed, a headless "playthrough" was played against a
@@ -1501,12 +1518,21 @@ func end_turn() -> Dictionary:
 		log.append_array(_end_of_turn_tiles(acting))
 		if mission_tag() != "":
 			break
-		turn_manager.end_turn(_board().present_factions())
+		log.append_array(_hand_off())
 		var next := turn_manager.active_faction()
 		if next == acting:
 			break   # nobody else to hand to; do not spin
 		squad_manager.reset_faction_actions(next)
 	return _turn_result(log)
+
+
+# One hand-off, and what the incoming faction's turn start did (#46): the ticks run inside it, through
+# _on_turn_started, which buffers rather than logs because it is a signal handler with no log to hand.
+func _hand_off() -> Array[String]:
+	turn_manager.end_turn(_board().present_factions())
+	var events := _boundary_events.duplicate()
+	_boundary_events.clear()
+	return events
 
 
 # What end_turn hands back. A mission the boundary ended (headlessly, only a burn can) is reported
@@ -1552,7 +1578,15 @@ func _on_round_completed() -> void:
 
 
 func _on_turn_started(faction: Team.Faction) -> void:
+	# The downed whose clock this start may run out, by handle, since a body that bleeds out is freed.
+	var bodies := {}
+	for unit in live_units():
+		if unit.is_downed() and unit.get_faction() == faction:
+			bodies[unit] = handle_for(unit)
 	TurnBoundary.turn_start_ticks(live_units(), faction)
+	for unit in bodies.keys():   # untyped: a typed loop variable cannot hold a freed unit (#149)
+		if not is_instance_valid(unit) or (unit as Unit).is_dead():
+			_boundary_events.append("%s bleeds out" % bodies[unit])
 	squad_manager.enforce_contact()   # AFTER the ticks, as game._on_turn_started orders them
 
 
