@@ -76,6 +76,38 @@ func test_a_queued_heal_restores_the_hp_the_preview_promised() -> void:
 			"the headless executor left the healed ally at %d HP; the preview promised %d" % [hurt.get_current_hp(), promised]
 			).is_equal(promised)
 
+
+# A heal the max-HP cap clips says what it GAVE BACK, not what it was worth (#46). The log printed the
+# heal's whole size, so a medic topping up a scratched ally read as restoring HP nobody received.
+func test_a_capped_heal_logs_the_hp_it_restored() -> void:
+	var b: Dictionary = BoardBuilder.build(self, "CappedHealRoot")
+	auto_free(b.root)
+	BoardBuilder.paint_rect(b.grid, Rect2i(-2, -2, 8, 8))
+	var medic: Unit = BoardBuilder.spawn(b, _data("Medic", PLAYER), Vector2i(0, 0))
+	var hurt: Unit = BoardBuilder.spawn(b, _data("Hurt", PLAYER), Vector2i(1, 0))
+	BoardBuilder.spawn(b, _data("Foe", ENEMY), Vector2i(5, 5))
+	var template := WeaponData.new()
+	template.weapon_type = WeaponData.WeaponType.CHAINSWORD
+	template.main_attack = WeaponAttackData.new()
+	template.main_attack.power = 6
+	template.main_attack.heals = true
+	template.main_attack.hits_allies = true
+	medic.add_item(WeaponInstance.make(template))
+	hurt.set_current_hp(hurt.get_max_hp() - 2)
+	var sess = PlaySession.new(b)
+
+	assert_bool(sess.queue_attack(sess.handle_for(medic), hurt.movement.cell).ok).override_failure_message(
+			"fixture: the heal was refused").is_true()
+	var plan: ResolvedPlan = sess.squad_manager.resolved_plan_for(medic.squad)
+	var heal: AttackAction = plan.attacks[0]
+	assert_int(heal.resolved.heal_amount).override_failure_message(
+			"fixture: the heal fits under the cap, so the cap clips nothing").is_greater(2)
+
+	var events: Array = sess.execute().get("events", [])
+	var line := "%s heals %s for 2" % [sess.handle_for(medic), sess.handle_for(hurt)]
+	assert_bool(events.has(line)).override_failure_message(
+			"the log did not say the heal gave back 2: %s" % str(events)).is_true()
+
 # #33 lifecycle: a would-be-fatal hit UNDER the overkill ceiling DOWNS (not kills) — preview
 # must say DOWNED and execution must leave the target alive at 1 HP, with its counter skipped.
 # This is the exact gap the view layer had: it read hp<=0 as "DIES".

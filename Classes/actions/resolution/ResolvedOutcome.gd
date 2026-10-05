@@ -6,7 +6,7 @@ class_name ResolvedOutcome
 
 var base_damage: int = 0
 var damage: int = 0                              # final, post-elemental
-var heal_amount: int = 0                          # final HP restored this hit (0 for a damage attack)
+var heal_amount: int = 0                          # the heal's whole size, UNCAPPED (0 for a damage attack); hp_restored() is what landed
 var states_added: Array[Elemental.State] = []
 var states_removed: Array[Elemental.State] = []
 # Authored duration overrides for states_added entries (max across fired reactions). Absent = the
@@ -120,6 +120,11 @@ var severed_limb: int = -1
 # resolver and both execution twins -- execution re-asks the ladder, which cannot see a removal.
 func non_blow() -> int:
 	return damage if removed else drown_damage
+
+# The HP a heal actually gave back (#46): heal_amount is the heal's whole size, and the max-HP cap ate
+# the rest, so a readout of what happened reads this. The field stays uncapped for its other readers.
+func hp_restored() -> int:
+	return maxi(0, target_hp_after - hp_before)
 
 # The target's weight held this hit's whole shove, so it stays on knockback_from (#1186). The board
 # marks that cell; a shove held only in part already draws its shorter trail.

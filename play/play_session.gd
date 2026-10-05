@@ -1302,7 +1302,7 @@ func _apply_attack(atk: AttackAction, events: Array[String]) -> void:
 	if atk.land():
 		var dropped := " (payload)" if atk.dropped_by != null else ""
 		if atk.fired_attack != null and atk.fired_attack.heals:
-			events.append("%s heals %s for %d%s" % [handle_for(actor), handle_for(target), r.heal_amount, dropped])
+			events.append("%s heals %s for %d%s" % [handle_for(actor), handle_for(target), r.hp_restored(), dropped])
 		else:
 			events.append("%s hits %s for %d%s%s" % [handle_for(actor), handle_for(target), r.damage, _lethality_tag(r.lethality), dropped])
 		if r.knockback_applied and is_instance_valid(target):
