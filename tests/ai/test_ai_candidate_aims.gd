@@ -107,6 +107,24 @@ func test_a_heal_is_never_aimed_at_an_enemy() -> void:
 	assert_bool(queued).override_failure_message("the healer aimed its heal at a hurt enemy").is_false()
 
 
+# A lopsided heal -- the aimed cell and the one two east of it -- with the hurt ally just out of its
+# reach and an enemy where an aim near the ally would land. The only aims it has heal an enemy alone.
+func test_a_heal_shaped_to_reach_only_an_enemy_is_not_aimed() -> void:
+	var board := _build_board()
+	var healer := _spawn(board, ENEMY, Vector2i(2, 2))
+	var heal := _heal(8, 3)
+	var offsets: Array[Vector2i] = [Vector2i(0, 0), Vector2i(2, 0)]
+	P.stamped(heal, 3, offsets)
+	(healer.get_equipped_weapon() as WeaponInstance).template.main_attack = heal
+	var ally := _spawn(board, ENEMY, Vector2i(2, 7), {Stats.Stat.MHP: 30})
+	ally.set_current_hp(5)
+	var foe := _spawn(board, PLAYER, Vector2i(2, 5), {Stats.Stat.MHP: 30})
+	foe.set_current_hp(5)
+	var queued := AITactics.queue_main_action(healer, _ctx(board), board.squad_manager, ATTACK_ONLY)
+
+	assert_bool(queued).override_failure_message("the healer healed an enemy because its shape could not reach the ally") 		.is_false()
+
+
 func test_a_heal_ignores_an_ally_at_full_health() -> void:
 	var board := _build_board()
 	var healer := _spawn(board, ENEMY, Vector2i(2, 2))
