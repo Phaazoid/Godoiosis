@@ -301,7 +301,7 @@ static func _try_best_attack(unit: Unit, board: BoardContext, squad_manager: Squ
 	var base_plan := squad_manager.resolve_plan(squad, board, reactions, terrain)
 	var alone: Array[Unit] = [unit]
 	var pick := _best_candidate_for(unit, squad, board, base_plan, squad_manager, reactions, terrain, {}, true,
-			_candidates_by_member(alone, board, base_plan))
+			_candidates_by_member(alone, board, base_plan), _stakes_for(squad, board, base_plan))
 	var queued := false
 	if pick != null:
 		unit.active_attack = pick.action.fired_attack   # the winner stays live, mirroring a player pick
@@ -403,10 +403,24 @@ static func _attack_candidates(unit: Unit, board: BoardContext, origin: Vector2i
 	return out
 
 
-# Score a whole RESOLVED PLAN -> Vector4i(x = net removals, y = net squad breaks, z = net damage
-# dealt, w = -damage taken from reactions); compared lexicographically (_beats). The MARGINAL a
+# Score a whole RESOLVED PLAN -> an AIScore: (mission, removals, squad breaks, saves, damage,
+# damage taken), compared lexicographically (#1220 widened it from four terms). The MARGINAL a
 # candidate adds is what ranks it, and since #711 there is no bar it has to clear -- the score
 # orders, it never gates.
+#
+# A MISSION-ENDING KILL RANKS ABOVE EVERYTHING (#1220 ruling 2): a unit the mission says must survive,
+# killed by this plan while the mission's lose conditions hold PROTECTED_UNIT_LOST. Read off the hypo,
+# so a downed escort finished and a standing one felled in a single blow both count. The sign is the
+# PLAYER's loss, since the mission is the player's: good for anyone hostile to the player.
+#
+# A HEAL IS PRICED LIKE DAMAGE (ruling 3): the HP it actually restores joins the damage term for our
+# side and against us on an enemy's, so overheal is worth nothing by the same arithmetic that makes
+# overkill worth nothing. A heal on a BODY is a SAVE instead (ruling 16) -- it stops the clock -- and
+# counts only when nobody could rescue that body this turn (stakes.rescuable), once per body, ranked
+# above damage and below a squad break.
+#
+# A UNIT THE PASS'S OWN MELT DROWNS (#922) is a victim like any other: plan.sinks seeds the ledger,
+# so the removal and the damage are priced through the ordinary rules below.
 #
 # A SQUAD BREAK SITS ABOVE DAMAGE AND BELOW A REMOVAL (#761, dev 2026-10-03), so a shove that knocks
 # somebody out of their squad beats a harder hit that does not. Counted off SplitForecast -- the
@@ -421,9 +435,7 @@ static func _attack_candidates(unit: Unit, board: BoardContext, origin: Vector2i
 #
 # ONE sign rule covers all three lists: a victim hostile to `faction` counts FOR, anyone else counts
 # AGAINST. That is the net-damage doctrine (dev, 2026-07-22), and it lands the derived rows
-# correctly with no second clause -- an enemy AoE counter splashing its own side adds. Heals
-# contribute nothing: heal_amount is not damage, and scoring it would start AI healers healing,
-# which is its own behaviour and its own ticket.
+# correctly with no second clause -- an enemy AoE counter splashing its own side adds.
 #
 # A REACTION'S DAMAGE NEVER JOINS z -- ONLY ITS REMOVALS (dev ruling, 2026-09-02). Priced at par
 # it cancels exactly: two units with the same weapon trade 3 for 3, every even exchange scores
@@ -475,13 +487,28 @@ static func _attack_candidates(unit: Unit, board: BoardContext, origin: Vector2i
 # outrank a real swing -- and _plan_removes answers false for a body, so it cannot earn a removal
 # either. That +1 came from the body CLINGING at 1 HP until #1002 let a heal raise one, and the
 # clamp now caps a body at 1 outright so the ruling survives the state that would have broken it.
-static func _score_plan(faction: Team.Faction, plan: ResolvedPlan) -> Vector4i:
+static func _score_plan(faction: Team.Faction, plan: ResolvedPlan, stakes: _Stakes = null) -> AIScore:
 	var dealt := {}   # Unit -> damage this plan lands on them, before the overkill clamp
+	var restored := {}   # Unit -> HP a heal actually gave them (a standing unit; a body is a save)
+	var stabilised := {}   # body -> true
 	for a in plan.attacks:
 		var victim: Unit = a.target
 		if victim == null or a.resolved == null or not is_instance_valid(victim):
 			continue
+		if a.fired_attack != null and a.fired_attack.heals:
+			var gained := maxi(a.resolved.target_hp_after - a.resolved.hp_before, 0)
+			if not victim.is_downed():
+				restored[victim] = int(restored.get(victim, 0)) + gained
+			elif gained > 0 and victim.downed_turns_remaining >= 0 \
+					and (stakes == null or not stakes.rescuable.has(victim)):
+				stabilised[victim] = true
+			continue
 		dealt[victim] = int(dealt.get(victim, 0)) + a.resolved.damage
+	for sink in plan.sinks:
+		var drowned: Unit = sink.actor
+		if drowned == null or sink.resolved == null or not is_instance_valid(drowned):
+			continue
+		dealt[drowned] = int(dealt.get(drowned, 0)) + sink.resolved.damage
 
 	# The REACTIONS this plan draws -- counters and any watch shots it sets off. Their victims join
 	# the removal ledger, and what they land on OUR side accumulates as the w tie-break. Damage a
@@ -514,6 +541,12 @@ static func _score_plan(faction: Team.Faction, plan: ResolvedPlan) -> Vector4i:
 		var cap: int = 1 if victim.is_downed() else maxi(victim.get_current_hp(), 0)
 		var counted: int = mini(int(dealt[victim]), cap)
 		net += counted if Team.is_enemy(faction, victim.get_faction()) else -counted
+	for patient: Unit in restored:
+		var gained: int = restored[patient]
+		net += -gained if Team.is_enemy(faction, patient.get_faction()) else gained
+	var saves := 0
+	for body: Unit in stabilised:
+		saves += -1 if Team.is_enemy(faction, body.get_faction()) else 1
 
 	# A REMOVAL IS PER VICTIM, NOT PER HIT, and that is the whole of squad focus-fire. Counting the
 	# lethality rung of each row instead double-pays: the ladder answers KILLED on a body once the
@@ -532,7 +565,14 @@ static func _score_plan(faction: Team.Faction, plan: ResolvedPlan) -> Vector4i:
 		if _plan_removes(unit, plan):
 			continue
 		splits += 1 if Team.is_enemy(faction, unit.get_faction()) else -1
-	return Vector4i(removals, splits, net, -taken)
+
+	var mission := 0
+	if stakes != null and stakes.protected_counts:
+		for victim: Unit in dealt:
+			if victim.must_survive and not victim.is_dead() \
+					and PlanResolver.projected_lifecycle(victim, plan.hypo) == Unit.LifecycleState.DEAD:
+				mission += 1 if Team.is_enemy(faction, Team.Faction.PLAYER) else -1
+	return AIScore.of(mission, removals, splits, saves, net, taken)
 
 
 # The DERIVED rows: counters the plan drew, plus any watch shots it set off. Deliberately NOT
@@ -555,18 +595,56 @@ static func _plan_removes(victim: Unit, plan: ResolvedPlan) -> bool:
 	return PlanResolver.plan_fells(victim, plan.hypo)
 
 
-# Lexicographic, and the ORDER is the design: removals are the currency, a squad break comes next
-# (#761), damage dealt is the tie-break, and damage taken from reactions only speaks when all of
-# those tie exactly -- which is what "when all else is even, go for optimal exchanges" means, and
-# what keeps a counter from ever talking the AI out of a trade.
-static func _beats(a: Vector4i, b: Vector4i) -> bool:
-	if a.x != b.x:
-		return a.x > b.x
-	if a.y != b.y:
-		return a.y > b.y
-	if a.z != b.z:
-		return a.z > b.z
-	return a.w > b.w
+# What a squad's scoring knows beyond the plan itself (#1220), built once per squad decision: whether
+# the mission ends on a protected unit's death, and which bodies a squadmate could rescue this turn
+# (a heal on one of those saves nothing). Null scores a plan with neither -- a sandbox board.
+class _Stakes:
+	var protected_counts := false
+	var rescuable := {}   # body -> true
+
+
+static func _stakes_for(squad: Squad, board: BoardContext, plan: ResolvedPlan) -> _Stakes:
+	var out := _Stakes.new()
+	out.protected_counts = board.mission != null \
+			and board.mission.lose_conditions.has(MissionRules.LoseCondition.PROTECTED_UNIT_LOST)
+	if squad == null or not AIArchetype.main_action_priority(squad.archetype).has(BaseAction.ActionType.RESCUE):
+		return out
+	for member in squad.get_members():
+		if not member.is_active() or not member.can_rescue_carry():
+			continue
+		for body in RulesService.adjacent_downed_allies(member, board, plan):
+			out.rescuable[body] = true
+	return out
+
+
+# Does this candidate's own work fell somebody on our side (#1220 ruling 1: the AI never fells its
+# own)? Its own rows are the volley it derived and any unit its deposits drowned; a COUNTER it draws is
+# not its work, so "a free finish beats a suicidal swing" stands. Measured against `base` -- the plan
+# without it -- so a squadmate a counter was already going to fell is not laid at this candidate's
+# door. A predicted CRISIS counts as the fall it would have been: the AI is blind to the gambit.
+static func _fells_own(aims: Array, faction: Team.Faction, base: ResolvedPlan, plan: ResolvedPlan) -> bool:
+	for a in plan.attacks:
+		if not aims.has(a.source_aim) or a.resolved == null:
+			continue
+		if _newly_felled(a.target, faction, base, plan) \
+				or (a.resolved.lethality == ResolvedOutcome.Lethality.CRISIS and _own_side(a.target, faction)):
+			return true
+	for sink in plan.sinks:
+		if sink.cause == null or not (aims.has(sink.cause) or aims.has(sink.cause.source_aim)):
+			continue
+		if _newly_felled(sink.actor, faction, base, plan):
+			return true
+	return false
+
+
+static func _own_side(unit: Unit, faction: Team.Faction) -> bool:
+	return unit != null and is_instance_valid(unit) and not Team.is_enemy(faction, unit.get_faction())
+
+
+static func _newly_felled(unit: Unit, faction: Team.Faction, base: ResolvedPlan, plan: ResolvedPlan) -> bool:
+	if not _own_side(unit, faction):
+		return false
+	return PlanResolver.projected_lifecycle(unit, plan.hypo) > PlanResolver.projected_lifecycle(unit, base.hypo)
 
 # Fallback builders -- each mirrors MainActionMenu's gate for its verb, then picks a
 # deterministic target (Law #1: explicit tie-break, first-in-order wins).
@@ -906,12 +984,16 @@ class SeekResult:
 	var pins := {}   # Unit -> cell, for GroupMoveSolver.plan
 
 
+# What a seeker found, best first: ending the mission (#1220), a removal, a squad break.
+enum Tier { BREAK, REMOVAL, MISSION }
+
+
 class _Opportunity:
 	var unit: Unit
 	var cell: Vector2i
 	var cost: int
 	var action: AttackAction
-	var removal: bool
+	var tier: Tier
 
 
 static func seek_positions(squad: Squad, default_destination: Vector2i, board: BoardContext,
@@ -928,10 +1010,11 @@ static func seek_positions(squad: Squad, default_destination: Vector2i, board: B
 	for member in squad.get_members():
 		live[member] = member.movement.cell
 	var wins: Array[BaseAction] = []
+	var stakes := _stakes_for(null, board, null)
 
 	if _can_seek(leader):
 		var lead := _first_opportunity(leader, _leader_cells(squad, leader, default_destination, board, allowed),
-				squad, board, squad_manager, wins, within, reactions, terrain)
+				squad, board, squad_manager, wins, within, reactions, terrain, stakes)
 		if lead != null:
 			out.destination = lead.cell
 			wins.append(lead.action)
@@ -950,7 +1033,7 @@ static func seek_positions(squad: Squad, default_destination: Vector2i, board: B
 		var best: _Opportunity = null
 		for member in waiting:
 			var found := _first_opportunity(member, options[member], squad, board, squad_manager, wins, within,
-					reactions, terrain)
+					reactions, terrain, stakes)
 			if found != null and (best == null or _opportunity_beats(found, best)):
 				best = found
 		if best == null:
@@ -968,10 +1051,10 @@ static func _can_seek(unit: Unit) -> bool:
 	return unit.is_active() and unit.can_wield_equipped()
 
 
-# A removal beats a break; then the closest -- the cheaper move -- does it; ties keep member order.
+# The higher tier wins; then the closest -- the cheaper move -- does it; ties keep member order.
 static func _opportunity_beats(a: _Opportunity, b: _Opportunity) -> bool:
-	if a.removal != b.removal:
-		return a.removal
+	if a.tier != b.tier:
+		return a.tier > b.tier
 	return a.cost < b.cost
 
 
@@ -1046,9 +1129,11 @@ static func _stand(squad: Squad, leader: Unit, leader_destination: Vector2i, pla
 	leader.movement.set_cell(leader_destination)
 
 
-# The first cell in `cells` from which `unit` takes a removal, else the first that breaks a squad.
-# Each cell is scored by standing there, as a marginal over what `wins` already does; `unit` is put
-# back where it started before returning.
+# The first cell in `cells` from which `unit` ends the mission, else the first that takes a removal,
+# else the first that breaks a squad. The mission tier is looked for only while the mission can end
+# on a kill -- otherwise a removal ends the search as it always has. Each cell is scored by standing
+# there, as a marginal over what `wins` already does; `unit` is put back where it started. A
+# candidate that would fell our own side is never an opportunity (#1220 ruling 1).
 #
 # One resolve stands for a GROUP of cells: see _group_key. A group whose first resolve shows its
 # single victim neither removed nor broken is skipped from then on, since every cell in it hands that
@@ -1056,13 +1141,13 @@ static func _stand(squad: Squad, leader: Unit, leader_destination: Vector2i, pla
 # cell, because counters are the one thing that differs inside a group.
 static func _first_opportunity(unit: Unit, cells: Array, squad: Squad, board: BoardContext,
 		squad_manager: SquadManager, wins: Array[BaseAction], within,
-		reactions: Array[ElementalReaction], terrain: Array[TerrainReaction]) -> _Opportunity:
+		reactions: Array[ElementalReaction], terrain: Array[TerrainReaction], stakes: _Stakes) -> _Opportunity:
 	var start := unit.movement.cell
 	var faction := unit.get_faction()
 	var base_plan := squad_manager.resolve_hypothetical(squad, wins, board, reactions, terrain)
 	var stale := false
 	var dead := {}
-	var split: _Opportunity = null
+	var top: Tier = Tier.MISSION if stakes.protected_counts else Tier.REMOVAL
 	var found: _Opportunity = null
 	for entry: Array in cells:
 		var cell: Vector2i = entry[0]
@@ -1077,7 +1162,7 @@ static func _first_opportunity(unit: Unit, cells: Array, squad: Squad, board: Bo
 		var candidates := _attack_candidates(unit, board, cell, base_plan.hypo)
 		if candidates.is_empty():
 			continue
-		var base := _score_plan(faction, base_plan)
+		var base := _score_plan(faction, base_plan, stakes)
 		for candidate in candidates:
 			if within != null and not within.has(candidate.target_cell):
 				continue
@@ -1088,28 +1173,44 @@ static func _first_opportunity(unit: Unit, cells: Array, squad: Squad, board: Bo
 			trial.append(candidate)
 			var plan := squad_manager.resolve_hypothetical(squad, trial, board, reactions, terrain)
 			stale = true
-			var score := _score_plan(faction, plan) - base
-			if score.x > 0:
-				found = _opportunity(unit, cell, int(entry[1]), candidate, true)
+			if _fells_own([candidate], faction, base_plan, plan):
+				continue
+			var tier := _tier_of(_score_plan(faction, plan, stakes).minus(base))
+			if tier < 0:
+				if not _fate_can_pay(candidate, plan):
+					dead[key] = true
+				continue
+			if found == null or tier > found.tier:
+				found = _opportunity(unit, cell, int(entry[1]), candidate, tier as Tier)
+			if found.tier == top:
 				break
-			if score.x == 0 and score.y > 0:
-				if split == null:
-					split = _opportunity(unit, cell, int(entry[1]), candidate, false)
-			elif not _fate_can_pay(candidate, plan):
-				dead[key] = true
-		if found != null:
+		if found != null and found.tier == top:
 			break
 	unit.movement.set_cell(start)
-	return found if found != null else split
+	return found
 
 
-static func _opportunity(unit: Unit, cell: Vector2i, cost: int, action: AttackAction, removal: bool) -> _Opportunity:
+# Which seek tier a marginal reaches, or -1 when it reaches none. A removal or a mission win that a
+# loss elsewhere in the same plan cancels (a counter fells us) is not one.
+static func _tier_of(score: AIScore) -> int:
+	if score.mission > 0:
+		return Tier.MISSION
+	if score.mission < 0:
+		return -1
+	if score.removals > 0:
+		return Tier.REMOVAL
+	if score.removals == 0 and score.splits > 0:
+		return Tier.BREAK
+	return -1
+
+
+static func _opportunity(unit: Unit, cell: Vector2i, cost: int, action: AttackAction, tier: Tier) -> _Opportunity:
 	var out := _Opportunity.new()
 	out.unit = unit
 	out.cell = cell
 	out.cost = cost
 	out.action = action
-	out.removal = removal
+	out.tier = tier
 	return out
 
 
@@ -1193,10 +1294,11 @@ static func _queue_attacks_jointly(squad: Squad, board: BoardContext, squad_mana
 		# nothing is committed within a round, so no candidate can go stale before the single queue
 		# below, and the next round sees the commitment through its own base resolve.
 		var by_member := _candidates_by_member(squad.get_members(), board, base_plan)
+		var stakes := _stakes_for(squad, board, base_plan)
 		var best: _Scored = null
 		for member in squad.get_members():
-			var pick := _best_candidate_for(member, squad, board, base_plan, squad_manager, reactions, terrain, refused, true, by_member)
-			if pick != null and (best == null or _beats(pick.score, best.score)):
+			var pick := _best_candidate_for(member, squad, board, base_plan, squad_manager, reactions, terrain, refused, true, by_member, stakes)
+			if pick != null and (best == null or pick.score.beats(best.score)):
 				best = pick
 		if best == null:
 			break
@@ -1227,7 +1329,7 @@ static func _queue_attacks_jointly(squad: Squad, board: BoardContext, squad_mana
 
 class _Scored:
 	var action: AttackAction
-	var score: Vector4i
+	var score: AIScore
 
 
 # One member's best candidate, or null when it has nothing it can legally aim.
@@ -1250,20 +1352,17 @@ class _Scored:
 # counter would FELL the attacker, and the score decides it (dev, 2026-09-03): a free finish at
 # (0,0,+1,0) beats a suicidal swing at (-1,0,d,-x). That is the only comparison a body wins.
 #
-# THE SCORE ORDERS, IT NEVER GATES (#711, dev ruling 2026-09-02): "the AI should ALWAYS attack if
-# there is an option to, and if all the options are weighed bad, it has to pick its least bad
-# option." So there is no bar to beat and the argmax wins at any sign -- a squad frozen by a
-# counter bill it could not net positive against is the shape that deleted the bar.
-#
 # REFUSAL still removes a candidate before it can count: one `queue_action` turned down is skipped,
-# so it was never a real option. That is the surviving half of "pass 2 needs an empty pass 1".
+# so it was never a real option. That is the surviving half of "pass 2 needs an empty pass 1". So
+# does a candidate that would fell our own side (#1220 ruling 1): never an option, not a bad one.
 static func _best_candidate_for(member: Unit, squad: Squad, board: BoardContext, base_plan: ResolvedPlan,
 		squad_manager: SquadManager, reactions: Array[ElementalReaction],
 		terrain: Array[TerrainReaction], refused: Dictionary, allow_lookahead: bool,
-		by_member: Dictionary) -> _Scored:
+		by_member: Dictionary, stakes: _Stakes) -> _Scored:
 	if not by_member.has(member):
 		return null   # the eligibility gate ran when the table was built -- _candidates_by_member
-	var base := _score_plan(member.get_faction(), base_plan)
+	var faction := member.get_faction()
+	var base := _score_plan(faction, base_plan, stakes)
 	var routine := AIWeaponRoutine.for_unit(member)
 	var best: _Scored = null
 	var last_resort: _Scored = null   # the best of what the family DEFERRED -- see below
@@ -1273,31 +1372,33 @@ static func _best_candidate_for(member: Unit, squad: Squad, board: BoardContext,
 			continue
 		var one: Array[BaseAction] = [candidate]
 		var plan := squad_manager.resolve_hypothetical(squad, one, board, reactions, terrain)
-		var score := _score_plan(member.get_faction(), plan) - base
+		if _fells_own([candidate], faction, base_plan, plan):
+			continue
+		var score := _score_plan(faction, plan, stakes).minus(base)
 		# A SET-UP is worth nothing by itself and everything to the swing behind it: Splash deals
 		# no damage, so soaking a target scores (0,0) and a greedy chooser could never OPEN a
 		# combo. One step of lookahead prices it by what a squadmate could then do (dev call,
 		# pairs in v1, 2026-09-02), FLOORED AT ITS OWN SOLO SCORE -- see _lookahead for why
 		# inventing a zero there inverts the ranking now that a negative score can still win.
-		if not _beats(score, Vector4i.ZERO) and allow_lookahead and _applies_state_to_an_enemy(member.get_faction(), plan):
-			score = _lookahead(member, candidate, score, squad, board, base_plan, squad_manager, reactions, terrain, refused, by_member)
+		if not score.beats(AIScore.zero()) and allow_lookahead and _applies_state_to_an_enemy(faction, plan):
+			score = _lookahead(member, candidate, score, squad, board, base_plan, squad_manager, reactions, terrain, refused, by_member, stakes)
 		# A DEFERRED candidate is the family's own last resort (#726): it loses to every candidate
 		# this member has NOT deferred and is still taken when it has nothing else, so #711 stays
 		# literal -- the AI always attacks. MEMBER-LOCAL on purpose: decided here, never carried on
 		# _Scored into the joint loop, where it would become a precedence across members (the
 		# two-tier shape #720 deleted) and let one family's routine reorder another family's swing.
 		if routine.defers_candidate(member, candidate, plan, score):
-			if last_resort == null or _beats(score, last_resort.score):
+			if last_resort == null or score.beats(last_resort.score):
 				last_resort = _scored(candidate, score)
 			continue
-		if best == null or _beats(score, best.score):
+		if best == null or score.beats(best.score):
 			best = _scored(candidate, score)
 	if best != null:
 		return best
 	return last_resort
 
 
-static func _scored(action: AttackAction, score: Vector4i) -> _Scored:
+static func _scored(action: AttackAction, score: AIScore) -> _Scored:
 	var out := _Scored.new()
 	out.action = action
 	out.score = score
@@ -1311,16 +1412,17 @@ static func _scored(action: AttackAction, score: Vector4i) -> _Scored:
 # Bounded by its trigger rather than by a depth counter: only a candidate that scores nothing alone
 # AND applies a state to an enemy gets here, so a squad of plain weapons pays nothing at all.
 #
-# THE ACCUMULATOR STARTS AT THE SET-UP'S OWN SOLO SCORE, never at Vector4i.ZERO (#711). A zero floor
+# THE ACCUMULATOR STARTS AT THE SET-UP'S OWN SOLO SCORE, never at a zero score (#711). A zero floor
 # was invisible while a candidate had to BEAT zero to queue -- it only ever turned a refusal into a
 # refusal. With no bar it LAUNDERS: a set-up really worth (-1, 0, -5) came back (0,0,0) and then
 # outranked an honest plain swing at (-1, 8, -4) on the first term, so a member facing a lethal
 # counter soaked instead of hitting and died dealing nothing. A set-up is worth the better of what
 # it does alone and what it enables; zero is not one of those two and must not be invented here.
-static func _lookahead(setup_unit: Unit, setup: AttackAction, solo: Vector4i, squad: Squad, board: BoardContext,
+static func _lookahead(setup_unit: Unit, setup: AttackAction, solo: AIScore, squad: Squad, board: BoardContext,
 		base_plan: ResolvedPlan, squad_manager: SquadManager, reactions: Array[ElementalReaction],
-		terrain: Array[TerrainReaction], refused: Dictionary, by_member: Dictionary) -> Vector4i:
-	var base := _score_plan(setup_unit.get_faction(), base_plan)
+		terrain: Array[TerrainReaction], refused: Dictionary, by_member: Dictionary, stakes: _Stakes) -> AIScore:
+	var faction := setup_unit.get_faction()
+	var base := _score_plan(faction, base_plan, stakes)
 	var best := solo
 	for mate in squad.get_members():
 		if mate == setup_unit or not by_member.has(mate):
@@ -1331,8 +1433,10 @@ static func _lookahead(setup_unit: Unit, setup: AttackAction, solo: Vector4i, sq
 				continue
 			var pair: Array[BaseAction] = [setup, follow]
 			var plan := squad_manager.resolve_hypothetical(squad, pair, board, reactions, terrain)
-			var score := _score_plan(setup_unit.get_faction(), plan) - base
-			if _beats(score, best):
+			if _fells_own(pair, faction, base_plan, plan):
+				continue
+			var score := _score_plan(faction, plan, stakes).minus(base)
+			if score.beats(best):
 				best = score
 	return best
 

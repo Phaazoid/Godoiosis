@@ -2205,7 +2205,8 @@ func _leash_cells_of(subjects: Array[Unit]) -> Array[Vector2i]:
 # ==============================================================================
 
 func _board() -> BoardContext:
-	return BoardContext.new(grid, _all_units(), squad_manager, terrain_states, zone_manager, board_heights, gas_field)
+	return BoardContext.new(grid, _all_units(), squad_manager, terrain_states, zone_manager, board_heights, gas_field,
+			mission_controller.mission if mission_controller != null else null)
 
 func _all_units() -> Array[Unit]:
 	var result: Array[Unit] = []

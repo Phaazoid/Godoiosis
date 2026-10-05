@@ -156,7 +156,8 @@ func reserve_units() -> Array[Unit]:
 	return result
 
 func _board() -> BoardContext:
-	return BoardContext.new(grid, live_units(), squad_manager, terrain_states, zone_manager, board_heights, gas_field)
+	return BoardContext.new(grid, live_units(), squad_manager, terrain_states, zone_manager, board_heights, gas_field,
+			mission)
 
 func active_faction() -> Team.Faction:
 	return turn_manager.active_faction()
