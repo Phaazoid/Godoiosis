@@ -585,20 +585,36 @@ static func render_legal_targets(session, handle: String, attack_name := "") -> 
 	if res.aims.is_empty():
 		return "%s %s with %s from (%d,%d): none" % [verb, res.unit, res.attack, res.from.x, res.from.y]
 	var lines: Array[String] = ["%s %s with %s from (%d,%d): %d aims" % [verb, res.unit, res.attack, res.from.x, res.from.y, res.aims.size()]]
+	# A directional attack's aim is its FACING: every cell of one facing fires the same stamp, so the
+	# facing prints once, at its first cell, with a count of the cells that aim the same way.
+	var order: Array[String] = []
+	var first: Dictionary = {}
+	var more: Dictionary = {}
 	for aim: Dictionary in res.aims:
+		var key: String = str(aim.facing) if aim.has("facing") else str(aim.cell)
+		if first.has(key):
+			more[key] += 1
+			continue
+		order.append(key)
+		first[key] = aim
+		more[key] = 0
+	for key in order:
+		var aim: Dictionary = first[key]
 		var where := "(%d,%d)" % [aim.cell.x, aim.cell.y]
 		if aim.has("facing"):
 			where += " facing %s" % aim.facing
+		var line: String
 		if res.get("watch", false):
-			var footprint: Array[Vector2i] = []
-			footprint.assign(aim.footprint)
 			var now: String = ("fires at once on " + ", ".join(aim.standing)) if not aim.standing.is_empty() \
 					else "nobody in it now"
-			lines.append("  %s watches %s; %s" % [where, _format_cells(footprint), now])
+			line = "  %s watches %s; %s" % [where, _format_cells(aim.footprint), now]
 		elif aim.ground_only:
-			lines.append("  %s hits no unit, only the ground" % where)
+			line = "  %s hits no unit, only the ground" % where
 		else:
-			lines.append("  %s hits %s" % [where, ", ".join(aim.victims)])
+			line = "  %s hits %s" % [where, ", ".join(aim.victims)]
+		if more[key] > 0:
+			line += "  (+%d more cells aim this way)" % more[key]
+		lines.append(line)
 	return "\n".join(lines)
 
 

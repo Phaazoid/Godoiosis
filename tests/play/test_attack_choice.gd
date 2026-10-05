@@ -249,7 +249,11 @@ func test_a_directional_aim_is_named_by_its_facing() -> void:
 	for aim: Dictionary in res.aims:
 		assert_str(str(aim.get("facing", ""))).override_failure_message(
 				"an aim at the enemy to the east was not labelled E: %s" % str(aim)).is_equal("E")
-	assert_str(BoardView.render_legal_targets(sess, sess.handle_for(hero))).contains("facing E hits")
+	var text: String = BoardView.render_legal_targets(sess, sess.handle_for(hero))
+	assert_str(text).contains("facing E hits")
+	# Every cell of a facing fires the same stamp, so the facing prints once with a count.
+	assert_int(text.count("facing E")).override_failure_message("a facing printed once per cell:\n%s" % text) \
+		.is_equal(1)
 
 
 # An aim that lands on the map and hits nobody says so, rather than "hits " and a blank (#46).
