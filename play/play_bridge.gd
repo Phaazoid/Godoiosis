@@ -21,6 +21,7 @@ extends SceneTree
 #   attack {"unit": "A", "x": 5, "y": 0, "attack": "Splash"}   - "attack" optional (#615), as are
 #                                 overwatch's and legal_targets'; omitted, the default fires
 #   cancel {"unit": "A"}
+#   wait {"unit": "A"}           - A's squad spends its turn doing nothing (the ring's Wait)
 #   rescue {"unit": "A", "target": "b", "x": 4, "y": 0}   - A picks up adjacent downed ally b (a main
 #                                 action); x/y optional: the bank a body in deep water is hauled to (#116),
 #                                 the first when omitted, with the reply naming the others
@@ -178,6 +179,9 @@ func _dispatch(cmd: String, args: Dictionary) -> Dictionary:
 		"cancel":
 			var r = _session.cancel(str(args.get("unit", "")))
 			return {"ok": r.ok, "text": _ack(r) + "\n\n" + BoardView.render_preview(_session)}
+		"wait":
+			var r = _session.wait(str(args.get("unit", "")))
+			return {"ok": r.ok, "text": _ack(r)}
 		"rescue":
 			var r = _session.rescue(str(args.get("unit", "")), str(args.get("target", "")), _optional_xy(args))
 			return {"ok": r.ok, "text": _ack(r) + "\n\n" + BoardView.render_preview(_session)}

@@ -81,6 +81,36 @@ func test_a_crisis_hit_is_logged_as_one() -> void:
 		.override_failure_message("the log did not say '%s': %s" % [line, str(events)]).is_true()
 
 
+# A hit that takes a limb says so, on the preview's row and in the log (#1236). The game shows it on
+# the queue row's icon and the inspect panel's chips; the headless readouts printed neither.
+func test_a_limb_taken_is_previewed_and_logged() -> void:
+	var b := _board("LimbLogRoot")
+	var hero: Unit = BoardBuilder.spawn(b, _data("Hero", PLAYER), Vector2i(0, 0))
+	var foe: Unit = BoardBuilder.spawn(b, _data("Foe", ENEMY), Vector2i(1, 0))
+	var heavy := _weapon()
+	heavy.template.main_attack.power = LethalityRules.LIMB_LOSS_DAMAGE * 3
+	hero.add_item(heavy)
+	foe.unit_instance.stats[Stats.Stat.MHP] = 500
+	foe.set_current_hp(500)
+	var sess = PlaySession.new(b)
+	assert_bool(sess.queue_attack(sess.handle_for(hero), foe.movement.cell).ok).is_true()
+	var plan: ResolvedPlan = sess.squad_manager.resolved_plan_for(hero.squad)
+	var slot: int = plan.attacks[0].resolved.severed_limb
+	if slot == -1:
+		fail("fixture: the blow does not take a limb, so there is nothing to show")
+		return
+	var limb: String = UnitInstance.LIMB_FULL[slot].to_lower()
+
+	var rows: Array = sess.preview()["plan"]["rows"]
+	var previewed: bool = rows.any(func(row: Variant) -> bool: return (row as Dictionary).get("events", []).has("takes the %s" % limb))
+	assert_bool(previewed).override_failure_message("no preview row says it takes the %s: %s" % [limb, str(rows)]).is_true()
+
+	var events: Array = sess.execute().get("events", [])
+
+	var line := "%s loses %s" % [sess.handle_for(foe), limb]
+	assert_bool(events.has(line)).override_failure_message("the log did not say '%s': %s" % [line, str(events)]).is_true()
+
+
 # A side-channel line names both ends by handle, ahead of the game's own words.
 func test_a_guard_is_logged_by_handle() -> void:
 	var b := _board("GuardLogRoot")

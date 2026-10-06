@@ -219,7 +219,10 @@ is still the board's (`BoardContext.is_walkable`, #109), and so is a cell's move
 (`BoardContext.move_cost_at`, #1223, which charges ice 1), so the view and the rules cannot disagree
 about a frozen cell. Height does not fit in a 3-char cell: when the board has relief or gas the
 overview says so and the `terrain` view draws it. A legend table carries what a glyph can't (name,
-hp, squad/leader, weapon). Unit handles are session-stable ids
+hp, squad/leader, weapon), and in brackets what the unit is standing in: a body's death clock,
+Wounded, Crisis, its element states and any limb that is not its own, the facts the inspect panel
+shows (#1236, e.g. `[DOWNED (dies in 2), Wet, no left arm]`). Mission zones overlay their cells: `C`
+capture, `E` extract, `F` a defended point, `D` deployment while the force is placed. Unit handles are session-stable ids
 assigned by `PlaySession` — units have no persistent id today.
 
 **Layered views — pull detail only where you act** (token discipline):
@@ -227,7 +230,7 @@ assigned by `PlaySession` — units have no persistent id today.
 - **Focus** (`focus(unit)`): board re-rendered with that unit's **move range** (`+`) and **attack range** (`×`) overlaid, then the unit's numbers as the game derives them, gear and jobs included (HP, MOV, STR/DEX/PER/CON/BLD, DEF, LDR, squad size against capacity, leash), and each attack it can fire or watch with in `Unit.attack_detail`'s words, the game's own hover readout (#46). A unit still in reserve has no range to draw and answers in words, pointing at `kit`.
 - **Terrain** (`terrain`): each cell's height in the rules' half-level units (`Terrain.UNITS_PER_LEVEL` to a level), with `n`/`e`/`s`/`w` for the side a ramp rises toward or `*` for a corner form, then the gas lying on each cell and how thick (#46). Read through `PlaySession.height_at` / `gas_at`, i.e. `BoardHeights` and `GasField`.
 - **Preview** (`preview`): the **resolved** outcome of the current/hypothetical plan — exact damage, deaths, counters, net board change — as a concise diff, not a re-dump. The deterministic-engine payoff.
-- **Result** (`execute`): the event log (equals the preview, by Law #2). No overview — see below. A hit logs the states it gave and took (`b gains Wet`, `b loses Wet`); a side-channel order logs its actor, verb and target by handle ahead of the game's own words (`A GUARD -> B: Warden guards Warden`), so two units sharing a name stay apart (#46).
+- **Result** (`execute`): the event log (equals the preview, by Law #2). No overview — see below. A hit logs the states it gave and took (`b gains Wet`, `b loses Wet`) and a limb it took (`b loses left arm`, #1236), and a Crisis hit says `(CRISIS)`; a side-channel order logs its actor, verb and target by handle ahead of the game's own words (`A GUARD -> B: Warden guards Warden`), so two units sharing a name stay apart (#46).
 - **Affordances** (`legal_moves(unit)` / `legal_targets(unit, attack?)`): where this unit may go, and
   which aims of a given attack hit whom. Cell lists grouped by row (`y=13: 19-23`), a few hundred bytes where the only way
   to ask used to be `focus`, which renders a 2 KB board to say it.
@@ -411,7 +414,7 @@ opens, for every host, so the headless plan carries the same filler the game's d
 
 Every feature the game gains used to reach the API weeks later, from a playtest that hit the hole:
 capture, group move and the pre-mission screen each lagged 3 to 14 weeks, and the `wait` this doc
-promised above never existed. Nothing checked game -> session; `test_bridge_exposes_every_verb.gd`
+promised above did not exist until the ledger found it missing. Nothing checked game -> session; `test_bridge_exposes_every_verb.gd`
 checks session -> bridge only.
 
 `tests/support/parity_ledger.gd` gives every member of every feature list a Play stance (and an AI
