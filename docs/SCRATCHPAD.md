@@ -36,7 +36,13 @@ Then report a short per-idea summary: where each went, and anything that needs t
 
 ## 📥 Inbox (drop ideas here)
 
-*(empty — swept 2026-09-12)*
+*Five ideas recovered from the team's old group DM (mined 2026-10-06). Captured, not decided.*
+
+- (art) **Modular sprite generator**: build unit sprites by mixing and matching hairstyles, uniforms and weapons, rather than drawing every unit whole. Worry raised at the time: a Terraria-style assembled look. (group DM, 2026-06-12)
+- (progression) **Earn something for impressive moves in battle**: a reward for plays like hitting several enemies with one area attack, or striking from behind with a bonus weapon. Triangle Strategy gives a currency spent on class-up materials and weapons. Fits the no-leveling direction; what it pays out is open. (group DM, 2026-04-28)
+- (missions / level design) **Time pressure inside levels**: thieves stealing loot, bandits destroying things, an allied faction that can be wiped out, enemy reinforcements or recruitment on a timer (Fire Emblem's trick for making a level harder). The round limit, protect-a-unit and defend-a-point conditions already cover part of this. (group DM, 2026-05-28)
+- (missions / level design) **Placing enemies to stop edge-of-range camping**: a player can park just outside enemy range, wait for enemies to walk in, then surround and kill them; the old GameMaker version had exactly this problem. The counter is placement: spread enemies so that striking from the edge of one group's range leaves you inside another group's range that you can't answer. (group DM, 2026-05-28)
+- (squads) **Leaders grant their squad buffs or abilities**: part of the squad rules as first stated in chat (2026-04-25), but not found in `squad-system.md`.
 
 ## 🗂 Dispersed (log)
 
