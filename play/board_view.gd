@@ -43,8 +43,9 @@ static func render_overview(session) -> String:
 
 # Mark every downed-but-alive body on the board ("v"), live watches ("!"),
 # mission zones ("C" = capture, "E" = extraction) (#413, #612), and while the pre-mission phase is
-# open the deployment zone ("D", #46), which the game hides the moment the battle begins.
-# Precedence: downed "v" > watch "!" > zone "C"/"E"/"D".
+# open the deployment zone ("D", #46), which the game hides the moment the battle begins, and a
+# defended point ("F", #1236).
+# Precedence: downed "v" > watch "!" > zone "C"/"E"/"D"/"F".
 static func _overview_overlay(session) -> Dictionary:
 	var overlay := {}
 	for zname in session.zones():
@@ -57,6 +58,8 @@ static func _overview_overlay(session) -> Dictionary:
 			glyph = "E"
 		elif kind == ZoneManager.Kind.DEPLOYMENT and session.is_deploying():
 			glyph = "D"
+		elif kind == ZoneManager.Kind.DEFEND:
+			glyph = "F"   # deFend: D is the deployment zone's
 		if glyph != "":
 			for cell in zone.get("cells", []):
 				overlay[cell] = glyph
@@ -367,16 +370,21 @@ static func _legend(session) -> String:
 		notes.append("v = downed body on board; finish it or rescue it")
 	var has_c := false
 	var has_e := false
+	var has_f := false
 	for zname in session.zones():
 		var kind: int = session.zones()[zname].get("kind", ZoneManager.Kind.PATROL)
 		if kind == ZoneManager.Kind.CAPTURE:
 			has_c = true
 		elif kind == ZoneManager.Kind.EXTRACTION:
 			has_e = true
+		elif kind == ZoneManager.Kind.DEFEND:
+			has_f = true
 	if has_c:
 		notes.append("C = capture zone")
 	if has_e:
 		notes.append("E = extract zone")
+	if has_f:
+		notes.append("F = defend zone: a hostile inside loses the mission")
 	if not notes.is_empty():
 		lines[0] = "Units:   (%s)" % "; ".join(notes)
 	return "\n".join(lines)
@@ -671,7 +679,7 @@ static func _unit_line(session, unit: Unit) -> String:
 	var wep := "(unarmed)"
 	if unit.has_equipped_weapon():
 		wep = _weapon_str(unit.get_equipped_weapon(), unit)
-	var state := "  [DOWNED]" if unit.is_downed() else ""
+	var state := _conditions(unit)
 	# Whose watch the "!" cells belong to, and what it fires (#413). Named on the unit line rather
 	# than in a second block: the footprint is on the board, this says who is behind it.
 	if unit.watch != null and unit.watch.is_armed() and unit.watch.is_anchored(unit.movement.cell):
@@ -681,6 +689,30 @@ static func _unit_line(session, unit: Unit) -> String:
 		unit.get_current_hp(), unit.get_max_hp(),
 		squad_tag, wep, state,
 	]
+
+# What a unit is standing in (#1236): the facts the inspect panel's badges and state icons show,
+# read off the same fields. A downed body's clock, Wounded, Crisis, its element states, and every
+# limb that is not its own.
+static func _conditions(unit: Unit) -> String:
+	var parts: Array[String] = []
+	if unit.is_downed():
+		parts.append("DOWNED (dies in %d)" % unit.downed_turns_remaining
+				if unit.downed_turns_remaining > 0 else "DOWNED")
+	elif unit.wounded:
+		parts.append("WOUNDED")
+	if unit.in_crisis:
+		parts.append("CRISIS")
+	for state in unit.element_states:
+		if state != Elemental.State.NONE:
+			parts.append(Elemental.state_display_name(state))
+	var inst := unit.unit_instance
+	for slot: UnitInstance.LimbSlot in UnitInstance.LimbSlot.values():
+		match inst.limbs[slot].state:
+			UnitInstance.LimbState.EMPTY:
+				parts.append("no %s" % UnitInstance.LIMB_FULL[slot].to_lower())
+			UnitInstance.LimbState.PROSTHETIC:
+				parts.append("prosthetic %s" % UnitInstance.LIMB_FULL[slot].to_lower())
+	return "" if parts.is_empty() else "  [%s]" % ", ".join(parts)
 
 static func _weapon_str(e: EquippableData, wielder: Unit) -> String:
 	var rune := e as RuneData

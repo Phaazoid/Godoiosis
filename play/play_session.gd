@@ -911,6 +911,20 @@ func cancel(handle: String) -> Dictionary:
 	squad_manager.remove_actions_for_unit(unit)
 	return {"ok": true, "summary": "cancelled %s's orders" % handle}
 
+# The ring's Wait (#1236): the squad spends its turn doing nothing, through the door the menu's arm
+# uses. Offered when the menu offers it: a squad that has not acted, with no plan open -- this one's
+# included, since Wait is a choice a squad makes instead of orders.
+func wait(handle: String) -> Dictionary:
+	var unit := unit_by_handle(handle)
+	var gate := _controllable(unit, handle)
+	if not gate.ok:
+		return gate
+	if squad_manager.active_squad == unit.squad:
+		return {"ok": false, "error": "%s has orders queued -- execute or cancel them to wait instead"
+				% _squad_label(unit.squad)}
+	squad_manager.set_has_acted(unit.squad, true)
+	return {"ok": true, "summary": "%s waits; its turn is spent" % _squad_label(unit.squad)}
+
 # ---- rescue + squad management (drives the same SquadManager / RescueAction as the player) ----
 
 # Rescue (#33): the same RescueAction the menu queues, gated on the menu's own candidate query with the
@@ -1289,6 +1303,8 @@ func _describe_row(section: String, action: BaseAction, depth: int) -> Dictionar
 		events.append("burns %s" % r.burned_vial.display_name)
 	if r.charge_spent:
 		events.append("spends a charge")
+	if r.severed_limb != -1:
+		events.append("takes the %s" % _limb_name(r.severed_limb))
 	for reaction: ElementalReaction in r.fired_reactions:
 		if reaction.is_combo() and reaction.badge_name() != "":
 			events.append(reaction.badge_name())
@@ -1475,6 +1491,8 @@ func _apply_attack(atk: AttackAction, events: Array[String]) -> void:
 			events.append("%s heals %s for %d%s" % [handle_for(actor), handle_for(target), r.hp_restored(), dropped])
 		else:
 			events.append("%s hits %s for %d%s%s" % [handle_for(actor), handle_for(target), r.damage, _lethality_tag(r.lethality), dropped])
+			if r.severed_limb != -1:
+				events.append("%s loses %s" % [handle_for(target), _limb_name(r.severed_limb)])
 		if r.knockback_applied and is_instance_valid(target):
 			target.movement.set_cell(r.knockback_to)
 			events.append("%s is shoved to %s" % [handle_for(target), str(r.knockback_to)])
@@ -1539,6 +1557,10 @@ const RUNG_WORDS := {
 	ResolvedOutcome.Lethality.KILLED: "DIES",
 	ResolvedOutcome.Lethality.CRISIS: "CRISIS",
 }
+
+# A limb in the words the inspect panel's chips use (UnitInstance.LIMB_FULL), lower-cased for a line.
+static func _limb_name(slot: int) -> String:
+	return UnitInstance.LIMB_FULL[slot].to_lower()
 
 func _lethality_tag(lethality: ResolvedOutcome.Lethality) -> String:
 	return " (%s)" % RUNG_WORDS[lethality] if RUNG_WORDS.has(lethality) else ""

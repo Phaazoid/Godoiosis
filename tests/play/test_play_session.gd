@@ -144,7 +144,7 @@ func test_sub_ceiling_lethal_hit_downs_and_skips_counter() -> void:
 			"the headless preview promised an HP the execution did not land on") \
 			.is_equal(target.get_current_hp())
 	assert_int(attacker.get_current_hp()).is_equal(attacker_hp)   # counter was skipped — no reprisal
-	assert_str(BoardView.render_overview(_session)).contains("[DOWNED]")   # legend flags the body
+	assert_str(BoardView.render_overview(_session)).contains("[DOWNED")   # legend flags the body (and its clock, #1236)
 
 # Look-ahead is pure: previewing (even twice) changes no live HP or position.
 func test_preview_does_not_mutate_live_state() -> void:

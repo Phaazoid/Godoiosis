@@ -121,7 +121,7 @@ static func ring_verbs() -> Dictionary:
 			MainActionMenu.GUARD: {"play": action_type(T.GUARD), "ai": action_type(T.GUARD)},
 			MainActionMenu.RESCUE: {"play": action_type(T.RESCUE), "ai": action_type(T.RESCUE)},
 			MainActionMenu.CAPTURE: {"play": action_type(T.CAPTURE), "ai": action_type(T.CAPTURE)},
-			MainActionMenu.WAIT: {"play": gap("#46", "no headless wait verb; docs/play-api.md promises one"),
+			MainActionMenu.WAIT: {"play": cmd("wait"),
 					"ai": never("a squad with nothing worth doing simply holds")},
 			MainActionMenu.SQUADUP: {"play": cmd("join"), "ai": covered(CONTROLLER, "squads_up")},
 			MainActionMenu.JOINSQUAD: {"play": cmd("join"), "ai": covered(CONTROLLER, "func regroup")},
@@ -318,7 +318,7 @@ static func outcome_fields() -> Dictionary:
 			"splits": {"play": covered(SESSION, ".splits"), "ai": covered(TACTICS, ".splits")},
 			"relinks": {"play": never("the tether animation; the split it follows prints"), "ai": never(ANIMATION)},
 			"lethality": {"play": covered(SESSION, ".lethality"), "ai": covered(TACTICS, ".lethality")},
-			"severed_limb": {"play": gap("#46", "limb loss is never printed"), "ai": covered(TACTICS, ".severed_limb")},
+			"severed_limb": {"play": covered(SESSION, ".severed_limb"), "ai": covered(TACTICS, ".severed_limb")},
 			"skipped": {"play": covered(SESSION, ".skipped"), "ai": covered(CONTROLLER, ".skipped")},
 			"iron_will_held": {"play": never("a presentation beat; the HP it leaves prints"), "ai": never(IN_DAMAGE)},
 			"hp_before": {"play": covered(SESSION, ".hp_before"), "ai": covered(TACTICS, ".hp_before")},
@@ -404,7 +404,7 @@ static func zone_kinds() -> Dictionary:
 					"ai": never("ruling 6 (#117, 2026-10-04): capture points are the player's goals")},
 			K.EXTRACTION: {"play": covered(VIEW, "Kind.EXTRACTION"), "ai": never("the player's goal, as ruling 6 rules a capture point")},
 			K.DEPLOYMENT: {"play": covered(VIEW, "Kind.DEPLOYMENT"), "ai": never("the player's placement, before the battle")},
-			K.DEFEND: {"play": gap("#46", "a DEFEND zone has no board glyph"), "ai": covered(RUSHDOWN, "Kind.DEFEND")},
+			K.DEFEND: {"play": covered(VIEW, "Kind.DEFEND"), "ai": covered(RUSHDOWN, "Kind.DEFEND")},
 		},
 	}
 
@@ -490,7 +490,7 @@ static func element_states() -> Dictionary:
 		"name": "element states (Elemental.State)",
 		"members": members,
 		"label": _enum_label(S.keys()),
-		"play_all": gap("#46", "a unit's standing states are not on its line; the logs carry only the changes"),
+		"play_all": covered(VIEW, "unit.element_states"),
 		"ai_all": covered(TACTICS, ".states_added"),
 		"rows": {},
 	}
