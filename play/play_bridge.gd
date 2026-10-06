@@ -227,14 +227,6 @@ func _dispatch(cmd: String, args: Dictionary) -> Dictionary:
 			return {"ok": r.ok, "text": _ack(r)}
 		"kit":
 			return {"ok": true, "text": BoardView.render_kit(_session, str(args.get("unit", "")))}
-		# The inspect dock's six verbs (#46 slice 2b), named as a run records them, in either phase.
-		# With a plan open, the reply carries its preview: a gear change re-resolves it.
-		"equip", "unequip", "wear", "remove_armor", "use", "toss":
-			var r = _session.gear(str(args.get("unit", "")), cmd, int(args.get("slot", -1)))
-			var text: String = _ack(r)
-			if r.ok and _session.squad_manager.active_squad != null:
-				text += "\n\n" + BoardView.render_preview(_session)
-			return {"ok": r.ok, "text": text}
 		# The six verbs PlaySession has always implemented and _dispatch never exposed -- which is
 		# why a driver asking for `burrow` got `unknown cmd` for a verb the docs list (#613).
 		"guard":
@@ -279,6 +271,15 @@ func _dispatch(cmd: String, args: Dictionary) -> Dictionary:
 			return {"ok": true, "text": "Turn -> %s\n%s"
 					% [str(r.faction), BoardView.render_result(moves)]}
 		_:
+			# The inspect dock's verbs (#46 slice 2b), named as a run records them, in either phase:
+			# DERIVED from GearVerbs (#1236), so a new dock verb needs no arm here. With a plan open,
+			# the reply carries its preview, since a gear change re-resolves it.
+			if GearVerbs.from_name(cmd) >= 0:
+				var r = _session.gear(str(args.get("unit", "")), cmd, int(args.get("slot", -1)))
+				var text: String = _ack(r)
+				if r.ok and _session.squad_manager.active_squad != null:
+					text += "\n\n" + BoardView.render_preview(_session)
+				return {"ok": r.ok, "text": text}
 			return {"ok": false, "text": "unknown cmd: " + cmd}
 
 func _cmd_new() -> String:

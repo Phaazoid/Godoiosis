@@ -1531,14 +1531,17 @@ func mission_tag() -> String:
 		_:
 			return ""
 
+# The word a predicted rung prints as, in every headless readout: the logs here and the preview's
+# rows (BoardView._rung_tag). One table since #1236 -- the log kept its own copy, and it had dropped
+# CRISIS.
+const RUNG_WORDS := {
+	ResolvedOutcome.Lethality.DOWNED: "DOWNED",
+	ResolvedOutcome.Lethality.KILLED: "DIES",
+	ResolvedOutcome.Lethality.CRISIS: "CRISIS",
+}
+
 func _lethality_tag(lethality: ResolvedOutcome.Lethality) -> String:
-	match lethality:
-		ResolvedOutcome.Lethality.KILLED:
-			return " (DIES)"
-		ResolvedOutcome.Lethality.DOWNED:
-			return " (DOWNED)"
-		_:
-			return ""
+	return " (%s)" % RUNG_WORDS[lethality] if RUNG_WORDS.has(lethality) else ""
 
 # ---- turn flow ----
 

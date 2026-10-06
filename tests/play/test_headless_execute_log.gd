@@ -56,6 +56,31 @@ func test_a_hit_logs_the_states_it_left_on_its_target() -> void:
 				% [line, str(events)]).is_true()
 
 
+# A Crisis hit says so (#1236). The log kept its own copy of the rung words and that copy had dropped
+# CRISIS, so a Berserker's gambit logged as an ordinary hit while the preview said otherwise.
+func test_a_crisis_hit_is_logged_as_one() -> void:
+	var b := _board("CrisisLogRoot")
+	var hero: Unit = BoardBuilder.spawn(b, _data("Hero", PLAYER), Vector2i(0, 0))
+	var foe: Unit = BoardBuilder.spawn(b, _data("Foe", ENEMY), Vector2i(1, 0))
+	hero.add_item(_weapon())
+	foe.unit_instance.jobs.append("berserker")   # the content path that arms the gambit
+	foe.unit_instance.stats[Stats.Stat.MHP] = 1
+	foe.set_current_hp(1)
+	var sess = PlaySession.new(b)
+	assert_bool(sess.queue_attack(sess.handle_for(hero), foe.movement.cell).ok).is_true()
+	var plan: ResolvedPlan = sess.squad_manager.resolved_plan_for(hero.squad)
+	var hit: AttackAction = plan.attacks[0]
+	if hit.resolved.lethality != ResolvedOutcome.Lethality.CRISIS:
+		fail("fixture: the hit does not predict CRISIS, so there is no Crisis line to log")
+		return
+
+	var events: Array = sess.execute().get("events", [])
+
+	var line := "%s hits %s for %d (CRISIS)" % [sess.handle_for(hero), sess.handle_for(foe), hit.resolved.damage]
+	assert_bool(events.any(func(e: Variant) -> bool: return String(e).begins_with(line))) \
+		.override_failure_message("the log did not say '%s': %s" % [line, str(events)]).is_true()
+
+
 # A side-channel line names both ends by handle, ahead of the game's own words.
 func test_a_guard_is_logged_by_handle() -> void:
 	var b := _board("GuardLogRoot")
