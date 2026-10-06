@@ -261,14 +261,7 @@ static func _row_line(row: Dictionary) -> String:
 	return text
 
 static func _rung_tag(lethality: ResolvedOutcome.Lethality) -> String:
-	match lethality:
-		ResolvedOutcome.Lethality.KILLED:
-			return " DIES"
-		ResolvedOutcome.Lethality.DOWNED:
-			return " DOWNED"
-		ResolvedOutcome.Lethality.CRISIS:
-			return " CRISIS"
-	return ""
+	return " %s" % PlaySession.RUNG_WORDS[lethality] if PlaySession.RUNG_WORDS.has(lethality) else ""
 
 static func render_result(events: Array) -> String:
 	if events.is_empty():
