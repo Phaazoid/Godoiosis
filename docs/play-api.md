@@ -396,8 +396,9 @@ walk's soaking included; the pass end is `SquadManager.settle_downed` per downed
 the game slides it. `tests/flow/test_execute_two_hosts.gd` runs one board through both executors and
 requires every unit to come out the same.
 
-**Every verb the game offers in battle, the API has (#46).** `capture`, `group_move` and a rescue's
-bank pick closed the last gaps, so every shipped mission can be won or lost headlessly. Three
+**Every verb the game offers in battle, the API has (#46), and what it does not is DECLARED** (the
+parity ledger, below). `capture`, `group_move` and a rescue's bank pick closed the gaps that stopped
+a shipped mission being won or lost headlessly. Three
 things keep a headless plan the game's plan rather than a lookalike. The plan **re-resolves after
 every order**, on the same `SquadManager` signals the game's queue panel hangs its refresh on
 (`PlaySession._refresh_plan`), so the next order is judged against the shoves and downs the plan
@@ -405,6 +406,28 @@ already publishes. **Hold orders** are queued by `SquadManager` itself the momen
 opens, for every host, so the headless plan carries the same filler the game's does. And the
 **loader** goes through the game's own doors (`valid_entries`, the spawn gate, `apply_placement`,
 `relink_guards`), so armed Guards and cast provenance survive a headless load.
+
+## Parity with the game: the ledger (#1236)
+
+Every feature the game gains used to reach the API weeks later, from a playtest that hit the hole:
+capture, group move and the pre-mission screen each lagged 3 to 14 weeks, and the `wait` this doc
+promised above never existed. Nothing checked game -> session; `test_bridge_exposes_every_verb.gd`
+checks session -> bridge only.
+
+`tests/support/parity_ledger.gd` gives every member of every feature list a Play stance (and an AI
+one): the ring's verbs, the queueable action types, the dock's gear verbs, the HUD's doors (queue
+panel, End Turn, the pre-mission card, the title screen, the pause menu, the mission banner), the
+board's hotkeys, every `ResolvedOutcome` field and `ResolvedPlan` list, tile states, gases, zone
+kinds, objectives, lose conditions, lethality rungs, ground kinds and element states. A stance is
+`covered` (a bridge command, or a file and the token that handles it, which the law reads),
+`never` (with the reason) or `gap` (with the issue that owes it -- #46 for this side).
+`tests/law/test_play_parity.gd` reds on a member with no row and on a claim the code no longer
+backs. A gap keeps CI green on purpose: the flag is that the feature's own diff has to write the
+row. `grep 'gap("#46"' tests/support/parity_ledger.gd` is the to-do list.
+
+Two of the ledger's checks ask the code directly rather than reading it: a ring verb that queues an
+action type must land on a covered row for that type, and every lose condition must have the
+`MissionRules.defeat_reason` wording the board view prints.
 
 ## Open questions
 
