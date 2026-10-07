@@ -311,3 +311,8 @@ func pan_to_position(world_pos: Vector2, duration: float = Pacing.AI_SQUAD_PAN) 
 func _apply_pan_position(pos: Vector2) -> void:
 	global_position = pos
 	target_position = pos
+
+# Whether a pan's tween owns the position right now (#1132): the 3D shot clearance waits for it,
+# because a sight line judged from where the camera is PASSING THROUGH answers for the wrong shot.
+func is_panning() -> bool:
+	return _panning
