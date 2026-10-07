@@ -113,6 +113,9 @@ func execute_orders(unit):
 	# finish synchronously, so that stretch does not exist to assert on (measured, #450).
 	game.overlay_manager.clear_guard_preview()
 	game.overlay_manager.clear_watch_preview()   # #591's ghosted footprint, same reason, same stretch
+	# The queued attacks' marks STAY (#1247) -- each goes at its own blow -- but are re-derived off THIS
+	# plan: the pass resolved afresh, and the hits that strike are its objects, not the preview's.
+	game.overlay_manager.show_queued_strikes(StrikeMarks2D.from_plan(plan, game._board()))
 	for action in squad.action_queue.duplicate():
 		action.actor.visuals.set_projected(false)
 		if action.action_type == BaseAction.ActionType.MOVE:
@@ -292,6 +295,8 @@ func _end_squad_turn(squad: Squad) -> void:
 	game.refresh_end_turn_button()
 	for member in squad.members:
 		game.overlay_manager.clear_move_markup(member)
+	# Each queued attack's mark went at its own blow (#1247); one whose actor fell first never struck.
+	game.overlay_manager.clear_queued_strikes()
 	# LAST, not beside the ejection sweeps above: the clear at the top of this method would wipe an
 	# earlier restore. Standing rings deliberately stand down for the WHOLE pass -- a marker sits on
 	# its unit's projected destination, which during a pass is the cell the unit has not reached

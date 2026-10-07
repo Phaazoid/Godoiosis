@@ -297,6 +297,18 @@ func get_action_icon() -> Texture2D:
 	var lethal := lethality_icon(resolved)
 	return lethal if lethal != null else ATTACK_ICON
 
+# The icon a ROW of hits wears (#1247): a folded volley has many outcomes, so it shows the plain
+# swords; a lone hit shows its own. The queue's volley header and the board's badge both ask this.
+static func group_icon(lead: AttackAction, count: int) -> Texture2D:
+	return ATTACK_ICON if count > 1 else lead.get_action_icon()
+
+# Whether `other` belongs to the same queue row as `first` -- one VOLLEY (create_volley's shared
+# array); a lone attack's volley is its own. Asked by the queue panel's fold and the board's marks.
+static func same_volley(first: AttackAction, other: AttackAction) -> bool:
+	if other == first:
+		return true
+	return not first.volley.is_empty() and is_same(other.volley, first.volley)
+
 func resolved_outcome() -> ResolvedOutcome:
 	return resolved
 

@@ -360,6 +360,9 @@ func _wire_signals() -> void:
 
 	# HoverPresenter connects its own handlers in its _ready, so this one runs after them.
 	hover_presenter.hovered_unit_changed.connect(overlay_manager.on_hovered_unit_changed)
+	# A queued attack's mark goes when its own blow lands (#1247) -- every attack in the game passes
+	# through volley_struck, aims, counters and a walk's triggered shots alike.
+	order_executor.volley_struck.connect(overlay_manager.retire_strike)
 
 # ==============================================================================
 #  Input
@@ -1373,6 +1376,7 @@ func refresh_action_queue(squad: Squad):
 		overlay_manager.clear_knockback_preview()
 		overlay_manager.clear_guard_preview()
 		overlay_manager.clear_watch_preview()
+		overlay_manager.clear_queued_strikes()
 		squad_action_queue_control.set_execute_state(SquadActionQueueControl.ExecuteState.DISABLED)
 		var none: Array[BaseAction] = []
 		squad_action_queue_control.set_refusals(none)
@@ -1497,6 +1501,8 @@ func _preview_plan_effects(plan: ResolvedPlan) -> void:
 	# The pass's deposits (#50) and gas (#508), deduped per cell and state -- the plan's own answer,
 	# which the Play API's preview prints too (#46).
 	overlay_manager.show_terrain_preview(plan.pending_deposits())
+	# The attacks themselves (#1247): one mark per queue row of hits, built off the plan the rows are.
+	overlay_manager.show_queued_strikes(StrikeMarks2D.from_plan(plan, _board()))
 	# Attacks AND counters (#259 closed the gap: counter shoves were never previewed). The path
 	# is the trail's one source -- a landing tumble can bend it, so endpoints cannot describe it.
 	var all_hits: Array = []

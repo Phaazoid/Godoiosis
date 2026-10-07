@@ -55,6 +55,7 @@ var _staging_moved := false
 
 var _last_trace_version := -1   # OverlayManager.sight_trace_version -- the store's own signal (#308)
 var _last_reach_line_version := -1   # ...and the reach lines, #710 slice 1 by way of #1069
+var _last_strike_version := -1   # ...and the queued attacks' marks (#1247)
 var _last_outline_version := -1  # ...and the focus stroke's (slice 4)
 var _last_squad_lines_version := -1   # ...and the squad's range and tethers (#1070)
 var _shake_pushed := 0.0   # the last pluck pushed, so a still tether costs no per-frame write
@@ -110,6 +111,10 @@ func _process(_delta: float) -> void:
 	_fill_gated(BoardOverlays.Layer.THREAT, om.threat_overlay, true)
 	if om.threat_overlay != null:
 		overlays.set_layer_modulate(BoardOverlays.Layer.THREAT, om.threat_overlay.modulate)
+	# A queued attack's footprint when it covers more than one tile (#1247), cells and tint by copy.
+	_fill_gated(BoardOverlays.Layer.QUEUED_FOOTPRINT, om.queued_footprint_overlay, true)
+	if om.queued_footprint_overlay != null:
+		overlays.set_layer_modulate(BoardOverlays.Layer.QUEUED_FOOTPRINT, om.queued_footprint_overlay.modulate)
 
 	# The aim footprint: its cells and steady colour by copy, then its travel-order flash per cell.
 	_fill(BoardOverlays.Layer.AIM, om.hover_overlay.get_used_cells())
@@ -124,6 +129,7 @@ func _process(_delta: float) -> void:
 	_sight_trace(om)
 	overlays.poll_beam_motion()   # #217 has no changed signal; this is the one composed read (#1042)
 	_reach_lines(om)
+	_queued_strikes(om)
 	_focus_outline(om)
 	_squad_lines(om)
 	_tether_moments(om)
@@ -350,6 +356,55 @@ func _reach_lines(om: OverlayManager) -> void:
 			})
 	overlays.set_marks(BoardOverlays.Layer.REACH_LINES, marks,
 			ThreatLines2D.MARK_LINE_COLOR, widths, cones)
+
+
+# What a queued attack leaves (#1247), gated on one version: StrikeMarks2D's line work lifted through
+# trace_point as the reach lines are, and its badge as a standing sprite at the same point. The marks
+# the hovered unit is part of go to the FOCUS layer, and their badges over everything. Each mark's
+# colour rides its own tint, shaft and cone alike; the pointer is the cone, and when a mark has no
+# shaft (the badge covers it) its lone cone stroke is handed a zero width, so only the solid draws.
+func _queued_strikes(om: OverlayManager) -> void:
+	if om.queued_strike_version == _last_strike_version:
+		return
+	_last_strike_version = om.queued_strike_version
+	var badges: Array[Dictionary] = []
+	var pixel := StrikeMarks2D.STRIKE_BADGE_SIZE / float(StrikeMarks2D.BADGE_TEXELS)
+	for focused: bool in [false, true]:
+		var marks: Array[Array] = []
+		var widths: Array[Array] = []
+		var cones: Array[Dictionary] = []
+		var tints: Array[Color] = []
+		for entry: Dictionary in om.queued_strikes:
+			if om.strike_focused(entry) != focused:
+				continue
+			var work := StrikeMarks2D.line_work(entry)
+			if work.is_empty():
+				continue
+			var tint: Color = entry["tint"]
+			var colour: Color = (entry["colour"] as Color) * tint
+			var strokes: Array[PackedVector3Array] = []
+			var scales: Array[PackedFloat32Array] = []
+			var shaft: PackedVector3Array = work["shaft"]
+			if shaft.size() == 2:
+				strokes.append(PackedVector3Array([BoardSpace.trace_point(shaft[0]),
+						BoardSpace.trace_point(shaft[1])]))
+				scales.append(PackedFloat32Array([1.0, 1.0]))
+			var base := BoardSpace.trace_point(work["base"])
+			var tip := BoardSpace.trace_point(work["tip"])
+			strokes.append(PackedVector3Array([base, tip]))
+			scales.append(PackedFloat32Array([0.0, 0.0]))
+			marks.append(strokes)
+			widths.append(scales)
+			cones.append({"base": base, "tip": tip, "tint": colour,
+					"radius": overlays.mark_width * ThreatLines2D.CONE_WIDTH_SCALE * 0.5})
+			tints.append(colour)
+			badges.append({"pos": BoardSpace.trace_point(StrikeMarks2D.badge_point(entry)),
+					"texture": StrikeMarks2D.badge_texture(entry["icon"], entry["colour"]), "modulate": tint,
+					"exact": true, "pixel_size": pixel, "on_top": focused})
+		var layer: BoardOverlays.Layer = BoardOverlays.Layer.QUEUED_STRIKES_FOCUS if focused \
+				else BoardOverlays.Layer.QUEUED_STRIKES
+		overlays.set_marks(layer, marks, Color.WHITE, widths, cones, tints)
+	_markers(BoardOverlays.Layer.QUEUED_BADGES, badges)
 
 
 func _target_pick_texture(om: OverlayManager) -> Texture2D:
