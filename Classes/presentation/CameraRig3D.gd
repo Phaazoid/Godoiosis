@@ -1037,15 +1037,20 @@ func directed_yaw(line: Array[Vector2i], turn := 0.0) -> float:
 # yaw the camera has not turned to yet, so it is composed from the channels, never read off the node.
 # The flourish is left out on both sides, as frame_floor leaves it out: a shake is transient and is
 # not a place the camera is going.
-func lens_at(yaw_degrees: float, when: When) -> Vector3:
+#
+# `aim` asks about an aim the rig has not been handed yet -- where a pan LANDS, while the tween is
+# still carrying the camera there (#1132 follow-up). Its drop is the caller's to apply, since only the
+# caller knows whose body the shot will train on; the lift, pitch and distance stay the rig's.
+func lens_at(yaw_degrees: float, when: When, aim := Vector3.INF) -> Vector3:
 	var settled := when == When.SETTLED
-	var aim: Vector3 = _target_aim if settled else _aim
 	var lift: Vector3 = _target_lift if settled else _lift
-	var drop: float = _target_drop if settled else _drop
 	var pitch: float = _target_pitch_degrees if settled else _pitch_degrees
 	var distance: float = _dollied_distance() if settled else _camera.position.z
+	if not aim.is_finite():
+		var drop: float = _target_drop if settled else _drop
+		aim = (_target_aim if settled else _aim) + Vector3(0.0, -drop, 0.0)
 	var turn := Basis(Vector3.UP, deg_to_rad(yaw_degrees)) * Basis(Vector3.RIGHT, deg_to_rad(pitch))
-	var local := aim + lift + Vector3(0.0, -drop, 0.0) + turn * Vector3(0.0, 0.0, distance)
+	var local := aim + lift + turn * Vector3(0.0, 0.0, distance)
 	var parent := get_parent_node_3d()
 	return parent.global_transform * local if parent != null else local
 
@@ -1053,6 +1058,28 @@ func lens_at(yaw_degrees: float, when: When) -> Vector3:
 # The yaw the camera is HEADED for -- the clearance search's answer for a beat with no line to turn.
 func target_yaw() -> float:
 	return _target_yaw_degrees
+
+
+# How close an eased channel must be to its target for the camera to count as ARRIVED (#1132
+# follow-up). A stillness threshold rather than a feel value: an exponential ease never lands, and
+# the residue left inside these moves less than a pixel a frame. Consts on that reason, the way
+# Pacing's arrival cap is one.
+const ARRIVED_DEGREES := 1.0
+const ARRIVED_UNITS := 0.05
+
+# Whether the camera is still travelling to the shot it was given: any eased channel short of its
+# target. Playback waits on this before a battle-zoom beat's hold, so the blow is watched from a
+# camera that has stopped (dev, 2026-10-07). The sway and the shake are not channels -- they are
+# addends with no target -- so neither keeps this true.
+func is_arriving() -> bool:
+	var yaw_left := absf(rad_to_deg(angle_difference(deg_to_rad(rotation_degrees.y),
+			deg_to_rad(_target_yaw_degrees))))
+	return yaw_left > ARRIVED_DEGREES \
+			or absf(_pitch_degrees - _target_pitch_degrees) > ARRIVED_DEGREES \
+			or absf(_camera.position.z - _dollied_distance()) > ARRIVED_UNITS \
+			or absf(_drop - _target_drop) > ARRIVED_UNITS \
+			or _lift.distance_to(_target_lift) > ARRIVED_UNITS \
+			or _aim.distance_to(_target_aim) > ARRIVED_UNITS
 
 
 # --- the view playback borrows (#520 follow-up) ------------------------------------------------

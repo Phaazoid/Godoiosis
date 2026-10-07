@@ -1030,15 +1030,17 @@ func _mirror_camera() -> void:
 	# The trained subject is read here rather than inside the director because validity is this
 	# scene's question: a void plummet ends in die(), and a freed Unit assigned into a typed slot
 	# dies on the type-check before any null test can run (#149). The director takes the ID.
-	var trained: Unit = cam.follow_unit if is_instance_valid(cam.follow_unit) else null
-	var trained_id := trained.get_instance_id() if trained != null else 0
-	# ...and the death show, traced ABOVE the gate for the reason the depth below is: the show's flag
-	# clears in UnitMirror's own _process, so its END can land after playback has let go, and an edge
-	# polled below the return would never see it.
+	#
+	# The death show is read FIRST, since it decides whether an approach may stand in for the follow.
+	# Traced ABOVE the gate for the reason the depth below is: the show's flag clears in UnitMirror's
+	# own _process, so its END can land after playback has let go, and an edge polled below the return
+	# would never see it.
 	var show_live: bool = _unit_mirror.death_show_live()
 	if show_live != _death_show_seen:
 		_death_show_seen = show_live
 		_rig.note_event("death show %s" % ("BEGAN" if show_live else "ended"))
+	var trained := _shot_subject(cam, show_live)
+	var trained_id := trained.get_instance_id() if trained != null else 0
 	# The whole table runs ABOVE the early return, because the LOCK IS ITS GATE rather than a row in
 	# it: releasing the camera is a shot transition like any other (to NONE), and it is the one that
 	# must never be missed.
@@ -1065,9 +1067,13 @@ func _mirror_camera() -> void:
 	# ...and how far below the board the rig has GOT, published back to playback (#602). ABOVE the
 	# gate for the same reason the lift is, and it is the whole point: the climb home finishes after
 	# playback lets go, so a poll below the return would freeze on the last value it saw and the
-	# exit transition would wait for ever. The one fact that travels rig -> playback down this
+	# exit transition would wait for ever. One of the two facts that travel rig -> playback down this
 	# channel; see CameraController.fall_depth for why it has to.
 	cam.fall_depth = _rig.drop_depth()
+	# ...and the other: whether the rig is still easing toward the shot it was given. A battle-zoom
+	# beat waits on it before its hold (#1132 follow-up), so the blow is watched from a camera that has
+	# stopped.
+	cam.view_arriving = _rig.is_arriving()
 	# ABOVE the early return for the same reason, and it is the whole point of the field: the readout
 	# has to learn when a pass ENDS, and everything below here stops being polled the moment the lock
 	# releases. Mirrored under the return -- where beat_profile sits -- it would hold the last pass's
@@ -1149,15 +1155,46 @@ func _clear_the_shot(cam: CameraController, trained: Unit, shot_edge: bool) -> v
 	var extras := _clearance_extras(cam)
 	var world := _clearance_world(cam, trained)
 	var before := _clearance.turn
+	var landing := _landing_aim(cam, trained)
 	var lens_of := func(turn: float) -> Vector3:
-		return _rig.lens_at(_lens_yaw(line, turn), CameraRig3D.When.SETTLED)
+		return _rig.lens_at(_lens_yaw(line, turn), CameraRig3D.When.SETTLED, landing)
 	var can_turn := not is_nan(_rig.directed_yaw(line))
-	if not _clearance.step(world, subjects, extras, lens_of, can_turn, not cam.is_panning()):
+	if not _clearance.step(world, subjects, extras, lens_of, can_turn):
 		return
 	if not is_equal_approx(before, _clearance.turn):
 		_rig.aim_along(line, _clearance.turn)
 		_rig.note_event("clearance: turned %+.0f" % _clearance.turn)
 	_push_hidden()
+
+
+# WHO THE SHOT IS OF: the followed unit -- or, on a battle-zoom beat, the one the camera is TRAVELLING
+# to (#1132 follow-up, dev 2026-10-07: "that first camera zoom should just be going to the correct
+# spot to watch the hit"). pan_to holds the follow back until its glide lands, so the follow alone
+# started the close-up, its zoom and the clearance's angle only once the camera had arrived -- a
+# second movement, and it ran into the blow. Standing in for the follow, the approach IS the shot.
+#
+# Never while a death show is live: DEATH_SHOW stands only while nobody is followed, and an approach
+# counting as one would pull the camera out of the pit with the cubes still in the air (#602 round
+# 8). Zoom off and Combat-Only walks keep the follow alone (ruling 4).
+func _shot_subject(cam: CameraController, show_live: bool) -> Unit:
+	if is_instance_valid(cam.follow_unit):
+		return cam.follow_unit
+	if show_live or not _clearance_live(cam) or not is_instance_valid(cam.pan_subject):
+		return null
+	return cam.pan_subject
+
+
+# Where the shot's aim will REST once the running pan lands, its trained drop applied -- so the
+# clearance chooses on the approach's first frame, from where the camera is going rather than from
+# where it is passing through. INF with no pan running, which hands lens_at the rig's own targets.
+func _landing_aim(cam: CameraController, trained: Unit) -> Vector3:
+	if not cam.is_panning():
+		return Vector3.INF
+	var flat := BoardSpace.of_pixels(cam.pan_destination, 0.0)
+	var aim := _aim_over(flat.x, flat.z)
+	if trained != null:
+		aim.y -= _depth_below(trained, cam, aim.y)
+	return aim
 
 
 # The yaw a candidate turn would settle at, or -- for a beat with no line to turn -- the one the
@@ -1723,16 +1760,21 @@ func _solve_stage_height(cells: Array[Vector2i]) -> float:
 func _fall_below(cam: CameraController, aim_y: float) -> float:
 	if not is_instance_valid(cam.follow_unit):
 		return _death_show_depth()
-	var watched: Unit = cam.follow_unit
+	var depth := _depth_below(cam.follow_unit, cam, aim_y)
+	_held_drop = depth
+	return depth
+
+
+# The arithmetic alone, with no hold written (#1132 follow-up): the shot clearance asks it of where a
+# pan will LAND, before that body is followed, and a second spelling of it is how the two would part.
+func _depth_below(watched: Unit, cam: CameraController, aim_y: float) -> float:
 	var heights: BoardHeights = game.board_heights
 	var surface := BoardSpace.surface_point(UnitMirror.cell_under(watched), heights).y
 	var fall := minf(UnitMirror.fall_depth(watched, heights),
 			Pacing.CLIFF_FOLLOW_MAX * BoardSpace.CELL_SIZE)
 	var lift := Pacing.STAGE_AIM_LIFT * BoardSpace.CELL_SIZE \
 			if not cam.shot_cells.is_empty() else 0.0
-	var depth := aim_y - (surface - fall + lift)
-	_held_drop = depth
-	return depth
+	return aim_y - (surface - fall + lift)
 
 
 # What the fall channel answers once its body is gone (#602 round 4): a void death frees the unit

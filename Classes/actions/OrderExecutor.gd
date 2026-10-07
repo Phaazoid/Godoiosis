@@ -563,6 +563,11 @@ func _execute_action_sequence(actions: Array, beat: float = 0.0, holds: Dictiona
 			# cinematic claimed, and the sway would otherwise ride in from whatever came before.
 			game.camera_controller.beat_profile = profiles.get(action, Pacing.Profile.BOARD)
 			await game.camera_controller.pan_to(subjects[action], Pacing.PLAYBACK_PAN)
+			# ...and on a battle-zoom beat the 2D tween landing is not the camera arriving: the rig
+			# eases its angle and zoom on its own clock, so the hold waits for THAT (#1132 follow-up,
+			# dev 2026-10-07: "it should be there and still for a moment before the hit even starts").
+			if profiles.get(action, Pacing.Profile.BOARD) == Pacing.Profile.CINEMATIC:
+				await _camera_arrives()
 		await Pacing.beat(self, hold)
 		_listen_for_the_blow(action)
 		action.begin_execution()
@@ -581,6 +586,28 @@ func _execute_action_sequence(actions: Array, beat: float = 0.0, holds: Dictiona
 		# resolve-pass test off the wall clock). Same declaration clear_guard_preview carries at the
 		# top of this function, and for the same reason. What IS pinned is the schedule and the table.
 		await Pacing.beat(self, after_the_blow(action, float(lingers.get(action, 0.0))))
+
+
+# Wait until the 3D camera has finished easing onto the beat's shot (#1132 follow-up). The rig says so
+# through view_arriving -- the eases are its own clock, so nothing else can -- and the first frame is
+# spent unconditionally so the mirror has polled since the pan landed. Capped by
+# Pacing.CAMERA_ARRIVAL_CAP, counting only time no card is up: a pause freezes the rig, and a cap
+# spent behind the pause menu would let the blow start mid-turn once it closed.
+#
+# Unwatched returns at once, Pacing.beat's escape and for its reason (#545): nobody is watching a
+# headless run or a skip under the fade, and every suite that resolves a cinematic pass would otherwise
+# spend frames here. Which also means NO SUITE SEES THIS WAIT -- the rig's half (is_arriving) is
+# pinned; that the hit waits on it is a play-check.
+func _camera_arrives() -> void:
+	if Pacing.unwatched():
+		return
+	var tree := get_tree()
+	await tree.process_frame
+	var waited := 0.0
+	while game.camera_controller.view_arriving and waited < Pacing.CAMERA_ARRIVAL_CAP:
+		await tree.process_frame
+		if not ModalLock.any_open(tree):
+			waited += get_process_delta_time()
 
 
 # What a landed blow -- or a sinking (#922) -- owes its squads' tethers (#367 part 2B): the links the forecast says it ends and
@@ -703,7 +730,7 @@ func _stage_the_fight(sheet: BeatSheet) -> void:
 # Wait until the rig is back on the board plane (#602 round 2). It waits on the fact the RIG
 # publishes rather than on a beat of its own: the climb is the rig's eased channel, so a beat here
 # would be a second answer to how long it takes and the two would disagree the moment the rate knob
-# moved. See CameraController.fall_depth for why that one fact travels the other way.
+# moved. See CameraController.fall_depth for why that fact travels the other way.
 #
 # BOUNDED rather than open. Nothing publishes headlessly, so this returns on its first check there
 # and costs the suite nothing; and a rig that somehow never settles costs ten seconds rather than

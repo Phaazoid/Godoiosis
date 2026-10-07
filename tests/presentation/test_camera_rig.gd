@@ -1064,3 +1064,53 @@ func test_aim_along_writes_the_directed_yaw_and_a_turn_adds_to_it() -> void:
 			"a beat with no line answered a yaw, so the clearance would turn a shot that has none") \
 		.is_true()
 	Pacing.CINEMATIC_DIRECTION = saved
+
+
+func test_a_lens_asked_about_where_a_pan_lands_is_the_settled_lens_moved_there() -> void:
+	# The clearance asks this on a pan's FIRST frame (#1132 follow-up), of an aim the rig has not been
+	# handed yet. It must be the lens the rig WILL settle at once that aim is its own -- the caller's
+	# drop already applied, the rig's lift, pitch and distance kept.
+	var rig := _rig()
+	rig.hold_at(Vector3(4.0, 1.0, 3.0))
+	rig.lift_to(Vector3(0.0, 2.0, 0.0))
+	rig.drop_to(0.5)
+	await await_idle_frame()
+	var landing := Vector3(9.0, 3.0, -2.0)
+	var own := rig.lens_at(40.0, CameraRig3D.When.SETTLED)
+	var asked := rig.lens_at(40.0, CameraRig3D.When.SETTLED, landing)
+	assert_float(own.distance_to(asked)).override_failure_message(
+			"the override changed nothing, so any formula would pass").is_greater(1.0)
+	rig.hold_at(landing)
+	rig.drop_to(0.0)
+	assert_vector(asked).override_failure_message(
+			"the lens asked about a landing aim is not where the rig settles once it lands there") \
+		.is_equal_approx(rig.lens_at(40.0, CameraRig3D.When.SETTLED), Vector3(0.001, 0.001, 0.001))
+
+
+# Every eased channel put ON its target, so the next assertion moves exactly one of them.
+func _land(rig: CameraRig3D) -> void:
+	rig.rotation_degrees.y = rig._target_yaw_degrees
+	rig._pitch_degrees = rig._target_pitch_degrees
+	rig._camera.position.z = rig._dollied_distance()
+	rig._drop = rig._target_drop
+	rig._lift = rig._target_lift
+	rig._aim = rig._target_aim
+
+
+func test_the_camera_is_arriving_until_its_eased_channels_land() -> void:
+	# Playback waits on this before a battle-zoom beat's hold (#1132 follow-up), so the blow is
+	# watched from a camera that has stopped. A turn and a zoom are the two the dev saw arrive late.
+	var rig := _rig()
+	await await_idle_frame()
+	_land(rig)
+	assert_bool(rig.is_arriving()).override_failure_message(
+			"a rig on every target said it was still moving -- the wait would never end").is_false()
+	rig._target_yaw_degrees += 90.0
+	assert_bool(rig.is_arriving()).override_failure_message(
+			"a camera with a quarter turn still to go said it had arrived").is_true()
+	_land(rig)
+	rig.set_zoom(rig._target_distance - 3.0)   # IN, since a zoom out may already sit at the ceiling
+	assert_bool(rig.is_arriving()).override_failure_message(
+			"a camera still zooming said it had arrived").is_true()
+	_land(rig)
+	assert_bool(rig.is_arriving()).is_false()

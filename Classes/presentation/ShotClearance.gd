@@ -240,7 +240,8 @@ var turn := 0.0
 # What is hidden right now. Grows within a shot, empties when the shot changes or the camera finds
 # a clear angle -- so nothing pops back and forth while a body tumbles.
 var hidden := Found.new()
-# A fresh search is owed: the shot changed, and the next SETTLED frame chooses from scratch.
+# A fresh search is owed: the shot changed, and the next frame that has something to look at chooses
+# from scratch.
 var _owed := false
 
 
@@ -258,7 +259,7 @@ func clear_hidden() -> bool:
 	return true
 
 
-# A new shot: whatever this one hid comes back, and the next settled frame searches afresh. A new
+# A new shot: whatever this one hid comes back, and the next frame searches afresh. A new
 # AIM LINE also starts the turn over, since a turn is relative to a line's own side-on yaw.
 func renew(new_line: bool) -> bool:
 	_owed = true
@@ -267,12 +268,13 @@ func renew(new_line: bool) -> bool:
 	return clear_hidden()
 
 
-# One frame. `lens_of(turn) -> Vector3` is where the lens would settle at that turn; `can_turn` is
-# false for a shot with no aim line, which can only hide. `settled` is false while a pan still owns
-# the aim. Returns whether the turn or the hidden set changed.
+# One frame. `lens_of(turn) -> Vector3` is where the lens would settle at that turn -- where the pan
+# LANDS while one is running, so the search can run on its first frame (#1132 follow-up); `can_turn`
+# is false for a shot with no aim line, which can only hide. Returns whether the turn or the hidden
+# set changed.
 func step(world: World, subjects: Array[Body], extras: Array[Target], lens_of: Callable,
-		can_turn: bool, settled: bool) -> bool:
-	if not settled or (subjects.is_empty() and extras.is_empty()):
+		can_turn: bool) -> bool:
+	if subjects.is_empty() and extras.is_empty():
 		return false
 	if _owed:
 		_owed = false

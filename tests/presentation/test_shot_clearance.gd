@@ -187,9 +187,8 @@ func test_side_on_is_both_sides_and_end_on_is_the_last_resort() -> void:
 
 # --- the latch -----------------------------------------------------------------------------------
 
-func _step(clearance: ShotClearance, world: ShotClearance.World, can_turn := true,
-		settled := true) -> bool:
-	return clearance.step(world, _subjects(), _none(), _lens_of(), can_turn, settled)
+func _step(clearance: ShotClearance, world: ShotClearance.World, can_turn := true) -> bool:
+	return clearance.step(world, _subjects(), _none(), _lens_of(), can_turn)
 
 
 func test_a_clear_view_never_moves() -> void:
@@ -212,16 +211,21 @@ func test_a_blocked_side_turns_to_the_other_side_on_angle() -> void:
 			"a clear angle existed and something was hidden anyway").is_equal(0)
 
 
-func test_nothing_is_decided_while_the_aim_is_still_travelling() -> void:
-	_columns[Vector2i(5, 3)] = Vector2(-1.0, 3.0)
+# A shot whose subject is not drawn yet (a unit the mirror has not placed this frame) has nobody to
+# look at -- and the search its edge owed must survive that frame rather than be spent on nothing.
+# The geometry is chosen so the FULL search and the per-frame check disagree: no angle is clear, and
+# the far side has one blocker fewer. The search takes the far side; the check, finding nothing
+# clear, would hide in place and leave the turn at 0.
+func test_a_search_owed_by_the_edge_waits_out_a_frame_with_nobody_to_look_at() -> void:
+	_ring()
+	_columns[Vector2i(5, 3)] = Vector2(-1.0, 10.0)
 	var clearance := ShotClearance.new()
 	clearance.renew(true)
-	assert_bool(_step(clearance, _world(), true, false)).is_false()
-	assert_float(clearance.turn).override_failure_message(
-			"the search ran from a lens still mid-pan").is_equal(0.0)
+	var nobody: Array[ShotClearance.Body] = []
+	assert_bool(clearance.step(_world(), nobody, _none(), _lens_of(), true)).is_false()
 	_step(clearance, _world())
 	assert_float(clearance.turn).override_failure_message(
-			"the search owed by the edge was lost while the pan ran").is_equal(180.0)
+			"the search owed by the edge was spent on a frame with nobody in the shot").is_equal(180.0)
 
 
 func _ring() -> void:

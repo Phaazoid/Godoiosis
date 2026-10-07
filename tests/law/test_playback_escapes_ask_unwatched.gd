@@ -12,6 +12,7 @@ const PLAYBACK_FILES: Array[String] = [
 	"res://Classes/board/CameraController.gd",
 	"res://Classes/presentation/CameraRig3D.gd",
 	"res://Classes/units/MovementComponent.gd",
+	"res://Classes/actions/OrderExecutor.gd",   # the battle zoom's wait for the camera (#1132 follow-up)
 ]
 
 const DOOR := "res://Classes/core/Pacing.gd"
