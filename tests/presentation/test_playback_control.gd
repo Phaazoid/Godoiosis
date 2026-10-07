@@ -167,6 +167,21 @@ func test_a_held_fast_forward_speeds_a_real_pass_and_lets_go_with_it() -> void:
 
 # --- the skip --------------------------------------------------------------------------------------
 
+func test_the_effects_go_quiet_only_while_a_skip_resolves() -> void:
+	_control.set_process(false)
+	await _settle()
+	assert_bool(AudioServer.is_bus_mute(_sfx_bus())).override_failure_message(
+			"precondition: the effects bus starts muted, so the case below proves nothing").is_false()
+	Pacing.set_skipping(true)
+	await _settle()
+	assert_bool(AudioServer.is_bus_mute(_sfx_bus())).override_failure_message(
+			"a skip played its sound effects").is_true()
+	Pacing.set_skipping(false)
+	await _settle()
+	assert_bool(AudioServer.is_bus_mute(_sfx_bus())).override_failure_message(
+			"the effects stayed muted after the skip").is_false()
+
+
 # THE INVARIANT, driven through the phase that owns it: a skip changes how fast a pass runs and
 # whether anyone sees it, never which code runs. So the skipped pass must end the way any pass does --
 # the squad spent (_end_squad_turn), the borrowed view handed back (#520's "restored after, including
@@ -272,21 +287,6 @@ func test_a_board_swap_mid_skip_ends_it() -> void:
 	_control.tick(0.0, false)
 	assert_bool(Pacing.skipping()).override_failure_message(
 			"a skip survived the board it was skipping").is_false()
-
-
-func test_the_effects_go_quiet_only_while_a_skip_resolves() -> void:
-	_control.set_process(false)
-	await _settle()
-	assert_bool(AudioServer.is_bus_mute(_sfx_bus())).override_failure_message(
-			"precondition: the effects bus starts muted, so the case below proves nothing").is_false()
-	Pacing.set_skipping(true)
-	await _settle()
-	assert_bool(AudioServer.is_bus_mute(_sfx_bus())).override_failure_message(
-			"a skip played its sound effects").is_true()
-	Pacing.set_skipping(false)
-	await _settle()
-	assert_bool(AudioServer.is_bus_mute(_sfx_bus())).override_failure_message(
-			"the effects stayed muted after the skip").is_false()
 
 
 # The skip state turns on only at FULL black, or the player watches the pass snap through the fade.
