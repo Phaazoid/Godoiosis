@@ -1356,6 +1356,9 @@ const CLASS_KNOBS: Array[Dictionary] = [
 	{"group": "Camera travel", "label": "Camera travel to the action", "static": "PLAYBACK_PAN",
 		"script": PACING_SCRIPT, "min": 0.0, "max": 2.0, "step": 0.05,
 		"tip": "How long the camera takes to reach the next blast, in seconds -- and therefore how long the action waits for it. Fixed duration, not speed, so a short hop and a long one read at the same pace. Zero snaps."},
+	{"group": "Camera travel", "label": "Settle: still before anything plays", "static": "CAMERA_SETTLE",
+		"script": PACING_SCRIPT, "min": 0.0, "max": 3.0, "step": 0.05,
+		"tip": "The least time the camera sits STILL in its new position before anything plays, in seconds -- counted from the moment every ease has arrived, after every playback pan (each blast, the walk, the tear-out, the way home, the burn). A floor: a beat whose own hold is longer keeps it."},
 	{"group": "Camera travel", "label": "Camera travel to a burning unit", "static": "ENVIRONMENT_PAN",
 		"script": PACING_SCRIPT, "min": 0.0, "max": 2.0, "step": 0.05,
 		"tip": "How long the camera takes to reach each unit in the end-of-turn effect pass -- today, everyone standing in fire. Its own number rather than a share of the blast travel above, because this phase is bookkeeping and paced against the others, not with them. Zero snaps."},
@@ -2114,6 +2117,7 @@ static func read_static(name: String) -> Variant:
 		"spark_gravity": return ShockSparks.spark_gravity
 		"spark_drag": return ShockSparks.spark_drag
 		"PLAYBACK_PAN": return Pacing.PLAYBACK_PAN
+		"CAMERA_SETTLE": return Pacing.CAMERA_SETTLE
 		"TEAR_OUT_BRACE": return Pacing.TEAR_OUT_BRACE
 		"TEAR_OUT_EMPTY_SKY": return Pacing.TEAR_OUT_EMPTY_SKY
 		"TEAR_OUT_SETTLE": return Pacing.TEAR_OUT_SETTLE
@@ -2672,6 +2676,9 @@ static func write_static(host: Node3D, name: String, value: Variant) -> void:
 			return
 		"PLAYBACK_PAN":
 			Pacing.PLAYBACK_PAN = value
+			return
+		"CAMERA_SETTLE":
+			Pacing.CAMERA_SETTLE = value
 			return
 		"TEAR_OUT_BRACE":
 			Pacing.TEAR_OUT_BRACE = value

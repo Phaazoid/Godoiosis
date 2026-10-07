@@ -458,7 +458,8 @@ func _execute_move_phase(actions: Array, plan: ResolvedPlan, sheet: BeatSheet,
 # Where the camera sits for the walk (#520): the MIDPOINT of the walk's span in 2D, with the span
 # itself published for the 3D rig to widen its distance to. The span goes out BEFORE the travel and
 # is never awaited, exactly as a beat's angle is -- the rig widens on its own edge while the pan
-# tweens, so the two are one movement. No hold: the pan IS the beat.
+# tweens, so the two are one movement. No hold of its own -- but the walk waits for the camera to
+# arrive and settle, like everything else a pass plays after a pan (#1132, dev 2026-10-07).
 #
 # One spelling, two call sites (#567) -- the top of the move phase, and again after each interrupt.
 # An EMPTY span is "nothing walks", which is a hold-position queue or none at all.
@@ -487,6 +488,7 @@ func _frame_the_walk(span: Array[Vector2i], profile: Pacing.Profile, duration: f
 	await game.camera_controller.pan_to_position(
 			(GridUtils.cell_world(grid, span[0]) + GridUtils.cell_world(grid, span[1])) * 0.5,
 			duration)
+	await _settle_then(0.0)
 
 
 # The pass's mid-walk interrupts (#567): ResolvedPlan.walk_moments, the one list both hosts play (#46),
@@ -563,12 +565,12 @@ func _execute_action_sequence(actions: Array, beat: float = 0.0, holds: Dictiona
 			# cinematic claimed, and the sway would otherwise ride in from whatever came before.
 			game.camera_controller.beat_profile = profiles.get(action, Pacing.Profile.BOARD)
 			await game.camera_controller.pan_to(subjects[action], Pacing.PLAYBACK_PAN)
-			# ...and on a battle-zoom beat the 2D tween landing is not the camera arriving: the rig
-			# eases its angle and zoom on its own clock, so the hold waits for THAT (#1132 follow-up,
-			# dev 2026-10-07: "it should be there and still for a moment before the hit even starts").
-			if profiles.get(action, Pacing.Profile.BOARD) == Pacing.Profile.CINEMATIC:
-				await _camera_arrives()
-		await Pacing.beat(self, hold)
+			# ...and the 2D tween landing is not the camera arriving: the rig eases its angle and zoom on
+			# its own clock, so the hold waits for THAT, and then lasts at least the settle (#1132, dev
+			# 2026-10-07: "If the camera is still moving to a new position, nothing should be playing").
+			await _settle_then(hold)
+		else:
+			await Pacing.beat(self, hold)
 		_listen_for_the_blow(action)
 		action.begin_execution()
 		action.execute()
@@ -608,6 +610,15 @@ func _camera_arrives() -> void:
 		await tree.process_frame
 		if not ModalLock.any_open(tree):
 			waited += get_process_delta_time()
+
+
+# The camera has just been sent somewhere new: wait for it to ARRIVE, then keep it still for at least
+# Pacing.CAMERA_SETTLE -- or for `hold`, when the caller's own beat there is the longer of the two.
+# Every playback pan ends here (dev, 2026-10-07: "playback should always give at least a half second
+# for the camera to settle in a new position"), so nothing a pass plays can start under a moving shot.
+func _settle_then(hold: float) -> void:
+	await _camera_arrives()
+	await Pacing.beat(self, maxf(hold, Pacing.CAMERA_SETTLE))
 
 
 # What a landed blow -- or a sinking (#922) -- owes its squads' tethers (#367 part 2B): the links the forecast says it ends and
@@ -718,8 +729,8 @@ func _stage_the_fight(sheet: BeatSheet) -> void:
 	await game.camera_controller.pan_to_position(_stage_centre(cells), Pacing.PLAYBACK_PAN)
 	# The board holds still, intact, before it comes apart. BEFORE stage(), not after: staging is
 	# what puts the cells in the diorama, and a beat between that and begin_flight would hold them
-	# in the sky rather than on the board.
-	await Pacing.beat(self, Pacing.TEAR_OUT_BRACE)
+	# in the sky rather than on the board. Counted from the camera's ARRIVAL, and at least the settle.
+	await _settle_then(Pacing.TEAR_OUT_BRACE)
 	BoardSpace.stage(cells, BoardSpace.lift_offset())
 	await _play_transition(cells, true)
 	# ...and the assembled diorama holds before the first blow (dev, 2026-08-28: the action used to
@@ -813,8 +824,8 @@ func _bring_the_board_home() -> void:
 		await game.camera_controller.pan_to_position(_stage_centre(staged), Pacing.PLAYBACK_PAN)
 		# The aftermath sits before the board reassembles -- SETTLE's twin at the other end, so the
 		# last blow is not immediately swept away by the tiles going home. AFTER the climb, so it is
-		# a beat on the diorama rather than a beat spent travelling.
-		await Pacing.beat(self, Pacing.TEAR_OUT_AFTERMATH)
+		# a beat on the diorama rather than a beat spent travelling -- and after the camera arrives.
+		await _settle_then(Pacing.TEAR_OUT_AFTERMATH)
 		await _play_transition(staged, false)
 	BoardSpace.clear_staging()
 	# The stage leaves the air the moment the ground does. The release edge clears it too, but the
@@ -988,6 +999,8 @@ func apply_end_of_turn_tiles(faction: Team.Faction) -> void:
 		effect_pass_subjects[hit.actor.get_instance_id()] = true
 	for hit in hits:
 		await game.camera_controller.pan_to(hit.actor, Pacing.ENVIRONMENT_PAN)
+		# ...and nothing burns until the camera has stopped (#1132, dev 2026-10-07: "always").
+		await _settle_then(0.0)
 		# The hit lands BEFORE the hold (dev, 2026-08-26: "the point of the linger is to show that
 		# something happened"). The other way round, the pause watched a unit at full health and the
 		# camera left as the cubes burst. It is also what keeps the mission banner off a kill that is

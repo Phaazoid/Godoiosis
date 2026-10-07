@@ -123,7 +123,9 @@ func _ring(centre: Vector2i) -> Array[Vector2i]:
 	return ring
 
 
-# Playback owns the camera on a battle-zoom beat, aimed along `line`, trained on `subject`.
+# Playback owns the camera on a battle-zoom beat, aimed along `line`, trained on `subject` -- the
+# approach's first frame, where the angle is CHOSEN (only a travelling pan may turn the camera), and
+# then the landing. A headless pan lands before any frame runs, so the travelling frame is scripted.
 func _frame(subject: Unit, line: Array[Vector2i], profile := Pacing.Profile.CINEMATIC,
 		cinematic := true) -> void:
 	await _settle()   # the unit mirror draws a spawned unit on its next frame, and the clearance looks at the DRAWN body
@@ -132,6 +134,11 @@ func _frame(subject: Unit, line: Array[Vector2i], profile := Pacing.Profile.CINE
 	cam.playback_cinematic = cinematic
 	cam.beat_profile = profile
 	cam.directed_line = line
+	cam.pan_subject = subject
+	cam.pan_destination = subject.global_position
+	cam._panning = true
+	_scene._mirror_camera()
+	cam._panning = false
 	await cam.pan_to(subject)
 	_scene._mirror_camera()
 
@@ -184,8 +191,11 @@ func test_a_blocked_side_turns_the_camera_to_the_clear_one() -> void:
 	assert_bool(tower != centre).override_failure_message(
 			"the lens sits over the subject's own cell, so no tower can stand between them") \
 		.is_true()
-	_raise([tower])
+	# The tower is up BEFORE the next beat's approach: the angle is chosen while the camera travels.
+	_cam().set_playback_locked(false)
 	_scene._mirror_camera()
+	_raise([tower])
+	await _frame(subject, line)
 	assert_float(ShotClearance.deviation(_scene._clearance.turn)).override_failure_message(
 			"the turn left side-on when the other side was open").is_equal(0.0)
 	assert_float(absf(_scene._clearance.turn)).override_failure_message(
@@ -196,6 +206,55 @@ func test_a_blocked_side_turns_the_camera_to_the_clear_one() -> void:
 		.is_equal_approx(_rig.directed_yaw(line, _scene._clearance.turn), 0.001)
 	assert_bool(_mirror.is_column_hidden(tower)).override_failure_message(
 			"a clear angle existed and the tower was hidden anyway").is_false()
+
+
+# --- holding still once landed (round 3, dev 2026-10-07) ---------------------------------------
+#
+# "If the camera is still moving to a new position, nothing should be playing." Once the approach has
+# landed an action is about to play or playing, so whatever comes into the way after that -- a lunge,
+# a tumble, a tower -- is HIDDEN, and the camera keeps the angle it arrived at.
+
+func test_once_landed_a_new_blocker_is_hidden_and_the_camera_holds_its_angle() -> void:
+	var centre := _open_ground()
+	var subject := _spawn(Team.Faction.PLAYER, centre)
+	var line := _east_west(centre)
+	await _frame(subject, line)
+	var yaw_before := _rig._target_yaw_degrees
+	var tower := _toward_lens(subject, line, 0.45)
+	assert_bool(tower != centre).override_failure_message(
+			"the lens sits over the subject's own cell, so no tower can stand between them") \
+		.is_true()
+	_raise([tower])
+	_scene._mirror_camera()
+	assert_float(_scene._clearance.turn).override_failure_message(
+			"a blocker arriving after the camera landed TURNED it -- the mid-blow swing").is_equal(0.0)
+	assert_float(_rig._target_yaw_degrees).override_failure_message(
+			"the camera is heading for a new angle while the shot plays").is_equal(yaw_before)
+	assert_bool(_mirror.is_column_hidden(tower)).override_failure_message(
+			"the tower that came into the way after landing was left in it").is_true()
+
+
+# A shot CHANGE after landing is not an approach either -- the tether break's pull back to the stage
+# (#367 2B) happens mid-linger, with no pan. Its fresh search may hide but may not turn.
+func test_a_shot_change_after_landing_hides_rather_than_turns() -> void:
+	var centre := _open_ground()
+	var subject := _spawn(Team.Faction.PLAYER, centre)
+	var line := _east_west(centre)
+	await _frame(subject, line)
+	var tower := _toward_lens(subject, line, 0.45)
+	_raise([tower])
+	_scene._mirror_camera()
+	var stage: Array[Vector2i] = [centre]
+	var cam := _cam()
+	cam.shot_cells = stage
+	cam.follow(null)
+	_scene._mirror_camera()
+	assert_int(_scene._shots.active).override_failure_message(
+			"precondition: the shot did not change to the stage, so no fresh search ran") \
+		.is_equal(ShotDirector.Shot.STAGE)
+	assert_float(_scene._clearance.turn).override_failure_message(
+			"a search with no pan travelling turned the camera").is_equal(0.0)
+	cam.shot_cells = []
 
 
 # --- the approach (#1132 follow-up) ------------------------------------------------------------

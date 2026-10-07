@@ -31,12 +31,18 @@ static var TURN_HANDOFF := 1.0     # hold at every faction turn start -- game.st
 # hop and a long one read at the same pace, which is what makes it a beat rather than a lurch.
 static var PLAYBACK_PAN := 0.5
 
-# The LONGEST a battle-zoom beat waits for the 3D camera to finish easing onto its shot before the
-# hold begins (#1132 follow-up). A CAP, NOT A BEAT -- nothing should ever reach it, since the eases
-# close in well under a second; it exists so a channel whose target never settles cannot hang a pass.
-# A const on that reason: a slider here could only ever be set to "long enough", and the hold before
-# the blow is what the dev tunes.
+# The LONGEST playback waits for the 3D camera to finish easing onto its shot after a pan (#1132
+# follow-up). A CAP, NOT A BEAT -- nothing should ever reach it, since the eases close in about a
+# second; it exists so a channel whose target never settles cannot hang a pass. A const on that
+# reason: a slider here could only ever be set to "long enough", and the settle below is the beat.
 const CAMERA_ARRIVAL_CAP := 2.0
+
+# How long the camera sits STILL in its new position before anything plays, once a pan has landed
+# and every ease has arrived (dev, 2026-10-07: "playback should always give at least a half second
+# for the camera to settle in a new position"). A FLOOR, not an addition: a beat whose own hold is
+# longer keeps it. Every playback pan honours it -- the beats, the walk framing, the tear-out, the
+# way home and the burn -- because "always" was the ruling.
+static var CAMERA_SETTLE := 0.5
 
 # The END-OF-TURN EFFECT PASS -- today, units standing in fire (#534). TWO numbers of its own
 # rather than one scale over the beats above (dev, 2026-08-26: "I don't see controls for the camera
