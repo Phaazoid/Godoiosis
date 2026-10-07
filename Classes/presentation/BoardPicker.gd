@@ -7,6 +7,9 @@ class_name BoardPicker
 # heights (stage 2+ swaps in real board data; GridMap appears only in the
 # column_tops_from adapter) and tests headlessly end to end.
 #
+# The walk itself is `crossings` since #1132, which the shot clearance rides too: one answer to
+# which columns a ray crosses, asked by the pick and by the camera's sight lines.
+#
 # Semantics (stage-1 decisions, each a one-function change if play disagrees):
 # - Any hit — top face OR cliff side — returns the column's TOP cell, the
 #   standable, tactically meaningful one.
