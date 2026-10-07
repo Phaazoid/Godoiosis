@@ -5,7 +5,7 @@ NAMES things and POINTS at the code that owns them. It deliberately does not re-
 came to be — [`visual-clarity.md`](visual-clarity.md) holds the round-by-round history in eleven
 camera sections, and a second telling here would drift from the first.
 
-**Canon checked through #699 (2026-09-02); #1132 (the clearance words, then the approach and arrival, then the held angle and the settle) folded in 2026-10-07.**
+**Canon checked through #699 (2026-09-02); #1132 (the clearance words, then the approach and arrival, then the held angle and the settle, then readouts and bystanders) folded in 2026-10-07.**
 
 ## Why this page exists
 
@@ -163,9 +163,17 @@ the dev tunes, `TRAINED_DISTANCE` is a `Pacing` constant. Both are content, neit
   tumble) is HIDDEN. `battle3d._clear_the_shot` passes `can_turn = cam.is_panning()`, and the
   per-frame step in `ShotClearance.step` can only hide.
 - **blocker** — a terrain column, a prop or a unit a sight line passes through. A column is a box
-  from the board's underside to its drawn top, never "everything below the top".
-- **the action** — the trained subject, whoever stands on the aim line, everyone on stage, the
-  walker. Never hidden, and the ground under them never hidden either.
+  from the board's underside to its drawn top, never "everything below the top". A unit is its art
+  AND its health readout, as two boxes (`ShotClearance.Body.blocks`), because from the battle zoom's
+  pitch the readout over a head is what buries the fighter behind it (round 4).
+- **the action** — never hidden, and the ground under it never hidden either. Depends on the shot:
+  - On a close-up, the trained subject and both ends of the aim line. Both ends are also what the
+    close-up looks AT, so an angle that parks one behind the other counts as blocked.
+  - On the stage's wide shot, everyone on stage.
+  - On a walk, everyone walking.
+
+  A bystander on stage may be hidden during a close-up. The ground under it stays protected, so a
+  hidden column never leaves a visible unit on air.
 - **turn** — degrees added to the beat's directed yaw (`CameraRig3D.directed_yaw`) to reach a clear
   side; zero is the shot exactly as it always was.
 - **hidden** — what no turn could clear, taken out of the frame outright: a column moved to the
