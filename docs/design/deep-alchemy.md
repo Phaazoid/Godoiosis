@@ -605,4 +605,4 @@ Equivalent exchange conserves atoms, not power; the exploit surface is loops and
 - smoke's ratio, entered as `AE + A2` one-to-one as a placeholder
 - sulfur gas is entered as `FAE`, the alchemical-order spelling of the `AFE` proposed in chat
 
-**Ruled, not built:** ice melts to water, not steam (Phaazoid, 2026-10-06), which reverses #508's melt-as-steam-source. It is a gameplay change and lands in its own PR. Whether gas spread must conserve matter is deferred.
+**Built 2026-10-07:** ice melts to water, not steam (Phaazoid, 2026-10-06, #508 ruling 22). `Melt.tres` releases no gas; a second fire hit on the open water boils it. **Still open:** Whether gas spread must conserve matter is deferred.

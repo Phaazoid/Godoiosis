@@ -1,5 +1,5 @@
 # Where gas comes from (#508): an attack that AUTHORS a gas leaves it on every tile it strikes, and a
-# terrain reaction may release one -- water dousing fire, fire boiling water, fire melting ice. Both
+# terrain reaction may release one -- water dousing fire, fire boiling water. Both
 # arrive on the one cell-effect channel the resolver already fills, so the queue previews them and
 # both executors play them.
 #
@@ -177,12 +177,13 @@ func test_fire_on_open_water_boils_it() -> void:
 	assert_int(plan.cell_effects[0].gas_added.get(boils.gas, 0)).is_equal(boils.gas_level)
 
 
-# Frozen water MELTS -- it does not also boil, so a fireball on ice steams exactly once.
-func test_fire_on_frozen_water_melts_it_and_does_not_also_boil_it() -> void:
+# Frozen water MELTS and does not also boil: whatever steam the cell gets is the melt's own. Since
+# #508 ruling 22 that is none -- the ice leaves water, and only a second fire hit boils it.
+func test_fire_on_frozen_water_melts_it_and_does_not_boil_it() -> void:
 	var melt := _authored(func(r: TerrainReaction) -> bool:
 		return r.incoming_element == Elemental.Element.FIRE \
-			and r.required_tile_state == Terrain.TileState.FROZEN and r.gas_level != Gas.Level.NONE,
-		"melts ice and releases gas")
+			and r.required_tile_state == Terrain.TileState.FROZEN,
+		"melts ice")
 	var attacker := _attacker(Elemental.Element.FIRE, EquippableData.TargetMode.MAP)
 	var struck: Array[Vector2i] = [TARGET_CELL]
 	var board := _KindBoard.new(_store_with(Terrain.TileState.FROZEN), { TARGET_CELL: Terrain.Kind.WATER })

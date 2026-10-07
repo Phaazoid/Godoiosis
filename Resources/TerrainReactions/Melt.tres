@@ -7,6 +7,5 @@ script = ExtResource("1_dfo0j")
 incoming_element = 1
 required_tile_state = 2
 remove_tile_states = Array[int]([2])
-gas_level = 2
 popup = "Melts!"
 metadata/_custom_type_script = "uid://dxskrhe0srgid"
