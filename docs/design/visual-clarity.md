@@ -7,7 +7,7 @@ its child [#49 Action Queue UX](https://github.com/Phaazoid/Godoiosis/issues/49)
 This is a *guidelines* doc, not a spec — it captures the principles we're holding the work to,
 plus the running order of the queue-UX checklist. Update it as items land.
 
-**Canon checked through #1171 (2026-09-29); #1207 (the field covers a placed blast's splash) folded in 2026-10-05; #1174 (Will retired, the limb icons) folded in 2026-10-01; #1197 (the danger field draws the watch shot and the current) folded in 2026-10-03; #508's soak rename folded in 2026-10-04; #46's shared execute steps folded in 2026-10-04.**
+**Canon checked through #1171 (2026-09-29); #1207 (the field covers a placed blast's splash) folded in 2026-10-05; #1174 (Will retired, the limb icons) folded in 2026-10-01; #1197 (the danger field draws the watch shot and the current) folded in 2026-10-03; #508's soak rename folded in 2026-10-04; #46's shared execute steps folded in 2026-10-04. #545 (fast-forward, skip and the playback speed) folded in 2026-10-07.**
 
 ## Principles
 
@@ -2078,8 +2078,9 @@ its own reason, whoever owns the base.
 spends its time by stopping the world. Three things are load-bearing: the unfreeze timer is created
 with `ignore_time_scale`, or it would be frozen by the freeze it exists to end and hang the game;
 re-entry is **counted**, so a volley killing two cannot have the first restore end the second freeze
-and race; and the restore writes `1.0` literally, which is correct only while nothing else writes
-`time_scale` — true today, and the comment says where to look when it stops being.
+and race; and the restore wrote `1.0` literally, which was correct only while nothing else wrote
+`time_scale` — until #545 made `Pacing._apply_time_scale` the one writer, so a release now comes
+back to the playback speed.
 
 **It fires from the death path and needed no new plumbing.** A killing blow already reaches
 `UnitMirror._on_unit_died` alone — the HP poll structurally never observes 0 HP — and that is already
@@ -3026,8 +3027,8 @@ and is the wrong field: it is held between passes, so it reads CINEMATIC for eve
 PUBLISHES — the disable path's predicate is the nearest one, not the right one.**
 
 **The set is DECLARED and can never be `ui_layer.visible = false`** —
-[#545](https://github.com/Phaazoid/Godoiosis/issues/545)'s skip affordance has to live on screen during
-exactly this window, so it is outside the set by construction. Hidden: the queue panel, the hover card,
+[#545](https://github.com/Phaazoid/Godoiosis/issues/545)'s skip affordance may yet live on screen during
+exactly this window, so the set stays declared (#545 shipped keys only, 2026-10-07). Hidden: the queue panel, the hover card,
 the inspect panel and End Turn. **`MissionStatusPanel` stays up** (dev, 2026-09-03) — objectives, the
 build stamp and #182's tutorial instruction row, which has to survive the moment the lesson is being
 demonstrated. Hard `visible = false`, no fade and no knob: there is no tuned value here to disagree
@@ -4370,3 +4371,40 @@ The dev's playtest note:
 - **The validator's strings become player-visible for the first time.** Several were written as internal messages; their wording is the dev's to change.
 - **Many refusals make a tall box.** It takes its height from the list, which scrolls; nothing caps it.
 - **What only the dev can judge:** the shake's size and feel, and whether the box reads as the reasons for the red rows.
+
+## Fast-forward, skip and a playback speed ([#545](https://github.com/Phaazoid/Godoiosis/issues/545), BUILT 2026-10-07)
+
+### Rulings (dev, 2026-10-07)
+
+| Fork | Ruling |
+|---|---|
+| Fast-forward or jump to the end | **Both.** A held fast-forward, and a skip |
+| What a hold covers | Any playback: your Execute, the enemy turn, the burn pass. Let go and it is back to normal at once |
+| What one skip covers | The rest of playback, until the board is the player's again: the whole rest of an enemy turn, or the rest of your own pass |
+| How a skip gets to the end | Resolve under a fade: black, the real pass at maximum speed, then back in on the settled board with the camera home |
+| Button, key or both | Keys only. Hold **Shift** to fast-forward, tap **Space** to skip |
+| Per press or a setting | Both. **Playback speed** (1x / 2x / 3x) is the base for all playback; holding Shift takes whichever is faster, never both multiplied |
+
+### How it is built
+
+- **A skip changes how fast a pass runs and whether anyone sees it, never which code runs.** That is the whole design, and it is why the four things this ticket said a skip must not break (the pass reaching `_end_squad_turn`, the camera coming home, the headless escape, the two-window key trap) hold by construction rather than by care. Nothing returns early from `execute_orders`.
+- **`Pacing.unwatched()` is the one spelling of *nobody is watching playback*: headless, or a skip resolving.** Nine playback escapes asked `DisplayServer.get_name() == "headless"` by hand (`Pacing.beat` and `hitstop`, `CameraController`'s lerp and `pan_to_position`, `CameraRig3D`'s glide, recover and flourish clocks, `MovementComponent`'s shove fall and plummet). They ask the predicate now, so a skip collapses exactly what the suite already collapses, through paths every suite already runs. `tests/law/test_playback_escapes_ask_unwatched.gd` refuses a tenth spelling in those files, because no headless case can tell the two apart.
+- **`Pacing._apply_time_scale` is the one writer of `Engine.time_scale`.** A hitstop's freeze outranks the playback speed and its release comes back to that speed. Before #545 the release wrote `1.0` literally, correct only while nothing else wrote the scale. The freeze is also divided by the speed, so it lasts the same share of a pass at any speed.
+- **`PlaybackControl` (`Classes/flow/`) decides; it is a per-frame reconcile, MusicDirector's idiom.** Its gate is `game.playback_owns_board()`, the existing answer to *is playback running*. A menu or a card drops the speed to 1x without ending a skip, so the pause menu never animates at skip speed and closing it carries on. Both keys are read off the global `Input` state rather than one window's event stream, which is the two-window trap answered by polling instead of forwarding. `PROCESS_MODE_ALWAYS`, because `ModalLock` disables the Game node.
+- **The skip waits for FULL black before anything runs unwatched**, so the snapping never shows through the fade. The fade runs on real time, so a hitstop cannot stall it. `battle3d` draws it as its own rect above the white-out; going dark is not a flash, so #217's cap does not apply.
+- **Space advances dialog too**, so a skip is refused while a timeline plays and on the frame after one ends: the press that ends a last line has already ended it by the time the frame asks. `ScenarioDirector.is_talking()` is the one answer to that question; it replaced two inline copies.
+- **The effects go quiet while a skip resolves** (`AudioDirector`'s bus pass folds the skip into the SFX level). Music plays on.
+- **Knobs:** *Fast-forward speed*, *Skip speed* and *Skip fade*, a "Fast-forward and skip" group on the Playback page. The setting's multipliers are a const beside its labels, because a knob could make "2x" lie; `test_player_settings` pins each label to its number.
+
+### What the suite cannot see
+
+Headless is already unwatched, so no case can watch a skip collapse a pause or a pan. The suite pins the speed each state asks for, the latch's edges, the fade, the mute, and that a skipped real pass still spends its squad and hands the borrowed view back (#520's *"restored after, including on skip"*). How long the screen stays dark is a play-check; `SKIP_SPEED` is the dial.
+
+### Declared residuals
+
+- The tether snap and pluck and the squad lines' dash run on wall clock, so they play at 1x during a fast-forward.
+- The 1 s hand-off beat before the player's turn sits outside `playback_owns_board` and plays at 1x.
+- A dialog that fires mid-skip plays over the dark screen.
+- Typing Shift or Space into a dev-tools text field during playback fast-forwards or skips (dev-only).
+- The flat 2D dev view gets no fade.
+- Nothing on screen says the keys exist.
