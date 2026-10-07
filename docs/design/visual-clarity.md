@@ -3027,8 +3027,8 @@ and is the wrong field: it is held between passes, so it reads CINEMATIC for eve
 PUBLISHES — the disable path's predicate is the nearest one, not the right one.**
 
 **The set is DECLARED and can never be `ui_layer.visible = false`** —
-[#545](https://github.com/Phaazoid/Godoiosis/issues/545)'s skip affordance may yet live on screen during
-exactly this window, so the set stays declared (#545 shipped keys only, 2026-10-07). Hidden: the queue panel, the hover card,
+[#545](https://github.com/Phaazoid/Godoiosis/issues/545)'s key hint lives on screen during exactly
+this window, in End Turn's slot, so the set stays declared and the hint is outside it by construction. Hidden: the queue panel, the hover card,
 the inspect panel and End Turn. **`MissionStatusPanel` stays up** (dev, 2026-09-03) — objectives, the
 build stamp and #182's tutorial instruction row, which has to survive the moment the lesson is being
 demonstrated. Hard `visible = false`, no fade and no knob: there is no tuned value here to disagree
@@ -4384,6 +4384,7 @@ The dev's playtest note:
 | How a skip gets to the end | Resolve under a fade: black, the real pass at maximum speed, then back in on the settled board with the camera home |
 | Button, key or both | Keys only. Hold **Shift** to fast-forward, tap **Space** to skip |
 | Per press or a setting | Both. **Playback speed** (1x / 2x / 3x) is the base for all playback; holding Shift takes whichever is faster, never both multiplied |
+| An on-screen hint (round 2, off three mockups on a real frame) | Yes: each key, an arrow, what it does. In **End Turn's corner** (bottom right), styled like the objectives panel, shown during **any playback** for **the whole of it** |
 
 ### How it is built
 
@@ -4391,7 +4392,9 @@ The dev's playtest note:
 - **`Pacing.unwatched()` is the one spelling of *nobody is watching playback*: headless, or a skip resolving.** Nine playback escapes asked `DisplayServer.get_name() == "headless"` by hand (`Pacing.beat` and `hitstop`, `CameraController`'s lerp and `pan_to_position`, `CameraRig3D`'s glide, recover and flourish clocks, `MovementComponent`'s shove fall and plummet). They ask the predicate now, so a skip collapses exactly what the suite already collapses, through paths every suite already runs. `tests/law/test_playback_escapes_ask_unwatched.gd` refuses a tenth spelling in those files, because no headless case can tell the two apart.
 - **`Pacing._apply_time_scale` is the one writer of `Engine.time_scale`.** A hitstop's freeze outranks the playback speed and its release comes back to that speed. Before #545 the release wrote `1.0` literally, correct only while nothing else wrote the scale. The freeze is also divided by the speed, so it lasts the same share of a pass at any speed.
 - **`PlaybackControl` (`Classes/flow/`) decides; it is a per-frame reconcile, MusicDirector's idiom.** Its gate is `game.playback_owns_board()`, the existing answer to *is playback running*. A menu or a card drops the speed to 1x without ending a skip, so the pause menu never animates at skip speed and closing it carries on. Both keys are read off the global `Input` state rather than one window's event stream, which is the two-window trap answered by polling instead of forwarding. `PROCESS_MODE_ALWAYS`, because `ModalLock` disables the Game node.
-- **The skip waits for FULL black before anything runs unwatched**, so the snapping never shows through the fade. The fade runs on real time, so a hitstop cannot stall it. `battle3d` draws it as its own rect above the white-out; going dark is not a flash, so #217's cap does not apply.
+- **The skip waits for FULL black before anything runs unwatched**, so the snapping never shows through the fade. The fade runs on real time, so a hitstop cannot stall it. Going dark is not a flash, so #217's cap does not apply.
+- **The fade lives in the GAME's HUD layer, at `UiLayers.PLAYBACK_FADE`, and that placement is the fix for a bug the first build shipped.** It began as a rect in `battle3d`'s own `$UI` CanvasLayer, which is in the ROOT viewport and draws over the whole game viewport, so the pause menu (a card inside that viewport) opened UNDER the black and Esc mid-skip looked like nothing happened. A layer number only orders layers inside ONE viewport, which is why `test_the_fade_sits_under_the_dialogue_and_every_card` asserts the same viewport as the cards before it compares layers. Now the dialogue, the wheel and every card draw over the dark, and the flat 2D dev view gets the fade too.
+- **The key hint (`Classes/ui/PlaybackHint.gd`) sits in End Turn's slot during playback**, in the objectives panel's own box (`MissionStatusPanel.panel_style()`, read rather than copied). Its keys come from `Controls.key_for_action`, the F3 sign's idiom, so it cannot name a key the Input Map lacks; Shift's reads "Shift (hold)" because that is how the registry spells it. Speed up lights while Shift is down. `PlaybackControl` owns the hint and the fade and pushes both every tick. **One slot, one occupant:** the hint yields to End Turn wherever that is still up, which is your own end-of-turn burn.
 - **Space advances dialog too**, so a skip is refused while a timeline plays and on the frame after one ends: the press that ends a last line has already ended it by the time the frame asks. `ScenarioDirector.is_talking()` is the one answer to that question; it replaced two inline copies.
 - **The effects go quiet while a skip resolves** (`AudioDirector`'s bus pass folds the skip into the SFX level). Music plays on.
 - **Knobs:** *Fast-forward speed*, *Skip speed* and *Skip fade*, a "Fast-forward and skip" group on the Playback page. The setting's multipliers are a const beside its labels, because a knob could make "2x" lie; `test_player_settings` pins each label to its number.
@@ -4404,7 +4407,7 @@ Headless is already unwatched, so no case can watch a skip collapse a pause or a
 
 - The tether snap and pluck and the squad lines' dash run on wall clock, so they play at 1x during a fast-forward.
 - The 1 s hand-off beat before the player's turn sits outside `playback_owns_board` and plays at 1x.
-- A dialog that fires mid-skip plays over the dark screen.
+- A dialog that fires mid-skip plays on top of the dark screen.
 - Typing Shift or Space into a dev-tools text field during playback fast-forwards or skips (dev-only).
-- The flat 2D dev view gets no fade.
-- Nothing on screen says the keys exist.
+- The hint does not show during your own end-of-turn burn, because End Turn holds the slot there.
+- The tear-out's white flash lives in `battle3d`'s own layer, so a flash already running as a skip begins draws over the fade until the skip collapses it.
