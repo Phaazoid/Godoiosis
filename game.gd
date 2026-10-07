@@ -158,6 +158,7 @@ var mission_log: MissionLog   # the playtest recorder (#53); writes down what th
 var telemetry_uploader: TelemetryUploader   # ships a sealed run to the intake (#53 slice 5)
 var audio_director: AudioDirector   # the one place a sound is played (#136)
 var music_director: MusicDirector   # ...and the one place a TRACK is chosen (#136 slice 3)
+var playback_control: PlaybackControl   # fast-forward, skip and the playback speed setting (#545)
 
 # ==============================================================================
 #  Lifecycle
@@ -295,6 +296,10 @@ func _build_collaborators() -> void:
 	music_director = MusicDirector.new()
 	music_director.game = self
 	add_child(music_director)   # AFTER mission_controller: its reconcile reads mission_select_is_up
+
+	playback_control = PlaybackControl.new()
+	playback_control.game = self
+	add_child(playback_control)   # AFTER scenario_director: a skip asks whether a dialog is up
 
 func _wire_signals() -> void:
 	turn_manager.turn_started.connect(_on_turn_started)

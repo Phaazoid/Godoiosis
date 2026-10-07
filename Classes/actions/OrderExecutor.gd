@@ -594,11 +594,12 @@ func _execute_action_sequence(actions: Array, beat: float = 0.0, holds: Dictiona
 # Pacing.CAMERA_ARRIVAL_CAP, counting only time no card is up: a pause freezes the rig, and a cap
 # spent behind the pause menu would let the blow start mid-turn once it closed.
 #
-# Headless returns at once, Pacing.beat's escape and for its reason: nobody is watching, and every
-# suite that resolves a cinematic pass would otherwise spend frames here. Which also means NO SUITE
-# SEES THIS WAIT -- the rig's half (is_arriving) is pinned; that the hit waits on it is a play-check.
+# Unwatched returns at once, Pacing.beat's escape and for its reason (#545): nobody is watching a
+# headless run or a skip under the fade, and every suite that resolves a cinematic pass would otherwise
+# spend frames here. Which also means NO SUITE SEES THIS WAIT -- the rig's half (is_arriving) is
+# pinned; that the hit waits on it is a play-check.
 func _camera_arrives() -> void:
-	if DisplayServer.get_name() == "headless":
+	if Pacing.unwatched():
 		return
 	var tree := get_tree()
 	await tree.process_frame
@@ -729,7 +730,7 @@ func _stage_the_fight(sheet: BeatSheet) -> void:
 # Wait until the rig is back on the board plane (#602 round 2). It waits on the fact the RIG
 # publishes rather than on a beat of its own: the climb is the rig's eased channel, so a beat here
 # would be a second answer to how long it takes and the two would disagree the moment the rate knob
-# moved. See CameraController.fall_depth for why that one fact travels the other way.
+# moved. See CameraController.fall_depth for why that fact travels the other way.
 #
 # BOUNDED rather than open. Nothing publishes headlessly, so this returns on its first check there
 # and costs the suite nothing; and a rig that somehow never settles costs ten seconds rather than

@@ -264,6 +264,9 @@ static func board_keys() -> Dictionary:
 			"Tab | Deploying": {"play": never("swaps the loadout screen and the board; headless reads both")},
 			"Enter | Deploying": {"play": cmd("begin")},
 			"Left-click | Deploying": {"play": cmd("deploy")},
+			# #545: playback speed, nothing a rule reads. Headless resolves a pass with no playback at all.
+			"Shift (hold) | During playback": {"play": never("speeds up playback, which headless does not have")},
+			"Space | During playback": {"play": never("skips playback, which headless does not have")},
 			"Click / Space / Enter | In dialog": {"play": never("dialog never plays headlessly")},
 		},
 	}
