@@ -8,5 +8,6 @@ incoming_element = 1
 required_kind = 5
 forbidden_tile_state = 2
 gas_level = 2
+equation = "F2 + W2 -> 2FW"
 popup = "Boils!"
 metadata/_custom_type_script = "uid://dxskrhe0srgid"
