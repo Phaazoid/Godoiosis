@@ -535,6 +535,11 @@ func sprite_for(unit: Unit) -> UnitSprite3D:
 # A unit as the shot clearance sees it (#1132), or null before it has a sprite. Off the DRAWN sprite,
 # lunge and tear-out included, because the question is what stands in the frame; the width is that
 # sprite's own ink and the height its own art top, so a tall unit blocks more than a short one.
+#
+# ...and its health readout while one is up (round 4): the battle zoom puts one on every unit, and
+# from its pitch the readout, not the head, is what hides the fighter behind. Placed where the bar
+# IS and sized by the bar itself, never re-derived from hud_lift. A square column, because the bar
+# turns to face the camera and the clearance asks from every candidate angle.
 func body_of(unit: Unit) -> ShotClearance.Body:
 	var sprite := sprite_for(unit)
 	if sprite == null:
@@ -549,6 +554,12 @@ func body_of(unit: Unit) -> ShotClearance.Body:
 	body.height = sprite.art_top_height()
 	body.heights.append(UnitSprite3D.body_middle())
 	body.heights.append(body.height * ShotClearance.HEAD_SAMPLE)
+	var bar := bar_for(unit)
+	if bar != null and bar.visible:
+		var half := bar.half_extents()
+		var at := bar.global_position
+		body.hud = AABB(at - Vector3(half.x, half.y, half.x),
+				Vector3(half.x * 2.0, half.y + bar.top_extent(), half.x * 2.0))
 	return body
 
 

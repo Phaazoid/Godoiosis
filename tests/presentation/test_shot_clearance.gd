@@ -155,6 +155,23 @@ func test_a_bystander_on_the_line_is_hidden_and_a_participant_is_not() -> void:
 		.is_greater(0)
 
 
+# Round 4, measured on the dev's board: from the battle zoom's pitch the line to a fighter passes
+# OVER the head of the unit in front and straight through the health readout floating above it.
+func test_a_units_readout_blocks_a_line_that_clears_its_head() -> void:
+	var world := _world()
+	var bystander := _body(BYSTANDER, HERE + Vector2i(0, -1))   # one cell toward the lens at turn 0
+	_stand(world, bystander)
+	assert_int(_found(world, 0.0).units.size()).override_failure_message(
+			"the line already met the bystander's art -- this case needs it to clear the head") \
+		.is_equal(0)
+	bystander.hud = AABB(Vector3(HERE.x + 0.05, 0.8, HERE.y - 0.95), Vector3(0.9, 0.3, 0.9))
+	var found := _found(world, 0.0)
+	assert_bool(found.units.has(BYSTANDER)).override_failure_message(
+			"the readout stood in the line and the clearance looked straight through it").is_true()
+	assert_int(found.fixed).override_failure_message(
+			"a bystander's readout counted as unclearable").is_equal(0)
+
+
 func test_a_prop_overhanging_into_the_line_is_found_from_its_own_cell() -> void:
 	# The art of a prop can spill past its cell, so the ring AROUND each crossed cell is asked. This
 	# prop's cell is off the line; only its box reaches across it.
