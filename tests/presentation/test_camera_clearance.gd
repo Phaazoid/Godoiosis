@@ -618,3 +618,31 @@ func test_on_a_close_up_the_attacker_is_watched_as_well_as_the_victim() -> void:
 		.is_true()
 	assert_bool(watched.has(fight[2].get_instance_id())).override_failure_message(
 			"a bystander became something the close-up is of").is_false()
+
+
+# The walk is everyone walking, not only the one the span frames (dev, 2026-10-07): with readouts
+# counted, the replay of his board hid a squadmate mid-stride for the length of the walk.
+func test_on_a_walk_every_walker_is_the_action() -> void:
+	var centre := _open_ground()
+	var walker := _spawn(Team.Faction.PLAYER, centre)
+	var squadmate := _spawn(Team.Faction.PLAYER, centre + Vector2i(1, 0))
+	await _settle()
+	var cam := _cam()
+	cam.set_playback_locked(true)
+	cam.playback_cinematic = true
+	cam.beat_profile = Pacing.Profile.CINEMATIC
+	var span: Array[Vector2i] = [centre, centre + Vector2i(0, 3)]
+	cam.framed_span = span
+	_scene._mirror_camera()
+	assert_int(_scene._shots.active).override_failure_message(
+			"precondition: the walk is not the shot").is_equal(ShotDirector.Shot.SPAN)
+	var world: ShotClearance.World = _scene._clearance_world(cam, null)
+	assert_bool(world.participants.has(walker.get_instance_id())).override_failure_message(
+			"the walker the span frames stopped being the action").is_true()
+	assert_bool(world.participants.has(squadmate.get_instance_id())).override_failure_message(
+			"a unit standing still became the action of somebody else's walk").is_false()
+	squadmate.movement.moving = true
+	world = _scene._clearance_world(cam, null)
+	squadmate.movement.moving = false
+	assert_bool(world.participants.has(squadmate.get_instance_id())).override_failure_message(
+			"a squadmate walking beside the framed walker may be hidden mid-stride").is_true()

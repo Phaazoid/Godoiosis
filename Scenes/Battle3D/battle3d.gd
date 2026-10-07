@@ -1265,8 +1265,11 @@ func _clearance_world(cam: CameraController, trained: Unit) -> ShotClearance.Wor
 		here.append(body)
 		world.bodies_at[body.cell] = here
 	# THE ACTION'S OWN: never hidden, and the ground under them never hidden either. The trained
-	# subject, whoever stands on the beat's aim line, and the walker -- plus everyone on stage when
-	# the STAGE is the shot, since they are then what it is of.
+	# subject, whoever stands on the beat's aim line, and on a walk everyone WALKING -- plus everyone
+	# on stage when the STAGE is the shot, since they are then what it is of.
+	#
+	# Every walker, not only the one the span frames (dev, 2026-10-07): once readouts counted, a
+	# squadmate walking in front of the framed walker was hidden mid-stride.
 	#
 	# Not everyone on stage on a CLOSE-UP (round 4): the tear-out keeps the stage published through
 	# every beat, so that clause made each bystander the action too, every block came out
@@ -1283,6 +1286,10 @@ func _clearance_world(cam: CameraController, trained: Unit) -> ShotClearance.Wor
 		var walker := _unit_by_id(_span_walker_id)
 		if walker != null:
 			actors.append(walker)
+		for child in game.units_root.get_children():
+			var unit := child as Unit
+			if unit != null and unit.movement.moving:
+				actors.append(unit)
 	for unit in actors:
 		world.participants[unit.get_instance_id()] = true
 		world.protected[UnitMirror.cell_under(unit)] = true
