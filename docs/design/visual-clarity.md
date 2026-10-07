@@ -7,7 +7,7 @@ its child [#49 Action Queue UX](https://github.com/Phaazoid/Godoiosis/issues/49)
 This is a *guidelines* doc, not a spec — it captures the principles we're holding the work to,
 plus the running order of the queue-UX checklist. Update it as items land.
 
-**Canon checked through #1171 (2026-09-29); #1132 (the battle zoom sees past what stands in the way, then the approach and arrival) folded in 2026-10-07; #1207 (the field covers a placed blast's splash) folded in 2026-10-05; #1174 (Will retired, the limb icons) folded in 2026-10-01; #1197 (the danger field draws the watch shot and the current) folded in 2026-10-03; #508's soak rename folded in 2026-10-04; #46's shared execute steps folded in 2026-10-04. #545 (fast-forward, skip and the playback speed) folded in 2026-10-07.**
+**Canon checked through #1171 (2026-09-29); #1132 (the battle zoom sees past what stands in the way, then the approach and arrival, then the held angle and the settle) folded in 2026-10-07; #1207 (the field covers a placed blast's splash) folded in 2026-10-05; #1174 (Will retired, the limb icons) folded in 2026-10-01; #1197 (the danger field draws the watch shot and the current) folded in 2026-10-03; #508's soak rename folded in 2026-10-04; #46's shared execute steps folded in 2026-10-04. #545 (fast-forward, skip and the playback speed) folded in 2026-10-07.**
 
 ## Principles
 
@@ -2933,8 +2933,8 @@ the one piece of state an edge needs.
   until the shot changes, so nothing pops in and out while a body tumbles. A fresh search runs on
   every shot edge and every new aim line, judged from where a running pan LANDS (see *The approach*
   below; it shipped deferred to the pan's end and that was the bug); every other frame checks only
-  the angle held, spinning to a fully clear one when the held angle becomes blocked -- that is
-  #972's fix.
+  the angle held. This bullet first said that check SPUN to a fully clear angle when the held one
+  became blocked, as #972's fix; round 3 below repealed that, and the check now only hides.
 - **The action is never hidden**: the trained subject, whoever stands on the aim line, everyone on
   the stage, the walker -- and the ground under each. They still count AGAINST an angle, which is
   what keeps the old side-on reason (attacker and target across the frame, not one behind the
@@ -2992,6 +2992,75 @@ wait itself is invisible headless** (a pan lands at once there, and the wait ask
 `Pacing.unwatched()` like every playback escape since #545, so a skip collapses it too), so "the
 blow starts once the camera has stopped" is a play-check; `is_arriving` and the approach's shot are
 pinned. `OrderExecutor.gd` joined `test_playback_escapes_ask_unwatched`'s file list for that escape.
+
+### The camera never moves while anything plays (round 3, the same day)
+
+The dev, on the build above, with report `2026-10-07_15-34-16`: *"The camera is jerking towards a
+new perspective as attacks are happening. If the camera is still moving to a new position, nothing
+should be playing, and playback should always give at least a half second for the camera to settle
+in a new position."*
+
+**Measured, not guessed.** A throwaway headless probe (never committed) replayed that report's board
+and orders with real-time pacing, logging the 3D camera every frame beside each unit's lunge and HP.
+It ran by patching `Pacing.unwatched()` to answer only the skip. The approach above was already right:
+one movement, then about 0.6s still. Then, **one frame after each of the five blows landed, the camera
+spun 45 to 90 degrees**:
+
+| Blow | Time | Spin |
+|---|---|---|
+| 1 | 8.670 | +90 |
+| 2 | 10.454 | +45 |
+| 3 | 12.070 | +90 |
+| 4 | 14.603 | −90 |
+| 5 | 16.387 | +45 |
+
+The cause was this section's own #972 fix. At a lunge's peak the attacker's body enters the sight
+line to the victim, and the per-frame check read a fixed participant on the line as a blocked angle.
+A second finding: `ARRIVED_DEGREES` at 1° declared arrival while the yaw was still turning about 8°
+a second, so part of every hold was spent creeping.
+
+Three changes:
+
+- **The angle changes on the approach and nowhere else.** `battle3d._clear_the_shot` passes
+  `can_turn = cam.is_panning()`, so only a search made while a playback pan is still travelling can
+  turn. `ShotClearance.step`'s per-frame path only HIDES what newly comes into the way, and
+  `_first_clear` is deleted. **This repeals #972's fix as written above:** a tumble that bends behind
+  a cliff now hides the cliff column instead of swinging the camera round, and a blocker that cannot
+  be hidden (a fighter, or the ground under one) stays in view for the rest of that action.
+- **Nothing plays until the camera has stopped, plus at least half a second.**
+  `OrderExecutor._settle_then(hold)` waits for `view_arriving` to clear, then holds
+  `maxf(hold, Pacing.CAMERA_SETTLE)` (0.5s, a Game-tab knob beside *Camera travel to the action*).
+  The CINEMATIC gate is gone, because the dev's word was "always". So it runs after every playback
+  pan: each beat in both profiles, the walk framing, the tear-out's brace, the way home and each
+  burn hit. The cost, stated in the approved plan: zoom-off passes and the burn are a little slower.
+- **Arrival means invisible.** `ARRIVED_DEGREES` 1.0 → 0.1 and `ARRIVED_UNITS` 0.05 → 0.01.
+
+**The re-run on the fixed build, same board.** No turn anywhere in the pass. Camera motion counts
+yaw, pitch, zoom and ground position, and excludes the vertical resting sway and the impact jolt:
+
+| Blow | Still before the lunge | Frames moving during it |
+|---|---|---|
+| 1 | 0.508s | 0 |
+| 2 | 0.517s | 0 |
+| 3 | 0.592s | 0 |
+| 4 | 0.519s | 0 |
+| 5 | 0.518s | 0 |
+
+The walk began 0.53s after its framing arrived and played under a still camera. Two things the probe
+saw and this round leaves alone:
+
+- **The resting sway** (#520 diff 2b) still breathes about ±0.04 units vertically through every hold.
+  It is authored motion, not travel to a new position, with its own knobs (*Sway: how far*, *Sway
+  strength (zoom on)*).
+- **The stage's framing lift** (`_aim_over`'s `STAGE_AIM_LIFT`) snaps the aim up half a unit on the
+  frame a stage is published. `hold_at` does not ease, and this happens at the start of the tear-out
+  approach, not during a blow.
+
+Pinned: a held angle that becomes blocked hides and never turns (`test_shot_clearance`); once landed,
+a new blocker is hidden and the yaw target stays put, and a shot change after landing hides rather
+than turns (`test_camera_clearance`). Both cases were falsified: letting the per-frame path turn
+again, and dropping the `is_panning()` gate, each turns them red. The settle itself is
+headless-invisible, so the probe numbers above are its evidence and the feel is his play-check.
 
 ## The UI has a DESIGN SPACE ([#659](https://github.com/Phaazoid/Godoiosis/issues/659), BUILT 2026-09-02)
 
