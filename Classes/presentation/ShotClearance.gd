@@ -13,6 +13,10 @@ class_name ShotClearance
 # either, end-on last -- and HIDES only what no angle clears. Hiding is outright, no fade, and it
 # reaches units, props and terrain columns (his rulings 2-3).
 #
+# THE ANGLE IS CHOSEN ON THE APPROACH AND HELD (dev, 2026-10-07: "If the camera is still moving to a
+# new position, nothing should be playing"). Once the camera lands, whatever moves -- a lunge, a
+# tumble -- only gets hidden; it never turns the camera. #972's tumble is answered by a hide.
+#
 # Shaped like ShotDirector: a scene-free core plus the one piece of state that makes an edge. The
 # WORLD arrives as callables and per-cell tables (battle3d builds it from the mirrors), so every
 # rule here is testable with no viewport and no board.
@@ -237,8 +241,8 @@ static func _swing(turn: float, current: float) -> float:
 
 # The turn the shot is held at, relative to its directed yaw.
 var turn := 0.0
-# What is hidden right now. Grows within a shot, empties when the shot changes or the camera finds
-# a clear angle -- so nothing pops back and forth while a body tumbles.
+# What is hidden right now. Grows within a shot and empties when the shot changes -- so nothing pops
+# back and forth while a body tumbles.
 var hidden := Found.new()
 # A fresh search is owed: the shot changed, and the next frame that has something to look at chooses
 # from scratch.
@@ -269,9 +273,14 @@ func renew(new_line: bool) -> bool:
 
 
 # One frame. `lens_of(turn) -> Vector3` is where the lens would settle at that turn -- where the pan
-# LANDS while one is running, so the search can run on its first frame (#1132 follow-up); `can_turn`
-# is false for a shot with no aim line, which can only hide. Returns whether the turn or the hidden
-# set changed.
+# LANDS while one is running, so the search can run on its first frame (#1132 follow-up). `can_turn`
+# is the caller's "may the angle change now": false for a shot with no aim line, and false once the
+# camera has landed, since nothing may move it while an action plays (dev, 2026-10-07). Returns
+# whether the turn or the hidden set changed.
+#
+# Only the owed SEARCH can turn. Every other frame only HIDES what has newly come into the way -- a
+# lunge's peak, a tumble -- because a turn there swings the camera mid-blow, which is what round 3 of
+# the play-check measured on every hit.
 func step(world: World, subjects: Array[Body], extras: Array[Target], lens_of: Callable,
 		can_turn: bool) -> bool:
 	if subjects.is_empty() and extras.is_empty():
@@ -279,16 +288,7 @@ func step(world: World, subjects: Array[Body], extras: Array[Target], lens_of: C
 	if _owed:
 		_owed = false
 		return _search(world, subjects, extras, lens_of, can_turn)
-	var now := survey(world, lens_of.call(turn), subjects, extras)
-	var fresh := now.beyond(hidden)
-	if now.fixed == 0 and fresh.hideable() == 0:
-		return false
-	if can_turn:
-		var clear_turn := _first_clear(world, subjects, extras, lens_of)
-		if not is_nan(clear_turn):
-			turn = clear_turn
-			clear_hidden()
-			return true
+	var fresh := survey(world, lens_of.call(turn), subjects, extras).beyond(hidden)
 	if fresh.hideable() == 0:
 		return false
 	hidden.absorb(fresh)
@@ -315,19 +315,3 @@ func _search(world: World, subjects: Array[Body], extras: Array[Target], lens_of
 	hidden.absorb(best)
 	hidden.fixed = 0
 	return not is_equal_approx(turn, before_turn) or not hidden.same_as(before)
-
-
-# The most side-on fully clear turn other than the current one, or NAN.
-func _first_clear(world: World, subjects: Array[Body], extras: Array[Target],
-		lens_of: Callable) -> float:
-	var pick := NAN
-	for candidate in TURNS:
-		if is_equal_approx(candidate, turn):
-			continue
-		if not is_nan(pick) and (deviation(candidate) > deviation(pick) \
-				or (deviation(candidate) == deviation(pick) \
-				and _swing(candidate, turn) >= _swing(pick, turn))):
-			continue
-		if survey(world, lens_of.call(candidate), subjects, extras).is_clear():
-			pick = candidate
-	return pick

@@ -261,17 +261,24 @@ func test_a_shot_with_no_line_to_turn_can_only_hide() -> void:
 			"a shot that cannot turn left its blocker standing").is_true()
 
 
-func test_the_held_angle_spins_when_it_becomes_blocked_and_another_is_clear() -> void:
+func test_a_held_angle_that_becomes_blocked_hides_the_blocker_and_never_turns() -> void:
 	# #972's shape: the shot was clear when chosen, and the subject's own movement put something in
-	# the way. The cheap per-frame check finds it and the camera turns.
+	# the way. Round 3 of the play-check (2026-10-07): a turn there swings the camera MID-BLOW, so the
+	# per-frame check hides what came into the way and holds the angle -- even with a clear one free.
 	var clearance := ShotClearance.new()
 	clearance.renew(true)
 	_step(clearance, _world())
 	assert_float(clearance.turn).is_equal(0.0)
 	_columns[Vector2i(5, 3)] = Vector2(-1.0, 3.0)
+	assert_bool(_found(_world(), 180.0).is_clear()).override_failure_message(
+			"precondition: the far side is blocked too, so a turn would have had nowhere to go") \
+		.is_true()
 	assert_bool(_step(clearance, _world())).override_failure_message(
 			"the held angle became blocked and nothing changed").is_true()
-	assert_float(clearance.turn).is_equal(180.0)
+	assert_float(clearance.turn).override_failure_message(
+			"the camera turned while the shot played -- the mid-blow swing").is_equal(0.0)
+	assert_bool(clearance.hidden.columns.has(Vector2i(5, 3))).override_failure_message(
+			"the column that came into the way was left standing in it").is_true()
 
 
 func test_hides_grow_within_a_shot_and_come_back_with_the_next() -> void:

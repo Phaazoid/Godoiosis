@@ -1133,7 +1133,8 @@ func _clearance_live(cam: CameraController) -> bool:
 			and cam.beat_profile == Pacing.Profile.CINEMATIC and not BoardSpace.flight_active()
 
 
-# One frame of the clearance: a fresh search on every edge, then the cheap check of the angle held.
+# One frame of the clearance: a fresh search on every edge, then the cheap hide-only check of the
+# angle held.
 func _clear_the_shot(cam: CameraController, trained: Unit, shot_edge: bool) -> void:
 	var line: Array[Vector2i] = cam.directed_line
 	var new_line := line != _clearance_line
@@ -1158,7 +1159,10 @@ func _clear_the_shot(cam: CameraController, trained: Unit, shot_edge: bool) -> v
 	var landing := _landing_aim(cam, trained)
 	var lens_of := func(turn: float) -> Vector3:
 		return _rig.lens_at(_lens_yaw(line, turn), CameraRig3D.When.SETTLED, landing)
-	var can_turn := not is_nan(_rig.directed_yaw(line))
+	# THE ANGLE CHANGES ON THE APPROACH AND NOWHERE ELSE (dev, 2026-10-07): only while a playback pan
+	# is still carrying the camera to its beat. Once it lands an action is about to play or playing,
+	# and a turn then is the mid-blow swing round 3 measured -- so a blocker that arrives later is hidden.
+	var can_turn := not is_nan(_rig.directed_yaw(line)) and cam.is_panning()
 	if not _clearance.step(world, subjects, extras, lens_of, can_turn):
 		return
 	if not is_equal_approx(before, _clearance.turn):

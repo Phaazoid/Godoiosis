@@ -1062,10 +1062,12 @@ func target_yaw() -> float:
 
 # How close an eased channel must be to its target for the camera to count as ARRIVED (#1132
 # follow-up). A stillness threshold rather than a feel value: an exponential ease never lands, and
-# the residue left inside these moves less than a pixel a frame. Consts on that reason, the way
-# Pacing's arrival cap is one.
-const ARRIVED_DEGREES := 1.0
-const ARRIVED_UNITS := 0.05
+# the residue left inside these drifts too slowly to see. Consts on that reason, the way Pacing's
+# arrival cap is one. They were 1 degree and 0.05 until the round-3 probe showed a camera "arrived"
+# at 1 degree is still turning at 8 degrees a second -- the ease's speed is its rate times what is
+# left, so the threshold has to be small enough that what is left is not visibly MOVING.
+const ARRIVED_DEGREES := 0.1
+const ARRIVED_UNITS := 0.01
 
 # Whether the camera is still travelling to the shot it was given: any eased channel short of its
 # target. Playback waits on this before a battle-zoom beat's hold, so the blow is watched from a

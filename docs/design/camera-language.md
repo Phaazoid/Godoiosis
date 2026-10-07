@@ -5,7 +5,7 @@ NAMES things and POINTS at the code that owns them. It deliberately does not re-
 came to be — [`visual-clarity.md`](visual-clarity.md) holds the round-by-round history in eleven
 camera sections, and a second telling here would drift from the first.
 
-**Canon checked through #699 (2026-09-02); #1132 (the clearance words, then the approach and arrival) folded in 2026-10-07.**
+**Canon checked through #699 (2026-09-02); #1132 (the clearance words, then the approach and arrival, then the held angle and the settle) folded in 2026-10-07.**
 
 ## Why this page exists
 
@@ -148,9 +148,20 @@ the dev tunes, `TRAINED_DISTANCE` is a `Pacing` constant. Both are content, neit
   `pan_subject`, and `battle3d._shot_subject` lets it stand in for the follow while the glide runs, so
   the close-up, its zoom and the clearance's angle start with the travel. Never while a death show is
   live, and never off the battle zoom.
-- **arrived** — every eased channel within `CameraRig3D.ARRIVED_*` of its target
-  (`CameraRig3D.is_arriving`). A battle-zoom beat waits for it after the pan and before its hold, so
-  the hold is spent with the camera still.
+- **arrived** — every eased channel within `CameraRig3D.ARRIVED_*` (0.1° / 0.01 units) of its
+  target (`CameraRig3D.is_arriving`). At 1° the camera was still turning about 8° a second, so
+  "arrived" has to mean invisible drift, not nearly there. The resting sway and the impact shake are
+  addends, not channels, so they never hold an arrival open.
+- **settle** — `OrderExecutor._settle_then`: after EVERY playback pan, wait for arrival and then at
+  least `Pacing.CAMERA_SETTLE` (0.5s, a Game-tab knob) before anything plays. That covers each beat in
+  both profiles, the walk framing, the tear-out's brace, the way home and each burn hit. The beat's
+  own hold still applies when it is longer, because the settle is a floor and not an addition (dev,
+  2026-10-07: *"playback should always give at least a half second for the camera to settle in a new
+  position"*).
+- **held angle** — the turn is chosen on the approach and NOWHERE else. Once a pan has landed,
+  nothing turns the camera until the next pan; whatever then comes into the way (a lunge's peak, a
+  tumble) is HIDDEN. `battle3d._clear_the_shot` passes `can_turn = cam.is_panning()`, and the
+  per-frame step in `ShotClearance.step` can only hide.
 - **blocker** — a terrain column, a prop or a unit a sight line passes through. A column is a box
   from the board's underside to its drawn top, never "everything below the top".
 - **the action** — the trained subject, whoever stands on the aim line, everyone on stage, the
@@ -194,7 +205,8 @@ The **causes** the 2D `CameraController` publishes: `shot_cells`, `follow_unit`,
 `beat_emphasis`, `beat_profile`, `pan_subject` and `pan_destination`, plus its own position. **Two
 facts travel the other way** — `CameraController.fall_depth`, the rig telling playback how far under
 the board it has got, so the teardown can wait for the climb; and `view_arriving`, the rig telling
-playback it is still easing onto the shot, so a battle-zoom beat's hold waits for it (#1132 follow-up).
+playback it is still easing onto the shot, so every playback pan's settle waits for it (#1132 follow-up,
+widened to every pan in round 3).
 
 Adding a sixth door is a decision worth stating out loud.
 
