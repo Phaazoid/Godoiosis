@@ -171,10 +171,9 @@ const DEFS := {
 		"options": ["Off", "Combat only", "Every action"],
 		"default": BattleZoom.ALWAYS,
 	},
-	# The desc is the dev's to write (player-facing prose); test_player_settings refuses it empty.
 	Setting.PLAYBACK_SPEED: {
 		"title": "Playback speed",
-		"desc": "",
+		"desc": "How fast each turn plays out. Hold Shift to speed it up more, or press Space to skip it.",
 		"options": ["1x", "2x", "3x"],
 		"default": PlaybackSpeed.NORMAL,
 	},
