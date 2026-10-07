@@ -996,15 +996,15 @@ func align_to_detent() -> void:
 #
 # An EMPTY line leaves the yaw alone rather than returning to square-on -- absence means "the camera
 # does not move", which is already the schedule's idiom for a beat with nobody to frame.
-func aim_along(line: Array[Vector2i]) -> void:
-	if line.size() != 2:
-		return
-	var side_on := BoardSpace.side_on_yaw(line[0], line[1], _squared_up_yaw)
-	if is_nan(side_on):
+#
+# `turn` is the shot clearance's (#1132): degrees added to the directed yaw when the side the line
+# picks has something standing between the lens and the action. Zero is today's shot exactly.
+func aim_along(line: Array[Vector2i], turn := 0.0) -> void:
+	var yaw := directed_yaw(line, turn)
+	if is_nan(yaw):
 		return
 	var strength := Pacing.direction_of(beat_profile)
-	_target_yaw_degrees = _squared_up_yaw + rad_to_deg(
-			angle_difference(deg_to_rad(_squared_up_yaw), deg_to_rad(side_on))) * strength
+	_target_yaw_degrees = yaw
 	# ...and the same published line drives the PITCH (#520 diff 2b). DERIVED here rather than
 	# published as a second field: a directed beat IS the shot that earns both, so one fact answers
 	# for two channels and there is nothing to keep in step.
@@ -1016,6 +1016,43 @@ func aim_along(line: Array[Vector2i]) -> void:
 	# It is also why the claim edge does NOT square the tilt up: see align_to_detent.
 	_target_pitch_degrees = clampf(board_pitch_degrees + Pacing.PITCH_DIVE * strength,
 			min_pitch_degrees, max_pitch_degrees)
+
+
+# The yaw aim_along writes for this line and turn, or NAN when the line has no direction. The ONE
+# spelling of that sum (#1132): the clearance search asks it of every candidate turn before the
+# camera commits to one, and a second copy of the arithmetic is how the two would come to disagree.
+func directed_yaw(line: Array[Vector2i], turn := 0.0) -> float:
+	if line.size() != 2:
+		return NAN
+	var side_on := BoardSpace.side_on_yaw(line[0], line[1], _squared_up_yaw)
+	if is_nan(side_on):
+		return NAN
+	var strength := Pacing.direction_of(beat_profile)
+	return _squared_up_yaw + rad_to_deg(
+			angle_difference(deg_to_rad(_squared_up_yaw), deg_to_rad(side_on))) * strength + turn
+
+
+# Where the LENS would be at this yaw, every other channel LIVE or SETTLED (#1132) -- #670's axis,
+# asked of the camera's position rather than of its frame edge. The clearance search asks it of a
+# yaw the camera has not turned to yet, so it is composed from the channels, never read off the node.
+# The flourish is left out on both sides, as frame_floor leaves it out: a shake is transient and is
+# not a place the camera is going.
+func lens_at(yaw_degrees: float, when: When) -> Vector3:
+	var settled := when == When.SETTLED
+	var aim: Vector3 = _target_aim if settled else _aim
+	var lift: Vector3 = _target_lift if settled else _lift
+	var drop: float = _target_drop if settled else _drop
+	var pitch: float = _target_pitch_degrees if settled else _pitch_degrees
+	var distance: float = _dollied_distance() if settled else _camera.position.z
+	var turn := Basis(Vector3.UP, deg_to_rad(yaw_degrees)) * Basis(Vector3.RIGHT, deg_to_rad(pitch))
+	var local := aim + lift + Vector3(0.0, -drop, 0.0) + turn * Vector3(0.0, 0.0, distance)
+	var parent := get_parent_node_3d()
+	return parent.global_transform * local if parent != null else local
+
+
+# The yaw the camera is HEADED for -- the clearance search's answer for a beat with no line to turn.
+func target_yaw() -> float:
+	return _target_yaw_degrees
 
 
 # --- the view playback borrows (#520 follow-up) ------------------------------------------------

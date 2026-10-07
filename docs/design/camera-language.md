@@ -5,7 +5,7 @@ NAMES things and POINTS at the code that owns them. It deliberately does not re-
 came to be — [`visual-clarity.md`](visual-clarity.md) holds the round-by-round history in eleven
 camera sections, and a second telling here would drift from the first.
 
-**Canon checked through #699 (2026-09-02).**
+**Canon checked through #699 (2026-09-02); #1132 (the clearance words) folded in 2026-10-07.**
 
 ## Why this page exists
 
@@ -43,7 +43,7 @@ position = _aim + _lift + Vector3(0.0, -_drop, 0.0) + flourish()
 | **drop** | how far below the board the shot has ridden a falling body | `_drop` / `_target_drop` | `drop_to` |
 | **distance** | how far the camera sits back from the aim | `_camera.position.z` / `_target_distance` | `set_zoom` — the ONE distance door |
 | **dolly** | the director's push-in for the beat now playing, an ADDEND on distance | `_dolly` | `dolly_to` |
-| **yaw** | which way the rig faces | `rotation_degrees.y` / `_target_yaw_degrees` | `aim_along` · `align_to_detent` · orbit |
+| **yaw** | which way the rig faces | `rotation_degrees.y` / `_target_yaw_degrees` | `aim_along` (carrying the clearance **turn**) · `align_to_detent` · orbit |
 | **pitch** | the tilt | `_pitch_degrees` / `_target_pitch_degrees` | drag · `board_pitch_degrees` |
 | **flourish** | the impact shake plus resting sway, a DISPLACEMENT over where the camera looks | `_shake_amplitude`, `_sway_elapsed` | `shake` |
 
@@ -137,6 +137,23 @@ the dev tunes, `TRAINED_DISTANCE` is a `Pacing` constant. Both are content, neit
   by construction. The one anchor is `battle3d._shot_floor()`, which puts a void death's burst
   `PLUMMET_BURST_UNDER` below the SETTLED floor so the cubes assemble off-screen and erupt upward.
 - **on / off picture** — whether a point is inside the frustum. See *Don't re-derive these*.
+
+### Clearance words ([#1132](https://github.com/Phaazoid/Godoiosis/issues/1132))
+
+- **sight line** — a segment from the SETTLED lens (`CameraRig3D.lens_at`) to a point on the action.
+- **blocker** — a terrain column, a prop or a unit a sight line passes through. A column is a box
+  from the board's underside to its drawn top, never "everything below the top".
+- **the action** — the trained subject, whoever stands on the aim line, everyone on stage, the
+  walker. Never hidden, and the ground under them never hidden either.
+- **turn** — degrees added to the beat's directed yaw (`CameraRig3D.directed_yaw`) to reach a clear
+  side; zero is the shot exactly as it always was.
+- **hidden** — what no turn could clear, taken out of the frame outright: a column moved to the
+  invisible lattice, a prop or a unit made invisible. Not a camera mover and not a sixth door --
+  it moves nothing -- so its writers are `BoardMirror.set_camera_hidden` and
+  `UnitMirror.camera_hidden`, both fed by `battle3d._push_hidden`.
+
+`ShotClearance` owns the rule and the latch; the history is in `visual-clarity.md` -> *The battle
+zoom sees past what stands in the way*.
 
 ### Two words that caused rounds
 

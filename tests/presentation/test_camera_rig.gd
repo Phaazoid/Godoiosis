@@ -1006,3 +1006,61 @@ func test_rewriting_the_same_values_does_not_cancel_a_live_pan() -> void:
 	_move(Vector2(30.0, 0.0))
 	assert_bool(rig._target_aim.is_equal_approx(mid)).override_failure_message(
 			"a no-op write killed the pan -- dragging is impossible under a per-frame host").is_false()
+
+
+# ---- the lens the shot clearance asks about (#1132) ----
+
+func test_the_live_lens_is_where_the_camera_actually_is() -> void:
+	# The clearance judges a sight line from lens_at, a COMPOSITION of the channels, because the
+	# yaw it asks about is one the camera has not turned to yet. So it must be the same sum the
+	# node tree performs: aim + lift - drop, then the yaw and the pitch, then the distance.
+	var rig := _rig()
+	rig.hold_at(Vector3(4.0, 1.0, 3.0))
+	rig.lift_to(Vector3(0.0, 2.0, 0.0))
+	rig.drop_to(0.5)
+	await await_idle_frame()
+	rig.rotation_degrees.y = 37.0
+	rig._target_yaw_degrees = 37.0
+	var camera := _camera()
+	assert_float(camera.global_position.distance_to(rig.global_position)).override_failure_message(
+			"the fixture put the camera on the rig's own point, so any lens formula would pass") \
+		.is_greater(1.0)
+	assert_vector(rig.lens_at(rig.rotation_degrees.y, CameraRig3D.When.LIVE)) \
+		.override_failure_message("lens_at disagrees with where the camera node actually is") \
+		.is_equal_approx(camera.global_position, Vector3(0.001, 0.001, 0.001))
+
+
+func test_the_settled_lens_reads_the_targets() -> void:
+	var rig := _rig()
+	rig.hold_at(Vector3(4.0, 1.0, 3.0))
+	await await_idle_frame()
+	rig.lift_to(Vector3(0.0, 5.0, 0.0))
+	var live := rig.lens_at(0.0, CameraRig3D.When.LIVE)
+	var settled := rig.lens_at(0.0, CameraRig3D.When.SETTLED)
+	assert_float(settled.y - live.y).override_failure_message(
+			"the settled lens did not read the lift the rig is still heading for") \
+		.is_equal_approx(5.0, 0.001)
+
+
+func test_aim_along_writes_the_directed_yaw_and_a_turn_adds_to_it() -> void:
+	var saved := Pacing.CINEMATIC_DIRECTION
+	Pacing.CINEMATIC_DIRECTION = 1.0
+	var rig := _rig()
+	rig.beat_profile = Pacing.Profile.CINEMATIC
+	rig.align_to_detent()
+	# Diagonal, so the side-on yaw is not a detent the camera could already be sitting on.
+	var line: Array[Vector2i] = [Vector2i(2, 2), Vector2i(5, 4)]
+	rig.aim_along(line)
+	var plain := rig._target_yaw_degrees
+	assert_float(plain).override_failure_message(
+			"aim_along wrote a yaw directed_yaw does not answer -- two spellings of one sum") \
+		.is_equal_approx(rig.directed_yaw(line), 0.001)
+	rig.aim_along(line, 180.0)
+	assert_float(rig._target_yaw_degrees - plain).override_failure_message(
+			"the clearance's turn did not reach the yaw the camera heads for") \
+		.is_equal_approx(180.0, 0.001)
+	var none: Array[Vector2i] = []
+	assert_bool(is_nan(rig.directed_yaw(none, 180.0))).override_failure_message(
+			"a beat with no line answered a yaw, so the clearance would turn a shot that has none") \
+		.is_true()
+	Pacing.CINEMATIC_DIRECTION = saved
