@@ -563,6 +563,11 @@ func _execute_action_sequence(actions: Array, beat: float = 0.0, holds: Dictiona
 			# cinematic claimed, and the sway would otherwise ride in from whatever came before.
 			game.camera_controller.beat_profile = profiles.get(action, Pacing.Profile.BOARD)
 			await game.camera_controller.pan_to(subjects[action], Pacing.PLAYBACK_PAN)
+			# ...and on a battle-zoom beat the 2D tween landing is not the camera arriving: the rig
+			# eases its angle and zoom on its own clock, so the hold waits for THAT (#1132 follow-up,
+			# dev 2026-10-07: "it should be there and still for a moment before the hit even starts").
+			if profiles.get(action, Pacing.Profile.BOARD) == Pacing.Profile.CINEMATIC:
+				await _camera_arrives()
 		await Pacing.beat(self, hold)
 		_listen_for_the_blow(action)
 		action.begin_execution()
@@ -581,6 +586,27 @@ func _execute_action_sequence(actions: Array, beat: float = 0.0, holds: Dictiona
 		# resolve-pass test off the wall clock). Same declaration clear_guard_preview carries at the
 		# top of this function, and for the same reason. What IS pinned is the schedule and the table.
 		await Pacing.beat(self, after_the_blow(action, float(lingers.get(action, 0.0))))
+
+
+# Wait until the 3D camera has finished easing onto the beat's shot (#1132 follow-up). The rig says so
+# through view_arriving -- the eases are its own clock, so nothing else can -- and the first frame is
+# spent unconditionally so the mirror has polled since the pan landed. Capped by
+# Pacing.CAMERA_ARRIVAL_CAP, counting only time no card is up: a pause freezes the rig, and a cap
+# spent behind the pause menu would let the blow start mid-turn once it closed.
+#
+# Headless returns at once, Pacing.beat's escape and for its reason: nobody is watching, and every
+# suite that resolves a cinematic pass would otherwise spend frames here. Which also means NO SUITE
+# SEES THIS WAIT -- the rig's half (is_arriving) is pinned; that the hit waits on it is a play-check.
+func _camera_arrives() -> void:
+	if DisplayServer.get_name() == "headless":
+		return
+	var tree := get_tree()
+	await tree.process_frame
+	var waited := 0.0
+	while game.camera_controller.view_arriving and waited < Pacing.CAMERA_ARRIVAL_CAP:
+		await tree.process_frame
+		if not ModalLock.any_open(tree):
+			waited += get_process_delta_time()
 
 
 # What a landed blow -- or a sinking (#922) -- owes its squads' tethers (#367 part 2B): the links the forecast says it ends and

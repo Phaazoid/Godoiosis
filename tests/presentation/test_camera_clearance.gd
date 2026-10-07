@@ -46,6 +46,8 @@ func before_test() -> void:
 
 
 func after_test() -> void:
+	_cam()._panning = false   # the approach cases script a pan in flight; a stuck one freezes the 2D camera
+	_units._death_show = false
 	_cam().set_playback_locked(false)
 	_scene._mirror_camera()
 	await _board.check(self)
@@ -134,6 +136,24 @@ func _frame(subject: Unit, line: Array[Vector2i], profile := Pacing.Profile.CINE
 	_scene._mirror_camera()
 
 
+# Playback holds the camera over `from`, and a pan has just set off toward `subject` -- its FIRST
+# frame, scripted at the seam the mirror reads, because a headless pan lands before any frame runs
+# (pan_to_position's escape). The caller drives the frame itself.
+func _approach(subject: Unit, line: Array[Vector2i], from: Vector2i,
+		profile := Pacing.Profile.CINEMATIC) -> void:
+	await _settle()
+	var cam := _cam()
+	cam.set_playback_locked(true)
+	cam.playback_cinematic = true
+	cam.beat_profile = profile
+	cam.directed_line = line
+	cam.snap_to_position(GridUtils.cell_world(_game.grid, from))
+	_scene._mirror_camera()
+	cam.pan_subject = subject
+	cam.pan_destination = subject.global_position
+	cam._panning = true
+
+
 # The cell `share` of the way from the subject toward where the lens would settle at turn 0.
 func _toward_lens(subject: Unit, line: Array[Vector2i], share: float) -> Vector2i:
 	var lens := _rig.lens_at(_rig.directed_yaw(line, 0.0), CameraRig3D.When.SETTLED)
@@ -176,6 +196,77 @@ func test_a_blocked_side_turns_the_camera_to_the_clear_one() -> void:
 		.is_equal_approx(_rig.directed_yaw(line, _scene._clearance.turn), 0.001)
 	assert_bool(_mirror.is_column_hidden(tower)).override_failure_message(
 			"a clear angle existed and the tower was hidden anyway").is_false()
+
+
+# --- the approach (#1132 follow-up) ------------------------------------------------------------
+#
+# Dev, 2026-10-07: "that first camera zoom should just be going to the correct spot to watch the hit".
+# The shot -- the close-up, and the clearance's angle -- is decided on the pan's FIRST frame, from
+# where it lands, so the approach is one movement rather than a landing followed by an adjustment.
+
+func test_the_approach_decides_the_shot_from_where_the_pan_lands() -> void:
+	var centre := _open_ground()
+	var subject := _spawn(Team.Faction.PLAYER, centre)
+	var line := _east_west(centre)
+	# The tower's cell comes from the lens the rig settles at over the subject...
+	await _frame(subject, line)
+	var tower := _toward_lens(subject, line, 0.45)
+	assert_bool(tower != centre).override_failure_message(
+			"the lens sits over the subject's own cell, so no tower can stand between them").is_true()
+	_cam().set_playback_locked(false)
+	_scene._mirror_camera()
+	_raise([tower])
+	# ...and the camera now starts five cells further along the line, so the sight line from where it
+	# is passing through runs wide of the tower.
+	await _approach(subject, line, centre + Vector2i(5, 0))
+	_scene._mirror_camera()
+	assert_int(_scene._shots.active).override_failure_message(
+			"the close-up waited for the pan to land -- the approach is two movements again") \
+		.is_equal(ShotDirector.Shot.TRAINED)
+	assert_float(_rig._target_distance).override_failure_message(
+			"the shot is trained on the subject but the zoom is not heading for the close-up") \
+		.is_equal_approx(Pacing.TRAINED_DISTANCE, 0.001)
+	var cam := _cam()
+	var in_flight := _rig.lens_at(_rig.directed_yaw(line, 0.0), CameraRig3D.When.SETTLED)
+	var seen := ShotClearance.survey(_scene._clearance_world(cam, subject), in_flight,
+			_scene._clearance_subjects(cam, subject), _scene._clearance_extras(cam))
+	assert_bool(seen.is_clear()).override_failure_message(
+			"precondition: the tower blocks the camera where it is passing through too, so the case "
+			+ "cannot tell which lens the choice was judged from").is_true()
+	assert_float(absf(_scene._clearance.turn)).override_failure_message(
+			"the angle was not chosen from where the pan lands, so the turn waits for the landing") \
+		.is_equal(180.0)
+	assert_float(_rig._target_yaw_degrees).override_failure_message(
+			"the clearance chose a turn the approaching camera is not heading for") \
+		.is_equal_approx(_rig.directed_yaw(line, _scene._clearance.turn), 0.001)
+
+
+func test_off_the_battle_zoom_the_approach_is_not_the_shot() -> void:
+	var centre := _open_ground()
+	var subject := _spawn(Team.Faction.PLAYER, centre)
+	await _approach(subject, _east_west(centre), centre + Vector2i(5, 0), Pacing.Profile.BOARD)
+	_scene._mirror_camera()
+	assert_int(_scene._shots.active).override_failure_message(
+			"a plain-board pan trained the shot before it landed -- zoom off is not today's") \
+		.is_equal(ShotDirector.Shot.WIDE)
+
+
+func test_a_live_death_show_outranks_the_approach() -> void:
+	# DEATH_SHOW stands only while nobody is followed; an approach counting as a follow would pull the
+	# camera out of the pit with the cubes still in the air (#602 round 8).
+	var centre := _open_ground()
+	var subject := _spawn(Team.Faction.PLAYER, centre)
+	await _approach(subject, _east_west(centre), centre + Vector2i(5, 0))
+	_units._death_show = true
+	_scene._mirror_camera()
+	assert_int(_scene._shots.active).override_failure_message(
+			"the next beat's approach took the camera while the death show still held it") \
+		.is_equal(ShotDirector.Shot.DEATH_SHOW)
+	_units._death_show = false
+	_scene._mirror_camera()
+	assert_int(_scene._shots.active).override_failure_message(
+			"the show ended and the approach never took the shot -- the case above proves nothing") \
+		.is_equal(ShotDirector.Shot.TRAINED)
 
 
 # --- then hiding -------------------------------------------------------------------------------

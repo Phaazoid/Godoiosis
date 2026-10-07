@@ -101,8 +101,9 @@ var playback_cinematic := false: set = _set_playback_cinematic
 # How far BELOW the board the 3D rig currently is, in world units, written every frame by
 # battle3d._mirror_camera (#602 round 2).
 #
-# THE ONE FACT THAT TRAVELS THE OTHER WAY down this channel -- every field above is playback telling
-# the rig what to do, and this is the rig answering. It has to be, and that is worth stating: the
+# A FACT THAT TRAVELS THE OTHER WAY down this channel (view_arriving below is the second) -- every
+# field above is playback telling the rig what to do, and this is the rig answering. It has to be,
+# and that is worth stating: the
 # exit transition must not start dropping tiles while the camera is still climbing out of a pit
 # (dev, 2026-08-29), the climb is the rig's OWN eased channel, so nothing but the rig can say when
 # it is done. A beat of playback's own would be a second answer to how long the climb takes and
@@ -111,6 +112,17 @@ var playback_cinematic := false: set = _set_playback_cinematic
 # Zero on a flat pass and in every headless run, where nothing publishes -- so the wait it feeds
 # returns on its first check rather than spending frames nobody is watching.
 var fall_depth := 0.0
+# ...and whether the 3D rig is still EASING toward the shot the beat put it on (#1132 follow-up), the
+# second fact that travels back, for fall_depth's reason: the eases are the rig's own clock, so only
+# the rig can say it has arrived. A battle-zoom beat waits on it before its hold, so the camera is
+# there and still before the blow (dev, 2026-10-07). False headless, where nothing publishes it.
+var view_arriving := false
+# Who a pan_to is travelling TO, while the tween runs (#1132 follow-up) -- follow_unit stays null for
+# the whole glide, so without this the subject's shot could only begin once the camera had landed.
+# Null for a position pan, and cleared the moment follow() takes over.
+var pan_subject: Unit = null
+# ...and where the running pan ENDS, in this camera's world space. Read only while is_panning().
+var pan_destination := Vector2.ZERO
 var _panning := false         # true while pan_to's tween owns global_position -- _process yields to it
 
 @export var move_speed := 14
@@ -265,6 +277,8 @@ func set_playback_locked(locked: bool) -> void:
 	# surviving a release would leave every bar on the board up until the next pass turned it off.
 	# A claiming pass publishes its own answer immediately after this call.
 	playback_cinematic = false
+	# ...and an approach in flight, which belongs to the pass that started it.
+	pan_subject = null
 	if not locked:
 		follow_unit = null
 
@@ -280,22 +294,29 @@ func _set_playback_cinematic(value: bool) -> void:
 
 func follow(unit: Unit) -> void:
 	follow_unit = unit
-	
+	pan_subject = null
+
 # Smoothly pans from wherever the camera currently is to `unit`'s position over a FIXED
 # duration (not fixed speed) -- a short hop and a cross-map jump read at the same pace,
 # giving the player a consistent beat to reorient before the next squad acts. Switches to
 # continuous follow() once the pan lands. The duration is Pacing's (#118); fixed-vs-speed is
 # the design, the number is a knob.
 func pan_to(unit: Unit, duration: float = Pacing.AI_SQUAD_PAN) -> void:
-	await pan_to_position(unit.global_position, duration)
+	await pan_to_position(unit.global_position, duration, unit)
 	follow(unit)
 
 # pan_to's POSITION-taking half, and the tween both share (#520): a point that is not a unit -- the
 # MIDPOINT of a walk, so the shot opens on both its ends. No closing follow(), and that is the whole
 # difference: framing both ends only means anything if the camera HOLDS while the walk crosses it,
 # where following would drag the far end straight back out of frame.
-func pan_to_position(world_pos: Vector2, duration: float = Pacing.AI_SQUAD_PAN) -> void:
+#
+# `subject` is pan_to's, published as pan_subject so the 3D rig can begin that unit's shot on the
+# glide's first frame rather than its last (#1132 follow-up).
+func pan_to_position(world_pos: Vector2, duration: float = Pacing.AI_SQUAD_PAN,
+		subject: Unit = null) -> void:
 	follow_unit = null
+	pan_subject = subject
+	pan_destination = world_pos
 	# Nobody is watching a headless run, and the glide is awaited once per AI squad -- tweening it
 	# there is pure suite wall clock. Land on the destination exactly as the tweened path does.
 	if DisplayServer.get_name() == "headless":
@@ -312,7 +333,8 @@ func _apply_pan_position(pos: Vector2) -> void:
 	global_position = pos
 	target_position = pos
 
-# Whether a pan's tween owns the position right now (#1132): the 3D shot clearance waits for it,
-# because a sight line judged from where the camera is PASSING THROUGH answers for the wrong shot.
+# Whether a pan's tween owns the position right now (#1132): while it does, the 3D shot clearance
+# judges from pan_destination, because a sight line from where the camera is PASSING THROUGH answers
+# for the wrong shot.
 func is_panning() -> bool:
 	return _panning
