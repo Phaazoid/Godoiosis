@@ -239,6 +239,11 @@ var water_at: Callable
 # purpose, so it says CINEMATIC for ever after the first clash.
 var cinematic_playback := false
 
+# Units the battle zoom has HIDDEN because they stand between the lens and the action (#1132),
+# keyed by instance id. Written by battle3d every frame (cinematic_playback's shape), and read as one
+# more conjunct on the sprite's gate and one veto on the bar's -- never as a second writer of either.
+var camera_hidden: Dictionary[int, bool] = {}
+
 # Where an IMPACT is reported, injected by battle3d beside the three sources above (#520 diff 2b).
 # A verb rather than a `*_source` noun because it PUSHES: this node is the only thing that observes
 # the instant a blow lands (the HP poll below, and unit_died for a killing one), and the camera is
@@ -462,6 +467,8 @@ func _is_water(cell: Vector2i) -> bool:
 # or the ghost that replaced it -- the LAST one tagged with the unit, since a shove's landing ghost
 # follows its move ghost and is where the plan leaves it. Null while neither is up.
 func _standing_sprite(unit: Unit, id: int, sprite: UnitSprite3D) -> UnitSprite3D:
+	if camera_hidden.has(id):
+		return null   # hidden by the battle zoom (#1132): nothing drips off a body nobody can see
 	if not unit.visuals.projected:
 		return sprite
 	var standing: UnitSprite3D = null
@@ -523,6 +530,26 @@ func mirrored_count() -> int:
 
 func sprite_for(unit: Unit) -> UnitSprite3D:
 	return _mirrored.get(unit.get_instance_id())
+
+
+# A unit as the shot clearance sees it (#1132), or null before it has a sprite. Off the DRAWN sprite,
+# lunge and tear-out included, because the question is what stands in the frame; the width is that
+# sprite's own ink and the height its own art top, so a tall unit blocks more than a short one.
+func body_of(unit: Unit) -> ShotClearance.Body:
+	var sprite := sprite_for(unit)
+	if sprite == null:
+		return null
+	var body := ShotClearance.Body.new()
+	body.unit_id = unit.get_instance_id()
+	body.feet = sprite.global_position
+	body.cell = cell_under(unit)
+	var ink: Rect2i = MapSpriteInk.ink_of(sprite.texture) if sprite.texture != null \
+			else MapSpriteInk.INK_RECT
+	body.half_width = float(ink.size.x) * 0.5 / UnitSprite3D.texels_per_unit
+	body.height = sprite.art_top_height()
+	body.heights.append(UnitSprite3D.body_middle())
+	body.heights.append(body.height * ShotClearance.HEAD_SAMPLE)
+	return body
 
 
 func bar_for(unit: Unit) -> UnitHealthBar:
@@ -767,7 +794,8 @@ func _sync(unit: Unit, sprite: UnitSprite3D) -> void:
 	# one line after set_downed above had correctly mirrored it. Never is_visible_in_tree
 	# either: 3D hosting hides the whole board subtree, which must not read as every unit
 	# hidden.
-	sprite.visible = not unit.visuals.projected
+	# ...or while the battle zoom has it out of the way (#1132).
+	sprite.visible = not unit.visuals.projected and not camera_hidden.has(unit.get_instance_id())
 	# The PRODUCT, because 2D modulate multiplies down the tree and the faction tint lives
 	# on the Unit node while the effects (pulse, highlight, flash) live on its sprite. The
 	# child alone is what left enemies un-reddened in 3D.
@@ -847,7 +875,11 @@ func _sync_bar(unit: Unit, sprite: UnitSprite3D, bar: UnitHealthBar, hovered: bo
 	# FOUR reasons again (#1069). #710 slice 3 added a fifth -- the enemy intends to hit this unit --
 	# and it went with the intent readout it belonged to; a reach line answers who could reach a
 	# cell, which is not a claim about any particular unit's HP and so has nothing to put on a bar.
-	var shown := hovered or foretold or marked or preferred
+	# ...and one VETO (#1132): a unit the battle zoom hid takes its readout with it. Not a fifth reason
+	# -- it can only take a bar down -- and on the gate rather than beside it, so the cube bursts and
+	# the crown height that read bar.visible follow without being told.
+	var shown := (hovered or foretold or marked or preferred) \
+			and not camera_hidden.has(unit.get_instance_id())
 	bar.set_shown(shown)
 	if not shown:
 		return

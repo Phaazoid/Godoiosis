@@ -7,7 +7,7 @@ its child [#49 Action Queue UX](https://github.com/Phaazoid/Godoiosis/issues/49)
 This is a *guidelines* doc, not a spec — it captures the principles we're holding the work to,
 plus the running order of the queue-UX checklist. Update it as items land.
 
-**Canon checked through #1171 (2026-09-29); #1207 (the field covers a placed blast's splash) folded in 2026-10-05; #1174 (Will retired, the limb icons) folded in 2026-10-01; #1197 (the danger field draws the watch shot and the current) folded in 2026-10-03; #508's soak rename folded in 2026-10-04; #46's shared execute steps folded in 2026-10-04. #545 (fast-forward, skip and the playback speed) folded in 2026-10-07.**
+**Canon checked through #1171 (2026-09-29); #1132 (the battle zoom sees past what stands in the way) folded in 2026-10-07; #1207 (the field covers a placed blast's splash) folded in 2026-10-05; #1174 (Will retired, the limb icons) folded in 2026-10-01; #1197 (the danger field draws the watch shot and the current) folded in 2026-10-03; #508's soak rename folded in 2026-10-04; #46's shared execute steps folded in 2026-10-04. #545 (fast-forward, skip and the playback speed) folded in 2026-10-07.**
 
 ## Principles
 
@@ -1689,7 +1689,9 @@ its **aim line** (`origin_cell → target_cell`, the resolver's own aim) and the
 yaw, because only the rig knows what to measure from. The line comes off the ATTACK rather than off
 the two units, so #47's swing at open ground still has a direction and a victim freed mid-pass
 cannot take the angle down with it. `BoardSpace.side_on_yaw` is the arithmetic, and it returns the
-NEARER of the two perpendiculars — which is what makes the shot a spin instead of a lurch.
+NEARER of the two perpendiculars — which is what makes the shot a spin instead of a lurch. (Still
+true of `side_on_yaw`; since [#1132](https://github.com/Phaazoid/Godoiosis/issues/1132) the shot
+clearance may add a TURN on top when the nearer side has something standing in it.)
 
 `_beat_lines` is a third schedule beside `_beat_holds` and `_beat_subjects`, keyed identically by
 the beat's opening action, and inherits their rule: **a beat left out means the camera keeps the
@@ -2894,6 +2896,64 @@ split out of that ticket at its grill (2026-09-22) as
 already found is that Crisis cannot be a red TINT, since an enemy already wears one.
 
 *Authored by Claude (Opus 4.8) at @Phaazoid's direction, 2026-06-26.*
+
+## The battle zoom sees past what stands in the way ([#1132](https://github.com/Phaazoid/Godoiosis/issues/1132), BUILT 2026-10-07)
+
+The dev's play-check of #1104: *"a lot of the time, it will zoom in on action, but there will be
+other units or terrain in its way ... The battle zoom camera should always zoom in such a way to
+avoid that, or when it can't, selectively make things invisible."* Nothing in the camera had ever
+asked what stands between the lens and its subject, and the beat's yaw was solved ONCE -- the
+shorter of `side_on_yaw`'s two answers -- and never re-asked while the subject moved. That second
+half is [#972](https://github.com/Phaazoid/Godoiosis/issues/972) exactly: a tumble bending 90
+degrees, held side-on to the BLOW, on a cliff face for the whole death show.
+
+**His four rulings (2026-10-07, on the issue):** both halves, angle first then hide; units, props
+and terrain may all be hidden; hide OUTRIGHT, no fade; the battle zoom only.
+
+**`ShotClearance` (`presentation/`) is the whole rule**, ShotDirector's shape: a scene-free core plus
+the one piece of state an edge needs.
+
+- **The test is a sight line from the SETTLED lens to points on the action** -- each subject's
+  middle and head, at its centre and both ink edges. A column blocks when the line passes inside its
+  box from the board's underside to its drawn top; a prop or a unit when the line crosses its box.
+  The box matters for the tear-out: the stage floats forty cells up, and "anything below the top"
+  would call a line passing UNDER it blocked.
+- **The walk is `BoardPicker.crossings`**, lifted out of `pick_cell` rather than copied: one walk,
+  two questions, so the mouse pick and the clearance cannot disagree about which cells a ray
+  crosses.
+- **Turning comes first.** The turns `0, 180, ±45, 180±45, ±90` relative to the beat's directed
+  yaw, ranked by unclearable blocks, then hides, then how far from side-on (both side-on angles
+  rank equal), then the shorter swing. `CameraRig3D.directed_yaw` is the one spelling of the yaw
+  `aim_along` writes, and `lens_at(yaw, When)` composes where the lens would settle at a yaw it
+  has not turned to yet -- #670's LIVE/SETTLED axis, asked of the camera's position.
+- **Hiding is what no angle clears**, and it GROWS within a shot: a blocker hidden stays hidden
+  until the shot changes, so nothing pops in and out while a body tumbles. A fresh search runs on
+  every shot edge and every new aim line, deferred to the first frame the 2D camera is not
+  mid-pan; every other frame checks only the angle held, spinning to a fully clear one when the
+  held angle becomes blocked -- that is #972's fix.
+- **The action is never hidden**: the trained subject, whoever stands on the aim line, everyone on
+  the stage, the walker -- and the ground under each. They still count AGAINST an angle, which is
+  what keeps the old side-on reason (attacker and target across the frame, not one behind the
+  other) inside the ranking.
+- **`DEATH_SHOW` holds everything**, matching its "writes nothing" rule; `WIDE` clears the hides and
+  keeps the turn; the release, the gate going off and a board in flight clear both.
+
+**Where the hides land is two existing seams, never a second writer.** A column goes to
+`BoardMirror.hidden_board`, an invisible lattice, through `_map_for` -- the tear-out's own move, so
+`reconcile_cell` does the routing; `_lattices(cell)` replaced four hand-spelled map lists while it
+was there. What stands on the cell hides at its ROOT, and every builder (`_reconcile_prop`,
+`_reconcile_state`, `_rebuild_fires`) asks the hidden set, because a staging bump rebuilds a staged
+cell's prop and a hide written only on change would come back at the next landing. A unit is one
+more conjunct on `UnitMirror`'s sprite gate and one VETO on the bar's -- which also silences that
+unit's cube bursts and its status particles. **The gate is `playback_cinematic` (#722's answer to
+"is the battle zoom on") AND the beat's profile**, so zoom-off, a Combat-Only walk and the burn
+pass are untouched.
+
+**Declared residuals:** a hidden lantern or fire goes dark with its root; a hidden unit's crown and
+rings stay; a cell a tumbling body lands on reappears under it (ground under a participant is
+protected); a hole's lip beside a hidden column stays; water surfaces do not hide; a beat with no
+aim line can only hide; and the pan deferral is invisible headless (a pan lands at once there), so
+its wire is a play-check. The View line in every report now says the turn and what is hidden.
 
 ## The UI has a DESIGN SPACE ([#659](https://github.com/Phaazoid/Godoiosis/issues/659), BUILT 2026-09-02)
 
