@@ -38,6 +38,7 @@ enum Setting {
 	SHOW_DIALOG,
 	PHOTOSENSITIVITY,
 	BATTLE_ZOOM_MODE,
+	PLAYBACK_SPEED,
 	AIM_PALETTE,
 	QUEUE_PALETTE,
 	UNHOVERED_BAR_NUMBERS,
@@ -87,6 +88,17 @@ enum BattleZoom {
 	COMBAT_ONLY,   # volleys and the turnover; moves, side channels and cell effects play plain
 	ALWAYS,        # every beat, the shipped default
 }
+
+## How fast playback runs when nobody is holding fast-forward (#545). The same DECLARED-duplicate
+## rule as BattleZoom: these values ARE the indices into the row's `options`. PLAYBACK_MULTIPLIERS is
+## what each one means -- a const rather than a knob, because a knob could make its label lie, and
+## test_player_settings pins every label to its multiplier.
+enum PlaybackSpeed {
+	NORMAL,
+	DOUBLE,
+	TRIPLE,
+}
+const PLAYBACK_MULTIPLIERS: Array[float] = [1.0, 2.0, 3.0]
 
 ## Which colours an aim wears (#422). The same DECLARED-duplicate rule as HealthBars and BattleZoom:
 ## these values ARE the indices into the row's `options`, and THE ENUM IS AUTHORITATIVE.
@@ -158,6 +170,13 @@ const DEFS := {
 		"desc": "Which moments get the camera treatment -- a killing blow, a Crisis or a last-gasp survival held on and leaned into. Combat only keeps the drama for blows and counters, and lets walking, reloading and rescues play plain. Off paces the whole pass plainly.",
 		"options": ["Off", "Combat only", "Every action"],
 		"default": BattleZoom.ALWAYS,
+	},
+	# The desc is the dev's to write (player-facing prose); test_player_settings refuses it empty.
+	Setting.PLAYBACK_SPEED: {
+		"title": "Playback speed",
+		"desc": "",
+		"options": ["1x", "2x", "3x"],
+		"default": PlaybackSpeed.NORMAL,
 	},
 	Setting.AIM_PALETTE: {
 		"title": "Aim colours",

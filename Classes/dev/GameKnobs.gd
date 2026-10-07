@@ -1547,6 +1547,18 @@ const CLASS_KNOBS: Array[Dictionary] = [
 		"script": MOVEMENT_SCRIPT, "min": 0.0, "max": 4.0, "step": 0.05,
 		"tip": "How long that fall takes, in seconds. Zero removes the unit at the lip with no fall at all -- the pre-#431 behaviour. Does not affect the preview arrow, only the playback."},
 
+	# Fast-forward and skip (#545). Speeds, not durations: each multiplies Engine.time_scale through
+	# Pacing's one writer, so they move every beat, pan and animation above together.
+	{"group": "Fast-forward and skip", "label": "Fast-forward speed", "static": "FAST_FORWARD",
+		"script": PACING_SCRIPT, "min": 1.0, "max": 10.0, "step": 0.5,
+		"tip": "How many times faster playback runs while the fast-forward key is held. If the player's Playback speed setting is faster, that wins -- the two never stack."},
+	{"group": "Fast-forward and skip", "label": "Skip speed", "static": "SKIP_SPEED",
+		"script": PACING_SCRIPT, "min": 1.0, "max": 32.0, "step": 1.0,
+		"tip": "How fast a skip runs what is left of the pass under the fade. Pauses and camera moves already take no time during a skip; this speeds up the walks, lunges and debris that remain, so it is the dial for how long the screen stays dark."},
+	{"group": "Fast-forward and skip", "label": "Skip fade", "static": "SKIP_FADE",
+		"script": PACING_SCRIPT, "min": 0.0, "max": 1.0, "step": 0.05,
+		"tip": "How long the screen takes to go dark when a skip starts, and to come back when it ends, in real seconds. Zero cuts."},
+
 	# The action ring (#467). Statics on a TRANSIENT node, which is why they are class knobs: the
 	# menu exists only while the player holds it open, so there is no standing property for a KNOBS
 	# row to name and nothing to re-apply a change to -- the next open reads them.
@@ -1801,6 +1813,7 @@ const GROUP_TABS: Dictionary[String, String] = {
 	# and only the first is cinematic-only.
 	"The cliff follow": "Playback",
 	"Motion": "Playback",
+	"Fast-forward and skip": "Playback",   # #545
 	"Ring: shape": "Action ring",
 	"Ring: slices": "Action ring",
 	"Ring: centre": "Action ring",
@@ -2110,6 +2123,9 @@ static func read_static(name: String) -> Variant:
 		"PLUMMET_HOLD": return Pacing.PLUMMET_HOLD
 		"VOID_HANG": return Pacing.VOID_HANG
 		"VOID_SNAP_HOLD": return Pacing.VOID_SNAP_HOLD
+		"FAST_FORWARD": return Pacing.FAST_FORWARD
+		"SKIP_SPEED": return Pacing.SKIP_SPEED
+		"SKIP_FADE": return Pacing.SKIP_FADE
 		"STAGE_AIM_LIFT": return Pacing.STAGE_AIM_LIFT
 		"TRAINED_DISTANCE": return Pacing.TRAINED_DISTANCE
 		"TEAR_OUT_FLIGHT": return Pacing.TEAR_OUT_FLIGHT
@@ -2675,6 +2691,12 @@ static func write_static(host: Node3D, name: String, value: Variant) -> void:
 			Pacing.VOID_HANG = value
 		"VOID_SNAP_HOLD":
 			Pacing.VOID_SNAP_HOLD = value
+		"FAST_FORWARD":
+			Pacing.FAST_FORWARD = value
+		"SKIP_SPEED":
+			Pacing.SKIP_SPEED = value
+		"SKIP_FADE":
+			Pacing.SKIP_FADE = value
 		"STAGE_AIM_LIFT":
 			Pacing.STAGE_AIM_LIFT = value
 		"TRAINED_DISTANCE":

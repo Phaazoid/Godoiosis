@@ -202,7 +202,7 @@ func _process(delta: float):
 	
 	# Headless, land now (Pacing.beat / pan_to's escape; third member 2026-08-26): the asymptotic
 	# lerp never settles, so a headless test sampling anything camera-derived reads frame timing.
-	if DisplayServer.get_name() == "headless":
+	if Pacing.unwatched():
 		global_position = target_position
 	else:
 		global_position = global_position.lerp(target_position, move_speed * delta)
@@ -298,7 +298,7 @@ func pan_to_position(world_pos: Vector2, duration: float = Pacing.AI_SQUAD_PAN) 
 	follow_unit = null
 	# Nobody is watching a headless run, and the glide is awaited once per AI squad -- tweening it
 	# there is pure suite wall clock. Land on the destination exactly as the tweened path does.
-	if DisplayServer.get_name() == "headless":
+	if Pacing.unwatched():
 		_apply_pan_position(world_pos)
 		return
 	_panning = true

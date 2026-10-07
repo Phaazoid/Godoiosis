@@ -303,10 +303,69 @@ static var VOID_SNAP_HOLD := 1.0
 # unit sits in frame.
 static var STAGE_AIM_LIFT := 0.5
 
+# --- fast-forward and skip (#545) ---------------------------------------------------------------
+#
+# Both change how fast playback runs, never which code runs: a skip is the headless escape switched
+# on at runtime (see unwatched()), so every pass still reaches _end_squad_turn and the view still
+# comes home. PlaybackControl decides; this file owns the one write to Engine.time_scale.
+static var FAST_FORWARD := 4.0   # held: how many times faster playback runs
+static var SKIP_SPEED := 16.0    # what is left of a skip's walks and lunges, under the fade
+static var SKIP_FADE := 0.25     # REAL seconds, each way
+
+static var _playback_speed := 1.0
+static var _skipping := false
+
 
 # What mode the player has the zoom in. ONE read of the setting, so nothing else names it.
 static func zoom_mode() -> PlayerSettings.BattleZoom:
 	return PlayerSettings.choice_of(PlayerSettings.Setting.BATTLE_ZOOM_MODE) as PlayerSettings.BattleZoom
+
+
+# The player's base playback speed (#545). ONE read of the setting, beside zoom_mode for its reason.
+static func setting_speed() -> float:
+	return PlayerSettings.PLAYBACK_MULTIPLIERS[
+			PlayerSettings.choice_of(PlayerSettings.Setting.PLAYBACK_SPEED)]
+
+
+# Nobody is watching playback: a headless run, or a skip resolving under the fade (#545). The ONE
+# spelling every playback escape asks -- beat, hitstop, the pans, the rig's eases, the falls -- so a
+# skip collapses exactly what the suite already collapses, through paths the suite already runs.
+static func unwatched() -> bool:
+	return _skipping or DisplayServer.get_name() == "headless"
+
+
+static func skipping() -> bool:
+	return _skipping
+
+
+static func set_skipping(on: bool) -> void:
+	_skipping = on
+
+
+static func playback_speed() -> float:
+	return _playback_speed
+
+
+# Writes Engine.time_scale only on a change, so a frame that asks for what is already set touches
+# nothing -- including a test runner's own time factor.
+static func set_playback_speed(speed: float) -> void:
+	if is_equal_approx(speed, _playback_speed):
+		return
+	_playback_speed = speed
+	_apply_time_scale()
+
+
+# Back to 1x, unskipped. PlaybackControl's exit and a suite's teardown.
+static func reset_playback() -> void:
+	_playback_speed = 1.0
+	_skipping = false
+	_apply_time_scale()
+
+
+# THE one writer of Engine.time_scale: a hitstop's freeze outranks the speed, and its release comes
+# back to the speed rather than to a literal 1.0, so a freeze mid-fast-forward resumes fast.
+static func _apply_time_scale() -> void:
+	Engine.time_scale = 0.0 if _frozen_count > 0 else _playback_speed
 
 
 # WHICH PROFILE THIS BEAT RUNS UNDER (#647) -- the one collapse from (mode, beat) to a profile, and
@@ -405,23 +464,34 @@ static func emphasis_for(beat: BeatSheet.Beat) -> float:
 # ignore_time_scale TRUE, or it would be frozen by the very freeze it exists to end and hang the game
 # outright. Re-entry is counted rather than ignored: a volley that kills two fires twice, and without
 # the count the first restore would end the second freeze early and the two would race. And the
-# restore writes 1.0 literally, which is correct only while nothing else in the project writes
-# time_scale -- true today (grepped), and this comment is where to look the day it stops being.
+# restore goes back to the PLAYBACK SPEED, not to 1.0 (#545): _apply_time_scale is the one writer,
+# so a freeze during a fast-forward resumes at the fast-forward.
 #
-# Headless returns immediately, the escape beat() carries and for the same reason: nobody is watching,
+# The freeze is divided by that speed, so it lasts the same share of a pass at any speed -- the timer
+# ignores time scale, so an undivided one would grow relative to everything around it.
+#
+# Unwatched returns immediately, the escape beat() carries and for the same reason: nobody is watching,
 # and a real freeze would put wall clock on every suite that resolves a lethal plan.
 static var _frozen_count := 0
 
 static func hitstop(host: Node, seconds: float) -> void:
-	if seconds <= 0.0 or DisplayServer.get_name() == "headless":
+	if seconds <= 0.0 or unwatched():
 		return
+	_freeze()
+	await host.get_tree().create_timer(seconds / _playback_speed, true, false, true).timeout
+	_unfreeze()
+
+
+# The hitstop's two edges, apart from its timer so a headless case can reach the release -- the one
+# line that decides what a freeze comes back to.
+static func _freeze() -> void:
 	_frozen_count += 1
-	Engine.time_scale = 0.0
-	await host.get_tree().create_timer(seconds, true, false, true).timeout
-	_frozen_count -= 1
-	if _frozen_count <= 0:
-		_frozen_count = 0
-		Engine.time_scale = 1.0
+	_apply_time_scale()
+
+
+static func _unfreeze() -> void:
+	_frozen_count = maxi(_frozen_count - 1, 0)
+	_apply_time_scale()
 
 
 # Whether the world is stopped right now. Nothing in the game reads it; it exists so a test can ask
@@ -571,6 +641,6 @@ static func beat(host: Node, seconds: float) -> void:
 	var tree: SceneTree = host.get_tree()
 	while tree != null and ModalLock.any_open(tree):
 		await tree.process_frame
-	if seconds <= 0.0 or DisplayServer.get_name() == "headless":
+	if seconds <= 0.0 or unwatched():
 		return
 	await host.get_tree().create_timer(seconds).timeout

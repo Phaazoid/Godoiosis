@@ -89,6 +89,10 @@ static func _resolve_bus(bus_name: String) -> int:
 func _process(_delta: float) -> void:
 	for setting: PlayerSettings.Setting in _buses:
 		var level := PlayerSettings.level_of(setting)
+		# A skip resolves a whole turn's blows in about a second under the fade (#545); the effects
+		# go quiet for it rather than arriving as one burst. Music plays on.
+		if setting == PlayerSettings.Setting.SFX_VOLUME and Pacing.skipping():
+			level = 0.0
 		if is_equal_approx(level, _applied.get(setting, -1.0)):
 			continue
 		_applied[setting] = level
