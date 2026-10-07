@@ -7,7 +7,7 @@ its child [#49 Action Queue UX](https://github.com/Phaazoid/Godoiosis/issues/49)
 This is a *guidelines* doc, not a spec — it captures the principles we're holding the work to,
 plus the running order of the queue-UX checklist. Update it as items land.
 
-**Canon checked through #1171 (2026-09-29); #1132 (the battle zoom sees past what stands in the way) folded in 2026-10-07; #1207 (the field covers a placed blast's splash) folded in 2026-10-05; #1174 (Will retired, the limb icons) folded in 2026-10-01; #1197 (the danger field draws the watch shot and the current) folded in 2026-10-03; #508's soak rename folded in 2026-10-04; #46's shared execute steps folded in 2026-10-04.**
+**Canon checked through #1171 (2026-09-29); #1132 (the battle zoom sees past what stands in the way, then the approach and arrival) folded in 2026-10-07; #1207 (the field covers a placed blast's splash) folded in 2026-10-05; #1174 (Will retired, the limb icons) folded in 2026-10-01; #1197 (the danger field draws the watch shot and the current) folded in 2026-10-03; #508's soak rename folded in 2026-10-04; #46's shared execute steps folded in 2026-10-04.**
 
 ## Principles
 
@@ -2553,7 +2553,8 @@ reason.
 A pass whose last blow knocked somebody into a pit ends with the shot still deep below the board, and
 the climb is *eased* — longer than `TEAR_OUT_AFTERMATH` — so the board used to start reassembling
 mid-climb. The exit now waits on the rig's own published depth
-(`CameraController.fall_depth`, the one fact that travels rig → playback down that channel) rather
+(`CameraController.fall_depth`, the one fact that travelled rig → playback down that channel until
+#1132's `view_arriving` joined it) rather
 than on a beat of its own, which would be a second answer to how long the climb takes and would
 disagree the moment the rate knob moved. Since round 4 the same wait covers the death show too —
 the depth stays published until the last cube lands — and the exit's return pan restores the WIDE
@@ -2835,7 +2836,9 @@ Four things are worth carrying out of the build.
   first beat and never came back, though `_shot_volume`'s own header calls that volume *"the WIDE
   shot"*. Nobody wrote that rule; it was what five independent edges added up to. **Ruled
   2026-09-02: a release falls to the next LIVE shot**, so the gap between beats now holds the stage.
-  No feel value moved — what moved is which shipped shot the gap belongs to.
+  No feel value moved — what moved is which shipped shot the gap belongs to. (On the BATTLE ZOOM
+  there is no gap since 2026-10-07: the next beat's approach is its shot from the pan's first frame
+  -- see *The approach is the shot* under #1132. The ruling still governs every other release.)
 
 Five latches retired from `battle3d` (`_playback_owned_camera`, `_framed_span`,
 `_stage_cells_solved`, `_trained_seen_id`, `_release_deferred`), each of which half-answered "what
@@ -2927,9 +2930,10 @@ the one piece of state an edge needs.
   has not turned to yet -- #670's LIVE/SETTLED axis, asked of the camera's position.
 - **Hiding is what no angle clears**, and it GROWS within a shot: a blocker hidden stays hidden
   until the shot changes, so nothing pops in and out while a body tumbles. A fresh search runs on
-  every shot edge and every new aim line, deferred to the first frame the 2D camera is not
-  mid-pan; every other frame checks only the angle held, spinning to a fully clear one when the
-  held angle becomes blocked -- that is #972's fix.
+  every shot edge and every new aim line, judged from where a running pan LANDS (see *The approach*
+  below; it shipped deferred to the pan's end and that was the bug); every other frame checks only
+  the angle held, spinning to a fully clear one when the held angle becomes blocked -- that is
+  #972's fix.
 - **The action is never hidden**: the trained subject, whoever stands on the aim line, everyone on
   the stage, the walker -- and the ground under each. They still count AGAINST an angle, which is
   what keeps the old side-on reason (attacker and target across the frame, not one behind the
@@ -2950,9 +2954,42 @@ pass are untouched.
 
 **Declared residuals:** a hidden lantern or fire goes dark with its root; a hidden unit's crown and
 rings stay; a cell a tumbling body lands on reappears under it (ground under a participant is
-protected); a hole's lip beside a hidden column stays; water surfaces do not hide; a beat with no
-aim line can only hide; and the pan deferral is invisible headless (a pan lands at once there), so
-its wire is a play-check. The View line in every report now says the turn and what is hidden.
+protected); a hole's lip beside a hidden column stays; water surfaces do not hide; and a beat with
+no aim line can only hide. The View line in every report now says the turn and what is hidden.
+
+### The approach is the shot, and the hit waits for the camera (the same day's play-check)
+
+The dev, on the build above: *"the camera first jumps to a combat, then the camera adjusts to the
+proper viewing angle while the hit is playing out. What should be happening is, that first camera
+zoom should just be going to the correct spot to watch the hit, and it should be there and still for
+a moment before the hit even starts."* Three causes, stacked, and the first was this section's own:
+
+- **The search waited for the pan to land**, because it judged from where the camera was passing
+  through. The cure was to judge from where it is GOING: `lens_at` takes an aim, and while a pan
+  runs `battle3d._landing_aim` hands it the aim over `CameraController.pan_destination` with the
+  subject's drop applied through `_depth_below`, the arithmetic `_fall_below` already used. The
+  `settled` deferral left `ShotClearance.step` with it.
+- **The close-up only began on landing.** `pan_to` nulls the follow for the whole glide, so the
+  TRAINED row was dark until the camera had arrived: the travel pulled OUT to the wide distance (or
+  the stage) and the landing zoomed back IN. `pan_to` now publishes `pan_subject`, and on a
+  battle-zoom beat `battle3d._shot_subject` lets it stand in for the follow -- never while a death
+  show is live, which would pull the camera out of the pit mid-show (#602 round 8). **Consequence,
+  stated in the plan he approved:** between two battle-zoom beats the camera goes close-up to
+  close-up and no longer drops to the stage while it pans -- the 2026-09-02 ruling above made that
+  gap hold the stage, and on the battle zoom there is no longer a gap. The stage is still framed
+  before the first blow, after the last and through a tether break.
+- **Nothing waited for the rig.** The hit waited for the 2D tween and a fixed hold, while the yaw and
+  zoom eased on the rig's own clock -- a 180-degree turn starting at landing needed most of the hold
+  to get within two degrees. `CameraRig3D.is_arriving()` answers "every eased channel within
+  `ARRIVED_*` of its target", `battle3d` publishes it as `CameraController.view_arriving` beside
+  `fall_depth` (the second fact that travels rig -> playback), and a CINEMATIC beat waits on it
+  after the pan and before its hold, capped by `Pacing.CAMERA_ARRIVAL_CAP`. The sway is an addend
+  with no target, so it keeps breathing through the hold.
+
+Zoom off and Combat-Only walks are untouched -- every part is gated on the battle-zoom beat. **The
+wait itself is invisible headless** (a pan lands at once there, and the wait has `Pacing.beat`'s
+escape), so "the blow starts once the camera has stopped" is a play-check; `is_arriving` and the
+approach's shot are pinned.
 
 ## The UI has a DESIGN SPACE ([#659](https://github.com/Phaazoid/Godoiosis/issues/659), BUILT 2026-09-02)
 

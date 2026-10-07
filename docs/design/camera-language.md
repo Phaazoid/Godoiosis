@@ -5,7 +5,7 @@ NAMES things and POINTS at the code that owns them. It deliberately does not re-
 came to be — [`visual-clarity.md`](visual-clarity.md) holds the round-by-round history in eleven
 camera sections, and a second telling here would drift from the first.
 
-**Canon checked through #699 (2026-09-02); #1132 (the clearance words) folded in 2026-10-07.**
+**Canon checked through #699 (2026-09-02); #1132 (the clearance words, then the approach and arrival) folded in 2026-10-07.**
 
 ## Why this page exists
 
@@ -141,6 +141,16 @@ the dev tunes, `TRAINED_DISTANCE` is a `Pacing` constant. Both are content, neit
 ### Clearance words ([#1132](https://github.com/Phaazoid/Godoiosis/issues/1132))
 
 - **sight line** — a segment from the SETTLED lens (`CameraRig3D.lens_at`) to a point on the action.
+  While a pan is running it is the lens over where the pan LANDS (`lens_at`'s `aim`, fed by
+  `CameraController.pan_destination`), so the angle is chosen on the approach's first frame rather
+  than after the camera arrives.
+- **the approach** — a battle-zoom beat's pan, which IS that beat's shot: `pan_to` publishes
+  `pan_subject`, and `battle3d._shot_subject` lets it stand in for the follow while the glide runs, so
+  the close-up, its zoom and the clearance's angle start with the travel. Never while a death show is
+  live, and never off the battle zoom.
+- **arrived** — every eased channel within `CameraRig3D.ARRIVED_*` of its target
+  (`CameraRig3D.is_arriving`). A battle-zoom beat waits for it after the pan and before its hold, so
+  the hold is spent with the camera still.
 - **blocker** — a terrain column, a prop or a unit a sight line passes through. A column is a box
   from the board's underside to its drawn top, never "everything below the top".
 - **the action** — the trained subject, whoever stands on the aim line, everyone on stage, the
@@ -181,9 +191,10 @@ camera, and on what occasion — because an ungated mover is the bug class the w
 | `CameraRig3D._unhandled_input` / `_process` | the player's own hand | orbit, tilt, wheel, WASD, the middle-drag pan (`hold_at`, #1037) |
 
 The **causes** the 2D `CameraController` publishes: `shot_cells`, `follow_unit`, `directed_line`,
-`beat_emphasis`, `beat_profile`, plus its own position. **One fact travels the other way** —
-`CameraController.fall_depth`, the rig telling playback how far under the board it has got, so the
-teardown can wait for the climb.
+`beat_emphasis`, `beat_profile`, `pan_subject` and `pan_destination`, plus its own position. **Two
+facts travel the other way** — `CameraController.fall_depth`, the rig telling playback how far under
+the board it has got, so the teardown can wait for the climb; and `view_arriving`, the rig telling
+playback it is still easing onto the shot, so a battle-zoom beat's hold waits for it (#1132 follow-up).
 
 Adding a sixth door is a decision worth stating out loud.
 
