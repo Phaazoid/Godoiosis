@@ -98,6 +98,11 @@ func _ready() -> void:
 	_version_label.set_anchors_and_offsets_preset(Control.PRESET_TOP_RIGHT, Control.PRESET_MODE_MINSIZE, STRIP_INSET)
 	_build_report_hint()
 
+# The objectives panel's own box, for the playback hint in the slot below it (#545), so the two
+# corner panels share one look rather than two copies of it.
+func panel_style() -> StyleBox:
+	return _panel.get_theme_stylebox("panel")
+
 # THE REPORT SIGN (#1051) -- a player is TOLD the key, not handed another button. The ticket was
 # built once as a clickable mark and that was the wrong answer (dev, 2026-09-21): a fourth door to
 # the same card left three of them undiscoverable and named none, where one line of text makes the

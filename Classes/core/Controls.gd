@@ -160,6 +160,13 @@ const ENTRIES: Array[Dictionary] = [
 	{"key": "Left-click", "context": Context.BOARD, "when": "Deploying",
 		"does": "Unit options, or place a unit",
 		"action": HARDCODED},
+	# #545. Placeholder labels; the wording is the dev's.
+	{"key": "Shift (hold)", "context": Context.BOARD, "when": "During playback",
+		"does": "Speed up",
+		"action": "fast_forward"},
+	{"key": "Space", "context": Context.BOARD, "when": "During playback",
+		"does": "Skip",
+		"action": "skip_playback"},
 	{"key": "Click / Space / Enter", "context": Context.BOARD, "when": "In dialog",
 		"does": "Advance",
 		"action": "dialogic_default_action"},

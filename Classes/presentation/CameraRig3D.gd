@@ -1185,14 +1185,14 @@ func _process(delta: float):
 	# never settles, and a suite sampling the rig must read the DECISION rather than frame timing.
 	# Fourth member of the escape Pacing.beat, CameraController.pan_to and CameraController._process
 	# already keep, and kept for the same reason.
-	var glide := 1.0 if DisplayServer.get_name() == "headless" else 1.0 - exp(-glide_smoothing * delta)
+	var glide := 1.0 if Pacing.unwatched() else 1.0 - exp(-glide_smoothing * delta)
 	_aim = _aim.lerp(_target_aim, glide)
 	_lift = _lift.lerp(_target_lift, glide)
 	# ...and the drop, on its OWN rate (#602) rather than the glide above: this one is asymmetric, and
 	# the climb back out of a pit is a slower, more deliberate move than a pan across the board. Same
 	# headless escape, so a case sampling the rig reads the decision instead of frame timing; one that
 	# wants to watch the curve supplies the blend and calls recovered() directly.
-	var recover := 1.0 if DisplayServer.get_name() == "headless" \
+	var recover := 1.0 if Pacing.unwatched() \
 			else 1.0 - exp(-Pacing.CLIFF_RECOVER * delta)
 	_drop = recovered(_drop, _target_drop, recover)
 
@@ -1202,7 +1202,7 @@ func _process(delta: float):
 	# asserts a coordinate can be moved by a jolt it was never meant to see. Headless refuses to
 	# SPEND time, exactly as Pacing.beat does; a case that wants to watch a curve supplies the
 	# elapsed time itself and reads flourish().
-	if DisplayServer.get_name() != "headless":
+	if not Pacing.unwatched():
 		_shake_elapsed += delta
 		_sway_elapsed += delta
 

@@ -62,6 +62,13 @@ func past_opening_turn() -> bool:
 	return _armed and _player_turn > 1
 
 
+# Whether a timeline is playing or starting. Both halves: Dialogic sets current_timeline a frame
+# late, so a beat started this frame shows only in _dialog_active. The playback skip asks it too
+# (#545), since Space advances a dialog and must not also skip.
+func is_talking() -> bool:
+	return _dialog_active or Dialogic.current_timeline != null
+
+
 # Fresh mission start (begin_mission / restart_mission -- the #220 door). Not board_loaded:
 # that signal also fires on resume and dev rebuilds, which must never replay an intro.
 func mission_started() -> void:
@@ -103,7 +110,7 @@ func pre_mission_started() -> bool:
 # that silently did nothing would read as the tool being broken. It never touches _fired either,
 # so previewing a beat's timeline does not spend that beat.
 func preview(timeline: DialogicTimeline) -> bool:
-	if timeline == null or _dialog_active or Dialogic.current_timeline != null:
+	if timeline == null or is_talking():
 		return false
 	_dialog_active = true
 	_start(timeline)
@@ -239,7 +246,7 @@ func _fire(beat: DialogBeat) -> void:
 	# are not dialog and never gate here; the #134 row carries the lesson alone then.
 	if not PlayerSettings.is_on(PlayerSettings.Setting.SHOW_DIALOG):
 		return
-	if _dialog_active or Dialogic.current_timeline != null:
+	if is_talking():
 		_pending.append(beat.timeline)
 	else:
 		_dialog_active = true
