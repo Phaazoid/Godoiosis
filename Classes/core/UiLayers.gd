@@ -35,6 +35,9 @@ const LAYER_CARDS := 100        # game.card_layer: every ModalCard, over everyth
 const MISSION_STATUS := 1     # the always-on objectives/version corner (Scenes/MissionStatusPanel.tscn)
 const HOVER_PANEL := 2        # the info card (Scenes/HoverInfoPanelControl.tscn), opened by a click since #1105
 const INVENTORY_POPUP := 10   # the in-panel item action popup (inventory_panel.gd)
+# The skip's fade to black (#545): over every HUD panel, and on THIS layer so the dialogue, the wheel
+# and every card stay above it -- a pause menu opened mid-skip must not open under the black.
+const PLAYBACK_FADE := 50
 
 # --- z_index inside LAYER_CARDS ------------------------------------------------------------------
 const MENU_SCREEN := 100      # a full-screen takeover -- MissionSelectScreen, PreMissionScreen

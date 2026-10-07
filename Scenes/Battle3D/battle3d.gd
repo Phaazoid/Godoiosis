@@ -111,7 +111,6 @@ var _staged_drawn: Array[Vector2i] = []
 # Both are created on demand: a board that never stages pays nothing for either.
 var _flight_drawn: Dictionary[Vector2i, GridMap] = {}
 var _whiteout: ColorRect = null
-var _skip_fade: ColorRect = null   # the skip's fade to black (#545)
 # The TEAR-OUT's share of it (#887 gave the channel a second driver). Held rather than pushed
 # straight through, because the two levels have to be composed and neither writer may zero the
 # other -- see _push_whiteout.
@@ -971,25 +970,6 @@ func _process(_delta: float) -> void:
 	if not BoardSpace.flight_active():
 		_push_whiteout()
 	_drive_crawl()
-	_drive_skip_fade()
-
-
-# The skip's fade to black (#545), drawn from PlaybackControl's level. Its own rect rather than a
-# second driver of the white-out: going dark is not a flash, and #217's cap is about the flash. Above
-# it, so a tear-out flashing behind a skip stays covered. Built on first use, as the white-out is.
-func _drive_skip_fade() -> void:
-	var control: PlaybackControl = game.playback_control
-	var level := 0.0 if control == null else control.fade_level()
-	if level <= 0.0 and _skip_fade == null:
-		return
-	if _skip_fade == null:
-		_skip_fade = ColorRect.new()
-		_skip_fade.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		_skip_fade.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-		_skip_fade.z_index = 1
-		$UI.add_child(_skip_fade)
-	_skip_fade.color = Color(0.0, 0.0, 0.0, level)
-	_skip_fade.visible = level > 0.001
 
 
 # The 3D view follows the action by MIRRORING the 2D camera, which is already the

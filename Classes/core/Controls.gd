@@ -162,7 +162,7 @@ const ENTRIES: Array[Dictionary] = [
 		"action": HARDCODED},
 	# #545. Placeholder labels; the wording is the dev's.
 	{"key": "Shift (hold)", "context": Context.BOARD, "when": "During playback",
-		"does": "Fast-forward",
+		"does": "Speed up",
 		"action": "fast_forward"},
 	{"key": "Space", "context": Context.BOARD, "when": "During playback",
 		"does": "Skip",

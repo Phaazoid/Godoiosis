@@ -27,11 +27,30 @@ var game   # the Game coordinator; set by game._build_collaborators()
 var phase := Phase.IDLE
 var _fade := 0.0   # 0 clear .. 1 black
 var _talked := false   # a dialog was up at the last tick (see request_skip)
+var _holding := false   # Shift was down at the last tick
 var _last_msec := -1
+
+# What the player sees of this, owned here as MusicDirector owns its players and pushed every tick.
+# Both live in the HUD layer: the fade at UiLayers.PLAYBACK_FADE, under the dialogue, the wheel and
+# every card, so a pause menu opened mid-skip draws over the black rather than under it.
+var _fade_rect: ColorRect
+var _hint: PlaybackHint
 
 
 func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
+	var hud: CanvasLayer = game.ui_layer
+	var status: MissionStatusPanel = game.mission_status_panel
+	_fade_rect = ColorRect.new()
+	_fade_rect.name = "SkipFade"
+	_fade_rect.color = Color(0, 0, 0, 0)
+	_fade_rect.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_fade_rect.z_index = UiLayers.PLAYBACK_FADE
+	_fade_rect.visible = false
+	hud.add_child(_fade_rect)
+	_fade_rect.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	_hint = PlaybackHint.new(status.panel_style())
+	hud.add_child(_hint)
 
 
 func _exit_tree() -> void:
@@ -81,7 +100,37 @@ func tick(real_dt: float, holding: bool) -> void:
 			_fade = _faded(_fade, 0.0, real_dt)
 			if _fade <= 0.0:
 				phase = Phase.IDLE
+	_holding = holding
 	Pacing.set_playback_speed(speed_for(owned, holding))
+	_draw_views(owned)
+
+
+# Whether the key hint is up: while the keys work and nothing covers them. The last clause is one
+# slot, one occupant -- End Turn stays up through your own end-of-turn burn, so the hint yields.
+func hint_shown(owned: bool) -> bool:
+	if not owned or game.menu_is_up() or ModalLock.any_open(get_tree()) or phase != Phase.IDLE:
+		return false
+	var end_turn: EndTurnButton = game.end_turn_button
+	return not end_turn.visible
+
+
+func holding() -> bool:
+	return _holding
+
+
+func hint() -> PlaybackHint:
+	return _hint
+
+
+func fade_rect() -> ColorRect:
+	return _fade_rect
+
+
+func _draw_views(owned: bool) -> void:
+	_fade_rect.color = Color(0, 0, 0, _fade)
+	_fade_rect.visible = _fade > 0.001
+	_hint.visible = hint_shown(owned)
+	_hint.set_held(_holding and _hint.visible)
 
 
 # What playback should run at this frame.
@@ -96,7 +145,7 @@ func speed_for(owned: bool, holding: bool) -> float:
 	return speed
 
 
-# How dark the skip fade is, 0..1. battle3d draws it.
+# How dark the skip fade is, 0..1.
 func fade_level() -> float:
 	return _fade
 
@@ -106,7 +155,9 @@ func reset() -> void:
 	phase = Phase.IDLE
 	_fade = 0.0
 	_talked = false
+	_holding = false
 	Pacing.reset_playback()
+	_draw_views(false)
 
 
 static func _faded(level: float, toward: float, real_dt: float) -> float:

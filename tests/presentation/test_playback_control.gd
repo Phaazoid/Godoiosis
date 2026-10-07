@@ -1,5 +1,5 @@
 # The playback speed setting, the held fast-forward and the skip (#545): PlaybackControl deciding,
-# Pacing owning the one write to Engine.time_scale, battle3d drawing the fade.
+# Pacing owning the one write to Engine.time_scale, and the fade and key hint it draws in the HUD.
 #
 # HEADLESS IS ALREADY UNWATCHED, and that is the structural limit worth stating first: Pacing.unwatched()
 # answers true in every case here whether or not a skip is on, so no case can watch a skip collapse a
@@ -53,6 +53,7 @@ func after_test() -> void:
 	PlayerSettings.reset_for_test()
 	_cam().set_playback_locked(false)
 	_game.game_state = _game.GameState.IDLE
+	_game.refresh_end_turn_button()
 	await _board.check(self)
 
 
@@ -150,9 +151,11 @@ func test_a_held_fast_forward_speeds_a_real_pass_and_lets_go_with_it() -> void:
 	_game.order_executor.execute_orders(mover)   # not awaited -- sampled per frame below
 	var fastest := 1.0
 	var frames := 0
+	var saw_hint_lit := false
 	while _game.order_executor.executing_plan != null:
 		await await_idle_frame()
 		fastest = maxf(fastest, Engine.time_scale)
+		saw_hint_lit = saw_hint_lit or (_control.hint().visible and _control.hint().is_held())
 		frames += 1
 	await _settle()
 
@@ -160,6 +163,10 @@ func test_a_held_fast_forward_speeds_a_real_pass_and_lets_go_with_it() -> void:
 			"the pass took no frames, so nothing below was ever sampled").is_greater(0)
 	assert_float(fastest).override_failure_message(
 			"holding fast-forward never reached a real pass").is_equal_approx(Pacing.FAST_FORWARD, 0.001)
+	assert_bool(saw_hint_lit).override_failure_message(
+			"the hint never showed, lit, during the player's own pass").is_true()
+	assert_bool(_control.hint().visible).override_failure_message(
+			"the hint outlived the pass").is_false()
 	assert_float(Engine.time_scale).override_failure_message(
 			"the pass ended and playback stayed fast on the player's own board") \
 		.is_equal_approx(1.0, 0.001)
@@ -300,9 +307,8 @@ func test_the_fade_is_drawn_and_the_skip_waits_for_full_black() -> void:
 	assert_int(_control.phase).is_equal(PlaybackControl.Phase.FADING_OUT)
 	assert_bool(Pacing.skipping()).override_failure_message(
 			"the skip ran before the screen was dark").is_false()
-	await _settle()
-	var rect := _scene.get("_skip_fade") as ColorRect
-	assert_object(rect).override_failure_message("battle3d never built the fade").is_not_null()
+	var rect := _control.fade_rect()
+	assert_object(rect).override_failure_message("nothing built the fade").is_not_null()
 	assert_float(rect.color.a).is_equal_approx(0.5, 0.01)
 	assert_bool(rect.visible).is_true()
 
@@ -316,17 +322,122 @@ func test_the_fade_is_drawn_and_the_skip_waits_for_full_black() -> void:
 	_control.tick(0.5, false)
 	_control.tick(0.5, false)
 	assert_int(_control.phase).is_equal(PlaybackControl.Phase.IDLE)
-	await _settle()
 	assert_bool(rect.visible).override_failure_message(
 			"the fade stayed up after the skip ended").is_false()
 
 
+# THE BUG THIS ROUND FIXED: the fade was a rect in Battle3D's own CanvasLayer, which draws over the
+# whole game viewport -- pause menu included -- so Esc mid-skip opened a menu under the black. Layer
+# numbers only order layers WITHIN one viewport, so the law asks both: same viewport as the cards,
+# and a lower layer than the dialogue and every card.
+func test_the_fade_sits_under_the_dialogue_and_every_card() -> void:
+	var rect := _control.fade_rect()
+	var cards: CanvasLayer = _game.card_layer
+	assert_object(rect.get_viewport()).override_failure_message(
+			"the fade draws in a different viewport from the cards, so no layer number can order them") \
+		.is_same(cards.get_viewport())
+	var layer := rect.get_canvas_layer_node()
+	assert_object(layer).override_failure_message("the fade is on no CanvasLayer").is_not_null()
+	assert_int(layer.layer).override_failure_message(
+			"the fade draws over the dialogue -- a line spoken mid-skip would be hidden") \
+		.is_less(UiLayers.LAYER_DIALOGUE)
+	assert_int(layer.layer).override_failure_message(
+			"the fade draws over the cards -- a pause menu opened mid-skip would be hidden") \
+		.is_less(cards.layer)
+
+
+# --- the hint ----------------------------------------------------------------------------------------
+
+func test_the_hint_shows_only_while_playback_owns_the_board() -> void:
+	_control.set_process(false)
+	_control.tick(0.0, false)
+	assert_bool(_control.hint().visible).override_failure_message(
+			"the playback keys are advertised on the player's own board").is_false()
+	_claim_like_an_ai_turn()
+	_control.tick(0.0, false)
+	assert_bool(_control.hint().visible).override_failure_message(
+			"an enemy turn is playing and the hint is not up").is_true()
+	_cam().set_playback_locked(false)
+	_game.game_state = _game.GameState.IDLE
+	_control.tick(0.0, false)
+	assert_bool(_control.hint().visible).override_failure_message(
+			"the hint outlived playback").is_false()
+
+
+func test_the_hint_steps_aside_for_a_menu_a_card_and_a_skip() -> void:
+	_control.set_process(false)
+	Pacing.SKIP_FADE = 1.0
+	_claim_like_an_ai_turn()
+	_control.tick(0.0, false)
+	assert_bool(_control.hint().visible).override_failure_message(
+			"precondition: the hint should be up before anything covers it").is_true()
+
+	_game.game_state = _game.GameState.MENU
+	_control.tick(0.0, false)
+	assert_bool(_control.hint().visible).override_failure_message(
+			"the hint stayed up under the pause menu").is_false()
+
+	_game.game_state = _game.GameState.AI_TURN
+	_fake_card = Node.new()
+	_fake_card.add_to_group(ModalLock.GROUP)
+	add_child(_fake_card)
+	_control.tick(0.0, false)
+	assert_bool(_control.hint().visible).override_failure_message(
+			"the hint stayed up under a card").is_false()
+	_fake_card.free()
+	_fake_card = null
+
+	assert_bool(_control.request_skip()).is_true()
+	_control.tick(0.25, false)
+	assert_int(_control.phase).is_equal(PlaybackControl.Phase.FADING_OUT)
+	assert_bool(_control.hint().visible).override_failure_message(
+			"the hint stayed up while the screen faded for a skip").is_false()
+
+
+# One slot, one occupant: End Turn stays up through the player's own end-of-turn burn.
+func test_the_hint_yields_to_a_visible_end_turn() -> void:
+	_control.set_process(false)
+	_claim_like_an_ai_turn()
+	var end_turn: EndTurnButton = _game.end_turn_button
+	end_turn.set_offered(true)
+	end_turn.set_hidden_for_playback(false)
+	assert_bool(end_turn.visible).override_failure_message(
+			"precondition: End Turn should be up for this case").is_true()
+	_control.tick(0.0, false)
+	assert_bool(_control.hint().visible).override_failure_message(
+			"the hint drew over End Turn in the same corner").is_false()
+
+
+func test_holding_shift_lights_the_hint() -> void:
+	_control.set_process(false)
+	_claim_like_an_ai_turn()
+	_control.tick(0.0, true)
+	assert_bool(_control.hint().is_held()).override_failure_message(
+			"Shift is down and the hint does not say so").is_true()
+	_control.tick(0.0, false)
+	assert_bool(_control.hint().is_held()).override_failure_message(
+			"the hint stayed lit after Shift came up").is_false()
+
+
+# The F3 sign's rule: a key on screen is the registry's key, so it cannot name one the game lacks.
+func test_the_hint_names_the_keys_the_registry_holds() -> void:
+	var readout := _control.hint().readout()
+	for action: String in [PlaybackHint.FAST_FORWARD_ACTION, PlaybackHint.SKIP_ACTION]:
+		var key := Controls.key_for_action(action)
+		assert_str(key).override_failure_message("nothing documents %s" % action).is_not_empty()
+		assert_bool(readout.contains(key)).override_failure_message(
+				"the hint does not name %s's key (%s): %s" % [action, key, readout]).is_true()
+
+
 # --- helpers --------------------------------------------------------------------------------------
 
-# The AI-turn shape: the state and the lock, held for a whole turn.
+# The AI-turn shape: the state and the lock, held for a whole turn -- and End Turn down, as #541 has
+# it on an AI faction's turn (this fixture keeps the player's faction active, so it says so itself).
 func _claim_like_an_ai_turn() -> void:
 	_game.game_state = _game.GameState.AI_TURN
 	_cam().set_playback_locked(true)
+	var end_turn: EndTurnButton = _game.end_turn_button
+	end_turn.set_offered(false)
 
 
 func _cam() -> CameraController:
