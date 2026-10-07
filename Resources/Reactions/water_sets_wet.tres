@@ -6,4 +6,5 @@
 script = ExtResource("1_xcbtu")
 incoming_element = 2
 add_states = Array[int]([1])
+equation = "W2 -> W2"
 popup = "Wet"

@@ -4,7 +4,7 @@
 
 Supersedes the wiki's `Battle Mechanics/Elemental Combinatrix.docx` and `Systems Mechanics/Terrain Modification.docx`. Kept-but-era-checked: the *combinatrix concept* survives (the author flagged it keep-not-deprecate), but every "20% chance of shock," "hit/Avo advantage," "AP cost," and "move randomly 1 square" is **dead under Law #1** and re-expressed deterministically here.
 
-**Canon checked through #892 (2026-09-11); #1092's Chilled-beats-Wet ruling folded in 2026-09-29; #508's steam soak folded in 2026-10-04.**
+**Canon checked through #892 (2026-09-11); Deep Alchemy phase 1 (reaction equations) folded in 2026-10-07; #1092's Chilled-beats-Wet ruling folded in 2026-09-29; #508's steam soak folded in 2026-10-04.**
 
 ## What it is
 
@@ -82,6 +82,7 @@ Small resources, edited in the reflection-based dev editor (same grain as `Weapo
 | `popup` | feedback hook ("Electrocuted!") — the DRAMATIC word, read by the glossary's composed interaction line and the bug report |
 | ~~`vfx_tag`~~ | **declared and read by NOTHING** (grepped #887, 2026-09-10). It was proposed as this table's hook for "what does this reaction LOOK like", and the row above used to claim both fields were read, which was true of `popup` alone. What actually draws an elemental event is the attack that carried it, not the reaction it fired: `ArcLightning` reads the volley's own element and route (#887). Kept as a field because a reaction-specific look is still plausible; the correction stands as the record that a hook nobody consumes is not a seam. **#900 makes the distinction sharper rather than filling it**: what an ATTACK plays is now authorable per attack (a shared `EffectLook` keyed by element, see presentation-effects.md), and this field is the REACTION-side question -- still unfilled, still out of scope, and not the same seam. |
 | `short_name` | the BADGE word ("Shock"), for a surface with no room for the dramatic one — the action queue's chip is ~40px (#685). Blank means the popup already fits, so only a long reaction needs one. A **declared** second representation per Law #4: two questions (what does this SHOUT vs what fits a badge), `badge_name()` is the one accessor, and every compact surface reads it rather than re-deriving a truncation. |
+| `equation` | Deep Alchemy’s balanced equation for the reaction, one line of text (`F2 + W2 -> 2FW`). **Read by `ReactionLint` only, nothing in play** (Deep Alchemy phase 1, 2026-10-07). `TerrainReaction` carries the same field. Empty means not written yet, which `tests/dev/test_reaction_lint.gd`’s PENDING ledger must declare. See [deep-alchemy.md](deep-alchemy.md) → *What is built*. |
 
 Resolution against a target: collect *every* reaction with a trigger matching the snapshot's `(element ∈ attack.elements) × (state ∈ target.states)`, fire them all, compose per E8.
 

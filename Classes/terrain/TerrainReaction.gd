@@ -49,6 +49,9 @@ class_name TerrainReaction
 @export var gas: Gas.Kind = Gas.Kind.STEAM
 @export var gas_level: Gas.Level = Gas.Level.NONE
 
+# The reaction as Deep Alchemy writes it, ElementalReaction.equation's twin. Read by ReactionLint only.
+@export_placeholder("F2 + W2 -> 2FW") var equation: String = ""
+
 @export var popup: String = ""
 @export var icon: Texture2D
 
