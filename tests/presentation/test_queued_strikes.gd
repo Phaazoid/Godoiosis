@@ -327,6 +327,82 @@ func _badge_of(entry: Dictionary) -> Sprite3D:
 	return null
 
 
+# --- The pointer rides its badge (#1253) ------------------------------------------------------------
+
+# The dev's report: at rest every arrow drew at the strike layer's priority under every badge, so a far
+# badge hid a near arrow, and hovering "fixed" it by lifting both into one band. A pointer is hung on
+# its badge now and must sort AS ONE with it -- its priority, its depth test, its sort point, a nudge
+# under it -- at rest and at both lifted tiers, through the real hover poll. An attack and its counter
+# make two marks in one tier, which is the split a layer's single cone mesh allowed.
+func test_each_pointer_sorts_with_its_own_badge_at_rest_and_lifted() -> void:
+	var hero := _spawn(PLAYER, Vector2i(2, 2), true)
+	var foe := _spawn(ENEMY, Vector2i(3, 2), true)
+	_spawn(PLAYER, Vector2i(6, 6))
+	_queue_attack(hero, foe.movement.cell)
+	await _settle()
+
+	for cell: Vector2i in [Vector2i(6, 6), hero.movement.cell, foe.movement.cell]:
+		await _point_at(cell)
+		var sprites := _badge_sprites()
+		assert_int(sprites.size()).override_failure_message("fixture: an attack and its counter expected") 				.is_equal(2)
+		for badge in sprites:
+			_assert_one_with(badge)
+	# ...and the arrow is drawn once: the line layers carry the shafts alone.
+	for layer: BoardOverlays.Layer in [BoardOverlays.Layer.QUEUED_STRIKES, BoardOverlays.Layer.QUEUED_STRIKES_FOCUS]:
+		assert_bool(_overlays.cone_vertices_of(layer).is_empty()).override_failure_message(
+				"a strike line layer still draws a cone beside the badge's own").is_true()
+
+
+func _assert_one_with(badge: Sprite3D) -> void:
+	var pointer := BoardOverlays.pointer_of(badge)
+	assert_object(pointer).override_failure_message("a badge drew no pointer").is_not_null()
+	assert_bool(pointer.visible).override_failure_message("a badge's pointer is hidden").is_true()
+	var material := pointer.material_override as ShaderMaterial
+	assert_int(material.render_priority).override_failure_message(
+			"a pointer sorts at %d and its badge at %d" % [material.render_priority, badge.render_priority]) 			.is_equal(badge.render_priority)
+	var on_top := material.shader.resource_path == BoardOverlays.REACH_CONE_ON_TOP_SHADER_PATH
+	assert_bool(on_top).override_failure_message("a pointer's depth test is not its badge's") 			.is_equal(badge.no_depth_test)
+	assert_bool(pointer.sorting_use_aabb_center).override_failure_message(
+			"a pointer sorts at its own bounds rather than at its badge").is_false()
+	assert_that(pointer.global_position).is_equal(badge.global_position)
+	assert_float(pointer.sorting_offset).override_failure_message(
+			"a pointer does not sit under its own badge, as the flat view draws it").is_less(0.0)
+
+
+# Cone shading and facets are baked into the mesh and the intensity is a uniform; all three are Game-tab
+# knobs, so each has to reach a pointer already standing on the board.
+func test_the_cone_knobs_reach_a_standing_pointer() -> void:
+	var hero := _spawn(PLAYER, Vector2i(2, 2), true)
+	var foe := _spawn(ENEMY, Vector2i(3, 2))
+	_queue_attack(hero, foe.movement.cell)
+	await _settle()
+	var pointer := BoardOverlays.pointer_of(_badge_sprites()[0])
+	assert_object(pointer).override_failure_message("fixture: the badge drew no pointer").is_not_null()
+
+	var facets := _overlays.cone_facets
+	var before_count := _vertex_count(pointer)
+	_overlays.cone_facets = facets + 4
+	var after_count := _vertex_count(pointer)
+	_overlays.cone_facets = facets
+	assert_int(after_count).override_failure_message(
+			"turning the cone facets left a standing pointer's mesh as it was").is_greater(before_count)
+
+	var intensity := _overlays.cone_intensity
+	_overlays.cone_intensity = intensity + 0.5
+	var read: float = (pointer.material_override as ShaderMaterial).get_shader_parameter("cone_intensity")
+	_overlays.cone_intensity = intensity
+	assert_float(read).override_failure_message("the cone intensity never reached a standing pointer") 			.is_equal_approx(intensity + 0.5, 0.0001)
+
+
+func _vertex_count(pointer: MeshInstance3D) -> int:
+	var mesh := pointer.mesh as ImmediateMesh
+	var count := 0
+	for s in mesh.get_surface_count():
+		var points: PackedVector3Array = mesh.surface_get_arrays(s)[Mesh.ARRAY_VERTEX]
+		count += points.size()
+	return count
+
+
 # --- Lifetime ---------------------------------------------------------------------------------------
 
 # Each mark goes at its OWN blow, not when the pass starts. Headless a pass runs synchronously, so the

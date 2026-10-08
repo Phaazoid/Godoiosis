@@ -43,7 +43,6 @@ enum Layer {
 	PAYLOAD,
 	TETHER_GLOW,
 	QUEUED_FOOTPRINT, QUEUED_STRIKES, QUEUED_STRIKES_FOCUS, QUEUED_BADGES,
-	QUEUED_STRIKES_OWN,
 }
 enum Kind { FILL, BRACKET, SPRITE, BILLBOARD, LINE }
 
@@ -78,11 +77,12 @@ const EFFECT_RENDER_PRIORITY := 16
 const UNIT_HUD_RENDER_PRIORITY := 48
 # The band above even that (#1247): the HOVERED unit's queued-attack marks, drawn with no depth test so
 # nothing on the board -- a body, a readout -- can hide the mark the player is asking about. Not a
-# LAYERS sort, so every law that a layer stays under the units still holds: a marker or cone opts in
-# with `on_top`, and only the focus marks do. `on_top` is a TIER (#1251): 1 for the marks aimed at the
-# hovered unit, 2 for its own, drawn at FOCUS_RENDER_PRIORITY + tier - 1 so its own come out on top.
+# LAYERS sort, so every law that a layer stays under the units still holds: a marker opts in with
+# `on_top` (its pointer with it), and only the queued-attack badges do. `on_top` is a TIER (#1251): 1 for
+# the marks aimed at the hovered unit, 2 for its own, drawn at FOCUS_RENDER_PRIORITY + tier - 1 so its
+# own come out on top.
 const FOCUS_RENDER_PRIORITY := 64
-# The highest `on_top` tier any layer or marker uses.
+# The highest `on_top` tier any marker uses.
 const FOCUS_TIERS := 2
 
 
@@ -313,24 +313,17 @@ const LAYERS: Dictionary[Layer, Dictionary] = {
 	# tile, in the 2D layer's tint (the aim's footprint colour at a queued mark's half strength): -4, the
 	# one vacant slot, under the range fills the way the 2D tree puts it under THREAT.
 	Layer.QUEUED_FOOTPRINT: {"color": Color(1, 1, 0, 0.5), "sort": -4, "kind": Kind.FILL},
-	# The marks' line work, hanging at body height. Every mark carries its own colour (whose side, or a
-	# heal), so the layer is WHITE and the tint rides each mark; the cone is the SEE-THROUGH one because
-	# only that shader honours a per-mark tint. Shares 11 with the reach marks: two hanging line layers
+	# The marks' SHAFTS, hanging at body height. Every mark carries its own colour (whose side, or a heal),
+	# so the layer is WHITE and the colour rides each mark. A mark's POINTER is not here: it belongs to its
+	# badge (#1253), so the two sort as one. Shares 11 with the reach marks: two hanging line layers
 	# depth-sort, as the tether family's five do at 14.
-	Layer.QUEUED_STRIKES: {"color": Color.WHITE, "sort": 11, "beam": "strike", "kind": Kind.LINE,
-		"cone_alpha": true},
-	# ...the HOVERED unit's marks (dev, 2026-10-07: "the hovered unit's should always come to the top"),
-	# above every other mark. Their cones and badges draw over EVERYTHING -- units and readouts included
-	# -- at FOCUS_RENDER_PRIORITY ("on_top"); the shaft stays depth-tested, since a beam that drew over
-	# the world would need a second sight_beam file.
-	Layer.QUEUED_STRIKES_FOCUS: {"color": Color.WHITE, "sort": 14, "beam": "strike", "kind": Kind.LINE,
-		"cone_alpha": true, "on_top": 1},
-	# ...and the hovered unit's OWN attacks, over the ones aimed at it (#1251). A layer of its own because
-	# a layer's cones are one mesh with one priority; the shafts share 14 and depth-sort.
-	Layer.QUEUED_STRIKES_OWN: {"color": Color.WHITE, "sort": 14, "beam": "strike", "kind": Kind.LINE,
-		"cone_alpha": true, "on_top": 2},
-	# ...and the badges: the queue row's icon, STANDING (camera-facing) between the two units. With the
-	# crowns at 15, both being things hanging in the air.
+	Layer.QUEUED_STRIKES: {"color": Color.WHITE, "sort": 11, "beam": "strike", "kind": Kind.LINE},
+	# ...the HOVERED unit's shafts (dev, 2026-10-07: "the hovered unit's should always come to the top"),
+	# above every other mark's. They stay depth-tested; their badges and pointers draw over EVERYTHING,
+	# units and readouts included, at FOCUS_RENDER_PRIORITY ("on_top").
+	Layer.QUEUED_STRIKES_FOCUS: {"color": Color.WHITE, "sort": 14, "beam": "strike", "kind": Kind.LINE},
+	# ...and the badges: the queue row's icon, STANDING (camera-facing) between the two units, each carrying
+	# its pointer. With the crowns at 15, both being things hanging in the air.
 	Layer.QUEUED_BADGES: {"color": Color.WHITE, "sort": 15, "kind": Kind.BILLBOARD, "face": "camera"},
 }
 
@@ -882,6 +875,7 @@ func set_marks(layer: Layer, marks: Array[Array], color: Color,
 func _rebuild_cones() -> void:
 	for layer: Layer in _cone_batches:
 		_emit_cones(layer)
+	_reapply_pointers()
 
 
 func _emit_cones(layer: Layer) -> void:
@@ -1103,6 +1097,14 @@ func _apply_beam_params() -> void:
 	# ...and the cones beside them, which carry the bead's own three so the pulse stays one sweep.
 	for layer: Layer in _cones:
 		_style_cone((_cones[layer] as MeshInstance3D).material_override as ShaderMaterial, LAYERS[layer])
+	# ...and the pointers hung on badges (#1253).
+	for layer: Layer in _markers:
+		if LAYERS[layer]["kind"] != Kind.BILLBOARD:
+			continue
+		for node: Node3D in _markers[layer]:
+			var pointer := pointer_of(node)
+			if pointer != null:
+				_style_cone(pointer.material_override as ShaderMaterial, LAYERS[layer])
 	# ...and the casing round them, whose colour is a SquadLines2D static a knob can move.
 	for layer: Layer in _cone_hulls:
 		((_cone_hulls[layer] as MeshInstance3D).material_override as ShaderMaterial) \
@@ -1509,15 +1511,71 @@ func billboard_point(base: Vector3) -> Vector3:
 	return base + Vector3(0.0, billboard_lift, 0.0)
 
 
+# A badge's POINTER (#1253): the see-through cone hung ON the badge, so the two draw as one. A layer's
+# cones are one mesh at the layer's priority, which put every queued-attack arrow at 11 under every
+# badge at 15 -- a far badge painted over a near arrow. Hung here, the pointer takes the sprite's own
+# priority and depth test and sorts at the sprite's own point, a nudge UNDER it (the flat view draws a
+# pointer before its badge too), so back-to-front keeps each pair together at every tier.
+const POINTER_NODE := &"Pointer"
+const POINTER_SORT_NUDGE := 0.001
+
+
+func _apply_pointer(sprite: Sprite3D, pointer: Dictionary, spec: Dictionary) -> void:
+	var node := pointer_of(sprite)
+	if pointer.is_empty():
+		if node != null:
+			node.visible = false
+		return
+	if node == null:
+		node = MeshInstance3D.new()
+		node.name = POINTER_NODE
+		node.mesh = ImmediateMesh.new()
+		node.material_override = ShaderMaterial.new()
+		node.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		node.layers = WORLD_RENDER_LAYER
+		node.sorting_use_aabb_center = false
+		node.sorting_offset = -POINTER_SORT_NUDGE
+		sprite.add_child(node)
+	var material := node.material_override as ShaderMaterial
+	var shader := load(REACH_CONE_ON_TOP_SHADER_PATH if sprite.no_depth_test else REACH_CONE_ALPHA_SHADER_PATH) as Shader
+	if material.shader != shader:
+		material.shader = shader
+	material.render_priority = sprite.render_priority
+	material.set_shader_parameter("beam_color", Color.WHITE)
+	_style_cone(material, spec)
+	var mesh := node.mesh as ImmediateMesh
+	mesh.clear_surfaces()
+	node.visible = add_beam_cone(mesh, pointer["base"] - sprite.position, pointer["tip"] - sprite.position,
+			float(pointer["radius"]), 0.0, cone_shading, cone_facets, pointer.get("tint", Color.WHITE))
+
+
+# The pointer hung on a badge, or null. Public so a case can ask about the pair.
+static func pointer_of(badge: Node3D) -> MeshInstance3D:
+	return badge.get_node_or_null(NodePath(POINTER_NODE)) as MeshInstance3D
+
+
+# Every badge's pointer re-hung from the marker it rides on: cone shading and facets are baked into
+# the mesh, so a knob turning either has to rebuild it as _rebuild_cones does a layer's.
+func _reapply_pointers() -> void:
+	for layer: Layer in _marker_data:
+		if LAYERS[layer]["kind"] != Kind.BILLBOARD:
+			continue
+		var markers: Array = _marker_data[layer]
+		var pool: Array = _pool_for(layer)
+		for i in mini(markers.size(), pool.size()):
+			_apply_pointer(pool[i] as Sprite3D, (markers[i] as Dictionary).get("pointer", {}), LAYERS[layer])
+
+
 func _apply_marker(spec: Dictionary, node: Node3D, marker: Dictionary) -> void:
 	var pos: Vector3 = marker["pos"]
 	var texture: Texture2D = marker["texture"]
 	var tint: Color = marker.get("modulate", Color.WHITE)
 	if spec["kind"] == Kind.BILLBOARD:
 		var sprite := node as Sprite3D
-		# Three optional keys (#1247), each written back to its default when absent because the pool
+		# Four optional keys (#1247, #1253), each written back to its default when absent because the pool
 		# is reused: `exact` hangs the sprite AT pos rather than billboard_lift over it, `pixel_size`
-		# sizes it, and `on_top` (a tier) lifts it over everything into the focus band.
+		# sizes it, `on_top` (a tier) lifts it over everything into the focus band, and `pointer` hangs
+		# a cone on it ({base, tip, radius, tint}, in this node's space).
 		sprite.position = pos if marker.get("exact", false) else billboard_point(pos)
 		sprite.pixel_size = float(marker.get("pixel_size", billboard_pixel_size))
 		var tier: int = marker.get("on_top", 0)
@@ -1525,6 +1583,7 @@ func _apply_marker(spec: Dictionary, node: Node3D, marker: Dictionary) -> void:
 		sprite.render_priority = focus_priority(tier) if tier > 0 else int(spec["sort"])
 		sprite.texture = texture
 		sprite.modulate = tint
+		_apply_pointer(sprite, marker.get("pointer", {}), spec)
 		return
 	# Orientation and art scale are ONE write: a basis carries scale, so assigning them separately
 	# would have whichever came second wipe the other. Both are set unconditionally because the
@@ -1662,10 +1721,7 @@ func _cone_for(layer: Layer) -> MeshInstance3D:
 	var instance := MeshInstance3D.new()
 	instance.mesh = ImmediateMesh.new()
 	var material := ShaderMaterial.new()
-	if int(LAYERS[layer].get("on_top", 0)) > 0:
-		material.shader = load(REACH_CONE_ON_TOP_SHADER_PATH) as Shader
-		material.render_priority = focus_priority(LAYERS[layer]["on_top"])
-	elif LAYERS[layer].get("cone_alpha", false):
+	if LAYERS[layer].get("cone_alpha", false):
 		material.shader = load(REACH_CONE_ALPHA_SHADER_PATH) as Shader
 		material.render_priority = LAYERS[layer]["sort"]
 	else:

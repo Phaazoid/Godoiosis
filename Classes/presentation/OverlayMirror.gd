@@ -361,11 +361,11 @@ func _reach_lines(om: OverlayManager) -> void:
 # What a queued attack leaves (#1247), gated on one version: StrikeMarks2D's line work lifted through
 # trace_point as the reach lines are, and its badge as a standing sprite at the same point. The marks
 # the hovered unit is part of lift by their focus rank, badges over everything, its own attacks over
-# the ones aimed at it (#1251). Each mark's colour rides its own tint, shaft and cone alike; the
-# pointer is the cone, and when a mark has no shaft (the badge covers it) its lone cone stroke is
-# handed a zero width, so only the solid draws.
+# the ones aimed at it (#1251). Each mark's colour rides its own tint. The POINTER rides its badge
+# (#1253), so a mark's arrow and circle always draw as one; the line layers carry only the shafts, and
+# both lifted ranks share one, the shafts staying depth-tested as #1247 declared.
 const STRIKE_LAYER_OF_RANK: Array[BoardOverlays.Layer] = [BoardOverlays.Layer.QUEUED_STRIKES,
-		BoardOverlays.Layer.QUEUED_STRIKES_FOCUS, BoardOverlays.Layer.QUEUED_STRIKES_OWN]
+		BoardOverlays.Layer.QUEUED_STRIKES_FOCUS, BoardOverlays.Layer.QUEUED_STRIKES_FOCUS]
 
 
 func _queued_strikes(om: OverlayManager) -> void:
@@ -374,39 +374,36 @@ func _queued_strikes(om: OverlayManager) -> void:
 	_last_strike_version = om.queued_strike_version
 	var badges: Array[Dictionary] = []
 	var pixel := StrikeMarks2D.STRIKE_BADGE_SIZE / float(StrikeMarks2D.BADGE_TEXELS)
-	for rank: int in [0, 1, 2]:
+	var shafts: Dictionary[BoardOverlays.Layer, Array] = {}
+	var tints: Dictionary[BoardOverlays.Layer, Array] = {}
+	for layer: BoardOverlays.Layer in STRIKE_LAYER_OF_RANK:
+		shafts[layer] = []
+		tints[layer] = []
+	for entry: Dictionary in om.queued_strikes:
+		var rank := om.strike_focus_rank(entry)
+		var work := StrikeMarks2D.line_work(entry)
+		if work.is_empty():
+			continue
+		var tint: Color = entry["tint"]
+		var colour: Color = (entry["colour"] as Color) * tint
+		var shaft: PackedVector3Array = work["shaft"]
+		if shaft.size() == 2:
+			var layer := STRIKE_LAYER_OF_RANK[rank]
+			var strokes: Array[PackedVector3Array] = [PackedVector3Array([BoardSpace.trace_point(shaft[0]),
+					BoardSpace.trace_point(shaft[1])])]
+			shafts[layer].append(strokes)
+			tints[layer].append(colour)
+		badges.append({"pos": BoardSpace.trace_point(StrikeMarks2D.badge_point(entry)),
+				"texture": StrikeMarks2D.badge_texture(entry["icon"], entry["colour"]), "modulate": tint,
+				"exact": true, "pixel_size": pixel, "on_top": rank,
+				"pointer": {"base": BoardSpace.trace_point(work["base"]), "tip": BoardSpace.trace_point(work["tip"]),
+						"radius": overlays.mark_width * ThreatLines2D.CONE_WIDTH_SCALE * 0.5, "tint": colour}})
+	for layer: BoardOverlays.Layer in shafts:
 		var marks: Array[Array] = []
-		var widths: Array[Array] = []
-		var cones: Array[Dictionary] = []
-		var tints: Array[Color] = []
-		for entry: Dictionary in om.queued_strikes:
-			if om.strike_focus_rank(entry) != rank:
-				continue
-			var work := StrikeMarks2D.line_work(entry)
-			if work.is_empty():
-				continue
-			var tint: Color = entry["tint"]
-			var colour: Color = (entry["colour"] as Color) * tint
-			var strokes: Array[PackedVector3Array] = []
-			var scales: Array[PackedFloat32Array] = []
-			var shaft: PackedVector3Array = work["shaft"]
-			if shaft.size() == 2:
-				strokes.append(PackedVector3Array([BoardSpace.trace_point(shaft[0]),
-						BoardSpace.trace_point(shaft[1])]))
-				scales.append(PackedFloat32Array([1.0, 1.0]))
-			var base := BoardSpace.trace_point(work["base"])
-			var tip := BoardSpace.trace_point(work["tip"])
-			strokes.append(PackedVector3Array([base, tip]))
-			scales.append(PackedFloat32Array([0.0, 0.0]))
-			marks.append(strokes)
-			widths.append(scales)
-			cones.append({"base": base, "tip": tip, "tint": colour,
-					"radius": overlays.mark_width * ThreatLines2D.CONE_WIDTH_SCALE * 0.5})
-			tints.append(colour)
-			badges.append({"pos": BoardSpace.trace_point(StrikeMarks2D.badge_point(entry)),
-					"texture": StrikeMarks2D.badge_texture(entry["icon"], entry["colour"]), "modulate": tint,
-					"exact": true, "pixel_size": pixel, "on_top": rank})
-		overlays.set_marks(STRIKE_LAYER_OF_RANK[rank], marks, Color.WHITE, widths, cones, tints)
+		marks.assign(shafts[layer])
+		var colours: Array[Color] = []
+		colours.assign(tints[layer])
+		overlays.set_marks(layer, marks, Color.WHITE, [], [], colours)
 	_markers(BoardOverlays.Layer.QUEUED_BADGES, badges)
 
 

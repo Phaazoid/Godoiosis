@@ -24,11 +24,13 @@ static var HIGHLIGHT_MODULATE := Color(1.4, 1.4, 1.0)
 # The peak of the aim-target pulse.
 static var TARGET_PULSE_MODULATE := Color(1.6, 1.6, 1.6)
 # The HOVER flash (#1251, dev: "a white flash, but a bit steadier, and more white/bright"): the unit
-# under the pointer, whatever it is, so the player can see whose marks just lifted. Ramp up, sit at
-# white, ramp down -- the pin flash's shape, brighter and held longer.
+# under the pointer, whatever it is, so the player can see whose marks just lifted. Ramp up, touch
+# white, ramp down, then REST at normal (#1253, dev: "inverse the timing on how long it is glowing vs
+# normal") -- the hold sat at white and left the unit bright most of the time.
 static var HOVER_FLASH_MODULATE := Color(2.4, 2.4, 2.4)
 static var HOVER_FLASH_RAMP := 0.4
-static var HOVER_FLASH_HOLD := 0.4
+static var HOVER_FLASH_HOLD := 0.0
+static var HOVER_FLASH_REST := 0.4
 # ...and the peak of the PIN flash (#1066, dev: "units that are toggled need to be indicated in some
 # way. I think they should flash, too.").
 #
@@ -129,10 +131,10 @@ func sync_flashes() -> void:
 		drop_pin_flash()
 	if want_hover and hover_tween == null:
 		hover_tween = Pulse.start(self, sprite, &"modulate", base_modulate, HOVER_FLASH_MODULATE,
-				HOVER_FLASH_RAMP, HOVER_FLASH_HOLD)
+				HOVER_FLASH_RAMP, HOVER_FLASH_HOLD, HOVER_FLASH_REST)
 	if want_pin and pin_tween == null:
 		pin_tween = Pulse.start(self, sprite, &"modulate", base_modulate, PIN_PULSE_MODULATE,
-				Pulse.PERIOD, PIN_PULSE_HOLD, _running_pin_flash())
+				Pulse.PERIOD, PIN_PULSE_HOLD, 0.0, _running_pin_flash())
 		add_to_group(PIN_FLASH_GROUP)
 
 func _alarm_running() -> bool:

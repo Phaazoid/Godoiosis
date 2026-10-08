@@ -709,11 +709,9 @@ func test_every_focus_tier_is_a_render_priority_godot_accepts() -> void:
 	# The tiers stack upward from the band (#1251); the engine refuses anything past its maximum.
 	assert_int(BoardOverlays.focus_priority(BoardOverlays.FOCUS_TIERS)).is_less_equal(
 			RenderingServer.MATERIAL_RENDER_PRIORITY_MAX)
-	for layer: int in BoardOverlays.LAYERS:
-		var tier: int = BoardOverlays.LAYERS[layer].get("on_top", 0)
-		assert_int(tier).override_failure_message(
-				"layer %d asks for focus tier %d, past FOCUS_TIERS" % [layer, tier]).is_less_equal(
-				BoardOverlays.FOCUS_TIERS)
+	# The one marker that asks for a tier is a queued-attack badge, whose tier is its focus rank (#1253).
+	assert_int(OverlayMirror.STRIKE_LAYER_OF_RANK.size() - 1).override_failure_message(
+			"a focus rank asks for a tier past FOCUS_TIERS").is_less_equal(BoardOverlays.FOCUS_TIERS)
 
 
 func test_no_overlay_layer_can_sort_over_the_flame() -> void:

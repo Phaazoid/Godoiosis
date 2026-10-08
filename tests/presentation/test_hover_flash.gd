@@ -4,7 +4,8 @@
 #
 # Fixture is test_queued_strikes': one shared Battle3D, a cleared board, units spawned per case, the
 # hover pointer borrowed through pointer_source (the 3D picker's own seam) and handed back. The flash's
-# PEAK is reached by stepping its own tween, never by sleeping, so no case waits on a clock.
+# PEAK is reached by stepping its own tween, never by sleeping, so no case waits on a clock -- and the
+# fixture gives the flash a plateau at each end, so a step lands on one whatever frames ran first.
 extends GdUnitTestSuite
 
 const SCENE_PATH := "res://Scenes/Battle3D/Battle3D.tscn"
@@ -21,6 +22,9 @@ var _unit_mirror: UnitMirror
 var _pointer: Callable
 var _pointed := GridUtils.NO_CELL
 var _knobs := {}
+
+# Seconds the fixture holds the flash at each end: wider than the frames a settle lets the tween run.
+const PLATEAU := 0.5
 
 
 func before() -> void:
@@ -39,7 +43,9 @@ func before_test() -> void:
 	_unit_mirror = _scene.get_node("UnitMirror") as UnitMirror
 	_pointer = game.hover_presenter.pointer_source
 	_knobs = {"modulate": UnitVisuals.HOVER_FLASH_MODULATE, "ramp": UnitVisuals.HOVER_FLASH_RAMP,
-			"hold": UnitVisuals.HOVER_FLASH_HOLD}
+			"hold": UnitVisuals.HOVER_FLASH_HOLD, "rest": UnitVisuals.HOVER_FLASH_REST}
+	UnitVisuals.HOVER_FLASH_HOLD = PLATEAU
+	UnitVisuals.HOVER_FLASH_REST = PLATEAU
 
 
 func after_test() -> void:
@@ -47,6 +53,7 @@ func after_test() -> void:
 	UnitVisuals.HOVER_FLASH_MODULATE = _knobs["modulate"]
 	UnitVisuals.HOVER_FLASH_RAMP = _knobs["ramp"]
 	UnitVisuals.HOVER_FLASH_HOLD = _knobs["hold"]
+	UnitVisuals.HOVER_FLASH_REST = _knobs["rest"]
 	game.game_state = game.GameState.IDLE
 	await _board.check(self)
 
@@ -91,6 +98,11 @@ func _to_peak(tween: Tween) -> void:
 	tween.custom_step(UnitVisuals.HOVER_FLASH_RAMP + 0.001)
 
 
+# ...and on from the peak, down, into the rest.
+func _to_rest(tween: Tween) -> void:
+	tween.custom_step(UnitVisuals.HOVER_FLASH_HOLD + UnitVisuals.HOVER_FLASH_RAMP)
+
+
 # --- The flash ---------------------------------------------------------------------------------------
 
 func test_hovering_a_unit_flashes_it_white_and_leaving_puts_it_back() -> void:
@@ -127,6 +139,32 @@ func test_a_ghost_flashes_at_full_alpha_and_goes_back_to_a_ghost() -> void:
 	ghost = _om()._ghost_for(hero)
 	assert_object(_om()._ghost_hover_tween(ghost)).is_null()
 	assert_that(ghost.modulate).is_equal(OverlayManager.PROJECTED_MODULATE)
+
+
+# Between flashes the unit sits at its NORMAL colour for HOVER_FLASH_REST (#1253, dev: "inverse the
+# timing on how long it is glowing vs normal"), body and ghost alike.
+func test_the_flash_rests_at_normal_between_flashes() -> void:
+	var hero := _spawn(PLAYER, Vector2i(2, 2))
+	var mover := _spawn(PLAYER, Vector2i(2, 5))
+	_spawn(PLAYER, Vector2i(6, 6))
+	await _point_at(hero.movement.cell)
+	var tween: Tween = hero.visuals.hover_tween
+	_to_peak(tween)
+	_to_rest(tween)
+	assert_that(hero.visuals.sprite.modulate).override_failure_message(
+			"the flash went straight back up instead of resting at normal").is_equal(hero.visuals.base_modulate)
+	assert_bool(tween.is_valid()).override_failure_message("the flash stopped instead of resting").is_true()
+
+	await _ghost_for_move(mover, Vector2i(3, 5))
+	game.exit_current_mode()
+	await _point_at(Vector2i(3, 5))
+	var ghost := _om()._ghost_for(mover)
+	var ghost_tween := _om()._ghost_hover_tween(ghost)
+	assert_object(ghost_tween).override_failure_message("fixture: the ghost is not flashing").is_not_null()
+	_to_peak(ghost_tween)
+	_to_rest(ghost_tween)
+	assert_that(ghost.modulate).override_failure_message(
+			"the ghost's flash went straight back up instead of resting").is_equal(OverlayManager.GHOST_FLASH_REST)
 
 
 # A ghost rebuilt under a still pointer is a NEW node; the flash has to find it.
