@@ -76,6 +76,10 @@ const ENTRIES: Array[Dictionary] = [
 	{"key": "Shift+F3", "context": Context.DEV, "when": "",
 		"does": "File a report instantly",
 		"action": "dev_report_instant"},
+	# #705: the pass freezes and the camera is the dev's until he presses it again.
+	{"key": "P", "context": Context.DEV, "when": "during playback",
+		"does": "Pause playback",
+		"action": HARDCODED},
 	{"key": "F4", "context": Context.DEV, "when": "3D view",
 		"does": "Flat 2D, full screen",
 		"action": HARDCODED},

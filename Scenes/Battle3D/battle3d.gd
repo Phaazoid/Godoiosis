@@ -157,6 +157,12 @@ var _held_drop := 0.0
 # because a show BEGINNING while a subject is still followed changes no shot at all, so the shot
 # transitions cannot carry this on their own.
 var _death_show_seen := false
+# THE DEV PAUSE (#705): last frame's Pacing.dev_paused(), so the pause's two edges are seen once, and
+# the director's frame as it stood when the dev took the camera -- cut back to on resume, so the
+# pass continues exactly as if nobody had touched it. Empty when no pause is holding one.
+var _dev_pause_seen := false
+var _held_frame: Dictionary = {}
+var _dev_pause_label: Label
 
 # THE SHOT CLEARANCE (#1132): which way the battle zoom turns, and what it hides, so nothing stands
 # between the lens and the action. The latch is its own; this scene builds the world it reads (the
@@ -206,6 +212,7 @@ func _ready() -> void:
 	if dev_overlay is DevOverlay:
 		(dev_overlay as DevOverlay).attach_3d_host(self)
 	_set_readout_plate_alpha(readout_plate_alpha)
+	_build_dev_pause_label()
 	_show_checkout()
 	game.dev_mode_changed.connect(_show_dev_badge)
 	_show_dev_badge(game.dev_mode_enabled)
@@ -982,7 +989,9 @@ func _process(_delta: float) -> void:
 	# rig must keep SMOOTHING (the mirror below drives it) while refusing the player.
 	# Same predicate that refuses their clicks — one question, one answer. `live` joins it because
 	# a rig whose input is off cannot hear a release, so a drag held into a freeze is let go here.
-	_rig.manual_input_enabled = live and (demo_mode or not game._board_locked_for_player())
+	# ...except under a dev pause (#705), which hands the frozen pass's camera to the dev.
+	_rig.manual_input_enabled = live and (demo_mode or not game._board_locked_for_player()
+			or Pacing.dev_paused())
 	# The ZOOM half rejoined the same gate in #602 round 4 (dev, 2026-08-29: "we control the camera,
 	# fully. Their zoom gets overridden, period" -- restoring #520's own Done-when after the
 	# 2026-08-26 carve-out left the wheel live under playback). One predicate, both halves: whoever
@@ -1086,7 +1095,12 @@ func _mirror_camera() -> void:
 		_clearance_on = false
 		if _clearance.reset():
 			_push_hidden()
+	_sync_dev_pause(cam)
 	if not cam.playback_locked:
+		return
+	# The director stands down while the dev holds the camera (#705): every write below is his frame
+	# being re-asserted, and the snapshot taken at the pause is what he gets back on resume.
+	if Pacing.dev_paused():
 		return
 	# The 2D camera answers WHERE on the board; the board answers HOW HIGH. It used to keep
 	# _rig.position.y, i.e. whatever the opening shot had left there — see _aim_over. Continuous
@@ -1122,6 +1136,29 @@ func _mirror_camera() -> void:
 	# LAST, so every channel the frame wrote is in the settled lens it judges (#1132).
 	if _clearance_live(cam):
 		_clear_the_shot(cam, trained, shot_edge)
+
+
+# --- The dev pause (#705) ---------------------------------------------------------------------------
+
+# The pause's two edges, seen once each. Taking the camera snapshots the director's frame; giving it
+# back CUTS to that frame -- an ease would have the camera moving as the pass resumes, which #1132
+# round 3 forbids -- but only while playback still owns the camera. A pause ended by playback letting
+# go (F2, a board swap) has no director to hand back to, so the frame is dropped.
+func _sync_dev_pause(cam: CameraController) -> void:
+	var paused := Pacing.dev_paused()
+	if paused == _dev_pause_seen:
+		return
+	_dev_pause_seen = paused
+	if paused:
+		_held_frame = _rig.snapshot_view()
+		_rig.note_event("dev pause: took the camera")
+	else:
+		if cam.playback_locked:
+			_rig.return_to_snapshot(_held_frame)
+			_rig.note_event("dev pause: back to the director")
+		_held_frame = {}
+	_dev_pause_label.visible = paused
+	_fit_readout_plate()
 
 
 # --- The shot clearance (#1132) -------------------------------------------------------------------
@@ -1612,6 +1649,26 @@ func _show_dev_badge(active: bool) -> void:
 	_fit_readout_plate()
 
 
+# The dev pause's readout (#705), one row under the badge and in its style -- a duplicate of it, so
+# the two cannot drift apart. Built in code rather than authored into Battle3D.tscn beside them,
+# because its text says which keys work, and that belongs with the code that binds them.
+const DEV_PAUSE_TEXT := "⏸ PAUSED · P resume"
+const DEV_PAUSE_COLOR := Color(1.0, 0.8, 0.3, 1.0)
+
+func _build_dev_pause_label() -> void:
+	_dev_pause_label = _dev_badge.duplicate() as Label
+	_dev_pause_label.name = "DevPause"
+	_dev_pause_label.position.y += _dev_badge.size.y
+	_dev_pause_label.add_theme_color_override(&"font_color", DEV_PAUSE_COLOR)
+	_dev_pause_label.text = DEV_PAUSE_TEXT
+	_dev_pause_label.visible = false
+	_dev_badge.get_parent().add_child(_dev_pause_label)
+
+
+func dev_pause_label() -> Label:
+	return _dev_pause_label
+
+
 # The plate is fitted to the TEXT, not to the labels (#498). Each label is authored 900px wide, which
 # means their rects say nothing about where the words end -- a plate sized to them would be a bar
 # across most of the screen. So the width comes from the font measuring each live string, and the
@@ -1624,7 +1681,7 @@ func _show_dev_badge(active: bool) -> void:
 func _fit_readout_plate() -> void:
 	var bounds := Rect2()
 	var found := false
-	for label: Label in [_checkout, _dev_badge]:
+	for label: Label in [_checkout, _dev_badge, _dev_pause_label]:
 		if not label.visible or label.text.is_empty():
 			continue
 		var font := label.get_theme_font(&"font")

@@ -89,10 +89,26 @@ func handle_dev_key(event: InputEvent) -> void:
 		var state_name: String = game.GameState.keys()[game.game_state]
 		var reporter: BugReporter = game.bug_reporter
 		reporter.report(state_name, BugReporter.Kind.BUG, "", null)
+	_handle_pause_key(event)
 	_handle_selector_key(event)
 	_handle_zoom_animation_key(event)
 	_handle_brush_keys(event)
 	_handle_undo_keys(event)
+
+
+# P freezes the pass mid-blow and hands the dev the camera (#705), so a shot can be SHOWN rather than
+# described. Only while playback owns the board: outside a pass the camera is already his, and there
+# is nothing to freeze. The pause itself is Pacing's (one reason in the one time-scale writer); the
+# camera's half -- taking it, and cutting back to the director's frame -- is battle3d's.
+func _handle_pause_key(event: InputEvent) -> void:
+	var key := event as InputEventKey
+	if key == null or not key.pressed or key.echo or key.ctrl_pressed or key.shift_pressed:
+		return
+	if key.physical_keycode != KEY_P:
+		return
+	if not Pacing.dev_paused() and not game.playback_owns_board():
+		return
+	Pacing.set_dev_paused(not Pacing.dev_paused())
 
 
 # V cycles how deep the 3D hover selector reads (#427 slice 2 follow-up). A TOP-LEVEL dev key rather

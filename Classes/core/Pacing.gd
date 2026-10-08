@@ -327,6 +327,11 @@ static var SKIP_FADE := 0.25     # REAL seconds, each way
 
 static var _playback_speed := 1.0
 static var _skipping := false
+# A DEV PAUSE (#705): the pass frozen mid-blow so the dev can take the camera and frame what he
+# wants. One more reason in the one writer below, never a direct write -- PlaybackControl rewrites
+# the speed every frame and a hitstop's release reapplies it, and either would undo a bare
+# Engine.time_scale = 0.
+static var _dev_paused := false
 
 
 # What mode the player has the zoom in. ONE read of the setting, so nothing else names it.
@@ -368,17 +373,30 @@ static func set_playback_speed(speed: float) -> void:
 	_apply_time_scale()
 
 
-# Back to 1x, unskipped. PlaybackControl's exit and a suite's teardown.
-static func reset_playback() -> void:
-	_playback_speed = 1.0
-	_skipping = false
+static func dev_paused() -> bool:
+	return _dev_paused
+
+
+static func set_dev_paused(on: bool) -> void:
+	if on == _dev_paused:
+		return
+	_dev_paused = on
 	_apply_time_scale()
 
 
-# THE one writer of Engine.time_scale: a hitstop's freeze outranks the speed, and its release comes
-# back to the speed rather than to a literal 1.0, so a freeze mid-fast-forward resumes fast.
+# Back to 1x, unskipped and unpaused. PlaybackControl's exit and a suite's teardown.
+static func reset_playback() -> void:
+	_playback_speed = 1.0
+	_skipping = false
+	_dev_paused = false
+	_apply_time_scale()
+
+
+# THE one writer of Engine.time_scale: a hitstop's freeze or a dev pause outranks the speed, and a
+# release comes back to the speed rather than to a literal 1.0, so a freeze mid-fast-forward resumes
+# fast.
 static func _apply_time_scale() -> void:
-	Engine.time_scale = 0.0 if _frozen_count > 0 else _playback_speed
+	Engine.time_scale = 0.0 if _frozen_count > 0 or _dev_paused else _playback_speed
 
 
 # WHICH PROFILE THIS BEAT RUNS UNDER (#647) -- the one collapse from (mode, beat) to a profile, and
